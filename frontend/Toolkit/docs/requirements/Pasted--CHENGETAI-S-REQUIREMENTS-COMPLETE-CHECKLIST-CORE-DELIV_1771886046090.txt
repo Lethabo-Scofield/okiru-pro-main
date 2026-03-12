@@ -1,0 +1,278 @@
+# ✅ **CHENGETAI'S REQUIREMENTS - COMPLETE CHECKLIST**
+
+## 🎯 **CORE DELIVERABLES (What Chengetai Asked For)**
+
+### 1. **Excel as Data Source** ✓
+```
+- [ ] User uploads GP Excel file
+- [ ] System reads ALL tabs (52 sheets)
+- [ ] Extracts data into structured format
+- [ ] Maintains Excel formulas in code
+- [ ] No manual data entry needed initially
+```
+
+### 2. **Scorecard Must Match Excel EXACTLY** ✓
+```
+- [ ] Ownership calculations match Excel:
+  * Formula A: B × (1 / (Target × Graduation)) × 8
+  * Formula B: Economic_Interest / Target × 8
+  * Graduation table: 1yr=0.1, 2yr=0.2, 3yr=0.4, etc.
+  * Voting rights: 4 points max
+  * Black women bonus: 2 points max
+
+- [ ] Skills calculations match Excel:
+  * 3.5% of leviable amount = target
+  * 2.5% for bursaries
+  * 0.8% for absorption
+  * MIN(20, (actual/target)×20) formula
+
+- [ ] Procurement calculations match Excel:
+  * Recognition: L1=135%, L2=125%, L3=110%, L4=100%
+  * 51% black-owned = 15% bonus
+  * MAX 25 points procurement + 2 bonus
+
+- [ ] ESD/SED calculations match Excel:
+  * 2% of NPAT = Supplier Development (max 10)
+  * 1% of NPAT = Enterprise Development (max 5)
+  * 1% of NPAT = SED (max 5)
+  * Benefit factors: Grant=1.0, Loan=1.0, Overhead=0.7
+```
+
+### 3. **Dashboard Must Show** ✓
+```
+- [ ] Achieved Level (from Excel)
+- [ ] Discounted Level (if sub-minimum fails)
+- [ ] Total Points
+- [ ] All 7 pillars with scores:
+  * Ownership (0-25)
+  * Management Control (0-19)
+  * Skills Development (0-25)
+  * Procurement (0-29)
+  * ESD (0-15)
+  * SED (0-5)
+  * YES (0-3)
+
+- [ ] Sub-minimum warnings (red alerts)
+- [ ] Progress bars (% of target)
+- [ ] EAP province selector (changes targets)
+```
+
+### 4. **Sub-minimum & Discounting** ✓
+```
+- [ ] Check ownership net value ≥ 40% of 8 (3.2 points)
+- [ ] Check skills spend ≥ 40% of 20 (8 points)
+- [ ] Check procurement ≥ 40% of 25 (10 points)
+- [ ] If ANY fail → discount level by 1
+- [ ] Show which pillars failed
+- [ ] Show discounted level vs achieved level
+```
+
+### 5. **Scenario Planning** ✓
+```
+- [ ] Clone base scenario → A/B/C
+- [ ] Interventions that work:
+  * Hire X black managers (updates MC)
+  * Add supplier with Level Y (updates Procurement)
+  * Increase training spend by R (updates Skills)
+  * Add ESD contribution (updates ESD)
+  
+- [ ] Side-by-side comparison:
+  * Base vs Scenario points diff
+  * Level change
+  * Investment required
+  * Pillar breakdown comparison
+```
+
+### 6. **Exports** ✓
+```
+- [ ] Excel export (matches original format)
+- [ ] PowerPoint slides (using Chengetai's templates)
+- [ ] PDF scorecard
+- [ ] Gap analysis report
+- [ ] Audit pack with all data
+```
+
+### 7. **EAP & Industry Norms** ✓
+```
+- [ ] Province dropdown affects targets
+- [ ] EAP data for all provinces:
+  * Gauteng, Western Cape, KZN, National, etc.
+- [ ] Industry norms table:
+  * Mining=16.25%, Manufacturing=4.58%, etc.
+```
+
+## 🔧 **HOW IT SHOULD WORK (Step by Step)**
+
+### **User Journey:**
+
+```
+1. USER GOES TO https://okiru.pro
+   ↓
+2. UPLOADS EXCEL FILE
+   ↓
+3. SYSTEM SHOWS DASHBOARD:
+   - Level: 6
+   - Points: 68.54
+   - All pillar scores match Excel
+   ↓
+4. USER SELECTS PROVINCE "Gauteng"
+   ↓
+5. MANAGEMENT TARGETS UPDATE (using EAP)
+   ↓
+6. USER CLICKS "Create Scenario A"
+   ↓
+7. ADDS INTERVENTION: "Hire 3 Black Managers"
+   ↓
+8. SYSTEM SHOWS NEW SCORES:
+   - MC improves from 12 → 15
+   - Total points 68.54 → 71.54
+   - Level still 6 (needs 70 for Level 5)
+   ↓
+9. USER COMPARES BASE vs SCENARIO A
+   ↓
+10. EXPORTS POWERPOINT for board presentation
+```
+
+### **Technical Flow:**
+
+```
+EXCEL UPLOAD
+   ↓
+PARSE all sheets
+   ↓
+EXTRACT data:
+  - Client info (name, revenue, NPAT)
+  - Shareholders (names, % ownership)
+  - Employees (race, gender, designation)
+  - Training programs (cost, category)
+  - Suppliers (BEE level, spend)
+  - Contributions (amount, type)
+   ↓
+CALCULATE using Excel formulas:
+  - Ownership calculator
+  - Management calculator  
+  - Skills calculator
+  - Procurement calculator
+  - ESD/SED calculator
+   ↓
+CHECK sub-minimum:
+  - Ownership net value ≥ 3.2?
+  - Skills spend ≥ 8?
+  - Procurement ≥ 10?
+   ↓
+APPLY discount if needed
+   ↓
+SHOW dashboard with all scores
+   ↓
+ALLOW scenario changes
+   ↓
+RECALCULATE in real-time
+   ↓
+EXPORT reports
+```
+
+## 📊 **TEST CASES Chengetai Will Check**
+
+### Test 1: Empty Template
+```
+Input: Blank Excel file
+Expected: All zeros, Level 8, No warnings
+```
+
+### Test 2: Full Compliance
+```
+Input: All targets met
+Expected: Level 1, 120+ points, Green status
+```
+
+### Test 3: Sub-minimum Failure
+```
+Input: Ownership net value = 2 (below 3.2)
+Expected: 
+- Red warning
+- Discounted level = Achieved level + 1
+- Failed pillars shown
+```
+
+### Test 4: 51% Black-Owned Supplier
+```
+Input: Supplier with 51% ownership, Level 4, Spend R100k
+Expected: Recognised = R100k × 100% × 115% = R115k
+Bonus points calculated correctly
+```
+
+### Test 5: 3 Years Ownership
+```
+Input: Shareholder held for 3 years
+Expected: Graduation factor = 0.4
+Formula A = B × (1/(0.25×0.4)) × 8 = B × 10 × 8
+```
+
+### Test 6: EAP Change
+```
+Input: Switch from National to Gauteng
+Expected: Management targets change:
+- National: Black Male 43.5%
+- Gauteng: Black Male 45.4%
+```
+
+### Test 7: Scenario Clone
+```
+Input: Create Scenario A, change 3 values
+Expected: 
+- Base unchanged
+- Scenario A shows new scores
+- Comparison shows differences
+```
+
+## 🚨 **CRITICAL SUCCESS FACTORS**
+
+1. **ACCURACY** - Numbers must match Excel EXACTLY (down to 2 decimals)
+2. **SPEED** - Calculations should update in < 1 second
+3. **CLARITY** - Users must see WHY they got a score
+4. **RELIABILITY** - No crashes when uploading real client data
+5. **EXPORTS** - PowerPoint must match Chengetai's templates
+
+## 📋 **DELIVERY CHECKLIST**
+
+### Week 1:
+- [ ] Excel parser working (reads all 52 sheets)
+- [ ] Data structures match Excel
+
+### Week 2:
+- [ ] Ownership calculator matches Excel
+- [ ] Procurement calculator matches Excel
+- [ ] Test with sample data
+
+### Week 3:
+- [ ] All pillars calculating correctly
+- [ ] Summary with sub-minimum working
+- [ ] Dashboard shows all scores
+
+### Week 4:
+- [ ] File upload working
+- [ ] EAP selector affecting targets
+- [ ] Show Chengetai working prototype
+
+### Week 5:
+- [ ] Scenario planning (clone + interventions)
+- [ ] Side-by-side comparison
+- [ ] Export to Excel working
+
+### Week 6:
+- [ ] PowerPoint exports with templates
+- [ ] PDF scorecard
+- [ ] Final testing with real client data
+
+## ✅ **ACCEPTANCE CRITERIA**
+
+The system is DONE when:
+
+1. Upload GP Excel → Dashboard matches Excel 100%
+2. Change black managers count → MC updates instantly
+3. Sub-minimum failure → Shows red warning + discount
+4. Create scenario → Independent data, correct calcs
+5. Export PowerPoint → Matches Chengetai's templates
+6. Works on https://okiru.pro with SSL
+
+**Chengetai will approve when ALL these work perfectly with real client data.**
