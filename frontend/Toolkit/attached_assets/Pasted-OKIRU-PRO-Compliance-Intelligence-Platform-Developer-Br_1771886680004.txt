@@ -1,0 +1,112 @@
+OKIRU.PRO
+Compliance Intelligence Platform
+Developer Briefing Document
+Version 1.0
+Prepared for Development Team
+1. Objective
+
+Build a unified, production-grade compliance intelligence platform hosted at https://okiru.pro.
+
+The system must consolidate all existing toolkits into a single integrated web application with:
+- Client-level data isolation
+- Cross-pillar data cascading
+- AI-powered ingestion and analysis
+- Multi-format upload capability
+- Scenario planning engine
+- Template-based export engine
+- Modular scorecard support
+
+2. High-Level User Flow
+
+Landing Page (ComplianceHub_Landing.html)
+→ Select B-BBEE Scorecard Calculator
+→ Select Sector Scorecard (BBBEE_scorecard selection.html)
+→ Enter Toolkit Environment
+
+3. Platform Architecture
+
+Frontend: React or Next.js (SPA architecture)
+Backend: Node.js or Python (FastAPI recommended)
+Database: PostgreSQL (structured data)
+Object Storage: AWS S3 / Azure Blob
+Vector Database: Pinecone or equivalent for AI indexing
+Authentication: Multi-tenant SaaS model with role-based access
+
+4. Central Data Architecture
+
+All data entered anywhere must cascade across the toolkit.
+
+Core Entities:
+- Client
+- Financials
+- Ownership
+- Management Control
+- Skills Development
+- ESD
+- SED
+- YES
+- Procurement
+- ESG
+
+Tenant ID must prefix every record for strict client isolation.
+
+5. AI Integration Requirements
+
+AI must integrate at:
+A) Data ingestion layer (Data Hub + Pillar pages)
+B) Analytical layer (Gap analysis, modelling, compliance alerts)
+
+AI must:
+- Accept Excel, PDF, Word, PPT, JPG
+- Convert documents into structured datasets
+- Map fields into toolkit schema
+- Flag inconsistencies
+- Suggest optimisation strategies
+
+6. Scenario Planning Engine
+
+Each client must support:
+- Base Scenario
+- Scenario A / B / C
+
+Scenarios must clone datasets and allow modelling without altering base data.
+Side-by-side comparison required.
+
+7. Export Engine Requirements
+
+System must generate:
+- Client Scorecard (PDF)
+- Gap Analysis Report (PDF)
+- Strategy Pack (PPT)
+- Audit Data Pack (Excel)
+- Verification Pack (ZIP)
+
+Templates will be provided later. Build placeholder template mapping engine.
+
+8. Data Hub Requirements
+
+Every toolkit must include a Data Hub:
+- Upload files
+- View structured extracted data
+- Approve AI mappings
+- Edit values
+- Maintain version history
+- Maintain audit trail
+
+9. Security Requirements
+
+- End-to-end encryption
+- POPIA compliance
+- Role-based access control
+- File scanning for uploads
+- Full audit logging
+
+10. Hosting Requirements
+
+Hosted at okiru.pro
+
+- Secure cloud infrastructure
+- SSL
+- Backup and disaster recovery
+- CDN for performance
+

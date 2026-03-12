@@ -1,0 +1,127 @@
+### Detailed Pillar Scorecard Structures for the B-BBEE Web App
+
+Hey ScoField! Based on the Ownership scorecard example you shared (from the Excel toolkit and image), I've structured detailed breakdowns for **all main pillars** in the B-BBEE Generic Scorecard. This is designed for your web app's pillar pages or scenario tab—what-if analysis. Each pillar will have a table mimicking the format: **Indicator**, **Criteria**, **Points** (target), **%** (target or compliance level), **Prior Year Points**, **Prior Year %**, **Actual Points**, **Actual %**, **Actual [manual] Points**, **Actual [manual] %**, **Gap Points**, **Gap %**.
+
+- **Why this format?** It matches your example exactly—targets on the left, prior/actual/manual columns for data entry/comparison, and gaps on the right. In the web app, this becomes an interactive table (e.g., using React Table or DataGrid): 
+  - **Editable cells**: Prior Year and Actual [manual] for overrides/scenarios.
+  - **Auto-calcs**: Actual Points/% from inputs (e.g., shareholder data for Ownership); Gaps = Target - Actual.
+  - **Visuals**: Color-code gaps (red for negative, green for zero/positive); tooltips explaining criteria (e.g., "25% +1 vote means control threshold").
+  - **Scenario Integration**: In what-if mode, duplicate the table, apply overrides (e.g., "Add black shareholder" recalcs Voting Rights), show deltas side-by-side.
+- **Data Sources**: Based on the Okiru Excel toolkit (Revised Codes, Generic Entity). Placeholders like 0.00 for prior/actual/gaps (as in your image). At the bottom: Period selector (e.g., dropdown for year/quarter) and data date.
+- **2026 Notes**: As of February 2026 (your current time in Johannesburg), the B-BBEE Codes are under draft amendments (gazetted Jan 29, 2026; comments until Mar 30, 2026). Key proposed changes: New "Transformation Fund" (20 points, 3% NPAT), ESD overhaul (emphasis on 100% Black-owned, total points up to 131-142), tighter procurement. For now, I've used the current 2019 Generic Codes (total ~120 points) matching your Excel. Add a toggle in the app: "Apply Draft 2026 Rules?" to simulate changes (e.g., add Transformation Fund row).
+
+Implement as responsive tables with export buttons (Excel/PDF). Let's dive in—starting with Ownership (reproduced for completeness), then others.
+
+#### 1. Ownership Pillar
+This pillar measures black ownership/control (max 25 points). Priority element—sub-minimum 40% (10 points) or level discount.
+
+| Indicator          | Criteria                                                                 | Points | %          | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|--------------------|--------------------------------------------------------------------------|--------|------------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| Voting Rights     | Exercisable Voting rights in the hands of Black people                   | 4      | 25% + 1 vote |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 25.00%  |
+|                    | Exercisable Voting rights in the hands of Black females                  | 2      | 10%        |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 10.00%  |
+| Economic Interest | Economic interest in the Measured Entity to which Black people are entitled | 4      | 25%        |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 25.00%  |
+|                    | Economic interest in the Measured Entity to which Black women are entitled | 2      | 10%        |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 10.00%  |
+|                    | Economic interest of any of the following Black natural people in the Measured Entity: |        |            |                   |              |               |          |                        |                   |            |         |
+|                    | 1. Black Military Veterans;                                              | 3      | 3%         |                   |              | 0.00          | 0.00%    |                        |                   | 1.21       | 3.00%   |
+|                    | 2. Black people in Broad-Based Ownership;                                |        |            |                   |              |               |          |                        |                   |            |         |
+|                    | 3. Black New Entrants                                                    | 2      | 2%         |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 2.00%   |
+| Realisation Points| Net Value                                                                | 8      | 100%       |                   |              | 0.00          | 0.00%    |                        |                   | 8.00       | 100.00% |
+| **Total**          |                                                                          | **25** |            | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **23.21**  |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 2. Management Control (MC) Pillar
+Measures black representation in management (max 19 points). No sub-minimum, but EAP-adjusted targets.
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| Board Participation        | Exercisable voting rights of black board members                         | 2      | 50%  |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 50.00%  |
+|                            | Exercisable voting rights of black female board members                  | 1      | 25%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 25.00%  |
+|                            | Black persons who are executive directors                                | 2      | 50%  |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 50.00%  |
+|                            | Black female persons who are executive directors                         | 1      | 25%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 25.00%  |
+| Other Executive Management | Black executive management                                               | 2      | 60%  |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 60.00%  |
+|                            | Black female executive management                                        | 1      | 30%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 30.00%  |
+| Senior Management          | Black employees in senior management                                     | 2      | 60%  |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 60.00%  |
+|                            | Black female employees in senior management                              | 1      | 30%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 30.00%  |
+| Middle Management          | Black employees in middle management                                     | 2      | 75%  |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 75.00%  |
+|                            | Black female employees in middle management                              | 1      | 38%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 38.00%  |
+| Junior Management          | Black employees in junior management                                     | 1      | 88%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 88.00%  |
+|                            | Black female employees in junior management                              | 1      | 44%  |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | 44.00%  |
+| Employees with Disabilities| Black employees with disabilities                                        | 2      | 2%   |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 2.00%   |
+| **Total**                  |                                                                          | **19** |      | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **19.00**  |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 3. Skills Development Pillar
+Measures training spend on black people (max 25 points, including 5 bonus). Priority element—sub-minimum 40% (10 points).
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| Skills Expenditure         | Skills development expenditure on black people                           | 8      | 6%   |                   |              | 0.00          | 0.00%    |                        |                   | 8.00       | 6.00%   |
+|                            | Skills development expenditure on black women                            | 4      | 3%   |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 3.00%   |
+| Bursaries                  | Bursaries or scholarships for black people                               | 4      | 2.5% |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 2.50%   |
+| Disabled                   | Skills development expenditure on black disabled employees               | 2      | 0.3% |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 0.30%   |
+| Absorption (Bonus)         | Number of black people absorbed                                          | 5      | 100% |                   |              | 0.00          | 0.00%    |                        |                   | 5.00       | 100.00% |
+| **Total**                  |                                                                          | **25** |      | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **25.00**  |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 4. Preferential Procurement (PP) Pillar
+Measures spend on empowered suppliers (max 29 points). Priority element—sub-minimum 40% (11.6 points).
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| All Suppliers              | B-BBEE procurement spend from all empowering suppliers                   | 5      | 80%  |                   |              | 0.00          | 0.00%    |                        |                   | 5.00       | 80.00%  |
+| QSE Suppliers              | B-BBEE procurement spend from QSE empowering suppliers                   | 3      | 15%  |                   |              | 0.00          | 0.00%    |                        |                   | 3.00       | 15.00%  |
+| EME Suppliers              | B-BBEE procurement spend from EME empowering suppliers                   | 4      | 15%  |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 15.00%  |
+| 51% Black Owned            | B-BBEE procurement spend from suppliers that are at least 51% black owned| 11     | 25%  |                   |              | 0.00          | 0.00%    |                        |                   | 11.00      | 25.00%  |
+| 30% Black Women Owned      | B-BBEE procurement spend from suppliers that are at least 30% black women owned| 4      | 12%  |                   |              | 0.00          | 0.00%    |                        |                   | 4.00       | 12.00%  |
+| Designated Group (Bonus)   | B-BBEE procurement spend from designated group suppliers                 | 2      | 2%   |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | 2.00%   |
+| **Total**                  |                                                                          | **29** |      | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **29.00**  |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 5. Enterprise and Supplier Development (ESD) Pillar
+Combined ESD (SD + ED, max 17 points). Contributions as % of NPAT. Priority for SD.
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| Supplier Development       | Annual value of all qualifying supplier development contributions        | 10     | 2%   |                   |              | 0.00          | 0.00%    |                        |                   | 10.00      | 2.00%   |
+| Enterprise Development     | Annual value of all qualifying enterprise development contributions     | 5      | 1%   |                   |              | 0.00          | 0.00%    |                        |                   | 5.00       | 1.00%   |
+| Bonus Points               | Graduation of one or more enterprise development beneficiaries          | 1      |      |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       |         |
+|                            | Creation of one or more jobs directly as a result of SD/ED               | 1      |      |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       |         |
+| **Total**                  |                                                                          | **17** |      | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **17.00**  |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 6. Socio-Economic Development (SED) Pillar
+Measures CSI-type contributions (max 5 points).
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| SED Contributions          | Annual value of all qualifying socio-economic development contributions  | 5      | 1%   |                   |              | 0.00          | 0.00%    |                        |                   | 5.00       | 1.00%   |
+| **Total**                  |                                                                          | **5**  |      | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **5.00**   |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+#### 7. YES (Youth Employment Service) Enhancement
+Optional enhancer (up to +3 levels if qualified). Not a full pillar, but add as a bonus section.
+
+| Indicator                  | Criteria                                                                 | Points | %    | Prior Year Points | Prior Year % | Actual Points | Actual % | Actual [manual] Points | Actual [manual] % | Gap Points | Gap %   |
+|----------------------------|--------------------------------------------------------------------------|--------|------|-------------------|--------------|---------------|----------|------------------------|-------------------|------------|---------|
+| YES Qualification          | Meet priority sub-minimums + YES headcount targets (e.g., 1.5% payroll)  | -      | -    |                   |              | -             | -        |                        |                   | -          | -       |
+| Tier 1                     | Achieve 1.5x headcount target + absorption                               | +3 Levels | - |                   |              | 0.00          | 0.00%    |                        |                   | 3.00       | -       |
+| Tier 2                     | Achieve 1x headcount target + absorption                                | +2 Levels | - |                   |              | 0.00          | 0.00%    |                        |                   | 2.00       | -       |
+| Tier 3                     | Achieve 1x headcount target                                             | +1 Level  | - |                   |              | 0.00          | 0.00%    |                        |                   | 1.00       | -       |
+| **Total Enhancement**      |                                                                          | **Varies** |  | **0.00**          |              | **0.00**      |          | **0.00**               |                   | **Varies** |         |
+
+select period  
+select 1900   data as at [ 00 January 1900 ]
+
+These tables can be rendered as interactive components in your app (e.g., with inputs for manual overrides in scenarios). For drafts: Add conditional rows (e.g., Transformation Fund: 20 points, 3% NPAT) under a "Preview 2026 Drafts" toggle. If you need code for these tables or more on integration, let me know! 😊

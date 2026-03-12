@@ -1,0 +1,16 @@
+
+> rest-express@1.0.0 dev
+> cross-env NODE_ENV=development tsx server/index.ts
+
+[1G[0KWARNING: GROQ_API_KEY is not set. AI endpoints will return errors.
+WARNING: MONGODB_URI is not set. Database features will be unavailable.
+WARNING: Using in-memory session store (MONGODB_URI not set). Sessions will not persist across restarts.
+8:26:47 PM [express] serving on port 5000
+8:26:53 PM [express] GET /api/auth/me 401 in 2ms :: {"message":"Not authenticated"}
+8:27:05 PM [express] GET /api/auth/me 401 in 1ms :: {"message":"Not authenticated"}
+8:27:14 PM [express] GET /api/auth/me 401 in 1ms :: {"message":"Not authenticated"}
+Login error: MongooseError: Operation `users.findOne()` buffering timed out after 10000ms
+    at Timeout._onTimeout [90m(/home/runner/workspace/[39mnode_modules/[4mmongoose[24m/lib/drivers/node-mongodb-native/collection.js:131:25[90m)[39m
+[90m    at listOnTimeout (node:internal/timers:581:17)[39m
+[90m    at process.processTimers (node:internal/timers:519:7)[39m
+8:27:36 PM [express] POST /api/auth/login 500 in 10005ms :: {"message":"Login failed"}

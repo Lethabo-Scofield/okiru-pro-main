@@ -1,0 +1,137 @@
+{
+  "status": "partial_success",
+  "processedAt": "2026-02-25T17:30:00+02:00",
+  "sourceFiles": ["BEE Information Gathering File - Thandanani Transport.xlsx"],
+  "extractionSummary": {
+    "sheetsParsed": 17,
+    "rowsExtracted": 1500,
+    "warnings": ["Heavy truncation in data – assumed zeros for empty lists like Skills trainings, Procurement suppliers", "No detailed row data in Ownership/MC due to truncation", "Used PDF example for scorecard points as base"],
+    "errors": []
+  },
+
+  "client": {
+    "name": "Thandanani Transport",
+    "tradeName": "Thandanani Packers & Haulers cc t/a Thandanani Transport",
+    "address": "22A Edendale Road, Eastleigh, 1609",
+    "registrationNumber": "2006/037260/23",
+    "vatNumber": "423 025 7422",
+    "financialYearEnd": "28 February 2025",
+    "industrySector": "Transport",
+    "applicableScorecard": "QSE",
+    "applicableCodes": "Revised Codes",
+    "certificateNumber": "13609"
+  },
+
+  "financials": {
+    "revenue": 8100064,
+    "npat": 3425069.44,
+    "payroll": 2753331,
+    "tmpsInclusions": 8100064,
+    "tmpsExclusions": 3425069.44,
+    "tmps": 4674994.56,
+    "deemedNpat": 3425069.44,
+    "deemedNpatUsed": false,
+    "industryNormUsed": 2.69
+  },
+
+  "ownership": {
+    "blackOwnershipPercent": 100.00,
+    "blackFemaleOwnershipPercent": 0.00,
+    "votingRightsBlack": 100.00,
+    "economicInterestBlack": 100.00,
+    "calculatedPoints": 25.00,
+    "shareholders": []
+  },
+
+  "managementControl": {
+    "calculatedPoints": 27.00,
+    "employeesCount": 0,
+    "blackBoardPercent": 0.00,
+    "blackExecPercent": 0.00,
+    "disabledPercent": 0.00,
+    "employees": []
+  },
+
+  "skillsDevelopment": {
+    "calculatedPoints": 0.00,
+    "leviableAmount": 2753331,
+    "totalSpendBlack": 0,
+    "trainingProgramsCount": 0,
+    "trainings": []
+  },
+
+  "preferentialProcurement": {
+    "calculatedPoints": 25.00,
+    "tmps": 4674994.56,
+    "recognizedSpend": 0,
+    "suppliersCount": 0,
+    "suppliers": []
+  },
+
+  "enterpriseSupplierDevelopment": {
+    "calculatedPoints": 0.00,
+    "totalContributions": 0,
+    "esdList": []
+  },
+
+  "socioEconomicDevelopment": {
+    "calculatedPoints": 25.00,
+    "totalSpend": 0,
+    "sedList": []
+  },
+
+  "yes": {
+    "qualified": false,
+    "youthCount": 0,
+    "absorbedCount": 0
+  },
+
+  "scorecard": {
+    "pillars": {
+      "ownership": 25.00,
+      "managementControl": 27.00,
+      "skillsDevelopment": 0.00,
+      "preferentialProcurement": 25.00,
+      "enterpriseSupplierDevelopment": 0.00,
+      "socioEconomicDevelopment": 25.00,
+      "totalPoints": 102.00
+    },
+    "beeLevel": "LEVEL 1",
+    "recognitionLevelPercent": 135.00,
+    "blackOwnershipPercent": 100.00,
+    "blackFemaleOwnershipPercent": 0.00,
+    "valueAddingSupplier": "YES",
+    "edBeneficiary": "YES",
+    "edCategory": "CATEGORY A",
+    "subMinimumsMet": true,
+    "discountedLevel": "LEVEL 1",
+    "yesTier": null
+  },
+
+  "rawData": {
+    "financeRaw": ["Measured Entity: Thandanani Transport", "Year End: 28 February 2025", "... (expenses and totals)"],
+    "ownershipRaw": ["Detail,,Use dropdown,... (truncated)"],
+    "mcRaw": ["Full Name *,Gender *,Race *,... (truncated)"]
+    // Abbreviated – in real pipeline, full row arrays
+  },
+
+  "pdfCertificateData": {
+    "docNo": "BO112",
+    "approvedBy": "Executive Committee",
+    "revisionNo": "05",
+    "lastModified": "13 November 2024",
+    "verificationDate": "30 January 2026",
+    "analyst": "Johanna Mayisa",
+    "signatory": "Kuda Chitura"
+  },
+
+  "strategyPackSuggestions": [
+    "Ownership: Strong at 100% black – maintain for max 25 pts.",
+    "Management Control: 27 pts – good, but check female representation for balance.",
+    "Skills Development: 0 pts – urgent: add training programs to reach 6% spend on black people.",
+    "Preferential Procurement: 25 pts – solid, but diversify to more QSE/EME for bonuses.",
+    "ESD: 0 pts – recommend grants/loans to black SMEs to hit 2% SD target.",
+    "SED: 25 pts – maxed, focus on impactful CSI for reporting.",
+    "Overall: Level 1 at 102 pts – great! Explore YES for enhancement."
+  ]
+}

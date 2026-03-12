@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entity Dashboard</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui"] }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="font-sans bg-slate-50 text-slate-900 min-h-screen">
+  <!-- Top Bar -->
+  <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-slate-900 text-white grid place-items-center font-bold">E</div>
+        <div>
+          <div class="text-sm font-semibold leading-tight">Entity Builder</div>
+          <div class="text-xs text-slate-500 -mt-0.5">Light theme dashboard</div>
+        </div>
+      </div>
+
+      <!-- User Profile -->
+      <div class="flex items-center gap-3">
+        <button class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm">
+          <span class="inline-flex h-6 w-6 rounded-full bg-slate-200 items-center justify-center text-slate-700 font-semibold">JK</span>
+          <span class="text-slate-700">John</span>
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+
+        <button class="sm:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white">
+          <span class="inline-flex h-7 w-7 rounded-full bg-slate-200 items-center justify-center text-slate-700 font-semibold">JK</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- PAGE: Home -->
+    <section id="page-home">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p class="text-sm text-slate-600 mt-1">Choose what you want to do.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Card: Create New Entity -->
+        <button
+          class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:shadow-sm hover:border-slate-300 transition"
+          onclick="goTo('entities')"
+        >
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-sm font-semibold">Create New Entity</div>
+              <div class="text-sm text-slate-600 mt-1">Pick a template, then customise.</div>
+            </div>
+            <div class="h-10 w-10 rounded-xl bg-slate-100 grid place-items-center group-hover:bg-slate-200 transition">
+              <svg class="h-5 w-5 text-slate-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4 text-xs text-slate-500">Templates → Create</div>
+        </button>
+
+        <!-- Card: Upload New Documents -->
+        <button
+          class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:shadow-sm hover:border-slate-300 transition"
+          onclick="toast('Upload New Documents clicked (stub).')"
+        >
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-sm font-semibold">Upload New Documents</div>
+              <div class="text-sm text-slate-600 mt-1">Add PDFs, images, and spreadsheets.</div>
+            </div>
+            <div class="h-10 w-10 rounded-xl bg-slate-100 grid place-items-center group-hover:bg-slate-200 transition">
+              <svg class="h-5 w-5 text-slate-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M3 4a2 2 0 012-2h6l6 6v8a2 2 0 01-2 2H5a2 2 0 01-2-2V4z"/>
+                <path d="M11 2v6h6" />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4 text-xs text-slate-500">Documents → Upload</div>
+        </button>
+
+        <!-- Card: View Scorecards -->
+        <button
+          class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:shadow-sm hover:border-slate-300 transition"
+          onclick="goTo('scorecards')"
+        >
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-sm font-semibold">View Scorecards</div>
+              <div class="text-sm text-slate-600 mt-1">Browse companies and compliance status.</div>
+            </div>
+            <div class="h-10 w-10 rounded-xl bg-slate-100 grid place-items-center group-hover:bg-slate-200 transition">
+              <svg class="h-5 w-5 text-slate-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M3 3h14a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1zm2 4h10v2H5V7zm0 4h7v2H5v-2z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4 text-xs text-slate-500">Scorecards → Companies</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- PAGE: Entity Templates -->
+    <section id="page-entities" class="hidden">
+      <div class="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <button
+              class="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+              onclick="goTo('home')"
+              aria-label="Back"
+            >
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.79 15.77a.75.75 0 01-1.06.02l-5-4.5a.75.75 0 010-1.1l5-4.5a.75.75 0 111.02 1.1L8.31 10l4.46 4.07a.75.75 0 01.02 1.06z" clip-rule="evenodd"/>
+              </svg>
+              Back
+            </button>
+            <span class="text-xs text-slate-500">/ Create Entity</span>
+          </div>
+          <h1 class="text-2xl font-bold tracking-tight mt-2">Entity Templates</h1>
+          <p class="text-sm text-slate-600 mt-1">Start from a template, then customise fields & extraction rules.</p>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+        <label class="text-xs font-medium text-slate-600" for="templateSearch">Search templates</label>
+        <div class="mt-1 relative">
+          <input
+            id="templateSearch"
+            type="text"
+            placeholder="Search by template name…"
+            class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+            oninput="renderTemplates()"
+          />
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M8.5 3a5.5 5.5 0 104.383 9.02l2.548 2.55a.75.75 0 101.06-1.06l-2.55-2.548A5.5 5.5 0 008.5 3zM4.5 8.5a4 4 0 118 0 4 4 0 01-8 0z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Templates grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="templatesGrid"></div>
+    </section>
+
+    <!-- PAGE: Scorecards -->
+    <section id="page-scorecards" class="hidden">
+      <div class="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <button
+              class="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+              onclick="goTo('home')"
+              aria-label="Back"
+            >
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12.79 15.77a.75.75 0 01-1.06.02l-5-4.5a.75.75 0 010-1.1l5-4.5a.75.75 0 111.02 1.1L8.31 10l4.46 4.07a.75.75 0 01.02 1.06z" clip-rule="evenodd"/>
+              </svg>
+              Back
+            </button>
+            <span class="text-xs text-slate-500">/ Scorecards</span>
+          </div>
+          <h1 class="text-2xl font-bold tracking-tight mt-2">Company Scorecards</h1>
+          <p class="text-sm text-slate-600 mt-1">Search and filter companies by industry and status.</p>
+        </div>
+      </div>
+
+      <!-- Mini Dashboard -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="text-xs text-slate-500">Total companies</div>
+          <div id="stat-companies" class="text-2xl font-bold mt-1">0</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="text-xs text-slate-500">Industries</div>
+          <div id="stat-industries" class="text-2xl font-bold mt-1">0</div>
+          <div id="stat-industry-list" class="text-xs text-slate-500 mt-2"></div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="text-xs text-slate-500">Statuses</div>
+          <div class="mt-2 flex flex-wrap gap-2 text-xs">
+            <span id="stat-new" class="px-2 py-1 rounded-full bg-slate-100 border border-slate-200">New: 0</span>
+            <span id="stat-progress" class="px-2 py-1 rounded-full bg-slate-100 border border-slate-200">In Progress: 0</span>
+            <span id="stat-compliant" class="px-2 py-1 rounded-full bg-slate-100 border border-slate-200">Compliant: 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search + Filters -->
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <div class="flex-1">
+            <label class="text-xs font-medium text-slate-600" for="search">Search companies</label>
+            <div class="mt-1 relative">
+              <input
+                id="search"
+                type="text"
+                placeholder="Search by company name or ID…"
+                class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                oninput="renderCompanies()"
+              />
+              <div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M8.5 3a5.5 5.5 0 104.383 9.02l2.548 2.55a.75.75 0 101.06-1.06l-2.55-2.548A5.5 5.5 0 008.5 3zM4.5 8.5a4 4 0 118 0 4 4 0 01-8 0z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <div>
+              <label class="text-xs font-medium text-slate-600" for="industryFilter">Industry</label>
+              <select
+                id="industryFilter"
+                class="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                onchange="renderCompanies()"
+              >
+                <option value="all">All</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-xs font-medium text-slate-600" for="statusFilter">Status</label>
+              <select
+                id="statusFilter"
+                class="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                onchange="renderCompanies()"
+              >
+                <option value="all">All</option>
+                <option value="new">New</option>
+                <option value="in_progress">In Progress</option>
+                <option value="compliant">Compliant</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Companies List -->
+      <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div class="text-sm font-semibold">Companies</div>
+          <div id="resultsCount" class="text-xs text-slate-500">0 results</div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr class="text-left text-xs text-slate-500">
+                <th class="px-4 py-3 font-medium">Company</th>
+                <th class="px-4 py-3 font-medium">Company ID</th>
+                <th class="px-4 py-3 font-medium">Industry</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+                <th class="px-4 py-3 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="companiesTbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 hidden">
+      <div class="rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-2 text-sm text-slate-700"></div>
+    </div>
+  </main>
+
+  <script>
+    // -------------------------
+    // Dummy data
+    // -------------------------
+    const companies = [
+      { name: "Moyo Retail (Pty) Ltd", id: "C-10483", industry: "Retail", status: "new" },
+      { name: "Karoo Telecom", id: "C-21907", industry: "Telecoms", status: "in_progress" },
+      { name: "Umhlaba Insurance Group", id: "C-88712", industry: "Insurance", status: "compliant" },
+      { name: "Aurum Financial Services", id: "C-54011", industry: "Financial Services", status: "in_progress" },
+      { name: "Blue Crane Logistics", id: "C-66309", industry: "Logistics", status: "new" },
+      { name: "Saffron Health Network", id: "C-77201", industry: "Healthcare", status: "compliant" },
+      { name: "Vula Energy Partners", id: "C-30118", industry: "Energy", status: "new" },
+      { name: "CapeTech Manufacturing", id: "C-91145", industry: "Manufacturing", status: "in_progress" },
+    ];
+
+    const templates = [
+      {
+        name: "Financial Statement ID",
+        key: "financial_statement_id",
+        category: "Finance",
+        description: "Extract statement identifiers, periods, and audit markers.",
+        fields: ["Statement ID", "Reporting Period", "Entity Name", "Currency", "Auditor (optional)"]
+      },
+      {
+        name: "BEE Affidavit",
+        key: "bee_affidavit",
+        category: "Compliance",
+        description: "Capture affidavit details and B-BBEE level declarations.",
+        fields: ["Affidavit Date", "BEE Level", "Company Reg No", "Deponent Name", "Commissioner/Stamp"]
+      },
+      {
+        name: "Governance Policy",
+        key: "governance_policy",
+        category: "Governance",
+        description: "Track policy name, versioning, and approval controls.",
+        fields: ["Policy Title", "Version", "Approval Date", "Approver", "Effective Date"]
+      },
+      {
+        name: "Tax Clearance (TCS/PIN)",
+        key: "tax_clearance",
+        category: "Compliance",
+        description: "Store tax clearance status and verification references.",
+        fields: ["PIN / TCS Number", "Issue Date", "Expiry Date", "Company Name", "VAT/Reg No"]
+      },
+      {
+        name: "Company Registration (CIPC)",
+        key: "cipc_registration",
+        category: "Corporate",
+        description: "Extract company registration details from CIPC docs.",
+        fields: ["Registration No", "Directors", "Registered Address", "Incorporation Date", "Status"]
+      },
+      {
+        name: "Board Resolution",
+        key: "board_resolution",
+        category: "Governance",
+        description: "Capture resolution dates, parties, and signatures.",
+        fields: ["Resolution Date", "Resolution Title", "Signatories", "Purpose", "Attachments"]
+      }
+    ];
+
+    // -------------------------
+    // Simple routing (single file)
+    // -------------------------
+    const pages = {
+      home: "page-home",
+      entities: "page-entities",
+      scorecards: "page-scorecards"
+    };
+
+    function goTo(page) {
+      Object.values(pages).forEach(id => document.getElementById(id).classList.add("hidden"));
+      document.getElementById(pages[page]).classList.remove("hidden");
+
+      if (page === "scorecards") initScorecards();
+      if (page === "entities") initTemplates();
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // -------------------------
+    // Toast
+    // -------------------------
+    let toastTimer = null;
+    function toast(message) {
+      const wrap = document.getElementById("toast");
+      const box = wrap.querySelector("div");
+      box.textContent = message;
+      wrap.classList.remove("hidden");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => wrap.classList.add("hidden"), 1800);
+    }
+
+    // -------------------------
+    // Scorecards page
+    // -------------------------
+    let scorecardsInitialized = false;
+
+    function initScorecards() {
+      if (scorecardsInitialized) {
+        renderCompanies();
+        return;
+      }
+      scorecardsInitialized = true;
+
+      const industries = Array.from(new Set(companies.map(c => c.industry))).sort();
+      const industryFilter = document.getElementById("industryFilter");
+      industries.forEach(ind => {
+        const opt = document.createElement("option");
+        opt.value = ind;
+        opt.textContent = ind;
+        industryFilter.appendChild(opt);
+      });
+
+      updateStats();
+      renderCompanies();
+    }
+
+    function updateStats() {
+      const total = companies.length;
+      const industries = Array.from(new Set(companies.map(c => c.industry))).sort();
+
+      const countNew = companies.filter(c => c.status === "new").length;
+      const countProg = companies.filter(c => c.status === "in_progress").length;
+      const countComp = companies.filter(c => c.status === "compliant").length;
+
+      document.getElementById("stat-companies").textContent = total;
+      document.getElementById("stat-industries").textContent = industries.length;
+      document.getElementById("stat-industry-list").textContent = industries.join(" • ");
+
+      document.getElementById("stat-new").textContent = `New: ${countNew}`;
+      document.getElementById("stat-progress").textContent = `In Progress: ${countProg}`;
+      document.getElementById("stat-compliant").textContent = `Compliant: ${countComp}`;
+    }
+
+    function statusLabel(status) {
+      if (status === "new") return "New";
+      if (status === "in_progress") return "In Progress";
+      if (status === "compliant") return "Compliant";
+      return status;
+    }
+
+    function statusPill(status) {
+      const base = "inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium";
+      if (status === "new") return `${base} bg-slate-50 border-slate-200 text-slate-700`;
+      if (status === "in_progress") return `${base} bg-white border-slate-200 text-slate-700`;
+      if (status === "compliant") return `${base} bg-slate-100 border-slate-200 text-slate-800`;
+      return `${base} bg-slate-50 border-slate-200 text-slate-700`;
+    }
+
+    function renderCompanies() {
+      const q = (document.getElementById("search")?.value || "").trim().toLowerCase();
+      const ind = document.getElementById("industryFilter")?.value || "all";
+      const st = document.getElementById("statusFilter")?.value || "all";
+
+      let filtered = companies.slice();
+
+      if (q) filtered = filtered.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+      if (ind !== "all") filtered = filtered.filter(c => c.industry === ind);
+      if (st !== "all") filtered = filtered.filter(c => c.status === st);
+
+      const tbody = document.getElementById("companiesTbody");
+      tbody.innerHTML = "";
+
+      filtered.forEach(c => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50";
+
+        tr.innerHTML = `
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-900">${escapeHtml(c.name)}</div>
+            <div class="text-xs text-slate-500">Scorecard ready</div>
+          </td>
+          <td class="px-4 py-3 text-slate-700 font-mono text-xs">${escapeHtml(c.id)}</td>
+          <td class="px-4 py-3 text-slate-700">${escapeHtml(c.industry)}</td>
+          <td class="px-4 py-3">
+            <span class="${statusPill(c.status)}">${statusLabel(c.status)}</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs"
+              onclick="toast('Open scorecard: ${escapeJs(c.id)}')"
+            >
+              View
+              <svg class="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L10.94 10 7.23 6.29a.75.75 0 111.06-1.06l4.24 4.24a.75.75 0 010 1.06l-4.24 4.24a.75.75 0 01-1.06.02z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("resultsCount").textContent =
+        `${filtered.length} result${filtered.length === 1 ? "" : "s"}`;
+    }
+
+    // -------------------------
+    // Entity templates page
+    // -------------------------
+    let templatesInitialized = false;
+
+    function initTemplates() {
+      if (templatesInitialized) {
+        renderTemplates();
+        return;
+      }
+      templatesInitialized = true;
+      renderTemplates();
+    }
+
+    function renderTemplates() {
+      const q = (document.getElementById("templateSearch")?.value || "").trim().toLowerCase();
+      const grid = document.getElementById("templatesGrid");
+      grid.innerHTML = "";
+
+      let filtered = templates.slice();
+      if (q) filtered = filtered.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
+
+      filtered.forEach(t => {
+        const card = document.createElement("div");
+        card.className = "rounded-2xl border border-slate-200 bg-white p-5 hover:shadow-sm hover:border-slate-300 transition";
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold">${escapeHtml(t.name)}</div>
+              <div class="text-xs text-slate-500 mt-1">${escapeHtml(t.category)}</div>
+            </div>
+            <span class="text-xs px-2 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700">Template</span>
+          </div>
+          <p class="text-sm text-slate-600 mt-3">${escapeHtml(t.description)}</p>
+
+          <div class="mt-4">
+            <div class="text-xs font-medium text-slate-600">Common fields</div>
+            <ul class="mt-2 space-y-1 text-xs text-slate-600">
+              ${t.fields.slice(0, 4).map(f => `<li class="flex items-center gap-2">
+                <span class="h-1.5 w-1.5 rounded-full bg-slate-300"></span>
+                ${escapeHtml(f)}
+              </li>`).join("")}
+              ${t.fields.length > 4 ? `<li class="text-slate-500">+ ${t.fields.length - 4} more</li>` : ``}
+            </ul>
+          </div>
+
+          <div class="mt-5 flex items-center justify-between">
+            <button
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs"
+              onclick="toast('Preview: ${escapeJs(t.name)}')"
+            >
+              Preview
+              <svg class="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M10 4.5c-4.5 0-7.5 5.5-7.5 5.5S5.5 15.5 10 15.5 17.5 10 17.5 10 14.5 4.5 10 4.5zm0 9a3.5 3.5 0 113.5-3.5A3.5 3.5 0 0110 13.5z"/>
+              </svg>
+            </button>
+
+            <button
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs"
+              onclick="toast('Create from template: ${escapeJs(t.name)}')"
+            >
+              Use Template
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L10.94 10 7.23 6.29a.75.75 0 111.06-1.06l4.24 4.24a.75.75 0 010 1.06l-4.24 4.24a.75.75 0 01-1.06.02z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+            No templates found. Try a different search.
+          </div>
+        `;
+      }
+    }
+
+    // -------------------------
+    // Escapers
+    // -------------------------
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    function escapeJs(str) {
+      return String(str).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+    }
+  </script>
+</body>
+</html>

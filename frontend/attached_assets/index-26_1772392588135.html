@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processor - Bulk Upload & Extraction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        surface: {
+                            50: '#fafafa',
+                            100: '#f5f5f5',
+                            200: '#e5e5e5',
+                            300: '#d4d4d4',
+                            800: '#262626',
+                            900: '#171717',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
+
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .slide-in { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+        .drag-active { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
+
+        .step-active { border-color: #3b82f6; background-color: #eff6ff; color: #1d4ed8; }
+        .step-completed { border-color: #22c55e; background-color: #f0fdf4; color: #15803d; }
+
+        .entity-card { transition: all 0.2s ease; }
+        .entity-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+        .page { display: none; }
+        .page.active { display: block; }
+    </style>
+</head>
+<body class="bg-surface-50 text-surface-800 font-sans min-h-screen">
+
+    <!-- Navigation Header -->
+    <nav class="bg-white border-b border-surface-200 px-6 py-4 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center text-white">
+                    <i class="fa-solid fa-microchip text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-surface-900 text-lg">Document Processor</h1>
+                    <p class="text-xs text-surface-500">Bulk Upload, Classify & Extract</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-surface-600 hover:text-surface-900 hover:bg-surface-100 rounded-lg transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back to Entity Builder</span>
+                </a>
+                <div class="w-px h-6 bg-surface-300"></div>
+                <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-semibold text-sm">
+                    JD
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Progress Steps -->
+    <div class="bg-white border-b border-surface-200 px-6 py-6">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2" id="step-1-indicator">
+                    <div class="w-8 h-8 rounded-full border-2 border-brand-600 bg-brand-600 text-white flex items-center justify-center font-bold text-sm">1</div>
+                    <span class="font-medium text-brand-700">Upload</span>
+                </div>
+                <div class="flex-1 h-0.5 bg-surface-200 mx-4 relative">
+                    <div id="progress-line-1" class="absolute left-0 top-0 h-full bg-brand-600 transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <div class="flex items-center gap-2" id="step-2-indicator">
+                    <div class="w-8 h-8 rounded-full border-2 border-surface-300 text-surface-400 flex items-center justify-center font-bold text-sm">2</div>
+                    <span class="font-medium text-surface-400">Classify</span>
+                </div>
+                <div class="flex-1 h-0.5 bg-surface-200 mx-4 relative">
+                    <div id="progress-line-2" class="absolute left-0 top-0 h-full bg-brand-600 transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <div class="flex items-center gap-2" id="step-3-indicator">
+                    <div class="w-8 h-8 rounded-full border-2 border-surface-300 text-surface-400 flex items-center justify-center font-bold text-sm">3</div>
+                    <span class="font-medium text-surface-400">Review</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto p-6">
+
+        <!-- PAGE 1: UPLOAD -->
+        <div id="page-upload" class="page active">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-surface-900 mb-2">Upload Documents</h2>
+                <p class="text-surface-500">Drag and drop multiple files or click to browse. Supported formats: PDF, JPG, PNG, DOCX.</p>
+            </div>
+
+            <div id="dropzone" class="border-2 border-dashed border-surface-300 rounded-2xl p-12 text-center bg-white hover:border-brand-500 hover:bg-brand-50 transition-all cursor-pointer mb-6"
+                 ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" onclick="document.getElementById('fileInput').click()">
+                <input type="file" id="fileInput" multiple class="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onchange="handleFiles(this.files)">
+                <div class="w-20 h-20 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-surface-900 mb-2">Drop files here</h3>
+                <p class="text-surface-500 mb-4">or click to browse from your computer</p>
+                <div class="flex items-center justify-center gap-2 text-xs text-surface-400">
+                    <span class="px-2 py-1 bg-surface-100 rounded">PDF</span>
+                    <span class="px-2 py-1 bg-surface-100 rounded">JPG</span>
+                    <span class="px-2 py-1 bg-surface-100 rounded">PNG</span>
+                    <span class="px-2 py-1 bg-surface-100 rounded">DOCX</span>
+                </div>
+            </div>
+
+            <!-- Uploaded Files List -->
+            <div id="uploaded-files-section" class="hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-surface-900">Uploaded Documents <span id="file-count" class="text-surface-500 font-normal">(0)</span></h3>
+                    <button onclick="clearAllFiles()" class="text-sm text-red-600 hover:text-red-700">
+                        <i class="fa-solid fa-trash mr-1"></i> Clear all
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl border border-surface-200 overflow-hidden">
+                    <div id="file-list" class="divide-y divide-surface-200 max-h-64 overflow-y-auto">
+                        <!-- Files injected here -->
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="goToClassify()" id="continue-btn" class="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Continue to Classification <i class="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 2: CLASSIFY -->
+        <div id="page-classify" class="page">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-surface-900 mb-2">Classify Documents</h2>
+                <p class="text-surface-500">Select the document type for each file. This determines which entities will be extracted.</p>
+            </div>
+
+            <div class="bg-white rounded-xl border border-surface-200 overflow-hidden mb-6">
+                <div class="bg-surface-50 px-6 py-3 border-b border-surface-200 grid grid-cols-12 gap-4 text-xs font-bold text-surface-500 uppercase tracking-wider">
+                    <div class="col-span-5">Document</div>
+                    <div class="col-span-4">Document Type</div>
+                    <div class="col-span-3">Entities to Extract</div>
+                </div>
+                <div id="classification-list" class="divide-y divide-surface-200">
+                    <!-- Classification rows injected here -->
+                </div>
+            </div>
+
+            <div class="flex justify-between">
+                <button onclick="goToUpload()" class="px-6 py-3 border border-surface-300 text-surface-700 rounded-lg font-medium hover:bg-surface-100 transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Back
+                </button>
+                <button onclick="startProcessing()" id="process-btn" class="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors">
+                    <i class="fa-solid fa-microchip mr-2"></i> Start Processing
+                </button>
+            </div>
+        </div>
+
+        <!-- PAGE 3: PROCESSING -->
+        <div id="page-processing" class="page">
+            <div class="text-center py-12">
+                <div class="relative w-24 h-24 mx-auto mb-6">
+                    <div class="absolute inset-0 rounded-full border-4 border-surface-200"></div>
+                    <div class="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i class="fa-solid fa-robot text-2xl text-brand-600"></i>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold text-surface-900 mb-2">Processing Documents</h2>
+                <p class="text-surface-500 mb-2">AI is analyzing and extracting entities...</p>
+                <p id="processing-status" class="text-sm text-brand-600 font-medium">Initializing models</p>
+
+                <div class="max-w-md mx-auto mt-8">
+                    <div class="flex justify-between text-xs text-surface-500 mb-1">
+                        <span id="progress-text">0%</span>
+                        <span id="progress-file">File 0 of 0</span>
+                    </div>
+                    <div class="h-2 bg-surface-200 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-brand-600 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div id="processing-log" class="max-w-md mx-auto mt-6 text-left bg-surface-900 rounded-lg p-4 font-mono text-xs text-green-400 h-32 overflow-y-auto">
+                    <!-- Log messages -->
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 4: REVIEW & EDIT -->
+        <div id="page-review" class="page">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-surface-900">Review Extracted Entities</h2>
+                    <p class="text-surface-500">Verify and edit the extracted information before final submission</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="exportResults()" class="px-4 py-2 border border-surface-300 text-surface-700 rounded-lg hover:bg-surface-100">
+                        <i class="fa-solid fa-download mr-2"></i> Export JSON
+                    </button>
+                    <button onclick="finalSubmit()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                        <i class="fa-solid fa-check mr-2"></i> Final Submit
+                    </button>
+                </div>
+            </div>
+
+            <div id="results-container" class="space-y-6">
+                <!-- Results injected here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-surface-900/50 backdrop-blur-sm hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-surface-900">Edit Entity</h3>
+                <button onclick="closeEditModal()" class="text-surface-400 hover:text-surface-900">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-surface-700 mb-1">Entity Type</label>
+                    <input type="text" id="edit-entity-type" class="w-full px-3 py-2 border border-surface-300 rounded-lg bg-surface-100 text-surface-500" readonly>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-surface-700 mb-1">Extracted Value</label>
+                    <input type="text" id="edit-entity-value" class="w-full px-3 py-2 border border-surface-300 rounded-lg focus:border-brand-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-surface-700 mb-1">Confidence Score (%)</label>
+                    <div class="flex items-center gap-3">
+                        <input type="range" id="edit-confidence" min="0" max="100" class="flex-1 h-2 bg-surface-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="edit-confidence-display" class="text-sm font-mono w-12 text-right font-medium text-surface-700">95%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeEditModal()" class="flex-1 py-2 border border-surface-300 text-surface-700 rounded-lg hover:bg-surface-100">Cancel</button>
+                <button onclick="saveEdit()" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let uploadedFiles = [];
+        let documentClassifications = {};
+        let extractionResults = [];
+        let currentEdit = null;
+
+        // Document Type Definitions with Entities
+        const documentTypes = {
+            'id': {
+                label: 'ID Document',
+                icon: 'fa-id-card',
+                color: 'blue',
+                entities: ['ID Number', 'Full Name', 'Date of Birth', 'Nationality', 'Gender', 'Document Number']
+            },
+            'financial': {
+                label: 'Financial Statement',
+                icon: 'fa-file-invoice-dollar',
+                color: 'green',
+                entities: ['Company Name', 'Registration Number', 'Revenue', 'Net Income', 'Total Assets', 'Report Date', 'Currency']
+            },
+            'bee': {
+                label: 'BEE Affidavit',
+                icon: 'fa-certificate',
+                color: 'purple',
+                entities: ['Company Name', 'Registration Number', 'BEE Level', 'Annual Turnover', 'Black Ownership %', 'Issue Date', 'Expiry Date']
+            },
+            'cipc': {
+                label: 'CIPC Registration',
+                icon: 'fa-building',
+                color: 'orange',
+                entities: ['Company Name', 'Registration Number', 'Date of Incorporation', 'Company Type', 'Status', 'Director Names', 'Registered Address']
+            },
+            'invoice': {
+                label: 'Invoice',
+                icon: 'fa-file-invoice',
+                color: 'red',
+                entities: ['Invoice Number', 'Vendor Name', 'Invoice Date', 'Due Date', 'Total Amount', 'VAT Number', 'PO Number']
+            },
+            'contract': {
+                label: 'Contract/Agreement',
+                icon: 'fa-file-signature',
+                color: 'indigo',
+                entities: ['Contract Number', 'Party A', 'Party B', 'Effective Date', 'Expiry Date', 'Contract Value', 'Governing Law']
+            }
+        };
+
+        // Navigation Functions
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            window.scrollTo(0, 0);
+        }
+
+        function updateProgress(step) {
+            // Reset all
+            for (let i = 1; i <= 3; i++) {
+                const indicator = document.getElementById(`step-${i}-indicator`);
+                const circle = indicator.querySelector('div');
+                const text = indicator.querySelector('span');
+                circle.className = 'w-8 h-8 rounded-full border-2 border-surface-300 text-surface-400 flex items-center justify-center font-bold text-sm';
+                text.className = 'font-medium text-surface-400';
+            }
+
+            // Mark completed
+            for (let i = 1; i < step; i++) {
+                const indicator = document.getElementById(`step-${i}-indicator`);
+                const circle = indicator.querySelector('div');
+                const text = indicator.querySelector('span');
+                circle.className = 'w-8 h-8 rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center font-bold text-sm';
+                circle.innerHTML = '<i class="fa-solid fa-check"></i>';
+                text.className = 'font-medium text-green-600';
+                document.getElementById(`progress-line-${i}`).style.width = '100%';
+            }
+
+            // Mark current
+            const current = document.getElementById(`step-${step}-indicator`);
+            const currentCircle = current.querySelector('div');
+            const currentText = current.querySelector('span');
+            currentCircle.className = 'w-8 h-8 rounded-full border-2 border-brand-600 bg-brand-600 text-white flex items-center justify-center font-bold text-sm';
+            currentCircle.innerHTML = step;
+            currentText.className = 'font-medium text-brand-700';
+        }
+
+        // Drag and Drop
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-active');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-active');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-active');
+            handleFiles(e.dataTransfer.files);
+        }
+
+        function handleFiles(files) {
+            const newFiles = Array.from(files).map(file => ({
+                id: Date.now() + Math.random(),
+                file: file,
+                name: file.name,
+                size: (file.size / 1024).toFixed(1),
+                type: file.name.split('.').pop().toUpperCase()
+            }));
+
+            uploadedFiles = [...uploadedFiles, ...newFiles];
+            renderFileList();
+        }
+
+        function renderFileList() {
+            const container = document.getElementById('file-list');
+            const section = document.getElementById('uploaded-files-section');
+            const count = document.getElementById('file-count');
+            const continueBtn = document.getElementById('continue-btn');
+
+            if (uploadedFiles.length > 0) {
+                section.classList.remove('hidden');
+                count.textContent = `(${uploadedFiles.length})`;
+                continueBtn.disabled = false;
+
+                container.innerHTML = uploadedFiles.map((file, idx) => `
+                    <div class="px-6 py-4 flex items-center gap-4 hover:bg-surface-50 transition-colors">
+                        <div class="w-10 h-10 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center">
+                            <i class="fa-solid ${getFileIcon(file.type)}"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-surface-900 truncate">${file.name}</p>
+                            <p class="text-xs text-surface-500">${file.size} KB • ${file.type}</p>
+                        </div>
+                        <button onclick="removeFile(${idx})" class="text-surface-400 hover:text-red-600 p-2">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                section.classList.add('hidden');
+                continueBtn.disabled = true;
+            }
+        }
+
+        function getFileIcon(type) {
+            const map = {
+                'PDF': 'fa-file-pdf',
+                'JPG': 'fa-file-image',
+                'JPEG': 'fa-file-image',
+                'PNG': 'fa-file-image',
+                'DOC': 'fa-file-word',
+                'DOCX': 'fa-file-word'
+            };
+            return map[type] || 'fa-file';
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        function clearAllFiles() {
+            uploadedFiles = [];
+            documentClassifications = {};
+            renderFileList();
+        }
+
+        // Page Navigation
+        function goToClassify() {
+            showPage('page-classify');
+            updateProgress(2);
+            renderClassificationList();
+        }
+
+        function goToUpload() {
+            showPage('page-upload');
+            updateProgress(1);
+            document.getElementById('progress-line-1').style.width = '0%';
+        }
+
+        function renderClassificationList() {
+            const container = document.getElementById('classification-list');
+
+            container.innerHTML = uploadedFiles.map((file, idx) => `
+                <div class="px-6 py-4 grid grid-cols-12 gap-4 items-center hover:bg-surface-50 transition-colors">
+                    <div class="col-span-5 flex items-center gap-3">
+                        <div class="w-8 h-8 rounded bg-brand-100 text-brand-600 flex items-center justify-center text-xs">
+                            <i class="fa-solid ${getFileIcon(file.type)}"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="font-medium text-surface-900 text-sm truncate">${file.name}</p>
+                            <p class="text-xs text-surface-500">${file.size} KB</p>
+                        </div>
+                    </div>
+
+                    <div class="col-span-4">
+                        <select onchange="updateClassification(${idx}, this.value)" 
+                                class="w-full px-3 py-2 border border-surface-300 rounded-lg text-sm focus:border-brand-500 focus:outline-none bg-white focus:ring-2 focus:ring-brand-100 transition-all">
+                            <option value="">Select document type...</option>
+                            ${Object.entries(documentTypes).map(([key, def]) => 
+                                `<option value="${key}">${def.label}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+
+                    <div class="col-span-3">
+                        <div id="entities-preview-${idx}" class="flex flex-wrap gap-1">
+                            <span class="text-xs text-surface-400 italic">Select type to see entities</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateClassification(fileIdx, docType) {
+            documentClassifications[fileIdx] = docType;
+            const preview = document.getElementById(`entities-preview-${fileIdx}`);
+
+            if (docType && documentTypes[docType]) {
+                const entities = documentTypes[docType].entities;
+                preview.innerHTML = entities.map(e => 
+                    `<span class="px-2 py-0.5 bg-brand-100 text-brand-700 text-xs rounded-full border border-brand-200 font-medium">${e}</span>`
+                ).join('');
+            } else {
+                preview.innerHTML = '<span class="text-xs text-surface-400 italic">Select type to see entities</span>';
+            }
+        }
+
+        function startProcessing() {
+            // Validate all classified
+            const unclassified = uploadedFiles.filter((_, idx) => !documentClassifications[idx]);
+            if (unclassified.length > 0) {
+                alert(`Please classify all documents. ${unclassified.length} remaining.`);
+                return;
+            }
+
+            showPage('page-processing');
+            updateProgress(3);
+            simulateProcessing();
+        }
+
+        function simulateProcessing() {
+            const statusEl = document.getElementById('processing-status');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const progressFile = document.getElementById('progress-file');
+            const log = document.getElementById('processing-log');
+
+            const statuses = [
+                'Loading OCR models...',
+                'Detecting document layout...',
+                'Extracting text regions...',
+                'Running entity recognition...',
+                'Validating extracted data...',
+                'Cross-referencing databases...',
+                'Finalizing results...'
+            ];
+
+            let progress = 0;
+
+            const interval = setInterval(() => {
+                progress += Math.random() * 12;
+                if (progress > 100) progress = 100;
+
+                // Update UI
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${Math.floor(progress)}%`;
+
+                const currentFile = Math.min(Math.floor((progress / 100) * uploadedFiles.length) + 1, uploadedFiles.length);
+                progressFile.textContent = `File ${currentFile} of ${uploadedFiles.length}`;
+
+                // Update status
+                const statusIndex = Math.floor((progress / 100) * statuses.length);
+                if (statuses[statusIndex]) {
+                    statusEl.textContent = statuses[statusIndex];
+                }
+
+                // Add log
+                if (Math.random() > 0.6) {
+                    const logMsg = document.createElement('div');
+                    logMsg.textContent = `> ${statuses[statusIndex] || 'Processing...'} [${new Date().toLocaleTimeString()}]`;
+                    log.appendChild(logMsg);
+                    log.scrollTop = log.scrollHeight;
+                }
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        generateResults();
+                        showReview();
+                    }, 800);
+                }
+            }, 250);
+        }
+
+        function generateResults() {
+            extractionResults = uploadedFiles.map((file, idx) => {
+                const docType = documentClassifications[idx];
+                const def = documentTypes[docType];
+
+                return {
+                    fileId: file.id,
+                    fileName: file.name,
+                    documentType: def.label,
+                    documentTypeKey: docType,
+                    entities: def.entities.map(entityName => ({
+                        name: entityName,
+                        value: generateMockValue(entityName, docType),
+                        confidence: Math.floor(Math.random() * 15) + 85,
+                        status: 'extracted'
+                    }))
+                };
+            });
+        }
+
+        function generateMockValue(entityName, docType) {
+            const mocks = {
+                'ID Number': '850412-5087-083',
+                'Full Name': 'John Peter Doe',
+                'Date of Birth': '1985-04-12',
+                'Nationality': 'South African',
+                'Gender': 'Male',
+                'Document Number': 'ID-2024-8847',
+                'Company Name': 'Acme Technologies (Pty) Ltd',
+                'Registration Number': '2015/123456/07',
+                'Revenue': 'R 12,450,000.00',
+                'Net Income': 'R 2,100,000.00',
+                'Total Assets': 'R 45,000,000.00',
+                'Report Date': '2024-03-31',
+                'Currency': 'ZAR',
+                'BEE Level': 'Level 2',
+                'Annual Turnover': 'R 10,000,000',
+                'Black Ownership %': '51%',
+                'Issue Date': '2024-01-15',
+                'Expiry Date': '2025-01-15',
+                'Date of Incorporation': '2015-06-20',
+                'Company Type': 'Private Company',
+                'Status': 'Active',
+                'Director Names': 'J. Doe, S. Smith, M. Johnson',
+                'Registered Address': '123 Business Ave, Sandton, 2196',
+                'Invoice Number': 'INV-2024-0042',
+                'Vendor Name': 'Tech Supplies Co.',
+                'Invoice Date': '2024-02-15',
+                'Due Date': '2024-03-15',
+                'Total Amount': 'R 45,600.00',
+                'VAT Number': '4120245678',
+                'PO Number': 'PO-9981-X',
+                'Contract Number': 'CTR-2024-001',
+                'Party A': 'Acme Technologies',
+                'Party B': 'Global Services Ltd',
+                'Effective Date': '2024-01-01',
+                'Expiry Date': '2026-12-31',
+                'Contract Value': 'R 5,000,000.00',
+                'Governing Law': 'South African Law'
+            };
+
+            return mocks[entityName] || `Sample ${entityName}`;
+        }
+
+        function showReview() {
+            showPage('page-review');
+
+            // Mark step 3 as complete
+            const indicator = document.getElementById('step-3-indicator');
+            const circle = indicator.querySelector('div');
+            circle.className = 'w-8 h-8 rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center font-bold text-sm';
+            circle.innerHTML = '<i class="fa-solid fa-check"></i>';
+            indicator.querySelector('span').className = 'font-medium text-green-600';
+
+            renderResults();
+        }
+
+        function renderResults() {
+            const container = document.getElementById('results-container');
+
+            container.innerHTML = extractionResults.map((result, docIdx) => `
+                <div class="bg-white rounded-xl border border-surface-200 overflow-hidden slide-in" style="animation-delay: ${docIdx * 100}ms">
+                    <div class="px-6 py-4 bg-surface-50 border-b border-surface-200 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-${getColorForType(result.documentTypeKey)}-100 text-${getColorForType(result.documentTypeKey)}-600 flex items-center justify-center">
+                                <i class="fa-solid ${documentTypes[result.documentTypeKey].icon}"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-surface-900">${result.fileName}</h3>
+                                <p class="text-xs text-surface-500">${result.documentType}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                <i class="fa-solid fa-check mr-1"></i> Processed
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="p-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            ${result.entities.map((entity, entIdx) => `
+                                <div class="entity-card bg-surface-50 rounded-lg p-4 border border-surface-200">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs font-bold text-surface-500 uppercase tracking-wider">${entity.name}</span>
+                                        <span class="text-xs font-mono ${entity.confidence > 90 ? 'text-green-600' : 'text-yellow-600'} font-medium">${entity.confidence}%</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <p class="font-mono text-sm text-surface-900 truncate flex-1" title="${entity.value}">${entity.value}</p>
+                                        <button onclick="openEdit(${docIdx}, ${entIdx})" class="text-surface-400 hover:text-brand-600 p-1 transition-colors">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getColorForType(type) {
+            return documentTypes[type]?.color || 'gray';
+        }
+
+        // Edit Modal Functions
+        function openEdit(docIdx, entIdx) {
+            currentEdit = { docIdx, entIdx };
+            const entity = extractionResults[docIdx].entities[entIdx];
+
+            document.getElementById('edit-entity-type').value = entity.name;
+            document.getElementById('edit-entity-value').value = entity.value;
+            document.getElementById('edit-confidence').value = entity.confidence;
+            document.getElementById('edit-confidence-display').textContent = entity.confidence + '%';
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            currentEdit = null;
+        }
+
+        document.getElementById('edit-confidence').addEventListener('input', function() {
+            document.getElementById('edit-confidence-display').textContent = this.value + '%';
+        });
+
+        function saveEdit() {
+            if (!currentEdit) return;
+
+            const { docIdx, entIdx } = currentEdit;
+            const newValue = document.getElementById('edit-entity-value').value;
+            const newConfidence = parseInt(document.getElementById('edit-confidence').value);
+
+            extractionResults[docIdx].entities[entIdx].value = newValue;
+            extractionResults[docIdx].entities[entIdx].confidence = newConfidence;
+            extractionResults[docIdx].entities[entIdx].status = 'edited';
+
+            renderResults();
+            closeEditModal();
+        }
+
+        function exportResults() {
+            const dataStr = JSON.stringify(extractionResults, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `extraction-results-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+        }
+
+        function finalSubmit() {
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Submitting...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                alert(`Successfully submitted ${extractionResults.length} documents with ${extractionResults.reduce((acc, r) => acc + r.entities.length, 0)} extracted entities!`);
+
+                // Reset everything
+                uploadedFiles = [];
+                documentClassifications = {};
+                extractionResults = [];
+
+                // Go back to upload
+                showPage('page-upload');
+                updateProgress(1);
+                document.getElementById('progress-line-1').style.width = '0%';
+                document.getElementById('progress-line-2').style.width = '0%';
+
+                // Clear UI
+                document.getElementById('uploaded-files-section').classList.add('hidden');
+                document.getElementById('file-list').innerHTML = '';
+                document.getElementById('results-container').innerHTML = '';
+
+                // Reset button
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }, 1500);
+        }
+
+        // Close modal on outside click
+        document.getElementById('edit-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditModal();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+### What the Pipeline Should Extract to Calculate the Scorecard and Generate Docs/Slides
+
+Based on the provided documents—the client-facing "Info Request Sheet Template(1).xlsx" (blank form you send), the filled "BEE Information Gathering File - Thandanani Transport.xlsx" (real example), and the target "Final Report" PDF example—the pipeline must intelligently extract specific data from the filled Excel to:
+
+1. **Calculate the Scorecard**: Pull raw inputs (e.g., employee lists, spend amounts, % ownership) → run B-BBEE formulas (e.g., % calcs, points allocation, sub-minimum checks) → output totals, levels, gaps.
+2. **Fill/Generate Outputs**: Use extracted + calculated data to populate the certificate PDF (like the example), auditor Excel (detailed raw + calcs), and PDF/PPTX presentations (strategy slides with visuals, gaps, recommendations).
+
+The pipeline should be **maximum robust**: Handle partial fills, extra rows (e.g., clients adding 100+ suppliers), format variations (e.g., dates as "28 February 2025" vs "28/02/2025"), negatives/losses (e.g., NPAT <0 → use Deemed), and bulk uploads. Extract to a structured JSON (as I suggested earlier), then feed to your engine.
+
+Below, I break it down by **sheet/pillar** – what to extract, why (for calcs), and how it ties to outputs. This is based on the Revised Codes (as in your files) but with hooks for draft 2026 changes (e.g., Transformation Fund).
+
+#### Pipeline Extraction Overview
+- **Input**: Filled Excel (main file) + optional PDFs (e.g., cert for cross-validation).
+- **Extraction Strategy**:
+  - Sheet-by-sheet parsing (use openpyxl or similar; fuzzy match names like "Management Control" or "Procurement").
+  - Row-by-row for lists (ignore blanks; stop at empty rows or totals).
+  - Column mapping: Fuzzy headers (e.g., "Supplier Name *" → "supplierName"; handle asterisks as required flags).
+  - Transformations: Convert text % to decimals (e.g., "100.00%" → 1.0), dates to ISO (e.g., "28 February 2025" → "2025-02-28"), sum aggregates (e.g., total spend).
+  - Validation: Flag errors (e.g., missing Race in MC → "Incomplete – default 0 pts"), warnings (e.g., negative spend → "Review").
+- **Output JSON Structure** (for scorecard & docs):
+  ```json
+  {
+    "client": { /* From Information Request / Finance */ },
+    "financials": { /* Revenue, NPAT, TMPS, etc. */ },
+    "ownership": [ /* Array of shareholders */ ],
+    "mc": [ /* Array of employees */ ],
+    "skills": [ /* Array of trainings */ ],
+    "procurement": [ /* Array of suppliers */ ],
+    "esd": [ /* Array of contributions */ ],
+    "sed": [ /* Array of contributions */ ],
+    "yes": [ /* Array of youth employees */ ],
+    "calculated": { "pillars": { "ownershipPts": 25, ... }, "totalPts": 102, "level": 1, "gaps": {...} },
+    "errors": [ "Missing ID in MC row 3" ]
+  }
+  ```
+- **Calcs Enabled**: With this extracted data, run formulas (e.g., Ownership: sum BO% / target * pts; Procurement: spend * recognition % / TMPS * pts).
+- **Outputs Generated**: Dynamically fill templates (e.g., PDF with jsPDF, PPTX with pptxgenjs, Excel with exceljs) using the JSON.
+
+#### Sheet-by-Sheet Extraction Needs (From Filled Template)
+Extract these to cover **all pillars** – prioritized by frequency in your files.
+
+1. **Information Request Sheet** (General Client Details – Extract First for Context)
+   - **What to Extract**:
+     - Entity Name: From row1 (e.g., "Thandanani Transport")
+     - Financial Info: Revenue, NPAT, Payroll (historical & forecasts; e.g., rows 9-15: "Revenue" → value in next cell)
+     - Employment Equity Profile: Staff list details if provided (names, gender, race, etc.; often links to MC sheet)
+     - Ownership Details: Shareholder info if listed (names, % ownership; links to Ownership sheet)
+     - Skills Development: Training details (programs, costs; links to Skills sheet)
+     - Preferential Procurement: Supplier spend notes (foreign spend, exclusions; links to Procurement)
+     - ESD/SED: Support details (monetary/non-monetary, beneficiaries; links to ESD/SED sheets)
+   - **For Scorecard Calcs**: Sets baselines (Revenue/NPAT → Deemed NPAT; Payroll → Leviable for Skills).
+   - **For Outputs**: Fills certificate (Company Name, Address, Reg No, VAT); Auditor Excel (summary sheet); Slides (title slide with entity info).
+   - **Handling**: Narrative text – use keyword extraction (e.g., "Revenue: [value]").
+
+2. **Finance Sheet** (Financials & TMPS – Critical for Targets)
+   - **What to Extract**:
+     - Year End: From row2 (e.g., "28 February 2025")
+     - Revenue/NPAT/Payroll: From row1+ (e.g., "Total Wages and Salaries" = 2753331)
+     - Expenses/Inclusions: All listed (e.g., "Commission paid" → value; sum to Total Inclusions)
+     - Exclusions: All listed (e.g., "Council Levies/Utilities" → value; sum to Total Exclusions)
+     - TMPS: Calculated total (e.g., 4674994.56) or extract if pre-filled
+   - **For Scorecard Calcs**: Revenue/NPAT → Deemed NPAT (if margin <25% norm); TMPS = Inclusions - Exclusions → Procurement % targets; Payroll → Leviable for Skills.
+   - **For Outputs**: Certificate (Value-Adding Supplier: YES if TMPS qualifies); Auditor Excel (full Finance sheet replica + formulas); Slides (financial overview slide with charts).
+
+3. **Ownership & Ownership Chain Sheets** (Ownership Pillar)
+   - **What to Extract**:
+     - Shareholder Details: Rows 5+ (e.g., "Detail" col, Black Voting Rights, Black Economic Interest, Use Dropdown cols for groups like Black Military Veterans)
+     - Chain: Ownership flow (e.g., % in trusts/companies → flow-through to entity)
+     - Totals: If pre-calculated (e.g., Black Ownership 100%)
+   - **For Scorecard Calcs**: Sum % BO/BWO/BDG/BNE → points (e.g., 25% Black → 4 pts); Net Value (graduation factor).
+   - **For Outputs**: Certificate (Black Ownership %, Black Female %); Auditor Excel (Ownership sheet with calcs); Slides (ownership pie chart).
+
+4. **Management Control & Employment Equity Sheets** (MC Pillar)
+   - **What to Extract**:
+     - Employee List: Rows 2+ (Full Name, Gender, Race, Designation, Disabled?, Foreign?, ID Number, Voting Rights, Start Date)
+     - Levels: Breakdown by Executive, Senior, Middle, Junior, etc.
+     - EE Profile: Similar to MC but with more counts (e.g., Non-Executive Directors)
+   - **For Scorecard Calcs**: Count % by level/race/gender/disabled (e.g., 50% Black Board → 2 pts); EAP adjustment.
+   - **For Outputs**: Certificate (MC points); Auditor Excel (EE lists + % calcs); Slides (demographics bar chart).
+
+5. **Y.E.S Employees Sheet** (YES Enhancer)
+   - **What to Extract**:
+     - Youth List: Rows 2+ (Employee details, Age, Absorbed?, etc.)
+     - Counts: Total youth hires, absorption rate
+   - **For Scorecard Calcs**: If sub-minimums met + headcount targets → +1–3 levels.
+   - **For Outputs**: Certificate (if YES beneficiary); Auditor Excel (YES sheet); Slides (youth impact slide).
+
+6. **Skills Development Sheet** (Skills Pillar)
+   - **What to Extract**:
+     - Training List: Rows 2+ (Program Name, Category, Provider, Learner Name, ID, Gender, Race, Disabled?, Cost columns, Start/End Dates)
+     - Aggregates: Total spend by category (A/Bursaries, etc.)
+   - **For Scorecard Calcs**: % of Leviable (e.g., 6% Black spend → 8 pts); Bursaries 2.5% → 4 pts.
+   - **For Outputs**: Certificate (Skills points); Auditor Excel (Skills lists + breakdowns); Slides (spend pie chart).
+
+7. **Procurement - Suppliers & Imports Sheets** (Procurement Pillar)
+   - **What to Extract**:
+     - Supplier List: Rows 2+ (Supplier Name, Company Size, B-BBEE Level, VAT, Empowering Supplier?, Black Ownership %, Spend, Certificate Expiry)
+     - Imports/Exclusions: Rows 2+ (Import types, amounts for exclusions)
+     - Totals: Total Spend, TMPS
+   - **For Scorecard Calcs**: Recognized spend (Level 1=135%) / TMPS → points; 51% BO bonus.
+   - **For Outputs**: Certificate (PP points); Auditor Excel (Supplier lists + TMPS calcs); Slides (supplier level distribution chart).
+
+8. **Enterprise & Supplier Development Sheet** (ESD Pillar)
+   - **What to Extract**:
+     - Contribution List: Rows 2+ (Supplier Name, Black Ownership %, Size, Description, Date, Type (Grant/Direct Cost), Amount, Invoice/Payment Dates)
+     - Aggregates: Total contributions by type
+   - **For Scorecard Calcs**: % of Deemed NPAT (2% SD → 10 pts, 1% ED → 5 pts).
+   - **For Outputs**: Certificate (ESD points); Auditor Excel (ESD lists); Slides (contribution types bar).
+
+9. **Socioeconomic Development Sheet** (SED Pillar)
+   - **What to Extract**:
+     - Beneficiary List: Rows 2+ (Beneficiary Name, Description, ICT Initiative?, Date, Type, % Benefiting Black, Amount)
+     - Aggregates: Total spend
+   - **For Scorecard Calcs**: 1% Deemed NPAT → 5 pts.
+   - **For Outputs**: Certificate (SED points); Auditor Excel (SED lists); Slides (impact summary).
+
+10. **Other Sheets** (If Present – Economic Dev, Empowerment Financing, AFS, Definitions)
+    - **What to Extract**: Contributions/Targets if sector-specific (e.g., TI for Transformational Infrastructure in Economic Dev).
+    - **For Scorecard Calcs**: Optional bonuses (e.g., AFS for Financial Sector).
+    - **For Outputs**: Include in Auditor Excel if relevant; ignore Definitions (use for tooltips).
+
+#### How This Enables Full Outputs
+- **Scorecard Calc**: Extracted data → JSON → run formulas (sum points, check sub-minimums, level lookup: ≥100=Level 1 @135%).
+- **Certificate PDF**: Fill template (e.g., Entity Details from Info Request, Scores from calcs, Status: Level 1, 135%, Black Ownership 100%).
+- **Auditor Excel**: Export filled sheets + calcs (add formulas, audit trail: "Extracted from upload on [date]").
+- **PDF/PPTX Presentation**: Slides with charts (e.g., pillar bars), gaps (red highlights), recommendations (if Skills gap >5 pts: "Recommend R50k bursaries").
+
+Implement with maximum accuracy: 90% auto for clean fills, guided fixes for others. Test with your Thandanani example (e.g., Ownership 25, Total 102 → Level 1).

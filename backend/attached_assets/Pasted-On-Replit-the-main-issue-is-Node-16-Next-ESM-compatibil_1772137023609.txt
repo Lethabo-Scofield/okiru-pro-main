@@ -1,0 +1,100 @@
+On **Replit**, the main issue is Node 16/Next ESM compatibility. Replit defaults to ESM when `"type": "module"` is in `package.json`, so you need to handle **relative imports with explicit `.js` extensions**, and ensure your TypeScript compiles correctly. Here’s a full explanation and step-by-step guide for Replit:
+
+---
+
+### 1. **Update TypeScript Relative Imports**
+
+All imports of local files must include `.js` extensions **after compilation**, because Node ESM does not automatically resolve `.ts`:
+
+| File         | Fix Example                                                              |
+| ------------ | ------------------------------------------------------------------------ |
+| `index.ts`   | `import { registerRoutes } from "./routes.js";`                          |
+| `index.ts`   | `import { connectDB } from "./db.js";`                                   |
+| `routes.ts`  | `import { storage } from "./storage.js";`                                |
+| `routes.ts`  | `import { parseExcelBuffer, buildPipelineResult } from "./pipeline.js";` |
+| `routes.ts`  | `import { ShareholderModel, OwnershipDataModel } from "./models.js";`    |
+| `storage.ts` | `import { ShareholderModel } from "./models.js";`                        |
+
+> **Note:** This is only for local relative imports (`./`) — packages from `node_modules` don’t need `.js`.
+
+---
+
+### 2. **Remove or Replace Missing Modules**
+
+`@shared/schema` is failing because Replit doesn’t know this module. You need to either:
+
+* Remove `import { SomeSchema } from "@shared/schema";`
+* Or replace it with your local `models.ts` exports.
+
+---
+
+### 3. **Update `tsconfig.json`**
+
+Ensure TypeScript targets Node16/ESM correctly:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist"
+  },
+  "include": ["*.ts", "pipeline/*.ts", "storage.ts", "routes.ts", "db.ts"]
+}
+```
+
+---
+
+### 4. **Add `.js` extensions in Dynamic Imports**
+
+Any dynamic imports also need `.js`:
+
+```ts
+// Before
+const { setupVite } = await import("./vite");
+
+// After
+const { setupVite } = await import("./vite.js");
+```
+
+---
+
+### 5. **Ensure `package.json` has `"type": "module"`**
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  }
+}
+```
+
+---
+
+### 6. **Compile and Run**
+
+```bash
+# Install dependencies
+npm install
+
+# Compile TS to JS
+npm run build
+
+# Start server
+npm run start
+```
+
+If all `.js` imports are correct and `@shared/schema` is fixed, it will run fine on Replit.
+
+---
+
+I can rewrite **your full `index.ts`, `routes.ts`, and `storage.ts` with `.js` extensions and remove `@shared/schema`**, ready for Replit, so you can just copy/paste and `npm run build` without errors.
+
+Do you want me to do that next?

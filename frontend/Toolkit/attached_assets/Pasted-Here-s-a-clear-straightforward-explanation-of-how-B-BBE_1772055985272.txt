@@ -1,0 +1,72 @@
+Here’s a clear, straightforward explanation of how B-BBEE compliance (Broad-Based Black Economic Empowerment) actually works in South Africa — specifically how the **points system** determines your B-BBEE level, and why the table you listed (Non-Compliant → Level 1) looks like this.
+
+This is based on the **current rules** (as of February 2026 in Johannesburg), using the **Revised Codes of Good Practice (2013, amended 2019)** + the **Integrated Transport Sector Code** (which applies to your Thandanani Transport example). The system has not changed significantly since the 2019 amendments — the January 2026 draft amendments are still in public comment and not yet law.
+
+### How B-BBEE Compliance Works – The Points System
+
+1. There are **7 main pillars** (elements) that give points.
+2. Each pillar has a **maximum number of points** (total possible = usually 118–120 points under generic codes, or slightly different under sector codes like Transport QSE).
+3. You earn points in each pillar by meeting targets (e.g., % black ownership, % black management, spend on black suppliers, etc.).
+4. Your **total points** out of the maximum determine your **B-BBEE level** — the higher the points, the better the level.
+5. The **level** gives you a **recognition percentage** (used by companies when scoring you as a supplier — e.g., Level 1 = 135% recognition, meaning you count as 135% of your spend toward their Procurement scorecard).
+6. If you fail **sub-minimum requirements** on priority pillars, your level drops by 1 (or more) — even if total points are high.
+
+### The Official B-BBEE Level Table (Generic & Most Sector Codes)
+
+This is the standard table used across South Africa (including Transport QSE in your example). It has **not changed** in the current codes:
+
+| Total Points (out of ~118–120) | B-BBEE Level | Recognition Level (what buyers get when scoring you) |
+|--------------------------------|--------------|-------------------------------------------------------|
+| 100 and above                  | Level 1      | 135%                                                 |
+| 95 – 99.99                     | Level 2      | 125%                                                 |
+| 90 – 94.99                     | Level 3      | 110%                                                 |
+| 80 – 89.99                     | Level 4      | 100%                                                 |
+| 75 – 79.99                     | Level 5      | 80%                                                  |
+| 70 – 74.99                     | Level 6      | 60%                                                  |
+| 55 – 69.99                     | Level 7      | 50%                                                  |
+| 40 – 54.99                     | Level 8      | 10%                                                  |
+| Below 40                       | Non-Compliant| 0%                                                   |
+
+### Your Example from Thandanani Transport Certificate
+
+From the PDF you shared:
+
+- Total Score: **102.00**
+- This puts them in **Level 1** (100+ points)
+- Recognition Level: **135%** (meaning if someone buys from them, they get 135% of the spend counted toward their own Preferential Procurement scorecard)
+- Black Ownership: **100.00%** (full points in Ownership pillar)
+- Management Control: **27.00** (very strong – Transport QSE gives higher max here)
+- Preferential Procurement: **25.00**
+- Socio Economic Development: **25.00** (unusual – generic max is 5; likely a reporting or sector adjustment, but your system should cap SED at 5 unless Transport Code explicitly allows more)
+- Skills, Enterprise Dev, Employment Equity: **0.00** (no points earned)
+- Value-Adding Supplier: **YES**
+- ED Beneficiary: **YES, Category A**
+
+### Why Your System Shows "Non-Compliant — 51.56 pts"
+
+Your pipeline is **under-calculating** massively:
+
+- Ownership: 0/25 → should be 25/25 (100% black)
+- Management Control: 10.32/8 → should be 27/27
+- Procurement: 25/27 → close, but inconsistent
+- SED: 1.24/5 → should be 5/5 (or 25 if following PDF)
+- Total 51.56 → Non-Compliant (real is 102 → Level 1)
+
+The problem is **extraction + calculation failure**:
+- Not reading full employee/supplier/training lists (truncation)
+- Not converting % to decimals or counting black employees by level
+- Not applying recognition multipliers (e.g., Level 1 supplier = 135% spend)
+- Not handling sector-specific rules (Transport QSE has different max points, e.g., MC 27 instead of 19)
+
+### Quick Summary of How Compliance Works in Practice
+
+1. Company fills data (your "Info Request" Excel template).
+2. You (or verifier) calculate points per pillar.
+3. Total points → look up level in table above.
+4. Check sub-minimums on priority pillars (Ownership, Skills, Procurement) — if any <40% of target, drop 1 level.
+5. Issue certificate showing level + recognition % (buyers use this % in their own Procurement scorecard).
+6. Higher level = better procurement advantage (Level 1 = 135%, Level 4 = 100%, Level 8 = 10%, Non-Compliant = 0%).
+
+Your system needs to match the PDF output: **102 points → Level 1 @135%**.
+
+If you want, I can write a short checklist or prompt to fix the parser/calculations in your Replit project to get exactly this result. Just let me know! 😊

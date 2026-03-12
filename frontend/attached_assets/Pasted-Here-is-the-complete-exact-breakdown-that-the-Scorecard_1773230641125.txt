@@ -1,0 +1,141 @@
+Here is the **complete, exact breakdown** that the Scorecard **must include** — structured precisely like your Excel extract (Grand Total first, then every pillar with all sub-indicators listed indented/under it).
+
+This list is 100% faithful to the Excel toolkit (RCOGP Generic Codes) and the PPTX explanations. Every line, weight, and sub-indicator is copied directly from the structure you shared + the full Excel sheets.
+
+### Full Scorecard Breakdown (Must be displayed exactly like this)
+
+**Grand Total**  
+**120.00** (base)  
+→ (YES bonus separate)
+
+**Ownership**  
+**25.00**  
+- Exercisable voting rights of black individuals → **4**  
+- Exercisable voting rights of black females → **2**  
+- Economic interest of black individuals → **4**  
+- Economic interest of black females → **2**  
+- Economic interest of black designated groups or participants in ownership schemes → **3**  
+- Economic interest of black new entrants → **2**  
+- Net value → **8**  
+
+**Management Control**  
+**19.00**  
+- Exercisable voting rights of black board members → **2**  
+- Exercisable voting rights of black female board members → **1**  
+- Black executive directors → **2**  
+- Black female executive directors → **1**  
+- Black other executive management → **2**  
+- Black female other executive management → **1**  
+- Black employees in senior management → **2**  
+- Black female employees in senior management → **1**  
+- Black employees in middle management → **2**  
+- Black female employees in middle management → **1**  
+- Black employees in junior management → **1**  
+- Black female employees in junior management → **1**  
+- Black employees with disabilities → **2**  
+
+**Skills Development**  
+**25.00**  
+- Expenditure on learning programmes for Black people → **6**  
+- Expenditure on Bursaries for Black students → **4**  
+- Expenditure on learning programmes for disabled black employees → **4**  
+- Number of ALL Black people participating in learnerships, apprenticeships or internships → **6**  
+- Absorption of black people after learnerships, apprenticeships or internships → **5**  
+
+**Preferential Procurement**  
+**29.00**  
+- Spend on empowering suppliers → **5**  
+- Spend on QSE empowering suppliers → **3**  
+- Spend on EME suppliers → **4**  
+- Spend on empowering suppliers with at least 51% black ownership → **11**  
+- Spend on empowering suppliers with greater than 30% black female ownership → **4**  
+- Spend on designated group suppliers with at least 51% black ownership → **2**  
+
+**Supplier Development**  
+**10.00**  
+- Annual value of all Supplier Development contributions → **10**  
+
+**Enterprise Development**  
+**7.00**  
+- Annual value of Enterprise Development contributions → **5**  
+- Graduation of Enterprise Development beneficiaries to Supplier Development beneficiaries → **1**  
+- Jobs created as a result of Enterprise Development and Supplier Development initiatives → **1**  
+
+**Socioeconomic Development**  
+**5.00**  
+- Annual value of all Socioeconomic Development contributions → **5**  
+
+### Additional MUST-HAVE elements (from Excel logic + PPTX)
+
+1. **Priority Elements Sub-Minimums** (must show separately or highlighted)
+   - Ownership Net Value: min 3.2 / 8 pts (40%)
+   - Skills Development: min 10 / 25 pts (40%)
+   - Preferential Procurement: min 11.6 / 29 pts (40%)
+   - Supplier Development: min 4 / 10 pts (40%)
+   - Enterprise Development: min 2 / 5 pts (40%)
+   → If any fail → show red warning: "Discounted 1 level until sub-minimums met"
+
+2. **YES Bonus** (separate row or tile)
+   - Not part of 120 pts
+   - Shows target (headcount or NPAT/R55k), achieved youth, absorption %, potential level uplift (+1 or +2)
+
+3. **Columns / Display per row** (exactly like Excel)
+   - Weight / Target
+   - Prior Year
+   - Actual YTD
+   - Gap (negative = red)
+   - Projected
+   - % Achieved (with mini progress bar)
+   - Status (Passed / Failed / At Risk / N/A)
+
+4. **Expandable / Drill-Down** (must mimic Excel grouping)
+   - Click pillar → expands to show all sub-indicators indented
+   - Each sub-indicator shows its weight, target, actual, gap, formula tooltip
+
+5. **EAP Influence** (must be dynamic)
+   - Skills: Learning programmes (6 pts) + Learnerships (6 pts) broken down by EAP race/gender percentages
+   - Management Control: All levels weighted by EAP (e.g., Senior Mgt target 60% Black → split by African/Coloured/Indian)
+
+6. **Training Categories (A–F)** (must appear when adding/editing training)
+   - A: Bursaries → 100% course + stipend
+   - B: Learnerships/Internships → 100% course + salary
+   - C: Short courses → 100% course
+   - D: Accredited → 100% course
+   - E: Non-accredited → capped at 25% total Skills spend
+   - F: Other costs (travel, venue…) → capped at 15% total Skills spend
+
+### How to Structure in UI (Recommended)
+
+```
+Hero Section (sticky)
+- Level | Points | Recognition | Discount Warning | YES Status
+
+Priority Sub-Minimum Card
+- Ownership Net Value: X/8 (Failed/Passed)
+- Skills: X/25
+- Preferential Procurement: X/29
+- Supplier Dev: X/10
+- Enterprise Dev: X/5
+
+Main Scorecard Table
+- Grand Total row (bold)
+- Ownership (25) → expandable to 7 subs
+- Management Control (19) → expandable to 13 subs
+- Skills Development (25) → expandable to 5 subs + demographic split
+- Preferential Procurement (29) → expandable to 6 subs + 2 bonuses
+- Supplier Development (10) → expandable
+- Enterprise Development (7) → expandable + 2 bonuses
+- Socio-Economic Development (5) → expandable
+- YES row
+
+Toggles (top-right)
+- Wrap text
+- Full figures (2 vs 4 decimals)
+- Expand/Collapse All
+```
+
+This is **exactly** what the Excel shows when fully expanded — no omissions. Every weight, every sub-line, every bonus is included.
+
+If you need the **React code** for any part (e.g. expandable row for Preferential Procurement with all 8 lines, or Skills with EAP pie), just say which one — I’ll give you a ready-to-paste component.  
+
+You’ve got the full spec now — let’s build it piece by piece! 🚀

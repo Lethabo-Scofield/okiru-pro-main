@@ -1,0 +1,50 @@
+Action Items from Our Meeting
+Hey ScoField, based on the meeting transcript and summary you shared (from our discussion in Johannesburg), I've compiled the key action items below. I've organized them by assignee (where specified), with timelines, priorities, and references to the transcript timestamps for clarity. This focuses on the immediate priorities: validating the Excel as the source of truth, implementing the scorecard/dashboard, handling exports, and deferring bigger architecture like multi-tenancy or document ingestion to phase 2.
+If any of these need adjustment or if you want me to help verify the Excel calculations (e.g., by simulating formulas or spotting issues in the provided dump), let me know— we can dive deeper!
+1. ScoField (Developer) Actions
+
+Use the GP Excel as the source to verify data feeds and calculationsDescription: Load the Gauteng Province (GP) Excel file (likely the "Okiru Toolkit (RCOGP)_Template_v.1.0.xlsx" from our previous chat) as the initial data source. Test that all data feeds into the web app correctly and that calculations (e.g., Ownership net value, Skills spend, Deemed NPAT) match the Excel outputs. Use live client data for testing once ready.
+Priority: High – Immediate focus to get the base functional before adding features.
+Timeline: Start now; report back when scorecard/dashboard is complete.
+Reference: 15:26 ScoField; Excel and data integration section (4:35); Summary next steps.
+Notes: If calculations don't match, cross-check against typical B-BBEE formulas (e.g., Deemed NPAT = MAX(Current_NPAT, AVG(last_5_years)); sub-minimum check = IF(pillar_score < 40% of target, discount level by 1)). Flag any discrepancies.
+Copy the entire existing toolkit/tool into a new instanceDescription: Duplicate the current Excel toolkit (tabs, logic, formulas) into a new version or web app instance to reuse its structure. This includes sheets like Client Information, Ownership Data, MC Data, Skills Data, etc., and their interdependencies (e.g., Financials feeding into Deemed NPAT for ESD/SED targets).
+Priority: Medium – Do this early to preserve logic while building the app.
+Timeline: Immediate, before dashboard work.
+Reference: 43:44 ScoField; Scope and priority section (1:47).
+Notes: Ensure dependencies are mapped (e.g., EAP table in "EAP" sheet affects MC and Skills; Industry Norms affect NPAT calcs).
+Work on the scorecard dashboard and pillar pagesDescription: Build the main dashboard showing current/previous/target scores, quarter-over-quarter tracking, and pillar breakdowns (Ownership, Management Control, Skills, Procurement, ESD, SED). Include scenario planning (e.g., interventions like hiring black managers to boost MC score, or adding black-owned suppliers to Procurement). Make it dynamic—changes in one pillar propagate (e.g., new training spend updates Skills points). Integrate industry norms and EAP selection (user picks province/year from "EAP" and "Industry Norms" sheets).
+Priority: High – Core feature; get to production-ready.
+Timeline: Focus now; report back when complete for review.
+Reference: 44:53 ScoField; Dashboard, scorecard, exports section (10:32); Scenario planning features (7:42); Industry norms and EAP (30:46).
+Notes: Dashboard metrics: Total Score, B-BBEE Level, Discounted Level, YES Level. Use Excel as temp backend (upload/input area for updates). Support sector-specific tweaks later (e.g., Financial Services scorecard variations).
+
+2. Chengetai Myezwa Actions
+
+Prepare and document what the exported slides should look like for slide export templatesDescription: Create and document templates for slide exports (e.g., PowerPoint strategy pack). Define content: Current state scores, gap analysis, interventions, graphs (e.g., pillar comparisons), industry norms/EAP impacts. Include examples like "Empower - Slides MC" or "Empower Slides - Skills" from the Excel.
+Priority: Medium – Needed for export functionality.
+Timeline: Soon, to align with dashboard completion.
+Reference: 18:21 Chengetai Myezwa; Dashboard, scorecard, exports (10:32); Summary next steps.
+Notes: Exports should also include Excel output (full scorecard). Ensure visuals like charts from "Empower - Current State" are replicated.
+Review the Excel input and verify it performs all expected calculationsDescription: Once the Excel is marked "done" (after copying/verification), review inputs (e.g., Ownership Data, MC Data) and confirm calculations work (e.g., Net Value in "Ownership Calcs Formula", sub-minimums in "Scorecard Calculations"). Test with live client data.
+Priority: High – Validates the source before full app build.
+Timeline: After ScoField's initial verification.
+Reference: 24:44 Chengetai Myezwa; Excel and data integration (4:35); Summary next steps.
+Notes: Check business rules like 40% sub-minimum for priority pillars (Ownership, Skills, Procurement), discounting, and bonus points (e.g., 51% black-owned in Procurement).
+
+3. Team/Shared Actions
+
+Further iteration after review with live client Excel dataDescription: Once dashboard/scorecard is built and Excel verified, test with real client files. Iterate on features like scenario interventions (e.g., "What if we hire 2 black executives?" → updates MC score). Defer multi-tenancy, full document ingestion (PDF upload for certs), and sector-specific scorecards (e.g., adding unique elements for Mining).
+Priority: Medium – Post-initial build.
+Timeline: After ScoField reports back.
+Reference: Summary; Multi-tenant and sectors (38:01); Scope and priority (1:47).
+Notes: Landing page: Focus on single version with procurement analysis integrated; treat cert search/PDF upload as separate for SEO.
+
+Overall Priorities & Next Steps
+
+Immediate Focus: Excel verification, toolkit copy, dashboard/scorecard build (using Excel as backend).
+Deferred: Multi-tenant architecture, live data ingestion (phase 2), external updates for EAP/industry norms (manual for now).
+Milestone: Report back when scorecard/dashboard is ready for review (ScoField). Provide slide templates/strategy pack (Chengetai).
+Potential Risks: Complexity in scenario planning (inter-pillar dependencies); ensure EAP (by province, e.g., Gauteng targets) and norms update scoring thresholds dynamically.
+
+If this list misses anything from the meeting or you need help simulating Excel calcs (e.g., running a test

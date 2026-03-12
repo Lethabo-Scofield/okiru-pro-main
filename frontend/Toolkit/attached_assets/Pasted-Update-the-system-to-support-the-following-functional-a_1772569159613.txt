@@ -1,0 +1,141 @@
+Update the system to support the following functional and UI improvements.
+
+1. Datasheets
+
+Ensure uploaded datasheets are automatically sorted and organized.
+
+Provide clear categorization and ordering after upload.
+
+Confirm uploads appear correctly in the knowledge base or document list.
+
+2. Ownership Module
+
+Current state: Only shareholder ownership can be captured.
+
+Required changes:
+
+Add additional ownership types:
+
+Sale of assets
+
+Equity equivalents (if applicable)
+
+Any alternative ownership structures
+
+Allow selection of ownership type during capture.
+
+Store ownership type in the database.
+
+3. Management Control (MC)
+
+Bulk Upload
+
+Add bulk upload capability.
+
+Allow uploading multiple management records via CSV or Excel.
+
+Automatically map columns to fields.
+
+Validate before saving.
+
+Sidebar Navigation
+
+Ensure MC and EE sidebars open on the same page layout.
+
+Standardize navigation behavior.
+
+Sidebar should remain consistent between modules.
+
+4. Skills Development
+
+Training Category
+
+Add dropdown to select training category:
+
+Learnership
+
+Internship
+
+Short course
+
+Bursary
+
+Other
+
+EAP Requirements
+
+Add demographic fields:
+
+Race
+
+Gender
+
+Required for Employment Equity Alignment (EAP).
+
+Edit Functionality
+
+Add ability to edit existing training programs.
+
+Include:
+
+Update button
+
+Save changes option
+
+Disability Status
+
+Add disability status field:
+
+Yes / No
+
+Optional description field
+
+Scorecard Validation
+
+Verify:
+
+Scorecard calculations
+
+Target points
+
+Weightings
+
+Ensure alignment with official B-BBEE scorecard rules.
+
+5. Procurement Module
+
+Supplier Ownership Details
+
+Add fields for additional ownership information:
+
+Black ownership %
+
+Black women ownership %
+
+Youth ownership %
+
+Disabled ownership %
+
+Enterprise type
+
+Edit Functionality
+
+Add ability to edit supplier records after creation.
+
+Include update and save functionality.
+
+Expected Outcome
+
+The system should:
+
+Support full B-BBEE data capture.
+
+Allow editing of all records.
+
+Support bulk uploads where needed.
+
+Capture all demographic and ownership details.
+
+Maintain consistent navigation.
+
+Align with B-BBEE scorecard requirements.

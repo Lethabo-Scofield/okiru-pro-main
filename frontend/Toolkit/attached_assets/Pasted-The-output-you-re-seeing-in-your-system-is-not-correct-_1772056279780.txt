@@ -1,0 +1,83 @@
+The output you're seeing in your system is **not correct** — it's severely under-calculating the B-BBEE score and incorrectly classifying the company as **Non-Compliant** with only **51.56 points**.
+
+The real certificate (the PDF you shared) shows:
+
+- **Total Score: 102.00**
+- **B-BBEE Status: LEVEL 1**
+- **Recognition Level: 135%**
+- **Black Ownership: 100.00%**
+- **Pillars**:
+  - Equity Ownership: 25.00
+  - Management Control: 27.00
+  - Preferential Procurement: 25.00
+  - Socio Economic Development: 25.00 (this is unusual — generic max is 5; likely a sector-specific or reporting adjustment, but your system should cap SED at 5 unless Transport Code explicitly allows higher)
+  - Employment Equity, Skills Development, Enterprise Development: 0.00
+- **Other**: Value-Adding Supplier = YES, ED Beneficiary = YES (Category A)
+
+Your pipeline is failing in several critical ways:
+
+### Main Problems in Your Current Output
+
+1. **Total points way too low (51.56 vs real 102)**
+   - Ownership: 0/25 → should be 25/25 (100% black ownership = full points)
+   - Management Control: 10.32/8 → should be 27/27 (Transport QSE gives higher max than generic 19)
+   - Procurement: 25/27 → close but inconsistent (real is 25.00)
+   - SED: 1.24/5 → wrong (real shows 25.00, but cap at 5 in generic)
+   - Skills/ESD/EE: 0 → correct if no data filled
+
+2. **Sub-minimums flag wrong**
+   - It says "Sub-minimums not met — level discounted to Non-Compliant"
+   - But real certificate is Level 1 (no discount applied). Either:
+     - Sub-minimums are actually met in the data
+     - Or the discount logic is buggy
+
+3. **Entity extraction low (189 total, but only 6 shareholders, 12 employees, 122 trainings, 46 suppliers, 3 contributions)**
+   - Management Control sheet has hundreds of rows — your parser is stopping early (truncation issue).
+   - Procurement likely has more than 46 suppliers.
+   - Skills has 122 trainings — that's a lot, but points still 0 → spend not summed or % not calculated.
+
+4. **"Risks & Points of Clarification" ignored**
+   - Correct — it's not B-BBEE data; it's a strategy sheet. Safe to skip.
+
+5. **Recognition 0%**
+   - Wrong — Level 1 = 135% recognition. This is a direct consequence of wrong level calculation.
+
+### Correct B-BBEE Level Table (for reference)
+
+This is the standard table (unchanged in current codes):
+
+| Total Points | B-BBEE Level | Recognition % |
+|--------------|--------------|---------------|
+| 100+         | Level 1      | 135%          |
+| 95–99.99     | Level 2      | 125%          |
+| 90–94.99     | Level 3      | 110%          |
+| 80–89.99     | Level 4      | 100%          |
+| 75–79.99     | Level 5      | 80%           |
+| 70–74.99     | Level 6      | 60%           |
+| 55–69.99     | Level 7      | 50%           |
+| 40–54.99     | Level 8      | 10%           |
+| <40          | Non-Compliant| 0%            |
+
+Your system should output **Level 1 @135%** with **102 points**, not Non-Compliant @51.56.
+
+### Why This Is Happening
+
+- **Truncation / row limit**: Your parser stops reading sheets early (e.g., MC sheet has 500+ rows but only 12 employees extracted).
+- **No real calculations**: It's not counting black employees by designation, not summing spend, not applying recognition multipliers (Level 1 supplier = 135% spend).
+- **Wrong targets/max points**: MC max is 27 in Transport QSE (not 19 generic), SED capped at 5 (PDF 25 is likely error).
+- **Sub-minimum logic bug**: Even if priority pillars are met, it's flagging discount incorrectly.
+
+### How to Fix It (Quick Action Plan)
+
+1. **Fix row reading**: Loop until completely empty row or max 2000 rows per sheet.
+2. **Improve entity counting**:
+   - MC: Count black % per level (Executive, Senior, Middle, Junior) → apply pts (e.g., 60% black exec → 2 pts).
+   - Procurement: Sum spend, apply recognition % (Level 1 = 135%) → points vs TMPS.
+   - Ownership: If blackOwnership >=100% → 25 pts.
+3. **Use PDF as target**: Hardcode fallback or validation — if calculated <80 but data suggests high ownership → flag error.
+4. **Correct SED cap**: Always cap at 5 pts unless Transport Code override.
+5. **Sub-minimum check**: Only discount if Ownership <10 pts, Skills <10 pts, Procurement <11.6 pts.
+
+Once fixed, your output should match the PDF exactly: **102 pts → Level 1 @135%**.
+
+If you want, I can write a precise Replit prompt or code snippet to fix the parser/calculations. Just say "give me the fix prompt" or "write code for MC counting".

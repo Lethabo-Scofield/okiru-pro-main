@@ -1,0 +1,130 @@
+{
+  "calculations": [
+    {
+      "sheet": "Financials",
+      "cell": "row74",
+      "formula": "Revenue - Expenses or similar (truncated, but shows 8100064 - exclusions = TMPS 4674994.56)",
+      "description": "Total Measured Procurement Spend (TMPS) = Inclusions - Exclusions"
+    },
+    {
+      "sheet": "Ownership Calcs",
+      "cell": "A14",
+      "formula": " (B - C) / D",
+      "description": "Deemed Value calculation for net value"
+    },
+    {
+      "sheet": "Ownership Calcs",
+      "cell": "A21",
+      "formula": " B x (1 / (25% x C)) x 8",
+      "description": "Formula A for economic interest graduation"
+    },
+    {
+      "sheet": "Ownership Calcs",
+      "cell": "A27",
+      "formula": " B / C x 8",
+      "description": "Formula B for straight economic interest"
+    },
+    {
+      "sheet": "Scorecard Calculations",
+      "cell": "D57",
+      "formula": "Round down total points, apply sub-minimum discounts",
+      "description": "Final B-BBEE level calculation with rounding and discounting"
+    },
+    {
+      "sheet": "Financials",
+      "cell": "B10",
+      "formula": "Average of last 5 years NPAT",
+      "description": "Last 5 year NPAT average"
+    },
+    {
+      "sheet": "Financials",
+      "cell": "B11",
+      "formula": "MAX(current NPAT, last 5 year average)",
+      "description": "Max NPAT for deemed calculation"
+    },
+    {
+      "sheet": "Oustanding Debts Calcs",
+      "cell": "H2",
+      "formula": "(Value_of_Equity - Outstanding_Debt) / Carrying_Value_of_Debt",
+      "description": "Deemed value after debt"
+    },
+    {
+      "sheet": "Skills Calcs",
+      "cell": "D3",
+      "formula": "Leviable Amount x 0.035",
+      "description": "3.5% target for black skills spend"
+    },
+    {
+      "sheet": "TMPS",
+      "cell": "B8",
+      "formula": "SUM(Inclusions rows)",
+      "description": "Total Inclusions for TMPS"
+    },
+    {
+      "sheet": "TMPS",
+      "cell": "B28",
+      "formula": "SUM(Exclusions rows)",
+      "description": "Total Exclusions for TMPS"
+    },
+    {
+      "sheet": "ESD and SED Calcs",
+      "cell": "D2",
+      "formula": "Contribution Amount x Benefit Factor (e.g., Grant = 1.0)",
+      "description": "Recognized contribution for ESD/SED"
+    },
+    {
+      "sheet": "ESD Scorecard",
+      "cell": "Total Points",
+      "formula": "MIN(10, (Supplier Dev Spend / (Deemed NPAT * 0.02)) * 10) + MIN(5, (Enterprise Dev Spend / (Deemed NPAT * 0.01)) * 5) + bonuses",
+      "description": "ESD total points calculation"
+    },
+    {
+      "sheet": "SED Scorecard",
+      "cell": "Total Points",
+      "formula": "MIN(5, (SED Spend / (Deemed NPAT * 0.01)) * 5)",
+      "description": "SED total points calculation"
+    },
+    {
+      "sheet": "Summary Scorecard",
+      "cell": "Achieved Level",
+      "formula": "Lookup total points in level table (100+ = Level 1 @135%, 95-99 = Level 2 @125%, etc., apply discount if sub-minimum failed)",
+      "description": "Overall B-BBEE level and recognition %"
+    },
+    {
+      "sheet": "Procurement Scorecard",
+      "cell": "Total Points",
+      "formula": "Sum recognized spend % of TMPS * points per category (e.g., 51% BO spend / 25% target * 11 pts) + bonuses",
+      "description": "Preferential Procurement points"
+    },
+    {
+      "sheet": "Skills Scorecard",
+      "cell": "Total Points",
+      "formula": "MIN(8, black spend / (leviable * 0.06) * 8) + MIN(4, bursaries / (leviable * 0.025) * 4) + MIN(2, disabilities / (leviable * 0.003) * 2) + absorption bonus (5 pts)",
+      "description": "Skills Development points"
+    },
+    {
+      "sheet": "Management Control Scorecard",
+      "cell": "Grand Total",
+      "formula": "Sum % black by level * points (e.g., 50% black board * 2 pts, 60% black exec * 2 pts) + disabilities 2 pts",
+      "description": "Management Control points"
+    },
+    {
+      "sheet": "YES",
+      "cell": "YES Tier",
+      "formula": "If sub-minimums met and headcount target achieved: Tier 1 (1.5x target + absorption = +3 levels), Tier 2 (1x + absorption = +2), Tier 3 (1x = +1)",
+      "description": "YES enhancement level"
+    },
+    {
+      "sheet": "Scorecard Calculations",
+      "cell": "B-BBEE Status",
+      "formula": "Total pillar points - discounts; lookup level",
+      "description": "Final status with YES points added"
+    },
+    {
+      "sheet": "Financials",
+      "cell": "Deemed NPAT",
+      "formula": "IF(NPAT margin >= 0.25 * industry norm, actual NPAT, Revenue * industry norm)",
+      "description": "Deemed NPAT for ESD/SED targets"
+    }
+  ]
+}

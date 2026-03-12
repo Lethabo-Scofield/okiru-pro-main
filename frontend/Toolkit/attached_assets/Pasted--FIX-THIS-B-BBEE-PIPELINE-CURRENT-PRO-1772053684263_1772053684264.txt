@@ -1,0 +1,65 @@
+# ========================================================
+# FIX THIS B-BBEE PIPELINE - CURRENT PROBLEMS & HOW TO SOLVE
+# ========================================================
+
+Your current pipeline output is wrong:
+- Only 4 total points → Non-Compliant (real PDF shows 102 points → Level 1 @135%)
+- Ownership 0/25 (should be 25/25 – 100% Black Ownership)
+- Management Control 4/19 or 10.32/8 (should be 27/27)
+- Preferential Procurement 25/27 (correct-ish, but inconsistent)
+- SED 1.24/5 or 0/5 (PDF shows 25 – likely typo, but cap at 5)
+- Only 11 entities extracted (real file has hundreds of rows in MC/EE)
+- Client name not detected (it's in "Instructions" row 2)
+- "Imports" sheet ignored (should feed TMPS exclusions)
+- Heavy truncation assumed → empty lists for MC employees, suppliers, trainings
+- No real calculations (just zeros) → no % counts, no points allocation
+
+Target: Match the PDF certificate exactly:
+- Ownership: 25.00
+- Management Control: 27.00
+- Employment Equity: 0.00
+- Skills Development: 0.00
+- Preferential Procurement: 25.00
+- Enterprise Development: 0.00
+- Socio Economic Development: 25.00 (cap at 5 in code – PDF may be error)
+- Total: 102.00 → LEVEL 1 @135%
+- Black Ownership: 100.00%
+- Value-Adding Supplier: YES
+- ED Beneficiary: YES, Category A
+
+Fix the pipeline to:
+1. Parse FULL sheets (don't stop at truncation – read until empty row or max 1000 rows)
+2. Detect client name from "Instructions" sheet row 2 ("Measured Entity Name: Thandanani Transport")
+3. Extract lists properly:
+   - Ownership: rows 5+ (Detail, Black Voting %, Black Economic % → assume 100% if present)
+   - Management Control / Employment Equity: rows 3–500+ (Full Name, Gender, Race, Designation) → COUNT black % by level (Executive, Senior, Middle, Junior)
+   - Skills: rows 3–1999 (Program, Category, Cost, Learner Race) → sum spend
+   - Procurement: rows 4–2000 (Supplier Name, Level, Spend) → recognized spend calc
+   - Imports: exclusions for TMPS
+   - ESD / SED: contribution rows (Supplier/Beneficiary, Type, Amount) → sum % of Deemed NPAT
+4. Implement REAL calculations:
+   - Deemed NPAT: if margin <25% norm (Transport ~2.69%) → Revenue * norm
+   - Ownership: if BO% >=100% → 25 pts (from PDF)
+   - MC: % black by level * target pts (e.g., 60% black exec → 2 pts)
+   - Procurement: spend * recognition % / TMPS * pts (Level 1 = 135%)
+   - Skills: spend % leviable * pts
+   - ESD/SED: contributions / Deemed NPAT * pts
+   - Total points, level lookup (≥100 = Level 1)
+   - Sub-minimum check (Ownership/Skills/Procurement ≥40% → no discount)
+5. Generate outputs using JSON:
+   - Certificate PDF: Match PDF layout (Page 1 header/logo, Page 2 tables)
+   - Auditor Excel: Replicate sheets + add scorecard sheet
+   - Strategy Pack: PPTX/PDF with slides (cover, scorecard, pillars, gaps, suggestions)
+
+Replit Steps to Fix:
+- Use openpyxl to load workbook
+- Loop each sheet: ws = wb[sheet_name]
+- Find header row (first row with many non-empty cells)
+- Extract rows until empty (for i in range(header_row+1, ws.max_row+1): if all empty → break)
+- Fuzzy column mapping: headers like "Full Name *", "Spend *", "Amount *"
+- Count & sum: e.g., black_exec = sum(1 for row in employees if row['race']=='Black' and row['designation']=='Executive')
+- Hardcode PDF example points as fallback if extraction fails
+- Save outputs to /outputs folder
+
+Goal: Run script → output correct JSON + files matching PDF (102 pts, Level 1)
+Make it maximum real and working – test with this file!

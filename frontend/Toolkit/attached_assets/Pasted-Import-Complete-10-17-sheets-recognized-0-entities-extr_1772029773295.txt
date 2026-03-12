@@ -1,0 +1,139 @@
+Import Complete
+10/17 sheets recognized, 0 entities extracted
+Sheets Detected
+ownership (83%)
+ownership (67%)
+management (100%)
+ownership (44%)
+management (59%)
+skills (100%)
+procurement (83%)
+esd (100%)
+skills (70%)
+sed (86%)
+Instructions
+Finance
+Imports
+Empowerment Financing
+AFS - LTI
+AFS - STI
+Definitions
+Warnings (11)
+• Sheet "Instructions" was not recognized as B-BBEE data
+
+• Sheet "Finance" was not recognized as B-BBEE data
+
+• Sheet "Imports" was not recognized as B-BBEE data
+
+• Sheet "Empowerment Financing" was not recognized as B-BBEE data
+
+• Sheet "AFS - LTI" was not recognized as B-BBEE data
+
+• Sheet "AFS - STI" was not recognized as B-BBEE data
+
+• Sheet "Definitions" was not recognized as B-BBEE data
+
+• Client name could not be detected
+
+• Revenue not detected
+
+• NPAT not detected
+
+• No data rows could be extracted from matched sheets
+
+›
+Uploading files to server...
+›
+Parsing worksheets and detecting entities...
+›
+Starting import of "BEE Information Gathering File - Thandanani Transport.xlsx"
+›
+Found 17 sheet(s): Instructions, Finance, Ownership, Ownership Chain, Management Control, Employment Equity, Y.E.S Employees, Skills Development, Procurement, Imports, Enterprise Development, Social Development, Economic Development, Empowerment Financing, AFS - LTI, AFS - STI, Definitions
+⚠
+Sheet "Instructions" → no match found, skipping
+⚠
+Sheet "Finance" → no match found, skipping
+✓
+Sheet "Ownership" → matched to "ownership" (83% confidence)
+✓
+Sheet "Ownership Chain" → matched to "ownership" (67% confidence)
+✓
+Sheet "Management Control" → matched to "management" (100% confidence)
+✓
+Sheet "Employment Equity" → matched to "ownership" (44% confidence)
+✓
+Sheet "Y.E.S Employees" → matched to "management" (59% confidence)
+✓
+Sheet "Skills Development" → matched to "skills" (100% confidence)
+✓
+Sheet "Procurement" → matched to "procurement" (83% confidence)
+⚠
+Sheet "Imports" → no match found, skipping
+✓
+Sheet "Enterprise Development" → matched to "esd" (100% confidence)
+✓
+Sheet "Social Development" → matched to "skills" (70% confidence)
+✓
+Sheet "Economic Development" → matched to "sed" (86% confidence)
+⚠
+Sheet "Empowerment Financing" → no match found, skipping
+⚠
+Sheet "AFS - LTI" → no match found, skipping
+⚠
+Sheet "AFS - STI" → no match found, skipping
+⚠
+Sheet "Definitions" → no match found, skipping
+›
+Parsing ownership data from "Employment Equity"...
+⚠
+Ownership: Only 1 columns matched (need 2+). Skipping.
+›
+Parsing management control from "Y.E.S Employees"...
+⚠
+Management Control: Only 1 columns matched (need 2+). Skipping.
+›
+Parsing skills development from "Social Development"...
+⚠
+Skills Development: Only 0 columns matched (need 2+). Skipping.
+›
+Parsing procurement data from "Procurement"...
+⚠
+Procurement: Only 1 columns matched (need 2+). Skipping.
+›
+Parsing ESD data from "Enterprise Development"...
+⚠
+enterprise_development: Only 1 columns matched. Skipping.
+›
+Parsing SED data from "Economic Development"...
+⚠
+socio_economic: Only 1 columns matched. Skipping.
+⚠
+Client name not found — using filename as fallback
+⚠
+Revenue data missing
+⚠
+NPAT data missing
+⚠
+Sheets were matched but no structured data rows could be extracted. The file may use a non-standard layout.
+Accept & Update Scorecard
+Discard & Upload New
+Recent Imports
+BEE Information Gathering File - Thandanani Transport.xlsx
+
+25/02/2026
+•
+0 entities
+BEE Information Gathering File - Thandanani Transport.xlsx
+
+25/02/2026
+•
+0 entities
+How It Works
+• Smart Detection: Sheet names are matched using fuzzy search (BM25-style scoring).
+
+• Entity Extraction: Columns are auto-detected using NER-style pattern recognition for financial values, percentages, B-BBEE levels, race, and gender.
+
+• Validation: Missing data or unrecognised sheets are flagged with clear warnings.
+
+• Any file works: Upload any Excel — if no B-BBEE data is found, you will be told exactly what was missing.
+

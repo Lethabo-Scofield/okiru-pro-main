@@ -1,0 +1,112 @@
+You are designing and building a clean, professional, and user-friendly "Industry Norms & Deemed NPAT" section for a modern B-BBEE compliance web application. This section is used to look up quarterly industry profit margin norms (from Stats SA P0044) and calculate Deemed NPAT — which directly affects ESD and SED targets (2% SD, 1% ED, 1% SED of NPAT).
+
+Goal:
+Make this section feel like a smart, reliable lookup tool + calculator. Users should quickly select their industry and date, see the correct norm, understand how Deemed NPAT is derived, and see the impact on their scorecard — all in one glance. It should be intuitive even for non-finance people (transformation managers, HR, consultants).
+
+Core Requirements for the UI Section:
+
+1. Overall Layout & Style
+   - Full-width card or dedicated tab/page called "Industry Norms & Deemed NPAT"
+   - Clean, professional design: white/light background, blue accents for interactive elements, green for positive/calculated values
+   - Responsive: desktop shows side-by-side panels, mobile stacks vertically
+   - Three main zones:
+     A. Top: Quick selector + current norm summary (hero card)
+     B. Middle: Interactive table of norms (filterable/sortable)
+     C. Bottom: Deemed NPAT calculator + impact preview
+
+2. Top Section – Quick Selector & Summary Card (Hero)
+   - Big title: "Industry Norms Lookup & Deemed NPAT Calculator"
+   - Two main dropdowns side-by-side (or stacked on mobile):
+     - Industry: searchable dropdown with ~10 options (All industries, Mining, Manufacturing, Electricity Gas & Water, Construction, Trade, Transport & Communication, Real Estate & Business Services, Community/Social/Personal Services)
+     - Publication Date / Quarter: dropdown showing latest first (e.g. "Q2 2025 – 27 Jun 2025", "Q4 2024 – 31 Dec 2024", etc.)
+   - Auto-show summary card below dropdowns:
+     - Selected Industry: [name]
+     - Selected Norm Date: [date]
+     - Industry Norm Margin: [X.XX%] (big bold green number)
+     - Status badge: "Latest Available" (green) or "Historical" (grey) or "Negative Margin – using 0% floor" (orange warning)
+     - Small note: "Source: Stats SA P0044 Quarterly Financial Statistics | Last refreshed: [app date]"
+
+3. Middle Section – Norms History Table
+   - Collapsible accordion or tab: "View All Historical Norms"
+   - Interactive table (use TanStack Table / AG Grid / MUI DataGrid):
+     - Columns: Publication Date | Industry | Norm Margin (%) | Notes (e.g. "Negative – floored at 0%")
+     - Sortable by date (newest first default) and by norm value
+     - Filterable: by industry, by year, search box for quick find
+     - Highlight row matching current selection (bold + light blue background)
+     - Pagination: 10–20 rows per page (data has ~100+ entries)
+     - Export button: "Download Full Norms CSV" (excel-friendly)
+
+4. Bottom Section – Deemed NPAT Calculator & Impact Preview
+   - Card titled: "Deemed NPAT Calculation for ESD/SED Targets"
+   - Inputs (pre-filled where possible):
+     - Your Revenue (ZAR): number input (pull from Financials section if available)
+     - Your Actual NPAT (ZAR): number input (pull from Financials)
+     - Your Actual NPAT Margin (%): auto-calculated
+     - 25% of Industry Norm: auto-shown (e.g. if norm 5.76% → 1.44%)
+   - Logic display (step-by-step, readable):
+     Step 1: Compare actual margin vs 25% of norm
+     Step 2: If actual margin ≥ 25% of norm → Use Actual NPAT
+     Step 3: Else → Deemed NPAT = Revenue × Industry Norm
+     Result: Big number "Deemed NPAT = R XXX,XXX,XXX" (green if using deemed, blue if actual)
+   - Impact preview mini-cards:
+     - ESD (Supplier Dev) Target: 2% of Deemed NPAT → R XXXk (points potential 10)
+     - ED Target: 1% of Deemed NPAT → R XXXk (points potential 5)
+     - SED Target: 1% of Deemed NPAT → R XXXk (points potential 5)
+   - Warning if negative norm: "Negative industry norm detected – using 0% floor for deemed calculation"
+
+5. Data to Embed / Use (hardcode or load from JSON)
+   Provide this cleaned data structure in the prompt or as a JSON file:
+
+   Example JSON snippet (latest entries):
+   [
+     {
+       "date": "2025-06-27",
+       "quarter": "Q2 2025",
+       "industry": "All industries",
+       "norm": 5.76
+     },
+     {
+       "date": "2025-06-27",
+       "quarter": "Q2 2025",
+       "industry": "Mining and quarrying industry",
+       "norm": 10.05
+     },
+     {
+       "date": "2025-06-27",
+       "quarter": "Q2 2025",
+       "industry": "Manufacturing industry",
+       "norm": 5.78
+     },
+     // ... add all relevant entries from 2021–2025
+     {
+       "date": "2023-09-30",
+       "quarter": "Q3 2023",
+       "industry": "All industries",
+       "norm": 5.58
+     }
+     // Include full list – ~80–100 rows
+   ]
+
+6. Integration Points
+   - Pull Revenue & Actual NPAT from "Financials" section (state/context)
+   - Push selected norm & calculated Deemed NPAT to ESD Scorecard and SED Scorecard
+   - In Scenario mode: allow override of norm % or date → show "Scenario Deemed NPAT" in comparison table
+   - Add toggle: "Preview Draft 2026 Rules" → show note: "Transformation Fund alternative: 3% NPAT → up to 20 ESD points (pending finalisation)"
+
+7. UX Polish & Cool Touches
+   - Instant recalc on dropdown change or input
+   - Loading spinner when recalculating
+   - Tooltips on every field (e.g., "Why 25%? Per B-BBEE Codes, deemed NPAT kicks in below 25% of industry norm")
+   - Success toast: "Norm updated – ESD target now R XXXk"
+   - Mobile: collapse table into cards or "View History" button
+   - Accessibility: ARIA labels, keyboard navigation, high contrast
+
+Deliverables:
+- Component structure (React preferred): IndustryNormsSelector, NormsTable, DeemedNPATCalculator
+- State management example (Zustand / Context)
+- How to handle negative norms (floor at 0%)
+- Visual mockup description or Tailwind classes suggestion
+
+Make it feel trustworthy, fast, and empowering — users should walk away thinking: "Now I know exactly what my real ESD/SED targets are."
+
+Build something clean, accurate and beautiful!

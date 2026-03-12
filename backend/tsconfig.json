@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "index.ts",
+    "db.ts",
+    "models.ts",
+    "routes.ts",
+    "schema.ts",
+    "storage.ts",
+    "pipeline/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "vite.ts"]
+}

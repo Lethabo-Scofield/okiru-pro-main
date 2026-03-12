@@ -1,0 +1,36 @@
+You are fixing a failing B-BBEE compliance data extraction pipeline prototype in Replit. The current output is incorrect: it shows only 4 total points (Non-Compliant), low entity count (11), missed client name, unrecognized "Imports" sheet, and wrong pillar points (e.g., Ownership 0/25 instead of 25/25 from PDF example, Management 4/19 instead of 27, SED 0/5 instead of 5). This is due to truncation handling (assumes empty lists), no actual calculations (just zeros), poor column mapping, and missed content scanning.
+
+Explain the issues first in comments, then fix the code to properly parse the Excel, calculate scorecard, and generate correct JSON + outputs (certificate PDF, auditor Excel, strategy PPTX/PDF). Use the provided Excel dump + PDF layout. Make it fully working in Replit – test with the data, handle max rows (e.g., 500+ in MC), sum aggregates, convert formats (% to decimal, dates to ISO).
+
+Core Fixes Needed:
+- Truncation: Read full sheets (loop until empty row, not stop at dump limit).
+- Client name: Scan "Instructions" row2 for "Measured Entity Name:".
+- Entities: Count rows properly (e.g., MC has 500+ employees → count black % by designation).
+- Calcs: Implement formulas (e.g., Ownership: if blackOwnership >=100% → 25 pts; MC: % black exec /60% target *2 pts).
+- Pillars: Use PDF example as target (Ownership 25, MC 27, PP 25, SED 5, total 102 → Level 1).
+- Imports: Map to TMPS exclusions (subtract from inclusions).
+- Outputs: Generate real files in /outputs folder.
+
+Steps for Replit Code (Python preferred):
+1. Install: openpyxl, pandas, reportlab (PDF), python-pptx (PPTX).
+2. Load Excel, parse sheet-by-sheet (fuzzy headers: "Full Name *" → fullName).
+3. Extract to JSON as below example.
+4. Calculate scorecard in code (add function calculate_scorecard(json_data)).
+5. Generate files: PDF matching screenshot layouts (Page 1 header/logo, Page 2 tables).
+6. Console: Print fixed log like "Fixed: Ownership 25/25, Total 102, Level 1".
+
+Example Correct JSON (Show This in Code as Target):
+{
+  "status": "success",
+  "client": { "name": "Thandanani Packers & Haulers cc t/a Thandanani Transport" },
+  "financials": { "revenue": 8100064, "npat": 3425069.44, "tmps": 4674994.56 },
+  "ownership": { "blackOwnershipPercent": 100.00, "calculatedPoints": 25.00 },
+  "managementControl": { "calculatedPoints": 27.00 },
+  "skillsDevelopment": { "calculatedPoints": 0.00 },
+  "preferentialProcurement": { "calculatedPoints": 25.00 },
+  "enterpriseSupplierDevelopment": { "calculatedPoints": 0.00 },
+  "socioEconomicDevelopment": { "calculatedPoints": 5.00 },
+  "scorecard": { "totalPoints": 102.00, "beeLevel": "LEVEL 1" }
+}
+
+Full code structure: main.py with parse_excel(), calculate(), generate_pdf(), etc. Run and fix until matches PDF points. Make it maximum working!

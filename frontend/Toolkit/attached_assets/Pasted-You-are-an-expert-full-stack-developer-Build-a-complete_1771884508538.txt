@@ -1,0 +1,112 @@
+You are an expert full-stack developer. Build a complete production-ready B-BBEE (Broad-Based Black Economic Empowerment) compliance web application that matches an Excel toolkit exactly. This is for South African companies.
+
+## PROJECT OVERVIEW
+Build a web app where users can:
+1. Upload their B-BBEE Excel toolkit
+2. See their scorecard on a beautiful dashboard
+3. Edit pillar data and see scores update in real-time
+4. Create "what-if" scenarios
+5. Export updated Excel and PowerPoint reports
+
+## TECH STACK
+- **Frontend**: Next.js 14 (App Router), Tailwind CSS, shadcn/ui components
+- **Backend**: Next.js API routes (no separate backend needed initially)
+- **Database**: PostgreSQL with Prisma ORM (for Phase 2 - start with file-based)
+- **Excel Processing**: SheetJS (xlsx) for reading/writing Excel
+- **Deployment**: Ready for Vercel
+
+## DATA STRUCTURE (Match Excel Exactly)
+
+### Core Data Models
+```typescript
+// types.ts
+interface Client {
+  id: string;
+  name: string;
+  financialYear: string;
+  revenue: number;
+  npat: number;
+  leviableAmount: number;
+  industrySector: string;
+  eapProvince: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'National';
+}
+
+interface OwnershipData {
+  id: string;
+  clientId: string;
+  shareholders: Shareholder[];
+  companyValue: number;
+  outstandingDebt: number;
+  yearsHeld: number;
+}
+
+interface Shareholder {
+  name: string;
+  blackOwnership: number;      // 0-1
+  blackWomenOwnership: number; // 0-1
+  shares: number;
+  shareValue: number;
+}
+
+interface ManagementData {
+  id: string;
+  clientId: string;
+  employees: Employee[];
+}
+
+interface Employee {
+  name: string;
+  gender: 'Male' | 'Female';
+  race: 'African' | 'Coloured' | 'Indian' | 'White';
+  designation: 'Board' | 'Executive' | 'Senior' | 'Middle' | 'Junior';
+  isDisabled: boolean;
+}
+
+interface SkillsData {
+  id: string;
+  clientId: string;
+  leviableAmount: number;
+  trainingPrograms: TrainingProgram[];
+}
+
+interface TrainingProgram {
+  name: string;
+  category: 'bursary' | 'learnership' | 'apprenticeship' | 'short course';
+  cost: number;
+  employeeId?: string;
+  isEmployed: boolean;
+  isBlack: boolean;
+}
+
+interface ProcurementData {
+  id: string;
+  clientId: string;
+  tmps: number; // Total Measured Procurement Spend
+  suppliers: Supplier[];
+}
+
+interface Supplier {
+  name: string;
+  beeLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  blackOwnership: number; // 0-1
+  spend: number;
+}
+
+interface ESDData {
+  id: string;
+  clientId: string;
+  contributions: Contribution[];
+}
+
+interface SEDData {
+  id: string;
+  clientId: string;
+  contributions: Contribution[];
+}
+
+interface Contribution {
+  beneficiary: string;
+  type: 'grant' | 'interest_free_loan' | 'lower_interest_loan' | 'overhead_costs' | 'professional_services' | 'employee_time';
+  amount: number;
+  category: 'supplier_development' | 'enterprise_development' | 'socio_economic';
+}

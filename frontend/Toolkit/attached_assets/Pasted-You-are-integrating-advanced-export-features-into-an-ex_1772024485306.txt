@@ -1,0 +1,71 @@
+You are integrating advanced export features into an existing B-BBEE compliance web platform, with the exports triggered from the "Import Excel" tab (or dashboard) after processing a client's filled "Info Request Sheet Template" and "BEE Information Gathering File". The exports must be real, functional, and high-quality: a B-BBEE Certificate PDF (matching the provided example layout with logo, entity details, scorecard, status), an Excel audit pack for auditors (detailed raw data + calcs), and PDF/PPTX presentation files (strategy pack with slides, gaps, recommendations). All exports are dynamically generated based on the imported/calculated data from the filled templates, ensuring everything is "maximum" real and working (use reliable libraries, handle edge cases, preview before download).
+
+Focus on seamless integration: After import & scorecard calc, show an "Export Options" section in the Import tab – users select formats, customize (e.g., add notes), and download. Make it professional, compliant with B-BBEE Codes (as of Feb 2026, including draft 2026 previews), and user-friendly for Johannesburg teams.
+
+Core Requirements for Export Integration (Starting from Import Excel Tab):
+
+1. Entry Point & Trigger in Import Tab
+   - In the "Import Excel" tab (post-import review screen), add an "Export Results" section/card below the summary.
+   - Trigger: After successful import & scorecard update, auto-show buttons: "Generate Certificate PDF", "Export Auditor Excel", "Create Strategy Pack (PDF/PPTX)"
+   - Preview mode: For each export, show a quick on-screen preview (e.g., PDF embed or PPTX thumbnail carousel) before download.
+   - Customization: Inputs like "Add Report Notes", "Include Draft 2026 Rules? (toggle)", "Verification Analyst Name" (default from user profile).
+
+2. Export 1: B-BBEE Certificate PDF (Match Example Layout)
+   - Generate a multi-page PDF exactly like the "Final BEE Verification Report" example:
+     - Page 1: Header (Doc No, Last Modified, Approved By, Revision), Logo ("BEE ONLINE VERIFICATION"), Title "Final BEE Verification Report", Entity Name/Trade Name, Date (e.g., "30 January 2026")
+     - Page 2: Entity Details (Company Name, Trade Name, Address, Reg No, VAT No), Scorecard Overview (Ownership pts, MC pts, etc., Total Score), B-BBEE Status (Recognition Level %, BEE Status Level, Black Ownership %, Black Female %, Value-Adding Supplier, ED Beneficiary, Category, Applicable Scorecard/Code, Certificate Number, Verification Analyst, Technical Signatory)
+     - Remaining pages (3–7): Detailed pillar breakdowns (tables from scorecard), disclaimers, signatures.
+   - Data source: Pull from imported template (e.g., Finance for Revenue/NPAT, Ownership for % BO, etc.) + calculated scores.
+   - Libraries: Use pdf-lib or jsPDF for PDF generation; add logo as image embed.
+   - File name: "Final_BEE_Report_[Entity_Name]_[Date].pdf"
+
+3. Export 2: Auditor Excel Pack (Detailed for Verification)
+   - Generate a comprehensive Excel file for auditors, replicating/mirroring the filled template structure but enhanced with calcs:
+     - Sheets: Match imported ones (Finance with totals/averages/Deemed NPAT, Ownership with net value formulas, MC/Employment Equity with % calcs, Skills with spend breakdowns, Procurement with TMPS & recognized spend, ESD/SED with contributions, etc.)
+     - Add extra sheets: "Summary Scorecard" (total points/level), "Audit Trail" (import date, changes, flags like "Negative NPAT used deemed"), "Gaps & Recommendations" (auto-generated suggestions).
+     - Include raw imported data + formulas (e.g., in Finance: SUM for totals, IF for deemed logic).
+     - Protect non-editable cells; add validation (dropdowns from original template).
+   - Libraries: Use exceljs or xlsx for Node.js generation.
+   - File name: "Auditor_Pack_[Entity_Name]_[Date].xlsx"
+
+4. Export 3: Strategy Pack Presentation (PDF/PPTX)
+   - Generate PPTX (primary) and PDF version (for quick share) as a polished strategy presentation:
+     - Slides structure (10–15 slides): Cover (entity name, date, logo), Scorecard Overview (table like PDF example), Pillar Details (one slide per pillar with targets/actuals/gaps/charts), Gaps Analysis (bar charts, recommendations like "Hire 2 black execs for +4 MC pts"), What-If Scenarios (if any, side-by-side tables), Next Steps/Actions, Disclaimers.
+     - Visuals: Charts (bar for pillar points, pie for ownership %), colors (green for good, red for gaps), Johannesburg-themed branding if needed.
+     - Data: Dynamic from scorecard – e.g., pull gaps from calcs, suggestions based on rules (if Skills <8, suggest "Increase bursaries by R50k").
+   - Libraries: pptxgenjs for PPTX, pdf-lib for PDF conversion.
+   - File names: "Strategy_Pack_[Entity_Name]_[Date].pptx" and ".pdf"
+
+5. Data Determination from Filled Info Request Sheet
+   - All exports are 100% driven by the imported "Info Request Sheet Template" / "BEE Information Gathering File":
+     - Client details (name, address, reg no) from "Information Request" sheet
+     - Financials (Revenue, NPAT, payroll) from "Finance" sheet → calc Deemed NPAT, TMPS
+     - Ownership from "Ownership" / "Ownership Chain" (voting, economic interest %)
+     - MC/Employment Equity from "Management Control" / "Employment Equity" (employee lists, designations)
+     - Skills from "Skills Development" (programs, costs, learners)
+     - Procurement from "Procurement - Suppliers" / "Imports" (suppliers, levels, spend, exclusions)
+     - ESD from "Enterprise & Supplier Development" (contributions, types, amounts)
+     - SED from "Socioeconomic Development" (beneficiaries, spends)
+     - YES from "Y.E.S Employees" (youth hires)
+   - Handle template variations: Fuzzy match sheets/headers, ignore extras like "Instructions" / "Definitions".
+
+6. Integration with Existing Platform
+   - Trigger from Import tab: After parse & scorecard update, auto-enable exports
+   - Use existing data stores (e.g., Redux/state for scorecard) to populate exports
+   - Scenarios: If import is base for scenario, include "Scenario X" slides in pack
+   - Draft 2026 toggle: Adjust exports (e.g., add Transformation Fund row if enabled)
+   - Download queue: Allow multi-export (zip all files)
+
+7. Technical & UX Notes
+   - Backend: Generate files server-side (Node.js/Express), return download links
+   - Frontend: React buttons with loading spinners, previews (PDF embed, PPTX via Office.js if possible)
+   - Error handling: "No data for ESD – certificate incomplete?" → disable export or flag in PDF
+   - Make it "maximum real/working": Use real libraries, test with sample imports, handle large files
+
+Deliverables:
+- Updated Import tab UI with Export section
+- API endpoints (/api/export/certificate, /api/export/audit-excel, /api/export/strategy-pack)
+- Code examples for PDF/PPTX generation
+- Flow diagram (upload → parse → calc → export)
+
+Ensure it's compliant, beautiful, and 100% dynamic from imports. Build for max reliability!
