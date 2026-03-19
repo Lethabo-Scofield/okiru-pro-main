@@ -28,7 +28,10 @@ import { COLLECTIONS } from '../../arango/collections.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const graphRepo = new GraphRepository();
-const scorecardRepo = new ScorecardRepository();
+
+function p(req: Request, key: string): string {
+  return String(req.params[key] || '');
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/templates/ingest - Upload toolkit, extract everything, store in ArangoDB
@@ -116,9 +119,9 @@ router.get('/', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/cells', async (req: Request, res: Response) => {
   try {
-    const cells = await graphRepo.getGraphCells(req.params.id);
+    const cells = await graphRepo.getGraphCells(p(req, 'id'));
     return res.json({
-      graphKey: req.params.id,
+      graphKey: p(req, 'id'),
       totalCells: cells.length,
       formulaCells: cells.filter(c => c.formula).length,
       inputCells: cells.filter(c => !c.formula).length,
@@ -136,10 +139,10 @@ router.get('/:id/cells', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/graph', async (req: Request, res: Response) => {
   try {
-    const graph = await graphRepo.getFormulaGraph(req.params.id);
+    const graph = await graphRepo.getFormulaGraph(p(req, 'id'));
     if (!graph) return res.status(404).json({ message: 'Graph not found' });
 
-    const cells = await graphRepo.getGraphCells(req.params.id);
+    const cells = await graphRepo.getGraphCells(p(req, 'id'));
     const edges = cells.flatMap(c =>
       c.dependsOn.map(dep => ({ from: dep, to: c.address }))
     );
@@ -176,7 +179,7 @@ router.get('/:id/graph', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/structure', async (req: Request, res: Response) => {
   try {
-    const graph = await graphRepo.getFormulaGraph(req.params.id);
+    const graph = await graphRepo.getFormulaGraph(p(req, 'id'));
     if (!graph) return res.status(404).json({ message: 'Graph not found' });
 
     const db = getArangoDB();
@@ -219,7 +222,7 @@ router.get('/:id/structure', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.post('/:id/evaluate', async (req: Request, res: Response) => {
   try {
-    const graph = await graphRepo.getFormulaGraph(req.params.id);
+    const graph = await graphRepo.getFormulaGraph(p(req, 'id'));
     if (!graph) return res.status(404).json({ message: 'Graph not found' });
 
     const computeClient = getComputeClient();
@@ -227,7 +230,7 @@ router.post('/:id/evaluate', async (req: Request, res: Response) => {
 
     const linkCursor = await db.query(aql`
       FOR g IN ${db.collection(COLLECTIONS.formulaGraphs)}
-        FILTER g._key == ${req.params.id}
+        FILTER g._key == ${p(req, 'id')}
         RETURN g.computeModelId
     `);
     const rows = await linkCursor.all();
@@ -254,7 +257,7 @@ router.post('/:id/evaluate', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.post('/:id/compare', upload.single('truthFile'), async (req: Request, res: Response) => {
   try {
-    const graph = await graphRepo.getFormulaGraph(req.params.id);
+    const graph = await graphRepo.getFormulaGraph(p(req, 'id'));
     if (!graph) return res.status(404).json({ message: 'Graph not found' });
 
     if (!req.file) {
@@ -267,7 +270,7 @@ router.post('/:id/compare', upload.single('truthFile'), async (req: Request, res
     const truthGraph = buildFormulaGraph(truthBuffer, truthFilename);
     const truthStructure = extractScorecardStructure(truthGraph, truthBuffer, truthFilename);
 
-    const storedCells = await graphRepo.getGraphCells(req.params.id);
+    const storedCells = await graphRepo.getGraphCells(p(req, 'id'));
 
     const comparison: Array<{
       address: string;
@@ -311,7 +314,7 @@ router.post('/:id/compare', upload.single('truthFile'), async (req: Request, res
 
     const total = matches + mismatches;
     return res.json({
-      graphKey: req.params.id,
+      graphKey: p(req, 'id'),
       truthFile: truthFilename,
       totalCompared: total,
       matches,
@@ -332,9 +335,10 @@ router.post('/:id/compare', upload.single('truthFile'), async (req: Request, res
 // ---------------------------------------------------------------------------
 router.get('/:id/trace/:cellAddress', async (req: Request, res: Response) => {
   try {
-    const { id, cellAddress } = req.params;
-    const direction = req.query.direction === 'forward' ? 'forward' : 'backward';
-    const maxDepth = parseInt(req.query.maxDepth as string) || 10;
+    const id = p(req, 'id');
+    const cellAddress = p(req, 'cellAddress');
+    const direction = String(req.query.direction || 'backward') === 'forward' ? 'forward' : 'backward';
+    const maxDepth = parseInt(String(req.query.maxDepth || '10')) || 10;
 
     if (direction === 'forward') {
       const result = await graphRepo.traceDependents(id, cellAddress, maxDepth);
@@ -355,10 +359,10 @@ router.get('/:id/trace/:cellAddress', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/pillar/:pillarCode', async (req: Request, res: Response) => {
   try {
-    const cells = await graphRepo.getCellsByPillar(req.params.id, req.params.pillarCode);
+    const cells = await graphRepo.getCellsByPillar(p(req, 'id'), p(req, 'pillarCode'));
     return res.json({
-      graphKey: req.params.id,
-      pillar: req.params.pillarCode,
+      graphKey: p(req, 'id'),
+      pillar: p(req, 'pillarCode'),
       totalCells: cells.length,
       cells,
     });

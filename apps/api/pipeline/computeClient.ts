@@ -61,7 +61,7 @@ export class ComputeClient {
 
   private async fetchWithTimeout(
     url: string,
-    init: RequestInit & { body?: BodyInit }
+    init?: RequestInit & { body?: BodyInit }
   ): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -71,7 +71,7 @@ export class ComputeClient {
         ...init,
         headers: {
           'X-Admin': 'true',
-          ...(init.headers as Record<string, string>),
+          ...(init?.headers as Record<string, string>),
         },
         signal: controller.signal,
       });

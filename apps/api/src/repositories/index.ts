@@ -13,7 +13,7 @@ import type {
   FinancialYear, InsertFinancialYear,
   ImportLog, InsertImportLog,
   ExportLog, InsertExportLog,
-} from "../schema.js";
+} from "../../schema.js";
 
 export interface IUserRepository {
   findById(id: string): Promise<User | undefined>;

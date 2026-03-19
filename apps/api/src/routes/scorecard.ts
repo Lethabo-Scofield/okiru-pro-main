@@ -34,7 +34,7 @@ router.get('/models', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/models/:versionId/summary', async (req: Request, res: Response) => {
   try {
-    const { versionId } = req.params;
+    const versionId = String(req.params.versionId || '');
     if (!versionId) {
       return res.status(400).json({ message: 'versionId is required' });
     }

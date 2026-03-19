@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import type { InsertOrganization, InsertUser, User } from "../schema.js";
+import type { InsertOrganization, InsertUser, User } from "../../schema.js";
 import { OrganizationRepository, UserRepository } from "../repositories/userRepository.js";
 
 export class AuthService {
