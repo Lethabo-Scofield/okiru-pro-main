@@ -23,6 +23,8 @@ import Scenarios from "@toolkit/pages/Scenarios";
 import ExcelImport from "@toolkit/pages/ExcelImport";
 import Scorecard from "@toolkit/pages/Scorecard";
 import Settings from "@toolkit/pages/Settings";
+import AccuracyReport from "@toolkit/pages/AccuracyReport";
+import ProvenanceGraph from "@toolkit/pages/ProvenanceGraph";
 import Profile from "@toolkit/pages/Profile";
 import AuthPage from "@toolkit/pages/AuthPage";
 import ClientSelector from "@toolkit/pages/ClientSelector";
@@ -76,6 +78,8 @@ function AppRoutes() {
           <Route path="/" component={Dashboard}/>
           <Route path="/scorecard" component={Scorecard}/>
           <Route path="/import" component={ExcelImport}/>
+          <Route path="/accuracy" component={AccuracyReport}/>
+          <Route path="/provenance" component={ProvenanceGraph}/>
           <Route path="/scenarios" component={Scenarios}/>
           <Route path="/reports" component={Reports}/>
           <Route path="/settings" component={Settings}/>

@@ -1,18 +1,23 @@
 {
-  "name": "rest-express",
+  "name": "@okiru/web",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev:client": "vite dev --port 5000",
-    "dev": "NODE_ENV=development tsx server/index.ts",
+    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "build": "tsx script/build.ts",
-    "start": "NODE_ENV=production node dist/index.cjs",
+    "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "clean": "rm -rf dist build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ESLint not configured for web'",
+    "lint:fix": "echo 'ESLint not configured for web'"
   },
   "dependencies": {
+    "@okiru/types": "workspace:*",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.31",

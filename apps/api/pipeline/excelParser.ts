@@ -182,17 +182,45 @@ function isJunkRow(name: string): boolean {
   const lower = name.toLowerCase().trim();
   if (!lower || lower.length < 2) return true;
   if (/^(detail|details|tier|total|totals|sub\s*total|grand\s*total|heading|header|column|row|note|notes|n\/a|na|tbd|test|example|sample|scenario|target|weighting|weight|compliance\s*target|indicator|element|sub-?element|description|criteria|formula)$/i.test(lower)) return true;
+  if (/^test\s*\d*$/i.test(lower)) return true;
+  if (/^(employee|staff|person)\s*\d+$/i.test(lower)) return true;
+  if (/^(name|surname)\s*\d+$/i.test(lower)) return true;
   if (/^year\s*end/i.test(lower)) return true;
   if (/^(b-?bbee|bee)\s*(level|status|certificate)/i.test(lower) && lower.length < 30) return true;
-  if (/^\d+[\.\)]?\s*$/.test(lower)) return true;
+  if (/^\d+[.)]?\s*$/.test(lower)) return true;
   if (/^(supplier\s*name|learner\s*name|employee\s*name|beneficiary\s*name|name\s*(&|and)\s*surname|full\s*name|programme\s*name|program\s*name|company\s*name|entity\s*name)$/i.test(lower)) return true;
   if (/^(occupational\s*level|management\s*level|designation|gender|race|population|disabled|disability)$/i.test(lower)) return true;
+  if (/^(african|colou?red|indian|white|black)\s+(male|female)$/i.test(lower)) return true;
+  if (/^(male|female)\s+(african|colou?red|indian|white|black)$/i.test(lower)) return true;
+  if (/black\s*(female|male)?\s*employees?/i.test(lower) && lower.length < 60) return true;
+  if (/(employees?|staff|headcount)\s*(in|at)\s*(senior|middle|junior|top|board|executive)/i.test(lower)) return true;
+  if (/^(african|colou?red|indian|white|black)\s*(employees?|staff|headcount)$/i.test(lower)) return true;
+  if (/^(board|executive|senior|middle|junior|top\s*management|other\s*management|non[\s-]*executive|semi[\s-]*skilled|unskilled|directors?|c[\s-]*suite|skilled\s*tech)$/i.test(lower)) return true;
   if (/^(category|type|amount|value|spend|cost|percentage|%|points|score|actual|measured|verified)$/i.test(lower)) return true;
   if (/^\s*[-–—]+\s*$/.test(lower)) return true;
   if (/^(insert|select|choose|enter|specify|please|refer|see)\b/i.test(lower)) return true;
   if (/^(gap\s*analysis|gap|optimum|prior\s*year|projected|absorption|results|headcount|disability\s*spend|effective\s*eap|lai\b)/i.test(lower)) return true;
   if (/^spend\s+[a-z]/i.test(lower) && lower.length < 30) return true;
   if (/\b(sub[\s-]*minimum|optimum|cap\]|manual\]|actual\]|scenario\])\b/i.test(lower) && lower.length < 50) return true;
+  return false;
+}
+
+function isLikelyPlaceholderSheet(data: any[][]): boolean {
+  const hints = [
+    /example|sample|template|illustration/i,
+    /\b(insert|enter|select|choose|specify|please\s*provide)\b/i,
+    /\bfor\s*guidance\s*only\b|\bdo\s*not\s*edit\b/i,
+  ];
+  const maxRows = Math.min(data.length, 40);
+  for (let r = 0; r < maxRows; r++) {
+    const row = data[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const text = String(row[c] || '').trim();
+      if (!text) continue;
+      if (hints.some(rx => rx.test(text))) return true;
+    }
+  }
   return false;
 }
 
@@ -208,7 +236,7 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
 
       if (!label || value === null || value === undefined || String(value).trim() === '') continue;
 
-      if (!client.name && /company|client|entity|name|organisation|organization|registered\s*name|legal\s*name|measured\s*entity/i.test(label) && !/trade|trading/i.test(label) && typeof value === 'string' && value.length > 1 && !/^(detail|tier|year|heading)/i.test(value.trim())) {
+      if (!client.name && /company\s*name|client\s*name|entity\s*name|^name\s*of\s*(company|entity|client|organisation)|organisation\s*name|organization\s*name|registered\s*name|legal\s*name|measured\s*entity/i.test(label) && !/trade|trading/i.test(label) && typeof value === 'string' && value.length > 1 && !/^(detail|tier|year|heading|economic|voting|black|net\s*value|b-?bbee|score|point|target|actual|weighting|month|day|period|quarter|date|time|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|fy\s*\d|financial\s*year|enter|insert|select|n\/a|specify|please|sdl|amount|value|levy|leviable|percentage|%|headcount|employee|staff)/i.test(value.trim())) {
         client.name = String(value).trim();
         addLog(logs, `Extracted Client Name: "${client.name}"`, 'success');
       }
@@ -236,8 +264,11 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
         }
       }
       if (!client.industrySector && /sector|industry|sic/i.test(label) && !/norm/i.test(label)) {
-        client.industrySector = String(value).trim();
-        addLog(logs, `Extracted Industry Sector: ${client.industrySector}`, 'success');
+        const sectorVal = String(value).trim();
+        if (sectorVal.length > 2 && !/^\d+(\.\d+)?$/.test(sectorVal)) {
+          client.industrySector = sectorVal;
+          addLog(logs, `Extracted Industry Sector: ${client.industrySector}`, 'success');
+        }
       }
       if (!client.tmps && /tmps|total\s*measured\s*procurement|measured\s*procurement\s*spend|total\s*procurement/i.test(label)) {
         const amt = extractCurrency(value);
@@ -280,7 +311,7 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
       if (/measured\s*entity\s*name/i.test(cellStr) && !client.name) {
         for (let c = col + 1; c < row.length; c++) {
           const val = String(row[c] || '').trim();
-          if (val && val.length > 2 && !/^(detail|tier|year|column|heading)/i.test(val)) {
+          if (val && val.length > 2 && !/^(detail|tier|year|column|heading|month|day|period|quarter|date|time|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|fy\s*\d|financial\s*year|enter|insert|select|n\/a|specify|please|sdl|amount|value|levy|leviable|percentage|%|headcount|employee|staff)/i.test(val)) {
             client.name = val;
             addLog(logs, `Extracted Measured Entity Name: "${client.name}"`, 'success');
             break;
@@ -292,7 +323,7 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
             const nextRow = data[nextRows + 1];
             if (nextRow) {
               const val = String(nextRow[col] || nextRow[col + 1] || '').trim();
-              if (val && val.length > 2) {
+              if (val && val.length > 2 && !/^(detail|tier|year|column|heading|month|day|period|quarter|date|time|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|fy\s*\d|financial\s*year|enter|insert|select|n\/a|specify|please|sdl|amount|value|levy|leviable|percentage|%|headcount|employee|staff)/i.test(val)) {
                 client.name = val;
                 addLog(logs, `Extracted Measured Entity Name (next row): "${client.name}"`, 'success');
               }
@@ -377,7 +408,7 @@ function parseOwnershipKV(data: any[][], logs: ParseLog[]): ParsedShareholder[] 
     if (!label) continue;
 
     if (/shareholder\s*(name|1|2|3|4|5|6|7|8|9|10)?$|^name\s*of\s*(shareholder|entity|owner)/i.test(label)) {
-      if (currentName && !isJunkRow(currentName)) {
+      if (currentName && !isJunkRow(currentName) && (currentBo > 0 || currentBwo > 0 || currentShares > 0)) {
         shareholders.push({ name: currentName, blackOwnership: currentBo, blackWomenOwnership: currentBwo, shares: currentShares, shareValue: currentValue });
       }
       currentName = String(value || '').trim();
@@ -397,11 +428,14 @@ function parseOwnershipKV(data: any[][], logs: ParseLog[]): ParsedShareholder[] 
     }
 
     if (/\b(pty|ltd|holdings|group|trust|cc|inc|npc)\b/i.test(String(value || '')) && !currentName) {
-      currentName = String(value).trim();
+      const surroundingHasOwnership = /black\s*own|bo\s*%|shareholding|voting|economic\s*interest/i.test(label);
+      if (surroundingHasOwnership) {
+        currentName = String(value).trim();
+      }
     }
   }
 
-  if (currentName && !isJunkRow(currentName)) {
+  if (currentName && !isJunkRow(currentName) && (currentBo > 0 || currentBwo > 0 || currentShares > 0)) {
     shareholders.push({ name: currentName, blackOwnership: currentBo, blackWomenOwnership: currentBwo, shares: currentShares, shareValue: currentValue });
   }
 
@@ -453,9 +487,9 @@ function parseMCTabular(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
 
         employees.push({
           name,
-          gender: genderEntity?.value || 'Male',
-          race: raceEntity?.value || 'White',
-          designation: desigEntity?.value || 'Junior',
+          gender: String(genderEntity?.value ?? 'Male'),
+          race: String(raceEntity?.value ?? 'White'),
+          designation: String(desigEntity?.value ?? 'Junior'),
           isDisabled: disCol ? /yes|y|true|1|disabled/i.test(String(dRow[disCol.columnIndex] || '')) : false,
         });
       }
@@ -501,9 +535,9 @@ function parseMCBroadScan(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
 
         employees.push({
           name,
-          gender: genderEntity?.value || 'Male',
-          race: raceEntity?.value || 'White',
-          designation: desigEntity?.value || 'Junior',
+          gender: String(genderEntity?.value ?? 'Male'),
+          race: String(raceEntity?.value ?? 'White'),
+          designation: String(desigEntity?.value ?? 'Junior'),
           isDisabled: false,
         });
       }
@@ -542,6 +576,15 @@ function parseMCCrossTab(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
 
   if (desigRows.length < 2) return [];
   addLog(logs, `MC Cross-tab: Found ${desigRows.length} designation rows: ${desigRows.map(d => d.raw).join(', ')}`, 'info');
+  const hasActualHeadcountSignal = data.some(row =>
+    Array.isArray(row) && row.some(cell =>
+      /\b(actual|achieved|verified|measured)\b.*\b(headcount|employees?|staff)\b/i.test(String(cell || '')),
+    ),
+  );
+  if (!hasActualHeadcountSignal) {
+    addLog(logs, 'MC Cross-tab: Skipping -- no actual/measured headcount signal found', 'warning');
+    return [];
+  }
 
   const firstDesigIdx = desigRows[0].idx;
   type ColDef = { race: string; gender: string };
@@ -626,6 +669,35 @@ function parseMCCrossTab(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
   }
   addLog(logs, `MC Cross-tab: Mapped ${colDefs.size} demographic columns`, 'info');
 
+  let grandTotal = 0;
+  for (const { idx } of desigRows) {
+    const row = data[idx];
+    if (!row) continue;
+    for (const [colIdx] of colDefs) {
+      const count = typeof row[colIdx] === 'number' ? Math.round(row[colIdx]) : parseInt(String(row[colIdx] || '0'));
+      if (!isNaN(count) && count > 0) grandTotal += count;
+    }
+  }
+  if (grandTotal < 3 || grandTotal > 50000) {
+    addLog(logs, `MC Cross-tab: Skipping -- total headcount ${grandTotal} looks like placeholder data`, 'warning');
+    return [];
+  }
+  const looksLikeTemplate = isLikelyPlaceholderSheet(data);
+  const maxCellCount = desigRows.reduce((maxCount, { idx }) => {
+    const row = data[idx];
+    if (!row) return maxCount;
+    let localMax = 0;
+    for (const [colIdx] of colDefs) {
+      const count = typeof row[colIdx] === 'number' ? Math.round(row[colIdx]) : parseInt(String(row[colIdx] || '0'));
+      if (!isNaN(count) && count > localMax) localMax = count;
+    }
+    return Math.max(maxCount, localMax);
+  }, 0);
+  if (looksLikeTemplate && grandTotal <= 30 && maxCellCount <= 8) {
+    addLog(logs, `MC Cross-tab: Skipping template-like placeholder counts (total=${grandTotal}, maxCell=${maxCellCount})`, 'warning');
+    return [];
+  }
+
   const employees: ParsedEmployee[] = [];
   let id = 0;
   for (const { idx, designation } of desigRows) {
@@ -673,22 +745,30 @@ function parseMCCrossTab(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
 }
 
 function parseOwnershipSummary(data: any[][], logs: ParseLog[]): ParsedShareholder[] {
+  if (isLikelyPlaceholderSheet(data)) {
+    addLog(logs, 'Ownership Summary: Skipping placeholder/template sheet', 'warning');
+    return [];
+  }
   let blackOwnership = 0;
   let blackWomenOwnership = 0;
+  let hasActualSignal = false;
 
   for (const row of data) {
     if (!row || row.length < 2) continue;
     for (let col = 0; col < row.length - 1; col++) {
       const label = String(row[col] || '').toLowerCase().trim();
       if (!label) continue;
+      const labelHasActualSignal = /\b(actual|achieved|verified|measured)\b/i.test(label);
+      if (labelHasActualSignal) hasActualSignal = true;
+      if (/\b(target|weight|weighting|optimum|compliance|cap)\b/i.test(label)) continue;
       for (let vc = col + 1; vc < Math.min(row.length, col + 4); vc++) {
         const value = row[vc];
         if (value === null || value === undefined) continue;
-        if (/black\s*own|bo\s*%|black\s*%|hdsa|voting\s*right.*black|black\s*voting|economic\s*interest.*black/i.test(label) && !/women|female|bwo/i.test(label)) {
+        if (labelHasActualSignal && /black\s*own|bo\s*%|black\s*%|hdsa|voting\s*right.*black|black\s*voting|economic\s*interest.*black/i.test(label) && !/women|female|bwo/i.test(label)) {
           const pct = extractPercentage(value);
           if (pct !== null && pct > 0) blackOwnership = Math.max(blackOwnership, pct);
         }
-        if (/black\s*wom|bwo|female\s*black|women\s*own|black\s*female/i.test(label)) {
+        if (labelHasActualSignal && /black\s*wom|bwo|female\s*black|women\s*own|black\s*female/i.test(label)) {
           const pct = extractPercentage(value);
           if (pct !== null && pct > 0) blackWomenOwnership = Math.max(blackWomenOwnership, pct);
         }
@@ -696,7 +776,7 @@ function parseOwnershipSummary(data: any[][], logs: ParseLog[]): ParsedSharehold
     }
   }
 
-  if (blackOwnership > 0) {
+  if (blackOwnership > 0 && hasActualSignal) {
     addLog(logs, `Ownership Summary: Black Ownership ${(blackOwnership * 100).toFixed(1)}%, BWO ${(blackWomenOwnership * 100).toFixed(1)}%`, 'success');
     return [{ name: 'Ownership (Summary)', blackOwnership, blackWomenOwnership, shares: 1, shareValue: 0 }];
   }
@@ -707,6 +787,7 @@ function parseScorecardSheet(data: any[][], logs: ParseLog[]): Record<string, nu
   const result: Record<string, number> = {};
   const PILLAR_PATTERNS: [RegExp, string][] = [
     [/ownership|equity\s*own/i, 'ownership'],
+    [/management\s*control\s*(and|&)\s*employment\s*equity/i, 'managementControlAndEE'],
     [/management\s*control/i, 'managementControl'],
     [/employment\s*equity/i, 'employmentEquity'],
     [/skills?\s*develop/i, 'skillsDevelopment'],
@@ -811,7 +892,7 @@ function parseSkillsSheet(data: any[][], logs: ParseLog[]): ParsedTrainingProgra
         const cost = costCol ? extractCurrency(dRow[costCol.columnIndex]) : null;
         const learnerName = learnerCol ? String(dRow[learnerCol.columnIndex] || '').trim() : undefined;
         const raceEntity = raceCol ? extractEntity(dRow[raceCol.columnIndex]) : null;
-        const isBlack = raceEntity ? ['African', 'Coloured', 'Indian'].includes(raceEntity.value) : false;
+        const isBlack = raceEntity ? ['African', 'Coloured', 'Indian'].includes(String(raceEntity.value)) : false;
         const isEmployed = employedCol ? /yes|y|true|1|employed/i.test(String(dRow[employedCol.columnIndex] || '')) : true;
 
         programs.push({
@@ -865,7 +946,7 @@ function parseProcurementSheet(data: any[][], logs: ParseLog[]): ParsedSupplier[
 
         suppliers.push({
           name,
-          beeLevel: levelEntity?.type === 'bee_level' ? levelEntity.value : (typeof dRow[levelCol?.columnIndex ?? -1] === 'number' ? Math.min(8, Math.max(0, Math.round(dRow[levelCol?.columnIndex ?? -1]))) : 0),
+          beeLevel: levelEntity?.type === 'bee_level' ? (levelEntity.value as number) : (typeof dRow[levelCol?.columnIndex ?? -1] === 'number' ? Math.min(8, Math.max(0, Math.round(dRow[levelCol?.columnIndex ?? -1] as number))) : 0),
           blackOwnership: bo ?? 0,
           spend: spend ?? 0,
         });
@@ -906,7 +987,7 @@ function parseProcurementSheet(data: any[][], logs: ParseLog[]): ParsedSupplier[
 
         suppliers.push({
           name,
-          beeLevel: levelEntity?.type === 'bee_level' ? levelEntity.value : 0,
+          beeLevel: levelEntity?.type === 'bee_level' ? (levelEntity.value as number) : 0,
           blackOwnership: 0,
           spend: spend ?? 0,
         });
@@ -1033,8 +1114,8 @@ export function parseExcelBuffer(buffer: Buffer, filename: string): ParseResult 
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(buffer, { type: 'buffer' });
-  } catch (e: any) {
-    addLog(logs, `Failed to read file: ${e.message}`, 'error');
+  } catch (e: unknown) {
+    addLog(logs, `Failed to read file: ${e instanceof Error ? e.message : String(e)}`, 'error');
     return {
       success: false, client: {}, shareholders: [], employees: [], trainingPrograms: [], suppliers: [],
       esdContributions: [], sedContributions: [], sheetsFound: [], sheetsMatched: [],
@@ -1282,6 +1363,26 @@ export function parseExcelBuffer(buffer: Buffer, filename: string): ParseResult 
   if (!client.name) { warnings.push('Client name could not be detected'); addLog(logs, 'Client name not found — using filename as fallback', 'warning'); client.name = filename.replace(/\.(xlsx?|csv)$/i, ''); }
   if (!client.revenue) { warnings.push('Revenue not detected'); addLog(logs, 'Revenue data missing', 'warning'); }
   if (client.npat === undefined) { warnings.push('NPAT not detected'); addLog(logs, 'NPAT data missing', 'warning'); }
+
+  const isTemplateWorkbook = /template/i.test(filename);
+  const scorecardLooksEmpty = !scorecardValues || Object.values(scorecardValues).every(v => typeof v === 'number' && v <= 0.0001);
+  if (isTemplateWorkbook && scorecardLooksEmpty) {
+    const placeholderSignals =
+      employees.some(e => /responsible\s*person|^board_|^executive_|^senior_|^middle_|^junior_/i.test(e.name)) ||
+      shareholders.some(s => /economic\s*interest|historically\s*disadvantaged|military\s*veterans?/i.test(s.name));
+    if (placeholderSignals) {
+      addLog(logs, 'Template workbook detected with placeholder rows; suppressing synthetic entity extraction.', 'warning');
+      shareholders = [];
+      employees = [];
+      trainingPrograms = [];
+      suppliers = [];
+      esdContributions = [];
+      sedContributions = [];
+      if (client.name && /(amount|headcount|period|actual|target|score|value|sdl)/i.test(client.name)) {
+        client.name = filename.replace(/\.(xlsx?|csv)$/i, '');
+      }
+    }
+  }
 
   const entitiesExtracted = shareholders.length + employees.length + trainingPrograms.length + suppliers.length + esdContributions.length + sedContributions.length;
   const dataSections = [shareholders.length > 0, employees.length > 0, trainingPrograms.length > 0, suppliers.length > 0, (client.revenue || 0) > 0].filter(Boolean).length;

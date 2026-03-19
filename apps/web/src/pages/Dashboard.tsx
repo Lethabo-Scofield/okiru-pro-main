@@ -71,8 +71,10 @@ export default function Dashboard() {
     try {
       const res = await fetch("/api/templates");
       if (res.ok) setStoredTemplates(await res.json());
+      else toast({ title: "Could not load templates", description: "Template list failed to load. Try again later.", variant: "destructive" });
     } catch (err) {
       console.error("Error fetching templates:", err);
+      toast({ title: "Could not load templates", description: err instanceof Error ? err.message : "Network or server error.", variant: "destructive" });
     } finally {
       setLoadingTemplates(false);
     }
