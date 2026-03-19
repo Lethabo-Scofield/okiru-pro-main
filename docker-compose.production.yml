@@ -93,6 +93,7 @@ services:
       ARANGO_USER: root
       ARANGO_PASSWORD: ${ARANGO_PASSWORD:-Okiru123!}
       COMPUTE_ENGINE_URL: http://computation-engine:8000
+      AUDIT_AI_URL: http://audit-ai:8007
       SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://okiru.yourdomain.com}
     ports:
@@ -113,6 +114,27 @@ services:
       MONGODB_URI: mongodb://${MONGO_USER:-okiru}:${MONGO_PASSWORD:-OkiruMongo123!}@mongodb:27017/okiru_web?authSource=admin
     ports:
       - "127.0.0.1:5001:5001"
+
+  # ─── AUDIT AI (Document Extraction) ─────────────────────────
+  audit-ai:
+    build:
+      context: ../sim/audit-ai
+      dockerfile: Dockerfile
+    container_name: okiru_audit_ai
+    restart: always
+    environment:
+      LOG_LEVEL: INFO
+      ROOT_PATH: ""
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}
+    ports:
+      - "127.0.0.1:8007:8007"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ─── REVERSE PROXY ──────────────────────────────────────────
   nginx:

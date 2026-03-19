@@ -17,7 +17,7 @@ export interface ScorecardTemplate {
   _key?: string;
   name: string;
   sectorCode: string;           // e.g. "RCOGP", "ICT", "FSC", "AGRI"
-  scorecardType: 'Generic' | 'QSE' | 'EME';
+  scorecardType: string;
   version: string;
   totalMaxPoints: number;
   levelThresholds: Array<{ level: number; minPoints: number; recognition: number }>;
@@ -50,7 +50,7 @@ export interface ComplianceTarget {
   indicatorId: string;
   sectorCode: string;
   targetValue: number;
-  targetUnit: 'percentage' | 'currency' | 'count' | 'ratio';
+  targetUnit: 'percentage' | 'currency' | 'count' | 'number' | 'ratio';
   targetBase: string;           // e.g. "revenue", "npat", "leviable_amount", "tmps"
   weighting: number;
 }
