@@ -81,7 +81,7 @@ export default function EntityBuilder() {
       const t = storedTemplates.find(st => st.id === Number(templateId));
       if (t) loadTemplateFromRepo(t);
     }
-  }, [storedTemplates]);
+  }, [storedTemplates, editingTemplateId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -101,7 +101,7 @@ export default function EntityBuilder() {
       setProjectName(starter.name);
       setSidebarTab("entities");
     }
-  }, []);
+  }, [entities.length, starterTemplatesMap]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

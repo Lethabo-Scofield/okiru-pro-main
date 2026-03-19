@@ -28,10 +28,11 @@ export async function connectDB(): Promise<void> {
       });
 
       return;
-    } catch (err: any) {
-      console.error(`[MongoDB] Connection attempt ${attempt} failed:`, err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[MongoDB] Connection attempt ${attempt} failed:`, msg);
       if (attempt >= maxRetries) {
-        throw new Error(`Failed to connect to MongoDB after ${maxRetries} attempts: ${err.message}`);
+        throw new Error(`Failed to connect to MongoDB after ${maxRetries} attempts: ${msg}`);
       }
       await new Promise((r) => setTimeout(r, 2000 * attempt));
     }

@@ -31,7 +31,10 @@ export const api = {
     apiRequest("/api/auth/me"),
 
   // --- Clients ---
-  getClients: () => apiRequest("/api/clients"),
+  getClients: (page = 1, limit = 500) =>
+    apiRequest(`/api/clients?page=${page}&limit=${limit}`).then((r: { items?: unknown[] } | unknown[]) =>
+      Array.isArray(r) ? r : (r.items ?? [])
+    ),
   createClient: (data: any) => apiRequest("/api/clients", { method: "POST", body: JSON.stringify(data) }),
   getClient: (id: string) => apiRequest(`/api/clients/${id}`),
   updateClient: (id: string, data: any) => apiRequest(`/api/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

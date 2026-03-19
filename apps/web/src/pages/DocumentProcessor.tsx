@@ -454,19 +454,27 @@ export default function DocumentProcessor() {
       uploadProgress: 0, status: 'uploading' as const, textContent: '',
     }));
     setUploadedFiles(prev => [...prev, ...newFiles]);
-    newFiles.forEach(async (newFile) => {
-      const textContent = await readFileText(newFile.file);
-      let prog = 0;
-      const interval = setInterval(() => {
-        prog += Math.random() * 30 + 10;
-        if (prog >= 100) {
-          clearInterval(interval);
-          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent } : f));
-        } else {
-          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: Math.min(prog, 99) } : f));
+    (async () => {
+      for (const newFile of newFiles) {
+        try {
+          const textContent = await readFileText(newFile.file);
+          let prog = 0;
+          const interval = setInterval(() => {
+            prog += Math.random() * 30 + 10;
+            if (prog >= 100) {
+              clearInterval(interval);
+              setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent } : f));
+            } else {
+              setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: Math.min(prog, 99) } : f));
+            }
+          }, 150);
+        } catch (err) {
+          console.error("Error reading file:", newFile.name, err);
+          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 0, status: 'ready' as const, textContent: '' } : f));
+          toast({ title: "File read error", description: `Could not read "${newFile.name}".`, variant: "destructive" });
         }
-      }, 150);
-    });
+      }
+    })();
   };
 
   const removeFile = (fileId: number) => {
@@ -642,7 +650,9 @@ export default function DocumentProcessor() {
                 entities: data.entities || [],
               };
             }
-          } catch {}
+          } catch (parseErr) {
+            if (process.env.NODE_ENV === 'development') console.warn("SSE parse error:", parseErr);
+          }
         }
       };
 
@@ -983,7 +993,7 @@ export default function DocumentProcessor() {
                         <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                           <div className="flex flex-wrap gap-1.5">
                             {selectedTemplate.entities.map((ent, i) => (
-                              <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
+                              <span key={ent.label ? `${ent.label}-${i}` : i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
                                 {ent.label}
                               </span>
                             ))}
