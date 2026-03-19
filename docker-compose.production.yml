@@ -116,12 +116,14 @@ services:
       - "127.0.0.1:5001:5001"
 
   # ─── AUDIT AI (Document Extraction) ─────────────────────────
+  # Build from the sim/audit-ai repo (clone it to /home/okiru/sim/audit-ai on the VM)
+  # Or set AUDIT_AI_CONTEXT env var to the path
   audit-ai:
     build:
-      context: ../sim/audit-ai
+      context: ${AUDIT_AI_CONTEXT:-./services/audit-ai}
       dockerfile: Dockerfile
     container_name: okiru_audit_ai
-    restart: always
+    restart: unless-stopped
     environment:
       LOG_LEVEL: INFO
       ROOT_PATH: ""
@@ -135,6 +137,8 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    profiles:
+      - with-audit-ai
 
   # ─── REVERSE PROXY ──────────────────────────────────────────
   nginx:
