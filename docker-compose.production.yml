@@ -30,10 +30,11 @@ services:
     ports:
       - "127.0.0.1:8529:8529"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8529/_api/version"]
+      interval: 15s
+      timeout: 10s
       retries: 5
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
