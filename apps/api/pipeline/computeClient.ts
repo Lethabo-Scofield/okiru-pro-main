@@ -107,14 +107,15 @@ export class ComputeClient {
 
   /**
    * Upload and compile an Excel toolkit file.
+   * Accepts either a file path (string) or a Buffer directly.
    */
   async compileToolkit(
-    filePath: string,
+    fileOrPath: string | Buffer,
     name: string,
     metadata?: Record<string, string>
   ): Promise<ModelVersion> {
-    const fileBuffer = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
+    const fileBuffer = typeof fileOrPath === 'string' ? fs.readFileSync(fileOrPath) : fileOrPath;
+    const fileName = typeof fileOrPath === 'string' ? path.basename(fileOrPath) : name;
     const boundary = `----FormBoundary${Date.now()}`;
 
     let body = '';

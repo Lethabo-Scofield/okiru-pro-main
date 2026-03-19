@@ -510,6 +510,517 @@ export function buildFormulaGraph(buffer: Buffer, filename: string, opts?: Graph
   };
 }
 
+// ---------------------------------------------------------------------------
+// Scorecard structure extraction (replaces hardcoded pillar definitions)
+// ---------------------------------------------------------------------------
+
+export interface ExtractedIndicator {
+  name: string;
+  code: string;
+  maxPoints: number;
+  targetValue: number;
+  targetUnit: 'percentage' | 'currency' | 'number' | 'ratio';
+  targetBase: string;
+  sourceCells: string[];
+  formulaChain: string[];
+}
+
+export interface ExtractedPillar {
+  name: string;
+  code: string;
+  maxPoints: number;
+  hasSubMinimum: boolean;
+  subMinimumThreshold: number;
+  displayOrder: number;
+  indicators: ExtractedIndicator[];
+  totalScoreCell: string | null;
+}
+
+export interface ExtractedScorecardStructure {
+  sectorCode: string;
+  scorecardType: string;
+  sourceFile: string;
+  pillars: ExtractedPillar[];
+  totalMaxPoints: number;
+  levelThresholds: Array<{ level: number; minPoints: number; recognition: number }>;
+  metadata: {
+    sheetsAnalyzed: string[];
+    cellsAnalyzed: number;
+    extractionConfidence: number;
+  };
+}
+
+const DEFAULT_LEVEL_THRESHOLDS = [
+  { level: 1, minPoints: 100, recognition: 135 },
+  { level: 2, minPoints: 95, recognition: 125 },
+  { level: 3, minPoints: 90, recognition: 110 },
+  { level: 4, minPoints: 80, recognition: 100 },
+  { level: 5, minPoints: 75, recognition: 80 },
+  { level: 6, minPoints: 70, recognition: 60 },
+  { level: 7, minPoints: 55, recognition: 50 },
+  { level: 8, minPoints: 40, recognition: 10 },
+];
+
+const PILLAR_CANONICAL: Record<string, { name: string; code: string }> = {
+  ownership: { name: 'Ownership', code: 'ownership' },
+  managementcontrol: { name: 'Management Control', code: 'managementControl' },
+  employmentequity: { name: 'Employment Equity', code: 'employmentEquity' },
+  skillsdevelopment: { name: 'Skills Development', code: 'skillsDevelopment' },
+  preferentialprocurement: { name: 'Preferential Procurement', code: 'preferentialProcurement' },
+  enterprisesupplierdevelopment: { name: 'Enterprise & Supplier Development', code: 'enterpriseSupplierDevelopment' },
+  socioeconomicdevelopment: { name: 'Socio-Economic Development', code: 'socioEconomicDevelopment' },
+  yesinitiative: { name: 'YES Initiative', code: 'yesInitiative' },
+};
+
+function detectSector(buffer: Buffer, filename: string): { sectorCode: string; scorecardType: string } {
+  const lower = filename.toLowerCase();
+  let sectorCode = 'RCOGP';
+  let scorecardType = 'Generic';
+
+  if (/ict/i.test(lower)) sectorCode = 'ICT';
+  else if (/fsc/i.test(lower)) sectorCode = 'FSC';
+  else if (/agri/i.test(lower)) sectorCode = 'AGRI';
+  else if (/construction/i.test(lower)) sectorCode = 'CONSTRUCTION';
+
+  if (/qse/i.test(lower)) scorecardType = 'QSE';
+  else if (/eme/i.test(lower)) scorecardType = 'EME';
+
+  return { sectorCode, scorecardType };
+}
+
+function inferTargetBase(indicatorName: string, pillarCode: string): string {
+  const lower = indicatorName.toLowerCase();
+  if (/voting/i.test(lower)) return 'total_voting_rights';
+  if (/economic\s*interest/i.test(lower)) return 'economic_interest';
+  if (/net\s*value/i.test(lower)) return 'net_value';
+  if (/board/i.test(lower) || /executive/i.test(lower) || /director/i.test(lower)) return pillarCode === 'managementControl' ? 'exec_count' : 'board_count';
+  if (/senior/i.test(lower)) return 'senior_count';
+  if (/middle/i.test(lower)) return 'middle_count';
+  if (/junior/i.test(lower)) return 'junior_count';
+  if (/disabled|disability/i.test(lower)) return 'total_employees';
+  if (/bursary|bursaries/i.test(lower)) return 'leviable_amount';
+  if (/spend|training|skills/i.test(lower) && pillarCode === 'skillsDevelopment') return 'leviable_amount';
+  if (/tmps|procurement|supplier/i.test(lower) && pillarCode === 'preferentialProcurement') return 'tmps';
+  if (/supplier.*dev|enterprise.*dev|esd|ed\b/i.test(lower)) return 'npat';
+  if (/sed|socio/i.test(lower)) return 'npat';
+  return 'total';
+}
+
+function inferTargetUnit(value: number): 'percentage' | 'currency' | 'number' {
+  if (value > 0 && value <= 1) return 'percentage';
+  if (value > 1 && value <= 100) return 'percentage';
+  return 'number';
+}
+
+function slugify(name: string): string {
+  return name.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .substring(0, 40);
+}
+
+/**
+ * Extracts the full scorecard structure (pillars, indicators, targets, weights)
+ * directly from the Excel formula graph. No hardcoded definitions.
+ *
+ * Strategy:
+ * 1. Scan all cells with semantic tags grouped by pillar
+ * 2. For pillar_total tagged cells, extract maxPoints from value
+ * 3. For target/weight/score tagged cells, extract indicator details
+ * 4. Build level thresholds from cells tagged as bee_level/recognition
+ * 5. Walk the formula graph to capture the full calculation chain per indicator
+ */
+export function extractScorecardStructure(
+  graph: FormulaGraph,
+  buffer: Buffer,
+  filename: string,
+): ExtractedScorecardStructure {
+  const { sectorCode, scorecardType } = detectSector(buffer, filename);
+
+  const pillarCells = new Map<string, CellNode[]>();
+  const pillarTotals = new Map<string, { value: number; cell: string }>();
+  const subMinimumCells = new Map<string, { value: number; cell: string }>();
+  const scorecardWideRoles: CellNode[] = [];
+
+  for (const addr of graph.nodes) {
+    const cell = graph.cells[addr];
+    if (!cell?.semanticTag) continue;
+
+    const tag = cell.semanticTag;
+
+    if ('pillar' in tag) {
+      const pillar = tag.pillar;
+      if (!pillarCells.has(pillar)) pillarCells.set(pillar, []);
+      pillarCells.get(pillar)!.push(cell);
+
+      if (tag.role === 'pillar_total' && typeof cell.value === 'number') {
+        const existing = pillarTotals.get(pillar);
+        if (!existing || cell.value > existing.value) {
+          pillarTotals.set(pillar, { value: cell.value, cell: addr });
+        }
+      }
+      if (tag.role === 'sub_minimum' && typeof cell.value === 'number') {
+        subMinimumCells.set(pillar, { value: cell.value, cell: addr });
+      }
+    } else {
+      scorecardWideRoles.push(cell);
+    }
+  }
+
+  const scorecardSheet = findScorecardSheet(graph, buffer);
+  let sheetStructure: Map<string, ExtractedPillar> | null = null;
+  if (scorecardSheet) {
+    sheetStructure = extractFromScorecardSheet(buffer, scorecardSheet, sectorCode);
+  }
+
+  const pillars: ExtractedPillar[] = [];
+  let displayOrder = 1;
+
+  const allPillarKeys = new Set([
+    ...pillarCells.keys(),
+    ...(sheetStructure ? sheetStructure.keys() : []),
+  ]);
+
+  const pillarOrder = [
+    'ownership', 'managementControl', 'employmentEquity',
+    'skillsDevelopment', 'preferentialProcurement',
+    'enterpriseSupplierDevelopment', 'socioEconomicDevelopment', 'yesInitiative',
+  ];
+  const sortedPillars = [...allPillarKeys].sort((a, b) => {
+    const ai = pillarOrder.indexOf(a);
+    const bi = pillarOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  for (const pillarKey of sortedPillars) {
+    const canonical = PILLAR_CANONICAL[pillarKey.toLowerCase().replace(/[^a-z]/g, '')] ||
+      { name: pillarKey, code: pillarKey };
+
+    const fromSheet = sheetStructure?.get(pillarKey);
+    const taggedCells = pillarCells.get(pillarKey) || [];
+    const total = pillarTotals.get(pillarKey);
+    const subMin = subMinimumCells.get(pillarKey);
+
+    let maxPoints = fromSheet?.maxPoints ?? total?.value ?? 0;
+
+    const indicators: ExtractedIndicator[] = [];
+
+    if (fromSheet && fromSheet.indicators.length > 0) {
+      for (const ind of fromSheet.indicators) {
+        const formulaChain = traceFormulaChain(graph, ind.sourceCells);
+        indicators.push({ ...ind, formulaChain });
+      }
+    }
+
+    if (indicators.length === 0 && taggedCells.length > 0) {
+      const targetCells = taggedCells.filter(c =>
+        c.semanticTag && 'role' in c.semanticTag && c.semanticTag.role === 'target');
+      const weightCells = taggedCells.filter(c =>
+        c.semanticTag && 'role' in c.semanticTag && c.semanticTag.role === 'weight');
+      const scoreCells = taggedCells.filter(c =>
+        c.semanticTag && 'role' in c.semanticTag && c.semanticTag.role === 'score');
+
+      const indicatorCells = targetCells.length > 0 ? targetCells :
+        weightCells.length > 0 ? weightCells : scoreCells;
+
+      for (const ic of indicatorCells) {
+        const tag = ic.semanticTag as { pillar: string; indicator: string; role: string };
+        const indName = tag.indicator || `${canonical.name} Indicator`;
+        const val = typeof ic.value === 'number' ? ic.value : 0;
+
+        const matchingWeight = weightCells.find(w =>
+          Math.abs(w.row - ic.row) <= 1 && w.sheet === ic.sheet);
+        const pts = matchingWeight && typeof matchingWeight.value === 'number'
+          ? matchingWeight.value : val;
+
+        indicators.push({
+          name: indName.substring(0, 80),
+          code: slugify(indName),
+          maxPoints: pts,
+          targetValue: val > 1 ? val / 100 : val,
+          targetUnit: inferTargetUnit(val),
+          targetBase: inferTargetBase(indName, pillarKey),
+          sourceCells: [ic.address],
+          formulaChain: traceFormulaChain(graph, [ic.address]),
+        });
+      }
+    }
+
+    if (maxPoints === 0 && indicators.length > 0) {
+      maxPoints = indicators.reduce((sum, i) => sum + i.maxPoints, 0);
+    }
+
+    const hasSubMinimum = !!subMin ||
+      ['ownership', 'skillsDevelopment', 'preferentialProcurement', 'enterpriseSupplierDevelopment']
+        .includes(pillarKey);
+    const subMinimumThreshold = subMin ? subMin.value / maxPoints : (hasSubMinimum ? 0.4 : 0);
+
+    if (maxPoints > 0 || indicators.length > 0) {
+      pillars.push({
+        name: canonical.name,
+        code: canonical.code,
+        maxPoints,
+        hasSubMinimum,
+        subMinimumThreshold,
+        displayOrder: displayOrder++,
+        indicators,
+        totalScoreCell: total?.cell || fromSheet?.totalScoreCell || null,
+      });
+    }
+  }
+
+  const levelThresholds = extractLevelThresholds(graph) ?? DEFAULT_LEVEL_THRESHOLDS;
+  const totalMaxPoints = pillars.reduce((s, p) => s + p.maxPoints, 0);
+
+  const confidence = calculateExtractionConfidence(pillars, graph);
+
+  return {
+    sectorCode,
+    scorecardType,
+    sourceFile: filename,
+    pillars,
+    totalMaxPoints,
+    levelThresholds,
+    metadata: {
+      sheetsAnalyzed: graph.processedSheets,
+      cellsAnalyzed: graph.metadata.totalCells,
+      extractionConfidence: confidence,
+    },
+  };
+}
+
+function findScorecardSheet(graph: FormulaGraph, _buffer: Buffer): string | null {
+  const scorecardPatterns = [/scorecard/i, /summary/i, /dashboard/i, /result/i, /b-?bbee.*score/i];
+  for (const sheet of graph.processedSheets) {
+    if (scorecardPatterns.some(p => p.test(sheet))) return sheet;
+  }
+  return null;
+}
+
+function extractFromScorecardSheet(
+  buffer: Buffer,
+  sheetName: string,
+  _sectorCode: string,
+): Map<string, ExtractedPillar> {
+  const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: true, sheets: [sheetName] });
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return new Map();
+
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  const result = new Map<string, ExtractedPillar>();
+
+  let currentPillar: string | null = null;
+  let currentPillarName = '';
+  let displayOrder = 1;
+  const indicators: ExtractedIndicator[] = [];
+
+  function flushPillar(): void {
+    if (currentPillar && (indicators.length > 0)) {
+      const canonical = PILLAR_CANONICAL[currentPillar.toLowerCase().replace(/[^a-z]/g, '')] ||
+        { name: currentPillarName, code: currentPillar };
+      result.set(currentPillar, {
+        name: canonical.name,
+        code: canonical.code,
+        maxPoints: indicators.reduce((s, i) => s + i.maxPoints, 0),
+        hasSubMinimum: false,
+        subMinimumThreshold: 0,
+        displayOrder: displayOrder++,
+        indicators: [...indicators],
+        totalScoreCell: null,
+      });
+      indicators.length = 0;
+    }
+  }
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const rowValues: Array<{ col: number; value: unknown; formula: string | null; text: string }> = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr] as XLSX.CellObject | undefined;
+      if (cell) {
+        rowValues.push({
+          col: c,
+          value: cell.v,
+          formula: cell.f ? String(cell.f) : null,
+          text: String(cell.v ?? '').trim(),
+        });
+      }
+    }
+
+    if (rowValues.length === 0) continue;
+
+    const firstText = rowValues[0]?.text || '';
+    const fullRowText = rowValues.map(v => v.text).join(' ');
+
+    let matchedPillar: string | null = null;
+    for (const [pillar, patterns] of Object.entries(PILLAR_KEYWORDS)) {
+      if (patterns.some(p => p.test(firstText))) {
+        matchedPillar = pillar;
+        break;
+      }
+    }
+
+    if (matchedPillar && !rowValues.some(v => /target|actual|score|weight/i.test(v.text))) {
+      flushPillar();
+      currentPillar = matchedPillar;
+      currentPillarName = firstText;
+      continue;
+    }
+
+    if (!currentPillar) continue;
+
+    const numericValues = rowValues.filter(v => typeof v.value === 'number');
+    if (numericValues.length >= 1 && firstText.length > 2) {
+      const isIndicatorRow = !(/^total|^element|^pillar|^compliance\s*target|^weighting|^actual/i.test(firstText));
+
+      if (isIndicatorRow) {
+        let targetVal = 0;
+        let maxPts = 0;
+        const sourceCells: string[] = [];
+
+        for (const nv of numericValues) {
+          const colAddr = `${sheetName}!${XLSX.utils.encode_col(nv.col)}${r + 1}`;
+          sourceCells.push(colAddr);
+
+          const val = nv.value as number;
+          if (val > 0 && val <= 1) {
+            targetVal = val;
+          } else if (val > 0 && val <= 100 && /target|compliance/i.test(fullRowText)) {
+            targetVal = val / 100;
+          }
+
+          const leftAddr = nv.col > 0 ? XLSX.utils.encode_cell({ r, c: nv.col - 1 }) : null;
+          const headerAddr = XLSX.utils.encode_cell({ r: range.s.r, c: nv.col });
+          const headerCell = ws[headerAddr] as XLSX.CellObject | undefined;
+          const headerText = String(headerCell?.v ?? '').toLowerCase();
+          const leftCell = leftAddr ? ws[leftAddr] as XLSX.CellObject | undefined : undefined;
+          const leftText = String(leftCell?.v ?? '').toLowerCase();
+
+          if (/weight|max\s*point|available/i.test(headerText) || /weight|max\s*point|available/i.test(leftText)) {
+            if (val > 0 && val <= 30) maxPts = val;
+          }
+        }
+
+        if (maxPts === 0) {
+          const smallInts = numericValues
+            .filter(v => typeof v.value === 'number' && (v.value as number) > 0 && (v.value as number) <= 30 && Number.isInteger(v.value))
+            .map(v => v.value as number);
+          if (smallInts.length > 0) maxPts = Math.max(...smallInts);
+        }
+
+        if (maxPts > 0 || targetVal > 0) {
+          indicators.push({
+            name: firstText.substring(0, 80),
+            code: slugify(firstText),
+            maxPoints: maxPts,
+            targetValue: targetVal,
+            targetUnit: inferTargetUnit(targetVal * 100),
+            targetBase: inferTargetBase(firstText, currentPillar),
+            sourceCells,
+            formulaChain: [],
+          });
+        }
+      }
+    }
+
+    if (/^total|^element\s*total|^pillar\s*total/i.test(firstText)) {
+      flushPillar();
+      currentPillar = null;
+    }
+  }
+
+  flushPillar();
+  return result;
+}
+
+function extractLevelThresholds(
+  graph: FormulaGraph,
+): Array<{ level: number; minPoints: number; recognition: number }> | null {
+  const levelCells = graph.nodes.filter(n => {
+    const tag = graph.cells[n]?.semanticTag;
+    return tag && 'role' in tag && (tag.role === 'bee_level' || tag.role === 'recognition');
+  });
+
+  if (levelCells.length === 0) return null;
+
+  const thresholds: Array<{ level: number; minPoints: number; recognition: number }> = [];
+  for (const addr of levelCells) {
+    const cell = graph.cells[addr];
+    if (typeof cell.value !== 'number') continue;
+
+    const neighbors = cell.dependsOn.map(d => graph.cells[d]).filter(Boolean);
+    const numNeighbors = neighbors.filter(n => typeof n.value === 'number');
+
+    if (numNeighbors.length >= 1) {
+      const level = Math.round(cell.value);
+      if (level >= 1 && level <= 8) {
+        thresholds.push({
+          level,
+          minPoints: numNeighbors[0] ? numNeighbors[0].value as number : 0,
+          recognition: numNeighbors[1] ? numNeighbors[1].value as number : 0,
+        });
+      }
+    }
+  }
+
+  if (thresholds.length >= 4) {
+    return thresholds.sort((a, b) => a.level - b.level);
+  }
+  return null;
+}
+
+function traceFormulaChain(graph: FormulaGraph, startAddrs: string[], maxDepth = 8): string[] {
+  const visited = new Set<string>();
+  const chain: string[] = [];
+  const stack = startAddrs.map(a => ({ addr: a, depth: 0 }));
+
+  while (stack.length > 0) {
+    const { addr, depth } = stack.pop()!;
+    if (visited.has(addr) || depth > maxDepth) continue;
+    visited.add(addr);
+
+    const cell = graph.cells[addr];
+    if (!cell) continue;
+
+    if (cell.formula) {
+      chain.push(`${addr} = ${cell.formula}`);
+    }
+    for (const dep of cell.dependsOn) {
+      stack.push({ addr: dep, depth: depth + 1 });
+    }
+  }
+
+  return chain;
+}
+
+function calculateExtractionConfidence(pillars: ExtractedPillar[], graph: FormulaGraph): number {
+  let score = 0;
+  const maxScore = 100;
+
+  if (pillars.length >= 5) score += 25;
+  else if (pillars.length >= 3) score += 15;
+  else score += 5;
+
+  const totalIndicators = pillars.reduce((s, p) => s + p.indicators.length, 0);
+  if (totalIndicators >= 15) score += 25;
+  else if (totalIndicators >= 8) score += 15;
+  else score += 5;
+
+  const withTargets = pillars.reduce(
+    (s, p) => s + p.indicators.filter(i => i.targetValue > 0).length, 0);
+  if (withTargets >= 10) score += 20;
+  else if (withTargets >= 5) score += 10;
+
+  const totalMax = pillars.reduce((s, p) => s + p.maxPoints, 0);
+  if (totalMax >= 90 && totalMax <= 130) score += 20;
+  else if (totalMax > 0) score += 10;
+
+  if (graph.metadata.formulaCells > 50) score += 10;
+  else if (graph.metadata.formulaCells > 10) score += 5;
+
+  return Math.min(score, maxScore);
+}
+
 /**
  * Extract only the B-BBEE-relevant subgraph by following dependencies
  * backward from cells tagged with scorecard roles.

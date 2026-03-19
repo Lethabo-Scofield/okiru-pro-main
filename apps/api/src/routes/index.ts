@@ -21,6 +21,8 @@ import importRouter from './import.js';
 import exportRouter from './export.js';
 import accuracyRouter from './accuracy.js';
 import scorecardRouter from './scorecard.js';
+import templatesRouter from './templates.js';
+import documentsRouter from './documents.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -119,6 +121,12 @@ export async function registerRoutes(
 
   // Scorecard & Computation Engine routes
   app.use('/api/scorecard', scorecardRouter);
+
+  // Template ingestion & graph inspection routes
+  app.use('/api/templates', templatesRouter);
+
+  // Document upload & entity extraction routes
+  app.use('/api/documents', documentsRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

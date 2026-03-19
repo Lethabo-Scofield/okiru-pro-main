@@ -147,6 +147,31 @@ const exportLogSchema = new Schema({
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "exportLogs" });
 
+const documentSchema = new Schema({
+  filename: { type: String, required: true },
+  fileType: { type: String, required: true },
+  uploadedAt: { type: Date, default: Date.now },
+  userId: { type: String, default: null },
+  entityId: { type: String, default: null, index: true },
+  fileHash: { type: String, required: true, unique: true },
+  fileSize: { type: Number, default: 0 },
+  rawContent: { type: Buffer, default: null },
+  status: { type: String, default: 'uploaded' },
+  chunkCount: { type: Number, default: 0 },
+}, { collection: "documents" });
+
+const documentChunkSchema = new Schema({
+  documentId: { type: Schema.Types.ObjectId, required: true, index: true, ref: 'Document' },
+  chunkIndex: { type: Number, required: true },
+  text: { type: String, required: true },
+  pageNumber: { type: Number, default: null },
+  sheetName: { type: String, default: null },
+  sectionPath: { type: String, default: '' },
+  chunkType: { type: String, default: 'text' },
+  metadata: { type: Schema.Types.Mixed, default: {} },
+  tokenCount: { type: Number, default: 0 },
+}, { collection: "document_chunks" });
+
 export const UserModel = mongoose.model("User", userSchema);
 export const OrganizationModel = mongoose.model("Organization", organizationSchema);
 export const ClientModel = mongoose.model("Client", clientSchema);
@@ -162,3 +187,5 @@ export const SedContributionModel = mongoose.model("SedContribution", sedContrib
 export const ScenarioModel = mongoose.model("Scenario", scenarioSchema);
 export const ImportLogModel = mongoose.model("ImportLog", importLogSchema);
 export const ExportLogModel = mongoose.model("ExportLog", exportLogSchema);
+export const Document = mongoose.model("Document", documentSchema);
+export const DocumentChunk = mongoose.model("DocumentChunk", documentChunkSchema);
