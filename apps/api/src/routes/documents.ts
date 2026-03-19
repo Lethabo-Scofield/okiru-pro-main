@@ -14,7 +14,7 @@ import { Document, DocumentChunk } from '../../models.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
-const AUDIT_AI_URL = process.env.AUDIT_AI_URL || 'http://localhost:8007';
+// Document extraction will be handled internally using patterns from audit-ai as reference
 
 // ---------------------------------------------------------------------------
 // POST /api/documents/upload - Upload a document for storage and chunking
@@ -51,40 +51,9 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       status: 'uploaded',
     });
 
+    // For now, just store the document. Chunking will be implemented later using audit-ai patterns
     let chunkCount = 0;
-    try {
-      const formData = new FormData();
-      formData.append('file', new Blob([new Uint8Array(buffer)]), filename);
-
-      const resp = await fetch(`${AUDIT_AI_URL}/api/audit/chunk`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (resp.ok) {
-        const data = await resp.json() as { chunks?: Array<Record<string, unknown>> };
-        if (data.chunks && Array.isArray(data.chunks)) {
-          const chunkDocs = data.chunks.map((chunk: Record<string, unknown>, idx: number) => ({
-            documentId: doc._id,
-            chunkIndex: idx,
-            text: chunk.text || '',
-            pageNumber: chunk.page_number || chunk.pageNumber || null,
-            sheetName: chunk.sheet_name || chunk.sheetName || null,
-            sectionPath: chunk.section_path || chunk.sectionPath || '',
-            chunkType: chunk.chunk_type || chunk.chunkType || 'text',
-            metadata: chunk.metadata || {},
-            tokenCount: chunk.token_count || chunk.tokenCount || 0,
-          }));
-          await DocumentChunk.insertMany(chunkDocs);
-          chunkCount = chunkDocs.length;
-        }
-      }
-
-      await Document.findByIdAndUpdate(doc._id, { status: 'chunked', chunkCount });
-    } catch (err: unknown) {
-      console.warn('[Documents] Chunking failed (non-blocking):', err);
-      await Document.findByIdAndUpdate(doc._id, { status: 'chunk_failed' });
-    }
+    await Document.findByIdAndUpdate(doc._id, { status: 'uploaded', chunkCount });
 
     return res.json({
       documentId: doc._id,
@@ -184,26 +153,12 @@ router.post('/extract-entities', upload.single('file'), async (req: Request, res
       return res.status(400).json({ message: 'Either file upload or documentId is required' });
     }
 
-    const formData = new FormData();
-    formData.append('file', new Blob([new Uint8Array(fileBuffer)]), filename);
-    formData.append('entity_definitions', typeof entityDefinitions === 'string'
-      ? entityDefinitions
-      : JSON.stringify(entityDefinitions));
-
-    const resp = await fetch(`${AUDIT_AI_URL}/api/audit/extract-entities`, {
-      method: 'POST',
-      body: formData,
+    // Entity extraction will be implemented later using audit-ai patterns as reference
+    return res.json({
+      message: 'Entity extraction not yet implemented. Will use audit-ai patterns as reference.',
+      filename,
+      entityDefinitions: typeof entityDefinitions === 'string' ? JSON.parse(entityDefinitions) : entityDefinitions,
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return res.status(resp.status).json({
-        message: `Extraction service error: ${errText}`,
-      });
-    }
-
-    const extractionResult = await resp.json();
-    return res.json(extractionResult);
   } catch (error: unknown) {
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Entity extraction failed',
