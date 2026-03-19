@@ -54,7 +54,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     let chunkCount = 0;
     try {
       const formData = new FormData();
-      formData.append('file', new Blob([buffer]), filename);
+      formData.append('file', new Blob([new Uint8Array(buffer)]), filename);
 
       const resp = await fetch(`${AUDIT_AI_URL}/api/audit/chunk`, {
         method: 'POST',
@@ -185,7 +185,7 @@ router.post('/extract-entities', upload.single('file'), async (req: Request, res
     }
 
     const formData = new FormData();
-    formData.append('file', new Blob([fileBuffer]), filename);
+    formData.append('file', new Blob([new Uint8Array(fileBuffer)]), filename);
     formData.append('entity_definitions', typeof entityDefinitions === 'string'
       ? entityDefinitions
       : JSON.stringify(entityDefinitions));
