@@ -238,13 +238,54 @@
     /* ── FLOW VIEW ── */
     #flow-view {
       flex: 1;
-      overflow: auto;
-      padding: 20px;
+      position: relative;
       display: none;
     }
-    #flow-view.active { display: block; }
-    .flow-svg-wrap { min-width: 900px; }
-    #flow-svg { display: block; }
+    #flow-view.active { display: flex; flex-direction: column; }
+    .flow-header { padding: 12px 16px 0; flex-shrink: 0; }
+    .flow-svg-wrap { flex: 1; position: relative; min-height: 0; }
+    #flow-svg { width: 100%; height: 100%; display: block; }
+    .flow-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(8,12,24,0.9);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 10px;
+    }
+    .flow-legend-item { display: flex; align-items: center; gap: 4px; }
+    .flow-hint {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--muted);
+      background: rgba(8,12,24,0.8);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+    }
+    .flow-info-bar {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(8,12,24,0.85);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      pointer-events: none;
+      white-space: nowrap;
+    }
     .flow-title {
       font-size: 11px;
       font-weight: 600;
@@ -690,18 +731,19 @@
 
     <!-- Flow Map -->
     <div id="flow-view">
-      <div class="flow-title" id="flow-title">Sheet Dependency Flow — Select a sector above</div>
-      <div class="flow-svg-wrap">
-        <svg id="flow-svg" height="520"></svg>
+      <div class="flow-header">
+        <div class="flow-title" id="flow-title" style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">Sheet Dependency Flow — Select a sector above</div>
       </div>
-      <div style="margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;color:var(--muted)">
-        <strong style="color:var(--text)">How to read this diagram:</strong>
-        Each box is an Excel sheet. Arrows show which sheets feed data into which other sheets.
-        <strong style="color:var(--accent)">Cyan boxes</strong> are calculation sheets.
-        <strong style="color:var(--green)">Green</strong> = input/data sheets.
-        <strong style="color:var(--amber)">Amber</strong> = output/scorecard sheets.
-        Click any box to filter the cell graph to that sheet.
-        The rightmost column (<em>Summary Scorecard</em>) is the final output — trace any value back to its origin input cell using the <strong>Trace</strong> view.
+      <div class="flow-svg-wrap">
+        <svg id="flow-svg"></svg>
+        <div class="flow-legend" id="flow-legend" style="display:none">
+          <div class="flow-legend-item"><div style="width:8px;height:8px;border-radius:2px;background:#22c55e22;border:1px solid #22c55e55"></div><span style="color:#22c55e">Input Data</span></div>
+          <div class="flow-legend-item"><div style="width:8px;height:8px;border-radius:2px;background:#38bdf822;border:1px solid #38bdf855"></div><span style="color:#38bdf8">Calculations</span></div>
+          <div class="flow-legend-item"><div style="width:8px;height:8px;border-radius:2px;background:#f59e0b22;border:1px solid #f59e0b55"></div><span style="color:#f59e0b">Pillar Scorecards</span></div>
+          <div class="flow-legend-item"><div style="width:8px;height:8px;border-radius:2px;background:#ec489922;border:1px solid #ec489955"></div><span style="color:#ec4899">Summary Output</span></div>
+        </div>
+        <div class="flow-hint">Drag to pan · Scroll to zoom · Click sheet to view formulas</div>
+        <div class="flow-info-bar" id="flow-info-bar" style="display:none"></div>
       </div>
     </div>
 
@@ -1130,26 +1172,31 @@ document.querySelectorAll('.view-btn[data-view]').forEach(b => {
 
 // ── FLOW DIAGRAM ──
 function renderFlowDiagram(tmpl, cells) {
-  const svg = d3.select('#flow-svg');
+  const svgEl = document.getElementById('flow-svg');
+  const svg = d3.select(svgEl);
   svg.selectAll('*').remove();
-  document.getElementById('flow-title').textContent = `Sheet Dependency Flow — ${tmpl.sectorCode} ${tmpl.scorecardType} (${tmpl.sourceFile})`;
+  document.getElementById('flow-title').textContent = `${tmpl.sectorCode} ${tmpl.scorecardType} — Sheet Dependency Flow (${tmpl.sourceFile})`;
+  document.getElementById('flow-legend').style.display = 'flex';
+  document.getElementById('flow-info-bar').style.display = '';
+
+  const W = svgEl.clientWidth || 700;
+  const H = svgEl.clientHeight || 500;
 
   // Build sheet → stage map
   const sheets = tmpl.sheets || [];
   const stageMap = {};
   sheets.forEach(s => {
-    const info = SHEET_STAGE[s] || { stage: 1, type: 'calc' };
-    stageMap[s] = info;
+    stageMap[s] = SHEET_STAGE[s] || { stage: 2, type: 'calc' };
   });
 
-  // Build cross-sheet edges from cell dependencies
-  const sheetEdges = new Map(); // "from→to" → count
+  // Build cross-sheet dependency edges
+  const sheetEdges = new Map();
   cells.forEach(c => {
     (c.dependsOn||[]).forEach(dep => {
       if(dep.includes('!')) {
         const depSheet = dep.split('!')[0].replace(/^'/,'').replace(/'$/,'');
         if(depSheet !== c.sheet && stageMap[c.sheet] && stageMap[depSheet]) {
-          const key = `${depSheet}→${c.sheet}`;
+          const key = `${depSheet}|||${c.sheet}`;
           sheetEdges.set(key, (sheetEdges.get(key)||0)+1);
         }
       }
@@ -1159,18 +1206,19 @@ function renderFlowDiagram(tmpl, cells) {
   // Group sheets by stage
   const stages = {};
   sheets.forEach(s => {
-    const st = stageMap[s]?.stage ?? 1;
+    const st = stageMap[s]?.stage ?? 2;
     if(!stages[st]) stages[st] = [];
-    stages[st].push({ name: s, type: stageMap[s]?.type || 'calc' });
+    stages[st].push({ name: s, type: stageMap[s]?.type||'calc' });
   });
 
   const numStages = 6;
-  const W = Math.max(document.getElementById('flow-view').offsetWidth - 40 || 900, 960);
-  const colW = W / numStages;
-  const rowH = 34;
-  const nodeW = colW * 0.82;
+  const colW = 170;
+  const rowH = 36;
+  const nodeW = 148;
   const nodeH = 28;
-  const padding = (colW - nodeW) / 2;
+  const colPad = (colW - nodeW) / 2;
+  const topPad = 50;
+  const fullW = numStages * colW + 20;
 
   // Position nodes
   const nodes = {};
@@ -1178,110 +1226,90 @@ function renderFlowDiagram(tmpl, cells) {
   for(let s = 0; s < numStages; s++) {
     const items = stages[s] || [];
     items.forEach((item, i) => {
-      nodes[item.name] = {
-        x: s * colW + padding,
-        y: 60 + i * rowH,
-        w: nodeW,
-        h: nodeH,
-        stage: s,
-        type: item.type,
-        name: item.name,
-      };
+      nodes[item.name] = { x: s*colW+colPad, y: topPad+i*rowH, w: nodeW, h: nodeH, stage: s, type: item.type, name: item.name };
     });
     maxRows = Math.max(maxRows, items.length);
   }
-  const svgH = Math.max(520, 80 + maxRows * rowH + 40);
-  svg.attr('height', svgH).attr('width', W);
+  const fullH = Math.max(H, topPad + maxRows*rowH + 60);
 
-  // Stage header labels
+  // Zoom/pan
+  const zoom = d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoom);
+  const initialScale = Math.min(W/fullW, H/fullH) * 0.92;
+  const tx = (W - fullW*initialScale)/2;
+  svg.call(zoom.transform, d3.zoomIdentity.translate(tx, 10).scale(initialScale));
+
+  const g = svg.append('g');
+
+  // Stage columns bg + labels
   const stageColors = ['#22c55e','#38bdf8','#38bdf8','#f59e0b','#ec4899','#ec4899'];
+  const stageShort = ['INPUT','FINANCIALS','PILLAR CALCS','SCORECARDS','AGGREGATION','SUMMARY'];
   for(let s=0;s<numStages;s++) {
-    const label = STAGE_LABELS[s] || `Stage ${s}`;
-    svg.append('text')
-      .attr('x', s * colW + colW/2)
-      .attr('y', 18)
-      .attr('text-anchor','middle')
-      .attr('font-family','IBM Plex Mono, monospace')
-      .attr('font-size', 9)
-      .attr('font-weight', 700)
-      .attr('letter-spacing', 1)
-      .attr('fill', stageColors[s])
-      .selectAll('tspan')
-      .data(label.split('\n'))
-      .join('tspan')
-      .attr('x', s * colW + colW/2)
-      .attr('dy', (d,i) => i===0?0:11)
-      .text(d=>d);
-  }
-
-  // Column separators
-  for(let s=1;s<numStages;s++) {
-    svg.append('line')
-      .attr('x1', s*colW).attr('y1', 0).attr('x2', s*colW).attr('y2', svgH)
-      .attr('stroke', 'rgba(255,255,255,0.04)').attr('stroke-width', 1);
+    if(s>0) g.append('line').attr('x1',s*colW).attr('y1',0).attr('x2',s*colW).attr('y2',fullH).attr('stroke','rgba(255,255,255,0.04)').attr('stroke-width',1);
+    g.append('text').attr('x',s*colW+colW/2).attr('y',22)
+      .attr('text-anchor','middle').attr('font-family','IBM Plex Mono,monospace')
+      .attr('font-size',9).attr('font-weight',700).attr('letter-spacing',1.5)
+      .attr('fill',stageColors[s]).text(stageShort[s]);
   }
 
   // Edges
-  const edgeG = svg.append('g').attr('class','edges');
+  const edgeG = g.append('g');
   sheetEdges.forEach((count, key) => {
-    const [from, to] = key.split('→');
+    const [from, to] = key.split('|||');
     const fn = nodes[from], tn2 = nodes[to];
     if(!fn||!tn2) return;
-    const x1 = fn.x + fn.w, y1 = fn.y + fn.h/2;
-    const x2 = tn2.x, y2 = tn2.y + tn2.h/2;
+    const x1 = fn.x+fn.w, y1 = fn.y+fn.h/2;
+    const x2 = tn2.x, y2 = tn2.y+tn2.h/2;
     const cx = (x1+x2)/2;
+    const opacity = Math.min(0.1+count*0.006, 0.5);
+    const sw = Math.min(1+count*0.04, 3.5);
     edgeG.append('path')
-      .attr('d', `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`)
+      .attr('d',`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`)
       .attr('fill','none')
-      .attr('stroke', `rgba(56,189,248,${Math.min(0.08+count*0.004,0.35)})`)
-      .attr('stroke-width', Math.min(1+count*0.05,3));
+      .attr('stroke',`rgba(56,189,248,${opacity})`)
+      .attr('stroke-width',sw);
   });
 
   // Nodes
-  const nodeG = svg.append('g').attr('class','sheet-nodes');
-  const typeColors = { input:'#22c55e', lookup:'#475569', calc:'#38bdf8', scorecard:'#f59e0b', output:'#ec4899' };
+  const typeColors = { input:'#22c55e', lookup:'#64748b', calc:'#38bdf8', scorecard:'#f59e0b', output:'#ec4899' };
+  const tt = document.getElementById('tooltip');
   Object.values(nodes).forEach(n => {
     const c = typeColors[n.type]||'#38bdf8';
-    const g = nodeG.append('g').attr('class','flow-node').attr('cursor','pointer')
+    const cellCount = cells.filter(x=>x.sheet===n.name).length;
+    const fmlCount = cells.filter(x=>x.sheet===n.name&&x.formula).length;
+    const ng = g.append('g').attr('cursor','pointer')
       .on('click', () => {
-        // Switch to formula view filtered to this sheet
         state.sheet = n.name;
         document.getElementById('sheet-select').value = n.name;
         document.getElementById('sheet-filter-sel').value = n.name;
-        setActiveViewBtn('formula');
-        state.view = 'formula';
-        setView('formula');
-        renderFormulaTable();
-      });
-    g.append('rect')
-      .attr('x', n.x).attr('y', n.y).attr('width', n.w).attr('height', n.h)
-      .attr('rx', 4)
-      .attr('fill', `${c}18`)
-      .attr('stroke', `${c}55`)
-      .attr('stroke-width', 1);
-    // Truncate name
-    const maxChars = Math.floor(n.w / 6.5);
-    const label = n.name.length > maxChars ? n.name.slice(0, maxChars-1)+'…' : n.name;
-    g.append('text')
-      .attr('x', n.x + n.w/2).attr('y', n.y + n.h/2 + 4)
-      .attr('text-anchor','middle')
-      .attr('font-family','IBM Plex Mono, monospace')
-      .attr('font-size', 9)
-      .attr('font-weight', n.type==='output'?700:400)
-      .attr('fill', n.type==='output'?c:n.type==='input'?'#86efac':'#94a3b8')
+        setActiveViewBtn('formula'); state.view='formula'; setView('formula'); renderFormulaTable();
+      })
+      .on('mouseover', (e) => {
+        tt.innerHTML=`<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:${c};margin-bottom:4px">${n.name}</div><div style="font-size:10px;color:var(--muted)">${cellCount} cells · <span style="color:#34d399">${fmlCount} formulas</span></div><div style="font-size:10px;color:var(--muted);margin-top:2px">Stage ${n.stage}: ${n.type}</div><div style="font-size:10px;color:var(--accent);margin-top:4px">Click → view all ${fmlCount} formulas</div>`;
+        tt.classList.add('show'); tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
+      }).on('mousemove',e=>{tt.style.left=(e.clientX+12)+'px';tt.style.top=(e.clientY-10)+'px';})
+      .on('mouseout',()=>tt.classList.remove('show'));
+
+    ng.append('rect').attr('x',n.x).attr('y',n.y).attr('width',n.w).attr('height',n.h).attr('rx',4)
+      .attr('fill',`${c}15`).attr('stroke',`${c}50`).attr('stroke-width',1);
+    // Highlight output nodes
+    if(n.type==='output') ng.select('rect').attr('fill',`${c}28`).attr('stroke',`${c}88`).attr('stroke-width',1.5);
+    const label = n.name.length>22?n.name.slice(0,21)+'…':n.name;
+    ng.append('text').attr('x',n.x+n.w/2).attr('y',n.y+n.h/2+4).attr('text-anchor','middle')
+      .attr('font-family','IBM Plex Mono,monospace').attr('font-size',9)
+      .attr('font-weight',n.type==='output'||n.type==='scorecard'?600:400)
+      .attr('fill',n.type==='output'?c:n.type==='scorecard'?'#fcd34d':n.type==='input'?'#86efac':'#94a3b8')
       .text(label);
-    // Tooltip
-    const tt = document.getElementById('tooltip');
-    g.on('mouseover', (e) => {
-      const cnt = cells.filter(c=>c.sheet===n.name).length;
-      const fmls = cells.filter(c=>c.sheet===n.name&&c.formula).length;
-      tt.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:${c};margin-bottom:4px">${n.name}</div><div style="font-size:10px;color:var(--muted)">${cnt} cells · ${fmls} formulas</div><div style="font-size:10px;color:var(--muted);margin-top:3px">Type: ${n.type} · Stage: ${n.stage}</div><div style="font-size:10px;color:var(--accent);margin-top:3px">Click to see formulas →</div>`;
-      tt.classList.add('show');
-      tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
-    }).on('mousemove',(e)=>{
-      tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
-    }).on('mouseout',()=>tt.classList.remove('show'));
+    // Cell count badge
+    if(cellCount>0) {
+      ng.append('text').attr('x',n.x+n.w-4).attr('y',n.y+n.h/2+4).attr('text-anchor','end')
+        .attr('font-family','IBM Plex Mono,monospace').attr('font-size',7)
+        .attr('fill',`${c}66`).text(cellCount);
+    }
   });
+
+  // Total edges in info bar
+  document.getElementById('flow-info-bar').textContent = `${sheets.length} sheets · ${sheetEdges.size} cross-sheet dependencies · scroll/pinch to zoom`;
 }
 
 // ── CELL GRAPH (D3 force) ──
