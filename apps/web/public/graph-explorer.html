@@ -3,37 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>B-BBEE Formula Graph Explorer</title>
+  <title>B-BBEE Calculation Provenance Explorer</title>
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #06091a;
-      --surface: #0c1228;
-      --card: #111a35;
-      --border: #1c2d50;
-      --text: #e2e8f4;
-      --muted: #5a7299;
-      --accent: #22d3ee;
-      --accent-dim: rgba(34,211,238,0.12);
+      --bg: #080c18;
+      --surface: #0d1526;
+      --card: #111d35;
+      --border: #1e2f50;
+      --border2: #243660;
+      --text: #dce6f5;
+      --muted: #4f6a99;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --pink: #f472b6;
+      --orange: #fb923c;
 
-      --ownership: #3b82f6;
-      --managementControl: #a855f7;
-      --skillsDevelopment: #22c55e;
-      --preferentialProcurement: #f59e0b;
-      --enterpriseSupplierDevelopment: #f97316;
-      --socioEconomicDevelopment: #ec4899;
-      --yesInitiative: #06b6d4;
-      --employmentEquity: #818cf8;
-      --other: #475569;
-
-      --glow: 0 0 20px rgba(34,211,238,0.25);
+      --p-own:  #3b82f6;
+      --p-mc:   #a855f7;
+      --p-ee:   #818cf8;
+      --p-sk:   #22c55e;
+      --p-pp:   #f59e0b;
+      --p-esd:  #f97316;
+      --p-sed:  #ec4899;
+      --p-yes:  #06b6d4;
+      --p-fin:  #94a3b8;
+      --p-inp:  #475569;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'IBM Plex Sans', sans-serif;
       background: var(--bg);
       color: var(--text);
       height: 100vh;
@@ -42,222 +45,505 @@
       overflow: hidden;
     }
 
-    /* ─── HEADER ─── */
+    /* ── HEADER ── */
     header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px 16px;
+      gap: 0;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
-      z-index: 10;
+      height: 46px;
       overflow: hidden;
-      min-height: 48px;
     }
     .logo {
-      font-family: 'Space Mono', monospace;
-      font-weight: 700;
-      font-size: 15px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
       color: var(--accent);
-      letter-spacing: -0.5px;
-      white-space: nowrap;
-    }
-    .logo span { color: var(--text); opacity: 0.6; }
-
-    .sector-tabs {
-      display: flex;
-      gap: 4px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-      flex: 1;
-    }
-    .sector-tabs::-webkit-scrollbar { display: none; }
-    .sector-tab {
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 5px 10px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      white-space: nowrap;
-    }
-    .sector-tab:hover { color: var(--text); border-color: var(--muted); }
-    .sector-tab.active {
-      background: var(--accent-dim);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .header-right {
-      margin-left: 0;
+      padding: 0 16px;
+      border-right: 1px solid var(--border);
+      height: 100%;
       display: flex;
       align-items: center;
       gap: 8px;
+      white-space: nowrap;
       flex-shrink: 0;
     }
-    .sheet-select {
-      background: var(--card);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 12px;
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      min-width: 180px;
-    }
-    .sheet-select:focus { outline: 1px solid var(--accent); }
-
-    .view-toggle {
+    .logo-sub { color: var(--muted); font-weight: 400; }
+    .sector-nav {
       display: flex;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      overflow: hidden;
+      align-items: center;
+      gap: 2px;
+      padding: 0 10px;
+      flex: 1;
+      overflow-x: auto;
+      scrollbar-width: none;
+      height: 100%;
     }
-    .view-btn {
+    .sector-nav::-webkit-scrollbar { display: none; }
+    .snav-btn {
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 11px;
-      padding: 5px 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid transparent;
       background: transparent;
-      border: none;
       color: var(--muted);
       cursor: pointer;
-      transition: all 0.15s;
+      white-space: nowrap;
+      transition: all 0.12s;
     }
-    .view-btn.active { background: var(--accent-dim); color: var(--accent); }
-    .view-btn:hover:not(.active) { color: var(--text); }
+    .snav-btn:hover { color: var(--text); background: var(--card); border-color: var(--border); }
+    .snav-btn.active { background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.4); color: var(--accent); }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 10px;
+      border-left: 1px solid var(--border);
+      height: 100%;
+    }
+    .view-btn {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .view-btn:hover { color: var(--text); border-color: var(--border2); }
+    .view-btn.active { background: rgba(56,189,248,0.12); border-color: var(--accent); color: var(--accent); }
 
-    /* ─── MAIN LAYOUT ─── */
-    .main {
+    /* ── BODY LAYOUT ── */
+    .body {
       display: flex;
       flex: 1;
       overflow: hidden;
     }
 
-    /* ─── LEFT PANEL ─── */
-    .left-panel {
-      width: 220px;
+    /* ── LEFT SPEC PANEL ── */
+    .spec-panel {
+      width: 230px;
       flex-shrink: 0;
+      background: var(--surface);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      background: var(--surface);
+      overflow: hidden;
     }
-
-    .panel-section {
-      padding: 14px 16px;
+    .spec-panel-header {
+      padding: 10px 14px 8px;
       border-bottom: 1px solid var(--border);
-    }
-    .panel-title {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .spec-sector-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      background: rgba(56,189,248,0.1);
+      border: 1px solid rgba(56,189,248,0.3);
+      border-radius: 3px;
+      color: var(--accent);
+    }
+    .spec-scroll { flex: 1; overflow-y: auto; padding: 10px 14px; }
+    .spec-pillar {
+      margin-bottom: 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .spec-pillar-header {
+      padding: 7px 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      background: var(--card);
+      transition: background 0.1s;
+    }
+    .spec-pillar-header:hover { background: #162040; }
+    .spec-pillar-header.active { background: #162040; border-bottom: 1px solid var(--border); }
+    .spec-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .spec-name { font-size: 11px; font-weight: 600; flex: 1; }
+    .spec-pts {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .spec-body { padding: 8px 10px; display: none; background: rgba(0,0,0,0.2); }
+    .spec-body.open { display: block; }
+    .spec-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 10px;
+      gap: 8px;
+    }
+    .spec-row:last-child { border-bottom: none; }
+    .spec-row-label { color: var(--muted); flex-shrink: 0; line-height: 1.4; }
+    .spec-row-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--text);
+      text-align: right;
+      line-height: 1.4;
+    }
+    .spec-formula {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--green);
+      margin-top: 5px;
+      padding: 5px 7px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 3px;
+      border-left: 2px solid var(--green);
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .spec-submin {
+      font-size: 9px;
+      padding: 3px 6px;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 3px;
+      color: var(--red);
+      margin-top: 5px;
+    }
+    .level-table {
+      width: 100%;
+      font-size: 10px;
+      border-collapse: collapse;
+    }
+    .level-table td { padding: 3px 5px; }
+    .level-table tr:not(:last-child) td { border-bottom: 1px solid rgba(255,255,255,0.04); }
+
+    /* ── CENTER AREA ── */
+    .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+    /* ── FLOW VIEW ── */
+    #flow-view {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      display: none;
+    }
+    #flow-view.active { display: block; }
+    .flow-svg-wrap { min-width: 860px; }
+    #flow-svg { width: 100%; }
+    .flow-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 1.5px;
-      color: var(--muted);
-      margin-bottom: 10px;
+      margin-bottom: 16px;
     }
 
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
+    /* ── GRAPH VIEW ── */
+    #graph-view {
+      flex: 1;
+      position: relative;
+      display: none;
     }
-    .stat-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px;
-      text-align: center;
-    }
-    .stat-value {
-      font-family: 'Space Mono', monospace;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--accent);
-      line-height: 1;
-    }
-    .stat-label {
-      font-size: 9px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-top: 3px;
-    }
-
-    .pillar-list {
+    #graph-view.active { display: flex; }
+    #graph-svg { width: 100%; height: 100%; }
+    .g-controls {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
-    .pillar-row {
+    .g-btn {
+      width: 30px;
+      height: 30px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.1s;
+      justify-content: center;
+      transition: border-color 0.1s;
     }
-    .pillar-row:hover { background: var(--card); }
-    .pillar-row.active { background: var(--card); border: 1px solid var(--border); }
-    .pillar-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .pillar-name {
-      font-size: 11px;
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .pillar-pts {
-      font-family: 'Space Mono', monospace;
+    .g-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .g-info {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(8,12,24,0.85);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 10px;
       color: var(--muted);
+      pointer-events: none;
     }
-    .pillar-count {
-      font-size: 9px;
-      color: var(--muted);
+    .sheet-filter {
+      position: absolute;
+      top: 8px;
+      left: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      max-width: 200px;
     }
 
-    /* Level thresholds */
-    .threshold-row {
+    /* ── FORMULAS VIEW ── */
+    #formula-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: none;
+    }
+    #formula-view.active { display: block; }
+    .ftable { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .ftable th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 2px solid var(--border);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 1px;
+      color: var(--muted);
+      text-transform: uppercase;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+    }
+    .ftable td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+    .ftable tr:hover td { background: var(--card); }
+    .ftable tr { cursor: pointer; }
+    .cell-addr { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--accent); }
+    .cell-sheet { font-size: 10px; color: var(--muted); }
+    .cell-formula { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--green); max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cell-value { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+    .cell-deps { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); text-align: right; }
+
+    /* ── TRACE VIEW ── */
+    #trace-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: none;
+    }
+    #trace-view.active { display: block; }
+    .trace-search {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .trace-input {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 5px;
+      outline: none;
+    }
+    .trace-input:focus { border-color: var(--accent); }
+    .trace-btn {
+      padding: 8px 16px;
+      background: rgba(56,189,248,0.1);
+      border: 1px solid rgba(56,189,248,0.4);
+      color: var(--accent);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .trace-btn:hover { background: rgba(56,189,248,0.2); }
+    .trace-results { display: flex; flex-direction: column; gap: 6px; }
+    .trace-cell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      cursor: pointer;
+    }
+    .trace-cell:hover { border-color: var(--accent); }
+    .trace-cell.depth-0 { border-color: rgba(56,189,248,0.5); background: rgba(56,189,248,0.05); }
+    .trace-cell.depth-1 { border-left: 3px solid var(--green); margin-left: 16px; }
+    .trace-cell.depth-2 { border-left: 3px solid var(--amber); margin-left: 32px; }
+    .trace-cell.depth-3 { border-left: 3px solid var(--purple); margin-left: 48px; }
+    .trace-cell.depth-4+ { border-left: 3px solid var(--muted); margin-left: 64px; }
+    .trace-depth-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .trace-addr { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 600; }
+    .trace-sheet { font-size: 10px; color: var(--muted); }
+    .trace-formula { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--green); margin-top: 3px; word-break: break-all; }
+    .trace-value { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text); }
+    .trace-connector { color: var(--muted); font-size: 11px; padding-left: 20px; }
+
+    /* ── RIGHT INSPECTOR PANEL ── */
+    .inspector {
+      width: 250px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .inspector-header {
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .inspector-scroll { flex: 1; overflow-y: auto; padding: 14px; }
+    .inspector-empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .insp-addr {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      word-break: break-all;
+      margin-bottom: 4px;
+    }
+    .insp-sheet { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+    .insp-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .insp-formula {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--green);
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      padding: 8px;
+      border-radius: 4px;
+      word-break: break-all;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+    .insp-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      color: var(--text);
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 100px;
+      border: 1px solid;
+    }
+    .dep-list { display: flex; flex-direction: column; gap: 4px; }
+    .dep-chip {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      padding: 4px 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.1s;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 3px 0;
-      font-size: 11px;
     }
-    .level-badge {
-      font-family: 'Space Mono', monospace;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 3px;
-    }
-
-    /* ─── GRAPH AREA ─── */
-    .graph-area {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-
-    #graph-svg {
+    .dep-chip:hover { color: var(--accent); border-color: var(--accent); background: rgba(56,189,248,0.05); }
+    .dep-chip-sheet { font-size: 9px; opacity: 0.6; }
+    .insp-trace-btn {
       width: 100%;
-      height: 100%;
+      padding: 7px;
+      margin-top: 10px;
+      background: rgba(56,189,248,0.08);
+      border: 1px solid rgba(56,189,248,0.3);
+      color: var(--accent);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.1s;
     }
+    .insp-trace-btn:hover { background: rgba(56,189,248,0.15); }
 
-    .graph-loading {
+    /* ── TOOLTIP ── */
+    .tooltip {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 1000;
+      max-width: 280px;
+      opacity: 0;
+      transition: opacity 0.1s;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .tooltip.show { opacity: 1; }
+
+    /* ── LOADING ── */
+    .loading-overlay {
       position: absolute;
       inset: 0;
       display: flex;
@@ -266,1445 +552,981 @@
       justify-content: center;
       gap: 12px;
       background: var(--bg);
-      z-index: 5;
+      z-index: 20;
     }
-    .graph-loading.hidden { display: none; }
-
+    .loading-overlay.hidden { display: none; }
     .spinner {
-      width: 36px;
-      height: 36px;
+      width: 32px; height: 32px;
       border: 2px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
 
-    .loading-text {
-      font-family: 'Space Mono', monospace;
-      font-size: 12px;
-      color: var(--muted);
-    }
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border2); }
 
-    .graph-empty {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .graph-empty.hidden { display: none; }
-
-    /* D3 graph elements */
-    .node circle {
-      cursor: pointer;
-      transition: r 0.15s;
-    }
-    .node:hover circle { stroke-width: 2px !important; }
-    .node text { pointer-events: none; font-family: 'Space Mono', monospace; }
-
-    .link {
-      stroke: rgba(255,255,255,0.06);
-      stroke-width: 1;
-    }
-    .link.highlighted { stroke: var(--accent); stroke-width: 1.5; opacity: 0.8; }
-
-    /* Tooltip */
-    .tooltip {
-      position: absolute;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      font-size: 11px;
-      pointer-events: none;
-      z-index: 100;
-      max-width: 280px;
-      opacity: 0;
-      transition: opacity 0.1s;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    }
-    .tooltip.visible { opacity: 1; }
-    .tooltip-addr {
-      font-family: 'Space Mono', monospace;
-      font-weight: 700;
-      font-size: 12px;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }
-    .tooltip-formula {
-      font-family: 'Space Mono', monospace;
-      font-size: 10px;
-      color: #4ade80;
-      word-break: break-all;
-      max-height: 60px;
-      overflow: hidden;
-    }
-    .tooltip-value { color: var(--muted); font-size: 10px; margin-top: 3px; }
-    .tooltip-tag { margin-top: 4px; }
-
-    /* ─── RIGHT PANEL ─── */
-    .right-panel {
-      width: 240px;
-      flex-shrink: 0;
-      border-left: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
+    /* ── OVERVIEW GRID ── */
+    #overview-view {
+      flex: 1;
       overflow-y: auto;
-      background: var(--surface);
-    }
-
-    .cell-detail { padding: 16px; }
-    .cell-detail h3 {
-      font-family: 'Space Mono', monospace;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    .detail-addr {
-      font-family: 'Space Mono', monospace;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent);
-      word-break: break-all;
-      margin-bottom: 6px;
-    }
-    .detail-sheet {
-      font-size: 11px;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    .detail-formula {
-      background: rgba(0,0,0,0.4);
-      border: 1px solid var(--border);
-      border-left: 3px solid #4ade80;
-      border-radius: 4px;
-      padding: 8px;
-      font-family: 'Space Mono', monospace;
-      font-size: 10px;
-      color: #4ade80;
-      word-break: break-all;
-      margin-bottom: 10px;
-      max-height: 100px;
-      overflow-y: auto;
-    }
-
-    .detail-value {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 8px;
-      font-family: 'Space Mono', monospace;
-      font-size: 12px;
-      color: var(--text);
-      margin-bottom: 10px;
-    }
-    .detail-value-label {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 3px;
-    }
-
-    .tag-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      border-radius: 100px;
-      font-size: 10px;
-      font-weight: 600;
-      margin: 2px;
-      border: 1px solid;
-    }
-
-    .deps-section {
-      margin-top: 10px;
-    }
-    .deps-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .dep-chip {
-      display: inline-block;
-      padding: 2px 6px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      font-family: 'Space Mono', monospace;
-      font-size: 9px;
-      color: var(--muted);
-      margin: 2px;
-      cursor: pointer;
-      transition: all 0.1s;
-    }
-    .dep-chip:hover { color: var(--accent); border-color: var(--accent); }
-
-    .empty-detail {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    /* Overview mode */
-    .overview-grid {
-      position: absolute;
-      inset: 0;
       padding: 20px;
-      overflow-y: auto;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 14px;
-      align-content: start;
+      display: none;
     }
-    .overview-grid.hidden { display: none; }
-
-    .template-card {
+    #overview-view.active { display: block; }
+    .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .ov-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 18px;
+      border-radius: 8px;
+      padding: 16px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.15s;
       position: relative;
       overflow: hidden;
     }
-    .template-card::before {
+    .ov-card::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 2px;
-      background: var(--sector-color, var(--accent));
+      background: var(--c, var(--accent));
     }
-    .template-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4), var(--glow);
-    }
-    .card-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .card-sector {
-      font-family: 'Space Mono', monospace;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1;
-    }
-    .card-type {
-      font-size: 11px;
-      padding: 3px 8px;
-      background: var(--accent-dim);
-      color: var(--accent);
-      border-radius: 100px;
-      font-weight: 600;
-    }
-    .card-file {
-      font-family: 'Space Mono', monospace;
-      font-size: 9px;
-      color: var(--muted);
-      margin-bottom: 14px;
-    }
-    .card-stats {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-    .card-stat { text-align: center; }
-    .card-stat-val {
-      font-family: 'Space Mono', monospace;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .card-stat-lbl {
-      font-size: 8px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .card-sheets {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 3px;
-    }
-    .sheet-chip {
-      font-size: 9px;
-      padding: 2px 5px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      color: var(--muted);
-    }
-    .sheet-chip.calc { color: var(--accent); border-color: rgba(34,211,238,0.3); background: var(--accent-dim); }
-    .card-explore {
-      margin-top: 14px;
-      text-align: center;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--accent);
-      opacity: 0.7;
-    }
+    .ov-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+    .ov-sector { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; }
+    .ov-type { font-size: 10px; padding: 2px 7px; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); border-radius: 100px; color: var(--accent); }
+    .ov-file { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); margin: 6px 0 12px; }
+    .ov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+    .ov-stat { text-align: center; }
+    .ov-stat-val { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent); }
+    .ov-stat-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .ov-sheets { display: flex; flex-wrap: wrap; gap: 3px; }
+    .ov-chip { font-size: 9px; padding: 2px 5px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 3px; color: var(--muted); }
+    .ov-chip.calc { color: var(--accent); border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.06); }
+    .ov-cta { margin-top: 12px; font-size: 11px; font-weight: 600; color: var(--accent); opacity: 0.6; text-align: center; }
 
-    /* Graph controls */
-    .graph-controls {
-      position: absolute;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
+    /* ── FLOW DIAGRAM STYLES (inline SVG text) ── */
+    .flow-node { cursor: pointer; }
+    .flow-node rect { transition: opacity 0.15s; }
+    .flow-node:hover rect { opacity: 0.85; }
+    .flow-edge { stroke-dasharray: 4 2; }
+
+    /* global stats bar */
+    .stats-bar {
       display: flex;
-      gap: 8px;
-      z-index: 10;
-    }
-    .ctrl-btn {
+      align-items: center;
+      gap: 20px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      height: 34px;
       background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-size: 16px;
-      width: 32px;
-      height: 32px;
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.1s;
+      flex-shrink: 0;
     }
-    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-    /* Legend */
-    .legend {
-      position: absolute;
-      bottom: 16px;
-      left: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      z-index: 10;
-    }
-    .legend-title {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .legend-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 10px;
-      color: var(--text);
-      margin-bottom: 3px;
-    }
-    .legend-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    /* Graph top info bar */
-    .graph-info-bar {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(6,9,26,0.85);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 5px 14px;
-      font-family: 'Space Mono', monospace;
-      font-size: 10px;
-      color: var(--muted);
-      z-index: 10;
-      white-space: nowrap;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-
-    /* Node size legend */
-    .size-legend {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border);
-    }
+    .stats-bar span { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
+    .stats-bar span strong { color: var(--text); }
   </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <header>
-  <div class="logo">B-BBEE <span>//</span> GRAPH EXPLORER</div>
-  <div class="sector-tabs" id="sector-tabs">
-    <button class="sector-tab active" data-key="overview">◈ All Sectors</button>
+  <div class="logo">B-BBEE <span class="logo-sub">// PROVENANCE</span></div>
+  <div class="sector-nav" id="sector-nav">
+    <button class="snav-btn active" data-key="overview">◈ Overview</button>
   </div>
-  <div class="header-right">
-    <select class="sheet-select" id="sheet-select" style="display:none">
+  <div class="header-actions" id="header-actions" style="display:none">
+    <button class="view-btn active" data-view="flow">Flow Map</button>
+    <button class="view-btn" data-view="graph">Cell Graph</button>
+    <button class="view-btn" data-view="formula">Formulas</button>
+    <button class="view-btn" data-view="trace">Trace</button>
+    <select class="view-btn" id="sheet-select" style="min-width:160px;cursor:pointer;padding:4px 8px">
       <option value="">— All Sheets —</option>
     </select>
-    <div class="view-toggle" id="view-toggle" style="display:none">
-      <button class="view-btn active" data-view="graph">Graph</button>
-      <button class="view-btn" data-view="formula">Formulas</button>
-      <button class="view-btn" data-view="accuracy">Accuracy</button>
-    </div>
   </div>
 </header>
 
-<!-- MAIN -->
-<div class="main">
+<!-- STATS BAR -->
+<div class="stats-bar" id="stats-bar">
+  <span>Templates: <strong id="s-templates">—</strong></span>
+  <span>Total Cells: <strong id="s-nodes">—</strong></span>
+  <span>Dependency Edges: <strong id="s-edges">—</strong></span>
+  <span>Formula Cells: <strong id="s-formulas">—</strong></span>
+</div>
 
-  <!-- LEFT PANEL -->
-  <div class="left-panel" id="left-panel">
-    <div class="panel-section">
-      <div class="panel-title">Overview</div>
-      <div id="overview-stats" class="stat-grid">
-        <div class="stat-card"><div class="stat-value" id="stat-templates">—</div><div class="stat-label">Sectors</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-total-formulas">—</div><div class="stat-label">Formulas</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-total-nodes">—</div><div class="stat-label">Total Nodes</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-total-edges">—</div><div class="stat-label">Total Edges</div></div>
-      </div>
+<!-- BODY -->
+<div class="body">
+
+  <!-- LEFT SPEC PANEL -->
+  <div class="spec-panel" id="spec-panel">
+    <div class="spec-panel-header">
+      Calculation Rules
+      <span class="spec-sector-badge" id="spec-sector-label">—</span>
     </div>
-
-    <div class="panel-section" id="pillar-section" style="display:none">
-      <div class="panel-title">Pillars</div>
-      <div class="pillar-list" id="pillar-list"></div>
-    </div>
-
-    <div class="panel-section" id="level-section" style="display:none">
-      <div class="panel-title">Level Thresholds</div>
-      <div id="level-list"></div>
-    </div>
-
-    <div class="panel-section" id="graph-stats-section" style="display:none">
-      <div class="panel-title">Graph Stats</div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-value" id="gstat-nodes">—</div><div class="stat-label">Nodes</div></div>
-        <div class="stat-card"><div class="stat-value" id="gstat-edges">—</div><div class="stat-label">Edges</div></div>
-        <div class="stat-card"><div class="stat-value" id="gstat-formula">—</div><div class="stat-label">Formula</div></div>
-        <div class="stat-card"><div class="stat-value" id="gstat-input">—</div><div class="stat-label">Input</div></div>
+    <div class="spec-scroll" id="spec-scroll">
+      <div style="color:var(--muted);font-size:11px;padding:20px 0;text-align:center;line-height:1.7">
+        Select a sector template<br>to see its calculation rules
       </div>
     </div>
   </div>
 
-  <!-- GRAPH AREA -->
-  <div class="graph-area">
+  <!-- CENTER VIEWS -->
+  <div class="center">
+
     <!-- Loading -->
-    <div class="graph-loading" id="graph-loading">
+    <div class="loading-overlay" id="loading-overlay">
       <div class="spinner"></div>
-      <div class="loading-text" id="loading-text">Loading templates...</div>
+      <div class="loading-msg" id="loading-msg">Loading templates…</div>
     </div>
 
-    <!-- Empty state -->
-    <div class="graph-empty hidden" id="graph-empty">
-      Select a sector above to explore its formula relationships.
+    <!-- Overview -->
+    <div id="overview-view" class="active">
+      <div class="ov-grid" id="ov-grid"></div>
     </div>
 
-    <!-- Overview grid -->
-    <div class="overview-grid hidden" id="overview-grid"></div>
-
-    <!-- SVG Graph -->
-    <svg id="graph-svg" style="display:none"></svg>
-
-    <!-- Accuracy test view -->
-    <div id="accuracy-view" style="display:none; position:absolute; inset:0; overflow-y:auto; padding:20px; font-family:'DM Sans',sans-serif;">
-      <div id="accuracy-content" style="max-width:900px; margin:0 auto;"></div>
+    <!-- Flow Map -->
+    <div id="flow-view">
+      <div class="flow-title" id="flow-title">Sheet Dependency Flow — Select a sector above</div>
+      <div class="flow-svg-wrap">
+        <svg id="flow-svg" height="520"></svg>
+      </div>
+      <div style="margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;color:var(--muted)">
+        <strong style="color:var(--text)">How to read this diagram:</strong>
+        Each box is an Excel sheet. Arrows show which sheets feed data into which other sheets.
+        <strong style="color:var(--accent)">Cyan boxes</strong> are calculation sheets.
+        <strong style="color:var(--green)">Green</strong> = input/data sheets.
+        <strong style="color:var(--amber)">Amber</strong> = output/scorecard sheets.
+        Click any box to filter the cell graph to that sheet.
+        The rightmost column (<em>Summary Scorecard</em>) is the final output — trace any value back to its origin input cell using the <strong>Trace</strong> view.
+      </div>
     </div>
 
-    <!-- Formula table view -->
-    <div id="formula-view" style="display:none; position:absolute; inset:0; overflow-y:auto; padding:16px;">
-      <table id="formula-table" style="width:100%; border-collapse:collapse; font-size:11px;">
-        <thead style="position:sticky;top:0;background:var(--bg);">
+    <!-- Cell Graph -->
+    <div id="graph-view">
+      <svg id="graph-svg"></svg>
+      <div class="g-info" id="g-info">Select a sector to load graph</div>
+      <select class="sheet-filter" id="sheet-filter-sel" style="display:none">
+        <option value="">— All Sheets —</option>
+      </select>
+      <div class="g-controls">
+        <button class="g-btn" id="gb-in">+</button>
+        <button class="g-btn" id="gb-out">−</button>
+        <button class="g-btn" id="gb-fit" title="Fit">⊡</button>
+        <button class="g-btn" id="gb-freeze" title="Freeze">❄</button>
+      </div>
+    </div>
+
+    <!-- Formula Table -->
+    <div id="formula-view">
+      <table class="ftable">
+        <thead>
           <tr>
-            <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">ADDRESS</th>
-            <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">FORMULA</th>
-            <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">VALUE</th>
-            <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">PILLAR</th>
-            <th style="text-align:right;padding:8px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">DEPS</th>
+            <th>Cell Address</th>
+            <th>Sheet</th>
+            <th>Formula</th>
+            <th>Value (Template)</th>
+            <th>Pillar / Role</th>
+            <th style="text-align:right">Deps</th>
           </tr>
         </thead>
-        <tbody id="formula-tbody"></tbody>
+        <tbody id="ftbody"></tbody>
       </table>
     </div>
 
-    <!-- Graph controls -->
-    <div class="graph-controls" id="graph-controls" style="display:none">
-      <button class="ctrl-btn" id="btn-zoom-in" title="Zoom In">+</button>
-      <button class="ctrl-btn" id="btn-zoom-out" title="Zoom Out">−</button>
-      <button class="ctrl-btn" id="btn-fit" title="Fit View">⊡</button>
-      <button class="ctrl-btn" id="btn-freeze" title="Toggle Physics">❄</button>
-    </div>
-
-    <!-- Legend -->
-    <div class="legend" id="legend" style="display:none">
-      <div class="legend-title">Pillars</div>
-      <div id="legend-items"></div>
-      <div class="size-legend">
-        <svg width="40" height="12">
-          <circle cx="6" cy="6" r="3" fill="rgba(255,255,255,0.3)"/>
-          <circle cx="24" cy="6" r="5" fill="rgba(255,255,255,0.3)"/>
-          <circle cx="36" cy="6" r="7" fill="rgba(255,255,255,0.3)" style="clip-path:inset(0 0 0 0)"/>
-        </svg>
-        <span>size = dependency count</span>
+    <!-- Trace View -->
+    <div id="trace-view">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Cell Dependency Tracer</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Enter a cell address to trace its full calculation ancestry — every input cell that contributed to this value.
+        Format: <code style="font-family:'IBM Plex Mono',monospace;color:var(--accent)">Sheet Name!A1</code> or just <code style="font-family:'IBM Plex Mono',monospace;color:var(--accent)">A1</code> (searches active sheet).
       </div>
+      <div class="trace-search">
+        <input class="trace-input" id="trace-input" placeholder="e.g. Scorecard Calculations!B12 or ownership" />
+        <button class="trace-btn" id="trace-go">Trace ↓</button>
+      </div>
+      <div id="trace-results" class="trace-results"></div>
     </div>
 
-    <!-- Info bar -->
-    <div class="graph-info-bar" id="graph-info-bar" style="display:none"></div>
-
-    <!-- Tooltip -->
-    <div class="tooltip" id="tooltip"></div>
   </div>
 
-  <!-- RIGHT PANEL -->
-  <div class="right-panel">
-    <div class="cell-detail" id="cell-detail">
-      <h3>CELL INSPECTOR</h3>
-      <div class="empty-detail" id="empty-detail">
-        <div style="font-size:24px;margin-bottom:8px;opacity:0.3">⬡</div>
-        Click any node in the graph to inspect its formula, value, and dependencies.
+  <!-- RIGHT INSPECTOR -->
+  <div class="inspector" id="inspector">
+    <div class="inspector-header">Cell Inspector</div>
+    <div class="inspector-scroll" id="inspector-scroll">
+      <div class="inspector-empty" id="insp-empty">
+        <div style="font-size:28px;margin-bottom:10px;opacity:0.25">⬡</div>
+        Click any cell in the graph or formula table to inspect its formula, value, and dependencies.
       </div>
-      <div id="cell-info" style="display:none"></div>
+      <div id="insp-detail" style="display:none"></div>
     </div>
   </div>
 
 </div>
 
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip"></div>
+
 <script>
-const API_BASE = 'http://20.164.207.196';
+const API = '';  // same origin
 
-// ─── STATE ───────────────────────────────────────────────────────────────────
+// ── SECTOR SPECS (from sectorConfig.ts + BBBEE_CALCULATIONS_REFERENCE.md) ──
+const SPECS = {
+  RCOGP_Generic: {
+    label: 'RCOGP Generic',
+    totalMax: 116,
+    levelThresholds: [
+      {level:1,min:100,recog:135},{level:2,min:95,recog:125},{level:3,min:90,recog:110},
+      {level:4,min:80,recog:100},{level:5,min:75,recog:80},{level:6,min:70,recog:60},
+      {level:7,min:55,recog:50},{level:8,min:40,recog:10}
+    ],
+    pillars: [
+      { code:'ownership', name:'Ownership', max:25, subMin:'40% (10 pts)', color:'var(--p-own)',
+        rules:[
+          {l:'Voting rights (25% target)',v:'max 4 pts'},
+          {l:'Black women voting (10%)',v:'max 2 pts'},
+          {l:'Economic interest (25%)',v:'max 8 pts'},
+          {l:'Net value',v:'max 8 pts'},
+          {l:'New entrants',v:'max 1 pt'},
+        ],
+        formula:'votingPts = min((BO% / 25%) × 4, 4)\nnvPts = min((allocated−debt) / carrying × BO%, 8)\nTotal = min(voting + women + EI + NV, 25)'
+      },
+      { code:'managementControl', name:'Mgmt Control', max:8, subMin:null, color:'var(--p-mc)',
+        rules:[
+          {l:'Black board (50% target)',v:'max 1 pt'},
+          {l:'Black women board (25%)',v:'max 1 pt'},
+          {l:'Black exec/CEO (60%)',v:'max 2 pts'},
+          {l:'Black women exec (30%)',v:'max 2 pts'},
+        ],
+        formula:'boardPts = min((blackBoard% / 50%) × 1, 1)\nexecPts = min((blackExec% / 60%) × 2, 2)\nTotal = min(board + exec, 8)'
+      },
+      { code:'employmentEquity', name:'Employment Equity', max:11, subMin:null, color:'var(--p-ee)',
+        rules:[
+          {l:'Senior mgmt (EAP target)',v:'max 5 pts'},
+          {l:'Middle mgmt (EAP target)',v:'max 4 pts'},
+          {l:'Junior/skilled (EAP)',v:'max 4 pts (combined)'},
+          {l:'Disabled employees (2%)',v:'max 2 pts'},
+        ],
+        formula:'seniorPts = min((blackSenior% / 100%) × 5, 5)\nmiddlePts = min((blackMiddle% / 100%) × 4, 4)\ndisabledPts = disabled% ≥ 2% ? 2 : (disabled%/2%) × 2\nTotal = min(senior+middle+junior+disabled, 11)'
+      },
+      { code:'skillsDevelopment', name:'Skills Development', max:25, subMin:'40% (8 pts on general)', color:'var(--p-sk)',
+        rules:[
+          {l:'Black skills spend ≥ 3.5% of leviable',v:'max 20 pts'},
+          {l:'Bursaries ≥ 2.5% of leviable',v:'max 5 pts'},
+        ],
+        formula:'generalScore = min((blackSpend / (leviable × 3.5%)) × 20, 20)\nbursaryScore = min((bursary / (leviable × 2.5%)) × 5, 5)\nTotal = min(general + bursary, 25)'
+      },
+      { code:'preferentialProcurement', name:'Pref Procurement', max:27, subMin:'40% (10 pts base)', color:'var(--p-pp)',
+        rules:[
+          {l:'TMPS = Revenue − Exclusions',v:'base'},
+          {l:'Target = TMPS × 80%',v:'base'},
+          {l:'Recognised spend (BEE levels × %)'},
+          {l:'L1=135% L2=125% L3=110% L4=100%'},
+          {l:'L5=80% L6=60% L7=50% L8=10%'},
+          {l:'Bonus: 51% BO suppliers',v:'max 2 pts'},
+        ],
+        formula:'recogSpend = Σ(supplierSpend × recogMultiplier)\nbaseScore = min((recogSpend / (TMPS×80%)) × 25, 25)\nbonus = min(Σ(51%BO spend/TMPS × 2), 2)\nTotal = min(base + bonus, 27)'
+      },
+      { code:'enterpriseSupplierDevelopment', name:'ESD', max:15, subMin:null, color:'var(--p-esd)',
+        rules:[
+          {l:'Supplier dev ≥ 2% of NPAT',v:'max 10 pts'},
+          {l:'Enterprise dev ≥ 1% of NPAT',v:'max 5 pts'},
+          {l:'Grant benefit factor',v:'1.0×'},
+          {l:'Interest-free loan',v:'0.7×'},
+          {l:'Professional services',v:'0.8×'},
+        ],
+        formula:'sdScore = min((sdSpend / (NPAT×2%)) × 10, 10)\nedScore = min((edSpend / (NPAT×1%)) × 5, 5)\nTotal = min(sd + ed, 15)'
+      },
+      { code:'socioEconomicDevelopment', name:'SED', max:5, subMin:null, color:'var(--p-sed)',
+        rules:[
+          {l:'SED contributions ≥ 1% of NPAT',v:'max 5 pts'},
+        ],
+        formula:'score = min((sedSpend / (NPAT×1%)) × 5, 5)'
+      },
+    ]
+  }
+};
+function getSpec(sectorCode, scorecardType) {
+  const key = `${sectorCode}_${scorecardType}`;
+  return SPECS[key] || SPECS['RCOGP_Generic'];
+}
+
+// ── PILLAR COLORS ──
+const PC = {
+  ownership:'#3b82f6', managementControl:'#a855f7', employmentEquity:'#818cf8',
+  skillsDevelopment:'#22c55e', preferentialProcurement:'#f59e0b',
+  enterpriseSupplierDevelopment:'#f97316', socioEconomicDevelopment:'#ec4899',
+  yesInitiative:'#06b6d4', financial:'#94a3b8', input:'#475569',
+};
+const PL = {
+  ownership:'Ownership', managementControl:'Mgmt Control', employmentEquity:'EE',
+  skillsDevelopment:'Skills', preferentialProcurement:'Procurement',
+  enterpriseSupplierDevelopment:'ESD', socioEconomicDevelopment:'SED',
+  yesInitiative:'YES', financial:'Financial', input:'Input',
+};
+const SC = { RCOGP:'#38bdf8', ICT:'#a78bfa', FSC:'#fbbf24', AGRI:'#34d399' };
+
+// ── SHEET STAGE MAPPING (for flow diagram) ──
+const SHEET_STAGE = {
+  'Client Information': { stage: 0, type: 'input' },
+  'Financials': { stage: 1, type: 'calc' },
+  'Industry Norms': { stage: 0, type: 'lookup' },
+  'EAP': { stage: 0, type: 'lookup' },
+  'Validation': { stage: 0, type: 'lookup' },
+  'Ownership Data': { stage: 0, type: 'input' },
+  'Ownership - Company Value Data': { stage: 0, type: 'input' },
+  'Outstanding Debts Calcs': { stage: 1, type: 'calc' },
+  'Ownership Calcs Formula': { stage: 2, type: 'calc' },
+  'Ownership Scorecard': { stage: 3, type: 'scorecard' },
+  'MC Data': { stage: 0, type: 'input' },
+  'Employee Demographics': { stage: 0, type: 'input' },
+  'MC Toolkit': { stage: 2, type: 'calc' },
+  'MC Calcs': { stage: 2, type: 'calc' },
+  'MC Scorecard': { stage: 3, type: 'scorecard' },
+  'MC Scorecard (Exco + Senior)': { stage: 3, type: 'scorecard' },
+  'Skills Data': { stage: 0, type: 'input' },
+  'Skills Toolkit': { stage: 2, type: 'calc' },
+  'Skills Calcs': { stage: 2, type: 'calc' },
+  'Skills Scorecard': { stage: 3, type: 'scorecard' },
+  'Procurement Data': { stage: 0, type: 'input' },
+  'TMPS': { stage: 1, type: 'calc' },
+  'Procurement Scorecard': { stage: 3, type: 'scorecard' },
+  'ESD Data': { stage: 0, type: 'input' },
+  'ESD and SED Calcs': { stage: 2, type: 'calc' },
+  'ESD Scorecard': { stage: 3, type: 'scorecard' },
+  'SED Data': { stage: 0, type: 'input' },
+  'SED Scorecard': { stage: 3, type: 'scorecard' },
+  'YES': { stage: 2, type: 'calc' },
+  'Scorecard Calculations': { stage: 4, type: 'output' },
+  'Summary Scorecard': { stage: 5, type: 'output' },
+};
+const STAGE_COLORS = { input:'#22c55e', lookup:'#475569', calc:'#38bdf8', scorecard:'#f59e0b', output:'#ec4899' };
+const STAGE_LABELS = ['0: Input\nData','1: Financial\nCalcs','2: Pillar\nCalcs','3: Pillar\nScorecards','4: Scorecard\nAggregation','5: Summary\nOutput'];
+
+// ── STATE ──
 const state = {
-  templates: [],
-  activeKey: null,
-  cells: [],
-  structure: null,
-  currentSheet: '',
-  currentView: 'graph',
-  selectedNode: null,
-  simulation: null,
-  frozen: false,
-  zoom: null,
-  svg: null,
-  g: null,
+  templates: [], activeKey: null, cells: [], structure: null,
+  view: 'overview', sheet: '', simulation: null, frozen: false,
+  zoom: null, g: null, selectedCell: null,
 };
 
-// ─── PILLAR CONFIG ────────────────────────────────────────────────────────────
-const PILLAR_COLORS = {
-  ownership:                    '#3b82f6',
-  managementControl:            '#a855f7',
-  skillsDevelopment:            '#22c55e',
-  preferentialProcurement:      '#f59e0b',
-  enterpriseSupplierDevelopment:'#f97316',
-  socioEconomicDevelopment:     '#ec4899',
-  yesInitiative:                '#06b6d4',
-  employmentEquity:             '#818cf8',
-};
+function fmt(n) { if(n>=1000)return(n/1000).toFixed(1)+'k'; return String(n); }
 
-const PILLAR_LABELS = {
-  ownership:                    'Ownership',
-  managementControl:            'Mgmt Control',
-  skillsDevelopment:            'Skills Dev',
-  preferentialProcurement:      'Pref Procurement',
-  enterpriseSupplierDevelopment:'ESD',
-  socioEconomicDevelopment:     'SED',
-  yesInitiative:                'YES',
-  employmentEquity:             'Emp Equity',
-};
-
-const SECTOR_COLORS = {
-  RCOGP: '#22d3ee',
-  ICT:   '#a855f7',
-  FSC:   '#f59e0b',
-  AGRI:  '#22c55e',
-};
-
-function pillarColor(tag) {
-  if (!tag) return '#475569';
-  return PILLAR_COLORS[tag.pillar] || PILLAR_COLORS[tag.role] || '#475569';
+// ── API ──
+async function get(url) {
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
 }
 
-// ─── API ──────────────────────────────────────────────────────────────────────
-async function fetchTemplates() {
-  const res = await fetch(`${API_BASE}/api/templates`);
-  if (!res.ok) throw new Error('Failed to load templates');
-  return res.json();
-}
-
-async function fetchCells(graphKey) {
-  const res = await fetch(`${API_BASE}/api/templates/${graphKey}/cells`);
-  if (!res.ok) throw new Error('Failed to load cells');
-  const data = await res.json();
-  return data.cells || [];
-}
-
-async function fetchStructure(graphKey) {
-  const res = await fetch(`${API_BASE}/api/templates/${graphKey}/structure`);
-  if (!res.ok) return null;
-  return res.json();
-}
-
-// ─── INIT ─────────────────────────────────────────────────────────────────────
+// ── INIT ──
 async function init() {
-  showLoading('Loading B-BBEE templates...');
+  showLoading('Loading B-BBEE knowledge graph templates…');
   try {
-    state.templates = await fetchTemplates();
+    state.templates = await get(`${API}/api/templates`);
   } catch(e) {
     hideLoading();
-    document.getElementById('graph-empty').classList.remove('hidden');
-    document.getElementById('graph-empty').textContent = `Error: ${e.message}. Ensure the API at ${API_BASE} is accessible.`;
+    document.getElementById('ov-grid').innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e.message}</div>`;
     return;
   }
-
-  // Update global stats
-  const totalFormulas = state.templates.reduce((a,t) => a + (t.formulaCount||0), 0);
-  const totalNodes = state.templates.reduce((a,t) => a + (t.nodeCount||0), 0);
-  const totalEdges = state.templates.reduce((a,t) => a + (t.edgeCount||0), 0);
-  document.getElementById('stat-templates').textContent = state.templates.length;
-  document.getElementById('stat-total-formulas').textContent = fmtNum(totalFormulas);
-  document.getElementById('stat-total-nodes').textContent = fmtNum(totalNodes);
-  document.getElementById('stat-total-edges').textContent = fmtNum(totalEdges);
-
-  buildSectorTabs();
+  const tf = state.templates.reduce((a,t)=>a+(t.formulaCount||0),0);
+  const tn = state.templates.reduce((a,t)=>a+(t.nodeCount||0),0);
+  const te = state.templates.reduce((a,t)=>a+(t.edgeCount||0),0);
+  document.getElementById('s-templates').textContent = state.templates.length;
+  document.getElementById('s-nodes').textContent = fmt(tn);
+  document.getElementById('s-edges').textContent = fmt(te);
+  document.getElementById('s-formulas').textContent = fmt(tf);
+  buildSectorNav();
   buildOverviewGrid();
-
   hideLoading();
-  showOverview();
 }
 
-function fmtNum(n) {
-  if (n >= 1000) return (n/1000).toFixed(1)+'k';
-  return String(n);
-}
-
-// ─── SECTOR TABS ─────────────────────────────────────────────────────────────
-function buildSectorTabs() {
-  const container = document.getElementById('sector-tabs');
+// ── NAV ──
+function buildSectorNav() {
+  const nav = document.getElementById('sector-nav');
   state.templates.forEach(t => {
-    const btn = document.createElement('button');
-    btn.className = 'sector-tab';
-    btn.dataset.key = t._key;
-    btn.innerHTML = `${t.sectorCode} <small style="opacity:0.6">${t.scorecardType}</small>`;
-    btn.style.setProperty('--tc', SECTOR_COLORS[t.sectorCode] || '#22d3ee');
-    btn.addEventListener('click', () => selectTemplate(t._key));
-    container.appendChild(btn);
+    const b = document.createElement('button');
+    b.className = 'snav-btn';
+    b.dataset.key = t._key;
+    const c = SC[t.sectorCode]||'#38bdf8';
+    b.innerHTML = `<span style="color:${c}">${t.sectorCode}</span> <small style="opacity:0.5">${t.scorecardType}</small>`;
+    b.onclick = () => selectTemplate(t._key);
+    nav.appendChild(b);
   });
-
-  // Tab "All"
-  document.querySelector('[data-key="overview"]').addEventListener('click', () => {
-    setActiveTab('overview');
-    showOverview();
-  });
+  nav.querySelector('[data-key="overview"]').onclick = () => goOverview();
+}
+function setNavActive(key) {
+  document.querySelectorAll('.snav-btn').forEach(b => b.classList.toggle('active', b.dataset.key === key));
 }
 
-function setActiveTab(key) {
-  document.querySelectorAll('.sector-tab').forEach(b => b.classList.remove('active'));
-  const tab = document.querySelector(`.sector-tab[data-key="${key}"]`);
-  if (tab) tab.classList.add('active');
-}
-
-// ─── OVERVIEW ────────────────────────────────────────────────────────────────
+// ── OVERVIEW ──
 function buildOverviewGrid() {
-  const grid = document.getElementById('overview-grid');
+  const grid = document.getElementById('ov-grid');
   grid.innerHTML = '';
   state.templates.forEach(t => {
-    const color = SECTOR_COLORS[t.sectorCode] || '#22d3ee';
-    const card = document.createElement('div');
-    card.className = 'template-card';
-    card.style.setProperty('--sector-color', color);
-    
-    const calcSheets = (t.sheets||[]).filter(s => 
-      s.toLowerCase().includes('calc') || s.toLowerCase().includes('scorecard') || s.toLowerCase().includes('summary')
-    );
-    const sheetChips = (t.sheets||[]).slice(0,12).map(s => {
-      const isCalc = calcSheets.includes(s);
-      return `<span class="sheet-chip${isCalc?' calc':''}">${s}</span>`;
-    }).join('');
-
-    card.innerHTML = `
-      <div class="card-header">
-        <div>
-          <div class="card-sector" style="color:${color}">${t.sectorCode}</div>
-          <div class="card-file">${t.sourceFile}</div>
-        </div>
-        <span class="card-type">${t.scorecardType}</span>
+    const c = SC[t.sectorCode]||'#38bdf8';
+    const calcSheets = (t.sheets||[]).filter(s=>s.toLowerCase().includes('calc')||s.toLowerCase().includes('scorecard')||s.toLowerCase().includes('summary'));
+    const div = document.createElement('div');
+    div.className = 'ov-card';
+    div.style.setProperty('--c', c);
+    div.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
+        <div class="ov-sector" style="color:${c}">${t.sectorCode}</div>
+        <span class="ov-type">${t.scorecardType}</span>
       </div>
-      <div class="card-stats">
-        <div class="card-stat"><div class="card-stat-val">${fmtNum(t.nodeCount)}</div><div class="card-stat-lbl">Cells</div></div>
-        <div class="card-stat"><div class="card-stat-val">${fmtNum(t.edgeCount)}</div><div class="card-stat-lbl">Edges</div></div>
-        <div class="card-stat"><div class="card-stat-val">${fmtNum(t.formulaCount)}</div><div class="card-stat-lbl">Formulas</div></div>
-        <div class="card-stat"><div class="card-stat-val">${t.sheets?.length||0}</div><div class="card-stat-lbl">Sheets</div></div>
+      <div class="ov-file">${t.sourceFile}</div>
+      <div class="ov-stats">
+        <div class="ov-stat"><div class="ov-stat-val">${fmt(t.nodeCount)}</div><div class="ov-stat-lbl">Cells</div></div>
+        <div class="ov-stat"><div class="ov-stat-val">${fmt(t.edgeCount)}</div><div class="ov-stat-lbl">Edges</div></div>
+        <div class="ov-stat"><div class="ov-stat-val">${fmt(t.formulaCount)}</div><div class="ov-stat-lbl">Formulas</div></div>
+        <div class="ov-stat"><div class="ov-stat-val">${t.sheets?.length||0}</div><div class="ov-stat-lbl">Sheets</div></div>
       </div>
-      <div class="card-sheets">${sheetChips}${(t.sheets||[]).length>12?`<span class="sheet-chip">+${t.sheets.length-12} more</span>`:''}</div>
-      <div class="card-explore">Click to explore relationships →</div>
+      <div class="ov-sheets">${(t.sheets||[]).slice(0,10).map(s=>`<span class="ov-chip${calcSheets.includes(s)?' calc':''}">${s}</span>`).join('')}${t.sheets?.length>10?`<span class="ov-chip">+${t.sheets.length-10}</span>`:''}</div>
+      <div class="ov-cta">Explore calculation relationships →</div>
     `;
-    card.addEventListener('click', () => selectTemplate(t._key));
-    grid.appendChild(card);
+    div.onclick = () => selectTemplate(t._key);
+    grid.appendChild(div);
   });
 }
 
-function showOverview() {
-  state.activeKey = null;
-  document.getElementById('overview-grid').classList.remove('hidden');
-  document.getElementById('graph-svg').style.display = 'none';
-  document.getElementById('formula-view').style.display = 'none';
-  document.getElementById('graph-controls').style.display = 'none';
-  document.getElementById('legend').style.display = 'none';
-  document.getElementById('graph-info-bar').style.display = 'none';
-  document.getElementById('graph-empty').classList.add('hidden');
-  document.getElementById('sheet-select').style.display = 'none';
-  document.getElementById('view-toggle').style.display = 'none';
-  document.getElementById('pillar-section').style.display = 'none';
-  document.getElementById('level-section').style.display = 'none';
-  document.getElementById('graph-stats-section').style.display = 'none';
-  // Hide right panel in overview
-  document.querySelector('.right-panel').style.display = 'none';
-  clearCellDetail();
+function goOverview() {
+  setNavActive('overview');
+  setView('overview');
+  document.getElementById('header-actions').style.display = 'none';
+  document.getElementById('spec-panel').style.display = 'flex';
+  buildSpecPanel(null);
+  clearInspector();
 }
 
-function showDetailPanel() {
-  document.querySelector('.right-panel').style.display = '';
-}
-
-// ─── SELECT TEMPLATE ─────────────────────────────────────────────────────────
+// ── SELECT TEMPLATE ──
 async function selectTemplate(key) {
-  if (state.activeKey === key) return;
+  if(state.activeKey === key && state.view !== 'overview') return;
   state.activeKey = key;
-  state.cells = [];
-  state.structure = null;
-  state.selectedNode = null;
-
-  setActiveTab(key);
-  clearCellDetail();
-
+  state.cells = []; state.structure = null; state.selectedCell = null;
+  setNavActive(key);
+  clearInspector();
   const tmpl = state.templates.find(t => t._key === key);
-  if (!tmpl) return;
+  if(!tmpl) return;
 
-  document.getElementById('overview-grid').classList.add('hidden');
-  document.getElementById('graph-svg').style.display = 'none';
-  document.getElementById('formula-view').style.display = 'none';
-  document.getElementById('sheet-select').style.display = '';
-  document.getElementById('view-toggle').style.display = '';
-  showDetailPanel(); // Restore right panel
+  document.getElementById('header-actions').style.display = 'flex';
 
-  showLoading(`Extracting formulas from ${tmpl.sectorCode} ${tmpl.scorecardType}...`);
-
-  // Load cells + structure in parallel
+  showLoading(`Extracting ${tmpl.sectorCode} ${tmpl.scorecardType} formula graph…`);
   const [cells, structure] = await Promise.all([
-    fetchCells(key).catch(() => []),
-    fetchStructure(key).catch(() => null),
+    get(`${API}/api/templates/${key}/cells`).then(d=>d.cells||[]).catch(()=>[]),
+    get(`${API}/api/templates/${key}/structure`).catch(()=>null),
   ]);
-
   state.cells = cells;
   state.structure = structure;
 
-  // Update sheet selector
-  buildSheetSelector(tmpl.sheets || []);
-
-  // Update left panel
-  updateLeftPanel(tmpl, structure, cells);
-
-  // Default to Scorecard Calculations sheet (or first calc sheet)
-  const calcSheet = (tmpl.sheets||[]).find(s =>
-    s === 'Scorecard Calculations' || s === 'Summary Scorecard' || s.toLowerCase().includes('scorecard calc')
-  ) || (tmpl.sheets||[])[0] || '';
-  state.currentSheet = calcSheet;
-  document.getElementById('sheet-select').value = calcSheet;
-
+  buildSheetSelector(tmpl.sheets||[]);
+  buildSpecPanel(tmpl);
   hideLoading();
 
-  // Update graph info
-  document.getElementById('gstat-nodes').textContent = fmtNum(cells.length);
-  document.getElementById('gstat-edges').textContent = fmtNum(cells.reduce((a,c) => a + (c.dependsOn?.length||0), 0));
-  document.getElementById('gstat-formula').textContent = fmtNum(cells.filter(c => c.formula).length);
-  document.getElementById('gstat-input').textContent = fmtNum(cells.filter(c => !c.formula).length);
-  document.getElementById('graph-stats-section').style.display = '';
-
-  renderView();
+  // Default to flow view
+  setActiveViewBtn('flow');
+  state.view = 'flow';
+  renderFlowDiagram(tmpl, cells);
+  setView('flow');
 }
 
-// ─── SHEET SELECTOR ───────────────────────────────────────────────────────────
+// ── SHEET SELECTOR ──
 function buildSheetSelector(sheets) {
-  const sel = document.getElementById('sheet-select');
-  sel.innerHTML = '<option value="">— All Sheets —</option>';
-  sheets.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    const isCalc = s.toLowerCase().includes('calc') || s.toLowerCase().includes('scorecard') || s.toLowerCase().includes('summary');
-    if (isCalc) opt.style.color = '#22d3ee';
-    sel.appendChild(opt);
+  ['sheet-select','sheet-filter-sel'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— All Sheets —</option>';
+    sheets.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      const isCalc = s.toLowerCase().includes('calc') || s.toLowerCase().includes('scorecard') || s.toLowerCase().includes('summary');
+      if(isCalc) o.style.color = '#38bdf8';
+      sel.appendChild(o);
+    });
   });
-  sel.onchange = () => {
-    state.currentSheet = sel.value;
-    renderView();
+  document.getElementById('sheet-select').onchange = (e) => {
+    state.sheet = e.target.value;
+    document.getElementById('sheet-filter-sel').value = state.sheet;
+    if(state.view === 'graph') renderGraph();
+    if(state.view === 'formula') renderFormulaTable();
+  };
+  document.getElementById('sheet-filter-sel').onchange = (e) => {
+    state.sheet = e.target.value;
+    document.getElementById('sheet-select').value = state.sheet;
+    if(state.view === 'graph') renderGraph();
   };
 }
 
-// ─── LEFT PANEL ──────────────────────────────────────────────────────────────
-function updateLeftPanel(tmpl, structure, cells) {
-  // Pillars from structure
-  if (structure?.pillars?.length) {
-    document.getElementById('pillar-section').style.display = '';
-    const list = document.getElementById('pillar-list');
-    list.innerHTML = '';
-    structure.pillars.forEach(p => {
-      const color = PILLAR_COLORS[p.code] || '#475569';
-      const row = document.createElement('div');
-      row.className = 'pillar-row';
-      row.innerHTML = `
-        <div class="pillar-dot" style="background:${color}"></div>
-        <div class="pillar-name">${p.name}</div>
-        <div class="pillar-pts">${p.maxPoints}pt</div>
-        <div class="pillar-count">${p.indicators?.length||0}i</div>
-      `;
-      row.addEventListener('click', () => {
-        // Filter graph to this pillar
-        highlightPillar(p.code);
-      });
-      list.appendChild(row);
-    });
+// ── SPEC PANEL ──
+function buildSpecPanel(tmpl) {
+  const label = document.getElementById('spec-sector-label');
+  const scroll = document.getElementById('spec-scroll');
+  if(!tmpl) {
+    label.textContent = '—';
+    scroll.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:20px 0;text-align:center;line-height:1.7">Select a sector template<br>to see its calculation rules</div>';
+    return;
   }
-
+  const spec = getSpec(tmpl.sectorCode, tmpl.scorecardType);
+  label.textContent = spec.label;
+  let html = '';
   // Level thresholds
-  if (structure?.levelThresholds?.length) {
-    document.getElementById('level-section').style.display = '';
-    const list = document.getElementById('level-list');
-    list.innerHTML = '';
-    const levelColors = {1:'#22c55e',2:'#4ade80',3:'#86efac',4:'#bef264',5:'#fde047',6:'#fbbf24',7:'#fb923c',8:'#f87171'};
-    structure.levelThresholds.forEach(t => {
-      const row = document.createElement('div');
-      row.className = 'threshold-row';
-      row.innerHTML = `
-        <span class="level-badge" style="background:${levelColors[t.level]}22;color:${levelColors[t.level]};border:1px solid ${levelColors[t.level]}44">L${t.level}</span>
-        <span style="font-size:11px">${t.minPoints}+ pts</span>
-        <span style="font-size:11px;color:var(--muted)">${t.recognition}% recog</span>
-      `;
-      list.appendChild(row);
-    });
-  }
-}
-
-// ─── RENDER VIEW ─────────────────────────────────────────────────────────────
-function renderView() {
-  if (state.currentView === 'graph') {
-    renderGraph();
-  } else if (state.currentView === 'accuracy') {
-    renderAccuracyView();
-  } else {
-    renderFormulaTable();
-  }
-}
-
-// ─── GRAPH RENDERING ─────────────────────────────────────────────────────────
-function renderGraph() {
-  document.getElementById('formula-view').style.display = 'none';
-  document.getElementById('accuracy-view').style.display = 'none';
-  document.querySelector('.right-panel').style.display = '';
-  document.getElementById('graph-svg').style.display = '';
-  document.getElementById('graph-controls').style.display = 'flex';
-  document.getElementById('legend').style.display = '';
-  document.getElementById('graph-info-bar').style.display = '';
-
-  // Filter cells
-  let filtered = state.cells;
-  if (state.currentSheet) {
-    filtered = state.cells.filter(c => c.sheet === state.currentSheet);
-  }
-
-  // For large sets, only show formula cells + their immediate dependencies
-  let showCells = filtered;
-  if (filtered.length > 400) {
-    showCells = filtered.filter(c => c.formula);
-    if (showCells.length > 400) showCells = showCells.slice(0, 400);
-  }
-
-  // Build node + edge sets
-  const nodeMap = new Map();
-  showCells.forEach(c => nodeMap.set(c.address, c));
-
-  // Add cross-sheet dependency stub nodes
-  showCells.forEach(c => {
-    (c.dependsOn || []).forEach(dep => {
-      if (!nodeMap.has(dep)) {
-        nodeMap.set(dep, {
-          address: dep,
-          sheet: dep.includes('!') ? dep.split('!')[0] : 'external',
-          formula: null,
-          value: null,
-          dependsOn: [],
-          semanticTag: null,
-          isStub: true,
-        });
-      }
-    });
+  html += `<div style="margin-bottom:12px">
+    <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">BEE Level Thresholds</div>
+    <table class="level-table">
+      ${spec.levelThresholds.map(t=>{
+        const colors=['#22c55e','#4ade80','#86efac','#bef264','#fde047','#fbbf24','#fb923c','#f87171'];
+        const c=colors[t.level-1]||'#94a3b8';
+        return `<tr><td><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${c}22;color:${c};border:1px solid ${c}44">L${t.level}</span></td><td style="font-family:'IBM Plex Mono',monospace;font-size:10px">≥${t.min}</td><td style="font-size:10px;color:var(--muted)">${t.recog}% recog</td></tr>`;
+      }).join('')}
+    </table>
+  </div>`;
+  // Pillars
+  spec.pillars.forEach(p => {
+    html += `<div class="spec-pillar">
+      <div class="spec-pillar-header" onclick="toggleSpecPillar(this)">
+        <div class="spec-dot" style="background:${p.color}"></div>
+        <div class="spec-name">${p.name}</div>
+        <div class="spec-pts">${p.max}pt</div>
+      </div>
+      <div class="spec-body">
+        ${p.rules.map(r=>`<div class="spec-row"><div class="spec-row-label">${r.l}</div>${r.v?`<div class="spec-row-value">${r.v}</div>`:''}</div>`).join('')}
+        <div class="spec-formula">${p.formula}</div>
+        ${p.subMin?`<div class="spec-submin">⚠ Sub-minimum: ${p.subMin}</div>`:''}
+      </div>
+    </div>`;
   });
-
-  const nodes = Array.from(nodeMap.values()).map(c => ({...c, id: c.address}));
-  const edges = [];
-  showCells.forEach(c => {
-    (c.dependsOn || []).forEach(dep => {
-      if (nodeMap.has(dep)) {
-        edges.push({ source: c.address, target: dep });
-      }
-    });
-  });
-
-  document.getElementById('graph-info-bar').textContent =
-    `${nodes.length} nodes  ·  ${edges.length} edges  ·  ${state.currentSheet || 'all sheets'}`;
-
-  buildLegend(nodes);
-  runD3Simulation(nodes, edges);
+  scroll.innerHTML = html;
+}
+function toggleSpecPillar(el) {
+  const body = el.nextElementSibling;
+  body.classList.toggle('open');
+  el.classList.toggle('active');
 }
 
-function buildLegend(nodes) {
-  const used = new Set(nodes.map(n => n.semanticTag?.pillar).filter(Boolean));
-  const items = document.getElementById('legend-items');
-  items.innerHTML = '';
-  
-  // Add "external" for stub nodes
-  const hasExternal = nodes.some(n => n.isStub);
-  
-  Object.entries(PILLAR_COLORS).forEach(([key, color]) => {
-    if (!used.has(key)) return;
-    const row = document.createElement('div');
-    row.className = 'legend-row';
-    row.innerHTML = `<div class="legend-dot" style="background:${color}"></div>${PILLAR_LABELS[key]||key}`;
-    items.appendChild(row);
+// ── VIEWS ──
+function setView(v) {
+  ['overview','flow','graph','formula','trace'].forEach(id => {
+    const el = document.getElementById(`${id}-view`);
+    if(el) el.classList.toggle('active', id === v);
   });
-  
-  if (hasExternal) {
-    const row = document.createElement('div');
-    row.className = 'legend-row';
-    row.innerHTML = `<div class="legend-dot" style="background:#475569;border:1px dashed #64748b"></div>Cross-sheet ref`;
-    items.appendChild(row);
-  }
+  state.view = v;
 }
+function setActiveViewBtn(v) {
+  document.querySelectorAll('.view-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+}
+document.querySelectorAll('.view-btn[data-view]').forEach(b => {
+  b.addEventListener('click', () => {
+    if(!state.activeKey) return;
+    setActiveViewBtn(b.dataset.view);
+    state.view = b.dataset.view;
+    setView(b.dataset.view);
+    if(b.dataset.view === 'flow') { const t=state.templates.find(t=>t._key===state.activeKey); if(t) renderFlowDiagram(t, state.cells); }
+    else if(b.dataset.view === 'graph') renderGraph();
+    else if(b.dataset.view === 'formula') renderFormulaTable();
+    else if(b.dataset.view === 'trace') { /* trace is interactive */ }
+  });
+});
 
-function runD3Simulation(nodes, edges) {
-  const svg = d3.select('#graph-svg');
+// ── FLOW DIAGRAM ──
+function renderFlowDiagram(tmpl, cells) {
+  const svg = d3.select('#flow-svg');
   svg.selectAll('*').remove();
+  document.getElementById('flow-title').textContent = `Sheet Dependency Flow — ${tmpl.sectorCode} ${tmpl.scorecardType} (${tmpl.sourceFile})`;
 
-  const rect = document.getElementById('graph-svg').getBoundingClientRect();
-  const W = rect.width, H = rect.height;
-
-  // Compute degree for sizing
-  const degMap = new Map();
-  edges.forEach(e => {
-    degMap.set(e.source, (degMap.get(e.source)||0)+1);
-    degMap.set(e.target, (degMap.get(e.target)||0)+1);
+  // Build sheet → stage map
+  const sheets = tmpl.sheets || [];
+  const stageMap = {};
+  sheets.forEach(s => {
+    const info = SHEET_STAGE[s] || { stage: 1, type: 'calc' };
+    stageMap[s] = info;
   });
-  nodes.forEach(n => { n.degree = degMap.get(n.id)||0; });
 
-  const maxDeg = Math.max(...nodes.map(n=>n.degree), 1);
-  const rScale = d3.scaleSqrt().domain([0, maxDeg]).range([3, 14]);
+  // Build cross-sheet edges from cell dependencies
+  const sheetEdges = new Map(); // "from→to" → count
+  cells.forEach(c => {
+    (c.dependsOn||[]).forEach(dep => {
+      if(dep.includes('!')) {
+        const depSheet = dep.split('!')[0].replace(/^'/,'').replace(/'$/,'');
+        if(depSheet !== c.sheet && stageMap[c.sheet] && stageMap[depSheet]) {
+          const key = `${depSheet}→${c.sheet}`;
+          sheetEdges.set(key, (sheetEdges.get(key)||0)+1);
+        }
+      }
+    });
+  });
 
-  // Zoom
-  state.zoom = d3.zoom()
-    .scaleExtent([0.05, 5])
-    .on('zoom', e => state.g.attr('transform', e.transform));
-  svg.call(state.zoom);
+  // Group sheets by stage
+  const stages = {};
+  sheets.forEach(s => {
+    const st = stageMap[s]?.stage ?? 1;
+    if(!stages[st]) stages[st] = [];
+    stages[st].push({ name: s, type: stageMap[s]?.type || 'calc' });
+  });
 
-  state.g = svg.append('g');
+  const numStages = 6;
+  const W = Math.max(document.getElementById('flow-svg').parentElement?.offsetWidth || 900, 860);
+  const colW = W / numStages;
+  const rowH = 34;
+  const nodeW = colW * 0.82;
+  const nodeH = 28;
+  const padding = (colW - nodeW) / 2;
 
-  // Arrow marker
-  svg.append('defs').append('marker')
-    .attr('id','arrow')
-    .attr('viewBox','0 -4 8 8')
-    .attr('refX', 12)
-    .attr('refY', 0)
-    .attr('markerWidth', 5)
-    .attr('markerHeight', 5)
-    .attr('orient','auto')
-    .append('path')
-    .attr('d','M0,-4L8,0L0,4')
-    .attr('fill','rgba(255,255,255,0.15)');
+  // Position nodes
+  const nodes = {};
+  let maxRows = 0;
+  for(let s = 0; s < numStages; s++) {
+    const items = stages[s] || [];
+    items.forEach((item, i) => {
+      nodes[item.name] = {
+        x: s * colW + padding,
+        y: 60 + i * rowH,
+        w: nodeW,
+        h: nodeH,
+        stage: s,
+        type: item.type,
+        name: item.name,
+      };
+    });
+    maxRows = Math.max(maxRows, items.length);
+  }
+  const svgH = Math.max(520, 80 + maxRows * rowH + 40);
+  svg.attr('height', svgH).attr('width', W);
+
+  // Stage header labels
+  const stageColors = ['#22c55e','#38bdf8','#38bdf8','#f59e0b','#ec4899','#ec4899'];
+  for(let s=0;s<numStages;s++) {
+    const label = STAGE_LABELS[s] || `Stage ${s}`;
+    svg.append('text')
+      .attr('x', s * colW + colW/2)
+      .attr('y', 18)
+      .attr('text-anchor','middle')
+      .attr('font-family','IBM Plex Mono, monospace')
+      .attr('font-size', 9)
+      .attr('font-weight', 700)
+      .attr('letter-spacing', 1)
+      .attr('fill', stageColors[s])
+      .selectAll('tspan')
+      .data(label.split('\n'))
+      .join('tspan')
+      .attr('x', s * colW + colW/2)
+      .attr('dy', (d,i) => i===0?0:11)
+      .text(d=>d);
+  }
+
+  // Column separators
+  for(let s=1;s<numStages;s++) {
+    svg.append('line')
+      .attr('x1', s*colW).attr('y1', 0).attr('x2', s*colW).attr('y2', svgH)
+      .attr('stroke', 'rgba(255,255,255,0.04)').attr('stroke-width', 1);
+  }
 
   // Edges
-  const link = state.g.append('g').selectAll('line')
-    .data(edges)
-    .join('line')
-    .attr('class','link')
-    .attr('marker-end','url(#arrow)');
+  const edgeG = svg.append('g').attr('class','edges');
+  sheetEdges.forEach((count, key) => {
+    const [from, to] = key.split('→');
+    const fn = nodes[from], tn2 = nodes[to];
+    if(!fn||!tn2) return;
+    const x1 = fn.x + fn.w, y1 = fn.y + fn.h/2;
+    const x2 = tn2.x, y2 = tn2.y + tn2.h/2;
+    const cx = (x1+x2)/2;
+    edgeG.append('path')
+      .attr('d', `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`)
+      .attr('fill','none')
+      .attr('stroke', `rgba(56,189,248,${Math.min(0.08+count*0.004,0.35)})`)
+      .attr('stroke-width', Math.min(1+count*0.05,3));
+  });
 
   // Nodes
-  const node = state.g.append('g').selectAll('g')
-    .data(nodes)
-    .join('g')
-    .attr('class','node')
-    .call(d3.drag()
-      .on('start', dragStarted)
-      .on('drag', dragged)
-      .on('end', dragEnded)
-    );
+  const nodeG = svg.append('g').attr('class','sheet-nodes');
+  const typeColors = { input:'#22c55e', lookup:'#475569', calc:'#38bdf8', scorecard:'#f59e0b', output:'#ec4899' };
+  Object.values(nodes).forEach(n => {
+    const c = typeColors[n.type]||'#38bdf8';
+    const g = nodeG.append('g').attr('class','flow-node').attr('cursor','pointer')
+      .on('click', () => {
+        // Switch to formula view filtered to this sheet
+        state.sheet = n.name;
+        document.getElementById('sheet-select').value = n.name;
+        document.getElementById('sheet-filter-sel').value = n.name;
+        setActiveViewBtn('formula');
+        state.view = 'formula';
+        setView('formula');
+        renderFormulaTable();
+      });
+    g.append('rect')
+      .attr('x', n.x).attr('y', n.y).attr('width', n.w).attr('height', n.h)
+      .attr('rx', 4)
+      .attr('fill', `${c}18`)
+      .attr('stroke', `${c}55`)
+      .attr('stroke-width', 1);
+    // Truncate name
+    const maxChars = Math.floor(n.w / 6.5);
+    const label = n.name.length > maxChars ? n.name.slice(0, maxChars-1)+'…' : n.name;
+    g.append('text')
+      .attr('x', n.x + n.w/2).attr('y', n.y + n.h/2 + 4)
+      .attr('text-anchor','middle')
+      .attr('font-family','IBM Plex Mono, monospace')
+      .attr('font-size', 9)
+      .attr('font-weight', n.type==='output'?700:400)
+      .attr('fill', n.type==='output'?c:n.type==='input'?'#86efac':'#94a3b8')
+      .text(label);
+    // Tooltip
+    const tt = document.getElementById('tooltip');
+    g.on('mouseover', (e) => {
+      const cnt = cells.filter(c=>c.sheet===n.name).length;
+      const fmls = cells.filter(c=>c.sheet===n.name&&c.formula).length;
+      tt.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:${c};margin-bottom:4px">${n.name}</div><div style="font-size:10px;color:var(--muted)">${cnt} cells · ${fmls} formulas</div><div style="font-size:10px;color:var(--muted);margin-top:3px">Type: ${n.type} · Stage: ${n.stage}</div><div style="font-size:10px;color:var(--accent);margin-top:3px">Click to see formulas →</div>`;
+      tt.classList.add('show');
+      tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
+    }).on('mousemove',(e)=>{
+      tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
+    }).on('mouseout',()=>tt.classList.remove('show'));
+  });
+}
 
-  node.append('circle')
-    .attr('r', d => rScale(d.degree))
-    .attr('fill', d => d.isStub ? '#1e293b' : (pillarColor(d.semanticTag) + 'cc'))
-    .attr('stroke', d => d.isStub ? '#334155' : pillarColor(d.semanticTag))
-    .attr('stroke-width', d => d.isStub ? 1 : 1.5)
-    .attr('stroke-dasharray', d => d.isStub ? '3,2' : null);
+// ── CELL GRAPH (D3 force) ──
+function renderGraph() {
+  const tmpl = state.templates.find(t=>t._key===state.activeKey);
+  let filtered = state.cells;
+  if(state.sheet) filtered = state.cells.filter(c=>c.sheet===state.sheet);
+  let show = filtered.filter(c=>c.formula);
+  if(show.length>500) show=show.slice(0,500);
 
-  // Labels for high-degree nodes
-  node.filter(d => d.degree >= 3)
-    .append('text')
-    .attr('dy', d => rScale(d.degree) + 10)
-    .attr('text-anchor','middle')
-    .attr('font-size', 7)
-    .attr('fill','rgba(255,255,255,0.4)')
-    .text(d => {
-      const parts = d.address.split('!');
-      return parts[parts.length-1];
+  const nodeMap = new Map();
+  show.forEach(c=>nodeMap.set(c.address,c));
+  show.forEach(c=>(c.dependsOn||[]).forEach(dep=>{
+    if(!nodeMap.has(dep))nodeMap.set(dep,{address:dep,sheet:dep.includes('!')?dep.split('!')[0]:'ext',formula:null,value:null,dependsOn:[],semanticTag:null,isStub:true});
+  }));
+  const nodes=Array.from(nodeMap.values()).map(c=>({...c,id:c.address}));
+  const edges=[];
+  show.forEach(c=>(c.dependsOn||[]).forEach(dep=>{if(nodeMap.has(dep))edges.push({source:c.address,target:dep});}));
+
+  document.getElementById('g-info').textContent=`${nodes.length} nodes · ${edges.length} edges · ${state.sheet||'all sheets'}`;
+  document.getElementById('sheet-filter-sel').style.display='';
+
+  const svg=d3.select('#graph-svg');
+  svg.selectAll('*').remove();
+  const rect=document.getElementById('graph-svg').getBoundingClientRect();
+  const W=rect.width,H=rect.height;
+  const degMap=new Map();
+  edges.forEach(e=>{degMap.set(e.source,(degMap.get(e.source)||0)+1);degMap.set(e.target,(degMap.get(e.target)||0)+1);});
+  nodes.forEach(n=>{n.degree=degMap.get(n.id)||0;});
+  const maxDeg=Math.max(...nodes.map(n=>n.degree),1);
+  const rScale=d3.scaleSqrt().domain([0,maxDeg]).range([2.5,12]);
+
+  state.zoom=d3.zoom().scaleExtent([0.03,5]).on('zoom',e=>state.g.attr('transform',e.transform));
+  svg.call(state.zoom);
+  state.g=svg.append('g');
+  svg.append('defs').append('marker').attr('id','ar').attr('viewBox','0 -3 6 6').attr('refX',10).attr('markerWidth',4).attr('markerHeight',4).attr('orient','auto').append('path').attr('d','M0,-3L6,0L0,3').attr('fill','rgba(255,255,255,0.12)');
+
+  const link=state.g.append('g').selectAll('line').data(edges).join('line')
+    .attr('stroke','rgba(255,255,255,0.06)').attr('stroke-width',1).attr('marker-end','url(#ar)');
+
+  const node=state.g.append('g').selectAll('g').data(nodes).join('g').attr('class','node')
+    .call(d3.drag().on('start',(e,d)=>{if(!e.active)state.simulation.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;})
+      .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y;})
+      .on('end',(e,d)=>{if(!e.active)state.simulation.alphaTarget(0);if(!state.frozen){d.fx=null;d.fy=null;}}));
+
+  const getPColor=(d)=>{const t=d.semanticTag;if(!t)return'#475569';return PC[t.pillar]||PC[t.role]||'#475569';};
+  node.append('circle').attr('r',d=>rScale(d.degree))
+    .attr('fill',d=>d.isStub?'#1e293b':getPColor(d)+'bb')
+    .attr('stroke',d=>d.isStub?'#334155':getPColor(d))
+    .attr('stroke-width',d=>d.isStub?1:1.5)
+    .attr('stroke-dasharray',d=>d.isStub?'3,2':null)
+    .attr('cursor','pointer');
+
+  node.filter(d=>d.degree>=4).append('text')
+    .attr('dy',d=>rScale(d.degree)+9).attr('text-anchor','middle')
+    .attr('font-size',7).attr('fill','rgba(255,255,255,0.35)').attr('pointer-events','none')
+    .text(d=>{const p=d.address.split('!');return p[p.length-1];});
+
+  const tt=document.getElementById('tooltip');
+  node.on('mouseover',(e,d)=>{
+    const t=d.semanticTag;
+    tt.innerHTML=`<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#38bdf8;margin-bottom:4px">${d.address}</div>${d.formula?`<div style="font-size:10px;color:#34d399;font-family:'IBM Plex Mono',monospace;word-break:break-all">=${d.formula.slice(0,80)}${d.formula.length>80?'…':''}</div>`:''}${d.value!=null?`<div style="font-size:10px;color:var(--muted);margin-top:3px">= ${typeof d.value==='number'?d.value.toFixed(4):d.value}</div>`:''}${t?.pillar?`<div style="font-size:10px;color:${PC[t.pillar]||'#94a3b8'};margin-top:3px">${t.pillar}</div>`:''}`;
+    tt.classList.add('show'); tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-10)+'px';
+  }).on('mousemove',e=>{tt.style.left=(e.clientX+12)+'px';tt.style.top=(e.clientY-10)+'px';})
+    .on('mouseout',()=>tt.classList.remove('show'))
+    .on('click',(e,d)=>{e.stopPropagation();showCellInspector(d);
+      node.select('circle').attr('opacity',n=>(n.id===d.id||edges.some(e2=>e2.source.id===d.id&&e2.target.id===n.id||e2.target.id===d.id&&e2.source.id===n.id))?1:0.15);
+      link.attr('stroke',e2=>(e2.source.id===d.id||e2.target.id===d.id)?'#38bdf8':'rgba(255,255,255,0.05)').attr('stroke-width',e2=>(e2.source.id===d.id||e2.target.id===d.id)?2:1);
+    });
+  svg.on('click',()=>{node.select('circle').attr('opacity',1);link.attr('stroke','rgba(255,255,255,0.06)').attr('stroke-width',1);clearInspector();});
+
+  state.simulation=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(edges).id(d=>d.id).distance(35).strength(0.25))
+    .force('charge',d3.forceManyBody().strength(-60))
+    .force('center',d3.forceCenter(W/2,H/2))
+    .force('collide',d3.forceCollide(d=>rScale(d.degree)+2))
+    .on('tick',()=>{
+      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      node.attr('transform',d=>`translate(${d.x},${d.y})`);
     });
 
-  // Tooltip + click
-  const tooltip = document.getElementById('tooltip');
-  node.on('mouseover', function(event, d) {
-    if (d === state.selectedNode) return;
-    const tag = d.semanticTag;
-    tooltip.innerHTML = `
-      <div class="tooltip-addr">${d.address}</div>
-      ${d.formula ? `<div class="tooltip-formula">=${d.formula}</div>` : ''}
-      ${d.value != null ? `<div class="tooltip-value">val: ${typeof d.value === 'number' ? d.value.toFixed(4) : String(d.value)}</div>` : ''}
-      ${tag ? `<div class="tooltip-tag">
-        ${tag.pillar ? `<span style="color:${PILLAR_COLORS[tag.pillar]};font-size:10px">${tag.pillar}</span>` : ''}
-        ${tag.role ? `<span style="color:var(--muted);font-size:10px"> · ${tag.role}</span>` : ''}
-      </div>` : ''}
-    `;
-    tooltip.classList.add('visible');
-    tooltip.style.left = (event.offsetX + 14) + 'px';
-    tooltip.style.top = (event.offsetY - 10) + 'px';
-  })
-  .on('mousemove', function(event) {
-    tooltip.style.left = (event.offsetX + 14) + 'px';
-    tooltip.style.top = (event.offsetY - 10) + 'px';
-  })
-  .on('mouseout', () => tooltip.classList.remove('visible'))
-  .on('click', (event, d) => {
-    event.stopPropagation();
-    state.selectedNode = d;
-    showCellDetail(d);
-    // Highlight connected nodes
-    node.select('circle')
-      .attr('opacity', n => isConnected(n, d, edges) ? 1 : 0.2);
-    link
-      .attr('stroke', e => (e.source.id === d.id || e.target.id === d.id) ? 'var(--accent)' : 'rgba(255,255,255,0.06)')
-      .attr('stroke-width', e => (e.source.id === d.id || e.target.id === d.id) ? 2 : 1);
-  });
-
-  svg.on('click', () => {
-    state.selectedNode = null;
-    clearCellDetail();
-    node.select('circle').attr('opacity', 1);
-    link.attr('stroke', 'rgba(255,255,255,0.06)').attr('stroke-width', 1);
-  });
-
-  // Force simulation
-  state.simulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(edges).id(d => d.id).distance(40).strength(0.3))
-    .force('charge', d3.forceManyBody().strength(-80))
-    .force('center', d3.forceCenter(W/2, H/2))
-    .force('collide', d3.forceCollide(d => rScale(d.degree) + 3))
-    .on('tick', () => {
-      link
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y);
-      node.attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-  // Graph controls
-  document.getElementById('btn-zoom-in').onclick = () => svg.transition().call(state.zoom.scaleBy, 1.4);
-  document.getElementById('btn-zoom-out').onclick = () => svg.transition().call(state.zoom.scaleBy, 0.7);
-  document.getElementById('btn-fit').onclick = () => {
-    svg.transition().duration(600).call(state.zoom.transform, d3.zoomIdentity.translate(W/2, H/2).scale(1));
-  };
-  document.getElementById('btn-freeze').onclick = function() {
-    state.frozen = !state.frozen;
-    this.style.color = state.frozen ? 'var(--accent)' : '';
-    if (state.frozen) state.simulation.stop();
-    else {
-      state.simulation.alphaTarget(0.1).restart();
-      setTimeout(() => state.simulation.alphaTarget(0), 2000);
-    }
-  };
+  document.getElementById('gb-in').onclick=()=>svg.transition().call(state.zoom.scaleBy,1.4);
+  document.getElementById('gb-out').onclick=()=>svg.transition().call(state.zoom.scaleBy,0.7);
+  document.getElementById('gb-fit').onclick=()=>svg.transition().duration(500).call(state.zoom.transform,d3.zoomIdentity.translate(W/2,H/2).scale(1));
+  document.getElementById('gb-freeze').onclick=function(){state.frozen=!state.frozen;this.style.color=state.frozen?'var(--accent)':'';if(state.frozen)state.simulation.stop();else{state.simulation.alphaTarget(0.1).restart();setTimeout(()=>state.simulation.alphaTarget(0),2000);}};
 }
 
-function isConnected(a, b, edges) {
-  if (a.id === b.id) return true;
-  return edges.some(e => 
-    (e.source.id === a.id && e.target.id === b.id) ||
-    (e.source.id === b.id && e.target.id === a.id)
-  );
-}
-
-function dragStarted(event, d) {
-  if (!event.active) state.simulation.alphaTarget(0.3).restart();
-  d.fx = d.x; d.fy = d.y;
-}
-function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
-function dragEnded(event, d) {
-  if (!event.active) state.simulation.alphaTarget(0);
-  if (!state.frozen) { d.fx = null; d.fy = null; }
-}
-
-// ─── PILLAR HIGHLIGHT ────────────────────────────────────────────────────────
-function highlightPillar(pillarCode) {
-  if (!state.g) return;
-  state.g.selectAll('.node circle').attr('opacity', d =>
-    d.semanticTag?.pillar === pillarCode ? 1 : 0.1
-  );
-}
-
-// ─── FORMULA TABLE ────────────────────────────────────────────────────────────
+// ── FORMULA TABLE ──
 function renderFormulaTable() {
-  document.getElementById('graph-svg').style.display = 'none';
-  document.getElementById('graph-controls').style.display = 'none';
-  document.getElementById('legend').style.display = 'none';
-  document.getElementById('graph-info-bar').style.display = 'none';
-  document.getElementById('accuracy-view').style.display = 'none';
-  document.querySelector('.right-panel').style.display = '';
-  document.getElementById('formula-view').style.display = '';
-
-  let cells = state.cells.filter(c => c.formula);
-  if (state.currentSheet) cells = cells.filter(c => c.sheet === state.currentSheet);
-  cells.sort((a,b) => (b.dependsOn?.length||0) - (a.dependsOn?.length||0));
-
-  const tbody = document.getElementById('formula-tbody');
-  tbody.innerHTML = '';
-  cells.slice(0, 1000).forEach(c => {
-    const color = pillarColor(c.semanticTag);
-    const tr = document.createElement('tr');
-    tr.style.cursor = 'pointer';
-    tr.style.borderBottom = '1px solid var(--border)';
-    tr.innerHTML = `
-      <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:10px;color:var(--accent)">${c.address}</td>
-      <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:10px;color:#4ade80;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.formula ? '='+c.formula : ''}</td>
-      <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:11px">${typeof c.value === 'number' ? c.value.toFixed(4) : String(c.value||'')}</td>
-      <td style="padding:7px 8px">
-        ${c.semanticTag?.pillar ? `<span style="color:${color};font-size:10px">${c.semanticTag.pillar}</span>` : ''}
-        ${c.semanticTag?.role ? `<span style="color:var(--muted);font-size:10px"> · ${c.semanticTag.role}</span>` : ''}
+  let cells=state.cells.filter(c=>c.formula);
+  if(state.sheet) cells=cells.filter(c=>c.sheet===state.sheet);
+  cells.sort((a,b)=>(b.dependsOn?.length||0)-(a.dependsOn?.length||0));
+  const tbody=document.getElementById('ftbody');
+  tbody.innerHTML='';
+  cells.slice(0,2000).forEach(c=>{
+    const color=c.semanticTag?.pillar?PC[c.semanticTag.pillar]||'#475569':'#475569';
+    const tr=document.createElement('tr');
+    const shortAddr=c.address.replace(/^'?([^!]+)'?!/,'');
+    tr.innerHTML=`
+      <td><div class="cell-addr" title="${c.address}">${c.address.length>30?c.address.slice(-28)+'…':c.address}</div></td>
+      <td><div class="cell-sheet">${c.sheet}</div></td>
+      <td><div class="cell-formula" title="${c.formula}">=${c.formula||''}</div></td>
+      <td><div class="cell-value" style="font-family:'IBM Plex Mono',monospace;font-size:10px">${typeof c.value==='number'?c.value.toFixed(5):String(c.value??'')}</div></td>
+      <td>
+        ${c.semanticTag?.pillar?`<span style="font-size:10px;font-weight:600;color:${color}">${c.semanticTag.pillar}</span>`:''}
+        ${c.semanticTag?.role?`<span style="font-size:10px;color:var(--muted)"> · ${c.semanticTag.role}</span>`:''}
       </td>
-      <td style="padding:7px 8px;text-align:right;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">${c.dependsOn?.length||0}</td>
+      <td class="cell-deps">${c.dependsOn?.length||0}</td>
     `;
-    tr.addEventListener('click', () => showCellDetail(c));
-    tr.addEventListener('mouseenter', () => tr.style.background = 'var(--card)');
-    tr.addEventListener('mouseleave', () => tr.style.background = '');
+    tr.onclick=()=>showCellInspector(c);
+    tr.style.cursor='pointer';
     tbody.appendChild(tr);
   });
 }
 
-// ─── CELL DETAIL ─────────────────────────────────────────────────────────────
-function showCellDetail(cell) {
-  document.getElementById('empty-detail').style.display = 'none';
-  const info = document.getElementById('cell-info');
-  info.style.display = '';
-  const color = pillarColor(cell.semanticTag);
+// ── TRACE VIEW ──
+document.getElementById('trace-go').onclick=()=>runTrace();
+document.getElementById('trace-input').addEventListener('keydown',e=>{if(e.key==='Enter')runTrace();});
 
-  const badges = [];
-  if (cell.semanticTag?.pillar) {
-    const pc = PILLAR_COLORS[cell.semanticTag.pillar] || '#475569';
-    badges.push(`<span class="tag-badge" style="color:${pc};border-color:${pc}44;background:${pc}11">${cell.semanticTag.pillar}</span>`);
+function runTrace() {
+  const query=(document.getElementById('trace-input').value||'').trim().toLowerCase();
+  if(!query) return;
+  const container=document.getElementById('trace-results');
+
+  // Find starting cell(s)
+  let startCells=state.cells.filter(c=>
+    c.address.toLowerCase()===query ||
+    c.address.toLowerCase().endsWith('!'+query) ||
+    (c.semanticTag?.pillar&&c.semanticTag.pillar.toLowerCase()===query&&c.formula)
+  );
+  if(startCells.length===0) {
+    startCells=state.cells.filter(c=>c.address.toLowerCase().includes(query)&&c.formula).slice(0,5);
   }
-  if (cell.semanticTag?.role) {
-    badges.push(`<span class="tag-badge" style="color:var(--muted);border-color:var(--border)">${cell.semanticTag.role}</span>`);
-  }
-  if (cell.semanticTag?.indicator) {
-    badges.push(`<span class="tag-badge" style="color:var(--muted);border-color:var(--border);font-size:9px">${cell.semanticTag.indicator}</span>`);
+  if(startCells.length===0) {
+    container.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:20px 0">No cells found matching "${query}".<br>Try a cell address like <code style="color:var(--accent)">Scorecard Calculations!B12</code> or a pillar name like <code style="color:var(--accent)">ownership</code></div>`;
+    return;
   }
 
-  const deps = (cell.dependsOn||[]).map(d =>
-    `<span class="dep-chip" onclick="navigateToDep('${d}')">${d}</span>`
-  ).join('');
+  const cellMap=new Map(state.cells.map(c=>[c.address,c]));
+  const html=[];
 
-  const valueStr = typeof cell.value === 'number'
-    ? cell.value.toFixed(6)
-    : (cell.value == null ? '<em style="color:var(--muted)">null</em>' : String(cell.value));
+  startCells.slice(0,3).forEach(startCell=>{
+    const chain=buildChain(startCell,cellMap,0,new Set(),6);
+    html.push(renderChain(chain));
+    if(startCells.length>1) html.push(`<div style="height:8px"></div>`);
+  });
 
-  info.innerHTML = `
-    <div class="detail-addr">${cell.address}</div>
-    <div class="detail-sheet">${cell.sheet} ${cell.isStub ? '· <em>(cross-sheet ref)</em>' : ''}</div>
-    ${badges.length ? `<div style="margin-bottom:10px">${badges.join('')}</div>` : ''}
-    ${cell.formula ? `
-      <div>
-        <div class="detail-value-label">Formula</div>
-        <div class="detail-formula">=${cell.formula}</div>
-      </div>
-    ` : ''}
-    <div>
-      <div class="detail-value-label">Stored Value</div>
-      <div class="detail-value">${valueStr}</div>
+  container.innerHTML=html.join('');
+  // Make chips clickable
+  container.querySelectorAll('[data-addr]').forEach(el=>{
+    el.onclick=()=>{
+      document.getElementById('trace-input').value=el.dataset.addr;
+      runTrace();
+    };
+  });
+}
+
+function buildChain(cell, cellMap, depth, visited, maxDepth) {
+  if(depth>maxDepth||visited.has(cell.address)) return {cell,depth,children:[]};
+  visited.add(cell.address);
+  const children=(cell.dependsOn||[]).map(dep=>{
+    const c=cellMap.get(dep);
+    if(!c) return {cell:{address:dep,sheet:'external',formula:null,value:null,dependsOn:[],semanticTag:null},depth:depth+1,children:[]};
+    return buildChain(c,cellMap,depth+1,new Set(visited),maxDepth);
+  }).filter(c=>c.cell.formula||depth<2); // only show non-formula leaves at depth <2
+  return {cell,depth,children:children.slice(0,6)};
+}
+
+function renderChain(node) {
+  const c=node.cell;
+  const depthColors=['#38bdf8','#34d399','#fbbf24','#a78bfa','#94a3b8','#475569'];
+  const dc=depthColors[Math.min(node.depth,5)];
+  const pillarColor=c.semanticTag?.pillar?PC[c.semanticTag.pillar]:'';
+  const valStr=typeof c.value==='number'?c.value.toFixed(5):String(c.value??'');
+  const shortSheet=c.sheet?.replace(/^'/,'').replace(/'$/,'')||'';
+  let html=`<div data-addr="${c.address}" style="margin-left:${node.depth*18}px;margin-bottom:5px;background:var(--card);border:1px solid ${dc}33;border-left:3px solid ${dc};border-radius:5px;padding:9px 12px;cursor:pointer;transition:border-color 0.1s"
+    onmouseover="this.style.borderLeftColor='${dc}';this.style.borderColor='${dc}66'"
+    onmouseout="this.style.borderLeftColor='${dc}';this.style.borderColor='${dc}33'">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:${c.formula?4:0}px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px;background:${dc}22;color:${dc}">D${node.depth}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:${dc}">${c.address}</span>
+      ${shortSheet?`<span style="font-size:10px;color:var(--muted)">${shortSheet}</span>`:''}
+      ${pillarColor?`<span style="font-size:10px;font-weight:600;color:${pillarColor};margin-left:auto">${c.semanticTag?.pillar}</span>`:''}
+      ${!c.formula&&valStr?`<span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text);margin-left:auto">${valStr}</span>`:''}
     </div>
-    ${deps ? `
-      <div class="deps-section">
-        <div class="deps-label">Depends On (${cell.dependsOn.length})</div>
-        <div>${deps}</div>
-      </div>
-    ` : ''}
+    ${c.formula?`<div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#34d399;word-break:break-all;line-height:1.5">=<span>${c.formula.slice(0,120)}${c.formula.length>120?'…':''}</span></div>`:''}
+    ${c.formula&&valStr?`<div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px">→ ${valStr}</div>`:''}
+  </div>`;
+  if(node.children.length>0) {
+    html+=`<div style="margin-left:${node.depth*18+6}px;border-left:1px dashed rgba(255,255,255,0.08);padding-left:4px">`;
+    node.children.forEach(ch=>{ html+=renderChain(ch); });
+    html+=`</div>`;
+  }
+  return html;
+}
+
+// ── CELL INSPECTOR ──
+function showCellInspector(cell) {
+  state.selectedCell=cell;
+  document.getElementById('insp-empty').style.display='none';
+  const detail=document.getElementById('insp-detail');
+  detail.style.display='';
+  const color=cell.semanticTag?.pillar?PC[cell.semanticTag.pillar]:'#38bdf8';
+  const tags=[];
+  if(cell.semanticTag?.pillar) tags.push(`<span class="tag" style="color:${color};border-color:${color}44;background:${color}11">${cell.semanticTag.pillar}</span>`);
+  if(cell.semanticTag?.role) tags.push(`<span class="tag" style="color:var(--muted);border-color:var(--border)">⬡ ${cell.semanticTag.role}</span>`);
+  const valStr=typeof cell.value==='number'?cell.value.toFixed(8):(cell.value==null?'null':String(cell.value));
+  const deps=(cell.dependsOn||[]).map(d=>{
+    const dc=state.cells.find(c=>c.address===d);
+    const s=d.includes('!')?d.split('!')[0].replace(/^'/,'').replace(/'$/,''):'';
+    return `<div class="dep-chip" onclick="inspectDep('${d}')"><span>${d.replace(/^.*!/, '')}</span><span class="dep-chip-sheet">${s}</span></div>`;
+  }).join('');
+  detail.innerHTML=`
+    <div class="insp-addr">${cell.address}</div>
+    <div class="insp-sheet">${cell.sheet}${cell.isStub?' · <em>(cross-sheet ref)</em>':''}</div>
+    ${tags.length?`<div class="tag-row">${tags.join('')}</div>`:''}
+    ${cell.formula?`<div class="insp-label">Formula</div><div class="insp-formula">=${cell.formula}</div>`:''}
+    <div class="insp-label">Stored Value</div>
+    <div class="insp-value">${valStr}</div>
+    ${deps?`<div class="insp-label">Depends On (${cell.dependsOn.length})</div><div class="dep-list">${deps}</div>`:''}
+    <button class="insp-trace-btn" onclick="traceFromCell('${cell.address}')">↓ Trace full ancestry</button>
   `;
 }
-
-function navigateToDep(addr) {
-  const cell = state.cells.find(c => c.address === addr);
-  if (cell) showCellDetail(cell);
+function inspectDep(addr) {
+  const c=state.cells.find(x=>x.address===addr);
+  if(c) showCellInspector(c);
+}
+function traceFromCell(addr) {
+  document.getElementById('trace-input').value=addr;
+  setActiveViewBtn('trace');
+  state.view='trace';
+  setView('trace');
+  runTrace();
+}
+function clearInspector() {
+  document.getElementById('insp-empty').style.display='';
+  document.getElementById('insp-detail').style.display='none';
+  state.selectedCell=null;
 }
 
-function clearCellDetail() {
-  document.getElementById('empty-detail').style.display = '';
-  document.getElementById('cell-info').style.display = 'none';
-}
+// ── LOADING ──
+function showLoading(msg) { document.getElementById('loading-msg').textContent=msg||'Loading…'; document.getElementById('loading-overlay').classList.remove('hidden'); }
+function hideLoading() { document.getElementById('loading-overlay').classList.add('hidden'); }
 
-// ─── LOADING ─────────────────────────────────────────────────────────────────
-function showLoading(text) {
-  document.getElementById('loading-text').textContent = text;
-  document.getElementById('graph-loading').classList.remove('hidden');
-}
-function hideLoading() {
-  document.getElementById('graph-loading').classList.add('hidden');
-}
-
-// ─── VIEW TOGGLE ──────────────────────────────────────────────────────────────
-document.querySelectorAll('.view-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.currentView = btn.dataset.view;
-    if (state.activeKey) renderView();
-  });
-});
-
-// ─── ACCURACY VIEW ───────────────────────────────────────────────────────────
-async function renderAccuracyView() {
-  document.getElementById('graph-svg').style.display = 'none';
-  document.getElementById('graph-controls').style.display = 'none';
-  document.getElementById('legend').style.display = 'none';
-  document.getElementById('graph-info-bar').style.display = 'none';
-  document.getElementById('formula-view').style.display = 'none';
-  document.getElementById('accuracy-view').style.display = '';
-  document.querySelector('.right-panel').style.display = 'none';
-
-  const el = document.getElementById('accuracy-content');
-  const activeTemplate = state.templates.find(t => t._key === state.activeKey);
-  const sectorCode = activeTemplate?.sectorCode || 'RCOGP';
-  const isRCOGP = sectorCode === 'RCOGP' && activeTemplate?.scorecardType !== 'QSE';
-
-  el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:40px 0 20px;text-align:center">Loading accuracy data…</div>`;
-
-  if (!isRCOGP) {
-    el.innerHTML = `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:32px;text-align:center">
-        <div style="font-size:28px;margin-bottom:8px">🔬</div>
-        <div style="font-size:16px;font-weight:600;margin-bottom:8px">Accuracy Test</div>
-        <div style="color:var(--muted);font-size:13px">Lake Trading comparison is only available for RCOGP Generic.<br>Select the RCOGP Generic template and click Accuracy.</div>
-      </div>`;
-    return;
-  }
-
-  // Find the RCOGP empty template (not Lake Trading) and the Lake Trading dataset
-  const rcogpTemplate = state.templates.find(t => t.sourceFile === 'rcogp.xlsx' || (t.sectorCode === 'RCOGP' && t.scorecardType === 'Generic' && !t.sourceFile?.toLowerCase().includes('lake')));
-  const lakeTrading = state.templates.find(t => t.sourceFile?.toLowerCase().includes('lake') || t._key === '56030');
-
-  if (!rcogpTemplate || !lakeTrading) {
-    el.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:24px;color:var(--muted)">
-      Template or Lake Trading data not found. Ensure both are ingested.<br>
-      Template: ${rcogpTemplate?._key || 'MISSING'} | Lake Trading: ${lakeTrading?._key || 'MISSING'}
-    </div>`;
-    return;
-  }
-
-  // Fetch Lake Trading cells (graphId 56030) and template cells for comparison
-  const LAKE_KEY = lakeTrading._key;
-  const TMPL_KEY = rcogpTemplate._key;
-
-  try {
-    // Use a lightweight AQL-like comparison via the API
-    const [ltResp, tmplResp] = await Promise.all([
-      fetch(`/api/templates/${LAKE_KEY}/cells`).then(r => r.json()),
-      fetch(`/api/templates/${TMPL_KEY}/cells`).then(r => r.json()),
-    ]);
-
-    const ltCells = ltResp.cells || [];
-    const tmplCells = tmplResp.cells || [];
-
-    // Build maps
-    const ltMap = new Map(ltCells.map(c => [c.address, c]));
-    const tmplMap = new Map(tmplCells.map(c => [c.address, c]));
-
-    // Compare formula cells
-    let matches = 0, diffs = 0;
-    const topDiffs = [];
-    const inputDiffs = [];
-
-    for (const [addr, lt] of ltMap) {
-      const tmpl = tmplMap.get(addr);
-      if (!tmpl) continue;
-
-      if (lt.formula && tmpl.formula && typeof lt.value === 'number' && typeof tmpl.value === 'number') {
-        const delta = Math.abs(lt.value - tmpl.value);
-        if (delta < 0.0001) { matches++; }
-        else {
-          diffs++;
-          if (topDiffs.length < 50) topDiffs.push({ addr, lt: lt.value, tmpl: tmpl.value, delta, formula: lt.formula, sheet: lt.sheet, pillar: lt.semanticTag?.pillar });
-        }
-      } else if (!lt.formula && !tmpl.formula && lt.value !== tmpl.value && lt.value != null && lt.value !== '') {
-        inputDiffs.push({ addr, lt: lt.value, tmpl: tmpl.value, sheet: lt.sheet });
-      }
-    }
-
-    const total = matches + diffs;
-    const pct = total > 0 ? ((matches / total) * 100).toFixed(1) : 'N/A';
-    const pctNum = parseFloat(pct);
-
-    // B-BBEE Scorecard outputs from Lake Trading
-    const ltSummary = ltCells.filter(c =>
-      c.sheet === 'Summary Scorecard' && c.formula && typeof c.value === 'number' && c.value > 0
-    ).sort((a, b) => a.address.localeCompare(b.address));
-
-    // Pillar error breakdown
-    const pillarErrors = {};
-    topDiffs.forEach(d => { if (d.pillar) pillarErrors[d.pillar] = (pillarErrors[d.pillar]||0)+1; });
-
-    const pillarEntries = Object.entries(pillarErrors).sort((a,b) => b[1]-a[1]);
-    const totalInputDiffs = inputDiffs.length;
-
-    const pctColor = pctNum >= 90 ? '#22c55e' : pctNum >= 70 ? '#f59e0b' : '#ef4444';
-
-    el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <div style="font-size:20px;font-weight:700">Calculation Accuracy</div>
-        <div style="background:#1c2d50;border-radius:6px;padding:3px 10px;font-size:12px;color:var(--muted)">RCOGP Generic vs Lake Trading (RCOGP)</div>
-      </div>
-
-      <!-- SUMMARY CARDS -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:${pctColor};font-family:'Space Mono',monospace">${pct}%</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">Formula Stability</div>
-          <div style="color:var(--muted);font-size:10px;margin-top:2px">(unchanged by client data)</div>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#22c55e;font-family:'Space Mono',monospace">${matches}</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">Stable Formulas</div>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#22d3ee;font-family:'Space Mono',monospace">${diffs}</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">Changed by Inputs</div>
-          <div style="color:var(--muted);font-size:10px;margin-top:2px">(expected — data flowed)</div>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#f59e0b;font-family:'Space Mono',monospace">${totalInputDiffs}</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">Client Data Cells</div>
-          <div style="color:var(--muted);font-size:10px;margin-top:2px">(filled by Lake Trading)</div>
-        </div>
-      </div>
-
-      <!-- EXPLANATION BOX -->
-      <div style="background:rgba(34,211,238,0.05);border:1px solid rgba(34,211,238,0.2);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;line-height:1.6">
-        <strong style="color:var(--accent)">What this means:</strong> ${diffs} formula cells produced different values because Lake Trading's client data changed the inputs.
-        This is <strong>correct behaviour</strong> — it confirms data flows through the formula graph as expected.
-        The ${matches} stable formulas are cells that don't depend on the client inputs (structural/reference formulas).
-        A high "changed" count is a <em>good sign</em>.
-      </div>
-
-      <!-- B-BBEE SCORECARD RESULTS -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600">
-          🏆 Lake Trading B-BBEE Scorecard (Excel Ground Truth)
-        </div>
-        <div style="padding:16px">
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${ltSummary.slice(0, 16).map(c => {
-              const val = typeof c.value === 'number' ? c.value.toFixed(4) : c.value;
-              const pillarColor2 = c.semanticTag?.pillar ? `var(--${c.semanticTag.pillar}, var(--muted))` : 'var(--muted)';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border-radius:6px;border:1px solid var(--border)">
-                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);flex-shrink:0">${c.address.replace('Summary Scorecard!','')}</span>
-                ${c.semanticTag?.pillar ? `<span style="font-size:11px;color:${pillarColor2};flex:1;text-align:center;padding:0 8px">${c.semanticTag.pillar}</span>` : '<span style="flex:1"></span>'}
-                <span style="font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:#22c55e;flex-shrink:0">${val}</span>
-              </div>`;
-            }).join('')}
-            ${ltSummary.length === 0 ? '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No non-zero scorecard outputs found</div>' : ''}
-          </div>
-        </div>
-      </div>
-
-      ${pillarEntries.length > 0 ? `
-      <!-- PILLAR BREAKDOWN -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600">
-          Formula Changes by Pillar (where inputs caused different outputs)
-        </div>
-        <div style="padding:16px;display:flex;flex-wrap:wrap;gap:8px">
-          ${pillarEntries.map(([p, c]) => {
-            const pc = `var(--${p}, var(--muted))`;
-            return `<div style="padding:8px 14px;background:var(--surface);border-radius:6px;border:1px solid ${pc}44;display:flex;align-items:center;gap:8px">
-              <div style="width:8px;height:8px;border-radius:50%;background:${pc}"></div>
-              <span style="font-size:12px">${p}</span>
-              <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:${pc}">${c}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
-
-      <!-- INPUT CELLS DIFF -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600">
-          Lake Trading Client Data (${totalInputDiffs} cells with actual values vs template defaults)
-        </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead><tr style="background:var(--surface)">
-              <th style="text-align:left;padding:8px;color:var(--muted);font-family:'Space Mono',monospace;font-size:10px">CELL</th>
-              <th style="text-align:left;padding:8px;color:var(--muted);font-family:'Space Mono',monospace;font-size:10px">SHEET</th>
-              <th style="text-align:right;padding:8px;color:var(--muted);font-family:'Space Mono',monospace;font-size:10px">TEMPLATE DEFAULT</th>
-              <th style="text-align:right;padding:8px;color:var(--muted);font-family:'Space Mono',monospace;font-size:10px">LAKE TRADING VALUE</th>
-            </tr></thead>
-            <tbody>
-              ${inputDiffs.slice(0, 30).map(d => `
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:10px;color:var(--accent)">${d.addr.replace(/^.*!/, '')}</td>
-                  <td style="padding:7px 8px;font-size:11px;color:var(--muted)">${d.sheet}</td>
-                  <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:11px;text-align:right;color:var(--muted)">${d.tmpl ?? '—'}</td>
-                  <td style="padding:7px 8px;font-family:'Space Mono',monospace;font-size:11px;text-align:right;color:#22c55e;font-weight:600">${typeof d.lt === 'number' ? d.lt.toFixed(4) : d.lt}</td>
-                </tr>`).join('')}
-              ${inputDiffs.length === 0 ? '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted)">No input differences found</td></tr>' : ''}
-            </tbody>
-          </table>
-          ${inputDiffs.length > 30 ? `<div style="padding:10px 16px;color:var(--muted);font-size:12px">+${inputDiffs.length-30} more…</div>` : ''}
-        </div>
-      </div>
-    `;
-  } catch(e) {
-    el.innerHTML = `<div style="color:#ef4444;background:var(--card);border:1px solid #ef444430;border-radius:10px;padding:24px">
-      <strong>Error loading accuracy data:</strong> ${e.message}<br>
-      <span style="color:var(--muted);font-size:12px">Make sure the Lake Trading data (graph 56030) is ingested.</span>
-    </div>`;
-  }
-}
-
-// ─── START ────────────────────────────────────────────────────────────────────
+// ── START ──
 init();
 </script>
 </body>
