@@ -8,7 +8,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes.js";
 import { createServer } from "http";
 import { connectDB } from "./db.js";
-import { connectArango } from "./arango/index.js";
+import { connectArango, ensureCollections } from "./arango/index.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -64,6 +64,7 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
 (async () => {
   await connectDB();
   await connectArango();
+  await ensureCollections();
   await registerRoutes(httpServer, app);
 
   // Error middleware
