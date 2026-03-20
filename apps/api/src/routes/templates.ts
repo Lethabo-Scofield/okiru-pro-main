@@ -378,7 +378,7 @@ router.get('/:id/pillar/:pillarCode', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.post('/ingest-all', async (req: Request, res: Response) => {
   try {
-    const basePath = req.body.basePath as string | undefined;
+    const basePath = (req.body?.basePath || req.query?.basePath) as string | undefined;
     if (!basePath) {
       return res.status(400).json({
         message: 'basePath is required (path to BBBEE Toolkits directory)',
@@ -387,8 +387,10 @@ router.post('/ingest-all', async (req: Request, res: Response) => {
     const result = await ingestAllToolkits(basePath);
     return res.json(result);
   } catch (error: unknown) {
+    console.error('[Templates] ingest-all error:', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Bulk ingestion failed',
+      detail: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : String(error),
     });
   }
 });
