@@ -1232,14 +1232,14 @@ function renderFlowDiagram(tmpl, cells) {
   }
   const fullH = Math.max(H, topPad + maxRows*rowH + 60);
 
-  // Zoom/pan
+  const g = svg.append('g');
+
+  // Zoom/pan (g must be declared before zoom references it)
   const zoom = d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform));
   svg.call(zoom);
   const initialScale = Math.min(W/fullW, H/fullH) * 0.92;
   const tx = (W - fullW*initialScale)/2;
   svg.call(zoom.transform, d3.zoomIdentity.translate(tx, 10).scale(initialScale));
-
-  const g = svg.append('g');
 
   // Stage columns bg + labels
   const stageColors = ['#22c55e','#38bdf8','#38bdf8','#f59e0b','#ec4899','#ec4899'];
