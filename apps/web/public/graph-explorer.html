@@ -1632,14 +1632,14 @@ async function renderAccuracyView() {
           🏆 Lake Trading B-BBEE Scorecard (Excel Ground Truth)
         </div>
         <div style="padding:16px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="display:flex;flex-direction:column;gap:6px">
             ${ltSummary.slice(0, 16).map(c => {
               const val = typeof c.value === 'number' ? c.value.toFixed(4) : c.value;
               const pillarColor2 = c.semanticTag?.pillar ? `var(--${c.semanticTag.pillar}, var(--muted))` : 'var(--muted)';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface);border-radius:6px;border:1px solid var(--border)">
-                <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--accent)">${c.address.replace('Summary Scorecard!','')}</span>
-                ${c.semanticTag?.pillar ? `<span style="font-size:10px;color:${pillarColor2}">${c.semanticTag.pillar}</span>` : ''}
-                <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#22c55e">${val}</span>
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border-radius:6px;border:1px solid var(--border)">
+                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);flex-shrink:0">${c.address.replace('Summary Scorecard!','')}</span>
+                ${c.semanticTag?.pillar ? `<span style="font-size:11px;color:${pillarColor2};flex:1;text-align:center;padding:0 8px">${c.semanticTag.pillar}</span>` : '<span style="flex:1"></span>'}
+                <span style="font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:#22c55e;flex-shrink:0">${val}</span>
               </div>`;
             }).join('')}
             ${ltSummary.length === 0 ? '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No non-zero scorecard outputs found</div>' : ''}
