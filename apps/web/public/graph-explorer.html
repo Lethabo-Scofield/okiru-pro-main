@@ -453,11 +453,11 @@
     .overview-grid {
       position: absolute;
       inset: 0;
-      padding: 24px;
+      padding: 20px;
       overflow-y: auto;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
       align-content: start;
     }
     .overview-grid.hidden { display: none; }
@@ -512,9 +512,9 @@
     }
     .card-stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-bottom: 14px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
     }
     .card-stat { text-align: center; }
     .card-stat-val {
@@ -966,7 +966,13 @@ function showOverview() {
   document.getElementById('pillar-section').style.display = 'none';
   document.getElementById('level-section').style.display = 'none';
   document.getElementById('graph-stats-section').style.display = 'none';
+  // Hide right panel in overview
+  document.querySelector('.right-panel').style.display = 'none';
   clearCellDetail();
+}
+
+function showDetailPanel() {
+  document.querySelector('.right-panel').style.display = '';
 }
 
 // ─── SELECT TEMPLATE ─────────────────────────────────────────────────────────
@@ -988,6 +994,7 @@ async function selectTemplate(key) {
   document.getElementById('formula-view').style.display = 'none';
   document.getElementById('sheet-select').style.display = '';
   document.getElementById('view-toggle').style.display = '';
+  showDetailPanel(); // Restore right panel
 
   showLoading(`Extracting formulas from ${tmpl.sectorCode} ${tmpl.scorecardType}...`);
 
