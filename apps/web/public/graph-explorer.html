@@ -1122,6 +1122,7 @@ function renderView() {
 function renderGraph() {
   document.getElementById('formula-view').style.display = 'none';
   document.getElementById('accuracy-view').style.display = 'none';
+  document.querySelector('.right-panel').style.display = '';
   document.getElementById('graph-svg').style.display = '';
   document.getElementById('graph-controls').style.display = 'flex';
   document.getElementById('legend').style.display = '';
@@ -1385,6 +1386,7 @@ function renderFormulaTable() {
   document.getElementById('legend').style.display = 'none';
   document.getElementById('graph-info-bar').style.display = 'none';
   document.getElementById('accuracy-view').style.display = 'none';
+  document.querySelector('.right-panel').style.display = '';
   document.getElementById('formula-view').style.display = '';
 
   let cells = state.cells.filter(c => c.formula);
@@ -1502,6 +1504,7 @@ async function renderAccuracyView() {
   document.getElementById('graph-info-bar').style.display = 'none';
   document.getElementById('formula-view').style.display = 'none';
   document.getElementById('accuracy-view').style.display = '';
+  document.querySelector('.right-panel').style.display = 'none';
 
   const el = document.getElementById('accuracy-content');
   const activeTemplate = state.templates.find(t => t._key === state.activeKey);
