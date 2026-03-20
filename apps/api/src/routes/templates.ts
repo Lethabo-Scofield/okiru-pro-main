@@ -374,6 +374,30 @@ router.get('/:id/pillar/:pillarCode', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /api/templates/:id - Remove a formula graph + all linked data
+// ---------------------------------------------------------------------------
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = p(req, 'id');
+    const graph = await graphRepo.getFormulaGraph(id);
+    if (!graph) return res.status(404).json({ message: `Graph ${id} not found` });
+
+    const result = await graphRepo.deleteFormulaGraph(id);
+    return res.json({
+      success: true,
+      graphKey: id,
+      sourceFile: graph.sourceFile,
+      ...result,
+    });
+  } catch (error: unknown) {
+    console.error('[Templates] delete error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Deletion failed',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/templates/ingest-all - Bulk ingest all 6 toolkit Excel files
 // ---------------------------------------------------------------------------
 router.post('/ingest-all', async (req: Request, res: Response) => {
