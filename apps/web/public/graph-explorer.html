@@ -1520,9 +1520,21 @@ async function renderAccuracyView() {
     return;
   }
 
+  // Find the RCOGP empty template (not Lake Trading) and the Lake Trading dataset
+  const rcogpTemplate = state.templates.find(t => t.sourceFile === 'rcogp.xlsx' || (t.sectorCode === 'RCOGP' && t.scorecardType === 'Generic' && !t.sourceFile?.toLowerCase().includes('lake')));
+  const lakeTrading = state.templates.find(t => t.sourceFile?.toLowerCase().includes('lake') || t._key === '56030');
+
+  if (!rcogpTemplate || !lakeTrading) {
+    el.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:24px;color:var(--muted)">
+      Template or Lake Trading data not found. Ensure both are ingested.<br>
+      Template: ${rcogpTemplate?._key || 'MISSING'} | Lake Trading: ${lakeTrading?._key || 'MISSING'}
+    </div>`;
+    return;
+  }
+
   // Fetch Lake Trading cells (graphId 56030) and template cells for comparison
-  const LAKE_KEY = '56030';
-  const TMPL_KEY = state.activeKey;
+  const LAKE_KEY = lakeTrading._key;
+  const TMPL_KEY = rcogpTemplate._key;
 
   try {
     // Use a lightweight AQL-like comparison via the API
