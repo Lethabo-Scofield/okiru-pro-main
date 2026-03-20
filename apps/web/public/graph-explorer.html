@@ -46,12 +46,14 @@
     header {
       display: flex;
       align-items: center;
-      gap: 20px;
-      padding: 12px 20px;
+      gap: 12px;
+      padding: 8px 16px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       z-index: 10;
+      overflow: hidden;
+      min-height: 48px;
     }
     .logo {
       font-family: 'Space Mono', monospace;
@@ -66,8 +68,12 @@
     .sector-tabs {
       display: flex;
       gap: 4px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex: 1;
     }
+    .sector-tabs::-webkit-scrollbar { display: none; }
     .sector-tab {
       font-family: 'Space Mono', monospace;
       font-size: 11px;
@@ -89,10 +95,11 @@
     }
 
     .header-right {
-      margin-left: auto;
+      margin-left: 0;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
+      flex-shrink: 0;
     }
     .sheet-select {
       background: var(--card);
@@ -134,7 +141,7 @@
 
     /* ─── LEFT PANEL ─── */
     .left-panel {
-      width: 260px;
+      width: 220px;
       flex-shrink: 0;
       border-right: 1px solid var(--border);
       display: flex;
@@ -340,7 +347,7 @@
 
     /* ─── RIGHT PANEL ─── */
     .right-panel {
-      width: 280px;
+      width: 240px;
       flex-shrink: 0;
       border-left: 1px solid var(--border);
       display: flex;
