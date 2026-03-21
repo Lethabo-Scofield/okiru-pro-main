@@ -3,13 +3,12 @@ import { Link, useLocation } from 'wouter';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
-import { starterTemplates } from '@/data/starterTemplates';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion, Building2
+  FileImage, File, FileQuestion, Building2, ScanLine, Monitor
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -138,16 +137,8 @@ const FileIcon = ({ type, className }: { type: string; className?: string }) => 
 };
 
 function getEntityColors(_dark?: boolean) {
-  return [
-    { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' },
-    { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.35)', text: '#4ade80', underline: '#22c55e' },
-    { bg: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.35)', text: '#a78bfa', underline: '#8b5cf6' },
-    { bg: 'rgba(251,146,60,0.15)', border: 'rgba(251,146,60,0.35)', text: '#fb923c', underline: '#f97316' },
-    { bg: 'rgba(236,72,153,0.15)', border: 'rgba(236,72,153,0.35)', text: '#f472b6', underline: '#ec4899' },
-    { bg: 'rgba(45,212,191,0.15)', border: 'rgba(45,212,191,0.35)', text: '#2dd4bf', underline: '#14b8a6' },
-    { bg: 'rgba(250,204,21,0.15)', border: 'rgba(250,204,21,0.35)', text: '#facc15', underline: '#eab308' },
-    { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.35)', text: '#f87171', underline: '#ef4444' },
-  ];
+  const c = { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' };
+  return [c, c, c, c, c, c, c, c];
 }
 
 function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity }: {
@@ -459,13 +450,14 @@ export default function DocumentProcessor() {
   const sessionCreatedAt = useRef<string>(new Date().toISOString());
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [fileClassifications, setFileClassifications] = useState<Record<string, number>>({});
+  const [fileDocTypes, setFileDocTypes] = useState<Record<string, 'digital' | 'scanned'>>({});
   const [extractionResults, setExtractionResults] = useState<any[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
   const [templates, setTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'low' | 'edited'>('all');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
   const [completedCount, setCompletedCount] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
@@ -475,7 +467,7 @@ export default function DocumentProcessor() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/entity-templates");
+      const res = await fetch("/api/templates");
       if (res.ok) setTemplates(await res.json());
     } catch (err) { console.error("Error fetching templates:", err); }
     finally { setLoadingTemplates(false); }
@@ -498,19 +490,33 @@ export default function DocumentProcessor() {
       sessionCreatedAt.current = sess.createdAt;
       setCompanyInfo({ ...EMPTY_COMPANY_INFO, ...sess.companyInfo });
       setFileClassifications(sess.fileClassifications || {});
-      setExtractionResults(sess.extractionResults || []);
+      const normalizeResults = (results: any[]) => (results || []).map((r: any) => ({
+        ...r,
+        entities: (r.entities || []).map((e: any) => ({
+          ...e,
+          name: e.name || e.entity || '',
+          confidence: e.confidence ?? e.conf ?? 0,
+        })),
+      }));
+      setExtractionResults(normalizeResults(sess.extractionResults));
       if (sess.filesData && sess.filesData.length > 0) {
         const NativeFile = window.File as typeof globalThis.File;
-        const restored: UploadedFile[] = sess.filesData.map((fd: any) => ({
-          id: fd.id,
-          file: new NativeFile([], fd.name, { type: fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream' }),
-          name: fd.name,
-          size: fd.size,
-          type: fd.type,
-          uploadProgress: 100,
-          status: 'ready' as const,
-          textContent: fd.textContent || '',
-        }));
+        const restored: UploadedFile[] = sess.filesData.map((fd: any) => {
+          let fileObj: globalThis.File;
+          if (fd.fileBase64) {
+            try {
+              const binary = atob(fd.fileBase64);
+              const bytes = new Uint8Array(binary.length);
+              for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+              fileObj = new NativeFile([bytes], fd.name, { type: 'application/pdf' });
+            } catch {
+              fileObj = new NativeFile([], fd.name, { type: 'application/pdf' });
+            }
+          } else {
+            fileObj = new NativeFile([], fd.name, { type: fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream' });
+          }
+          return { id: fd.id, file: fileObj, name: fd.name, size: fd.size, type: fd.type, uploadProgress: 100, status: 'ready' as const, textContent: fd.textContent || '' };
+        });
         setUploadedFiles(restored);
       }
       const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review'];
@@ -542,8 +548,18 @@ export default function DocumentProcessor() {
       createdAt: sessionCreatedAt.current,
       updatedAt: new Date().toISOString(),
       currentStep: step,
-      filesData: (opts?.files ?? uploadedFiles).map(f => ({
-        id: f.id, name: f.name, size: f.size, type: f.type, textContent: f.textContent,
+      filesData: await Promise.all((opts?.files ?? uploadedFiles).map(async f => {
+        let fileBase64: string | undefined;
+        if (f.type === 'PDF' && f.file && f.file.size > 0) {
+          try {
+            const buf = await f.file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let j = 0; j < bytes.length; j += 8192) binary += String.fromCharCode(...bytes.slice(j, j + 8192));
+            fileBase64 = btoa(binary);
+          } catch { /* skip */ }
+        }
+        return { id: f.id, name: f.name, size: f.size, type: f.type, textContent: f.textContent, ...(fileBase64 ? { fileBase64 } : {}) };
       })),
       fileClassifications: opts?.classifications ?? fileClassifications,
       extractionResults: opts?.results ?? extractionResults,
@@ -674,8 +690,8 @@ export default function DocumentProcessor() {
     abortControllerRef.current = controller;
     processingFinalized.current = false;
 
-    const initialStatuses: Record<number, 'waiting'> = {};
-    uploadedFiles.forEach((_, i) => { initialStatuses[i] = 'waiting'; });
+    const initialStatuses: Record<number, string> = {};
+    uploadedFiles.forEach((_, i) => { initialStatuses[i] = 'processing'; });
     setDocStatuses(initialStatuses);
     setCompletedCount(0);
     setProcessingError(null);
@@ -718,7 +734,12 @@ export default function DocumentProcessor() {
           setDocStatuses(prev => ({ ...prev, [data.index]: eventType === 'doc-done' ? 'done' : 'error' }));
           resultsAccumulator[data.index] = {
             fileName: data.fileName, templateId: data.templateId,
-            templateName: data.templateName, entities: data.entities || [],
+            templateName: data.templateName,
+            entities: (data.entities || []).map((e: any) => ({
+              ...e,
+              name: e.name || e.entity || '',
+              confidence: e.confidence ?? e.conf ?? 0,
+            })),
           };
           setCompletedCount(prev => { const next = prev + 1; if (next >= documents.length) finalizeResults(); return next; });
           break;
@@ -829,7 +850,11 @@ export default function DocumentProcessor() {
               result = {
                 fileName: data.fileName || file.name,
                 templateId, templateName: template.name,
-                entities: data.entities || [],
+                entities: (data.entities || []).map((e: any) => ({
+                  ...e,
+                  name: e.name || e.entity || '',
+                  confidence: e.confidence ?? e.conf ?? 0,
+                })),
               };
             }
           } catch {}
@@ -946,7 +971,8 @@ export default function DocumentProcessor() {
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
 
-      <header className="h-14 flex items-center justify-between px-5 shrink-0 z-20 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+      <header className="h-14 shrink-0 z-20 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+        <div className="max-w-5xl mx-auto w-full px-6 h-full flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => window.history.back()} className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors duration-200 press-sm group" data-testid="btn-back">
             <ChevronLeft className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
@@ -966,10 +992,11 @@ export default function DocumentProcessor() {
             <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
           </Link>
         </div>
+        </div>
       </header>
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
           {['Company', 'Upload', 'Template', 'Extract', 'Review'].map((label, idx) => {
             const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck];
             const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review'] as const;
@@ -998,7 +1025,7 @@ export default function DocumentProcessor() {
       </div>
 
       <main className="flex-1 overflow-y-auto">
-        <div className={`${currentPage === 'review' ? '' : 'max-w-3xl mx-auto'} p-6`}>
+        <div className={`${currentPage === 'review' ? '' : 'max-w-5xl mx-auto w-full'} p-6`}>
 
           {currentPage === 'company-info' && (
             <div>
@@ -1306,9 +1333,9 @@ export default function DocumentProcessor() {
                       className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-company-info">
                       <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
                     </button>
-                    <button onClick={async () => { if (allReady) { await persistSession('classify'); setCurrentPage('classify'); } }} disabled={!allReady}
+                    <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
                       className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
-                      Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
                     </button>
                   </div>
                 </>
@@ -1322,113 +1349,81 @@ export default function DocumentProcessor() {
                 <h2 className="text-2xl font-bold text-white mb-2">Assign Templates</h2>
                 <p className="text-[#8e8e93] text-sm">Choose which template to use for each document</p>
               </div>
-              {/* ── Sector-based template suggestion ── */}
-              {(() => {
-                if (!companyInfo.sector) return null;
-                const sectorMap: Record<string, string> = {
-                  'RCOGP': 'RCOGP', 'ICT': 'ICT', 'FSC': 'FSC', 'AGRI': 'AGRI',
-                  'Manufacturing': 'RCOGP', 'Retail': 'RCOGP', 'Logistics': 'RCOGP',
-                  'Telecoms': 'ICT', 'Software': 'ICT', 'Digital': 'ICT',
-                  'Financial Services': 'FSC', 'Insurance': 'FSC', 'Banking': 'FSC',
-                  'Agriculture': 'AGRI', 'Farming': 'AGRI',
-                };
-                const turnover = parseFloat(companyInfo.annualTurnover?.replace(/[^0-9.]/g, '') || '0');
-                const isQSE = turnover > 10_000_000 && turnover <= 50_000_000;
-                const sectorCode = sectorMap[companyInfo.sector];
-                if (!sectorCode) return null;
-                const suggested = starterTemplates.find(
-                  t => t.category === 'Toolkit' && t.sectorCode === sectorCode &&
-                    t.sectorType === (isQSE ? 'QSE' : 'Generic')
-                ) ?? starterTemplates.find(t => t.category === 'Toolkit' && t.sectorCode === sectorCode);
-                if (!suggested) return null;
-                const applyToAll = async () => {
-                  // Publish the toolkit template as an entity template if not present
-                  const existing = templates.find(tp => tp.name === suggested.name);
-                  if (existing) {
-                    const update: Record<string, number> = {};
-                    uploadedFiles.forEach(f => { update[String(f.id)] = existing.id; });
-                    setFileClassifications(prev => ({ ...prev, ...update }));
-                    return;
-                  }
-                  try {
-                    const res = await fetch('/api/entity-templates', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        name: suggested.name,
-                        description: suggested.description,
-                        version: '1.0',
-                        entities: (suggested.entities ?? []).map(e => ({
-                          label: e.label, definition: e.definition, synonyms: e.synonyms,
-                          positives: e.positives, negatives: e.negatives, zones: e.zones,
-                          keywords: e.keywords, pattern: e.pattern,
-                        })),
-                      }),
-                    });
-                    if (res.ok) {
-                      const newTmpl = await res.json();
-                      setTemplates(prev => [newTmpl, ...prev]);
-                      const update: Record<string, number> = {};
-                      uploadedFiles.forEach(f => { update[String(f.id)] = newTmpl.id; });
-                      setFileClassifications(prev => ({ ...prev, ...update }));
-                    }
-                  } catch { /* ignore */ }
-                };
-                return (
-                  <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 uppercase tracking-wider">{suggested.sectorCode}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f] font-medium">{suggested.sectorType}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">✦ Suggested for {companyInfo.sector}</span>
-                        </div>
-                        <div className="text-[15px] font-semibold text-white mb-1">{suggested.name}</div>
-                        <div className="text-[12px] text-[#636366]">{(suggested.entities ?? []).length} entities &middot; max {suggested.maxPoints} pts</div>
-                      </div>
-                      <button
-                        onClick={applyToAll}
-                        className="shrink-0 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-xl smooth press-sm"
-                      >
-                        Apply to All
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
               <div className="space-y-3 mb-8">
                 {uploadedFiles.map((file) => {
                   const selectedId = fileClassifications[String(file.id)];
                   const selectedTemplate = templates.find(t => t.id === selectedId);
                   return (
-                    <div key={file.id} className={`bg-[#1c1c1e] rounded-2xl p-4 transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/20' : ''}`} data-testid={`classify-row-${file.id}`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedTemplate ? 'bg-purple-500/15' : 'bg-[#2c2c2e]'}`}>
-                          <FileIcon type={file.type} className={`w-4 h-4 ${selectedTemplate ? 'text-purple-400' : file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{file.name}</div>
-                          <div className="text-xs text-[#636366] mt-0.5">{file.size} KB</div>
-                        </div>
-                        <select value={selectedId || ''}
-                          onChange={(e) => setFileClassifications(prev => ({ ...prev, [String(file.id)]: Number(e.target.value) }))}
-                          className="bg-[#2c2c2e] text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 appearance-none min-w-[200px]" data-testid={`select-template-${file.id}`}>
-                          <option value="">Select template...</option>
-                          {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.entities.length})</option>)}
-                        </select>
-                      </div>
-                      {selectedTemplate && (
-                        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedTemplate.entities.map((ent, i) => (
-                              <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
-                                {ent.label}
-                              </span>
-                            ))}
+                    (() => {
+                      const docType = fileDocTypes[String(file.id)] || 'digital';
+                      const isScanned = docType === 'scanned';
+                      return (
+                        <div key={file.id} className={`rounded-2xl overflow-hidden transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/20' : ''}`} style={{ background: '#1c1c1e' }} data-testid={`classify-row-${file.id}`}>
+                          {/* File identity row */}
+                          <div className="flex items-center gap-3.5 px-4 pt-4 pb-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedTemplate ? 'bg-purple-500/15' : 'bg-[#2c2c2e]'}`}>
+                              <FileIcon type={file.type} className={`w-4 h-4 ${selectedTemplate ? 'text-purple-400' : file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-semibold text-white truncate">{file.name}</div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-[#636366]">{file.size} KB</span>
+                                {selectedTemplate && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/12 text-purple-400 font-medium">{selectedTemplate.name}</span>
+                                )}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${isScanned ? 'bg-amber-500/12 text-amber-400' : 'bg-blue-500/12 text-blue-400'}`}>
+                                  {isScanned ? 'Scanned' : 'Digital'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
+
+                          {/* Two-dropdown row */}
+                          <div className="grid grid-cols-2 gap-px mx-4 mb-4" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #2c2c2e' }}>
+                            {/* Template selector */}
+                            <div className="relative bg-[#141414] px-3 py-2.5">
+                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1">Template</label>
+                              <div className="flex items-center gap-2">
+                                <Puzzle className="w-3 h-3 text-purple-400 shrink-0" />
+                                <select value={selectedId || ''}
+                                  onChange={(e) => setFileClassifications(prev => ({ ...prev, [String(file.id)]: Number(e.target.value) }))}
+                                  className="flex-1 bg-transparent text-white text-[12px] focus:outline-none appearance-none cursor-pointer min-w-0"
+                                  data-testid={`select-template-${file.id}`}>
+                                  <option value="">Select template…</option>
+                                  {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.entities.length})</option>)}
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Document type selector */}
+                            <div className={`relative px-3 py-2.5 ${isScanned ? 'bg-amber-500/[0.05]' : 'bg-blue-500/[0.05]'}`}>
+                              <label className={`text-[9px] font-semibold uppercase tracking-widest block mb-1 ${isScanned ? 'text-amber-500/60' : 'text-blue-500/60'}`}>Document type</label>
+                              <div className="flex items-center gap-2">
+                                {isScanned
+                                  ? <ScanLine className="w-3 h-3 text-amber-400 shrink-0" />
+                                  : <Monitor className="w-3 h-3 text-blue-400 shrink-0" />}
+                                <select value={docType}
+                                  onChange={(e) => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: e.target.value as 'digital' | 'scanned' }))}
+                                  className={`flex-1 bg-transparent text-[12px] font-semibold focus:outline-none appearance-none cursor-pointer ${isScanned ? 'text-amber-300' : 'text-blue-300'}`}
+                                  data-testid={`select-doctype-${file.id}`}>
+                                  <option value="digital">Digital</option>
+                                  <option value="scanned">Scanned</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Entity chips */}
+                          {selectedTemplate && (
+                            <div className="px-4 pb-4 flex flex-wrap gap-1.5">
+                              {selectedTemplate.entities.map((ent, i) => (
+                                <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">{ent.label}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()
                   );
                 })}
               </div>
@@ -1436,9 +1431,9 @@ export default function DocumentProcessor() {
                 <button onClick={() => setCurrentPage('upload')} className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-upload">
                   <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
                 </button>
-                <button onClick={async () => { if (allClassified) { await persistSession('extract'); setCurrentPage('extract'); } }} disabled={!allClassified}
+                <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
                   className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-extract">
-                  Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
+                  {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
                 </button>
               </div>
             </div>
@@ -1639,44 +1634,34 @@ export default function DocumentProcessor() {
                   <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700">{isPdfFile ? 'Document Viewer' : 'Document'}</span>
-                      {!isPdfFile && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      <span className="text-sm font-medium text-gray-700">{isPdfFile && activeDocFile?.file?.size > 0 ? 'Document Viewer' : 'Document'}</span>
+                      {!(isPdfFile && activeDocFile?.file?.size > 0) && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
                         .filter((e: any) => e.value && e.status !== 'not_found' && e.status !== 'rejected')
                         .map((e: any, i: number) => {
-                          const realIdx = extractionResults[activeReviewDoc].entities.indexOf(e);
-                          const color = entityColors[realIdx % entityColors.length];
-                          const isHovered = hoveredEntity === realIdx;
+                          const fmtLabel = (s: string) => s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/([a-z\d])([A-Z])/g, '$1 $2');
                           return (
-                            <span key={i}
-                              className="text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1.5 cursor-pointer transition-all"
-                              style={{
-                                backgroundColor: isHovered ? color.bg.replace('0.15', '0.4') : color.bg,
-                                borderColor: color.border, color: color.text,
-                                transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                              }}
-                              onMouseEnter={() => setHoveredEntity(realIdx)}
-                              onMouseLeave={() => setHoveredEntity(null)}
-                            >
-                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color.underline }}></span>
-                              {e.name}
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-md border bg-gray-100 border-gray-300 text-gray-600">
+                              {fmtLabel(e.name)}
                             </span>
                           );
                         })}
                     </div>
                   </div>
-                  <div className={isPdfFile ? "px-2 py-2" : "p-5"}>
-                    {isPdfFile && activeDocFile ? (
+                  <div className={isPdfFile && activeDocFile?.file?.size > 0 ? "px-2 py-2" : "p-5"}>
+                    {isPdfFile && activeDocFile?.file?.size > 0 ? (
                       <PDFDocumentViewer
                         file={activeDocFile.file}
-                        entities={extractionResults[activeReviewDoc]?.entities || []}
-                        hoveredEntity={hoveredEntity}
-                        onHoverEntity={setHoveredEntity}
+                        entities={[]}
+                        hoveredEntity={null}
+                        onHoverEntity={() => {}}
                       />
                     ) : activeDocText ? (
-                      <HighlightedDocument text={activeDocText} entities={extractionResults[activeReviewDoc]?.entities || []} hoveredEntity={hoveredEntity} onHoverEntity={setHoveredEntity} />
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+                        <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{activeDocText}</p>
+                      </div>
                     ) : (
                       <div className="bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-center py-16 text-center">
                         <FileQuestion className="w-8 h-8 text-gray-300 mb-3" />
@@ -1692,26 +1677,31 @@ export default function DocumentProcessor() {
                       <div className="flex items-center gap-2">
                         <ListChecks className="w-4 h-4 text-[#636366]" />
                         <span className="text-sm font-medium text-[#d1d1d6]">Extracted Entities</span>
+                        <span className="text-[11px] text-[#636366] bg-[#1c1c1e] px-2 py-0.5 rounded-md">
+                          {extractionResults[activeReviewDoc]?.entities?.length ?? 0}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {(['all', 'low', 'edited'] as const).map(f => (
+                      <div className="flex items-center gap-1.5">
+                        {(['all', 'edited'] as const).map(f => (
                           <button key={f} onClick={() => setReviewFilter(f)}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
-                            {f === 'low' ? '< 70%' : f}
+                            {f}
                           </button>
                         ))}
                         <button onClick={() => approveAllForDoc(activeReviewDoc)}
-                          className="px-2.5 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg text-[11px] font-medium hover:bg-green-500/20 smooth press-sm ml-1" data-testid="button-approve-all">
-                          <CheckCheck className="w-3 h-3 mr-1 inline-block" />All
+                          className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
+                          <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div className="p-5 space-y-2">
+                  <div className="p-4 space-y-2">
                     {(() => {
                       const entities = extractionResults[activeReviewDoc]?.entities || [];
-                      const filtered = entities.filter((e: any, _: number) => {
-                        if (reviewFilter === 'low') return e.confidence < 70;
+                      const templateForResult = templates?.find((t: any) => t.id === extractionResults[activeReviewDoc]?.templateId);
+                      const getEntityDef = (name: string) => templateForResult?.entities?.find((e: any) => e.label === name)?.definition || '';
+                      const fmtLabel = (s: string) => s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/([a-z\d])([A-Z])/g, '$1 $2');
+                      const filtered = entities.filter((e: any) => {
                         if (reviewFilter === 'edited') return e.status === 'edited';
                         return true;
                       });
@@ -1723,12 +1713,10 @@ export default function DocumentProcessor() {
                               <FileQuestion className="w-5 h-5 text-[#636366]" />
                             </div>
                             <p className="text-[#d1d1d6] text-sm font-medium mb-1">
-                              {reviewFilter === 'all' ? 'No entities found' : `No ${reviewFilter === 'low' ? 'low-confidence' : 'edited'} entities`}
+                              {reviewFilter === 'all' ? 'No entities found' : 'No edited entities'}
                             </p>
                             <p className="text-[#636366] text-xs">
-                              {reviewFilter === 'all'
-                                ? 'The template entities were not detected in this document'
-                                : 'Try switching to "all" to see all extracted entities'}
+                              {reviewFilter === 'all' ? 'The template entities were not detected in this document' : 'Switch to "All" to see everything'}
                             </p>
                           </div>
                         );
@@ -1736,61 +1724,55 @@ export default function DocumentProcessor() {
 
                       return filtered.map((entity: any) => {
                         const realIdx = entities.indexOf(entity);
-                        const color = entityColors[realIdx % entityColors.length];
                         const isHovered = hoveredEntity === realIdx;
+                        const def = getEntityDef(entity.name);
+                        const isApproved = entity.status === 'approved';
+                        const isRejected = entity.status === 'rejected';
+                        const isEdited = entity.status === 'edited';
                         return (
                           <div key={realIdx}
-                            className={`rounded-xl overflow-hidden transition-all cursor-default ${isHovered ? 'ring-1 scale-[1.01]' : ''} ${entity.status === 'rejected' ? 'opacity-40' : ''}`}
-                            style={isHovered ? { '--tw-ring-color': color.underline } as React.CSSProperties : undefined}
+                            className={`rounded-xl border transition-all ${isHovered ? 'border-[#48484a]' : 'border-[#2c2c2e]'} ${isApproved ? 'border-green-500/30' : ''} ${isRejected ? 'opacity-40' : ''}`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
                             onMouseLeave={() => setHoveredEntity(null)}
                             data-testid={`review-entity-${realIdx}`}
                           >
-                            <div className="flex">
-                              <div className="w-1.5 shrink-0 rounded-l-xl" style={{ backgroundColor: color.underline }}></div>
-                              <div className={`flex-1 bg-[#1c1c1e] rounded-r-xl p-4 ${entity.status === 'approved' ? 'ring-1 ring-green-500/20' : ''}`}>
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}>{entity.name}</span>
-                                      {entity.status === 'approved' && <span className="text-[10px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded-md">Approved</span>}
-                                      {entity.status === 'edited' && <span className="text-[10px] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-md">Edited</span>}
-                                      {entity.status === 'rejected' && <span className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-md">Rejected</span>}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <input
-                                        type="text"
-                                        defaultValue={entity.value || ''}
-                                        placeholder="No value found"
-                                        onBlur={(e) => {
-                                          const val = e.target.value;
-                                          if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val);
-                                        }}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                        className="min-w-0 flex-1 px-2 py-1 rounded-md text-sm font-mono bg-transparent border-0 border-b-2 focus:outline-none focus:border-purple-400 transition-colors placeholder:text-[#636366] placeholder:italic placeholder:font-sans"
-                                        style={{ color: color.text, borderColor: color.underline, backgroundColor: color.bg }}
-                                        data-testid={`input-entity-value-${realIdx}`}
-                                      />
-                                    </div>
+                            <div className="bg-[#1c1c1e] rounded-xl p-3.5">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest leading-none">
+                                      {fmtLabel(entity.name)}
+                                    </span>
+                                    {isApproved && <span className="text-[10px] text-green-400 font-medium">· Approved</span>}
+                                    {isEdited && <span className="text-[10px] text-[#8e8e93] font-medium">· Edited</span>}
+                                    {isRejected && <span className="text-[10px] text-red-400 font-medium">· Rejected</span>}
                                   </div>
-                                  <div className="flex items-center gap-2 shrink-0 ml-3">
-                                    <span className={`text-sm font-bold ${entity.confidence >= 80 ? 'text-green-400' : entity.confidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{entity.confidence}%</span>
-                                    <div className="flex items-center gap-0.5">
-                                      {entity.status !== 'approved' && (
-                                        <button onClick={() => approveEntity(activeReviewDoc, realIdx)} className="p-1.5 text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve" data-testid={`button-approve-${realIdx}`}>
-                                          <Check className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                      {entity.status !== 'rejected' && (
-                                        <button onClick={() => rejectEntity(activeReviewDoc, realIdx)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject" data-testid={`button-reject-${realIdx}`}>
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
+                                  {def && <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>}
+                                  <input
+                                    type="text"
+                                    defaultValue={entity.value || ''}
+                                    placeholder="No value extracted"
+                                    onBlur={(e) => { const val = e.target.value; if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    className="w-full text-sm text-white bg-[#2c2c2e] rounded-lg px-3 py-2 border border-transparent focus:border-[#48484a] focus:outline-none transition-colors placeholder:text-[#48484a] placeholder:italic"
+                                    data-testid={`input-entity-value-${realIdx}`}
+                                  />
                                 </div>
-                                <div className="mt-2.5 h-1 bg-[#2c2c2e] rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${entity.confidence}%`, backgroundColor: color.underline }}></div>
+                                <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+                                  {!isApproved && (
+                                    <button onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="p-1.5 text-[#636366] hover:text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve"
+                                      data-testid={`button-approve-${realIdx}`}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {!isRejected && (
+                                    <button onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="p-1.5 text-[#636366] hover:text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject"
+                                      data-testid={`button-reject-${realIdx}`}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

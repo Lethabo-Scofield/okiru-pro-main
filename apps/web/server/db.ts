@@ -18,6 +18,22 @@ export async function connectDB(): Promise<typeof mongoose> {
     await mongoose.connect(MONGODB_URI);
     isConnected = true;
     console.log("Connected to MongoDB");
+
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const usersCollection = db.collection("users");
+        const indexes = await usersCollection.indexes();
+        const staleIndex = indexes.find((idx: any) => idx.name === "id_1");
+        if (staleIndex) {
+          await usersCollection.dropIndex("id_1");
+          console.log("Dropped stale 'id_1' index from users collection");
+        }
+      }
+    } catch (indexErr) {
+      console.warn("Index cleanup skipped:", (indexErr as Error).message);
+    }
+
     return mongoose;
   } catch (error) {
     console.error("MongoDB connection error:", error);

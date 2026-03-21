@@ -19,7 +19,7 @@ Full-stack Vite + Express application for B-BBEE compliance management. Migrated
 - `api/` — Vercel serverless functions (not used on Replit, active on Vercel deployment)
 
 ## Required Environment Variables
-- `MONGODB_URI` — MongoDB connection string (optional — both Replit and Vercel fallback to in-memory storage if not set)
+- `MONGODB_URI` — MongoDB connection string (set to KurioPro Atlas cluster) — required for processor sessions
 - `GROQ_API_KEY` — Groq API key (optional — entity generation uses rule-based fallback without it)
 - `SESSION_SECRET` — Express session secret (auto-generated on Replit, uses default on Vercel if not set)
 
@@ -27,12 +27,27 @@ Full-stack Vite + Express application for B-BBEE compliance management. Migrated
 - `npm run dev` starts Express on port 5000 with Vite middleware (HMR)
 - In production, `npm run build` then `npm run start`
 
-## Authentication
+## Authentication & Multi-Tenancy
 - Users must sign in or register to access the dashboard and all features
-- No demo mode or auto-login fallbacks — real authentication required
+- Login accepts both username and email (case-insensitive lookup via `getUserByUsernameOrEmail`)
+- `requireAuth` middleware validates session AND checks user still exists in DB
+- Templates are user-scoped: each user sees their own templates + shared ones (userId: null)
+- Users can only edit/delete their own templates — shared templates are read-only
 - Auth provider (`Toolkit/src/lib/auth.tsx`) properly throws errors on failed login/register
-- Unauthenticated users are redirected to `/auth` from protected routes
-- Landing page (`/`) always shows on reload regardless of auth state
+- Centralized route guards (`src/components/RouteGuards.tsx`): `ProtectedRoute` redirects to `/auth` if not logged in; `GuestRoute` redirects to `/dashboard` if already logged in
+- Protected routes: `/dashboard`, `/builder`, `/processor`, `/toolkit/:clientId`
+- Guest-only routes: `/` (landing), `/auth` (login/register)
+- 404 page is auth-aware: links to Dashboard if logged in, Home if not
+- Toolkit client data (ownership, management, skills, procurement) will move to ArangoDB (not yet implemented)
+
+## Registration Wizard (4-step flow)
+- Step 1 — Organization: Select from registered orgs (Okiru, Param Solutions) + enter subscription ID
+- Step 2 — Personal Details: Full name and email
+- Step 3 — Credentials: Username, password, confirm password
+- Step 4 — Role Selection: Auditor, Analyst, Manager, or Admin (admin role blocked server-side for self-registration)
+- Backend validates org + subscription ID match, trims/normalizes all inputs, enforces allowed roles (no privilege escalation)
+- Registered orgs and subscription IDs defined server-side in `REGISTERED_ORGANIZATIONS` constant in `server/routes.ts`
+- `/api/organizations` endpoint returns org list (id + name) for the dropdown
 
 ## Key Configuration
 - `API_BASE` in `Toolkit/src/lib/config.ts` defaults to empty string (relative URLs)
@@ -41,6 +56,11 @@ Full-stack Vite + Express application for B-BBEE compliance management. Migrated
 - Storage layer (`server/storage.ts`) has a `MemoryStorage` fallback when MONGODB_URI is not set, enabling full Entity Builder, auth, and template CRUD without MongoDB (data does not persist across restarts)
 - In-memory mode auto-seeds 3 predefined B-BBEE starter templates and a demo user (username: demo, password: demo) on startup
 - Entity generation without AI key fills all fields intelligently based on type detection
+- Entity Builder tracks unsaved changes for ALL templates (new and existing): amber indicators for existing template edits, purple for new drafts
+- Unsaved new template entities auto-save to localStorage (`okiru-entity-draft`) and restore on next visit (skipped when URL has template/starter params)
+- Draft cleared on publish, startNew, or loading a template from repository
+- **Saved Drafts system**: When starting a new template or loading a repo template while having unfinished work, an Instagram-style prompt appears ("Save your work?") offering "Save to Drafts" or "Discard". Up to 5 drafts stored in `okiru-entity-drafts` (localStorage). Drafts visible in the left sidebar Entities tab with Resume + delete. Amber draft count badge shows in the header. `guardedNew()` intercepts `startNew` and `loadTemplateFromRepo`. URL-param template loads bypass the guard via `_loadTemplateFromRepo`.
+- Onboarding tour (`src/components/OnboardingTour.tsx`): welcome modal + 5-step guided tour for new users. Completion tracked per-user in localStorage (`okiru-onboarding-complete:{userId}`). Help button (?) in dashboard header replays tour. Dismissing (X/backdrop) does not mark as complete; only explicit skip or finishing all steps does.
 - Vercel API (`api/[...path].ts`) includes middleware to preserve pre-parsed request body for proper POST/PUT handling in serverless environment
 - Vercel API gracefully handles missing MONGODB_URI: auth uses session-only mode (any credentials accepted), templates use in-memory storage with 3 starter templates
 - Vercel routing (`vercel.json`) uses explicit `routes` array: API routes → catch-all serverless function, then filesystem, then SPA fallback to `index.html`
