@@ -58,12 +58,13 @@ interface ProcessorSession {
   companyInfo: CompanyInfo;
   createdAt: string;
   updatedAt: string;
-  currentStep: string;
+  currentStep: 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'scorecard';
   filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
   fileClassifications: Record<string, number>;
   extractionResults: any[];
   docStatuses: Record<number, string>;
   isComplete: boolean;
+  scorecardResult?: any;
 }
 
 const BBEE_SECTORS = [
@@ -122,6 +123,7 @@ async function apiLoadSession(sessionId: string): Promise<ProcessorSession | nul
       extractionResults: data.extractionResults || [],
       docStatuses: data.docStatuses || {},
       isComplete: data.isComplete || false,
+      scorecardResult: data.scorecardResult || null,
     };
   } catch { return null; }
 }
@@ -519,9 +521,10 @@ export default function DocumentProcessor() {
         });
         setUploadedFiles(restored);
       }
-      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review'];
+      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'];
       const step = sess.currentStep && validSteps.includes(sess.currentStep)
         ? sess.currentStep
+        : sess.scorecardResult ? 'scorecard'
         : sess.extractionResults && sess.extractionResults.length > 0 ? 'review'
         : sess.filesData && sess.filesData.length > 0 ? 'classify'
         : 'upload';
@@ -537,6 +540,7 @@ export default function DocumentProcessor() {
     results?: any[];
     statuses?: Record<number, string>;
     complete?: boolean;
+    scorecardResult?: any;
   }) => {
     const sid = sessionId || generateSessionId();
     if (!sessionId) setSessionId(sid);
@@ -547,7 +551,7 @@ export default function DocumentProcessor() {
       companyInfo: ci,
       createdAt: sessionCreatedAt.current,
       updatedAt: new Date().toISOString(),
-      currentStep: step,
+      currentStep: step as ProcessorSession['currentStep'],
       filesData: await Promise.all((opts?.files ?? uploadedFiles).map(async f => {
         let fileBase64: string | undefined;
         if (f.type === 'PDF' && f.file && f.file.size > 0) {
@@ -555,7 +559,10 @@ export default function DocumentProcessor() {
             const buf = await f.file.arrayBuffer();
             const bytes = new Uint8Array(buf);
             let binary = '';
-            for (let j = 0; j < bytes.length; j += 8192) binary += String.fromCharCode(...bytes.slice(j, j + 8192));
+            for (let j = 0; j < bytes.length; j += 8192) {
+              const chunk = Array.from(bytes.subarray(j, j + 8192));
+              binary += String.fromCharCode(...chunk);
+            }
             fileBase64 = btoa(binary);
           } catch { /* skip */ }
         }
@@ -565,6 +572,7 @@ export default function DocumentProcessor() {
       extractionResults: opts?.results ?? extractionResults,
       docStatuses: opts?.statuses ?? docStatuses,
       isComplete: opts?.complete ?? false,
+      scorecardResult: opts?.scorecardResult ?? undefined,
     };
     await apiSaveSession(sess);
     return sid;
@@ -690,7 +698,7 @@ export default function DocumentProcessor() {
     abortControllerRef.current = controller;
     processingFinalized.current = false;
 
-    const initialStatuses: Record<number, string> = {};
+    const initialStatuses: Record<number, 'processing' | 'done' | 'error' | 'waiting'> = {};
     uploadedFiles.forEach((_, i) => { initialStatuses[i] = 'processing'; });
     setDocStatuses(initialStatuses);
     setCompletedCount(0);
@@ -997,23 +1005,26 @@ export default function DocumentProcessor() {
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
-          {['Company', 'Upload', 'Template', 'Extract', 'Review'].map((label, idx) => {
-            const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck];
-            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review'] as const;
+          {['Company', 'Upload', 'Template', 'Extract', 'Review', 'Scorecard'].map((label, idx) => {
+            const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck, FileText];
+            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'] as const;
+            type PageMapType = typeof pageMap[number];
+            const safeCurrentPage = currentPage as PageMapType;
+            const stepIdx = pageMap.indexOf(safeCurrentPage);
             const isComplete = idx < stepIdx;
             const isCurrent = idx === stepIdx;
-            const canNavigate = isComplete && currentPage !== 'company-info';
+            const canNavigate = isComplete && safeCurrentPage !== 'company-info';
             const StepIcon = StepIcons[idx];
             return (
               <React.Fragment key={label}>
                 <div className={`flex items-center gap-2.5 ${canNavigate ? 'cursor-pointer group' : ''}`}
-                  onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx]); }}>
+                  onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx] as PageMapType); }}>
                   <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs smooth ${isComplete ? 'border-green-500 bg-green-500 text-white group-hover:bg-green-400' : isCurrent ? 'border-purple-600 bg-purple-600 text-white' : 'border-transparent text-[#636366]'}`}>
                     {isComplete ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
                   </div>
                   <span className={`text-[13px] font-medium hidden sm:inline smooth ${isComplete ? 'text-green-400 group-hover:text-green-300' : isCurrent ? 'text-purple-400' : 'text-[#636366]'}`}>{label}</span>
                 </div>
-                {idx < 4 && (
+                {idx < 5 && (
                   <div className="flex-1 h-0.5 bg-[#1c1c1e] mx-4 rounded-full overflow-hidden">
                     <div className="h-full bg-green-500 transition-all duration-700 rounded-full" style={{ width: isComplete ? '100%' : '0%' }}></div>
                   </div>
@@ -1584,10 +1595,53 @@ export default function DocumentProcessor() {
             };
             const handleSubmit = async () => {
               setIsSavingSession(true);
-              await persistSession('review', { results: extractionResults, complete: true });
-              setIsSavingSession(false);
-              setIsSubmitted(true);
-              toast({ title: "Assessment complete", description: `${totalEntities} entities across ${extractionResults.length} document${extractionResults.length !== 1 ? 's' : ''} — view in Toolkit` });
+              
+              // 1. Gather all document texts
+              const documentTexts = uploadedFiles
+                .filter(file => file.textContent)
+                .map(file => file.textContent);
+
+              // 2. Base fallback if info missing
+              const sectorCode = 'RCOGP'; // Defaulting to generic for now until sector logic upgraded
+              const scorecardType = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) <= 50000000 ? 'QSE' : 'Generic';
+
+              try {
+                // 3. Make the API Call to extract-and-score
+                const res = await fetch('/api/extract-and-score', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    documentTexts,
+                    sectorCode,
+                    scorecardType,
+                    clientName: companyInfo.name
+                  }),
+                });
+
+                if (!res.ok) throw new Error('Scoring failed');
+                
+                const scoreData = await res.json();
+                
+                // 4. Update the session with the new scorecardResult
+                await persistSession('scorecard', { 
+                  results: extractionResults, 
+                  complete: true,
+                  scorecardResult: scoreData
+                });
+                
+                setIsSubmitted(true);
+                setCurrentPage('scorecard');
+                toast({ title: "Assessment complete", description: "Scorecard generated successfully!" });
+
+              } catch (err: any) {
+                console.error("Scorecard generation error", err);
+                toast({ title: "Generation Failed", description: "Could not generate scorecard. Review extraction results.", variant: "destructive" });
+                // Fallback to basic complete if scoring fails
+                await persistSession('review', { results: extractionResults, complete: true });
+                setIsSubmitted(true);
+              } finally {
+                setIsSavingSession(false);
+              }
             };
             return (
             <div className="flex flex-col h-full -m-6">
@@ -1634,8 +1688,8 @@ export default function DocumentProcessor() {
                   <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700">{isPdfFile && activeDocFile?.file?.size > 0 ? 'Document Viewer' : 'Document'}</span>
-                      {!(isPdfFile && activeDocFile?.file?.size > 0) && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      <span className="text-sm font-medium text-gray-700">{isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? 'Document Viewer' : 'Document'}</span>
+                      {!(isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0) && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
@@ -1650,8 +1704,8 @@ export default function DocumentProcessor() {
                         })}
                     </div>
                   </div>
-                  <div className={isPdfFile && activeDocFile?.file?.size > 0 ? "px-2 py-2" : "p-5"}>
-                    {isPdfFile && activeDocFile?.file?.size > 0 ? (
+                  <div className={isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? "px-2 py-2" : "p-5"}>
+                    {isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? (
                       <PDFDocumentViewer
                         file={activeDocFile.file}
                         entities={[]}
@@ -1786,6 +1840,45 @@ export default function DocumentProcessor() {
             </div>
             );
           })()}
+
+          {currentPage === ('scorecard' as 'scorecard' | 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review') && (
+            <div className="max-w-4xl mx-auto py-8">
+              <div className="bg-[#1c1c1e] rounded-2xl p-8 border border-[#2c2c2e] shadow-xl">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center border border-purple-500/30">
+                      <ScanLine className="w-8 h-8 text-purple-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-1">B-BBEE Scorecard</h2>
+                      <p className="text-[#8e8e93] text-sm">{companyInfo.name} • {companyInfo.sector}</p>
+                    </div>
+                  </div>
+                  <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white rounded-xl text-sm font-medium smooth press-sm border border-[#48484a]" onClick={() => window.print()}>
+                    Export PDF
+                  </button>
+                </div>
+
+                {isSavingSession ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-400 mb-4" />
+                    <p className="text-[#8e8e93]">Generating scorecard...</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-3xl font-bold text-green-400 mb-2">Operation Complete</p>
+                    <p className="text-[#a1a1aa] max-w-lg mx-auto leading-relaxed">
+                      Scorecard calculation has been processed by the engine. You can view the fully generated certificate and metrics in the main Toolkit Dashboard.
+                    </p>
+                    <Link href="/dashboard" className="inline-block mt-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold smooth press">
+                      Go to Dashboard
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </main>
     </div>
