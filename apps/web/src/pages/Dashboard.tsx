@@ -155,7 +155,7 @@ export default function Dashboard() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/templates");
+      const res = await fetch("/api/entity-templates");
       if (res.ok) setStoredTemplates(await res.json());
     } catch (err) {
       console.error("Error fetching templates:", err);
@@ -168,15 +168,15 @@ export default function Dashboard() {
     if (publishingKey) return;
     setPublishingKey(template.key);
     try {
-      const templateEntities = template.entities.map(e => ({
+      const templateEntities = (template.entities ?? []).map(e => ({
         label: e.label, definition: e.definition, synonyms: e.synonyms,
         positives: e.positives, negatives: e.negatives, zones: e.zones,
         keywords: e.keywords, pattern: e.pattern,
       }));
-      const freshRes = await fetch("/api/templates");
+      const freshRes = await fetch("/api/entity-templates");
       const freshTemplates: StoredTemplate[] = freshRes.ok ? await freshRes.json() : [];
       const existing = freshTemplates.find(t => t.name === template.name);
-      const url = existing ? `/api/templates/${existing.id}` : "/api/templates";
+      const url = existing ? `/api/entity-templates/${existing.id}` : "/api/entity-templates";
       const method = existing ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -231,13 +231,9 @@ export default function Dashboard() {
 
   const filteredStaticTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
-    const base = q ? staticTemplates.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)) : staticTemplates.slice(0, 3);
+    const base = q ? staticTemplates.filter(t => t.category !== 'Toolkit' && (t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q))) : staticTemplates.filter(t => t.category !== 'Toolkit').slice(0, 3);
     return base;
   }, [templateSearch]);
-
-  const toolkitTemplates = useMemo(() =>
-    staticTemplates.filter(t => t.category === 'Toolkit'),
-  []);
 
   const filteredStoredTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
@@ -259,7 +255,7 @@ export default function Dashboard() {
     const template = storedTemplates.find(t => t.id === id);
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/entity-templates/${id}`, { method: "DELETE" });
       if (res.ok) {
         setStoredTemplates(prev => prev.filter(t => t.id !== id));
         setDeleteConfirm(null);
@@ -537,67 +533,11 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* ── Recommended Sector Templates ── */}
-            {(() => {
-              const searchParams = new URLSearchParams(window.location.search);
-              const sector = searchParams.get('sector') || localStorage.getItem('okiru-last-sector');
-              const type = searchParams.get('type') || localStorage.getItem('okiru-last-type');
-              
-              if (!sector) return null;
-              
-              const recommendedTemplates = toolkitTemplates.filter(
-                t => t.sectorCode === sector && (!type || t.sectorType === type)
-              );
-              
-              if (recommendedTemplates.length === 0) return null;
-              
-              return (
-                <div className="mb-8">
-                  <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Recommended Templates</h2>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/[0.15] text-emerald-400">Based on your details</span>
-                  </div>
-                  <p className="text-[12px] text-[#636366] mb-5 max-w-2xl">
-                    We've detected you are in the {sector} sector{type ? ` (${type})` : ''}. Here are the specialized B-BBEE scorecard templates for your business.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {recommendedTemplates.map((t, idx) => (
-                      <div key={t.key} className={`rounded-2xl border border-emerald-500/[0.12] bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5 hover:border-emerald-500/30 hover:from-emerald-500/[0.1] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`}>
-                        <div className="flex items-start justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 tracking-wider">{t.sectorCode}</span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f]">{t.sectorType}</span>
-                          </div>
-                          <div className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">{t.maxPoints} pts</div>
-                        </div>
-                        <div className="text-[15px] font-semibold tracking-tight text-white mb-2">{t.name}</div>
-                        <p className="text-[12px] text-[#636366] leading-relaxed mb-4" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</p>
-                        {t.pillars && (
-                          <div className="flex flex-wrap gap-1 mb-4">
-                            {t.pillars.map(p => (
-                              <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] text-[#8e8e93] uppercase tracking-wide">{p}</span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="text-[10px] text-[#636366] mb-3">{t.entities.length} entities to extract</div>
-                        <Link
-                          href={`/processor?sector=${t.sectorCode}&type=${t.sectorType}&template=${t.key}`}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 text-[12px] font-semibold smooth press-sm"
-                        >
-                          Start Assessment
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
             <div className="mb-4">
               <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Document Templates</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="templates-grid">
-              {filteredStaticTemplates.filter(t => t.category !== 'Toolkit').map((t, idx) => (
+              {filteredStaticTemplates.map((t, idx) => (
                 <div key={t.key} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`template-${t.key}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -610,13 +550,13 @@ export default function Dashboard() {
                   <div className="mt-4">
                     <div className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">Entities</div>
                     <ul className="mt-2 space-y-1 text-[12px] text-[#98989f]">
-                      {t.entities.slice(0, 4).map((e, i) => (
+                      {(t.entities ?? []).slice(0, 4).map((e, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <span className="h-1 w-1 rounded-full bg-purple-400 shrink-0" />
                           {e.label}
                         </li>
                       ))}
-                      {t.entities.length > 4 && <li className="text-[#636366] font-medium">+ {t.entities.length - 4} more</li>}
+                      {(t.entities ?? []).length > 4 && <li className="text-[#636366] font-medium">+ {(t.entities ?? []).length - 4} more</li>}
                     </ul>
                   </div>
 

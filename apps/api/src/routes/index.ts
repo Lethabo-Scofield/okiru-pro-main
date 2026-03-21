@@ -24,6 +24,7 @@ import scorecardRouter from './scorecard.js';
 import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
 import extractAndScoreRouter from './extractAndScore.js';
+import entityTemplatesRouter from './entityTemplates.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -131,6 +132,9 @@ export async function registerRoutes(
 
   // Sector toolkit: extract from document texts → full B-BBEE scorecard
   app.use('/api', extractAndScoreRouter);
+
+  // Entity templates (Dashboard CRUD) — stored in MongoDB
+  app.use('/api/entity-templates', entityTemplatesRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

@@ -172,6 +172,16 @@ const documentChunkSchema = new Schema({
   tokenCount: { type: Number, default: 0 },
 }, { collection: "document_chunks" });
 
+const entityTemplateSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  name: { type: String, required: true },
+  description: { type: String, default: '' },
+  version: { type: String, default: '1.0' },
+  entities: { type: Schema.Types.Mixed, default: [] },
+  createdAt: { type: String, default: () => new Date().toISOString() },
+  updatedAt: { type: String, default: () => new Date().toISOString() },
+}, { collection: "entityTemplates" });
+
 export const UserModel = mongoose.model("User", userSchema);
 export const OrganizationModel = mongoose.model("Organization", organizationSchema);
 export const ClientModel = mongoose.model("Client", clientSchema);
@@ -189,3 +199,4 @@ export const ImportLogModel = mongoose.model("ImportLog", importLogSchema);
 export const ExportLogModel = mongoose.model("ExportLog", exportLogSchema);
 export const Document = mongoose.model("Document", documentSchema);
 export const DocumentChunk = mongoose.model("DocumentChunk", documentChunkSchema);
+export const EntityTemplateModel = mongoose.model("EntityTemplate", entityTemplateSchema);
