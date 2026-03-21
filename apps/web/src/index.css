@@ -339,4 +339,16 @@
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
   }
+
+  .onboarding-highlight {
+    position: relative;
+    z-index: 51;
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.35), 0 0 24px 4px rgba(168, 85, 247, 0.15);
+    border-radius: 16px;
+    animation: onboardingPulse 2s ease-in-out infinite;
+  }
+  @keyframes onboardingPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.35), 0 0 24px 4px rgba(168, 85, 247, 0.15); }
+    50% { box-shadow: 0 0 0 6px rgba(168, 85, 247, 0.5), 0 0 32px 8px rgba(168, 85, 247, 0.25); }
+  }
 }

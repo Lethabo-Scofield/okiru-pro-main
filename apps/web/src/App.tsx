@@ -6,11 +6,13 @@ import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { AuthProvider } from "@toolkit/lib/auth";
 import { Toaster } from "@toolkit/components/ui/toaster";
 import { TooltipProvider } from "@toolkit/components/ui/tooltip";
+import { ProtectedRoute, GuestRoute } from "@/components/RouteGuards";
 import LandingWrapper from "@/pages/LandingWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import Dashboard from "@/pages/Dashboard";
 import EntityBuilder from "@/pages/EntityBuilder";
 import DocumentProcessor from "@/pages/DocumentProcessor";
+import NotFound from "@/pages/NotFound";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 
@@ -32,22 +34,26 @@ function ToolkitLoader() {
 function AppRouter() {
   return (
     <Switch>
-      <Route path="/" component={LandingWrapper} />
-      <Route path="/auth" component={AuthWrapper} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/builder" component={EntityBuilder} />
-      <Route path="/processor" component={DocumentProcessor} />
-      <Route path="/toolkit/:clientId" nest component={ToolkitLoader} />
+      <Route path="/">
+        <GuestRoute><LandingWrapper /></GuestRoute>
+      </Route>
+      <Route path="/auth">
+        <GuestRoute><AuthWrapper /></GuestRoute>
+      </Route>
+      <Route path="/dashboard">
+        <ProtectedRoute><Dashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/builder">
+        <ProtectedRoute><EntityBuilder /></ProtectedRoute>
+      </Route>
+      <Route path="/processor">
+        <ProtectedRoute><DocumentProcessor /></ProtectedRoute>
+      </Route>
+      <Route path="/toolkit/:clientId" nest>
+        <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
+      </Route>
       <Route>
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <p className="text-4xl font-bold text-foreground">404</p>
-            <p className="text-muted-foreground">This page doesn't exist.</p>
-            <a href="/dashboard" className="inline-flex items-center gap-2 text-sm text-primary hover:underline" data-testid="link-404-dashboard">
-              Go to Dashboard
-            </a>
-          </div>
-        </div>
+        <NotFound />
       </Route>
     </Switch>
   );

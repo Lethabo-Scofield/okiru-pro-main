@@ -3,8 +3,35 @@ import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles } from 'lucide-react';
+import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink } from 'lucide-react';
 import { starterTemplates as staticTemplates } from '@/data/starterTemplates';
+import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
+
+interface ProcessorSession {
+  id: string;
+  companyInfo: {
+    name: string; sector: string; registrationNumber: string;
+    annualTurnover?: string; employees?: string; contactName?: string;
+    contactEmail?: string; currentBBEELevel?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+  currentStep: string;
+  filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
+  fileClassifications: Record<string, number>;
+  extractionResults: any[];
+  isComplete: boolean;
+}
+
+interface CompanyRow {
+  name: string;
+  id: string;
+  industry: string;
+  status: 'in_progress' | 'complete';
+  sessionId: string;
+  subtitle?: string;
+  isComplete: boolean;
+}
 
 interface StoredTemplate {
   id: number;
@@ -16,29 +43,18 @@ interface StoredTemplate {
   updatedAt: string;
 }
 
-const companies = [
-  { name: "Moyo Retail (Pty) Ltd", id: "C-10483", industry: "Retail", status: "new" as const },
-  { name: "Karoo Telecom", id: "C-21907", industry: "Telecoms", status: "in_progress" as const },
-  { name: "Umhlaba Insurance Group", id: "C-88712", industry: "Insurance", status: "compliant" as const },
-  { name: "Aurum Financial Services", id: "C-54011", industry: "Financial Services", status: "in_progress" as const },
-  { name: "Blue Crane Logistics", id: "C-66309", industry: "Logistics", status: "new" as const },
-  { name: "Saffron Health Network", id: "C-77201", industry: "Healthcare", status: "compliant" as const },
-  { name: "Vula Energy Partners", id: "C-30118", industry: "Energy", status: "new" as const },
-  { name: "CapeTech Manufacturing", id: "C-91145", industry: "Manufacturing", status: "in_progress" as const },
-];
 
 type Page = 'home' | 'templates' | 'scorecards';
 
 function statusLabel(status: string) {
-  if (status === "new") return "New";
+  if (status === "complete") return "Complete";
   if (status === "in_progress") return "In Progress";
-  if (status === "compliant") return "Compliant";
   return status;
 }
 
 function statusPillClass(status: string) {
   const base = "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium";
-  if (status === "compliant") return `${base} bg-emerald-500/15 text-emerald-400`;
+  if (status === "complete") return `${base} bg-emerald-500/15 text-emerald-400`;
   if (status === "in_progress") return `${base} bg-amber-500/15 text-amber-400`;
   return `${base} bg-white/[0.06] text-[#8e8e93]`;
 }
@@ -55,26 +71,94 @@ export default function Dashboard() {
   const [page, setPage] = useState<Page>('home');
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user, isLoading: authLoading, logout } = useAuth();
+  const { user, logout } = useAuth();
   const [templateSearch, setTemplateSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [industryFilter, setIndustryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [storedTemplates, setStoredTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
+  const { needsOnboarding, showTour, startTour, completeTour, dismissTour } = useOnboarding(user?.id);
+  const [processorSessions, setProcessorSessions] = useState<ProcessorSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<string | null>(null);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [rowOrder, setRowOrder] = useState<string[]>([]);
+
+  const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    setRowOrder(prev => {
+      const ids = processorSessions.map(s => s.id);
+      const existing = prev.filter(id => ids.includes(id));
+      const newIds = ids.filter(id => !prev.includes(id));
+      return [...existing, ...newIds];
+    });
+  }, [processorSessions]);
+
+  const moveRow = (sessionId: string, direction: 'up' | 'down') => {
+    setRowOrder(prev => {
+      const idx = prev.indexOf(sessionId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= next.length) return prev;
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  };
+
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    setIsDeletingSession(true);
+    try {
+      const res = await fetch(`/api/processor-sessions/${sessionId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProcessorSessions(prev => prev.filter(s => s.id !== sessionId));
+        toast({ title: 'Assessment deleted', description: 'The client assessment has been removed.' });
+      } else {
+        toast({ title: 'Delete failed', description: 'Could not delete the assessment.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Delete failed', description: 'Network error. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsDeletingSession(false);
+      setDeleteSessionConfirm(null);
+    }
+  }, [toast]);
+
+  const fetchSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await fetch('/api/processor-sessions');
+      if (res.ok) {
+        const data = await res.json();
+        setProcessorSessions(data);
+      }
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page === 'scorecards') {
+      fetchSessions();
+    }
+  }, [page, fetchSessions]);
 
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
       const res = await fetch("/api/templates");
       if (res.ok) setStoredTemplates(await res.json());
-      else toast({ title: "Could not load templates", description: "Template list failed to load. Try again later.", variant: "destructive" });
     } catch (err) {
       console.error("Error fetching templates:", err);
-      toast({ title: "Could not load templates", description: err instanceof Error ? err.message : "Network or server error.", variant: "destructive" });
     } finally {
       setLoadingTemplates(false);
     }
@@ -84,7 +168,7 @@ export default function Dashboard() {
     if (publishingKey) return;
     setPublishingKey(template.key);
     try {
-      const templateEntities = (template.entities ?? []).map(e => ({
+      const templateEntities = template.entities.map(e => ({
         label: e.label, definition: e.definition, synonyms: e.synonyms,
         positives: e.positives, negatives: e.negatives, zones: e.zones,
         keywords: e.keywords, pattern: e.pattern,
@@ -111,16 +195,39 @@ export default function Dashboard() {
     }
   }, [publishingKey, fetchTemplates, toast, navigate]);
 
-  const industries = useMemo(() => Array.from(new Set(companies.map(c => c.industry))).sort(), []);
+  const allCompanies = useMemo<CompanyRow[]>(() => {
+    return processorSessions.map(s => ({
+      name: s.companyInfo.name,
+      id: s.id,
+      industry: s.companyInfo.sector || 'Other',
+      status: s.isComplete ? 'complete' : 'in_progress',
+      sessionId: s.id,
+      isComplete: s.isComplete,
+      subtitle: s.isComplete
+        ? `${s.extractionResults?.length || 0} doc${(s.extractionResults?.length || 0) !== 1 ? 's' : ''} processed · Assessment complete`
+        : s.currentStep === 'review'
+        ? 'Extraction complete — awaiting review'
+        : `In progress · ${s.filesData?.length || 0} doc${(s.filesData?.length || 0) !== 1 ? 's' : ''} uploaded`,
+    }));
+  }, [processorSessions]);
+
+  const industries = useMemo(() => Array.from(new Set(allCompanies.map(c => c.industry))).sort(), [allCompanies]);
 
   const filteredCompanies = useMemo(() => {
-    let result = companies.slice();
+    let result = allCompanies.slice();
     const q = companySearch.toLowerCase();
     if (q) result = result.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
     if (industryFilter !== 'all') result = result.filter(c => c.industry === industryFilter);
     if (statusFilter !== 'all') result = result.filter(c => c.status === statusFilter);
+    if (rowOrder.length > 0) {
+      result.sort((a, b) => {
+        const ai = rowOrder.indexOf(a.sessionId);
+        const bi = rowOrder.indexOf(b.sessionId);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
+    }
     return result;
-  }, [companySearch, industryFilter, statusFilter]);
+  }, [allCompanies, companySearch, industryFilter, statusFilter, rowOrder]);
 
   const filteredStaticTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
@@ -139,19 +246,12 @@ export default function Dashboard() {
   }, [templateSearch, storedTemplates]);
 
   const stats = useMemo(() => ({
-    total: companies.length,
+    total: allCompanies.length,
     industries: industries.length,
     industryList: industries.join(' \u2022 '),
-    new: companies.filter(c => c.status === 'new').length,
-    inProgress: companies.filter(c => c.status === 'in_progress').length,
-    compliant: companies.filter(c => c.status === 'compliant').length,
-  }), [industries]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, authLoading, navigate]);
+    inProgress: allCompanies.filter(c => c.status === 'in_progress').length,
+    complete: allCompanies.filter(c => c.status === 'complete').length,
+  }), [allCompanies, industries]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
@@ -179,20 +279,13 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="h-10 w-10 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
   return (
     <div className="font-sans min-h-screen bg-black" style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}>
+
+      {needsOnboarding && !showTour && page === 'home' && (
+        <OnboardingWelcome onStart={startTour} onSkip={completeTour} userName={user?.fullName} />
+      )}
+      {showTour && page === 'home' && <OnboardingTour onComplete={completeTour} onDismiss={dismissTour} />}
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }} data-testid="modal-delete-overlay">
@@ -226,6 +319,15 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setPage('home'); startTour(); }}
+              className="p-2 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-purple-400"
+              title="Take a tour"
+              aria-label="Take a guided tour"
+              data-testid="button-help-tour"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
             <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
               <span className="inline-flex h-5 w-5 rounded-full bg-purple-600 items-center justify-center text-white font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
@@ -233,7 +335,7 @@ export default function Dashboard() {
               <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
             </div>
             <button
-              onClick={() => { logout(); navigate('/'); }}
+              onClick={async () => { await logout(); navigate('/auth'); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
               data-testid="button-sign-out"
             >
@@ -385,7 +487,7 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
-                          <div className="text-[11px] text-[#98989f] mt-1">{(t.entities ?? []).length} entities &middot; v{t.version || '1.0'}</div>
+                          <div className="text-[11px] text-[#98989f] mt-1">{t.entities.length} entities &middot; v{t.version || '1.0'}</div>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-semibold shrink-0">Custom</span>
                       </div>
@@ -393,10 +495,10 @@ export default function Dashboard() {
 
                       <div className="mt-4">
                         <div className="flex flex-wrap gap-1.5">
-                          {(t.entities ?? []).slice(0, 4).map((e: any, i: number) => (
+                          {t.entities.slice(0, 4).map((e: any, i: number) => (
                             <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#8e8e93] font-medium">{e.label}</span>
                           ))}
-                          {(t.entities ?? []).length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{(t.entities ?? []).length - 4} more</span>}
+                          {t.entities.length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{t.entities.length - 4} more</span>}
                         </div>
                       </div>
 
@@ -410,13 +512,16 @@ export default function Dashboard() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                          <Link href={`/builder?template=${t.id}`}
+                          <button
+                            onClick={() => { setEditingTemplateId(t.id); navigate(`/builder?template=${t.id}`); }}
                             className="p-2 text-[#636366] hover:text-purple-400 hover:bg-purple-500/10 rounded-lg smooth press-sm"
                             title="Edit template"
                             data-testid={`button-edit-${t.id}`}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Link>
+                            {editingTemplateId === t.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                              : <Pencil className="h-3.5 w-3.5" />}
+                          </button>
                         </div>
                         <Link href="/processor"
                           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-500 text-[12px] font-semibold smooth press-sm shadow-sm shadow-purple-500/15"
@@ -432,45 +537,61 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* ── Sector Toolkit Templates ─────────────────────────────── */}
-            {toolkitTemplates.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">B-BBEE Sector Toolkit</h2>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/[0.15] text-emerald-400">Full Scorecard Pipeline</span>
-                </div>
-                <p className="text-[12px] text-[#636366] mb-5 max-w-2xl">Upload your financial statements, employee register, supplier schedule and contribution records — the AI extracts all the data it needs and generates your complete B-BBEE scorecard.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {toolkitTemplates.map((t, idx) => (
-                    <div key={t.key} className={`rounded-2xl border border-emerald-500/[0.12] bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5 hover:border-emerald-500/30 hover:from-emerald-500/[0.1] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`}>
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 tracking-wider">{t.sectorCode}</span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f]">{t.sectorType}</span>
+            {/* ── Recommended Sector Templates ── */}
+            {(() => {
+              const searchParams = new URLSearchParams(window.location.search);
+              const sector = searchParams.get('sector') || localStorage.getItem('okiru-last-sector');
+              const type = searchParams.get('type') || localStorage.getItem('okiru-last-type');
+              
+              if (!sector) return null;
+              
+              const recommendedTemplates = toolkitTemplates.filter(
+                t => t.sectorCode === sector && (!type || t.sectorType === type)
+              );
+              
+              if (recommendedTemplates.length === 0) return null;
+              
+              return (
+                <div className="mb-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Recommended Templates</h2>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/[0.15] text-emerald-400">Based on your details</span>
+                  </div>
+                  <p className="text-[12px] text-[#636366] mb-5 max-w-2xl">
+                    We've detected you are in the {sector} sector{type ? ` (${type})` : ''}. Here are the specialized B-BBEE scorecard templates for your business.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {recommendedTemplates.map((t, idx) => (
+                      <div key={t.key} className={`rounded-2xl border border-emerald-500/[0.12] bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5 hover:border-emerald-500/30 hover:from-emerald-500/[0.1] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`}>
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 tracking-wider">{t.sectorCode}</span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f]">{t.sectorType}</span>
+                          </div>
+                          <div className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">{t.maxPoints} pts</div>
                         </div>
-                        <div className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">{t.maxPoints} pts</div>
+                        <div className="text-[15px] font-semibold tracking-tight text-white mb-2">{t.name}</div>
+                        <p className="text-[12px] text-[#636366] leading-relaxed mb-4" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</p>
+                        {t.pillars && (
+                          <div className="flex flex-wrap gap-1 mb-4">
+                            {t.pillars.map(p => (
+                              <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] text-[#8e8e93] uppercase tracking-wide">{p}</span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-[#636366] mb-3">{t.entities.length} entities to extract</div>
+                        <Link
+                          href={`/processor?sector=${t.sectorCode}&type=${t.sectorType}&template=${t.key}`}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 text-[12px] font-semibold smooth press-sm"
+                        >
+                          Start Assessment
+                        </Link>
                       </div>
-                      <div className="text-[15px] font-semibold tracking-tight text-white mb-2">{t.name}</div>
-                      <p className="text-[12px] text-[#636366] leading-relaxed mb-4" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</p>
-                      {t.pillars && (
-                        <div className="flex flex-wrap gap-1 mb-4">
-                          {t.pillars.map(p => (
-                            <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] text-[#8e8e93] uppercase tracking-wide">{p}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-[#636366] mb-3">{(t.entities ?? []).length} entities to extract</div>
-                      <Link
-                        href={`/processor?sector=${t.sectorCode}&type=${t.sectorType}&template=${t.key}`}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 text-[12px] font-semibold smooth press-sm"
-                      >
-                        Start Assessment
-                      </Link>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="mb-4">
               <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Document Templates</h2>
@@ -489,13 +610,13 @@ export default function Dashboard() {
                   <div className="mt-4">
                     <div className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">Entities</div>
                     <ul className="mt-2 space-y-1 text-[12px] text-[#98989f]">
-                      {(t.entities ?? []).slice(0, 4).map((e, i) => (
+                      {t.entities.slice(0, 4).map((e, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <span className="h-1 w-1 rounded-full bg-purple-400 shrink-0" />
                           {e.label}
                         </li>
                       ))}
-                      {(t.entities ?? []).length > 4 && <li className="text-[#636366] font-medium">+ {(t.entities ?? []).length - 4} more</li>}
+                      {t.entities.length > 4 && <li className="text-[#636366] font-medium">+ {t.entities.length - 4} more</li>}
                     </ul>
                   </div>
 
@@ -547,24 +668,35 @@ export default function Dashboard() {
                 <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Company Scorecards</h1>
                 <p className="text-[14px] text-[#98989f] mt-1">Search and filter companies by industry and status.</p>
               </div>
+              <Link
+                href="/processor"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-purple-500/20 shrink-0 mt-8"
+                data-testid="button-new-assessment"
+              >
+                <UploadCloud className="h-4 w-4" />
+                New Assessment
+              </Link>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="rounded-2xl bg-[#1c1c1e] p-5 fade-in">
-                <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Total companies</div>
-                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-companies">{stats.total}</div>
+                <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Total Clients</div>
+                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-companies">
+                  {loadingSessions ? <Loader2 className="w-6 h-6 animate-spin text-[#636366] inline-block" /> : stats.total}
+                </div>
               </div>
               <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-1">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Industries</div>
-                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-industries">{stats.industries}</div>
-                <div className="text-[10px] text-[#636366] mt-2">{stats.industryList}</div>
+                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-industries">
+                  {loadingSessions ? '—' : stats.industries}
+                </div>
+                <div className="text-[10px] text-[#636366] mt-2">{stats.industryList || 'No sessions yet'}</div>
               </div>
               <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-2">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Statuses</div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                  <span className="px-2.5 py-1 rounded-full bg-white/[0.06] text-[#8e8e93] font-medium">New: {stats.new}</span>
                   <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 font-medium">In Progress: {stats.inProgress}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">Compliant: {stats.compliant}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">Complete: {stats.complete}</span>
                 </div>
               </div>
             </div>
@@ -611,9 +743,8 @@ export default function Dashboard() {
                       data-testid="select-status"
                     >
                       <option value="all">All</option>
-                      <option value="new">New</option>
                       <option value="in_progress">In Progress</option>
-                      <option value="compliant">Compliant</option>
+                      <option value="complete">Complete</option>
                     </select>
                   </div>
                 </div>
@@ -622,55 +753,153 @@ export default function Dashboard() {
 
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
               <div className="px-5 py-3.5 flex items-center justify-between">
-                <div className="text-[13px] font-semibold text-white">Companies</div>
-                <div className="text-[11px] text-[#98989f] font-medium" data-testid="results-count">{filteredCompanies.length} result{filteredCompanies.length !== 1 ? 's' : ''}</div>
+                <div className="text-[13px] font-semibold text-white">Client Assessments</div>
+                <div className="text-[11px] text-[#98989f] font-medium" data-testid="results-count">
+                  {loadingSessions ? <Loader2 className="w-3 h-3 animate-spin inline-block" /> : `${filteredCompanies.length} result${filteredCompanies.length !== 1 ? 's' : ''}`}
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-[13px]">
-                  <thead className="bg-white/[0.03]">
-                    <tr className="text-left text-[10px] text-[#98989f] uppercase tracking-wider">
-                      <th className="px-5 py-2.5 font-semibold">Company</th>
-                      <th className="px-5 py-2.5 font-semibold">Company ID</th>
-                      <th className="px-5 py-2.5 font-semibold">Industry</th>
-                      <th className="px-5 py-2.5 font-semibold">Status</th>
-                      <th className="px-5 py-2.5 font-semibold text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.06]">
-                    {filteredCompanies.map(c => (
-                      <tr key={c.id} className="hover:bg-white/[0.03] smooth" data-testid={`company-row-${c.id}`}>
-                        <td className="px-5 py-3.5">
-                          <div className="font-semibold text-white">{c.name}</div>
-                          <div className="text-[10px] text-[#636366] mt-0.5">Scorecard ready</div>
-                        </td>
-                        <td className="px-5 py-3.5 text-[#98989f] font-mono text-[11px]">{c.id}</td>
-                        <td className="px-5 py-3.5 text-[#8e8e93]">{c.industry}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={statusPillClass(c.status)}>{statusLabel(c.status)}</span>
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <button
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-[12px] font-medium smooth press-sm text-[#8e8e93]"
-                            onClick={() => navigate(`/toolkit/${c.id}`)}
-                            data-testid={`button-view-${c.id}`}
-                          >
-                            View
-                            <ChevronRight className="h-3 w-3 text-[#636366]" />
-                          </button>
-                        </td>
+              {loadingSessions ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                  <p className="text-[#8e8e93] text-sm">Loading assessments...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-[13px]">
+                    <thead className="bg-white/[0.03]">
+                      <tr className="text-left text-[10px] text-[#98989f] uppercase tracking-wider">
+                        <th className="px-5 py-2.5 font-semibold">Company</th>
+                        <th className="px-5 py-2.5 font-semibold">Session ID</th>
+                        <th className="px-5 py-2.5 font-semibold">Industry</th>
+                        <th className="px-5 py-2.5 font-semibold">Status</th>
+                        <th className="px-5 py-2.5 font-semibold text-right">Action</th>
                       </tr>
-                    ))}
-                    {filteredCompanies.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-5 py-12 text-center text-[14px] text-[#636366]">
-                          No companies match your filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.06]">
+                      {filteredCompanies.map((c, idx) => {
+                        const isHovered = hoveredRow === c.sessionId;
+                        const isFirst = idx === 0;
+                        const isLast = idx === filteredCompanies.length - 1;
+                        return (
+                        <tr key={c.id}
+                          className="hover:bg-white/[0.03] smooth group"
+                          data-testid={`company-row-${c.id}`}
+                          onMouseEnter={() => setHoveredRow(c.sessionId)}
+                          onMouseLeave={() => { if (deleteSessionConfirm !== c.sessionId) setHoveredRow(null); }}
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-white">{c.name}</div>
+                              {!c.isComplete && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold tracking-wider uppercase">Active</span>
+                              )}
+                              {c.isComplete && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold tracking-wider uppercase">Done</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-[#636366] mt-0.5">{c.subtitle}</div>
+                          </td>
+                          <td className="px-5 py-3.5 text-[#98989f] font-mono text-[11px]">{c.sessionId.slice(0, 18)}…</td>
+                          <td className="px-5 py-3.5 text-[#8e8e93]">{c.industry}</td>
+                          <td className="px-5 py-3.5">
+                            <span className={statusPillClass(c.status)}>{statusLabel(c.status)}</span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {deleteSessionConfirm === c.sessionId ? (
+                                <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-1.5">
+                                  <span className="text-[11px] text-red-400 font-medium">Delete?</span>
+                                  <button
+                                    onClick={() => handleDeleteSession(c.sessionId)}
+                                    disabled={isDeletingSession}
+                                    className="px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-400 text-white text-[11px] font-semibold smooth press-sm disabled:opacity-60"
+                                    data-testid={`button-confirm-delete-${c.id}`}
+                                  >
+                                    {isDeletingSession ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Yes, delete'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setDeleteSessionConfirm(null); setHoveredRow(null); }}
+                                    disabled={isDeletingSession}
+                                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-[#8e8e93] text-[11px] font-medium smooth press-sm"
+                                    data-testid={`button-cancel-delete-${c.id}`}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className={`flex items-center gap-0.5 transition-opacity duration-150 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                    <button
+                                      onClick={() => moveRow(c.sessionId, 'up')}
+                                      disabled={isFirst}
+                                      className="p-1 rounded text-[#636366] hover:text-white hover:bg-white/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
+                                      title="Move up"
+                                      data-testid={`button-move-up-${c.id}`}
+                                    >
+                                      <ChevronRight className="h-3.5 w-3.5 -rotate-90" />
+                                    </button>
+                                    <button
+                                      onClick={() => moveRow(c.sessionId, 'down')}
+                                      disabled={isLast}
+                                      className="p-1 rounded text-[#636366] hover:text-white hover:bg-white/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
+                                      title="Move down"
+                                      data-testid={`button-move-down-${c.id}`}
+                                    >
+                                      <ChevronRight className="h-3.5 w-3.5 rotate-90" />
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteSessionConfirm(c.sessionId)}
+                                      className="p-1.5 rounded-lg text-[#636366] hover:text-red-400 hover:bg-red-500/10 smooth press-sm ml-0.5"
+                                      data-testid={`button-delete-${c.id}`}
+                                      title="Delete assessment"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  {c.isComplete ? (
+                                    <Link
+                                      href={`/toolkit/${c.sessionId}`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
+                                      data-testid={`button-toolkit-${c.id}`}
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                      View in Toolkit
+                                    </Link>
+                                  ) : (
+                                    <Link
+                                      href={`/processor?session=${c.sessionId}`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[12px] font-semibold smooth press-sm"
+                                      data-testid={`button-resume-${c.id}`}
+                                    >
+                                      <Play className="h-2.5 w-2.5" />
+                                      Resume
+                                    </Link>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        );
+                      })}
+                      {filteredCompanies.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-16 text-center">
+                            <div className="flex flex-col items-center gap-3">
+                              <Building2 className="w-8 h-8 text-[#3a3a3c]" />
+                              <p className="text-[14px] text-[#636366]">No assessments yet</p>
+                              <Link href="/processor" className="text-[13px] text-purple-400 hover:text-purple-300 font-medium smooth">
+                                Start a new assessment →
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         )}
