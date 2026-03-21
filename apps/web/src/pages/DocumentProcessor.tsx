@@ -3,6 +3,7 @@ import { Link, useLocation } from 'wouter';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
+import { starterTemplates } from '@/data/starterTemplates';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
@@ -474,7 +475,7 @@ export default function DocumentProcessor() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/templates");
+      const res = await fetch("/api/entity-templates");
       if (res.ok) setTemplates(await res.json());
     } catch (err) { console.error("Error fetching templates:", err); }
     finally { setLoadingTemplates(false); }
@@ -1321,6 +1322,80 @@ export default function DocumentProcessor() {
                 <h2 className="text-2xl font-bold text-white mb-2">Assign Templates</h2>
                 <p className="text-[#8e8e93] text-sm">Choose which template to use for each document</p>
               </div>
+              {/* ── Sector-based template suggestion ── */}
+              {(() => {
+                if (!companyInfo.sector) return null;
+                const sectorMap: Record<string, string> = {
+                  'RCOGP': 'RCOGP', 'ICT': 'ICT', 'FSC': 'FSC', 'AGRI': 'AGRI',
+                  'Manufacturing': 'RCOGP', 'Retail': 'RCOGP', 'Logistics': 'RCOGP',
+                  'Telecoms': 'ICT', 'Software': 'ICT', 'Digital': 'ICT',
+                  'Financial Services': 'FSC', 'Insurance': 'FSC', 'Banking': 'FSC',
+                  'Agriculture': 'AGRI', 'Farming': 'AGRI',
+                };
+                const turnover = parseFloat(companyInfo.annualTurnover?.replace(/[^0-9.]/g, '') || '0');
+                const isQSE = turnover > 10_000_000 && turnover <= 50_000_000;
+                const sectorCode = sectorMap[companyInfo.sector];
+                if (!sectorCode) return null;
+                const suggested = starterTemplates.find(
+                  t => t.category === 'Toolkit' && t.sectorCode === sectorCode &&
+                    t.sectorType === (isQSE ? 'QSE' : 'Generic')
+                ) ?? starterTemplates.find(t => t.category === 'Toolkit' && t.sectorCode === sectorCode);
+                if (!suggested) return null;
+                const applyToAll = async () => {
+                  // Publish the toolkit template as an entity template if not present
+                  const existing = templates.find(tp => tp.name === suggested.name);
+                  if (existing) {
+                    const update: Record<string, number> = {};
+                    uploadedFiles.forEach(f => { update[String(f.id)] = existing.id; });
+                    setFileClassifications(prev => ({ ...prev, ...update }));
+                    return;
+                  }
+                  try {
+                    const res = await fetch('/api/entity-templates', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: suggested.name,
+                        description: suggested.description,
+                        version: '1.0',
+                        entities: (suggested.entities ?? []).map(e => ({
+                          label: e.label, definition: e.definition, synonyms: e.synonyms,
+                          positives: e.positives, negatives: e.negatives, zones: e.zones,
+                          keywords: e.keywords, pattern: e.pattern,
+                        })),
+                      }),
+                    });
+                    if (res.ok) {
+                      const newTmpl = await res.json();
+                      setTemplates(prev => [newTmpl, ...prev]);
+                      const update: Record<string, number> = {};
+                      uploadedFiles.forEach(f => { update[String(f.id)] = newTmpl.id; });
+                      setFileClassifications(prev => ({ ...prev, ...update }));
+                    }
+                  } catch { /* ignore */ }
+                };
+                return (
+                  <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 uppercase tracking-wider">{suggested.sectorCode}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f] font-medium">{suggested.sectorType}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">✦ Suggested for {companyInfo.sector}</span>
+                        </div>
+                        <div className="text-[15px] font-semibold text-white mb-1">{suggested.name}</div>
+                        <div className="text-[12px] text-[#636366]">{(suggested.entities ?? []).length} entities &middot; max {suggested.maxPoints} pts</div>
+                      </div>
+                      <button
+                        onClick={applyToAll}
+                        className="shrink-0 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-xl smooth press-sm"
+                      >
+                        Apply to All
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="space-y-3 mb-8">
                 {uploadedFiles.map((file) => {
                   const selectedId = fileClassifications[String(file.id)];
