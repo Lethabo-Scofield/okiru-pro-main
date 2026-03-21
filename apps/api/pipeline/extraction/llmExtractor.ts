@@ -1,6 +1,8 @@
 /**
- * LLM-based value extraction layer with anti-hallucination controls.
- * Uses raw fetch to OpenAI API (no openai npm package).
+ * LLM-based value extraction using Groq llama-3.3-70b-versatile.
+ * Matches the same model used by apps/web/server/routes.ts for consistency.
+ * Anti-hallucination controls: structural verification, JSON schema, temperature 0,
+ * explicit null instruction, and dual extraction agreement scoring.
  */
 
 export interface LLMExtractionRequest {
@@ -27,18 +29,15 @@ export interface LLMExtractionResult {
 }
 
 export interface LLMExtractorConfig {
-  apiKey: string;
-  baseUrl: string; // default https://api.openai.com/v1
-  model: string; // default gpt-4o-mini
-  temperature: number; // default 0
-  maxTokens: number; // default 500
-  timeoutMs: number; // default 30000
+  apiKey?: string;
+  model?: string;       // default llama-3.3-70b-versatile
+  temperature?: number; // default 0
+  maxTokens?: number;   // default 500
+  timeoutMs?: number;   // default 30000
 }
 
-const DEFAULT_CONFIG: Required<LLMExtractorConfig> = {
-  apiKey: '',
-  baseUrl: 'https://api.openai.com/v1',
-  model: 'gpt-4o-mini',
+const DEFAULT_CONFIG = {
+  model: 'llama-3.3-70b-versatile',
   temperature: 0,
   maxTokens: 500,
   timeoutMs: 30000,
@@ -49,14 +48,12 @@ const DEFAULT_CONFIG: Required<LLMExtractorConfig> = {
  */
 export function buildExtractionPrompt(req: LLMExtractionRequest): string {
   const aliasesStr = req.aliases.length ? req.aliases.join(', ') : 'none';
-  const positiveStr =
-    req.positiveExamples.length > 0
-      ? req.positiveExamples.map((e) => `"${e}"`).join(', ')
-      : 'none';
-  const negativeStr =
-    req.negativeExamples.length > 0
-      ? req.negativeExamples.map((e) => `"${e}"`).join(', ')
-      : 'none';
+  const positiveStr = req.positiveExamples.length > 0
+    ? req.positiveExamples.map((e) => `"${e}"`).join(', ')
+    : 'none';
+  const negativeStr = req.negativeExamples.length > 0
+    ? req.negativeExamples.map((e) => `"${e}"`).join(', ')
+    : 'none';
   const zonesStr = req.zones.length ? req.zones.join(', ') : 'any';
 
   return [
@@ -66,7 +63,7 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
     `- Definition: ${req.definition}`,
     `- Aliases (also look for these): ${aliasesStr}`,
     `- Positive examples: ${positiveStr}`,
-    `- Negative examples: ${negativeStr}`,
+    `- Negative examples (DO NOT extract these): ${negativeStr}`,
     `- Relevant zones/sections: ${zonesStr}`,
     ``,
     `## Source Text`,
@@ -79,17 +76,16 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
     ``,
     `Return JSON only: {"value": <extracted_value_or_null>, "reasoning": "<brief_explanation>", "source_quote": "<exact_quote_from_text>"}`,
     ``,
-    `CRITICAL: The extracted value MUST appear verbatim in the source text. If you cannot find it exactly, return null.`,
+    `CRITICAL: The extracted value MUST appear verbatim in the source text. If you cannot find it exactly, return null. Never guess or infer values.`,
   ].join('\n');
 }
 
 /**
- * Generate number format variants for matching (e.g. "1,000" -> "1000", "1 000").
+ * Generate number format variants for matching (e.g. "1,000" → "1000", "1 000").
  */
 function numberVariants(val: string | number): string[] {
   const str = String(val).trim();
   const variants: string[] = [str, str.toLowerCase()];
-  // Remove commas and spaces (thousand separators)
   const noSeparators = str.replace(/[\s,]/g, '');
   if (noSeparators !== str) variants.push(noSeparators);
   return variants;
@@ -100,31 +96,25 @@ function numberVariants(val: string | number): string[] {
  */
 export function structuralVerify(
   extractedValue: string | number | null,
-  sourceText: string
+  sourceText: string,
 ): boolean {
   if (extractedValue === null) return true;
-
   const strVal = String(extractedValue).trim();
   if (!strVal) return true;
 
   const sourceLower = sourceText.toLowerCase();
   const sourceNormalized = sourceText.replace(/[\s]+/g, ' ').toLowerCase();
 
-  // Case-insensitive exact substring
   if (sourceLower.includes(strVal.toLowerCase())) return true;
 
-  // Flexible whitespace: collapse internal spaces in value
   const valCollapsed = strVal.replace(/\s+/g, ' ').trim();
   if (sourceNormalized.includes(valCollapsed.toLowerCase())) return true;
 
-  // For numbers: check variants (1,000 vs 1000 vs 1 000)
-  const numMatch = strVal.match(/^-?[\d\s,\.]+%?$/);
+  const numMatch = strVal.match(/^-?[\d\s,.]+%?$/);
   if (numMatch) {
-    const variants = numberVariants(extractedValue);
-    for (const v of variants) {
+    for (const v of numberVariants(extractedValue)) {
       if (sourceLower.includes(v)) return true;
     }
-    // Also try with all separators removed from source
     const sourceNoSep = sourceText.replace(/[\s,]/g, '').toLowerCase();
     const valNoSep = strVal.replace(/[\s,]/g, '').toLowerCase();
     if (sourceNoSep.includes(valNoSep)) return true;
@@ -134,56 +124,60 @@ export function structuralVerify(
 }
 
 /**
- * Check if the OpenAI API is available (API key configured).
+ * Check if Groq API key is configured.
  */
 export function isAvailable(): boolean {
-  return !!process.env.OPENAI_API_KEY;
+  return !!process.env.GROQ_API_KEY;
 }
 
 export class LLMExtractor {
-  private config: Required<LLMExtractorConfig>;
+  private apiKey: string;
+  private model: string;
+  private temperature: number;
+  private maxTokens: number;
+  private timeoutMs: number;
 
-  constructor(partial?: Partial<LLMExtractorConfig>) {
-    const apiKey =
-      partial?.apiKey ?? process.env.OPENAI_API_KEY ?? '';
-    this.config = { ...DEFAULT_CONFIG, ...partial, apiKey };
+  constructor(partial?: LLMExtractorConfig) {
+    this.apiKey = partial?.apiKey ?? process.env.GROQ_API_KEY ?? '';
+    this.model = partial?.model ?? DEFAULT_CONFIG.model;
+    this.temperature = partial?.temperature ?? DEFAULT_CONFIG.temperature;
+    this.maxTokens = partial?.maxTokens ?? DEFAULT_CONFIG.maxTokens;
+    this.timeoutMs = partial?.timeoutMs ?? DEFAULT_CONFIG.timeoutMs;
   }
 
   /**
-   * Call OpenAI chat completions API via raw fetch.
+   * Call Groq chat completions API.
    */
-  private async callOpenAI(prompt: string): Promise<string> {
-    const { apiKey, baseUrl, model, temperature, maxTokens, timeoutMs } =
-      this.config;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not set');
+  private async callGroq(prompt: string): Promise<string> {
+    if (!this.apiKey) {
+      throw new Error('GROQ_API_KEY is not set');
     }
 
-    const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
     const body = JSON.stringify({
-      model,
+      model: this.model,
       messages: [
         {
           role: 'system',
           content:
-            'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values.',
+            'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values. Respond with valid JSON only.',
         },
         { role: 'user', content: prompt },
       ],
-      temperature,
-      max_tokens: maxTokens,
+      temperature: this.temperature,
+      max_tokens: this.maxTokens,
       response_format: { type: 'json_object' },
     });
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body,
         signal: controller.signal,
@@ -193,7 +187,7 @@ export class LLMExtractor {
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`OpenAI API error ${res.status}: ${errText}`);
+        throw new Error(`Groq API error ${res.status}: ${errText}`);
       }
 
       const data = (await res.json()) as {
@@ -201,7 +195,7 @@ export class LLMExtractor {
       };
       const content = data.choices?.[0]?.message?.content;
       if (content == null) {
-        throw new Error('OpenAI API returned empty response');
+        throw new Error('Groq API returned empty response');
       }
       return content;
     } catch (err) {
@@ -211,11 +205,11 @@ export class LLMExtractor {
   }
 
   /**
-   * Extract a single value using the LLM.
+   * Extract a single value using Groq LLM.
    */
   async extract(req: LLMExtractionRequest): Promise<LLMExtractionResult> {
     const prompt = buildExtractionPrompt(req);
-    const rawLLMResponse = await this.callOpenAI(prompt);
+    const rawLLMResponse = await this.callGroq(prompt);
 
     let parsed: { value?: unknown; reasoning?: string; source_quote?: string };
     try {
@@ -271,14 +265,14 @@ export class LLMExtractor {
    * Extract multiple values concurrently (up to 5 at a time).
    */
   async extractBatch(
-    requests: LLMExtractionRequest[]
+    requests: LLMExtractionRequest[],
   ): Promise<LLMExtractionResult[]> {
     const BATCH_SIZE = 5;
     const results: LLMExtractionResult[] = [];
     for (let i = 0; i < requests.length; i += BATCH_SIZE) {
       const batch = requests.slice(i, i + BATCH_SIZE);
       const settled = await Promise.allSettled(
-        batch.map((r) => this.extract(r))
+        batch.map((r) => this.extract(r)),
       );
       for (const s of settled) {
         if (s.status === 'fulfilled') {
@@ -301,14 +295,14 @@ export class LLMExtractor {
   }
 
   /**
-   * Dual extraction: compare LLM with rule-based value for higher confidence.
+   * Dual extraction: run LLM and compare with a rule-based value for higher confidence.
+   * Disagreement is flagged for human review.
    */
   async dualExtract(
     req: LLMExtractionRequest,
-    ruleBasedValue: string | number | null
+    ruleBasedValue: string | number | null,
   ): Promise<LLMExtractionResult> {
     const llmResult = await this.extract(req);
-
     const llmVal = llmResult.extractedValue;
     const ruleVal = ruleBasedValue;
 
@@ -339,13 +333,10 @@ export class LLMExtractor {
     }
 
     if (llmVal != null && ruleVal == null) {
-      return {
-        ...llmResult,
-        method: 'llm_fallback',
-      };
+      return { ...llmResult, method: 'llm_fallback' };
     }
 
-    // Disagree: both have values but they differ
+    // Both have values but disagree — flag for review
     return {
       ...llmResult,
       confidence: Math.min(llmResult.confidence, 0.75) * 0.5,
