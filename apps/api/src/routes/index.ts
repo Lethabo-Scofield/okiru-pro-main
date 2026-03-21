@@ -23,6 +23,7 @@ import accuracyRouter from './accuracy.js';
 import scorecardRouter from './scorecard.js';
 import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
+import extractAndScoreRouter from './extractAndScore.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -127,6 +128,9 @@ export async function registerRoutes(
 
   // Document upload & entity extraction routes
   app.use('/api/documents', documentsRouter);
+
+  // Sector toolkit: extract from document texts → full B-BBEE scorecard
+  app.use('/api', extractAndScoreRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

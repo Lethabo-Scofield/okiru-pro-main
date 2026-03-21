@@ -128,6 +128,10 @@ export default function Dashboard() {
     return base;
   }, [templateSearch]);
 
+  const toolkitTemplates = useMemo(() =>
+    staticTemplates.filter(t => t.category === 'Toolkit'),
+  []);
+
   const filteredStoredTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
     if (!q) return storedTemplates;
@@ -428,11 +432,51 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* ── Sector Toolkit Templates ─────────────────────────────── */}
+            {toolkitTemplates.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">B-BBEE Sector Toolkit</h2>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/[0.15] text-emerald-400">Full Scorecard Pipeline</span>
+                </div>
+                <p className="text-[12px] text-[#636366] mb-5 max-w-2xl">Upload your financial statements, employee register, supplier schedule and contribution records — the AI extracts all the data it needs and generates your complete B-BBEE scorecard.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {toolkitTemplates.map((t, idx) => (
+                    <div key={t.key} className={`rounded-2xl border border-emerald-500/[0.12] bg-gradient-to-br from-emerald-500/[0.06] to-[#1c1c1e] p-5 hover:border-emerald-500/30 hover:from-emerald-500/[0.1] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`}>
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 tracking-wider">{t.sectorCode}</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-[#98989f]">{t.sectorType}</span>
+                        </div>
+                        <div className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">{t.maxPoints} pts</div>
+                      </div>
+                      <div className="text-[15px] font-semibold tracking-tight text-white mb-2">{t.name}</div>
+                      <p className="text-[12px] text-[#636366] leading-relaxed mb-4" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</p>
+                      {t.pillars && (
+                        <div className="flex flex-wrap gap-1 mb-4">
+                          {t.pillars.map(p => (
+                            <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] text-[#8e8e93] uppercase tracking-wide">{p}</span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-[#636366] mb-3">{t.entities.length} entities to extract</div>
+                      <Link
+                        href={`/processor?sector=${t.sectorCode}&type=${t.sectorType}&template=${t.key}`}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 text-[12px] font-semibold smooth press-sm"
+                      >
+                        Start Assessment
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mb-4">
-              <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Starter Templates</h2>
+              <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Document Templates</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="templates-grid">
-              {filteredStaticTemplates.map((t, idx) => (
+              {filteredStaticTemplates.filter(t => t.category !== 'Toolkit').map((t, idx) => (
                 <div key={t.key} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`template-${t.key}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>

@@ -1,7 +1,7 @@
 # Okiru B-BBEE System -- Development Progress
 
-**Last Updated:** 2026-03-19  
-**Status:** Phase 1-7 Implementation Complete (Development Branch)
+**Last Updated:** 2026-03-21  
+**Status:** Phase 1-8 Implementation Complete (Production VM: https://20.164.207.196)
 
 ---
 
@@ -351,12 +351,69 @@ Stored in ArangoDB per scorecard template. Each manifest defines:
 
 ---
 
+## Phase 8: Full Frontend + Pipeline Integration (2026-03-21)
+
+### 6 Sector Toolkit Templates
+Added to `apps/web/src/data/starterTemplates.ts` (okiru-pro-main) and `src/data/starterTemplates.ts` (main_okiru_pro):
+
+| Template | Sector | Type | Max Pts | Entities |
+|----------|--------|------|---------|---------|
+| RCOGP Generic | RCOGP | Generic | 116 | 27 |
+| ICT Generic | ICT | Generic | 118 | 24 |
+| FSC Generic | FSC | Generic | 105 | 24 |
+| AGRI Generic | AGRI | Generic | 114 | 24 |
+| RCOGP QSE | RCOGP | QSE | 124 | 24 |
+| ICT QSE | ICT | QSE | 124 | 24 |
+
+Each entity has `pillarCode` + `formulaRole` + `fieldType` — fully wired to `buildPipelineResult()` inputs.
+
+### Interface Extensions
+- `StarterEntity`: +`pillarCode`, `formulaRole`, `fieldType`, `validationMin`, `validationMax`
+- `StarterTemplate`: +`sectorCode`, `sectorType`, `maxPoints`, `pillars`
+
+### `llmExtractor.ts` → Groq
+Replaced OpenAI `gpt-4o-mini` with **Groq `llama-3.3-70b-versatile`** — same model as `apps/web/server/routes.ts`. Removed OpenAI SDK dependency.
+
+### `entityToParseResult.ts` (new)
+Maps `LLMExtractionResult[]` with `formulaRole` tags → `ParseResult` for `buildPipelineResult()`:
+- Parses currency (R, M, K, B suffix), percentage (normalise 51 → 0.51), BEE level, race, gender, designation
+- Builds `shareholders[]`, `employees[]`, `trainingPrograms[]`, `suppliers[]`, `esdContributions[]`, `sedContributions[]`
+- Generates `PillarConfidence[]` report for the UI confidence bars
+
+### `POST /api/extract-and-score` (new route)
+Full auto-scorecard endpoint:
+```
+body: { documentTexts[], sectorCode, scorecardType, clientName }
+→ buildManifestForSector()
+→ LLMExtractor.extractBatch() [Groq llama-3.3-70b-versatile]
+→ entityToParseResult()
+→ buildPipelineResult()
+→ { scorecard, confidence[], extractedEntities, totalEntities }
+```
+
+### Dashboard — B-BBEE Sector Toolkit Section
+Added new section above "Document Templates" in both repos:
+- 6 sector cards in a 2×3 grid (emerald theme)
+- Each shows: sectorCode badge, Generic/QSE type, max pts, pillar chips, entity count
+- "Start Assessment" button → `/processor?sector=RCOGP&type=Generic&template=toolkit_rcogp_generic`
+- `toolkitTemplates` computed from `starterTemplates.filter(t => t.category === 'Toolkit')`
+- Renamed existing "Starter Templates" section → "Document Templates"
+
+### VM Infrastructure — https://20.164.207.196
+- `deploy/nginx.conf`: Full HTTPS config on port 443 with self-signed cert, HTTP→HTTPS redirect, CORS headers for `20.164.207.196`
+- `deploy/.env.production.template`: Updated `CORS_ORIGIN`, `DOMAIN=20.164.207.196`, `PUBLIC_URL`, `GROQ_API_KEY` slot
+- `deploy/ssl-setup.sh` (new): Generates self-signed cert with IP SAN for the VM, valid 825 days
+- `docker-compose.production.yml`: Mounts `./deploy/ssl:/etc/nginx/ssl:ro`
+
+---
+
 ## Next Steps
 
-1. **Connect Computation Engine** to the main API for ArangoDB graph evaluation
-2. **Run full batch accuracy tests** across all 6 toolkit types and fix sector-specific deviations
-3. **Integrate extraction pipeline into the main upload flow** (document format detection -> appropriate extraction path)
-4. **Deploy ArangoDB alongside MongoDB** in production environment
-5. **Add semantic search** (OpenAI embeddings) to the hybrid retriever for improved unstructured document extraction
-6. **Performance tuning** for the 24MB file parse (currently ~160s, target <60s)
-7. **UI flow integration** for template selection -> document upload -> extraction -> scorecard generation
+1. **VM deploy**: SSH into `20.164.207.196`, run `sudo ./deploy/ssl-setup.sh`, then `./deploy/update.sh`
+2. **GROQ_API_KEY**: Add key to `.env` on the VM — enables live scorecard generation from document uploads
+3. **DocumentProcessor sector auto-select**: Wire `?sector=&type=` query params to auto-set the manifest in the processor (form pre-fill)
+4. **Generate Scorecard CTA**: After extraction review on a Toolkit template, call `POST /api/extract-and-score` and navigate to the Toolkit scorecard view
+5. **ArangoDB graph evaluation**: Connect to Computation Engine for formula-graph-based scoring (replaces linear calculators)
+6. **Domain migration**: Get a domain, update `DOMAIN` in `.env`, run `certbot` for a proper TLS cert, replace self-signed
+7. **Accuracy batch tests**: Upload all 6 sector Excel samples, compare `buildPipelineResult()` output vs known correct scores
+
