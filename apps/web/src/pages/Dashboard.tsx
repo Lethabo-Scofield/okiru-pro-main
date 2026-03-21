@@ -487,7 +487,7 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
-                          <div className="text-[11px] text-[#98989f] mt-1">{t.entities.length} entities &middot; v{t.version || '1.0'}</div>
+                          <div className="text-[11px] text-[#98989f] mt-1">{(t.entities || []).length} entities &middot; v{t.version || '1.0'}</div>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-semibold shrink-0">Custom</span>
                       </div>
@@ -495,10 +495,10 @@ export default function Dashboard() {
 
                       <div className="mt-4">
                         <div className="flex flex-wrap gap-1.5">
-                          {t.entities.slice(0, 4).map((e: any, i: number) => (
+                          {(t.entities || []).slice(0, 4).map((e: any, i: number) => (
                             <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#8e8e93] font-medium">{e.label}</span>
                           ))}
-                          {t.entities.length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{t.entities.length - 4} more</span>}
+                          {(t.entities || []).length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{(t.entities || []).length - 4} more</span>}
                         </div>
                       </div>
 
