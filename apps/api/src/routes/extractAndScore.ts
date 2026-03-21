@@ -64,8 +64,8 @@ router.post('/extract-and-score', async (req, res) => {
       .join('\n\n');
 
     // 3 — Build LLM extraction requests: one per entity in the manifest
-    const requests: LLMExtractionRequest[] = manifest.entities.map((entity) => ({
-      entityName: entity.formulaRole ?? entity.name,
+    const requests: LLMExtractionRequest[] = manifest.requiredEntities.map((entity) => ({
+      entityName: entity.name,
       entityType: entity.fieldType,
       definition: entity.definition,
       aliases: entity.aliases,
@@ -92,7 +92,7 @@ router.post('/extract-and-score', async (req, res) => {
     const scorecard = buildPipelineResult(parseResult, filename);
 
     // 7 — Build confidence report for the UI
-    const requiredRoles = manifest.entities.map((e) => e.formulaRole ?? e.name);
+    const requiredRoles = manifest.requiredEntities.map((e) => e.name);
     const confidence = buildConfidenceReport(extractionResults, requiredRoles);
 
     return res.json({
