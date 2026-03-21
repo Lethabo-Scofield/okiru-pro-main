@@ -337,6 +337,15 @@ export function entityResultsToParseResult(
       },
     ],
     errors: [],
+    warnings: [],
+    stats: {
+      totalSheets: 1,
+      matchedSheets: 1,
+      entitiesExtracted: results.filter((r) => r.extractedValue !== null).length,
+      confidence: results.length > 0
+        ? results.reduce((s, r) => s + r.confidence, 0) / results.length
+        : 0,
+    },
     logs: [
       {
         message: `entityToParseResult: mapped ${results.length} extraction results at ${now}`,
