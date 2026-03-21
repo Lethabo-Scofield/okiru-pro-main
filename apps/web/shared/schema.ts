@@ -267,6 +267,7 @@ const processorSessionSchema = new Schema({
   extractionResults: { type: Schema.Types.Mixed, default: [] },
   docStatuses: { type: Schema.Types.Mixed, default: {} },
   isComplete: { type: Boolean, default: false },
+  scorecardResult: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

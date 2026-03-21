@@ -950,6 +950,73 @@ Respond ONLY with a valid JSON array.`;
     }
   });
 
+  app.get("/api/sector-templates", async (_req, res) => {
+    try {
+      const { listSectorConfigs } = await import('./pipeline');
+      const configs = listSectorConfigs();
+      res.json(configs);
+    } catch (error: any) {
+      console.error("Error fetching sector templates:", error);
+      res.status(500).json({ error: "Failed to fetch sector templates" });
+    }
+  });
+
+  app.post("/api/extract-and-score", requireAuth, async (req, res) => {
+    try {
+      const { documentTexts, sectorCode, scorecardType, clientName } = req.body;
+      
+      if (!Array.isArray(documentTexts) || documentTexts.length === 0 || !sectorCode || !scorecardType) {
+        return res.status(400).json({ error: "documentTexts, sectorCode, and scorecardType are required" });
+      }
+
+      const pipeline = await import('./pipeline');
+      const manifest = pipeline.buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      
+      const combinedText = documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
+      
+      const requests = manifest.requiredEntities.map((entity: any) => ({
+        entityName: entity.name,
+        entityType: entity.fieldType,
+        definition: entity.definition,
+        aliases: entity.aliases,
+        positiveExamples: entity.positiveExamples,
+        negativeExamples: entity.negativeExamples,
+        zones: entity.zones,
+        sourceText: combinedText,
+        sourcePageId: 'combined',
+      }));
+
+      const extractor = new pipeline.LLMExtractor();
+      const extractionResults = await extractor.extractBatch(requests);
+
+      const parseResult = pipeline.entityResultsToParseResult(extractionResults, {
+        clientName: clientName || 'Unnamed Client',
+        industrySector: sectorCode,
+        applicableScorecard: scorecardType,
+      });
+
+      const filename = `${sectorCode}_${scorecardType}_${clientName || 'entity'}`;
+      const scorecard = pipeline.buildPipelineResult(parseResult, filename);
+      
+      const requiredRoles = manifest.requiredEntities.map((e: any) => e.name);
+      const confidence = pipeline.buildConfidenceReport(extractionResults, requiredRoles);
+
+      return res.json({
+        success: true,
+        scorecard,
+        confidence,
+        extractedEntities: extractionResults.filter(r => r.extractedValue !== null).length,
+        totalEntities: extractionResults.length,
+        sectorCode,
+        scorecardType,
+        clientName: clientName || parseResult.client.name,
+      });
+    } catch (error: any) {
+      console.error("Error in extract-and-score:", error);
+      res.status(500).json({ error: error.message || "Failed to extract and score" });
+    }
+  });
+
   app.get("/api/processor-sessions", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
