@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { EntityTemplateModel } from '../../../models.js';
+import { EntityTemplateModel } from '../../models.js';
 
 const router = Router();
 
