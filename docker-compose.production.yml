@@ -57,7 +57,7 @@ services:
     restart: always
     depends_on:
       arangodb:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     environment:
@@ -84,7 +84,7 @@ services:
       mongodb:
         condition: service_healthy
       arangodb:
-        condition: service_healthy
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: "5000"
@@ -95,7 +95,8 @@ services:
       ARANGO_PASSWORD: ${ARANGO_PASSWORD:-Okiru123!}
       COMPUTE_ENGINE_URL: http://computation-engine:8000
       SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://okiru.yourdomain.com}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://20.164.207.196,http://20.164.207.196}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     ports:
       - "127.0.0.1:5000:5000"
 
