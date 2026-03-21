@@ -1,26 +1,17 @@
-import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@toolkit/lib/auth";
-import { AppLoader } from "@toolkit/components/Loader";
 import AuthPage from "@toolkit/pages/AuthPage";
+import { useAuth } from "@toolkit/lib/auth";
+import { useEffect } from "react";
 
 export default function AuthWrapper() {
   const [, navigate] = useLocation();
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && user) {
-      navigate("/dashboard");
+    if (user) {
+      navigate("/dashboard", { replace: true });
     }
-  }, [user, isLoading, navigate]);
-
-  if (isLoading) {
-    return <AppLoader />;
-  }
-
-  if (user) {
-    return <AppLoader />;
-  }
+  }, [user, navigate]);
 
   return <AuthPage />;
 }

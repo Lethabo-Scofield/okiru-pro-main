@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
@@ -7,8 +7,8 @@ import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
-  Circle, Zap, ListChecks, Download, CheckCheck, Pencil, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion
+  Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
+  FileImage, File, FileQuestion, Building2
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -37,6 +37,95 @@ interface UploadedFile {
   textContent: string;
 }
 
+interface CompanyInfo {
+  name: string;
+  sector: string;
+  registrationNumber: string;
+  annualTurnover: string;
+  employees: string;
+  financialYearEnd: string;
+  address: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  currentBBEELevel: string;
+  notes: string;
+  logo?: string;
+}
+
+interface ProcessorSession {
+  id: string;
+  companyInfo: CompanyInfo;
+  createdAt: string;
+  updatedAt: string;
+  currentStep: string;
+  filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
+  fileClassifications: Record<string, number>;
+  extractionResults: any[];
+  docStatuses: Record<number, string>;
+  isComplete: boolean;
+}
+
+const BBEE_SECTORS = [
+  'Agriculture', 'Construction', 'Education', 'Financial Services',
+  'Healthcare', 'Information Technology', 'Manufacturing', 'Mining',
+  'Professional Services', 'Retail', 'Transportation', 'Other',
+];
+
+const BBEE_LEVELS = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Non-Compliant', 'Not Verified'];
+const FYE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const EMPTY_COMPANY_INFO: CompanyInfo = {
+  name: '', sector: '', registrationNumber: '', annualTurnover: '', employees: '',
+  financialYearEnd: '', address: '', contactName: '', contactEmail: '',
+  contactPhone: '', currentBBEELevel: '', notes: '',
+};
+
+function generateSessionId() {
+  return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSession | null> {
+  try {
+    const res = await fetch('/api/processor-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: session.id,
+        companyInfo: session.companyInfo,
+        currentStep: session.currentStep,
+        filesData: session.filesData,
+        fileClassifications: session.fileClassifications,
+        extractionResults: session.extractionResults,
+        docStatuses: session.docStatuses,
+        isComplete: session.isComplete,
+      }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function apiLoadSession(sessionId: string): Promise<ProcessorSession | null> {
+  try {
+    const res = await fetch(`/api/processor-sessions/${sessionId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      id: data.sessionId || data.id,
+      companyInfo: data.companyInfo,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      currentStep: data.currentStep,
+      filesData: data.filesData || [],
+      fileClassifications: data.fileClassifications || {},
+      extractionResults: data.extractionResults || [],
+      docStatuses: data.docStatuses || {},
+      isComplete: data.isComplete || false,
+    };
+  } catch { return null; }
+}
+
 const FileIcon = ({ type, className }: { type: string; className?: string }) => {
   const props = { className: className || "w-4 h-4" };
   switch (type) {
@@ -60,8 +149,8 @@ function getEntityColors(_dark?: boolean) {
   ];
 }
 
-function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity, isDark = true }: {
-  text: string; entities: any[]; isDark?: boolean;
+function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity }: {
+  text: string; entities: any[];
   hoveredEntity: number | null; onHoverEntity: (idx: number | null) => void;
 }) {
   const highlighted = useMemo(() => {
@@ -107,42 +196,44 @@ function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity, isD
   }, [text, entities]);
 
   return (
-    <pre className="text-sm text-[#d1d1d6] whitespace-pre-wrap font-mono leading-relaxed break-words">
-      {highlighted.map((seg, i) => {
-        if (!seg.highlight) return <span key={i}>{seg.text}</span>;
-        const colors = getEntityColors(isDark);
-        const color = colors[seg.entityIdx % colors.length];
-        const isHovered = hoveredEntity === seg.entityIdx;
-        const entityName = entities[seg.entityIdx]?.name || '';
-        return (
-          <span key={i} className="relative inline-block group/mark"
-            onMouseEnter={() => onHoverEntity(seg.entityIdx)}
-            onMouseLeave={() => onHoverEntity(null)}
-          >
-            <span className="absolute -top-5 left-0 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap px-1.5 py-0.5 rounded-t-md z-10 pointer-events-none"
-              style={{
-                backgroundColor: color.underline,
-                color: '#fff',
-                opacity: isHovered ? 1 : 0,
-                transition: 'opacity 0.15s',
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+      <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif', letterSpacing: '0' }}>
+        {highlighted.map((seg, i) => {
+          if (!seg.highlight) return <span key={i}>{seg.text}</span>;
+          const colors = getEntityColors(false);
+          const color = colors[seg.entityIdx % colors.length];
+          const isHovered = hoveredEntity === seg.entityIdx;
+          const entityName = entities[seg.entityIdx]?.name || '';
+          return (
+            <span key={i} className="relative inline-block group/mark"
+              onMouseEnter={() => onHoverEntity(seg.entityIdx)}
+              onMouseLeave={() => onHoverEntity(null)}
+            >
+              <span className="absolute -top-5 left-0 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap px-1.5 py-0.5 rounded-t-md z-10 pointer-events-none"
+                style={{
+                  backgroundColor: color.underline,
+                  color: '#fff',
+                  opacity: isHovered ? 1 : 0,
+                  transition: 'opacity 0.15s',
+                }}>
+                {entityName}
+              </span>
+              <mark style={{
+                backgroundColor: isHovered ? color.bg.replace('0.15', '0.35') : color.bg,
+                borderBottom: `3px solid ${color.underline}`,
+                color: '#111827',
+                padding: '2px 3px',
+                borderRadius: '3px',
+                transition: 'background-color 0.15s',
+                fontWeight: isHovered ? 600 : 400,
               }}>
-              {entityName}
+                {seg.text}
+              </mark>
             </span>
-            <mark style={{
-              backgroundColor: isHovered ? color.bg.replace('0.15', '0.35') : color.bg,
-              borderBottom: `3px solid ${color.underline}`,
-              color: color.text,
-              padding: '2px 4px',
-              borderRadius: '4px',
-              transition: 'background-color 0.15s',
-              fontWeight: isHovered ? 600 : 400,
-            }}>
-              {seg.text}
-            </mark>
-          </span>
-        );
-      })}
-    </pre>
+          );
+        })}
+      </p>
+    </div>
   );
 }
 
@@ -355,14 +446,19 @@ function PDFDocumentViewer({ file, entities, hoveredEntity, onHoverEntity }: {
 export default function DocumentProcessor() {
   const { isDark } = useTheme();
   const { toast } = useToast();
+  const [location] = useLocation();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'upload' | 'classify' | 'extract' | 'processing' | 'review'>('upload');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review'>('company-info');
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isSavingSession, setIsSavingSession] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(() => {
+    return new URLSearchParams(window.location.search).has('session');
+  });
+  const sessionCreatedAt = useRef<string>(new Date().toISOString());
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [fileClassifications, setFileClassifications] = useState<Record<string, number>>({});
   const [extractionResults, setExtractionResults] = useState<any[]>([]);
-  const [currentEdit, setCurrentEdit] = useState<{ docIdx: number; entIdx: number } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [editConfidence, setEditConfidence] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const [templates, setTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -385,6 +481,98 @@ export default function DocumentProcessor() {
   }, []);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('session');
+    if (!sid) return;
+    setIsLoadingSession(true);
+    apiLoadSession(sid).then(sess => {
+      setIsLoadingSession(false);
+      if (!sess) {
+        toast({ title: 'Session not found', description: 'Could not resume that session.', variant: 'destructive' });
+        return;
+      }
+      setSessionId(sess.id);
+      sessionCreatedAt.current = sess.createdAt;
+      setCompanyInfo({ ...EMPTY_COMPANY_INFO, ...sess.companyInfo });
+      setFileClassifications(sess.fileClassifications || {});
+      setExtractionResults(sess.extractionResults || []);
+      if (sess.filesData && sess.filesData.length > 0) {
+        const NativeFile = window.File as typeof globalThis.File;
+        const restored: UploadedFile[] = sess.filesData.map((fd: any) => ({
+          id: fd.id,
+          file: new NativeFile([], fd.name, { type: fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream' }),
+          name: fd.name,
+          size: fd.size,
+          type: fd.type,
+          uploadProgress: 100,
+          status: 'ready' as const,
+          textContent: fd.textContent || '',
+        }));
+        setUploadedFiles(restored);
+      }
+      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review'];
+      const step = sess.currentStep && validSteps.includes(sess.currentStep)
+        ? sess.currentStep
+        : sess.extractionResults && sess.extractionResults.length > 0 ? 'review'
+        : sess.filesData && sess.filesData.length > 0 ? 'classify'
+        : 'upload';
+      setCurrentPage(step as any);
+      toast({ title: `Resumed: ${sess.companyInfo.name}`, description: 'Your session has been loaded.' });
+    });
+  }, [location]);
+
+  const persistSession = useCallback(async (step: string, opts?: {
+    ci?: CompanyInfo;
+    files?: UploadedFile[];
+    classifications?: Record<string, number>;
+    results?: any[];
+    statuses?: Record<number, string>;
+    complete?: boolean;
+  }) => {
+    const sid = sessionId || generateSessionId();
+    if (!sessionId) setSessionId(sid);
+    const ci = opts?.ci ?? companyInfo;
+    if (!ci.name) return sid;
+    const sess: ProcessorSession = {
+      id: sid,
+      companyInfo: ci,
+      createdAt: sessionCreatedAt.current,
+      updatedAt: new Date().toISOString(),
+      currentStep: step,
+      filesData: (opts?.files ?? uploadedFiles).map(f => ({
+        id: f.id, name: f.name, size: f.size, type: f.type, textContent: f.textContent,
+      })),
+      fileClassifications: opts?.classifications ?? fileClassifications,
+      extractionResults: opts?.results ?? extractionResults,
+      docStatuses: opts?.statuses ?? docStatuses,
+      isComplete: opts?.complete ?? false,
+    };
+    await apiSaveSession(sess);
+    return sid;
+  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses]);
+
+  const lastSavedFilesRef = useRef<string>('');
+  useEffect(() => {
+    if (!sessionId || currentPage !== 'upload') return;
+    const allReady = uploadedFiles.length > 0 && uploadedFiles.every(f => f.status === 'ready');
+    if (!allReady) return;
+    const key = uploadedFiles.map(f => f.id + f.status).join(',');
+    if (key === lastSavedFilesRef.current) return;
+    lastSavedFilesRef.current = key;
+    persistSession('upload', { files: uploadedFiles });
+  }, [uploadedFiles, currentPage, sessionId, persistSession]);
+
+  const lastSavedClassifyRef = useRef<string>('');
+  useEffect(() => {
+    if (!sessionId || currentPage !== 'classify') return;
+    const key = JSON.stringify(fileClassifications);
+    if (key === lastSavedClassifyRef.current || key === '{}') return;
+    lastSavedClassifyRef.current = key;
+    const t = setTimeout(() => { persistSession('classify', { classifications: fileClassifications }); }, 800);
+    return () => clearTimeout(t);
+  }, [fileClassifications, currentPage, sessionId, persistSession]);
 
   const extractPdfText = async (file: File): Promise<string> => {
     try {
@@ -454,27 +642,19 @@ export default function DocumentProcessor() {
       uploadProgress: 0, status: 'uploading' as const, textContent: '',
     }));
     setUploadedFiles(prev => [...prev, ...newFiles]);
-    (async () => {
-      for (const newFile of newFiles) {
-        try {
-          const textContent = await readFileText(newFile.file);
-          let prog = 0;
-          const interval = setInterval(() => {
-            prog += Math.random() * 30 + 10;
-            if (prog >= 100) {
-              clearInterval(interval);
-              setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent } : f));
-            } else {
-              setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: Math.min(prog, 99) } : f));
-            }
-          }, 150);
-        } catch (err) {
-          console.error("Error reading file:", newFile.name, err);
-          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 0, status: 'ready' as const, textContent: '' } : f));
-          toast({ title: "File read error", description: `Could not read "${newFile.name}".`, variant: "destructive" });
+    newFiles.forEach(async (newFile) => {
+      const textContent = await readFileText(newFile.file);
+      let prog = 0;
+      const interval = setInterval(() => {
+        prog += Math.random() * 30 + 10;
+        if (prog >= 100) {
+          clearInterval(interval);
+          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent } : f));
+        } else {
+          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: Math.min(prog, 99) } : f));
         }
-      }
-    })();
+      }, 150);
+    });
   };
 
   const removeFile = (fileId: number) => {
@@ -522,6 +702,7 @@ export default function DocumentProcessor() {
         templateName: documents[i].templateName, entities: [],
       });
       setExtractionResults(finalResults);
+      persistSession('review', { results: finalResults });
       setTimeout(() => setCurrentPage('review'), 600);
     };
 
@@ -650,9 +831,7 @@ export default function DocumentProcessor() {
                 entities: data.entities || [],
               };
             }
-          } catch (parseErr) {
-            if (process.env.NODE_ENV === 'development') console.warn("SSE parse error:", parseErr);
-          }
+          } catch {}
         }
       };
 
@@ -687,24 +866,13 @@ export default function DocumentProcessor() {
     }
   };
 
-  const editInputRef = useRef<HTMLInputElement>(null);
-
-  const openEdit = (docIdx: number, entIdx: number) => {
-    const entity = extractionResults[docIdx]?.entities[entIdx];
-    if (!entity) return;
-    setCurrentEdit({ docIdx, entIdx });
-    setEditValue(entity.value || '');
-    setEditConfidence(entity.confidence || 0);
-    setTimeout(() => editInputRef.current?.focus(), 50);
-  };
-  const saveEdit = () => {
-    if (!currentEdit) return;
-    const { docIdx, entIdx } = currentEdit;
+  const inlineEditEntity = (docIdx: number, entIdx: number, newValue: string) => {
     const r = structuredClone(extractionResults);
-    r[docIdx].entities[entIdx] = { ...r[docIdx].entities[entIdx], value: editValue, confidence: editConfidence, status: 'edited' };
+    const entity = r[docIdx]?.entities[entIdx];
+    if (!entity) return;
+    entity.value = newValue;
+    entity.status = 'edited';
     setExtractionResults(r);
-    setCurrentEdit(null);
-    toast({ title: "Entity updated", description: `Value saved for "${r[docIdx].entities[entIdx].name}"` });
   };
   const approveEntity = (docIdx: number, entIdx: number) => {
     const r = structuredClone(extractionResults);
@@ -771,58 +939,18 @@ export default function DocumentProcessor() {
     return name.endsWith('.pdf') || activeDocFile.file.type === 'application/pdf';
   }, [activeDocFile]);
 
-  const stepIdx = currentPage === 'upload' ? 0 : currentPage === 'classify' ? 1 : (currentPage === 'extract' || currentPage === 'processing') ? 2 : 3;
+  const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : 4;
 
   return (
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
-      {currentEdit !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xl" onClick={(e) => { if (e.target === e.currentTarget) setCurrentEdit(null); }} style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div className="bg-[#1c1c1e] rounded-2xl shadow-2xl w-full max-w-md p-6 scale-in" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setCurrentEdit(null); }}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-white">Edit Entity</h3>
-              <button onClick={() => setCurrentEdit(null)} className="p-1.5 text-[#98989f] hover:text-white rounded-[10px] hover:bg-[#2c2c2e] smooth press-sm">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {currentEdit && extractionResults[currentEdit.docIdx]?.entities[currentEdit.entIdx] && (
-              <div className="text-xs text-[#8e8e93] mb-4 px-2 py-1.5 bg-[#2c2c2e] rounded-lg">
-                <span className="font-medium text-[#d1d1d6]">{extractionResults[currentEdit.docIdx].entities[currentEdit.entIdx].name}</span>
-                <span className="mx-1.5 text-[#636366]">|</span>
-                {extractionResults[currentEdit.docIdx].fileName}
-              </div>
-            )}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-[#d1d1d6] uppercase tracking-wider mb-2">Value</label>
-                <input ref={editInputRef} type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                  className="w-full bg-[#2c2c2e] border border-transparent rounded-xl px-3 py-2.5 text-sm text-white focus:border-purple-500/50 focus:outline-none focus:ring-1 focus:ring-purple-500/30 transition-all" data-testid="input-edit-value" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-[#d1d1d6] uppercase tracking-wider">Confidence</label>
-                  <span className={`text-sm font-bold ${editConfidence >= 80 ? 'text-green-400' : editConfidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{editConfidence}%</span>
-                </div>
-                <input type="range" min="0" max="100" value={editConfidence} onChange={(e) => setEditConfidence(Number(e.target.value))}
-                  className="w-full accent-purple-500" data-testid="input-edit-confidence" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setCurrentEdit(null)} className="flex-1 py-2.5 bg-[#2c2c2e] text-white rounded-xl hover:bg-[#3a3a3c] smooth press-sm text-[13px] font-medium">Cancel</button>
-              <button onClick={saveEdit} className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-500 smooth press-sm text-[13px] font-semibold" data-testid="button-save-edit">
-                Save <span className="text-white/60 text-[11px] ml-1">Enter</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <header className="h-14 flex items-center justify-between px-5 shrink-0 z-20 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors duration-200 press-sm group" data-testid="btn-back">
+          <button onClick={() => window.history.back()} className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors duration-200 press-sm group" data-testid="btn-back">
             <ChevronLeft className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
             <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg" />
-          </Link>
+          </button>
           <span className="text-lg font-semibold tracking-tight">
             <span className="text-purple-400">Okiru</span><span className="text-white"> Processor</span>
           </span>
@@ -841,12 +969,12 @@ export default function DocumentProcessor() {
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          {['Upload', 'Template', 'Extract', 'Review'].map((label, idx) => {
-            const StepIcons = [CloudUpload, Puzzle, Cpu, SearchCheck];
-            const pageMap = ['upload', 'classify', 'extract', 'review'] as const;
+          {['Company', 'Upload', 'Template', 'Extract', 'Review'].map((label, idx) => {
+            const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck];
+            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review'] as const;
             const isComplete = idx < stepIdx;
             const isCurrent = idx === stepIdx;
-            const canNavigate = isComplete;
+            const canNavigate = isComplete && currentPage !== 'company-info';
             const StepIcon = StepIcons[idx];
             return (
               <React.Fragment key={label}>
@@ -857,7 +985,7 @@ export default function DocumentProcessor() {
                   </div>
                   <span className={`text-[13px] font-medium hidden sm:inline smooth ${isComplete ? 'text-green-400 group-hover:text-green-300' : isCurrent ? 'text-purple-400' : 'text-[#636366]'}`}>{label}</span>
                 </div>
-                {idx < 3 && (
+                {idx < 4 && (
                   <div className="flex-1 h-0.5 bg-[#1c1c1e] mx-4 rounded-full overflow-hidden">
                     <div className="h-full bg-green-500 transition-all duration-700 rounded-full" style={{ width: isComplete ? '100%' : '0%' }}></div>
                   </div>
@@ -870,6 +998,225 @@ export default function DocumentProcessor() {
 
       <main className="flex-1 overflow-y-auto">
         <div className={`${currentPage === 'review' ? '' : 'max-w-3xl mx-auto'} p-6`}>
+
+          {currentPage === 'company-info' && (
+            <div>
+              {isLoadingSession ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-4">
+                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                  <p className="text-[#8e8e93] text-sm">Loading session...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto mb-4">
+                      <Building2 className="w-7 h-7" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-1">New Client Assessment</h2>
+                    <p className="text-[#8e8e93] text-sm">Enter the client company's details before uploading documents</p>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-3">Company Logo</p>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-20 h-20 rounded-2xl bg-[#1c1c1e] border-2 border-dashed border-[#3a3a3c] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
+                        onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                        data-testid="logo-upload-zone"
+                      >
+                        {companyInfo.logo ? (
+                          <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
+                        ) : (
+                          <Building2 className="w-7 h-7 text-[#3a3a3c]" />
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          id="logo-input"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          data-testid="input-logo"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 2 * 1024 * 1024) {
+                              toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' });
+                              e.target.value = '';
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = '';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                          className="px-4 py-2 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-[#3a3a3c]"
+                          data-testid="button-upload-logo"
+                        >
+                          {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
+                        </button>
+                        {companyInfo.logo && (
+                          <button
+                            type="button"
+                            onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
+                            className="ml-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[12px] font-medium smooth press-sm"
+                            data-testid="button-remove-logo"
+                          >
+                            Remove
+                          </button>
+                        )}
+                        <p className="text-[11px] text-[#636366] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Company Details</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Company Name <span className="text-red-400">*</span></label>
+                      <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. Acme Holdings (Pty) Ltd"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-company-name" autoFocus />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Registration Number</label>
+                      <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
+                        placeholder="e.g. 2021/123456/07"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-company-regno" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Industry Sector <span className="text-red-400">*</span></label>
+                      <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-company-sector">
+                        <option value="">Select a sector...</option>
+                        {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Annual Turnover (ZAR)</label>
+                      <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
+                        placeholder="e.g. R 50,000,000"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-annual-turnover" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Number of Employees</label>
+                      <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
+                        placeholder="e.g. 150"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-employees" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Financial Year End</label>
+                      <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-fye">
+                        <option value="">Select month...</option>
+                        {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Current B-BBEE Level</label>
+                      <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-bbee-level">
+                        <option value="">Select level...</option>
+                        {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Physical Address</label>
+                      <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
+                        placeholder="e.g. 10 Mandela Square, Sandton, 2196"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-address" />
+                    </div>
+                  </div>
+
+                  <div className="mb-3 mt-6">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Contact Person</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Full Name</label>
+                      <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
+                        placeholder="e.g. Jane Dlamini"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-name" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Email Address</label>
+                      <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
+                        placeholder="e.g. jane@company.co.za"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-email" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Phone Number</label>
+                      <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
+                        placeholder="e.g. +27 82 123 4567"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-phone" />
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Additional Notes</p>
+                  </div>
+                  <div className="mb-8">
+                    <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
+                      placeholder="Any additional context about this client or assessment..."
+                      rows={3}
+                      className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all resize-none"
+                      data-testid="input-notes" />
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!companyInfo.name.trim() || !companyInfo.sector) {
+                        toast({ title: "Missing information", description: "Please provide a company name and sector.", variant: "destructive" });
+                        return;
+                      }
+                      setIsSavingSession(true);
+                      const sid = sessionId || generateSessionId();
+                      if (!sessionId) {
+                        setSessionId(sid);
+                        sessionCreatedAt.current = new Date().toISOString();
+                      }
+                      await apiSaveSession({
+                        id: sid, companyInfo,
+                        createdAt: sessionCreatedAt.current,
+                        updatedAt: new Date().toISOString(),
+                        currentStep: 'upload',
+                        filesData: [], fileClassifications: {},
+                        extractionResults: [], docStatuses: {}, isComplete: false,
+                      });
+                      setIsSavingSession(false);
+                      setCurrentPage('upload');
+                    }}
+                    disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
+                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press"
+                    data-testid="button-next-upload"
+                  >
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</>
+                      : <>Continue to Upload <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {currentPage === 'upload' && (
             <div>
@@ -953,10 +1300,16 @@ export default function DocumentProcessor() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => allReady && setCurrentPage('classify')} disabled={!allReady}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
-                    Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
-                  </button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setCurrentPage('company-info')}
+                      className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-company-info">
+                      <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
+                    </button>
+                    <button onClick={async () => { if (allReady) { await persistSession('classify'); setCurrentPage('classify'); } }} disabled={!allReady}
+                      className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
+                      Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -993,7 +1346,7 @@ export default function DocumentProcessor() {
                         <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                           <div className="flex flex-wrap gap-1.5">
                             {selectedTemplate.entities.map((ent, i) => (
-                              <span key={ent.label ? `${ent.label}-${i}` : i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
+                              <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
                                 {ent.label}
                               </span>
                             ))}
@@ -1008,7 +1361,7 @@ export default function DocumentProcessor() {
                 <button onClick={() => setCurrentPage('upload')} className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-upload">
                   <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
                 </button>
-                <button onClick={() => allClassified && setCurrentPage('extract')} disabled={!allClassified}
+                <button onClick={async () => { if (allClassified) { await persistSession('extract'); setCurrentPage('extract'); } }} disabled={!allClassified}
                   className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-extract">
                   Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
                 </button>
@@ -1094,15 +1447,6 @@ export default function DocumentProcessor() {
                             ))}
                           </div>
                         )}
-                        {!anyProcessing && status !== 'done' && (
-                          <button
-                            onClick={() => extractSingleDocument(idx)}
-                            className="px-3 py-1.5 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[#d1d1d6] hover:text-white rounded-[10px] text-[11px] font-medium smooth press-sm"
-                            data-testid={`button-extract-single-${idx}`}
-                          >
-                            <Zap className="w-2.5 h-2.5 mr-1 inline-block" />Extract
-                          </button>
-                        )}
                         {status === 'done' && (
                           <span className="text-xs text-green-400 font-medium inline-flex items-center gap-1"><Check className="w-2.5 h-2.5" />Done</span>
                         )}
@@ -1158,55 +1502,70 @@ export default function DocumentProcessor() {
           })()}
 
 
-          {currentPage === 'review' && extractionResults.length > 0 && (
+          {currentPage === 'review' && extractionResults.length > 0 && (() => {
+            const isLastDoc = activeReviewDoc === extractionResults.length - 1;
+            const handleNext = async () => {
+              setIsSavingSession(true);
+              await persistSession('review', { results: extractionResults, complete: false });
+              setIsSavingSession(false);
+              setActiveReviewDoc(prev => prev + 1);
+              setHoveredEntity(null);
+              setReviewFilter('all');
+            };
+            const handleSubmit = async () => {
+              setIsSavingSession(true);
+              await persistSession('review', { results: extractionResults, complete: true });
+              setIsSavingSession(false);
+              setIsSubmitted(true);
+              toast({ title: "Assessment complete", description: `${totalEntities} entities across ${extractionResults.length} document${extractionResults.length !== 1 ? 's' : ''} — view in Toolkit` });
+            };
+            return (
             <div className="flex flex-col h-full -m-6">
               <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentPage('extract')} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
+                  <button onClick={() => {
+                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); }
+                    else setCurrentPage('extract');
+                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <h2 className="text-lg font-semibold text-white">Review Results</h2>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="px-2 py-1 bg-[#1c1c1e] text-[#d1d1d6] rounded-lg">{totalEntities} entities</span>
-                    <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded-lg">{approvedCount} approved</span>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-white leading-tight">Review Results</h2>
+                    <p className="text-[11px] text-[#636366] truncate max-w-[240px]">{extractionResults[activeReviewDoc]?.fileName}</p>
                   </div>
+                  {extractionResults.length > 1 && (
+                    <span className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] rounded-lg text-[11px] font-medium">
+                      {activeReviewDoc + 1} / {extractionResults.length}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={exportResults} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-[10px] text-[13px] smooth press-sm" data-testid="button-export-results">
-                    <Download className="w-3.5 h-3.5 mr-1.5 inline-block" />JSON
-                  </button>
-                  <button onClick={exportCSV} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-[10px] text-[13px] smooth press-sm" data-testid="button-export-csv">
-                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 inline-block" />CSV
-                  </button>
-                  <button onClick={() => { setIsSubmitted(true); toast({ title: "Results submitted", description: `${totalEntities} entities across ${extractionResults.length} documents` }); }} disabled={isSubmitted}
-                    className={`px-4 py-1.5 rounded-[10px] font-semibold text-[13px] smooth press-sm ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`} data-testid="button-submit">
-                    {isSubmitted ? <><Check className="w-3.5 h-3.5 mr-1.5 inline-block" />Submitted</> : 'Submit All'}
-                  </button>
+                  {isLastDoc ? (
+                    <button onClick={handleSubmit} disabled={isSubmitted || isSavingSession}
+                      className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
+                      data-testid="button-submit">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
+                        : isSubmitted ? <><Check className="w-3.5 h-3.5" />Complete</>
+                        : 'Submit & Complete'}
+                    </button>
+                  ) : (
+                    <button onClick={handleNext} disabled={isSavingSession}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-60"
+                      data-testid="button-next-doc">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
+                        : <>Next Document <ChevronRight className="w-3.5 h-3.5" /></>}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {extractionResults.length > 1 && (
-                <div className="px-6 py-3 bg-[#0a0a0a] flex gap-2 overflow-x-auto shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
-                  {extractionResults.map((result: any, idx: number) => {
-                    const ext = result.fileName.split('.').pop()?.toUpperCase() || '';
-                    const iconColor = ext === 'PDF' ? 'text-red-400' : ext === 'CSV' ? 'text-green-400' : ext === 'DOC' || ext === 'DOCX' ? 'text-purple-400' : 'text-[#636366]';
-                    return (
-                      <button key={idx} onClick={() => setActiveReviewDoc(idx)}
-                        className={`px-3 py-2 rounded-[10px] text-[13px] font-medium whitespace-nowrap smooth press-sm flex items-center gap-1.5 ${activeReviewDoc === idx ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.06]'}`} data-testid={`tab-doc-${idx}`}>
-                        <FileIcon type={ext} className={`w-3.5 h-3.5 ${iconColor}`} />{result.fileName}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                <div className="w-1/2 overflow-y-auto bg-[#0a0a0a]" style={{ borderRight: '1px solid #2c2c2e' }}>
-                  <div className="px-5 py-4 sticky top-0 bg-[#0a0a0a] z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
+                <div className="w-1/2 overflow-y-auto bg-[#f5f5f5]" style={{ borderRight: '1px solid #2c2c2e' }}>
+                  <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-[#636366]" />
-                      <span className="text-sm font-medium text-[#d1d1d6]">{isPdfFile ? 'Document Viewer' : 'Document Preview'}</span>
-                      {!isPdfFile && <span className="text-xs text-[#636366] ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700">{isPdfFile ? 'Document Viewer' : 'Document'}</span>
+                      {!isPdfFile && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
@@ -1233,7 +1592,7 @@ export default function DocumentProcessor() {
                         })}
                     </div>
                   </div>
-                  <div className={isPdfFile ? "px-2" : "p-5"}>
+                  <div className={isPdfFile ? "px-2 py-2" : "p-5"}>
                     {isPdfFile && activeDocFile ? (
                       <PDFDocumentViewer
                         file={activeDocFile.file}
@@ -1242,11 +1601,11 @@ export default function DocumentProcessor() {
                         onHoverEntity={setHoveredEntity}
                       />
                     ) : activeDocText ? (
-                      <HighlightedDocument text={activeDocText} entities={extractionResults[activeReviewDoc]?.entities || []} hoveredEntity={hoveredEntity} onHoverEntity={setHoveredEntity} isDark={isDark} />
+                      <HighlightedDocument text={activeDocText} entities={extractionResults[activeReviewDoc]?.entities || []} hoveredEntity={hoveredEntity} onHoverEntity={setHoveredEntity} />
                     ) : (
-                      <div className="text-center py-12">
-                        <FileQuestion className="w-8 h-8 text-[#636366] mb-3" />
-                        <p className="text-[#636366] text-sm">Document text not available</p>
+                      <div className="bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-center py-16 text-center">
+                        <FileQuestion className="w-8 h-8 text-gray-300 mb-3" />
+                        <p className="text-gray-400 text-sm">Document content not available</p>
                       </div>
                     )}
                   </div>
@@ -1282,6 +1641,24 @@ export default function DocumentProcessor() {
                         return true;
                       });
 
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-16 text-center">
+                            <div className="w-12 h-12 rounded-2xl bg-[#1c1c1e] flex items-center justify-center mb-4">
+                              <FileQuestion className="w-5 h-5 text-[#636366]" />
+                            </div>
+                            <p className="text-[#d1d1d6] text-sm font-medium mb-1">
+                              {reviewFilter === 'all' ? 'No entities found' : `No ${reviewFilter === 'low' ? 'low-confidence' : 'edited'} entities`}
+                            </p>
+                            <p className="text-[#636366] text-xs">
+                              {reviewFilter === 'all'
+                                ? 'The template entities were not detected in this document'
+                                : 'Try switching to "all" to see all extracted entities'}
+                            </p>
+                          </div>
+                        );
+                      }
+
                       return filtered.map((entity: any) => {
                         const realIdx = entities.indexOf(entity);
                         const color = entityColors[realIdx % entityColors.length];
@@ -1305,10 +1682,20 @@ export default function DocumentProcessor() {
                                       {entity.status === 'edited' && <span className="text-[10px] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-md">Edited</span>}
                                       {entity.status === 'rejected' && <span className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-md">Rejected</span>}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="inline-block px-2 py-1 rounded-md text-sm font-mono" style={{ backgroundColor: color.bg, color: color.text, borderBottom: `2px solid ${color.underline}` }}>
-                                        {entity.value || <span className="text-[#636366] italic font-sans text-sm">No value found</span>}
-                                      </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <input
+                                        type="text"
+                                        defaultValue={entity.value || ''}
+                                        placeholder="No value found"
+                                        onBlur={(e) => {
+                                          const val = e.target.value;
+                                          if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val);
+                                        }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                        className="min-w-0 flex-1 px-2 py-1 rounded-md text-sm font-mono bg-transparent border-0 border-b-2 focus:outline-none focus:border-purple-400 transition-colors placeholder:text-[#636366] placeholder:italic placeholder:font-sans"
+                                        style={{ color: color.text, borderColor: color.underline, backgroundColor: color.bg }}
+                                        data-testid={`input-entity-value-${realIdx}`}
+                                      />
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -1319,9 +1706,6 @@ export default function DocumentProcessor() {
                                           <Check className="w-3.5 h-3.5" />
                                         </button>
                                       )}
-                                      <button onClick={() => openEdit(activeReviewDoc, realIdx)} className="p-1.5 text-purple-400 hover:bg-purple-500/10 rounded-lg smooth press-sm" title="Edit" data-testid={`button-edit-${realIdx}`}>
-                                        <Pencil className="w-3.5 h-3.5" />
-                                      </button>
                                       {entity.status !== 'rejected' && (
                                         <button onClick={() => rejectEntity(activeReviewDoc, realIdx)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject" data-testid={`button-reject-${realIdx}`}>
                                           <X className="w-3.5 h-3.5" />
@@ -1343,7 +1727,8 @@ export default function DocumentProcessor() {
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
         </div>
       </main>
     </div>

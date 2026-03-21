@@ -2,8 +2,10 @@ import { useState, useMemo } from "react";
 import { Switch } from "@toolkit/components/ui/switch";
 import { Label } from "@toolkit/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
-import { ChevronDown, ChevronRight, HelpCircle, Award, Shield, TrendingUp, Trophy, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, HelpCircle, Award, Shield, TrendingUp, Trophy, CheckCircle2, XCircle, AlertTriangle, Trash2, Loader2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { useAuth } from "@toolkit/lib/auth";
+import { useActiveClient } from "@toolkit/lib/client-context";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
@@ -53,9 +55,31 @@ function statusIcon(pctAchieved: number): { icon: typeof CheckCircle2; label: st
 
 export default function Scorecard() {
   const { scorecard, ownership, management, skills, procurement, esd, sed, client } = useBbeeStore();
+  const { user } = useAuth();
+  const { activeClientId } = useActiveClient();
   const [wrapMode, setWrapMode] = useState(true);
   const [fullFigures, setFullFigures] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+
+  const handleDelete = async () => {
+    if (!activeClientId) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/processor-sessions/${activeClientId}`, { method: 'DELETE' });
+      if (res.ok) {
+        window.location.href = '/dashboard';
+      }
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   const toggleRow = (key: string) => {
     setExpandedRows(prev => {
@@ -242,6 +266,39 @@ export default function Scorecard() {
               <Switch id="figures-toggle" checked={fullFigures} onCheckedChange={setFullFigures} data-testid="toggle-full-figures" />
               <Label htmlFor="figures-toggle" className="text-xs text-muted-foreground cursor-pointer">Full figures</Label>
             </div>
+            {isAdmin && !showDeleteConfirm && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                data-testid="btn-delete-company"
+                title="Delete this client"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Client
+              </button>
+            )}
+            {isAdmin && showDeleteConfirm && (
+              <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-destructive font-medium">Delete {client.name || 'this client'}?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="px-2.5 py-1 rounded-md bg-destructive hover:bg-destructive/80 text-white text-xs font-semibold transition-colors disabled:opacity-60 inline-flex items-center gap-1"
+                  data-testid="btn-confirm-delete"
+                >
+                  {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="px-2.5 py-1 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground text-xs font-medium transition-colors"
+                  data-testid="btn-cancel-delete"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
