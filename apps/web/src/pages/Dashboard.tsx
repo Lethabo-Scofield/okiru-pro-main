@@ -84,7 +84,7 @@ export default function Dashboard() {
     if (publishingKey) return;
     setPublishingKey(template.key);
     try {
-      const templateEntities = template.entities.map(e => ({
+      const templateEntities = (template.entities ?? []).map(e => ({
         label: e.label, definition: e.definition, synonyms: e.synonyms,
         positives: e.positives, negatives: e.negatives, zones: e.zones,
         keywords: e.keywords, pattern: e.pattern,
@@ -385,7 +385,7 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
-                          <div className="text-[11px] text-[#98989f] mt-1">{t.entities.length} entities &middot; v{t.version || '1.0'}</div>
+                          <div className="text-[11px] text-[#98989f] mt-1">{(t.entities ?? []).length} entities &middot; v{t.version || '1.0'}</div>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-semibold shrink-0">Custom</span>
                       </div>
@@ -393,10 +393,10 @@ export default function Dashboard() {
 
                       <div className="mt-4">
                         <div className="flex flex-wrap gap-1.5">
-                          {t.entities.slice(0, 4).map((e: any, i: number) => (
+                          {(t.entities ?? []).slice(0, 4).map((e: any, i: number) => (
                             <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#8e8e93] font-medium">{e.label}</span>
                           ))}
-                          {t.entities.length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{t.entities.length - 4} more</span>}
+                          {(t.entities ?? []).length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{(t.entities ?? []).length - 4} more</span>}
                         </div>
                       </div>
 
@@ -459,7 +459,7 @@ export default function Dashboard() {
                           ))}
                         </div>
                       )}
-                      <div className="text-[10px] text-[#636366] mb-3">{t.entities.length} entities to extract</div>
+                      <div className="text-[10px] text-[#636366] mb-3">{(t.entities ?? []).length} entities to extract</div>
                       <Link
                         href={`/processor?sector=${t.sectorCode}&type=${t.sectorType}&template=${t.key}`}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 text-[12px] font-semibold smooth press-sm"
@@ -489,13 +489,13 @@ export default function Dashboard() {
                   <div className="mt-4">
                     <div className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">Entities</div>
                     <ul className="mt-2 space-y-1 text-[12px] text-[#98989f]">
-                      {t.entities.slice(0, 4).map((e, i) => (
+                      {(t.entities ?? []).slice(0, 4).map((e, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <span className="h-1 w-1 rounded-full bg-purple-400 shrink-0" />
                           {e.label}
                         </li>
                       ))}
-                      {t.entities.length > 4 && <li className="text-[#636366] font-medium">+ {t.entities.length - 4} more</li>}
+                      {(t.entities ?? []).length > 4 && <li className="text-[#636366] font-medium">+ {(t.entities ?? []).length - 4} more</li>}
                     </ul>
                   </div>
 
