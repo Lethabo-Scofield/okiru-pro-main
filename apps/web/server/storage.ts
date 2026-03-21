@@ -12,12 +12,17 @@ import {
 } from "../shared/schema";
 
 export interface IStorage {
+  getTemplatesByUser(userId: string): Promise<Template[]>;
   getTemplates(): Promise<Template[]>;
   getTemplate(id: number): Promise<Template | undefined>;
+  getTemplateForUser(id: number, userId: string): Promise<Template | undefined>;
   createTemplate(template: InsertTemplate): Promise<Template>;
   updateTemplate(id: number, template: Partial<InsertTemplate>): Promise<Template | undefined>;
+  updateTemplateForUser(id: number, userId: string, template: Partial<InsertTemplate>): Promise<Template | undefined>;
   deleteTemplate(id: number): Promise<boolean>;
+  deleteTemplateForUser(id: number, userId: string): Promise<boolean>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsernameOrEmail(loginId: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
@@ -33,6 +38,12 @@ export class MemoryStorage implements IStorage {
   private userSeq = 0;
   private configSeq = 0;
 
+  async getTemplatesByUser(userId: string): Promise<Template[]> {
+    return Array.from(this.templates.values())
+      .filter((t) => t.userId === userId || t.userId === null)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
   async getTemplates(): Promise<Template[]> {
     return Array.from(this.templates.values()).sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -43,11 +54,19 @@ export class MemoryStorage implements IStorage {
     return this.templates.get(id);
   }
 
+  async getTemplateForUser(id: number, userId: string): Promise<Template | undefined> {
+    const t = this.templates.get(id);
+    if (!t) return undefined;
+    if (t.userId !== null && t.userId !== userId) return undefined;
+    return t;
+  }
+
   async createTemplate(template: InsertTemplate): Promise<Template> {
     const id = ++this.templateSeq;
     const now = new Date();
     const doc: Template = {
       id,
+      userId: template.userId || null,
       name: template.name,
       description: template.description || null,
       version: template.version || "1.0",
@@ -66,6 +85,22 @@ export class MemoryStorage implements IStorage {
       ...existing,
       ...template,
       id,
+      userId: existing.userId,
+      updatedAt: new Date(),
+    };
+    this.templates.set(id, updated);
+    return updated;
+  }
+
+  async updateTemplateForUser(id: number, userId: string, template: Partial<InsertTemplate>): Promise<Template | undefined> {
+    const existing = this.templates.get(id);
+    if (!existing) return undefined;
+    if (existing.userId !== userId) return undefined;
+    const updated: Template = {
+      ...existing,
+      ...template,
+      id,
+      userId: existing.userId,
       updatedAt: new Date(),
     };
     this.templates.set(id, updated);
@@ -76,8 +111,22 @@ export class MemoryStorage implements IStorage {
     return this.templates.delete(id);
   }
 
+  async deleteTemplateForUser(id: number, userId: string): Promise<boolean> {
+    const existing = this.templates.get(id);
+    if (!existing) return false;
+    if (existing.userId !== userId) return false;
+    return this.templates.delete(id);
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find((u) => u.username === username);
+  }
+
+  async getUserByUsernameOrEmail(loginId: string): Promise<User | undefined> {
+    const lower = loginId.toLowerCase();
+    return Array.from(this.users.values()).find(
+      (u) => u.username.toLowerCase() === lower || (u.email && u.email.toLowerCase() === lower)
+    );
   }
 
   async getUserById(id: string): Promise<User | undefined> {
@@ -149,6 +198,7 @@ function toTemplate(doc: any): Template | undefined {
   const obj = doc.toJSON ? doc.toJSON() : doc;
   return {
     id: obj.seqId || obj.id || obj._id,
+    userId: obj.userId || null,
     name: obj.name,
     description: obj.description || null,
     version: obj.version || "1.0",
@@ -159,6 +209,13 @@ function toTemplate(doc: any): Template | undefined {
 }
 
 export class DatabaseStorage implements IStorage {
+  async getTemplatesByUser(userId: string): Promise<Template[]> {
+    const docs = await TemplateModel.find({
+      $or: [{ userId }, { userId: null }, { userId: { $exists: false } }],
+    }).sort({ updatedAt: -1 });
+    return docs.map((d) => toTemplate(d)!);
+  }
+
   async getTemplates(): Promise<Template[]> {
     const docs = await TemplateModel.find().sort({ updatedAt: -1 });
     return docs.map((d) => toTemplate(d)!);
@@ -166,6 +223,14 @@ export class DatabaseStorage implements IStorage {
 
   async getTemplate(id: number): Promise<Template | undefined> {
     const doc = await TemplateModel.findOne({ seqId: id });
+    return toTemplate(doc);
+  }
+
+  async getTemplateForUser(id: number, userId: string): Promise<Template | undefined> {
+    const doc = await TemplateModel.findOne({
+      seqId: id,
+      $or: [{ userId }, { userId: null }, { userId: { $exists: false } }],
+    });
     return toTemplate(doc);
   }
 
@@ -177,6 +242,7 @@ export class DatabaseStorage implements IStorage {
       description: template.description || null,
       version: template.version || "1.0",
       entities: template.entities,
+      userId: template.userId || null,
     });
     return toTemplate(doc)!;
   }
@@ -190,13 +256,37 @@ export class DatabaseStorage implements IStorage {
     return toTemplate(doc);
   }
 
+  async updateTemplateForUser(id: number, userId: string, template: Partial<InsertTemplate>): Promise<Template | undefined> {
+    const doc = await TemplateModel.findOneAndUpdate(
+      { seqId: id, userId },
+      { ...template, updatedAt: new Date() },
+      { new: true }
+    );
+    return toTemplate(doc);
+  }
+
   async deleteTemplate(id: number): Promise<boolean> {
     const result = await TemplateModel.deleteOne({ seqId: id });
     return result.deletedCount > 0;
   }
 
+  async deleteTemplateForUser(id: number, userId: string): Promise<boolean> {
+    const result = await TemplateModel.deleteOne({ seqId: id, userId });
+    return result.deletedCount > 0;
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     const doc = await UserModel.findOne({ username });
+    return toUser(doc);
+  }
+
+  async getUserByUsernameOrEmail(loginId: string): Promise<User | undefined> {
+    const doc = await UserModel.findOne({
+      $or: [
+        { username: { $regex: new RegExp(`^${loginId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+        { email: { $regex: new RegExp(`^${loginId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+      ],
+    });
     return toUser(doc);
   }
 
@@ -273,6 +363,7 @@ if (!useDatabase) {
         description: t.description,
         version: "1.0",
         entities: t.entities,
+        userId: null,
       });
     }
     console.log(`Storage: Seeded ${top3.length} predefined templates`);

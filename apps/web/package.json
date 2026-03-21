@@ -1,23 +1,18 @@
 {
-  "name": "@okiru/web",
+  "name": "rest-express",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev:client": "vite dev --port 5000",
-    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
+    "dev": "NODE_ENV=development node_modules/.bin/tsx server/index.ts",
     "build": "tsx script/build.ts",
-    "start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "clean": "rm -rf dist build",
-    "typecheck": "tsc --noEmit",
-    "lint": "echo 'ESLint not configured for web'",
-    "lint:fix": "echo 'ESLint not configured for web'"
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@okiru/types": "workspace:*",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.31",
@@ -50,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.21",
     "@types/bcryptjs": "^2.4.6",
+    "@types/nodemailer": "^7.0.11",
     "@vercel/node": "^5.6.10",
     "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.4",
@@ -73,6 +69,7 @@
     "memorystore": "^1.6.7",
     "mongoose": "^9.2.4",
     "next-themes": "^0.4.6",
+    "nodemailer": "^8.0.3",
     "openai": "^6.27.0",
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1",

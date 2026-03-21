@@ -3,7 +3,7 @@ import { API_BASE } from "./config";
 
 async function apiRequest(url: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${url}`, {
-    credentials: "include", 
+    credentials: "include", // ensures cookies/session are sent
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -31,10 +31,7 @@ export const api = {
     apiRequest("/api/auth/me"),
 
   // --- Clients ---
-  getClients: (page = 1, limit = 500) =>
-    apiRequest(`/api/clients?page=${page}&limit=${limit}`).then((r: { items?: unknown[] } | unknown[]) =>
-      Array.isArray(r) ? r : (r.items ?? [])
-    ),
+  getClients: () => apiRequest("/api/clients"),
   createClient: (data: any) => apiRequest("/api/clients", { method: "POST", body: JSON.stringify(data) }),
   getClient: (id: string) => apiRequest(`/api/clients/${id}`),
   updateClient: (id: string, data: any) => apiRequest(`/api/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

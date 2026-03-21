@@ -229,11 +229,12 @@ async function getApp(): Promise<express.Express> {
 
     app.post("/api/auth/login", async (req, res) => {
       try {
-        const { username, password } = req.body;
-        if (!username || !password) return res.status(400).json({ message: "Username and password are required" });
+        const { username, email, password } = req.body;
+        const loginId = username || email;
+        if (!loginId || !password) return res.status(400).json({ message: "Username/email and password are required" });
 
         if (isDbConnected) {
-          const doc = await UserModel.findOne({ username });
+          const doc = await UserModel.findOne({ $or: [{ username: loginId }, { email: loginId.toLowerCase() }] });
           if (!doc) return res.status(401).json({ message: "Invalid username or password" });
           const user = toUser(doc)!;
           const valid = await bcrypt.compare(password, user.password);
@@ -244,7 +245,7 @@ async function getApp(): Promise<express.Express> {
           return res.json({ user: safeUser });
         }
 
-        const safeUser = { id: `user-${Date.now()}`, username, fullName: null, email: null, role: "user", organizationId: null, organizationName: null, profilePicture: null };
+        const safeUser = { id: `user-${Date.now()}`, username: loginId, fullName: null, email: null, role: "user", organizationId: null, organizationName: null, profilePicture: null };
         const token = signToken(safeUser);
         res.cookie("okiru_auth", token, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
         res.json({ user: safeUser });

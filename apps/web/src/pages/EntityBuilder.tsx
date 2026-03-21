@@ -7,7 +7,8 @@ import {
   Upload, Loader2, Check, X, Trash2, Pencil, Download,
   Shapes, Folder, FilePlus, Copy, AlignLeft, Tags,
   Map, Code, CheckCircle2, RefreshCw, FolderOpen, ChevronLeft, Sparkles,
-  Zap, Plus, ChevronRight, MoreHorizontal, Search,
+  Zap, Plus, ChevronRight, MoreHorizontal, Search, FlaskConical,
+  BookOpen, Play, ChevronDown, Clock,
 } from 'lucide-react';
 
 import { starterTemplates as starterTemplatesList } from '@/data/starterTemplates';
@@ -73,6 +74,20 @@ export default function EntityBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [entitySearch, setEntitySearch] = useState("");
+  const [savedDrafts, setSavedDrafts] = useState<{ id: string; name: string; entities: any[]; savedAt: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('okiru-entity-drafts') || '[]'); } catch { return []; }
+  });
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [leftTab, setLeftTab] = useState<'entities' | 'repository'>('entities');
+  const [rightTab, setRightTab] = useState<'editor' | 'test'>('editor');
+  const [testText, setTestText] = useState('');
+  const [testResults, setTestResults] = useState<any[]>([]);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testTemplateId, setTestTemplateId] = useState<'current' | number>('current');
+  const [testTemplateDropOpen, setTestTemplateDropOpen] = useState(false);
+  const testTemplateDropRef = useRef<HTMLDivElement>(null);
+  const [expandedRepoId, setExpandedRepoId] = useState<number | null>(null);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return !!params.get('template');
@@ -128,7 +143,7 @@ export default function EntityBuilder() {
     const templateId = params.get('template');
     if (templateId && storedTemplates.length > 0 && !editingTemplateId) {
       const t = storedTemplates.find(st => st.id === Number(templateId));
-      if (t) loadTemplateFromRepo(t);
+      if (t) _loadTemplateFromRepo(t);
       else {
         setIsLoadingTemplate(false);
         toast({ title: "Template not found", description: "Could not find the requested template.", variant: "destructive" });
@@ -169,7 +184,18 @@ export default function EntityBuilder() {
     return () => window.removeEventListener('keydown', handler);
   }, [editingTemplateId, hasUnsavedChanges, entities, showPublishModal, deleteConfirm, showTemplatesPanel]);
 
-  const loadTemplateFromRepo = (template: StoredTemplate) => {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (testTemplateDropRef.current && !testTemplateDropRef.current.contains(e.target as Node)) {
+        setTestTemplateDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const loadTemplateFromRepo = (template: StoredTemplate) => guardedNew(() => _loadTemplateFromRepo(template));
+  const _loadTemplateFromRepo = (template: StoredTemplate) => {
     const loadedEntities = template.entities.map((e: any) => ({
       ...createEntity(e.label, e.definition, 60),
       synonyms: e.synonyms || [], positives: e.positives || [], negatives: e.negatives || [],
@@ -392,6 +418,98 @@ export default function EntityBuilder() {
     localStorage.removeItem('okiru-entity-draft');
   };
 
+  const saveDraftItem = () => {
+    const draft = { id: Date.now().toString(), name: projectName, entities, savedAt: new Date().toISOString() };
+    const updated = [draft, ...savedDrafts.filter(d => d.name !== projectName || d.entities.length !== entities.length)].slice(0, 5);
+    setSavedDrafts(updated);
+    localStorage.setItem('okiru-entity-drafts', JSON.stringify(updated));
+    toast({ title: "Draft saved", description: `"${projectName}" — ${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}` });
+  };
+
+  const deleteDraft = (id: string) => {
+    const updated = savedDrafts.filter(d => d.id !== id);
+    setSavedDrafts(updated);
+    localStorage.setItem('okiru-entity-drafts', JSON.stringify(updated));
+  };
+
+  const resumeDraft = (draft: { id: string; name: string; entities: any[]; savedAt: string }) => {
+    const loaded = draft.entities.map((e: any, i: number) => ({ ...e, id: Date.now() + i }));
+    setEntities(loaded);
+    setProjectName(draft.name);
+    setEditingTemplateId(null);
+    setHasUnsavedChanges(true);
+    setSelectedEntityId(loaded.length > 0 ? loaded[0].id : null);
+    setLeftTab('entities');
+    deleteDraft(draft.id);
+    toast({ title: "Draft resumed", description: `"${draft.name}" — ${draft.entities.length} ${draft.entities.length === 1 ? 'entity' : 'entities'}` });
+  };
+
+  const relativeTime = (iso: string) => {
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  const guardedNew = (action: () => void) => {
+    if (entities.length > 0 && !editingTemplateId) {
+      setPendingAction(() => action);
+      setShowDraftPrompt(true);
+    } else {
+      action();
+    }
+  };
+
+  const clientExtract = (text: string, ents: any[]) => ents.map((e, idx) => {
+    let value: string | null = null, method = 'Not found', confidence = 0;
+    if (e.pattern) {
+      try {
+        const m = text.match(new RegExp(e.pattern, 'i'));
+        if (m) { value = m[0]; method = 'Pattern'; confidence = 87; }
+      } catch {}
+    }
+    if (!value) {
+      const kwList = [...(e.keywords?.must || []), ...(e.synonyms || []), e.label];
+      for (const kw of kwList) {
+        const pos = text.toLowerCase().indexOf(kw.toLowerCase());
+        if (pos !== -1) {
+          const s = Math.max(0, pos - 60), end = Math.min(text.length, pos + 100);
+          value = text.slice(s, end).replace(/\s+/g, ' ').trim();
+          method = 'Context'; confidence = 55; break;
+        }
+      }
+    }
+    return { id: idx + 1, name: e.label, value, method, confidence, status: value ? 'extracted' : 'not_found' };
+  });
+
+  const runTest = async () => {
+    if (!testText.trim()) return;
+    setIsTesting(true);
+    const entsToTest = testTemplateId === 'current'
+      ? entities
+      : storedTemplates.find(t => t.id === testTemplateId)?.entities || [];
+    if (entsToTest.length === 0) { setIsTesting(false); return; }
+    setTestResults(clientExtract(testText, entsToTest));
+    try {
+      const res = await fetch('/api/extract-entities', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentText: testText, entities: entsToTest }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.extractions?.some((e: any) => e.value)) {
+          setTestResults(data.extractions.map((e: any, idx: number) => ({
+            id: idx + 1, name: e.entity || entsToTest[idx]?.label || '',
+            value: e.value, method: e.method, confidence: e.conf ?? 0,
+            status: e.value ? 'extracted' : 'not_found',
+          })));
+        }
+      }
+    } catch {}
+    setIsTesting(false);
+  };
+
   const completenessColor = (pct: number) => pct >= 80 ? 'text-emerald-400' : pct >= 40 ? 'text-purple-400' : 'text-amber-400';
   const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-emerald-500' : pct >= 40 ? 'bg-purple-500' : 'bg-amber-500';
 
@@ -442,10 +560,6 @@ export default function EntityBuilder() {
                     <span className="text-[#636366]">Entities</span>
                     <span className="text-white font-medium">{entities.length}</span>
                   </div>
-                  <div className="flex justify-between items-center px-4 py-3 text-[13px]">
-                    <span className="text-[#636366]">Avg. completeness</span>
-                    <span className={`font-semibold ${completenessColor(avgCompleteness)}`}>{avgCompleteness}%</span>
-                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowPublishModal(false)} className="flex-1 py-3 rounded-xl font-medium text-[14px] text-[#b0b0b8] bg-[#2c2c2e] hover:bg-[#3a3a3c] smooth press-sm">Cancel</button>
@@ -479,6 +593,46 @@ export default function EntityBuilder() {
                 <p className="text-[13px] text-[#636366] mt-1">Please try again</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showDraftPrompt && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ animation: 'fadeIn 0.15s ease' }}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }} />
+          <div className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-3xl overflow-hidden" style={{ background: '#1c1c1e', boxShadow: '0 32px 64px -16px rgba(0,0,0,0.7)', animation: 'scaleIn 0.18s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div className="px-6 pt-7 pb-2 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/20 flex items-center justify-center mx-auto mb-4">
+                <FilePlus className="w-5 h-5 text-amber-400" />
+              </div>
+              <p className="text-[17px] font-semibold text-white tracking-tight">Save your work?</p>
+              <p className="text-[13px] text-[#636366] mt-1.5 leading-relaxed">
+                <span className="text-white font-medium">"{projectName}"</span> has {entities.length} {entities.length === 1 ? 'entity' : 'entities'} that haven't been published.
+              </p>
+            </div>
+            <div className="px-4 pb-5 pt-4 flex flex-col gap-2.5">
+              <button onClick={() => {
+                saveDraftItem();
+                setShowDraftPrompt(false);
+                const action = pendingAction;
+                setPendingAction(null);
+                action?.();
+              }} className="w-full py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white text-[14px] font-semibold smooth press-sm" data-testid="button-save-draft">
+                Save to Drafts
+              </button>
+              <button onClick={() => {
+                setShowDraftPrompt(false);
+                const action = pendingAction;
+                setPendingAction(null);
+                action?.();
+              }} className="w-full py-3 rounded-2xl bg-white/[0.06] hover:bg-white/[0.10] text-[#b0b0b8] hover:text-white text-[14px] font-semibold smooth press-sm" data-testid="button-discard-draft">
+                Discard
+              </button>
+              <button onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }}
+                className="w-full py-2.5 text-[13px] text-[#636366] hover:text-white smooth">
+                Keep editing
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -580,7 +734,7 @@ export default function EntityBuilder() {
 
             {editingTemplateId && (
               <div className="p-4" style={{ borderTop: '1px solid #2c2c2e' }}>
-                <button onClick={() => { startNew(); setShowTemplatesPanel(false); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium text-[#b0b0b8] bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm" data-testid="button-start-new">
+                <button onClick={() => guardedNew(() => { startNew(); setShowTemplatesPanel(false); })} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium text-[#b0b0b8] bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm" data-testid="button-start-new">
                   <FilePlus className="w-3.5 h-3.5" /> New Template
                 </button>
               </div>
@@ -589,7 +743,8 @@ export default function EntityBuilder() {
         </div>
       )}
 
-      <header className="h-[52px] shrink-0 z-20 flex items-center justify-between px-5" style={{ borderBottom: '1px solid #2c2c2e', background: '#0a0a0a' }}>
+      <header className="h-[52px] shrink-0 z-20" style={{ borderBottom: '1px solid #2c2c2e', background: '#0a0a0a' }}>
+        <div className="max-w-5xl mx-auto w-full px-6 h-full flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/dashboard" className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 smooth press-sm group shrink-0" data-testid="btn-back">
             <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
@@ -620,13 +775,16 @@ export default function EntityBuilder() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={() => { setShowTemplatesPanel(true); fetchTemplates(); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium smooth press-sm ${showTemplatesPanel ? 'bg-white/[0.08] text-white' : 'text-[#b0b0b8] hover:text-white hover:bg-white/[0.06]'}`}>
-            <Folder className="w-3.5 h-3.5" />
-            Templates
-            {storedTemplates.length > 0 && <span className="text-[10px] tabular-nums bg-white/[0.08] px-1.5 py-0.5 rounded-full">{storedTemplates.length}</span>}
+          <button onClick={() => guardedNew(startNew)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-white hover:bg-white/[0.06] rounded-lg smooth press-sm" title="New Template" data-testid="button-new-template">
+            <FilePlus className="w-3.5 h-3.5" /> New
           </button>
-          <div className="h-4 w-px bg-[#2c2c2e]" />
+          {savedDrafts.length > 0 && (
+            <button onClick={() => setLeftTab('entities')}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/15 rounded-lg smooth press-sm" title="View drafts" data-testid="button-view-drafts">
+              <Clock className="w-3 h-3" /> {savedDrafts.length}
+            </button>
+          )}
           <button onClick={exportEntities} disabled={entities.length === 0}
             className="p-2 text-[#636366] hover:text-white hover:bg-white/[0.06] rounded-lg smooth press-sm disabled:opacity-30" title="Export JSON" data-testid="button-export">
             <Download className="w-4 h-4" />
@@ -648,6 +806,7 @@ export default function EntityBuilder() {
             className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm shadow-sm shadow-purple-500/20" data-testid="button-publish">
             {editingTemplateId ? "Update" : "Publish"}
           </button>
+        </div>
         </div>
       </header>
 
@@ -678,65 +837,154 @@ export default function EntityBuilder() {
           {/* Entity list + Detail — side by side */}
           <div className="flex gap-4 flex-1 min-h-0">
 
-            {/* Entity List Column */}
+            {/* Left Column */}
             <div className="w-[240px] shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
-              {entities.length > 3 && (
-                <div className="px-3 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[#3a3a3c] pointer-events-none" />
-                    <input type="text" value={entitySearch} onChange={(e) => setEntitySearch(e.target.value)}
-                      placeholder="Filter…" className="w-full bg-transparent pl-7 pr-3 py-1.5 text-[12px] text-[#b0b0b8] placeholder-[#3a3a3c] focus:outline-none rounded-lg focus:bg-white/[0.04] transition-all" />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex-1 overflow-y-auto py-2 px-2">
-                {entities.length === 0 && (
-                  <div className="text-center py-10 px-3">
-                    <div className="w-10 h-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center mx-auto mb-3">
-                      <Shapes className="w-4 h-4 text-[#3a3a3c]" />
-                    </div>
-                    <p className="text-[11px] text-[#3a3a3c] leading-relaxed">Type above to create your first entity</p>
-                  </div>
-                )}
-                {filteredEntities.map((entity) => {
-                  const isSelected = selectedEntityId === entity.id;
-                  return (
-                    <div key={entity.id}
-                      onClick={() => setSelectedEntityId(entity.id)}
-                      className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-purple-500/12' : 'hover:bg-white/[0.04]'}`}
-                      data-testid={`entity-row-${entity.id}`}>
-                      {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-purple-500" />}
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-purple-500/20 text-purple-300' : 'bg-white/[0.05] text-[#636366]'}`}>
-                        {entity.label.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="flex-1 h-0.5 bg-[#1e1e1e] rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-500 ${completenessBarColor(entity.completeness)}`} style={{ width: `${entity.completeness}%` }} />
-                          </div>
-                          <span className={`text-[9px] font-bold tabular-nums shrink-0 ${completenessColor(entity.completeness)}`}>{entity.completeness}%</span>
-                        </div>
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
-                        title="Delete" data-testid={`button-delete-${entity.id}`}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })}
+              {/* Tab switcher */}
+              <div className="flex shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                {(['entities', 'repository'] as const).map(tab => (
+                  <button key={tab} onClick={() => setLeftTab(tab)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-colors smooth ${leftTab === tab ? 'text-white border-b-2 border-purple-500' : 'text-[#636366] hover:text-[#b0b0b8]'}`}
+                    style={{ borderBottom: leftTab === tab ? '2px solid #a855f7' : '2px solid transparent' }}>
+                    {tab === 'entities' ? <><Shapes className="w-3 h-3" />Entities</> : <><BookOpen className="w-3 h-3" />Repository</>}
+                  </button>
+                ))}
               </div>
 
-              {entities.length > 0 && (
-                <div className="px-3 py-2.5 shrink-0" style={{ borderTop: '1px solid #1e1e1e' }}>
-                  <div className="flex items-center justify-between text-[11px] text-[#636366] mb-1">
-                    <span>{entities.length} {entities.length === 1 ? 'entity' : 'entities'}</span>
-                    <span className={`font-semibold ${completenessColor(avgCompleteness)}`}>{avgCompleteness}% avg</span>
+              {/* Entities tab */}
+              {leftTab === 'entities' && <>
+                {entities.length > 3 && (
+                  <div className="px-3 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[#3a3a3c] pointer-events-none" />
+                      <input type="text" value={entitySearch} onChange={(e) => setEntitySearch(e.target.value)}
+                        placeholder="Filter…" className="w-full bg-transparent pl-7 pr-3 py-1.5 text-[12px] text-[#b0b0b8] placeholder-[#3a3a3c] focus:outline-none rounded-lg focus:bg-white/[0.04] transition-all" />
+                    </div>
                   </div>
-                  <div className="h-1 bg-[#1e1e1e] rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-700 ${completenessBarColor(avgCompleteness)}`} style={{ width: `${avgCompleteness}%` }} />
+                )}
+                <div className="flex-1 overflow-y-auto py-2 px-2">
+                  {entities.length === 0 && (
+                    <div className="text-center py-10 px-3">
+                      <div className="w-10 h-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center mx-auto mb-3">
+                        <Shapes className="w-4 h-4 text-[#3a3a3c]" />
+                      </div>
+                      <p className="text-[11px] text-[#3a3a3c] leading-relaxed">Type above to create your first entity</p>
+                    </div>
+                  )}
+                  {filteredEntities.map((entity) => {
+                    const isSelected = selectedEntityId === entity.id;
+                    return (
+                      <div key={entity.id}
+                        onClick={() => setSelectedEntityId(entity.id)}
+                        className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-purple-500/12' : 'hover:bg-white/[0.04]'}`}
+                        data-testid={`entity-row-${entity.id}`}>
+                        {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-purple-500" />}
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-purple-500/20 text-purple-300' : 'bg-white/[0.05] text-[#636366]'}`}>
+                          {entity.label.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
+                          title="Delete" data-testid={`button-delete-${entity.id}`}>
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {entities.length > 0 && (
+                  <div className="px-3 py-2.5 shrink-0 text-[11px] text-[#636366]" style={{ borderTop: '1px solid #1e1e1e' }}>
+                    {entities.length} {entities.length === 1 ? 'entity' : 'entities'}
+                  </div>
+                )}
+
+                {savedDrafts.length > 0 && (
+                  <div className="shrink-0" style={{ borderTop: '1px solid #1e1e1e' }}>
+                    <div className="flex items-center gap-1.5 px-3 py-2">
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest">Drafts</span>
+                      <span className="ml-auto text-[10px] text-[#636366]">{savedDrafts.length}</span>
+                    </div>
+                    <div className="pb-2 space-y-1 px-2">
+                      {savedDrafts.map(draft => (
+                        <div key={draft.id} className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-amber-500/[0.06] hover:bg-amber-500/10 smooth group" style={{ border: '1px solid rgba(245,158,11,0.12)' }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-[#d4a827] truncate">{draft.name}</p>
+                            <p className="text-[10px] text-[#636366]">{draft.entities.length} {draft.entities.length === 1 ? 'entity' : 'entities'} · {relativeTime(draft.savedAt)}</p>
+                          </div>
+                          <button onClick={() => resumeDraft(draft)}
+                            className="px-2 py-0.5 text-[10px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded-md smooth press-sm shrink-0" data-testid={`button-resume-draft-${draft.id}`}>
+                            Resume
+                          </button>
+                          <button onClick={() => deleteDraft(draft.id)}
+                            className="p-1 text-[#636366] hover:text-red-400 smooth press-sm opacity-0 group-hover:opacity-100 shrink-0" data-testid={`button-delete-draft-${draft.id}`}>
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>}
+
+              {/* Repository tab */}
+              {leftTab === 'repository' && (
+                <div className="flex-1 overflow-y-auto">
+                  <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                    <span className="text-[10px] text-[#636366]">{storedTemplates.length} saved</span>
+                    <button onClick={fetchTemplates} className="p-1 text-[#636366] hover:text-white rounded-md smooth press-sm">
+                      <RefreshCw className={`w-3 h-3 ${loadingTemplates ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                  {loadingTemplates && storedTemplates.length === 0 && (
+                    <div className="space-y-1.5 p-2">{[1,2,3].map(i => <div key={i} className="h-12 rounded-xl bg-white/[0.03] animate-pulse" />)}</div>
+                  )}
+                  {!loadingTemplates && storedTemplates.length === 0 && (
+                    <div className="text-center py-12 px-3">
+                      <FolderOpen className="w-6 h-6 text-[#3a3a3c] mx-auto mb-2" />
+                      <p className="text-[11px] text-[#3a3a3c]">No saved templates</p>
+                    </div>
+                  )}
+                  <div className="p-2 space-y-1">
+                    {storedTemplates.map(tmpl => (
+                      <div key={tmpl.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e1e1e' }}>
+                        <div
+                          className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer smooth ${expandedRepoId === tmpl.id ? 'bg-purple-500/10' : 'bg-white/[0.02] hover:bg-white/[0.05]'}`}
+                          onClick={() => setExpandedRepoId(expandedRepoId === tmpl.id ? null : tmpl.id)}>
+                          <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+                            <Folder className="w-3.5 h-3.5 text-purple-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-white truncate">{tmpl.name}</p>
+                            <p className="text-[10px] text-[#636366]">{tmpl.entities.length} entities</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(tmpl); setLeftTab('entities'); }}
+                              className="px-2 py-0.5 text-[10px] font-semibold text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 rounded-md smooth press-sm" data-testid={`button-load-repo-${tmpl.id}`}>
+                              Load
+                            </button>
+                            <ChevronDown className={`w-3 h-3 text-[#636366] transition-transform ${expandedRepoId === tmpl.id ? 'rotate-180' : ''}`} />
+                          </div>
+                        </div>
+                        {expandedRepoId === tmpl.id && tmpl.entities.length > 0 && (
+                          <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop: '1px solid #1e1e1e' }}>
+                            {tmpl.entities.map((e: any, i: number) => (
+                              <div key={i} className="flex items-start gap-2 py-1.5">
+                                <div className="w-5 h-5 rounded-md bg-white/[0.05] flex items-center justify-center shrink-0 mt-0.5">
+                                  <span className="text-[8px] font-bold text-[#636366]">{e.label.substring(0,2).toUpperCase()}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-semibold text-[#b0b0b8] truncate">{e.label}</p>
+                                  {e.definition && <p className="text-[9px] text-[#3a3a3c] leading-relaxed line-clamp-2">{e.definition}</p>}
+                                  {e.pattern && <p className="text-[9px] text-purple-500/70 font-mono mt-0.5 truncate">{e.pattern}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -745,7 +993,18 @@ export default function EntityBuilder() {
             {/* Detail / Empty State Panel */}
             <div className="flex-1 min-w-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
 
-              {!selectedEntity && (
+              {/* Right panel tab header */}
+              <div className="flex items-center gap-1 px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                {(['editor', 'test'] as const).map(tab => (
+                  <button key={tab} onClick={() => setRightTab(tab)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold smooth transition-colors ${rightTab === tab ? 'bg-white/[0.08] text-white' : 'text-[#636366] hover:text-[#b0b0b8]'}`}>
+                    {tab === 'editor' ? <><Pencil className="w-3 h-3" />Editor</> : <><FlaskConical className="w-3 h-3" />Live Test</>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Editor tab */}
+              {rightTab === 'editor' && !selectedEntity && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                   <div className="w-16 h-16 rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.04] flex items-center justify-center mx-auto mb-5">
                     <Shapes className="w-7 h-7 text-[#2c2c2e]" />
@@ -761,7 +1020,117 @@ export default function EntityBuilder() {
                 </div>
               )}
 
-              {selectedEntity && (
+              {/* Live Test tab */}
+              {rightTab === 'test' && (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {/* Controls row */}
+                  <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                    <div className="flex-1 relative" ref={testTemplateDropRef}>
+                      <label className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest block mb-1">Template</label>
+                      <button onClick={() => setTestTemplateDropOpen(o => !o)}
+                        className="w-full flex items-center justify-between bg-[#1c1c1e] text-white text-[12px] rounded-lg px-3 py-1.5 border border-[#2c2c2e] hover:border-[#48484a] smooth text-left"
+                        data-testid="select-test-template">
+                        <span className="truncate">
+                          {testTemplateId === 'current'
+                            ? `Current build (${entities.length} entities)`
+                            : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${t.entities.length})` : 'Template'; })()}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-2 text-[#636366] transition-transform duration-150 ${testTemplateDropOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {testTemplateDropOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
+                          style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
+                          <div onClick={() => { setTestTemplateId('current'); setTestTemplateDropOpen(false); }}
+                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                            <span className="flex-1 truncate">Current build</span>
+                            <span className="text-[11px] text-[#636366] shrink-0">({entities.length} entities)</span>
+                            {testTemplateId === 'current' && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
+                          </div>
+                          {storedTemplates.length > 0 && <div style={{ borderTop: '1px solid #2c2c2e' }} />}
+                          {storedTemplates.map(t => (
+                            <div key={t.id} onClick={() => { setTestTemplateId(t.id); setTestTemplateDropOpen(false); }}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                              <span className="flex-1 truncate">{t.name}</span>
+                              <span className="text-[11px] text-[#636366] shrink-0">({t.entities.length})</span>
+                              {testTemplateId === t.id && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={runTest} disabled={isTesting || !testText.trim() || (testTemplateId === 'current' && entities.length === 0)}
+                      className="mt-5 flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm"
+                      data-testid="button-run-test">
+                      {isTesting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing…</> : <><Play className="w-3.5 h-3.5" />Run</>}
+                    </button>
+                  </div>
+                  {/* Two-column: text input + results */}
+                  <div className="flex flex-1 min-h-0">
+                    {/* Text input */}
+                    <div className="w-1/2 flex flex-col" style={{ borderRight: '1px solid #1e1e1e' }}>
+                      <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest"><span className="underline">Document text</span></span>
+                      </div>
+                      <textarea
+                        value={testText}
+                        onChange={(e) => setTestText(e.target.value)}
+                        placeholder="Paste or type document text here to test extraction…"
+                        className="flex-1 w-full bg-transparent text-[13px] text-white resize-none p-4 focus:outline-none placeholder:text-[#3a3a3c] leading-relaxed font-mono"
+                        data-testid="textarea-test-input"
+                      />
+                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderTop: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#3a3a3c]">{testText.length.toLocaleString()} chars</span>
+                        {testText && <button onClick={() => { setTestText(''); setTestResults([]); }} className="text-[10px] text-[#636366] hover:text-white smooth">Clear</button>}
+                      </div>
+                    </div>
+                    {/* Results */}
+                    <div className="w-1/2 flex flex-col overflow-hidden">
+                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Results</span>
+                        {testResults.length > 0 && (
+                          <span className="text-[10px] text-[#636366]">
+                            {testResults.filter(r => r.status === 'extracted').length}/{testResults.length} <span className="underline">found</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                        {testResults.length === 0 && !isTesting && (
+                          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                            <FlaskConical className="w-8 h-8 text-[#2c2c2e] mb-3" />
+                            <p className="text-[12px] text-[#3a3a3c]">Paste text and click Run</p>
+                          </div>
+                        )}
+                        {isTesting && testResults.length === 0 && (
+                          <div className="flex flex-col items-center justify-center h-full py-12">
+                            <Loader2 className="w-6 h-6 text-purple-400 animate-spin mb-2" />
+                            <p className="text-[12px] text-[#636366]">Extracting…</p>
+                          </div>
+                        )}
+                        {testResults.map((r, i) => (
+                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`} style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
+                              <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest">{r.name}</span>
+                              {r.status === 'extracted' && (
+                                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-md font-semibold ${r.method === 'Pattern' ? 'bg-purple-500/15 text-purple-400' : 'bg-[#2c2c2e] text-[#636366]'}`}>
+                                  {r.method}
+                                </span>
+                              )}
+                            </div>
+                            {r.status === 'extracted' ? (
+                              <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
+                            ) : (
+                              <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {rightTab === 'editor' && selectedEntity && (
                 <div className="flex-1 overflow-y-auto">
                   <div className="px-6 py-5 sticky top-0 z-10 shrink-0" style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e' }}>
                     <div className="flex items-start justify-between gap-4">
@@ -777,12 +1146,6 @@ export default function EntityBuilder() {
                         <p className="text-[11px] text-[#3a3a3c] mt-0.5">Entity #{selectedEntity.id.toString().slice(-4)}</p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <div className="relative">
-                          <CompletenessRing pct={selectedEntity.completeness} />
-                          <span className={`absolute inset-0 flex items-center justify-center text-[10px] font-bold tabular-nums ${completenessColor(selectedEntity.completeness)}`}>
-                            {selectedEntity.completeness}%
-                          </span>
-                        </div>
                         <button onClick={() => duplicateEntity(selectedEntity.id)}
                           className="p-2 text-[#636366] hover:text-white hover:bg-white/[0.06] rounded-xl smooth press-sm" title="Duplicate" data-testid={`button-duplicate-${selectedEntity.id}`}>
                           <Copy className="w-4 h-4" />
@@ -913,12 +1276,6 @@ export default function EntityBuilder() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="flex-1 h-1.5 bg-[#111111] rounded-full overflow-hidden ring-1 ring-white/[0.04]">
-                      <div className={`h-full rounded-full transition-all duration-700 ${completenessBarColor(selectedEntity.completeness)}`} style={{ width: `${selectedEntity.completeness}%` }} />
-                    </div>
-                    <span className={`text-[12px] font-bold tabular-nums w-10 text-right ${completenessColor(selectedEntity.completeness)}`}>{selectedEntity.completeness}%</span>
                   </div>
                 </Section>
 
