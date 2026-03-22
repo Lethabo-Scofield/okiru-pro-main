@@ -1,0 +1,96 @@
+In the web app version of the Okiru B-BBEE Toolkit, **scenario planning** is one of the most valuable features for clients — it turns a static scorecard into a dynamic "what-if" simulator. This directly supports the meeting discussion (around 7:42 in the transcript) where scenario planning was described as:
+
+- Based on loaded data (from Excel upload or manual inputs)
+- Allowing users to create multiple scenarios
+- Inputting figures for targets and interventions
+- Making changes that propagate across connected pillars
+- Showing dynamic score updates (current vs scenario)
+
+The Excel already has a basic foundation for this in sheets like **"Empower - Secenario Planning"** (note the typo in the sheet name), **"Empower - Strategy"**, and some scenario flags in Procurement Data and Skills Calcs. However, it's mostly static tables with manual overrides.
+
+To make this powerful in the web app, we need to **extend and change** how scenarios work. Below are the key changes and additions we should implement.
+
+### Core Changes for Scenario Planning in the Web App
+
+1. **Scenario Creation & Management**
+   - Add a **Scenarios** page or dedicated tab (e.g., accessible from the Dashboard via a "Scenario Planner" button).
+   - Users can:
+     - Create new scenario (name it, e.g., "Hire 5 Black Managers Q3", "Add R2m ESD Grant", "Switch 30% Procurement to Level 1 Suppliers").
+     - Duplicate the current/base scenario (load all real data as starting point).
+     - List all scenarios (table: Name | Created | Last Modified | Projected Level | Delta Points | Status: Draft / Saved / Compared).
+     - Delete / rename / archive scenarios.
+   - Limit: Start with 5–10 active scenarios per client (to avoid performance issues).
+
+2. **What Changes Are Allowed in a Scenario?**
+   We make targeted, pillar-specific overrides that only affect that scenario — **never** the base data. Common realistic interventions (based on typical B-BBEE consulting practice and recent code discussions):
+
+   | Pillar                  | Allowed Scenario Changes (Examples)                                                                 | Impact on Scorecard                                                                 | UI Implementation |
+   |-------------------------|-----------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------|-------------------|
+   | **Ownership**           | Change % BO/BWO/BDG for existing shareholders; Add new black shareholder; Adjust debt/graduation years | Net Value points, Voting Rights, Economic Interest, New Entrants | Edit shareholder table (overrides only) |
+   | **Management Control**  | Add / promote black employees (change race/gender/designation/disabled status); Adjust headcount | Board/Exec/Senior/Junior % targets, Disabilities 2% target | "Add Employee" form or bulk edit grid |
+   | **Skills Development**  | Increase training spend (All Spend, Bursaries, Disabilities); Add unemployed learners; Change absorption rate | 3.5% black skills, 2.5% bursaries, absorption bonus | Spend sliders + learner count inputs |
+   | **Preferential Procurement** | Increase spend on Level 1–4 / 51% BO / 30% BWO suppliers; Add new suppliers | Recognised spend % (135% for Level 1, bonus for BDG) | Spend allocation sliders or % overrides |
+   | **ESD (Supplier/Enterprise Dev)** | Add new contribution (grant/loan/employee time); Increase amount; Change benefit factor | % of Deemed NPAT targets (2% SD, 1% ED) | Contribution form (type, amount, beneficiary) |
+   | **SED**                 | Add socio-economic spend (e.g., CSI project) | 1% of Deemed NPAT target | Simple amount + % black benefiting input |
+   | **YES**                 | Simulate youth hires/absorption numbers; Change registration status | Tier qualification, bonus points/levels | Headcount target overrides |
+   | **Financials (Global)** | Override projected Revenue/NPAT (affects Deemed NPAT → ESD/SED targets) | Leviable amount, ESD/SED targets | Top-level financial projection fields |
+
+   - **Rule**: Changes are **isolated per scenario** — e.g., adding a black manager only affects MC in that scenario, not base data.
+   - **Global overrides** (e.g., change Deemed NPAT assumption) apply to the whole scenario.
+
+3. **How Changes Propagate & Recalculate**
+   - Every change triggers a full recalculation (client-side JS for speed, or server-side for complex cases).
+   - Propagation chain (same as Excel dependencies):
+     - Financials → Deemed NPAT → ESD/SED targets
+     - EAP selection → MC & Skills optimum targets
+     - Ownership/MC/Skills/Procurement changes → sub-minimum checks → possible discounting
+     - All pillars → total points → B-BBEE level / discounted level / YES level
+   - Show **before/after delta** immediately (e.g., "+4 points to MC", "Level improves from 6 to 4").
+
+4. **UI/UX for Scenarios**
+   - **Comparison View** (most important screen):
+     - Side-by-side or tabbed view: Base | Scenario 1 | Scenario 2
+     - Table columns: Pillar | Base Points | Scenario Points | Delta | Required Investment (estimated, e.g., salary cost for new hire)
+     - Highlight improvements (green) / regressions (red)
+     - Overall summary: Projected Level | Points Delta | YES Tier Change
+   - **Intervention Library** (nice-to-have later):
+     - Pre-built "recipes" e.g.:
+       - "Hire 3 Black Females – Junior Management" → auto-calcs MC impact + estimated cost
+       - "Shift R5m Procurement to 51% BO Suppliers" → Procurement impact + cost delta
+   - **Charts**:
+     - Bar chart: Points per pillar (base vs scenario)
+     - Waterfall chart: How interventions add up to total delta
+   - **Save & Export**:
+     - Save scenario
+     - Export: Include in strategy pack slides (e.g., "Scenario: Target Level 4 – Required Actions")
+
+5. **Additional Changes from Recent Code Context (2026 Perspective)**
+   Recent draft amendments (Jan 2026 gazette, comments until ~March 2026) introduce things like:
+   - Transformation Fund alternative (3% NPAT → up to 20 ESD points)
+   - Shift in bonus points (e.g., from 51% BO Designated Groups to 100% Black-owned Designated Groups)
+   - Increased ESD monitoring requirements
+
+   **In the app**:
+   - Add toggle: "Apply Draft 2026 Rules" (for forward-looking scenarios)
+   - Extra scenario field: "Use Transformation Fund instead of ESD?" → reroutes points calculation
+   - Bonus point overrides become more sensitive to 100% ownership checks
+
+6. **Technical & Validation Changes**
+   - **Performance**: Client-side recalc (using same JS formulas we extracted earlier) for instant feedback; debounce inputs.
+   - **Versioning**: Each scenario stores its own snapshot of inputs + overrides.
+   - **Audit trail**: Log what changed (e.g., "Increased bursary spend by R150k → +2.1 points").
+   - **Testing**: Use GP Excel base data → create scenarios like "Add R1m grant to ESD" and verify points match manual Excel override.
+
+### Summary of Effort & Priority
+- **Must-have for MVP** (aligns with meeting priority): Create/Duplicate scenarios, allow pillar-specific overrides, show side-by-side comparison with deltas, recalc total level.
+- **High value add**: Intervention cost estimators, pre-built recipes, draft-code toggles (especially ESD/Procurement changes).
+- **Start simple**: Build on the existing "Empower - Secenario Planning" table structure, then expand to dynamic inputs.
+
+This turns the tool from "calculator" → "strategic advisor". Clients love being able to answer "What do we need to do to reach Level 4 by next verification?"
+
+If you want, I can sketch:
+- A wireframe description for the Scenario Comparison screen
+- Example JS pseudo-code for one intervention (e.g., adding black managers)
+- Or prioritize which 3–4 interventions to build first
+
+Let me know what to zoom in on next! 🚀
