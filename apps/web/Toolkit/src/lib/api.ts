@@ -3,7 +3,7 @@ import { API_BASE } from "./config";
 
 async function apiRequest(url: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${url}`, {
-    credentials: "include", 
+    credentials: "include", // ensures cookies/session are sent
     ...options,
     headers: {
       "Content-Type": "application/json",

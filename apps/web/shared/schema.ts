@@ -88,6 +88,7 @@ export interface InsertUser {
 
 export interface Template {
   id: number;
+  userId: string | null;
   name: string;
   description: string | null;
   version: string;
@@ -101,6 +102,7 @@ export interface InsertTemplate {
   description?: string | null;
   version?: string;
   entities: TemplateEntity[];
+  userId?: string | null;
 }
 
 export interface CalculatorConfigRow {
@@ -151,6 +153,7 @@ const templateSchema = new Schema({
   description: { type: String, default: null },
   version: { type: String, default: "1.0" },
   entities: { type: Schema.Types.Mixed, required: true },
+  userId: { type: String, default: null, index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -239,10 +242,51 @@ messageSchema.set("toJSON", {
   },
 });
 
+const processorSessionSchema = new Schema({
+  sessionId: { type: String, required: true, unique: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
+  companyInfo: {
+    name: { type: String, required: true },
+    registrationNumber: { type: String, default: '' },
+    sector: { type: String, default: '' },
+    annualTurnover: { type: String, default: '' },
+    employees: { type: String, default: '' },
+    financialYearEnd: { type: String, default: '' },
+    address: { type: String, default: '' },
+    contactName: { type: String, default: '' },
+    contactEmail: { type: String, default: '' },
+    contactPhone: { type: String, default: '' },
+    currentBBEELevel: { type: String, default: '' },
+    notes: { type: String, default: '' },
+    logo: { type: String, default: '' },
+  },
+  currentStep: { type: String, default: 'company-info' },
+  filesData: { type: Schema.Types.Mixed, default: [] },
+  fileClassifications: { type: Schema.Types.Mixed, default: {} },
+  extractionResults: { type: Schema.Types.Mixed, default: [] },
+  docStatuses: { type: Schema.Types.Mixed, default: {} },
+  isComplete: { type: Boolean, default: false },
+  scorecardResult: { type: Schema.Types.Mixed, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+processorSessionSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.sessionId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
 export const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 export const TemplateModel = mongoose.models.Template || mongoose.model("Template", templateSchema);
 export const CalculatorConfigModel = mongoose.models.CalculatorConfig || mongoose.model("CalculatorConfig", calculatorConfigSchema);
 export const ConversationModel = mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema);
 export const MessageModel = mongoose.models.Message || mongoose.model("Message", messageSchema);
+export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
 
 export { getNextSequence };

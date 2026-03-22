@@ -8,6 +8,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes.js";
 import { createServer } from "http";
 import { connectDB } from "./db.js";
+import { connectArango, ensureCollections } from "./arango/index.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -26,8 +27,8 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false 
 app.use(compression());
 
 // CORS
-const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()) || ["http://localhost:3000"];
-app.use(cors({ origin: isProd ? allowedOrigins : true, credentials: true }));
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Boolean) || (isProd ? [] : ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
 
 // Body parser
 app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
@@ -37,7 +38,7 @@ app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 // Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
-  let capturedJsonResponse: Record<string, any> | undefined;
+  let capturedJsonResponse: Record<string, unknown> | undefined;
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
     capturedJsonResponse = bodyJson;
@@ -62,12 +63,19 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
 
 (async () => {
   await connectDB();
+  await connectArango();
+  await ensureCollections();
   await registerRoutes(httpServer, app);
 
   // Error middleware
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = isProd ? "Internal Server Error" : (err.message || "Internal Server Error");
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const status =
+      (err && typeof err === "object" && "status" in err && typeof (err as { status: number }).status === "number")
+        ? (err as { status: number }).status
+        : (err && typeof err === "object" && "statusCode" in err && typeof (err as { statusCode: number }).statusCode === "number")
+          ? (err as { statusCode: number }).statusCode
+          : 500;
+    const message = isProd ? "Internal Server Error" : (err instanceof Error ? err.message : "Internal Server Error");
     if (!isProd) console.error("Internal Server Error:", err);
     if (res.headersSent) return next(err);
     return res.status(status).json({ message });

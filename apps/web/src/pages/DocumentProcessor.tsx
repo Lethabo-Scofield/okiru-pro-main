@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
-  Circle, Zap, ListChecks, Download, CheckCheck, Pencil, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion
+  Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
+  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -37,6 +38,97 @@ interface UploadedFile {
   textContent: string;
 }
 
+interface CompanyInfo {
+  name: string;
+  sector: string;
+  registrationNumber: string;
+  annualTurnover: string;
+  employees: string;
+  financialYearEnd: string;
+  address: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  currentBBEELevel: string;
+  notes: string;
+  logo?: string;
+}
+
+interface ProcessorSession {
+  id: string;
+  companyInfo: CompanyInfo;
+  createdAt: string;
+  updatedAt: string;
+  currentStep: 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'scorecard';
+  filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
+  fileClassifications: Record<string, number>;
+  extractionResults: any[];
+  docStatuses: Record<number, string>;
+  isComplete: boolean;
+  scorecardResult?: any;
+}
+
+const BBEE_SECTORS = [
+  'Agriculture', 'Construction', 'Education', 'Financial Services',
+  'Healthcare', 'Information Technology', 'Manufacturing', 'Mining',
+  'Professional Services', 'Retail', 'Transportation', 'Other',
+];
+
+const BBEE_LEVELS = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Non-Compliant', 'Not Verified'];
+const FYE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const EMPTY_COMPANY_INFO: CompanyInfo = {
+  name: '', sector: '', registrationNumber: '', annualTurnover: '', employees: '',
+  financialYearEnd: '', address: '', contactName: '', contactEmail: '',
+  contactPhone: '', currentBBEELevel: '', notes: '',
+};
+
+function generateSessionId() {
+  return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSession | null> {
+  try {
+    const res = await fetch('/api/processor-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: session.id,
+        companyInfo: session.companyInfo,
+        currentStep: session.currentStep,
+        filesData: session.filesData,
+        fileClassifications: session.fileClassifications,
+        extractionResults: session.extractionResults,
+        docStatuses: session.docStatuses,
+        isComplete: session.isComplete,
+      }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function apiLoadSession(sessionId: string): Promise<ProcessorSession | null> {
+  try {
+    const res = await fetch(`/api/processor-sessions/${sessionId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      id: data.sessionId || data.id,
+      companyInfo: data.companyInfo,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      currentStep: data.currentStep,
+      filesData: data.filesData || [],
+      fileClassifications: data.fileClassifications || {},
+      extractionResults: data.extractionResults || [],
+      docStatuses: data.docStatuses || {},
+      isComplete: data.isComplete || false,
+      scorecardResult: data.scorecardResult || null,
+    };
+  } catch { return null; }
+}
+
 const FileIcon = ({ type, className }: { type: string; className?: string }) => {
   const props = { className: className || "w-4 h-4" };
   switch (type) {
@@ -48,20 +140,12 @@ const FileIcon = ({ type, className }: { type: string; className?: string }) => 
 };
 
 function getEntityColors(_dark?: boolean) {
-  return [
-    { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' },
-    { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.35)', text: '#4ade80', underline: '#22c55e' },
-    { bg: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.35)', text: '#a78bfa', underline: '#8b5cf6' },
-    { bg: 'rgba(251,146,60,0.15)', border: 'rgba(251,146,60,0.35)', text: '#fb923c', underline: '#f97316' },
-    { bg: 'rgba(236,72,153,0.15)', border: 'rgba(236,72,153,0.35)', text: '#f472b6', underline: '#ec4899' },
-    { bg: 'rgba(45,212,191,0.15)', border: 'rgba(45,212,191,0.35)', text: '#2dd4bf', underline: '#14b8a6' },
-    { bg: 'rgba(250,204,21,0.15)', border: 'rgba(250,204,21,0.35)', text: '#facc15', underline: '#eab308' },
-    { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.35)', text: '#f87171', underline: '#ef4444' },
-  ];
+  const c = { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' };
+  return [c, c, c, c, c, c, c, c];
 }
 
-function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity, isDark = true }: {
-  text: string; entities: any[]; isDark?: boolean;
+function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity }: {
+  text: string; entities: any[];
   hoveredEntity: number | null; onHoverEntity: (idx: number | null) => void;
 }) {
   const highlighted = useMemo(() => {
@@ -107,42 +191,44 @@ function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity, isD
   }, [text, entities]);
 
   return (
-    <pre className="text-sm text-[#d1d1d6] whitespace-pre-wrap font-mono leading-relaxed break-words">
-      {highlighted.map((seg, i) => {
-        if (!seg.highlight) return <span key={i}>{seg.text}</span>;
-        const colors = getEntityColors(isDark);
-        const color = colors[seg.entityIdx % colors.length];
-        const isHovered = hoveredEntity === seg.entityIdx;
-        const entityName = entities[seg.entityIdx]?.name || '';
-        return (
-          <span key={i} className="relative inline-block group/mark"
-            onMouseEnter={() => onHoverEntity(seg.entityIdx)}
-            onMouseLeave={() => onHoverEntity(null)}
-          >
-            <span className="absolute -top-5 left-0 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap px-1.5 py-0.5 rounded-t-md z-10 pointer-events-none"
-              style={{
-                backgroundColor: color.underline,
-                color: '#fff',
-                opacity: isHovered ? 1 : 0,
-                transition: 'opacity 0.15s',
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+      <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif', letterSpacing: '0' }}>
+        {highlighted.map((seg, i) => {
+          if (!seg.highlight) return <span key={i}>{seg.text}</span>;
+          const colors = getEntityColors(false);
+          const color = colors[seg.entityIdx % colors.length];
+          const isHovered = hoveredEntity === seg.entityIdx;
+          const entityName = entities[seg.entityIdx]?.name || '';
+          return (
+            <span key={i} className="relative inline-block group/mark"
+              onMouseEnter={() => onHoverEntity(seg.entityIdx)}
+              onMouseLeave={() => onHoverEntity(null)}
+            >
+              <span className="absolute -top-5 left-0 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap px-1.5 py-0.5 rounded-t-md z-10 pointer-events-none"
+                style={{
+                  backgroundColor: color.underline,
+                  color: '#fff',
+                  opacity: isHovered ? 1 : 0,
+                  transition: 'opacity 0.15s',
+                }}>
+                {entityName}
+              </span>
+              <mark style={{
+                backgroundColor: isHovered ? color.bg.replace('0.15', '0.35') : color.bg,
+                borderBottom: `3px solid ${color.underline}`,
+                color: '#111827',
+                padding: '2px 3px',
+                borderRadius: '3px',
+                transition: 'background-color 0.15s',
+                fontWeight: isHovered ? 600 : 400,
               }}>
-              {entityName}
+                {seg.text}
+              </mark>
             </span>
-            <mark style={{
-              backgroundColor: isHovered ? color.bg.replace('0.15', '0.35') : color.bg,
-              borderBottom: `3px solid ${color.underline}`,
-              color: color.text,
-              padding: '2px 4px',
-              borderRadius: '4px',
-              transition: 'background-color 0.15s',
-              fontWeight: isHovered ? 600 : 400,
-            }}>
-              {seg.text}
-            </mark>
-          </span>
-        );
-      })}
-    </pre>
+          );
+        })}
+      </p>
+    </div>
   );
 }
 
@@ -355,20 +441,27 @@ function PDFDocumentViewer({ file, entities, hoveredEntity, onHoverEntity }: {
 export default function DocumentProcessor() {
   const { isDark } = useTheme();
   const { toast } = useToast();
+  const [location, navigate] = useLocation();
+  const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'upload' | 'classify' | 'extract' | 'processing' | 'review'>('upload');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review'>('company-info');
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isSavingSession, setIsSavingSession] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(() => {
+    return new URLSearchParams(window.location.search).has('session');
+  });
+  const sessionCreatedAt = useRef<string>(new Date().toISOString());
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [fileClassifications, setFileClassifications] = useState<Record<string, number>>({});
+  const [fileDocTypes, setFileDocTypes] = useState<Record<string, 'digital' | 'scanned'>>({});
   const [extractionResults, setExtractionResults] = useState<any[]>([]);
-  const [currentEdit, setCurrentEdit] = useState<{ docIdx: number; entIdx: number } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [editConfidence, setEditConfidence] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const [templates, setTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'low' | 'edited'>('all');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
   const [completedCount, setCompletedCount] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
@@ -385,6 +478,128 @@ export default function DocumentProcessor() {
   }, []);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('session');
+    if (!sid) return;
+    setIsLoadingSession(true);
+    apiLoadSession(sid).then(sess => {
+      setIsLoadingSession(false);
+      if (!sess) {
+        toast({ title: 'Session not found', description: 'Could not resume that session.', variant: 'destructive' });
+        return;
+      }
+      setSessionId(sess.id);
+      sessionCreatedAt.current = sess.createdAt;
+      setCompanyInfo({ ...EMPTY_COMPANY_INFO, ...sess.companyInfo });
+      setFileClassifications(sess.fileClassifications || {});
+      const normalizeResults = (results: any[]) => (results || []).map((r: any) => ({
+        ...r,
+        entities: (r.entities || []).map((e: any) => ({
+          ...e,
+          name: e.name || e.entity || '',
+          confidence: e.confidence ?? e.conf ?? 0,
+        })),
+      }));
+      setExtractionResults(normalizeResults(sess.extractionResults));
+      if (sess.filesData && sess.filesData.length > 0) {
+        const NativeFile = window.File as typeof globalThis.File;
+        const restored: UploadedFile[] = sess.filesData.map((fd: any) => {
+          let fileObj: globalThis.File;
+          if (fd.fileBase64) {
+            try {
+              const binary = atob(fd.fileBase64);
+              const bytes = new Uint8Array(binary.length);
+              for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+              fileObj = new NativeFile([bytes], fd.name, { type: 'application/pdf' });
+            } catch {
+              fileObj = new NativeFile([], fd.name, { type: 'application/pdf' });
+            }
+          } else {
+            fileObj = new NativeFile([], fd.name, { type: fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream' });
+          }
+          return { id: fd.id, file: fileObj, name: fd.name, size: fd.size, type: fd.type, uploadProgress: 100, status: 'ready' as const, textContent: fd.textContent || '' };
+        });
+        setUploadedFiles(restored);
+      }
+      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'];
+      const step = sess.currentStep && validSteps.includes(sess.currentStep)
+        ? sess.currentStep
+        : sess.scorecardResult ? 'scorecard'
+        : sess.extractionResults && sess.extractionResults.length > 0 ? 'review'
+        : sess.filesData && sess.filesData.length > 0 ? 'classify'
+        : 'upload';
+      setCurrentPage(step as any);
+      toast({ title: `Resumed: ${sess.companyInfo.name}`, description: 'Your session has been loaded.' });
+    });
+  }, [location]);
+
+  const persistSession = useCallback(async (step: string, opts?: {
+    ci?: CompanyInfo;
+    files?: UploadedFile[];
+    classifications?: Record<string, number>;
+    results?: any[];
+    statuses?: Record<number, string>;
+    complete?: boolean;
+    scorecardResult?: any;
+  }) => {
+    const sid = sessionId || generateSessionId();
+    if (!sessionId) setSessionId(sid);
+    const ci = opts?.ci ?? companyInfo;
+    if (!ci.name) return sid;
+    const sess: ProcessorSession = {
+      id: sid,
+      companyInfo: ci,
+      createdAt: sessionCreatedAt.current,
+      updatedAt: new Date().toISOString(),
+      currentStep: step as ProcessorSession['currentStep'],
+      filesData: await Promise.all((opts?.files ?? uploadedFiles).map(async f => {
+        let fileBase64: string | undefined;
+        if (f.type === 'PDF' && f.file && f.file.size > 0) {
+          try {
+            const buf = await f.file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let j = 0; j < bytes.length; j += 8192) {
+              const chunk = Array.from(bytes.subarray(j, j + 8192));
+              binary += String.fromCharCode(...chunk);
+            }
+            fileBase64 = btoa(binary);
+          } catch { /* skip */ }
+        }
+        return { id: f.id, name: f.name, size: f.size, type: f.type, textContent: f.textContent, ...(fileBase64 ? { fileBase64 } : {}) };
+      })),
+      fileClassifications: opts?.classifications ?? fileClassifications,
+      extractionResults: opts?.results ?? extractionResults,
+      docStatuses: opts?.statuses ?? docStatuses,
+      isComplete: opts?.complete ?? false,
+      scorecardResult: opts?.scorecardResult ?? undefined,
+    };
+    await apiSaveSession(sess);
+    return sid;
+  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses]);
+
+  const lastSavedFilesRef = useRef<string>('');
+  useEffect(() => {
+    if (!sessionId || currentPage !== 'upload') return;
+    const allReady = uploadedFiles.length > 0 && uploadedFiles.every(f => f.status === 'ready');
+    if (!allReady) return;
+    const key = uploadedFiles.map(f => f.id + f.status).join(',');
+    if (key === lastSavedFilesRef.current) return;
+    lastSavedFilesRef.current = key;
+    persistSession('upload', { files: uploadedFiles });
+  }, [uploadedFiles, currentPage, sessionId, persistSession]);
+
+  const lastSavedClassifyRef = useRef<string>('');
+  useEffect(() => {
+    if (!sessionId || currentPage !== 'classify') return;
+    const key = JSON.stringify(fileClassifications);
+    if (key === lastSavedClassifyRef.current || key === '{}') return;
+    lastSavedClassifyRef.current = key;
+    const t = setTimeout(() => { persistSession('classify', { classifications: fileClassifications }); }, 800);
+    return () => clearTimeout(t);
+  }, [fileClassifications, currentPage, sessionId, persistSession]);
 
   const extractPdfText = async (file: File): Promise<string> => {
     try {
@@ -430,10 +645,31 @@ export default function DocumentProcessor() {
     }
   };
 
+  const extractXlsxText = async (file: File): Promise<string> => {
+    try {
+      const XLSX = await import('xlsx');
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheets: string[] = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        if (csv.trim()) {
+          sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`);
+        }
+      }
+      return sheets.join('\n\n') || `[No text content in Excel file: ${file.name}]`;
+    } catch (err) {
+      console.error('Excel extraction failed:', err);
+      return `[Could not extract text from Excel file: ${file.name}]`;
+    }
+  };
+
   const readFileText = async (file: File): Promise<string> => {
     const name = file.name.toLowerCase();
     if (name.endsWith('.pdf') || file.type === 'application/pdf') return extractPdfText(file);
     if (name.endsWith('.docx') || name.endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return extractDocxText(file);
+    if (name.endsWith('.xlsx') || name.endsWith('.xls') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel') return extractXlsxText(file);
     if (name.endsWith('.txt') || name.endsWith('.csv') || name.endsWith('.eml') || name.endsWith('.json') || name.endsWith('.md') || name.endsWith('.html') || name.endsWith('.xml') || file.type.startsWith('text/')) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -442,7 +678,7 @@ export default function DocumentProcessor() {
         reader.readAsText(file);
       });
     }
-    return `[Unsupported file format: ${file.name}. Supported formats: PDF, DOCX, TXT, CSV, EML, JSON]`;
+    return `[Unsupported file format: ${file.name}. Supported formats: PDF, DOCX, XLSX, XLS, TXT, CSV, EML, JSON]`;
   };
 
   const handleFiles = (files: File[]) => {
@@ -485,8 +721,8 @@ export default function DocumentProcessor() {
     abortControllerRef.current = controller;
     processingFinalized.current = false;
 
-    const initialStatuses: Record<number, 'waiting'> = {};
-    uploadedFiles.forEach((_, i) => { initialStatuses[i] = 'waiting'; });
+    const initialStatuses: Record<number, 'processing' | 'done' | 'error' | 'waiting'> = {};
+    uploadedFiles.forEach((_, i) => { initialStatuses[i] = 'processing'; });
     setDocStatuses(initialStatuses);
     setCompletedCount(0);
     setProcessingError(null);
@@ -514,6 +750,7 @@ export default function DocumentProcessor() {
         templateName: documents[i].templateName, entities: [],
       });
       setExtractionResults(finalResults);
+      persistSession('review', { results: finalResults });
       setTimeout(() => setCurrentPage('review'), 600);
     };
 
@@ -528,7 +765,12 @@ export default function DocumentProcessor() {
           setDocStatuses(prev => ({ ...prev, [data.index]: eventType === 'doc-done' ? 'done' : 'error' }));
           resultsAccumulator[data.index] = {
             fileName: data.fileName, templateId: data.templateId,
-            templateName: data.templateName, entities: data.entities || [],
+            templateName: data.templateName,
+            entities: (data.entities || []).map((e: any) => ({
+              ...e,
+              name: e.name || e.entity || '',
+              confidence: e.confidence ?? e.conf ?? 0,
+            })),
           };
           setCompletedCount(prev => { const next = prev + 1; if (next >= documents.length) finalizeResults(); return next; });
           break;
@@ -639,7 +881,11 @@ export default function DocumentProcessor() {
               result = {
                 fileName: data.fileName || file.name,
                 templateId, templateName: template.name,
-                entities: data.entities || [],
+                entities: (data.entities || []).map((e: any) => ({
+                  ...e,
+                  name: e.name || e.entity || '',
+                  confidence: e.confidence ?? e.conf ?? 0,
+                })),
               };
             }
           } catch {}
@@ -677,24 +923,13 @@ export default function DocumentProcessor() {
     }
   };
 
-  const editInputRef = useRef<HTMLInputElement>(null);
-
-  const openEdit = (docIdx: number, entIdx: number) => {
-    const entity = extractionResults[docIdx]?.entities[entIdx];
-    if (!entity) return;
-    setCurrentEdit({ docIdx, entIdx });
-    setEditValue(entity.value || '');
-    setEditConfidence(entity.confidence || 0);
-    setTimeout(() => editInputRef.current?.focus(), 50);
-  };
-  const saveEdit = () => {
-    if (!currentEdit) return;
-    const { docIdx, entIdx } = currentEdit;
+  const inlineEditEntity = (docIdx: number, entIdx: number, newValue: string) => {
     const r = structuredClone(extractionResults);
-    r[docIdx].entities[entIdx] = { ...r[docIdx].entities[entIdx], value: editValue, confidence: editConfidence, status: 'edited' };
+    const entity = r[docIdx]?.entities[entIdx];
+    if (!entity) return;
+    entity.value = newValue;
+    entity.status = 'edited';
     setExtractionResults(r);
-    setCurrentEdit(null);
-    toast({ title: "Entity updated", description: `Value saved for "${r[docIdx].entities[entIdx].name}"` });
   };
   const approveEntity = (docIdx: number, entIdx: number) => {
     const r = structuredClone(extractionResults);
@@ -761,93 +996,71 @@ export default function DocumentProcessor() {
     return name.endsWith('.pdf') || activeDocFile.file.type === 'application/pdf';
   }, [activeDocFile]);
 
-  const stepIdx = currentPage === 'upload' ? 0 : currentPage === 'classify' ? 1 : (currentPage === 'extract' || currentPage === 'processing') ? 2 : 3;
+  const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : 4;
 
   return (
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
-      {currentEdit !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xl" onClick={(e) => { if (e.target === e.currentTarget) setCurrentEdit(null); }} style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div className="bg-[#1c1c1e] rounded-2xl shadow-2xl w-full max-w-md p-6 scale-in" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setCurrentEdit(null); }}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-white">Edit Entity</h3>
-              <button onClick={() => setCurrentEdit(null)} className="p-1.5 text-[#98989f] hover:text-white rounded-[10px] hover:bg-[#2c2c2e] smooth press-sm">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {currentEdit && extractionResults[currentEdit.docIdx]?.entities[currentEdit.entIdx] && (
-              <div className="text-xs text-[#8e8e93] mb-4 px-2 py-1.5 bg-[#2c2c2e] rounded-lg">
-                <span className="font-medium text-[#d1d1d6]">{extractionResults[currentEdit.docIdx].entities[currentEdit.entIdx].name}</span>
-                <span className="mx-1.5 text-[#636366]">|</span>
-                {extractionResults[currentEdit.docIdx].fileName}
-              </div>
-            )}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-[#d1d1d6] uppercase tracking-wider mb-2">Value</label>
-                <input ref={editInputRef} type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                  className="w-full bg-[#2c2c2e] border border-transparent rounded-xl px-3 py-2.5 text-sm text-white focus:border-purple-500/50 focus:outline-none focus:ring-1 focus:ring-purple-500/30 transition-all" data-testid="input-edit-value" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-[#d1d1d6] uppercase tracking-wider">Confidence</label>
-                  <span className={`text-sm font-bold ${editConfidence >= 80 ? 'text-green-400' : editConfidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{editConfidence}%</span>
-                </div>
-                <input type="range" min="0" max="100" value={editConfidence} onChange={(e) => setEditConfidence(Number(e.target.value))}
-                  className="w-full accent-purple-500" data-testid="input-edit-confidence" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setCurrentEdit(null)} className="flex-1 py-2.5 bg-[#2c2c2e] text-white rounded-xl hover:bg-[#3a3a3c] smooth press-sm text-[13px] font-medium">Cancel</button>
-              <button onClick={saveEdit} className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-500 smooth press-sm text-[13px] font-semibold" data-testid="button-save-edit">
-                Save <span className="text-white/60 text-[11px] ml-1">Enter</span>
-              </button>
+
+      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0">
+              <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
+              <span className="text-[13px] font-medium tracking-wide">Back to Dashboard</span>
+            </Link>
+            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
+            <div className="flex items-center gap-3 press-sm">
+              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
+              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">Document Processor</span>
             </div>
           </div>
-        </div>
-      )}
 
-      <header className="h-14 flex items-center justify-between px-5 shrink-0 z-20 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors duration-200 press-sm group" data-testid="btn-back">
-            <ChevronLeft className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
-            <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg" />
-          </Link>
-          <span className="text-lg font-semibold tracking-tight">
-            <span className="text-purple-400">Okiru</span><span className="text-white"> Processor</span>
-          </span>
-          <div className="h-5 w-px bg-[#3a3a3c]"></div>
-          <span className="text-[#d1d1d6] text-[13px] font-medium">Document Processor</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-dashboard-nav">
-            <Home className="w-3.5 h-3.5 mr-1 inline-block" /> Dashboard
-          </Link>
-          <Link href="/builder" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-builder-nav">
-            <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/builder" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-builder-nav">
+              <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
+            </Link>
+            <div className="w-px h-4 bg-[#2c2c2e] mx-1"></div>
+            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
+              <span className="inline-flex h-5 w-5 rounded-full bg-purple-600 items-center justify-center text-white font-semibold text-[9px]">
+                {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
+              </span>
+              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
+            </div>
+            <button
+              onClick={async () => { await logout(); navigate('/auth'); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              data-testid="button-sign-out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          {['Upload', 'Template', 'Extract', 'Review'].map((label, idx) => {
-            const StepIcons = [CloudUpload, Puzzle, Cpu, SearchCheck];
-            const pageMap = ['upload', 'classify', 'extract', 'review'] as const;
+        <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
+          {['Company', 'Upload', 'Template', 'Extract', 'Review', 'Scorecard'].map((label, idx) => {
+            const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck, FileText];
+            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'] as const;
+            type PageMapType = typeof pageMap[number];
+            const safeCurrentPage = currentPage as PageMapType;
+            const stepIdx = pageMap.indexOf(safeCurrentPage);
             const isComplete = idx < stepIdx;
             const isCurrent = idx === stepIdx;
-            const canNavigate = isComplete;
+            const canNavigate = isComplete && safeCurrentPage !== 'company-info';
             const StepIcon = StepIcons[idx];
             return (
               <React.Fragment key={label}>
                 <div className={`flex items-center gap-2.5 ${canNavigate ? 'cursor-pointer group' : ''}`}
-                  onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx]); }}>
+                  onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx] as PageMapType); }}>
                   <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs smooth ${isComplete ? 'border-green-500 bg-green-500 text-white group-hover:bg-green-400' : isCurrent ? 'border-purple-600 bg-purple-600 text-white' : 'border-transparent text-[#636366]'}`}>
                     {isComplete ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
                   </div>
                   <span className={`text-[13px] font-medium hidden sm:inline smooth ${isComplete ? 'text-green-400 group-hover:text-green-300' : isCurrent ? 'text-purple-400' : 'text-[#636366]'}`}>{label}</span>
                 </div>
-                {idx < 3 && (
+                {idx < 5 && (
                   <div className="flex-1 h-0.5 bg-[#1c1c1e] mx-4 rounded-full overflow-hidden">
                     <div className="h-full bg-green-500 transition-all duration-700 rounded-full" style={{ width: isComplete ? '100%' : '0%' }}></div>
                   </div>
@@ -859,7 +1072,226 @@ export default function DocumentProcessor() {
       </div>
 
       <main className="flex-1 overflow-y-auto">
-        <div className={`${currentPage === 'review' ? '' : 'max-w-3xl mx-auto'} p-6`}>
+        <div className={`${currentPage === 'review' ? '' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
+
+          {currentPage === 'company-info' && (
+            <div>
+              {isLoadingSession ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-4">
+                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                  <p className="text-[#8e8e93] text-sm">Loading session...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto mb-4">
+                      <Building2 className="w-7 h-7" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-1">New Client Assessment</h2>
+                    <p className="text-[#8e8e93] text-sm">Enter the client company's details before uploading documents</p>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-3">Company Logo</p>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-20 h-20 rounded-2xl bg-[#1c1c1e] border-2 border-dashed border-[#3a3a3c] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
+                        onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                        data-testid="logo-upload-zone"
+                      >
+                        {companyInfo.logo ? (
+                          <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
+                        ) : (
+                          <Building2 className="w-7 h-7 text-[#3a3a3c]" />
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          id="logo-input"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          data-testid="input-logo"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 2 * 1024 * 1024) {
+                              toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' });
+                              e.target.value = '';
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = '';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                          className="px-4 py-2 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-[#3a3a3c]"
+                          data-testid="button-upload-logo"
+                        >
+                          {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
+                        </button>
+                        {companyInfo.logo && (
+                          <button
+                            type="button"
+                            onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
+                            className="ml-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[12px] font-medium smooth press-sm"
+                            data-testid="button-remove-logo"
+                          >
+                            Remove
+                          </button>
+                        )}
+                        <p className="text-[11px] text-[#636366] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Company Details</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Company Name <span className="text-red-400">*</span></label>
+                      <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. Acme Holdings (Pty) Ltd"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-company-name" autoFocus />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Registration Number</label>
+                      <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
+                        placeholder="e.g. 2021/123456/07"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-company-regno" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Industry Sector <span className="text-red-400">*</span></label>
+                      <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-company-sector">
+                        <option value="">Select a sector...</option>
+                        {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Annual Turnover (ZAR)</label>
+                      <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
+                        placeholder="e.g. R 50,000,000"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-annual-turnover" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Number of Employees</label>
+                      <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
+                        placeholder="e.g. 150"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-employees" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Financial Year End</label>
+                      <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-fye">
+                        <option value="">Select month...</option>
+                        {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Current B-BBEE Level</label>
+                      <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
+                        data-testid="select-bbee-level">
+                        <option value="">Select level...</option>
+                        {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Physical Address</label>
+                      <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
+                        placeholder="e.g. 10 Mandela Square, Sandton, 2196"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-address" />
+                    </div>
+                  </div>
+
+                  <div className="mb-3 mt-6">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Contact Person</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Full Name</label>
+                      <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
+                        placeholder="e.g. Jane Dlamini"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-name" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Email Address</label>
+                      <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
+                        placeholder="e.g. jane@company.co.za"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-email" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Phone Number</label>
+                      <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
+                        placeholder="e.g. +27 82 123 4567"
+                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
+                        data-testid="input-contact-phone" />
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Additional Notes</p>
+                  </div>
+                  <div className="mb-8">
+                    <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
+                      placeholder="Any additional context about this client or assessment..."
+                      rows={3}
+                      className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all resize-none"
+                      data-testid="input-notes" />
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!companyInfo.name.trim() || !companyInfo.sector) {
+                        toast({ title: "Missing information", description: "Please provide a company name and sector.", variant: "destructive" });
+                        return;
+                      }
+                      setIsSavingSession(true);
+                      const sid = sessionId || generateSessionId();
+                      if (!sessionId) {
+                        setSessionId(sid);
+                        sessionCreatedAt.current = new Date().toISOString();
+                      }
+                      await apiSaveSession({
+                        id: sid, companyInfo,
+                        createdAt: sessionCreatedAt.current,
+                        updatedAt: new Date().toISOString(),
+                        currentStep: 'upload',
+                        filesData: [], fileClassifications: {},
+                        extractionResults: [], docStatuses: {}, isComplete: false,
+                      });
+                      setIsSavingSession(false);
+                      setCurrentPage('upload');
+                    }}
+                    disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
+                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press"
+                    data-testid="button-next-upload"
+                  >
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</>
+                      : <>Continue to Upload <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {currentPage === 'upload' && (
             <div>
@@ -943,10 +1375,16 @@ export default function DocumentProcessor() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => allReady && setCurrentPage('classify')} disabled={!allReady}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
-                    Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
-                  </button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setCurrentPage('company-info')}
+                      className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-company-info">
+                      <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
+                    </button>
+                    <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
+                      className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -963,34 +1401,76 @@ export default function DocumentProcessor() {
                   const selectedId = fileClassifications[String(file.id)];
                   const selectedTemplate = templates.find(t => t.id === selectedId);
                   return (
-                    <div key={file.id} className={`bg-[#1c1c1e] rounded-2xl p-4 transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/20' : ''}`} data-testid={`classify-row-${file.id}`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedTemplate ? 'bg-purple-500/15' : 'bg-[#2c2c2e]'}`}>
-                          <FileIcon type={file.type} className={`w-4 h-4 ${selectedTemplate ? 'text-purple-400' : file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{file.name}</div>
-                          <div className="text-xs text-[#636366] mt-0.5">{file.size} KB</div>
-                        </div>
-                        <select value={selectedId || ''}
-                          onChange={(e) => setFileClassifications(prev => ({ ...prev, [String(file.id)]: Number(e.target.value) }))}
-                          className="bg-[#2c2c2e] text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 appearance-none min-w-[200px]" data-testid={`select-template-${file.id}`}>
-                          <option value="">Select template...</option>
-                          {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.entities.length})</option>)}
-                        </select>
-                      </div>
-                      {selectedTemplate && (
-                        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedTemplate.entities.map((ent, i) => (
-                              <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">
-                                {ent.label}
-                              </span>
-                            ))}
+                    (() => {
+                      const docType = fileDocTypes[String(file.id)] || 'digital';
+                      const isScanned = docType === 'scanned';
+                      return (
+                        <div key={file.id} className={`rounded-2xl overflow-hidden transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/20' : ''}`} style={{ background: '#1c1c1e' }} data-testid={`classify-row-${file.id}`}>
+                          {/* File identity row */}
+                          <div className="flex items-center gap-3.5 px-4 pt-4 pb-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedTemplate ? 'bg-purple-500/15' : 'bg-[#2c2c2e]'}`}>
+                              <FileIcon type={file.type} className={`w-4 h-4 ${selectedTemplate ? 'text-purple-400' : file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-semibold text-white truncate">{file.name}</div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-[#636366]">{file.size} KB</span>
+                                {selectedTemplate && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/12 text-purple-400 font-medium">{selectedTemplate.name}</span>
+                                )}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${isScanned ? 'bg-amber-500/12 text-amber-400' : 'bg-blue-500/12 text-blue-400'}`}>
+                                  {isScanned ? 'Scanned' : 'Digital'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
+
+                          {/* Two-dropdown row */}
+                          <div className="grid grid-cols-2 gap-px mx-4 mb-4" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #2c2c2e' }}>
+                            {/* Template selector */}
+                            <div className="relative bg-[#141414] px-3 py-2.5">
+                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1">Template</label>
+                              <div className="flex items-center gap-2">
+                                <Puzzle className="w-3 h-3 text-purple-400 shrink-0" />
+                                <select value={selectedId || ''}
+                                  onChange={(e) => setFileClassifications(prev => ({ ...prev, [String(file.id)]: Number(e.target.value) }))}
+                                  className="flex-1 bg-transparent text-white text-[12px] focus:outline-none appearance-none cursor-pointer min-w-0"
+                                  data-testid={`select-template-${file.id}`}>
+                                  <option value="">Select template…</option>
+                                  {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.entities.length})</option>)}
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Document type selector */}
+                            <div className={`relative px-3 py-2.5 ${isScanned ? 'bg-amber-500/[0.05]' : 'bg-blue-500/[0.05]'}`}>
+                              <label className={`text-[9px] font-semibold uppercase tracking-widest block mb-1 ${isScanned ? 'text-amber-500/60' : 'text-blue-500/60'}`}>Document type</label>
+                              <div className="flex items-center gap-2">
+                                {isScanned
+                                  ? <ScanLine className="w-3 h-3 text-amber-400 shrink-0" />
+                                  : <Monitor className="w-3 h-3 text-blue-400 shrink-0" />}
+                                <select value={docType}
+                                  onChange={(e) => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: e.target.value as 'digital' | 'scanned' }))}
+                                  className={`flex-1 bg-transparent text-[12px] font-semibold focus:outline-none appearance-none cursor-pointer ${isScanned ? 'text-amber-300' : 'text-blue-300'}`}
+                                  data-testid={`select-doctype-${file.id}`}>
+                                  <option value="digital">Digital</option>
+                                  <option value="scanned">Scanned</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Entity chips */}
+                          {selectedTemplate && (
+                            <div className="px-4 pb-4 flex flex-wrap gap-1.5">
+                              {selectedTemplate.entities.map((ent, i) => (
+                                <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">{ent.label}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()
                   );
                 })}
               </div>
@@ -998,9 +1478,9 @@ export default function DocumentProcessor() {
                 <button onClick={() => setCurrentPage('upload')} className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-upload">
                   <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
                 </button>
-                <button onClick={() => allClassified && setCurrentPage('extract')} disabled={!allClassified}
+                <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
                   className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-extract">
-                  Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
+                  {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
                 </button>
               </div>
             </div>
@@ -1084,15 +1564,6 @@ export default function DocumentProcessor() {
                             ))}
                           </div>
                         )}
-                        {!anyProcessing && status !== 'done' && (
-                          <button
-                            onClick={() => extractSingleDocument(idx)}
-                            className="px-3 py-1.5 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[#d1d1d6] hover:text-white rounded-[10px] text-[11px] font-medium smooth press-sm"
-                            data-testid={`button-extract-single-${idx}`}
-                          >
-                            <Zap className="w-2.5 h-2.5 mr-1 inline-block" />Extract
-                          </button>
-                        )}
                         {status === 'done' && (
                           <span className="text-xs text-green-400 font-medium inline-flex items-center gap-1"><Check className="w-2.5 h-2.5" />Done</span>
                         )}
@@ -1148,95 +1619,143 @@ export default function DocumentProcessor() {
           })()}
 
 
-          {currentPage === 'review' && extractionResults.length > 0 && (
+          {currentPage === 'review' && extractionResults.length > 0 && (() => {
+            const isLastDoc = activeReviewDoc === extractionResults.length - 1;
+            const handleNext = async () => {
+              setIsSavingSession(true);
+              await persistSession('review', { results: extractionResults, complete: false });
+              setIsSavingSession(false);
+              setActiveReviewDoc(prev => prev + 1);
+              setHoveredEntity(null);
+              setReviewFilter('all');
+            };
+            const handleSubmit = async () => {
+              setIsSavingSession(true);
+              
+              // 1. Gather all document texts
+              const documentTexts = uploadedFiles
+                .filter(file => file.textContent)
+                .map(file => file.textContent);
+
+              // 2. Base fallback if info missing
+              const sectorCode = 'RCOGP'; // Defaulting to generic for now until sector logic upgraded
+              const scorecardType = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) <= 50000000 ? 'QSE' : 'Generic';
+
+              try {
+                // 3. Make the API Call to extract-and-score
+                const res = await fetch('/api/extract-and-score', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    documentTexts,
+                    sectorCode,
+                    scorecardType,
+                    clientName: companyInfo.name
+                  }),
+                });
+
+                if (!res.ok) throw new Error('Scoring failed');
+                
+                const scoreData = await res.json();
+                
+                // 4. Update the session with the new scorecardResult
+                await persistSession('scorecard', { 
+                  results: extractionResults, 
+                  complete: true,
+                  scorecardResult: scoreData
+                });
+                
+                setIsSubmitted(true);
+                setCurrentPage('scorecard');
+                toast({ title: "Assessment complete", description: "Scorecard generated successfully!" });
+
+              } catch (err: any) {
+                console.error("Scorecard generation error", err);
+                toast({ title: "Generation Failed", description: "Could not generate scorecard. Review extraction results.", variant: "destructive" });
+                // Fallback to basic complete if scoring fails
+                await persistSession('review', { results: extractionResults, complete: true });
+                setIsSubmitted(true);
+              } finally {
+                setIsSavingSession(false);
+              }
+            };
+            return (
             <div className="flex flex-col h-full -m-6">
               <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentPage('extract')} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
+                  <button onClick={() => {
+                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); }
+                    else setCurrentPage('extract');
+                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <h2 className="text-lg font-semibold text-white">Review Results</h2>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="px-2 py-1 bg-[#1c1c1e] text-[#d1d1d6] rounded-lg">{totalEntities} entities</span>
-                    <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded-lg">{approvedCount} approved</span>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-white leading-tight">Review Results</h2>
+                    <p className="text-[11px] text-[#636366] truncate max-w-[240px]">{extractionResults[activeReviewDoc]?.fileName}</p>
                   </div>
+                  {extractionResults.length > 1 && (
+                    <span className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] rounded-lg text-[11px] font-medium">
+                      {activeReviewDoc + 1} / {extractionResults.length}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={exportResults} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-[10px] text-[13px] smooth press-sm" data-testid="button-export-results">
-                    <Download className="w-3.5 h-3.5 mr-1.5 inline-block" />JSON
-                  </button>
-                  <button onClick={exportCSV} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-[10px] text-[13px] smooth press-sm" data-testid="button-export-csv">
-                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 inline-block" />CSV
-                  </button>
-                  <button onClick={() => { setIsSubmitted(true); toast({ title: "Results submitted", description: `${totalEntities} entities across ${extractionResults.length} documents` }); }} disabled={isSubmitted}
-                    className={`px-4 py-1.5 rounded-[10px] font-semibold text-[13px] smooth press-sm ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`} data-testid="button-submit">
-                    {isSubmitted ? <><Check className="w-3.5 h-3.5 mr-1.5 inline-block" />Submitted</> : 'Submit All'}
-                  </button>
+                  {isLastDoc ? (
+                    <button onClick={handleSubmit} disabled={isSubmitted || isSavingSession}
+                      className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
+                      data-testid="button-submit">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
+                        : isSubmitted ? <><Check className="w-3.5 h-3.5" />Complete</>
+                        : 'Submit & Complete'}
+                    </button>
+                  ) : (
+                    <button onClick={handleNext} disabled={isSavingSession}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-60"
+                      data-testid="button-next-doc">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
+                        : <>Next Document <ChevronRight className="w-3.5 h-3.5" /></>}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {extractionResults.length > 1 && (
-                <div className="px-6 py-3 bg-[#0a0a0a] flex gap-2 overflow-x-auto shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
-                  {extractionResults.map((result: any, idx: number) => {
-                    const ext = result.fileName.split('.').pop()?.toUpperCase() || '';
-                    const iconColor = ext === 'PDF' ? 'text-red-400' : ext === 'CSV' ? 'text-green-400' : ext === 'DOC' || ext === 'DOCX' ? 'text-purple-400' : 'text-[#636366]';
-                    return (
-                      <button key={idx} onClick={() => setActiveReviewDoc(idx)}
-                        className={`px-3 py-2 rounded-[10px] text-[13px] font-medium whitespace-nowrap smooth press-sm flex items-center gap-1.5 ${activeReviewDoc === idx ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.06]'}`} data-testid={`tab-doc-${idx}`}>
-                        <FileIcon type={ext} className={`w-3.5 h-3.5 ${iconColor}`} />{result.fileName}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                <div className="w-1/2 overflow-y-auto bg-[#0a0a0a]" style={{ borderRight: '1px solid #2c2c2e' }}>
-                  <div className="px-5 py-4 sticky top-0 bg-[#0a0a0a] z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
+                <div className="w-1/2 overflow-y-auto bg-[#f5f5f5]" style={{ borderRight: '1px solid #2c2c2e' }}>
+                  <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-[#636366]" />
-                      <span className="text-sm font-medium text-[#d1d1d6]">{isPdfFile ? 'Document Viewer' : 'Document Preview'}</span>
-                      {!isPdfFile && <span className="text-xs text-[#636366] ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700">{isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? 'Document Viewer' : 'Document'}</span>
+                      {!(isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0) && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
                         .filter((e: any) => e.value && e.status !== 'not_found' && e.status !== 'rejected')
                         .map((e: any, i: number) => {
-                          const realIdx = extractionResults[activeReviewDoc].entities.indexOf(e);
-                          const color = entityColors[realIdx % entityColors.length];
-                          const isHovered = hoveredEntity === realIdx;
+                          const fmtLabel = (s: string) => s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/([a-z\d])([A-Z])/g, '$1 $2');
                           return (
-                            <span key={i}
-                              className="text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1.5 cursor-pointer transition-all"
-                              style={{
-                                backgroundColor: isHovered ? color.bg.replace('0.15', '0.4') : color.bg,
-                                borderColor: color.border, color: color.text,
-                                transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                              }}
-                              onMouseEnter={() => setHoveredEntity(realIdx)}
-                              onMouseLeave={() => setHoveredEntity(null)}
-                            >
-                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color.underline }}></span>
-                              {e.name}
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-md border bg-gray-100 border-gray-300 text-gray-600">
+                              {fmtLabel(e.name)}
                             </span>
                           );
                         })}
                     </div>
                   </div>
-                  <div className={isPdfFile ? "px-2" : "p-5"}>
-                    {isPdfFile && activeDocFile ? (
+                  <div className={isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? "px-2 py-2" : "p-5"}>
+                    {isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? (
                       <PDFDocumentViewer
                         file={activeDocFile.file}
-                        entities={extractionResults[activeReviewDoc]?.entities || []}
-                        hoveredEntity={hoveredEntity}
-                        onHoverEntity={setHoveredEntity}
+                        entities={[]}
+                        hoveredEntity={null}
+                        onHoverEntity={() => {}}
                       />
                     ) : activeDocText ? (
-                      <HighlightedDocument text={activeDocText} entities={extractionResults[activeReviewDoc]?.entities || []} hoveredEntity={hoveredEntity} onHoverEntity={setHoveredEntity} isDark={isDark} />
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+                        <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{activeDocText}</p>
+                      </div>
                     ) : (
-                      <div className="text-center py-12">
-                        <FileQuestion className="w-8 h-8 text-[#636366] mb-3" />
-                        <p className="text-[#636366] text-sm">Document text not available</p>
+                      <div className="bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-center py-16 text-center">
+                        <FileQuestion className="w-8 h-8 text-gray-300 mb-3" />
+                        <p className="text-gray-400 text-sm">Document content not available</p>
                       </div>
                     )}
                   </div>
@@ -1248,80 +1767,102 @@ export default function DocumentProcessor() {
                       <div className="flex items-center gap-2">
                         <ListChecks className="w-4 h-4 text-[#636366]" />
                         <span className="text-sm font-medium text-[#d1d1d6]">Extracted Entities</span>
+                        <span className="text-[11px] text-[#636366] bg-[#1c1c1e] px-2 py-0.5 rounded-md">
+                          {extractionResults[activeReviewDoc]?.entities?.length ?? 0}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {(['all', 'low', 'edited'] as const).map(f => (
+                      <div className="flex items-center gap-1.5">
+                        {(['all', 'edited'] as const).map(f => (
                           <button key={f} onClick={() => setReviewFilter(f)}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
-                            {f === 'low' ? '< 70%' : f}
+                            {f}
                           </button>
                         ))}
                         <button onClick={() => approveAllForDoc(activeReviewDoc)}
-                          className="px-2.5 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg text-[11px] font-medium hover:bg-green-500/20 smooth press-sm ml-1" data-testid="button-approve-all">
-                          <CheckCheck className="w-3 h-3 mr-1 inline-block" />All
+                          className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
+                          <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div className="p-5 space-y-2">
+                  <div className="p-4 space-y-2">
                     {(() => {
                       const entities = extractionResults[activeReviewDoc]?.entities || [];
-                      const filtered = entities.filter((e: any, _: number) => {
-                        if (reviewFilter === 'low') return e.confidence < 70;
+                      const templateForResult = templates?.find((t: any) => t.id === extractionResults[activeReviewDoc]?.templateId);
+                      const getEntityDef = (name: string) => templateForResult?.entities?.find((e: any) => e.label === name)?.definition || '';
+                      const fmtLabel = (s: string) => s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/([a-z\d])([A-Z])/g, '$1 $2');
+                      const filtered = entities.filter((e: any) => {
                         if (reviewFilter === 'edited') return e.status === 'edited';
                         return true;
                       });
 
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-16 text-center">
+                            <div className="w-12 h-12 rounded-2xl bg-[#1c1c1e] flex items-center justify-center mb-4">
+                              <FileQuestion className="w-5 h-5 text-[#636366]" />
+                            </div>
+                            <p className="text-[#d1d1d6] text-sm font-medium mb-1">
+                              {reviewFilter === 'all' ? 'No entities found' : 'No edited entities'}
+                            </p>
+                            <p className="text-[#636366] text-xs">
+                              {reviewFilter === 'all' ? 'The template entities were not detected in this document' : 'Switch to "All" to see everything'}
+                            </p>
+                          </div>
+                        );
+                      }
+
                       return filtered.map((entity: any) => {
                         const realIdx = entities.indexOf(entity);
-                        const color = entityColors[realIdx % entityColors.length];
                         const isHovered = hoveredEntity === realIdx;
+                        const def = getEntityDef(entity.name);
+                        const isApproved = entity.status === 'approved';
+                        const isRejected = entity.status === 'rejected';
+                        const isEdited = entity.status === 'edited';
                         return (
                           <div key={realIdx}
-                            className={`rounded-xl overflow-hidden transition-all cursor-default ${isHovered ? 'ring-1 scale-[1.01]' : ''} ${entity.status === 'rejected' ? 'opacity-40' : ''}`}
-                            style={isHovered ? { '--tw-ring-color': color.underline } as React.CSSProperties : undefined}
+                            className={`rounded-xl border transition-all ${isHovered ? 'border-[#48484a]' : 'border-[#2c2c2e]'} ${isApproved ? 'border-green-500/30' : ''} ${isRejected ? 'opacity-40' : ''}`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
                             onMouseLeave={() => setHoveredEntity(null)}
                             data-testid={`review-entity-${realIdx}`}
                           >
-                            <div className="flex">
-                              <div className="w-1.5 shrink-0 rounded-l-xl" style={{ backgroundColor: color.underline }}></div>
-                              <div className={`flex-1 bg-[#1c1c1e] rounded-r-xl p-4 ${entity.status === 'approved' ? 'ring-1 ring-green-500/20' : ''}`}>
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}>{entity.name}</span>
-                                      {entity.status === 'approved' && <span className="text-[10px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded-md">Approved</span>}
-                                      {entity.status === 'edited' && <span className="text-[10px] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-md">Edited</span>}
-                                      {entity.status === 'rejected' && <span className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-md">Rejected</span>}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="inline-block px-2 py-1 rounded-md text-sm font-mono" style={{ backgroundColor: color.bg, color: color.text, borderBottom: `2px solid ${color.underline}` }}>
-                                        {entity.value || <span className="text-[#636366] italic font-sans text-sm">No value found</span>}
-                                      </span>
-                                    </div>
+                            <div className="bg-[#1c1c1e] rounded-xl p-3.5">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest leading-none">
+                                      {fmtLabel(entity.name)}
+                                    </span>
+                                    {isApproved && <span className="text-[10px] text-green-400 font-medium">· Approved</span>}
+                                    {isEdited && <span className="text-[10px] text-[#8e8e93] font-medium">· Edited</span>}
+                                    {isRejected && <span className="text-[10px] text-red-400 font-medium">· Rejected</span>}
                                   </div>
-                                  <div className="flex items-center gap-2 shrink-0 ml-3">
-                                    <span className={`text-sm font-bold ${entity.confidence >= 80 ? 'text-green-400' : entity.confidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{entity.confidence}%</span>
-                                    <div className="flex items-center gap-0.5">
-                                      {entity.status !== 'approved' && (
-                                        <button onClick={() => approveEntity(activeReviewDoc, realIdx)} className="p-1.5 text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve" data-testid={`button-approve-${realIdx}`}>
-                                          <Check className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                      <button onClick={() => openEdit(activeReviewDoc, realIdx)} className="p-1.5 text-purple-400 hover:bg-purple-500/10 rounded-lg smooth press-sm" title="Edit" data-testid={`button-edit-${realIdx}`}>
-                                        <Pencil className="w-3.5 h-3.5" />
-                                      </button>
-                                      {entity.status !== 'rejected' && (
-                                        <button onClick={() => rejectEntity(activeReviewDoc, realIdx)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject" data-testid={`button-reject-${realIdx}`}>
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
+                                  {def && <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>}
+                                  <input
+                                    type="text"
+                                    defaultValue={entity.value || ''}
+                                    placeholder="No value extracted"
+                                    onBlur={(e) => { const val = e.target.value; if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    className="w-full text-sm text-white bg-[#2c2c2e] rounded-lg px-3 py-2 border border-transparent focus:border-[#48484a] focus:outline-none transition-colors placeholder:text-[#48484a] placeholder:italic"
+                                    data-testid={`input-entity-value-${realIdx}`}
+                                  />
                                 </div>
-                                <div className="mt-2.5 h-1 bg-[#2c2c2e] rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${entity.confidence}%`, backgroundColor: color.underline }}></div>
+                                <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+                                  {!isApproved && (
+                                    <button onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="p-1.5 text-[#636366] hover:text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve"
+                                      data-testid={`button-approve-${realIdx}`}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {!isRejected && (
+                                    <button onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="p-1.5 text-[#636366] hover:text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject"
+                                      data-testid={`button-reject-${realIdx}`}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1333,7 +1874,47 @@ export default function DocumentProcessor() {
                 </div>
               </div>
             </div>
+            );
+          })()}
+
+          {currentPage === ('scorecard' as 'scorecard' | 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review') && (
+            <div className="max-w-4xl mx-auto py-8">
+              <div className="bg-[#1c1c1e] rounded-2xl p-8 border border-[#2c2c2e] shadow-xl">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center border border-purple-500/30">
+                      <ScanLine className="w-8 h-8 text-purple-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-1">B-BBEE Scorecard</h2>
+                      <p className="text-[#8e8e93] text-sm">{companyInfo.name} • {companyInfo.sector}</p>
+                    </div>
+                  </div>
+                  <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white rounded-xl text-sm font-medium smooth press-sm border border-[#48484a]" onClick={() => window.print()}>
+                    Export PDF
+                  </button>
+                </div>
+
+                {isSavingSession ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-400 mb-4" />
+                    <p className="text-[#8e8e93]">Generating scorecard...</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-3xl font-bold text-green-400 mb-2">Operation Complete</p>
+                    <p className="text-[#a1a1aa] max-w-lg mx-auto leading-relaxed">
+                      Scorecard calculation has been processed by the engine. You can view the fully generated certificate and metrics in the main Toolkit Dashboard.
+                    </p>
+                    <Link href="/dashboard" className="inline-block mt-8 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold smooth press">
+                      Go to Dashboard
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
+
         </div>
       </main>
     </div>

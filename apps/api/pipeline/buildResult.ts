@@ -1,9 +1,32 @@
 import type { ParseResult } from './excelParser.js';
 import type { PipelineResult, PipelineLog } from './types.js';
-import { r2, calcOwnership, calcManagementAndEE, calcSkills, calcProcurement, calcEsd, calcSed } from './calculators.js';
+import { r2 } from './calculators.js';
+import { detectSectorFromName } from './sectorConfig.js';
+import type { SectorConfig } from './sectorConfig.js';
+import {
+  calcOwnershipSector, calcMCSector, calcEESector,
+  calcSkillsSector, calcProcurementSector, calcEsdSector,
+  calcSedSector, determineLevelSector,
+} from './sectorCalculators.js';
 import { determineBeeLevel, LEVEL_POINTS_THRESHOLDS } from './levelDetermination.js';
 import { generateSuggestions } from './suggestions.js';
 import { resolveIndustryNorm } from './industryNorms.js';
+
+function _isBlack(r: string) { return ['African', 'Coloured', 'Indian'].includes(r); }
+
+function _boardBlackPct(employees: ParseResult['employees']): number {
+  const board = employees.filter(e => e.designation === 'Board');
+  return board.length > 0 ? board.filter(e => _isBlack(e.race)).length / board.length : 0;
+}
+
+function _execBlackPct(employees: ParseResult['employees']): number {
+  const exec = employees.filter(e => e.designation === 'Executive');
+  return exec.length > 0 ? exec.filter(e => _isBlack(e.race)).length / exec.length : 0;
+}
+
+function _disabledPct(employees: ParseResult['employees']): number {
+  return employees.length > 0 ? employees.filter(e => e.isDisabled).length / employees.length : 0;
+}
 
 export function buildPipelineResult(parsed: ParseResult, filename: string): PipelineResult {
   const now = new Date().toISOString();
@@ -65,19 +88,26 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
 
   addLog(`Found ${parsed.esdContributions.length} ESD + ${parsed.sedContributions.length} SED contributions`, (parsed.esdContributions.length + parsed.sedContributions.length) > 0 ? 'success' : 'warning');
 
-  const own = calcOwnership(parsed.shareholders);
-  const mcee = calcManagementAndEE(parsed.employees);
-  const sk = calcSkills(parsed.trainingPrograms, leviableAmount);
-  const pr = calcProcurement(parsed.suppliers, tmps);
-  const esd = calcEsd(parsed.esdContributions, effectiveNpat);
-  const sed = calcSed(parsed.sedContributions, effectiveNpat);
+  const sectorCfg: SectorConfig = detectSectorFromName(
+    parsed.client.industrySector || parsed.client.applicableScorecard || '',
+  );
+  addLog(`Sector config: ${sectorCfg.sectorName} (${sectorCfg.sectorCode} ${sectorCfg.scorecardType})`, 'info');
 
-  addLog(`Calculated: Ownership ${r2(own.total)}/25 · MC ${r2(mcee.mcTotal)}/8 · EE ${r2(mcee.eeTotal)}/11 · Skills ${r2(sk.total)}/25 · Procurement ${r2(pr.total)}/27 · ESD ${r2(esd.total)}/15 · SED ${r2(sed.total)}/5`, 'success');
+  const own = calcOwnershipSector(parsed.shareholders, sectorCfg);
+  const mcScore = calcMCSector(parsed.employees, sectorCfg);
+  const eeScore = calcEESector(parsed.employees, sectorCfg);
+  const sk = calcSkillsSector(parsed.trainingPrograms, leviableAmount, sectorCfg);
+  const pr = calcProcurementSector(parsed.suppliers, tmps, sectorCfg);
+  const esd = calcEsdSector(parsed.esdContributions, effectiveNpat, sectorCfg);
+  const sed = calcSedSector(parsed.sedContributions, effectiveNpat, sectorCfg);
+
+  const pCfg = sectorCfg.pillarConfigs;
+  addLog(`Calculated: Ownership ${r2(own.total)}/${pCfg.ownership.maxPoints} · MC ${r2(mcScore)}/${pCfg.managementControl.maxPoints} · EE ${r2(eeScore)}/${pCfg.employmentEquity.maxPoints} · Skills ${r2(sk.total)}/${pCfg.skillsDevelopment.maxPoints} · Procurement ${r2(pr.total)}/${pCfg.preferentialProcurement.maxPoints} · ESD ${r2(esd.total)}/${pCfg.enterpriseSupplierDevelopment.maxPoints} · SED ${r2(sed.total)}/${pCfg.socioEconomicDevelopment.maxPoints}`, 'success');
 
   const pillarScores = {
     ownership: r2(own.total),
-    managementControl: r2(mcee.mcTotal),
-    employmentEquity: r2(mcee.eeTotal),
+    managementControl: r2(mcScore),
+    employmentEquity: r2(eeScore),
     skillsDevelopment: r2(sk.total),
     preferentialProcurement: r2(pr.total),
     enterpriseSupplierDevelopment: r2(esd.total),
@@ -88,6 +118,33 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
 
   const sv = parsed.scorecardValues;
   if (sv) {
+    // Detect when the toolkit stores MC+EE as a single combined element.
+    // This happens when either:
+    //   (a) An explicit 'managementControlAndEE' key exists, or
+    //   (b) The 'managementControl' value exceeds 8 (its solo max),
+    //       indicating it's really MC+EE combined (max 19).
+    const mcMax = pCfg.managementControl.maxPoints;
+    const eeMax = pCfg.employmentEquity.maxPoints;
+    const mceeMax = mcMax + eeMax;
+    const explicitCombined = sv.managementControlAndEE !== undefined;
+    const implicitCombined = sv.managementControl !== undefined && sv.managementControl > mcMax + 0.5 && sv.employmentEquity === undefined;
+
+    if (explicitCombined || implicitCombined) {
+      const combinedRef = explicitCombined ? sv.managementControlAndEE! : sv.managementControl!;
+      const combinedCalc = pillarScores.managementControl + pillarScores.employmentEquity;
+      if (combinedRef >= 0 && combinedRef <= mceeMax * 1.5) {
+        if (combinedCalc > 0) {
+          const ratio = combinedRef / combinedCalc;
+          pillarScores.managementControl = r2(Math.min(mcMax, pillarScores.managementControl * ratio));
+          pillarScores.employmentEquity = r2(Math.min(eeMax, pillarScores.employmentEquity * ratio));
+          addLog(`MC+EE combined ref ${r2(combinedRef)} → split MC ${pillarScores.managementControl} + EE ${pillarScores.employmentEquity}`, 'info');
+        }
+      }
+      sv.managementControl = pillarScores.managementControl;
+      sv.employmentEquity = pillarScores.employmentEquity;
+      delete sv.managementControlAndEE;
+    }
+
     const override = (key: keyof typeof pillarScores, svKey: string, maxPts: number, label: string) => {
       const ref = sv[svKey];
       if (ref !== undefined && ref >= 0 && ref <= maxPts * 1.5) {
@@ -98,13 +155,13 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
         }
       }
     };
-    override('ownership', 'ownership', 25, 'Ownership');
-    override('managementControl', 'managementControl', 27, 'MC');
-    override('employmentEquity', 'employmentEquity', 18, 'EE');
-    override('skillsDevelopment', 'skillsDevelopment', 25, 'Skills');
-    override('preferentialProcurement', 'preferentialProcurement', 27, 'Procurement');
-    override('enterpriseSupplierDevelopment', 'enterpriseSupplierDevelopment', 15, 'ESD');
-    override('socioEconomicDevelopment', 'socioEconomicDevelopment', 5, 'SED');
+    override('ownership', 'ownership', pCfg.ownership.maxPoints, 'Ownership');
+    override('managementControl', 'managementControl', pCfg.managementControl.maxPoints, 'MC');
+    override('employmentEquity', 'employmentEquity', pCfg.employmentEquity.maxPoints, 'EE');
+    override('skillsDevelopment', 'skillsDevelopment', pCfg.skillsDevelopment.maxPoints, 'Skills');
+    override('preferentialProcurement', 'preferentialProcurement', pCfg.preferentialProcurement.maxPoints, 'Procurement');
+    override('enterpriseSupplierDevelopment', 'enterpriseSupplierDevelopment', pCfg.enterpriseSupplierDevelopment.maxPoints, 'ESD');
+    override('socioEconomicDevelopment', 'socioEconomicDevelopment', pCfg.socioEconomicDevelopment.maxPoints, 'SED');
     override('yesInitiative', 'yesInitiative', 5, 'YES');
   }
 
@@ -122,9 +179,12 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
     }
   }
 
-  const ownSubMinMet = pillarScores.ownership >= 10 || own.subMinMet;
-  const skSubMinMet = pillarScores.skillsDevelopment >= 10 || sk.subMinMet;
-  const prSubMinMet = pillarScores.preferentialProcurement >= 10.8 || pr.subMinMet;
+  const ownSubMinThresh = pCfg.ownership.maxPoints * (pCfg.ownership.subMinimumPercent / 100);
+  const skSubMinThresh = pCfg.skillsDevelopment.maxPoints * (pCfg.skillsDevelopment.subMinimumPercent / 100);
+  const prSubMinThresh = pCfg.preferentialProcurement.maxPoints * (pCfg.preferentialProcurement.subMinimumPercent / 100);
+  const ownSubMinMet = !pCfg.ownership.hasSubMinimum || pillarScores.ownership >= ownSubMinThresh || own.subMinMet;
+  const skSubMinMet = !pCfg.skillsDevelopment.hasSubMinimum || pillarScores.skillsDevelopment >= skSubMinThresh || sk.subMinMet;
+  const prSubMinMet = !pCfg.preferentialProcurement.hasSubMinimum || pillarScores.preferentialProcurement >= prSubMinThresh || pr.subMinMet;
   const allSubMinsMet = ownSubMinMet && skSubMinMet && prSubMinMet;
   const achieved = determineBeeLevel(pillarScores.totalPoints);
   const isNonCompliant = achieved.level >= 9;
@@ -213,9 +273,9 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
     managementControl: {
       calculatedPoints: pillarScores.managementControl,
       employeesCount: parsed.employees.length,
-      blackBoardPercent: r2(mcee.blackBoardPct * 100),
-      blackExecPercent: r2(mcee.blackExecPct * 100),
-      disabledPercent: r2(mcee.disabledPct * 100),
+      blackBoardPercent: r2(_boardBlackPct(parsed.employees) * 100),
+      blackExecPercent: r2(_execBlackPct(parsed.employees) * 100),
+      disabledPercent: r2(_disabledPct(parsed.employees) * 100),
       employees: parsed.employees.map(e => ({
         name: e.name,
         gender: e.gender,

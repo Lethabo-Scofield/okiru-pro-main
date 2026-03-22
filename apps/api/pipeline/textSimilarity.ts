@@ -122,7 +122,7 @@ export function matchHeaders(
 function normalizeSheetName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/^\d+[\.\)\-\s]+/, '')
+    .replace(/^\d+[.)\-\s]+/, '')
     .replace(/\([^)]*\)/g, '')
     .replace(/[^a-z0-9\s&]/g, ' ')
     .replace(/\s+/g, ' ')
