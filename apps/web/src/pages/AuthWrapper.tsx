@@ -9,7 +9,7 @@ export default function AuthWrapper() {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard", { replace: true });
+      navigate("/hub", { replace: true });
     }
   }, [user, navigate]);
 

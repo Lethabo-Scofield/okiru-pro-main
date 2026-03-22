@@ -9,6 +9,7 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ProtectedRoute, GuestRoute } from "@/components/RouteGuards";
 import LandingWrapper from "@/pages/LandingWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
+import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
 import EntityBuilder from "@/pages/EntityBuilder";
 import DocumentProcessor from "@/pages/DocumentProcessor";
@@ -39,6 +40,9 @@ function AppRouter() {
       </Route>
       <Route path="/auth">
         <GuestRoute><AuthWrapper /></GuestRoute>
+      </Route>
+      <Route path="/hub">
+        <ProtectedRoute><HubLanding /></ProtectedRoute>
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>
