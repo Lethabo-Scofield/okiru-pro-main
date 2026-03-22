@@ -976,6 +976,7 @@ export default function DocumentProcessor() {
   const approvedCount = extractionResults.reduce((a, r) => a + r.entities.filter((e: any) => e.status === 'approved').length, 0);
 
   const [hoveredEntity, setHoveredEntity] = useState<number | null>(null);
+  const [openTemplateDropdown, setOpenTemplateDropdown] = useState<string | null>(null);
 
   const activeDocText = useMemo(() => {
     if (currentPage !== 'review' || !extractionResults[activeReviewDoc]) return '';
@@ -1425,37 +1426,101 @@ export default function DocumentProcessor() {
                             </div>
                           </div>
 
-                          {/* Two-dropdown row */}
-                          <div className="grid grid-cols-2 gap-px mx-4 mb-4" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #2c2c2e' }}>
-                            {/* Template selector */}
-                            <div className="relative bg-[#141414] px-3 py-2.5">
-                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1">Template</label>
-                              <div className="flex items-center gap-2">
-                                <Puzzle className="w-3 h-3 text-purple-400 shrink-0" />
-                                <select value={selectedId || ''}
-                                  onChange={(e) => setFileClassifications(prev => ({ ...prev, [String(file.id)]: Number(e.target.value) }))}
-                                  className="flex-1 bg-transparent text-white text-[12px] focus:outline-none appearance-none cursor-pointer min-w-0"
-                                  data-testid={`select-template-${file.id}`}>
-                                  <option value="">Select template…</option>
-                                  {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.entities.length})</option>)}
-                                </select>
-                              </div>
+                          {/* Controls row */}
+                          <div className="px-4 pb-4 space-y-2.5">
+                            {/* Template custom dropdown */}
+                            <div className="relative" data-testid={`select-template-${file.id}`}>
+                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1.5">Template</label>
+                              <button
+                                type="button"
+                                onClick={() => setOpenTemplateDropdown(prev => prev === String(file.id) ? null : String(file.id))}
+                                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-left transition-all ${
+                                  selectedTemplate
+                                    ? 'bg-purple-500/10 border border-purple-500/25 text-white hover:border-purple-500/40'
+                                    : 'bg-[#141414] border border-[#2c2c2e] text-[#8e8e93] hover:border-[#3a3a3c] hover:text-white'
+                                }`}
+                              >
+                                <Puzzle className={`w-3.5 h-3.5 shrink-0 ${selectedTemplate ? 'text-purple-400' : 'text-[#636366]'}`} />
+                                <span className="flex-1 truncate">
+                                  {selectedTemplate ? selectedTemplate.name : 'Select a template…'}
+                                </span>
+                                {selectedTemplate && (
+                                  <span className="text-[10px] text-purple-400/70 shrink-0">{selectedTemplate.entities.length} fields</span>
+                                )}
+                                <ChevronRight className={`w-3.5 h-3.5 shrink-0 text-[#636366] transition-transform ${openTemplateDropdown === String(file.id) ? 'rotate-90' : ''}`} />
+                              </button>
+
+                              {openTemplateDropdown === String(file.id) && (
+                                <>
+                                  <div className="fixed inset-0 z-10" onClick={() => setOpenTemplateDropdown(null)} />
+                                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[#1c1c1e] border border-[#3a3a3c] rounded-xl shadow-2xl overflow-hidden">
+                                    <div className="max-h-52 overflow-y-auto">
+                                      {loadingTemplates ? (
+                                        <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#8e8e93]">
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading templates…
+                                        </div>
+                                      ) : templates.length === 0 ? (
+                                        <div className="px-4 py-3 text-[13px] text-[#636366]">No templates available</div>
+                                      ) : (
+                                        templates.map((t, i) => (
+                                          <button
+                                            key={t.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                              setOpenTemplateDropdown(null);
+                                            }}
+                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                                              selectedId === t.id
+                                                ? 'bg-purple-500/15 text-purple-300'
+                                                : 'text-[#d1d1d6] hover:bg-[#2c2c2e]'
+                                            } ${i > 0 ? 'border-t border-[#2c2c2e]' : ''}`}
+                                          >
+                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${selectedId === t.id ? 'bg-purple-500/20' : 'bg-[#2c2c2e]'}`}>
+                                              <Puzzle className={`w-3 h-3 ${selectedId === t.id ? 'text-purple-400' : 'text-[#636366]'}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-[13px] font-medium truncate">{t.name}</div>
+                                              <div className="text-[11px] text-[#636366]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                            </div>
+                                            {selectedId === t.id && <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                                          </button>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
 
-                            {/* Document type selector */}
-                            <div className={`relative px-3 py-2.5 ${isScanned ? 'bg-amber-500/[0.05]' : 'bg-blue-500/[0.05]'}`}>
-                              <label className={`text-[9px] font-semibold uppercase tracking-widest block mb-1 ${isScanned ? 'text-amber-500/60' : 'text-blue-500/60'}`}>Document type</label>
-                              <div className="flex items-center gap-2">
-                                {isScanned
-                                  ? <ScanLine className="w-3 h-3 text-amber-400 shrink-0" />
-                                  : <Monitor className="w-3 h-3 text-blue-400 shrink-0" />}
-                                <select value={docType}
-                                  onChange={(e) => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: e.target.value as 'digital' | 'scanned' }))}
-                                  className={`flex-1 bg-transparent text-[12px] font-semibold focus:outline-none appearance-none cursor-pointer ${isScanned ? 'text-amber-300' : 'text-blue-300'}`}
-                                  data-testid={`select-doctype-${file.id}`}>
-                                  <option value="digital">Digital</option>
-                                  <option value="scanned">Scanned</option>
-                                </select>
+                            {/* Document type segmented control */}
+                            <div>
+                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1.5">Document Type</label>
+                              <div className="flex gap-1 p-1 bg-[#141414] rounded-xl border border-[#2c2c2e]" data-testid={`select-doctype-${file.id}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
+                                    !isScanned
+                                      ? 'bg-blue-500/20 text-blue-300 shadow-sm'
+                                      : 'text-[#636366] hover:text-[#8e8e93]'
+                                  }`}
+                                >
+                                  <Monitor className="w-3 h-3" />
+                                  Digital
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
+                                    isScanned
+                                      ? 'bg-amber-500/20 text-amber-300 shadow-sm'
+                                      : 'text-[#636366] hover:text-[#8e8e93]'
+                                  }`}
+                                >
+                                  <ScanLine className="w-3 h-3" />
+                                  Scanned
+                                </button>
                               </div>
                             </div>
                           </div>
