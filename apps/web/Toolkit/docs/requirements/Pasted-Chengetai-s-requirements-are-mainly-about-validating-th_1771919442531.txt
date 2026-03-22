@@ -1,0 +1,504 @@
+Chengetai’s requirements are mainly about **validating the scorecard system using Excel first and defining export outputs**, before moving to the full AI-driven platform. The focus is **Phase 1: Excel-driven scorecard and dashboard**, not the AI pipeline yet.
+
+Below is a clear interpretation of what Chengetai needs and what each action item means technically.
+
+---
+
+## 1. Use the GP Excel as Source of Truth
+
+### Requirement
+
+You must use the **GP Excel toolkit** as the reference model.
+
+Purpose:
+
+* Verify that your system produces the same results as Excel
+* Ensure formulas and calculations match exactly
+* Confirm that pillar scores are correct
+
+Meaning technically:
+
+The system should behave like:
+
+```
+GP Excel File
+     ↓
+Load Data
+     ↓
+Apply Calculations
+     ↓
+Dashboard Scores
+```
+
+You must confirm:
+
+* Ownership scores match Excel
+* Management scores match Excel
+* Skills scores match Excel
+* Procurement scores match Excel
+* Total score matches Excel
+
+If Excel says:
+
+```
+Total Score = 68.4
+```
+
+Your system must produce:
+
+```
+Total Score = 68.4
+```
+
+This is **calculation validation**.
+
+---
+
+## 2. Prepare Slide Export Templates
+
+### Requirement
+
+Chengetai must define what exported slides should look like.
+
+Your responsibility:
+
+Implement slide export after templates are provided.
+
+Slides will likely include:
+
+* Current scorecard
+* Target scorecard
+* Gap analysis
+* Recommendations
+* Scenario results
+
+System should support:
+
+```
+Dashboard Data
+   ↓
+Slide Template
+   ↓
+PowerPoint Export
+```
+
+Chengetai provides:
+
+* Layout
+* Content
+* Titles
+* Charts
+
+You implement:
+
+* Data insertion
+* Export engine
+
+---
+
+## 3. Verify Excel Input Works Correctly
+
+### Requirement
+
+Once Excel integration is complete:
+
+Chengetai will verify:
+
+* All fields load correctly
+* Calculations match Excel
+* Scorecards are correct
+
+Meaning:
+
+You must build:
+
+```
+Excel Upload
+   ↓
+Data Parser
+   ↓
+System Fields
+   ↓
+Score Calculation
+```
+
+Example:
+
+Excel:
+
+```
+Black Managers = 5
+Total Managers = 10
+```
+
+System must compute:
+
+```
+Management % = 50%
+Score = X
+```
+
+If Excel produces different results, it fails.
+
+---
+
+## 4. Copy the Existing Toolkit
+
+### Requirement
+
+You must duplicate the existing Excel toolkit logic.
+
+Meaning:
+
+Take:
+
+* Tabs
+* Formulas
+* Structure
+* Calculations
+
+And recreate them inside the system.
+
+Example Excel Tabs:
+
+```
+Ownership
+Management
+Skills
+Procurement
+ESD
+Dashboard
+Industry Norms
+EAP
+```
+
+These become:
+
+```
+Ownership Page
+Management Page
+Skills Page
+Procurement Page
+ESD Page
+Dashboard
+Industry Norms
+EAP Settings
+```
+
+Goal:
+
+Reuse Excel logic instead of redesigning formulas.
+
+---
+
+## 5. Build Scorecard Dashboard
+
+### Requirement
+
+This is the **main immediate task.**
+
+You must build:
+
+### Dashboard
+
+Shows:
+
+* Current score
+* Previous score
+* Target score
+
+Example:
+
+```
+Current: 64
+Previous: 61
+Target: 75
+```
+
+Also:
+
+```
+Ownership: 18
+Management: 12
+Skills: 14
+Procurement: 20
+```
+
+---
+
+### Pillar Pages
+
+Each pillar needs its own page.
+
+Example:
+
+Ownership page:
+
+```
+Black Ownership %
+Black Female Ownership %
+Voting Rights %
+Net Value %
+Ownership Score
+```
+
+Management page:
+
+```
+Black Managers
+Female Managers
+Senior Management
+Junior Management
+Score
+```
+
+These pages allow editing values.
+
+---
+
+## 6. Scenario Planning
+
+### Requirement
+
+Users must create scenarios.
+
+Example:
+
+Base:
+
+```
+Black Managers = 5
+Score = 64
+```
+
+Scenario:
+
+```
+Black Managers = 8
+Score = 71
+```
+
+System must support:
+
+```
+Base Data
++
+Scenario Changes
+=
+New Score
+```
+
+Without modifying base data.
+
+---
+
+## 7. Dynamic Interventions
+
+### Requirement
+
+Users must test interventions.
+
+Examples:
+
+```
+Hire 3 Black Managers
+Add Supplier
+Increase Training Spend
+```
+
+System recalculates instantly.
+
+Meaning:
+
+```
+User Changes Input
+   ↓
+Scores Recalculate
+   ↓
+Dashboard Updates
+```
+
+No reload required.
+
+---
+
+## 8. Excel Export
+
+### Requirement
+
+System must export Excel files.
+
+Output should resemble toolkit.
+
+Example:
+
+```
+Dashboard Sheet
+Ownership Sheet
+Management Sheet
+Skills Sheet
+```
+
+Goal:
+
+Auditors can work from Excel.
+
+---
+
+## 9. Quarter Tracking
+
+### Requirement
+
+Dashboard must track history.
+
+Example:
+
+```
+Q1: 60
+Q2: 63
+Q3: 64
+Q4: 68
+```
+
+User must see progress.
+
+---
+
+## 10. Industry Norms and EAP
+
+### Requirement
+
+System must include:
+
+* Industry norms
+* EAP data
+
+User must select:
+
+```
+Province
+Industry
+```
+
+Example:
+
+```
+Province: Gauteng
+```
+
+System loads:
+
+```
+EAP Targets
+```
+
+These affect scoring.
+
+Important:
+
+Data updates quarterly.
+
+So must allow manual updates.
+
+---
+
+## 11. What is NOT Required Now
+
+Deferred to Phase 2:
+
+* Multi-tenant architecture
+* AI document ingestion
+* OCR pipeline
+* Automated extraction
+* Database-first design
+
+Current architecture:
+
+```
+Excel → System → Dashboard
+```
+
+Future architecture:
+
+```
+Documents → AI Pipeline → Database → Dashboard
+```
+
+---
+
+## 12. Immediate Priority (Critical)
+
+Your main tasks:
+
+### Task 1
+
+Build Excel ingestion.
+
+```
+Upload Excel
+↓
+Parse Data
+↓
+Load Scorecard
+```
+
+---
+
+### Task 2
+
+Build Scorecard Engine.
+
+```
+Inputs → Formulas → Scores
+```
+
+Must match Excel exactly.
+
+---
+
+### Task 3
+
+Build Dashboard.
+
+Display:
+
+* Pillar scores
+* Total score
+* Targets
+* History
+
+---
+
+### Task 4
+
+Build Pillar Pages.
+
+Editable fields.
+
+Dynamic updates.
+
+---
+
+## 13. Real Meaning of the Meeting
+
+They want:
+
+**Working Excel-driven scorecard first.**
+
+Not AI yet.
+
+Your pipeline is Phase 2.
+
+Phase 1 is:
+
+```
+Excel Toolkit → Web Scorecard System
+```
+
+Once that works:
+
+```
+AI Pipeline → Automatic Data Input
+```
+
+Your pipeline becomes the replacement for Excel later.

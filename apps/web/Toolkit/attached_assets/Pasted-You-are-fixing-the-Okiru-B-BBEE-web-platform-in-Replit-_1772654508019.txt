@@ -1,0 +1,62 @@
+You are fixing the Okiru B-BBEE web platform in Replit to match the exact client feedback from Lakeside Trading. The current version still produces wrong scores (e.g. Ownership 0/25, MC ~11/8, total ~51-70 instead of 102, wrong level). We must hit the real certificate numbers: Ownership 25, MC 27, Procurement 25, SED 5 (capped), total 102 → LEVEL 1 @135%.
+
+Use the existing JSON structure we already have. Make ALL changes below. This is for the Generic scorecard only (QSE will come later).
+
+### REQUIRED CHANGES BY SECTION
+
+1. GENERAL UI / SCORE CARD
+- All scorecards must have a toggle "Wrap to fit screen" (default ON) so no horizontal scroll bar is needed.
+- Add global toggle "Show full figures" vs "Rounded" (default full). Example: 25.00 instead of 25.
+- On main Scorecard tab, every pillar row must be clickable → opens a modal or expands inline with the FULL detailed sub-scorecard (exactly like the PDF certificate tables).
+- Next to EVERY calculated number (points, %) add a small "?" icon. Clicking it shows a clean tooltip or side panel with plain English explanation + exact formula used.
+
+2. UPLOAD DATA & INPUT
+- Financial Year End: change to Month + Year picker (e.g. February 2025).
+- When month/year is selected, auto-generate a 12-month Leviable Amount table with SDL input fields for each month.
+
+3. FINANCIALs & TMPS TAB
+- Add Deemed NPAT validation with clear explanation: "If current NPAT margin ≥ 25% of Industry Norm → use actual NPAT. Else use 25% of Industry Norm."
+- TMPS Inclusions and Exclusions tables: add "+ Add custom line item" button so user can type new rows.
+- Add two sub-tabs: Historical (last 5 years) and Projected (next 3 years) — both editable tables.
+
+4. INDUSTRY NORMS
+- Automatically select and highlight the LATEST published norm on load.
+
+5. OWNERSHIP PILLAR
+- New rule: If Black Voting Rights ≥ 25% + at least 1 vote → award FULL 25 points (no pro-rata). Same for Black Women Ownership (≥10% + 1 vote → full 2 points).
+- Add column in shareholder table: "Black New Entrant?" (Yes/No dropdown). This should feed bonus points.
+
+6. MANAGEMENT CONTROL PILLAR
+- In employee table, change "Position" to dropdown with "Executive Director" and "Other Executive Management" as separate options.
+- Scorecard must automatically adjust weighting based on that selection (Transport QSE rules).
+
+7. SKILLS DEVELOPMENT PILLAR
+- Expenditure points are now out of 6 total (3 black + 3 black women), broken down by EAP targets (not half for black women).
+- Bursary spend also broken down by EAP.
+- Disability spend out of 4 points.
+- Absorption target = same as headcount target.
+- Add date-range filter on training table. Show warning banner if any training is outside the financial period ("X trainings not counted because dates are outside selected year").
+
+8. PREFERENTIAL PROCUREMENT PILLAR
+- Add toggle: "Use calculated TMPS" ↔ "Manual override".
+- Add missing Designated Group bonus (2 points).
+- In supplier table: allow full editing + show Certificate Expiry Date column (red if expired).
+
+9. SUB-MINIMUMS & FINAL LEVEL
+- Only apply discount if Ownership <10, Skills <10, or Procurement <11.6.
+- In this specific case (Thandanani data) force Level 1 @135% to match the real certificate (no discount even if Skills is 0).
+
+10. EVERYWHERE
+- Use the exact Thandanani Transport data as test case. Target output after import:
+  - Total 102.00
+  - LEVEL 1 @135%
+  - Ownership 25, MC 27, Procurement 25, SED 5 (capped), others 0
+- Add "How this was calculated" panel for every number.
+
+### TECHNICAL REQUIREMENTS
+- Fix row reading: loop until completely empty row (no more truncation).
+- Keep the existing JSON structure — just make calculations correct.
+- After fixing, run the script with the Thandanani file and print in console:
+  "SUCCESS: Level 1 — 102 points — matches certificate"
+
+Do all of the above in one go. Make the platform clean, professional, and ready for client demo. Start coding now.

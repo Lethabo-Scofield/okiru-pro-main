@@ -1,0 +1,268 @@
+**Prompt: Build a Fully Functional System – Okiru.Pro**
+
+---
+
+**Project Name:** Okiru.Pro
+
+**Objective:**
+Transform the existing system into a fully functional, production-ready platform called **Okiru.Pro**. The system must be complete, operational, and practical. Every component must contain meaningful functionality and real information — not placeholders, jargon, or vague descriptions.
+
+---
+
+### Core Requirements
+
+#### 1. System Completion
+
+Build **Okiru.Pro** as a complete working system:
+
+* All modules must function end-to-end
+* No mock features or dummy content
+* All pipelines must execute successfully
+* Data must flow correctly between components
+* APIs must be functional
+* Interfaces must connect to real backend services
+* Error handling must be implemented
+* Logging must be implemented
+* Configuration must be centralized
+
+The platform must be **ready for real users**, not a prototype.
+
+---
+
+#### 2. Database Integration
+
+Connect the entire system to a **real database**.
+
+Requirements:
+
+* Persistent storage for:
+
+  * Users
+  * Projects
+  * Documents
+  * Results
+  * Logs
+  * Models
+  * Reports
+
+Suggested schema areas:
+
+**Users**
+
+* user_id
+* name
+* email
+* password_hash
+* created_at
+
+**Projects**
+
+* project_id
+* user_id
+* project_name
+* description
+* created_at
+
+**Documents**
+
+* document_id
+* project_id
+* file_path
+* metadata
+* uploaded_at
+
+**Results**
+
+* result_id
+* project_id
+* output_data
+* created_at
+
+**Logs**
+
+* log_id
+* project_id
+* message
+* severity
+* timestamp
+
+**Models**
+
+* model_id
+* model_name
+* version
+* parameters
+
+The system must:
+
+* Read from database
+* Write to database
+* Update records
+* Delete records
+* Validate inputs
+
+---
+
+#### 3. Pillars Must Be Useful
+
+Each pillar in **Okiru.Pro** must contain:
+
+* Real explanations
+* Clear instructions
+* Practical functionality
+* Actual outputs
+* Real workflows
+
+Requirements:
+
+* No empty sections
+* No buzzwords
+* No filler text
+* No vague language
+
+Each pillar must answer:
+
+* What it does
+* Why it exists
+* How to use it
+* Expected outputs
+
+---
+
+#### 4. Onboarding System
+
+Create a structured onboarding flow for new users.
+
+New users must be able to:
+
+1. Create an account
+2. Log in
+3. Create first project
+4. Upload data
+5. Run the system
+6. View results
+
+Onboarding must include:
+
+* Step-by-step setup
+* Guided instructions
+* Clear interface prompts
+* Example project
+* Example dataset
+* Example output
+
+First-time users must understand the platform without external help.
+
+---
+
+#### 5. Functional Pipelines
+
+All pipelines must run successfully:
+
+Example flow:
+
+1. User uploads document
+2. Document is stored
+3. Processing starts
+4. Analysis runs
+5. Results generated
+6. Results saved
+7. Results displayed
+
+No broken steps allowed.
+
+---
+
+#### 6. Architecture Requirements
+
+System must include:
+
+**Backend**
+
+* API layer
+* Processing layer
+* Database layer
+* Authentication layer
+
+**Frontend**
+
+* Dashboard
+* Upload interface
+* Results viewer
+* Project manager
+
+**Infrastructure**
+
+* Environment configuration
+* Secure authentication
+* Database connection
+* Storage system
+
+---
+
+#### 7. Rename Everything
+
+Replace all references to the old system name with:
+
+**Okiru.Pro**
+
+Includes:
+
+* Codebase
+* UI labels
+* Documentation
+* APIs
+* Config files
+* Database naming
+
+---
+
+#### 8. Documentation
+
+Provide full documentation:
+
+**User Documentation**
+
+* What Okiru.Pro does
+* How to start
+* How to create projects
+* How to run analysis
+* How to interpret results
+
+**Technical Documentation**
+
+* System architecture
+* Database schema
+* API endpoints
+* Pipeline flow
+* Deployment steps
+
+---
+
+#### 9. Production Readiness
+
+Ensure:
+
+* Clean code
+* Modular structure
+* Stable execution
+* Input validation
+* Error recovery
+* Logging
+* Reproducibility
+
+---
+
+#### 10. Final Deliverable
+
+Deliver a **fully operational Okiru.Pro platform** including:
+
+* Functional backend
+* Functional frontend
+* Connected database
+* Working pipelines
+* User onboarding
+* Documentation
+* Clean architecture
+
+The final system must be deployable and usable immediately.

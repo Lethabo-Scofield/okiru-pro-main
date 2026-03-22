@@ -1,0 +1,16 @@
+{
+  "buildCommand": "npx vite build --outDir dist",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    { "src": "/api/health", "dest": "/api/health.ts" },
+    { "src": "/api$", "dest": "/api/[...path].ts" },
+    { "src": "/api/(.*)", "dest": "/api/[...path].ts" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

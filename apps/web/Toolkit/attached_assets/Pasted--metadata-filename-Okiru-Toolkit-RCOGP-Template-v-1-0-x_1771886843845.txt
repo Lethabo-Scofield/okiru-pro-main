@@ -1,0 +1,992 @@
+{
+  "metadata": {
+    "filename": "Okiru Toolkit (RCOGP)_Template_v.1.0.xlsx",
+    "total_sheets": 52,
+    "last_updated": "Version 1.4 (from sheet)"
+  },
+  "sheets": [
+    {
+      "name": "Client Information",
+      "type": "input",
+      "hidden": false,
+      "description": "Measured Entity information, financial details, revenue, NPAT, etc.",
+      "inputs": ["Measured Entity Name", "Financial Period", "Applicable Codes", "Revenue", "NPAT", "Leviable Amount"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Financials", "Summary Scorecard", "Ownership Scorecard", "ESD Scorecard"]
+    },
+    {
+      "name": "Financials",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Financial data over years, NPAT, revenue, leidable amount, headcount",
+      "inputs": ["Year", "NPAT", "Revenue"],
+      "outputs": ["Last 5 year Average", "Deemed NPAT"],
+      "depends_on": ["Client Information"],
+      "referenced_by": ["Industry Norms", "Summary Scorecard"]
+    },
+    {
+      "name": "Industry Norms",
+      "type": "lookup",
+      "hidden": false,
+      "description": "Table of industry norms by sector and publication date",
+      "inputs": [],
+      "outputs": ["Industry Norms"],
+      "depends_on": [],
+      "referenced_by": ["Financials", "Scorecard Calculations"]
+    },
+    {
+      "name": "EAP",
+      "type": "lookup",
+      "hidden": false,
+      "description": "Economically Active Population tables by province and year",
+      "inputs": [],
+      "outputs": ["EAP percentages"],
+      "depends_on": [],
+      "referenced_by": ["MC Toolkit", "Skills Toolkit"]
+    },
+    {
+      "name": "Summary Scorecard",
+      "type": "dashboard",
+      "hidden": false,
+      "description": "Overall B-BBEE scorecard summary, levels, points",
+      "inputs": [],
+      "outputs": ["Achived Level", "Discounted Level", "YES Level"],
+      "depends_on": ["Scorecard Calculations", "Ownership Scorecard", "MC Scorecard", "Skills Scorecard", "Procurement Scorecard", "ESD Scorecard", "SED Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Ownership Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Ownership pillar scorecard, voting rights, economic interest, net value",
+      "inputs": ["Company Value"],
+      "outputs": ["Total Ownership Points"],
+      "depends_on": ["Client Information", "Ownership Data"],
+      "referenced_by": ["Summary Scorecard", "Scorecard Calculations"]
+    },
+    {
+      "name": "Scorecard Calculations",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Calculations for sub-minimums, gaps, levels, YES points",
+      "inputs": [],
+      "outputs": ["B-BBEE Status", "Discounted Level", "YES Points"],
+      "depends_on": ["Ownership Scorecard", "MC Scorecard", "Skills Scorecard", "Procurement Scorecard", "ESD Scorecard", "SED Scorecard"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "Ownership Data",
+      "type": "input",
+      "hidden": false,
+      "description": "Shareholder data, ownership percentages, debts, dates",
+      "inputs": ["Shareholder", "BO%", "BWO%", "BDG%", "BNE%", "Number of Share", "Share Value"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Ownership Scorecard", "Oustanding Debts Calcs"]
+    },
+    {
+      "name": "Ownership - Company Value Data",
+      "type": "input",
+      "hidden": false,
+      "description": "Company asset value, shares, share value",
+      "inputs": ["Date", "Company Asset Value", "Total Shares"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Ownership Scorecard"]
+    },
+    {
+      "name": "Ownership Calcs Formula",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Formulas for graduation factor, deemed value, net value",
+      "inputs": [],
+      "outputs": ["Graduation Factor", "Deemed Value"],
+      "depends_on": ["Ownership Data"],
+      "referenced_by": ["Oustanding Debts Calcs"]
+    },
+    {
+      "name": "Oustanding Debts Calcs",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Calculations for outstanding debts, deemed values, formula results",
+      "inputs": [],
+      "outputs": ["Deemed Value", "Formual A Results"],
+      "depends_on": ["Ownership Data", "Ownership Calcs Formula"],
+      "referenced_by": ["Ownership Scorecard"]
+    },
+    {
+      "name": "MC Toolkit",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Management Control toolkit, EAP targets, gaps, shortfalls",
+      "inputs": ["Effective EAP Target", "Select Period"],
+      "outputs": ["Shortfall", "Gap Analysis"],
+      "depends_on": ["EAP", "MC Data"],
+      "referenced_by": ["MC Scorecard"]
+    },
+    {
+      "name": "MC Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Management Control scorecard, board participation, executives, employees with disabilities",
+      "inputs": [],
+      "outputs": ["Grand Total"],
+      "depends_on": ["MC Toolkit", "MC Calcs"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "MC Scorecard (Exco + Senior)",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Alternative MC scorecard combining Exco and Senior",
+      "inputs": [],
+      "outputs": ["Grand Total"],
+      "depends_on": ["MC Toolkit"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "MC Data",
+      "type": "input",
+      "hidden": false,
+      "description": "Management Control data, employee details, gender, race, designation",
+      "inputs": ["Full Name", "Gender", "Race", "Designation", "Disabled", "ID Number"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["MC Toolkit", "MC Calcs"]
+    },
+    {
+      "name": "MC Report Data",
+      "type": "report",
+      "hidden": false,
+      "description": "MC report data, rand per point, spend, race/gender breakdowns",
+      "inputs": [],
+      "outputs": ["Rand per point"],
+      "depends_on": ["MC Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "MC Calcs",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Management Control calculations, targets, actuals, points",
+      "inputs": [],
+      "outputs": ["Grand Total"],
+      "depends_on": ["MC Data"],
+      "referenced_by": ["MC Scorecard"]
+    },
+    {
+      "name": "Skills Toolkit",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Skills Development toolkit, le viable amount, EAP targets, spend summaries",
+      "inputs": ["Leviable amount", "Applicable EAP Targets"],
+      "outputs": ["Actual Spend", "Gap Analysis"],
+      "depends_on": ["EAP", "Skills Data"],
+      "referenced_by": ["Skills Scorecard"]
+    },
+    {
+      "name": "Skills Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Skills Development scorecard, spend categories, absorption, bonus points",
+      "inputs": [],
+      "outputs": ["Total Points"],
+      "depends_on": ["Skills Toolkit", "Skills Calcs"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "Employee Demographics",
+      "type": "input",
+      "hidden": false,
+      "description": "Employee demographics by race, gender, disabled",
+      "inputs": ["African Male", "Coloured Female"],
+      "outputs": ["Total"],
+      "depends_on": [],
+      "referenced_by": ["Skills Toolkit"]
+    },
+    {
+      "name": "Skills Data",
+      "type": "input",
+      "hidden": false,
+      "description": "Skills training data, program name, category, costs, employee details",
+      "inputs": ["Training Program Name", "Category", "Course Cost", "ID Number"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Skills Toolkit", "Skills Calcs"]
+    },
+    {
+      "name": "Procurement Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Preferential Procurement scorecard, TMPS, spend categories, bonus",
+      "inputs": ["TMPS", "Total Procurement Spend"],
+      "outputs": ["Total Points"],
+      "depends_on": ["Procurement Data", "TMPS"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "Procurement Data",
+      "type": "input",
+      "hidden": false,
+      "description": "Procurement supplier data, B-BBEE level, black ownership, spend",
+      "inputs": ["Supplier Name", "B-BBEE Level", "Black Ownership", "Spend"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Procurement Scorecard"]
+    },
+    {
+      "name": "PP Report Data",
+      "type": "report",
+      "hidden": false,
+      "description": "Preferential Procurement report, actual/gap spend by level",
+      "inputs": [],
+      "outputs": ["Actual Spend", "Gap"],
+      "depends_on": ["Procurement Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "TMPS",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Total Measured Procurement Spend calculations, inclusions/exclusions",
+      "inputs": ["Cost of Sales", "Operating Expenses"],
+      "outputs": ["Total Measured Spend"],
+      "depends_on": ["Financials"],
+      "referenced_by": ["Procurement Scorecard"]
+    },
+    {
+      "name": "ESD and SED Calcs",
+      "type": "lookup",
+      "hidden": false,
+      "description": "ESD and SED contribution types, benefit factors",
+      "inputs": [],
+      "outputs": ["Benefit Factor"],
+      "depends_on": [],
+      "referenced_by": ["ESD Scorecard", "SED Scorecard"]
+    },
+    {
+      "name": "ESD Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Enterprise and Supplier Development scorecard, contributions as % of NPAT",
+      "inputs": [],
+      "outputs": ["Total Points"],
+      "depends_on": ["ESD Data", "Financials"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "ESD Data",
+      "type": "input",
+      "hidden": false,
+      "description": "ESD contributions, beneficiary, amount, type",
+      "inputs": ["Beneficiary Name", "Contribution Type", "Amount"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["ESD Scorecard"]
+    },
+    {
+      "name": "ESD Report Data",
+      "type": "report",
+      "hidden": false,
+      "description": "ESD report, actual/gap, initiatives",
+      "inputs": [],
+      "outputs": ["Actual", "Gap"],
+      "depends_on": ["ESD Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "SED Scorecard",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Socioeconomic Development scorecard, contributions as % of NPAT",
+      "inputs": [],
+      "outputs": ["Total Points"],
+      "depends_on": ["SED Data", "Financials"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "SED Data",
+      "type": "input",
+      "hidden": false,
+      "description": "SED contributions, beneficiary, amount, type",
+      "inputs": ["Beneficiary Name", "Contribution Type", "Amount"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["SED Scorecard"]
+    },
+    {
+      "name": "YES",
+      "type": "calculation",
+      "hidden": false,
+      "description": "YES initiative, qualification criteria, headcount targets, costs",
+      "inputs": ["YES registration date"],
+      "outputs": ["YES Tier"],
+      "depends_on": ["Scorecard Calculations"],
+      "referenced_by": ["Summary Scorecard"]
+    },
+    {
+      "name": "Validation",
+      "type": "lookup",
+      "hidden": false,
+      "description": "Validation data, periods, initiatives, genders, etc.",
+      "inputs": [],
+      "outputs": ["Period", "ESD Initiatives"],
+      "depends_on": [],
+      "referenced_by": ["All data sheets"]
+    },
+    {
+      "name": "Empower - Financials",
+      "type": "dashboard",
+      "hidden": false,
+      "description": "Empowerment financial forecasts, revenue, NPAT, costs per point",
+      "inputs": ["Projected received from"],
+      "outputs": ["Total to maximize scorecard"],
+      "depends_on": ["Financials"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Current State",
+      "type": "dashboard",
+      "hidden": false,
+      "description": "Current state, pillar champions, scores, graph data",
+      "inputs": ["Pillar Champion"],
+      "outputs": ["Level", "Discounted"],
+      "depends_on": ["Summary Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Strategy",
+      "type": "dashboard",
+      "hidden": false,
+      "description": "Strategy summary, financials, risk areas, pillar strategies",
+      "inputs": ["Required Level", "Verification Agent"],
+      "outputs": [],
+      "depends_on": ["Empower - Current State"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Curent State Actions",
+      "type": "input",
+      "hidden": false,
+      "description": "Action items for current state, by pillar",
+      "inputs": ["Task", "Investment", "Pillar Champion", "Timeframe"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Empower - Strategy"]
+    },
+    {
+      "name": "Risks & Points of Clarification",
+      "type": "documentation",
+      "hidden": false,
+      "description": "Risks and clarifications by pillar",
+      "inputs": ["Risks", "Points of Clarification"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Empower - Strategy"]
+    },
+    {
+      "name": "Empower - SED",
+      "type": "report",
+      "hidden": false,
+      "description": "SED empowerment, spend, top beneficiaries",
+      "inputs": ["Beneficiary Name", "Contribution Type"],
+      "outputs": ["Target Spend", "Actual Spend"],
+      "depends_on": ["SED Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empowe - PP Timelines",
+      "type": "report",
+      "hidden": false,
+      "description": "Preferential Procurement timelines, monthly spend",
+      "inputs": ["insert current date"],
+      "outputs": ["Spend for whole year"],
+      "depends_on": ["Procurement Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - PP",
+      "type": "report",
+      "hidden": false,
+      "description": "PP empowerment, scorecard, spend by category",
+      "inputs": [],
+      "outputs": ["Rand Spend", "%"],
+      "depends_on": ["Procurement Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - ESD",
+      "type": "report",
+      "hidden": false,
+      "description": "ESD empowerment, scorecard, investments",
+      "inputs": ["ESD Data Date"],
+      "outputs": ["Points", "Spend"],
+      "depends_on": ["ESD Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Skills Calcs",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Skills calculations, spend by race/gender, results",
+      "inputs": [],
+      "outputs": ["Results [Actual]"],
+      "depends_on": ["Skills Data"],
+      "referenced_by": ["Skills Scorecard"]
+    },
+    {
+      "name": "Empower Slides - Skills",
+      "type": "report",
+      "hidden": false,
+      "description": "Skills slides, spend breakdowns, analyses",
+      "inputs": [],
+      "outputs": ["Target Spend", "Actual Spend"],
+      "depends_on": ["Skills Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Slides MC",
+      "type": "report",
+      "hidden": false,
+      "description": "MC slides, scorecard summary, breakdowns",
+      "inputs": ["Data Date"],
+      "outputs": ["Target", "Actual"],
+      "depends_on": ["MC Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Ownership",
+      "type": "report",
+      "hidden": false,
+      "description": "Ownership empowerment, indicators, points",
+      "inputs": ["Data Date"],
+      "outputs": ["Actual", "Projected"],
+      "depends_on": ["Ownership Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Secenario Planning",
+      "type": "calculation",
+      "hidden": false,
+      "description": "Scenario planning, target/current/scenario points, investments",
+      "inputs": ["Required Investment", "Actions"],
+      "outputs": ["Level"],
+      "depends_on": ["Summary Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "SED Report Data",
+      "type": "report",
+      "hidden": false,
+      "description": "SED report, actual/gap, monthly",
+      "inputs": [],
+      "outputs": ["Actual", "Gap"],
+      "depends_on": ["SED Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Employees Training",
+      "type": "report",
+      "hidden": false,
+      "description": "Employees training programs by level",
+      "inputs": ["Training program"],
+      "outputs": [],
+      "depends_on": ["Skills Data"],
+      "referenced_by": []
+    },
+    {
+      "name": "Employee ROI",
+      "type": "report",
+      "hidden": false,
+      "description": "Employee ROI, spend by level",
+      "inputs": [],
+      "outputs": ["Total"],
+      "depends_on": ["Skills Data"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower Slides - MC Achieved",
+      "type": "report",
+      "hidden": false,
+      "description": "MC achieved slides, by quarter, scenario",
+      "inputs": [],
+      "outputs": ["Points", "%"],
+      "depends_on": ["MC Scorecard"],
+      "referenced_by": []
+    },
+    {
+      "name": "Empower - Strategy Actions",
+      "type": "input",
+      "hidden": false,
+      "description": "Strategy action items by pillar",
+      "inputs": ["Action", "Timeframe", "Cost"],
+      "outputs": [],
+      "depends_on": [],
+      "referenced_by": ["Empower - Strategy"]
+    }
+  ],
+  "formulas": [
+    {
+      "sheet": "Ownership Calcs Formula",
+      "cell": "A14",
+      "formula": "A=,(B - C) / D",
+      "description": "Deemed Value A = (B - C) / D",
+      "depends_on": ["B", "C", "D"],
+      "dependents": ["Net Value"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Ownership Calcs Formula",
+      "cell": "A21",
+      "formula": "A = ,B x (1 / (25% x C)) x 8",
+      "description": "Formula A = B x (1 / (25% x C)) x 8",
+      "depends_on": ["B", "C"],
+      "dependents": ["Formual A Results"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Ownership Calcs Formula",
+      "cell": "A27",
+      "formula": "A = ,B / C x 8",
+      "description": "Formula B = B / C x 8",
+      "depends_on": ["B", "C"],
+      "dependents": ["Formual B Results"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Scorecard Calculations",
+      "cell": "D57",
+      "formula": "Round-Down Points",
+      "description": "Rounds down the points",
+      "depends_on": ["Total"],
+      "dependents": ["Discounted Points"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Financials",
+      "cell": "B10",
+      "formula": "Last 5 year Average",
+      "description": "Average of last 5 years NPAT",
+      "depends_on": ["B2:B6"],
+      "dependents": ["Max of current and last 5 year average"],
+      "data_type": "currency"
+    },
+    {
+      "sheet": "Financials",
+      "cell": "B11",
+      "formula": "Max of current and last 5 year average",
+      "description": "Max between current and average",
+      "depends_on": ["B2", "B10"],
+      "dependents": ["Profit margin in the last 5 years that is at least 25% of Industry Norm"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Oustanding Debts Calcs",
+      "cell": "H2",
+      "formula": "Deemed Value",
+      "description": "Deemed value calculation",
+      "depends_on": ["B2", "D2", "E2"],
+      "dependents": ["Formual A Results"],
+      "data_type": "number"
+    },
+    {
+      "sheet": "Skills Calcs",
+      "cell": "D3",
+      "formula": "All Spend",
+      "description": "Target all spend calculation",
+      "depends_on": ["Leviable amount from Financials"],
+      "dependents": ["Results [Actual]"],
+      "data_type": "currency"
+    },
+    {
+      "sheet": "TMPS",
+      "cell": "B8",
+      "formula": "Total Inclusions",
+      "description": "Sum of inclusions",
+      "depends_on": ["B3:B7"],
+      "dependents": ["Total Measured Spend"],
+      "data_type": "currency"
+    },
+    {
+      "sheet": "TMPS",
+      "cell": "B28",
+      "formula": "Total Exclusions",
+      "description": "Sum of exclusions",
+      "depends_on": ["B9:B27"],
+      "dependents": ["Total Measured Spend"],
+      "data_type": "currency"
+    },
+    {
+      "sheet": "ESD and SED Calcs",
+      "cell": "D2",
+      "formula": "Benefit Factor =1 for Grant",
+      "description": "Benefit factor for grant contribution",
+      "depends_on": [],
+      "dependents": ["Recognised Amount"],
+      "data_type": "number"
+    }
+  ],
+  "inputs": [
+    {
+      "sheet": "Client Information",
+      "cell": "B2",
+      "label": "Measured Entity Name",
+      "description": "Name of the measured entity",
+      "data_type": "string",
+      "validation": "none",
+      "used_by": ["Summary Scorecard"]
+    },
+    {
+      "sheet": "Client Information",
+      "cell": "B4",
+      "label": "Measured Financial Year",
+      "description": "Financial year for measurement",
+      "data_type": "year",
+      "validation": "1900 or later",
+      "used_by": ["Financials"]
+    },
+    {
+      "sheet": "Client Information",
+      "cell": "B17",
+      "label": "Revenue",
+      "description": "Annual revenue",
+      "data_type": "currency",
+      "validation": ">=0",
+      "used_by": ["Financials", "Deemed NPAT"]
+    },
+    {
+      "sheet": "Client Information",
+      "cell": "B18",
+      "label": "NPAT (Net Profit After Tax)",
+      "description": "Net profit after tax",
+      "data_type": "currency",
+      "validation": "none",
+      "used_by": ["Financials", "ESD Scorecard", "SED Scorecard"]
+    },
+    {
+      "sheet": "Ownership Data",
+      "cell": "B5",
+      "label": "Shareholder",
+      "description": "Name of shareholder",
+      "data_type": "string",
+      "validation": "none",
+      "used_by": ["Ownership Scorecard"]
+    },
+    {
+      "sheet": "Ownership Data",
+      "cell": "H5",
+      "label": "BO%",
+      "description": "Black Ownership percentage",
+      "data_type": "percentage",
+      "validation": "0-1",
+      "used_by": ["Ownership Calcs Formula"]
+    },
+    {
+      "sheet": "MC Data",
+      "cell": "B1",
+      "label": "Full Name *",
+      "description": "Employee full name",
+      "data_type": "string",
+      "validation": "required",
+      "used_by": ["MC Calcs"]
+    },
+    {
+      "sheet": "Skills Data",
+      "cell": "B3",
+      "label": "Training Program Name *",
+      "description": "Name of training program",
+      "data_type": "string",
+      "validation": "required",
+      "used_by": ["Skills Calcs"]
+    },
+    {
+      "sheet": "Procurement Data",
+      "cell": "A5",
+      "label": "Supplier Name",
+      "description": "Supplier name",
+      "data_type": "string",
+      "validation": "none",
+      "used_by": ["Procurement Scorecard"]
+    },
+    {
+      "sheet": "ESD Data",
+      "cell": "C1",
+      "label": "Beneficiary Name",
+      "description": "Beneficiary of ESD contribution",
+      "data_type": "string",
+      "validation": "required",
+      "used_by": ["ESD Scorecard"]
+    },
+    {
+      "sheet": "SED Data",
+      "cell": "B1",
+      "label": "Beneficiary Name *",
+      "description": "Beneficiary of SED contribution",
+      "data_type": "string",
+      "validation": "required",
+      "used_by": ["SED Scorecard"]
+    }
+  ],
+  "constants": {
+    "eap_tables": [
+      {
+        "province": "Gauteng",
+        "black_male": 0.454,
+        "black_female": 0.327,
+        "coloured_male": 0.057,
+        "coloured_female": 0.056,
+        "indian_male": 0.031,
+        "indian_female": 0.019,
+        "white_male": 0.035,
+        "white_female": 0.021,
+        "black %": 0.944,
+        "all %": 1
+      },
+      {
+        "province": "National",
+        "black_male": 0.435,
+        "black_female": 0.375,
+        "coloured_male": 0.046,
+        "coloured_female": 0.042,
+        "indian_male": 0.017,
+        "indian_female": 0.01,
+        "white_male": 0.041,
+        "white_female": 0.034,
+        "black %": 0.925,
+        "all %": 1
+      },
+      {
+        "province": "Western Cape",
+        "black_male": 0.225,
+        "black_female": 0.207,
+        "coloured_male": 0.224,
+        "coloured_female": 0.198,
+        "indian_male": 0.008,
+        "indian_female": 0.006,
+        "white_male": 0.072,
+        "white_female": 0.06,
+        "black %": 0.868,
+        "all %": 1
+      },
+      {
+        "province": "Northern Cape",
+        "black_male": 0.299,
+        "black_female": 0.248,
+        "coloured_male": 0.186,
+        "coloured_female": 0.169,
+        "indian_male": 0.006,
+        "indian_female": 0.002,
+        "white_male": 0.053,
+        "white_female": 0.037,
+        "black %": 0.91,
+        "all %": 1
+      }
+      // More provinces from the dump
+    ],
+    "weightings": {
+      "generic": {
+        "ownership": 25,
+        "management": 19,
+        "skills": 25,
+        "preferential_procurement": 29,
+        "supplier_development": 10,
+        "enterprise_development": 7,
+        "socioeconomic_development": 5
+      }
+    },
+    "industry_norms": [
+      {
+        "industry": "All industries",
+        "norm": 0.0558,
+        "date": 45199
+      },
+      {
+        "industry": "Mining and quarrying industry",
+        "norm": 0.1625,
+        "date": 45199
+      },
+      {
+        "industry": "Manufacturing industry",
+        "norm": 0.0458,
+        "date": 45199
+      },
+      {
+        "industry": "Electricity Gas and Water supply Industry",
+        "norm": 0.0273,
+        "date": 45199
+      },
+      // More from the table
+      {
+        "industry": "Community, Social and personal services Industry",
+        "norm": 0.0956,
+        "date": 45835
+      }
+    ]
+  },
+  "business_rules": [
+    {
+      "rule": "Sub-minimum requirement",
+      "condition": "Pillar score < 40% of target",
+      "consequence": "Discount level by 1"
+    },
+    {
+      "rule": "Discounting principles",
+      "condition": "Failure to meet sub-minimum in priority elements",
+      "consequence": "Overall level drops by 1"
+    },
+    {
+      "rule": "Procurement Recognition Levels",
+      "condition": "Supplier B-BBEE level",
+      "consequence": "Recognition % based on level (e.g., Level 1 = 135%)"
+    },
+    {
+      "rule": "Bonus points criteria",
+      "condition": "Spend on 51% black designated group owned",
+      "consequence": "Bonus 2 points"
+    },
+    {
+      "rule": "If Black Ownership < 10%, then Level drops by 1",
+      "condition": "Ownership < 10%",
+      "consequence": "Level drop"
+    },
+    {
+      "rule": "Maximum score for Management Control is 19",
+      "condition": "Calculated score > 19",
+      "consequence": "Cap at 19"
+    }
+  ],
+  "dependency_graph": {
+    "nodes": ["Client Information", "Financials", "Ownership Data", "Ownership Calcs Formula", "Ownership Scorecard", "MC Data", "MC Calcs", "MC Scorecard", "Skills Data", "Skills Calcs", "Skills Scorecard", "Procurement Data", "TMPS", "Procurement Scorecard", "ESD Data", "ESD Scorecard", "SED Data", "SED Scorecard", "Scorecard Calculations", "Summary Scorecard"],
+    "edges": [
+      {"from": "Client Information", "to": "Financials"},
+      {"from": "Financials", "to": "Scorecard Calculations"},
+      {"from": "Ownership Data", "to": "Ownership Calcs Formula"},
+      {"from": "Ownership Calcs Formula", "to": "Ownership Scorecard"},
+      {"from": "Ownership Scorecard", "to": "Scorecard Calculations"},
+      {"from": "MC Data", "to": "MC Calcs"},
+      {"from": "MC Calcs", "to": "MC Scorecard"},
+      {"from": "MC Scorecard", "to": "Scorecard Calculations"},
+      {"from": "Skills Data", "to": "Skills Calcs"},
+      {"from": "Skills Calcs", "to": "Skills Scorecard"},
+      {"from": "Skills Scorecard", "to": "Scorecard Calculations"},
+      {"from": "Procurement Data", "to": "TMPS"},
+      {"from": "TMPS", "to": "Procurement Scorecard"},
+      {"from": "Procurement Scorecard", "to": "Scorecard Calculations"},
+      {"from": "ESD Data", "to": "ESD Scorecard"},
+      {"from": "ESD Scorecard", "to": "Scorecard Calculations"},
+      {"from": "SED Data", "to": "SED Scorecard"},
+      {"from": "SED Scorecard", "to": "Scorecard Calculations"},
+      {"from": "Scorecard Calculations", "to": "Summary Scorecard"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "Empty Template - No Data",
+      "inputs": {},
+      "expected_outputs": {
+        "Summary Scorecard!Achived Level": "Non-compliant",
+        "Ownership Scorecard!Total": 0,
+        "MC Scorecard!Grand Total": 0,
+        "Skills Scorecard!Total": 0,
+        "Procurement Scorecard!Total": 0,
+        "ESD Scorecard!Total": 0,
+        "SED Scorecard!Total": 0
+      }
+    },
+    {
+      "name": "Basic Ownership Input",
+      "inputs": {
+        "Ownership Data!H5": 0.25,
+        "Ownership Data!I5": 0.1
+      },
+      "expected_outputs": {
+        "Ownership Scorecard!Voting Rights Black": 4,
+        "Ownership Scorecard!Voting Rights Black females": 2,
+        "Ownership Scorecard!Total": 25
+      }
+    },
+    {
+      "name": "Sub-minimum Failure",
+      "inputs": {
+        "Ownership Scorecard!Points": 3,
+        "Skills Scorecard!Points": 7,
+        "Procurement Scorecard!Points": 10
+      },
+      "expected_outputs": {
+        "Scorecard Calculations!Discounted Level": "Non-compliant"
+      }
+    },
+    {
+      "name": "Full Compliance Level 1",
+      "inputs": {
+        "All pillars at max": true
+      },
+      "expected_outputs": {
+        "Summary Scorecard!Achived Level": "Level 1"
+      }
+    },
+    {
+      "name": "YES Qualification",
+      "inputs": {
+        "Priority elements subminimum": true
+      },
+      "expected_outputs": {
+        "YES!YES Level": "Level 1"
+      }
+    },
+    {
+      "name": "Procurement Spend",
+      "inputs": {
+        "Procurement Data!Spend BO": 0.5,
+        "Procurement Data!Spend BWO": 0.12
+      },
+      "expected_outputs": {
+        "Procurement Scorecard!Spend from suppliers 51% black owned": 11,
+        "Procurement Scorecard!Total": 29
+      }
+    },
+    {
+      "name": "Skills Spend",
+      "inputs": {
+        "Skills Data!All Spend": 0.06,
+        "Skills Data!Bursaries": 0.025
+      },
+      "expected_outputs": {
+        "Skills Scorecard!Skills spend on black people": 8,
+        "Skills Scorecard!Total": 25
+      }
+    },
+    {
+      "name": "ESD Contribution",
+      "inputs": {
+        "ESD Data!Amount": 0.03,
+        "ESD Data!Type": "Grant"
+      },
+      "expected_outputs": {
+        "ESD Scorecard!Supplier Development": 10,
+        "ESD Scorecard!Enterprise Development": 7
+      }
+    },
+    {
+      "name": "SED Contribution",
+      "inputs": {
+        "SED Data!Amount": 0.01
+      },
+      "expected_outputs": {
+        "SED Scorecard!Total": 5
+      }
+    },
+    {
+      "name": "Management Control",
+      "inputs": {
+        "MC Data!Black board members": 0.5,
+        "MC Data!Black executives": 0.6
+      },
+      "expected_outputs": {
+        "MC Scorecard!Board Participation": 3,
+        "MC Scorecard!Grand Total": 19
+      }
+    }
+  ]
+}
