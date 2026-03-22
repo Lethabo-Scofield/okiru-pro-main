@@ -1,14 +1,21 @@
 {
-  "name": "okiru-server",
+  "name": "@okiru/api",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx index.ts",
     "build": "tsc",
-    "start": "NODE_ENV=production node dist/index.js"
+    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "test": "echo \"No tests configured\" && exit 0",
+    "test:arango-calc": "tsx __tests__/accuracy/arangoCalcPathTest.ts",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@okiru/types": "workspace:*",
     "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
@@ -32,12 +39,16 @@
     "typescript": "^5.9.3",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
+    "arangojs": "^9.2.0",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76",
     "zod-validation-error": "^3.5.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "cross-env": "^10.1.0",
-    "tsx": "^4.21.0"
+    "eslint": "^9.0.0",
+    "tsx": "^4.21.0",
+    "typescript-eslint": "^8.0.0"
   }
 }

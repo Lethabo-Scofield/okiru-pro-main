@@ -5,7 +5,7 @@
 
 export interface ExtractedEntity {
   type: 'currency' | 'percentage' | 'date' | 'person_name' | 'company_name' | 'bee_level' | 'race' | 'gender' | 'designation' | 'number';
-  value: any;
+  value: string | number;
   raw: string;
   confidence: number;
 }
@@ -30,7 +30,7 @@ const DESIGNATION_PATTERNS: Record<string, string[]> = {
   'Junior': ['junior', 'jr', 'junior management', 'trainee', 'intern', 'clerk', 'assistant', 'entry'],
 };
 
-export function extractEntity(value: any): ExtractedEntity | null {
+export function extractEntity(value: unknown): ExtractedEntity | null {
   if (value === null || value === undefined || value === '') return null;
 
   const str = String(value).trim();
@@ -118,18 +118,18 @@ export function extractEntity(value: any): ExtractedEntity | null {
   return null;
 }
 
-export function extractCurrency(value: any): number | null {
+export function extractCurrency(value: unknown): number | null {
   if (typeof value === 'number' && !isNaN(value)) return value;
   const entity = extractEntity(value);
-  if (entity && (entity.type === 'currency' || entity.type === 'number')) return entity.value;
+  if (entity && (entity.type === 'currency' || entity.type === 'number')) return entity.value as number;
   return null;
 }
 
-export function extractPercentage(value: any): number | null {
+export function extractPercentage(value: unknown): number | null {
   if (typeof value === 'number' && !isNaN(value)) {
     return value > 1 ? value / 100 : value;
   }
   const entity = extractEntity(value);
-  if (entity && entity.type === 'percentage') return entity.value;
+  if (entity && entity.type === 'percentage') return entity.value as number;
   return null;
 }

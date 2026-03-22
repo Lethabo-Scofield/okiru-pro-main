@@ -42,3 +42,8 @@ externalPort = 80
 deploymentTarget = "autoscale"
 run = ["node", "./dist/index.cjs"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+MONGODB_URI = "mongodb+srv://scofieldx911_db_user:bMn26IskYLn67m0n@kuriopro.qwmqzkd.mongodb.net/?appName=KurioPro"

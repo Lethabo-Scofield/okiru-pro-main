@@ -14,11 +14,16 @@ import type {
   EsdContribution, InsertEsdContribution,
   SedContribution, InsertSedContribution,
   Scenario, InsertScenario, ImportLog, ExportLog, FinancialYear,
+  InsertFinancialYear, InsertImportLog, InsertExportLog,
+  PaginatedResponse,
 } from "./schema.js";
 
-function clean<T>(doc: any): T {
-  if (!doc) return doc;
-  const obj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+function clean<T>(doc: unknown): T {
+  if (doc == null) return doc as T;
+  const obj =
+    typeof (doc as { toObject?: () => Record<string, unknown> }).toObject === "function"
+      ? (doc as { toObject: () => Record<string, unknown> }).toObject()
+      : { ...(doc as Record<string, unknown>) };
   delete obj._id;
   delete obj.__v;
   return obj as T;
@@ -34,13 +39,14 @@ export interface IStorage {
   getOrganization(id: string): Promise<Organization | undefined>;
 
   getClientsByOrg(orgId: string): Promise<Client[]>;
+  getClientsByOrgPaginated(orgId: string, page: number, limit: number): Promise<PaginatedResponse<Client>>;
   getClient(id: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: string, data: Partial<InsertClient>): Promise<Client | undefined>;
   deleteClient(id: string): Promise<void>;
 
   getFinancialYears(clientId: string): Promise<FinancialYear[]>;
-  createFinancialYear(data: any): Promise<FinancialYear>;
+  createFinancialYear(data: InsertFinancialYear): Promise<FinancialYear>;
   deleteFinancialYear(id: string): Promise<void>;
 
   getShareholdersByClient(clientId: string): Promise<Shareholder[]>;
@@ -78,11 +84,12 @@ export interface IStorage {
   createScenario(data: InsertScenario): Promise<Scenario>;
   deleteScenario(id: string): Promise<void>;
 
-  createImportLog(data: any): Promise<ImportLog>;
+  createImportLog(data: InsertImportLog): Promise<ImportLog>;
   getImportLogs(clientId: string): Promise<ImportLog[]>;
   getImportLogsByUser(userId: string): Promise<ImportLog[]>;
+  getImportLogsByUserPaginated(userId: string, page: number, limit: number): Promise<PaginatedResponse<ImportLog>>;
 
-  createExportLog(data: any): Promise<ExportLog>;
+  createExportLog(data: InsertExportLog): Promise<ExportLog>;
   getExportLogs(clientId: string): Promise<ExportLog[]>;
 }
 
@@ -122,6 +129,21 @@ export class DatabaseStorage implements IStorage {
     return docs.map((d) => clean<Client>(d));
   }
 
+  async getClientsByOrgPaginated(orgId: string, page: number, limit: number): Promise<PaginatedResponse<Client>> {
+    const skip = Math.max(0, (page - 1) * limit);
+    const safeLimit = Math.min(100, Math.max(1, limit));
+    const [docs, total] = await Promise.all([
+      ClientModel.find({ organizationId: orgId }).skip(skip).limit(safeLimit).lean(),
+      ClientModel.countDocuments({ organizationId: orgId }),
+    ]);
+    return {
+      items: docs.map((d) => clean<Client>(d)),
+      total,
+      page,
+      limit: safeLimit,
+    };
+  }
+
   async getClient(id: string): Promise<Client | undefined> {
     const doc = await ClientModel.findOne({ id }).lean();
     return doc ? clean<Client>(doc) : undefined;
@@ -146,7 +168,7 @@ export class DatabaseStorage implements IStorage {
     return docs.map((d) => clean<FinancialYear>(d));
   }
 
-  async createFinancialYear(data: any): Promise<FinancialYear> {
+  async createFinancialYear(data: InsertFinancialYear): Promise<FinancialYear> {
     const doc = await FinancialYearModel.create({ id: uuid(), ...data });
     return clean<FinancialYear>(doc);
   }
@@ -286,36 +308,52 @@ export class DatabaseStorage implements IStorage {
     await ScenarioModel.deleteOne({ id });
   }
 
-  async createImportLog(data: any): Promise<ImportLog> {
+  async createImportLog(data: InsertImportLog): Promise<ImportLog> {
     const { errors, ...rest } = data;
     const doc = await ImportLogModel.create({ id: uuid(), importErrors: errors ?? null, ...rest });
-    const obj = clean<any>(doc);
+    const obj = clean<Record<string, unknown>>(doc);
     obj.errors = obj.importErrors ?? null;
     delete obj.importErrors;
-    return obj as ImportLog;
+    return obj as unknown as ImportLog;
   }
 
   async getImportLogs(clientId: string): Promise<ImportLog[]> {
     const docs = await ImportLogModel.find({ clientId }).lean();
     return docs.map((d) => {
-      const obj = clean<any>(d);
+      const obj = clean<Record<string, unknown>>(d);
       obj.errors = obj.importErrors ?? null;
       delete obj.importErrors;
-      return obj as ImportLog;
+      return obj as unknown as ImportLog;
     });
   }
 
   async getImportLogsByUser(userId: string): Promise<ImportLog[]> {
     const docs = await ImportLogModel.find({ userId }).sort({ createdAt: -1 }).limit(20).lean();
     return docs.map((d) => {
-      const obj = clean<any>(d);
+      const obj = clean<Record<string, unknown>>(d);
       obj.errors = obj.importErrors ?? null;
       delete obj.importErrors;
-      return obj as ImportLog;
+      return obj as unknown as ImportLog;
     });
   }
 
-  async createExportLog(data: any): Promise<ExportLog> {
+  async getImportLogsByUserPaginated(userId: string, page: number, limit: number): Promise<PaginatedResponse<ImportLog>> {
+    const skip = Math.max(0, (page - 1) * limit);
+    const safeLimit = Math.min(100, Math.max(1, limit));
+    const [docs, total] = await Promise.all([
+      ImportLogModel.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
+      ImportLogModel.countDocuments({ userId }),
+    ]);
+    const items = docs.map((d) => {
+      const obj = clean<Record<string, unknown>>(d);
+      obj.errors = obj.importErrors ?? null;
+      delete obj.importErrors;
+      return obj as unknown as ImportLog;
+    });
+    return { items, total, page, limit: safeLimit };
+  }
+
+  async createExportLog(data: InsertExportLog): Promise<ExportLog> {
     const doc = await ExportLogModel.create({ id: uuid(), ...data });
     return clean<ExportLog>(doc);
   }

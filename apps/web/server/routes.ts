@@ -1,12 +1,27 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Groq from "groq-sdk";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import { sendLoginNotification } from "./email";
+import { ProcessorSessionModel } from "../shared/schema";
 
-const groqApiKey = process.env.GROQ_API_KEY;
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const userId = (req.session as any)?.userId;
+  if (!userId) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const user = await storage.getUserById(userId);
+  if (!user) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ message: "User no longer exists" });
+  }
+  next();
+}
+
+let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
   console.warn("WARNING: GROQ_API_KEY is not set. AI endpoints will return errors.");
 }
@@ -70,28 +85,73 @@ export async function registerRoutes(
 
   app.use(session(sessionConfig));
 
+  const REGISTERED_ORGANIZATIONS = [
+    { id: "okiru", name: "Okiru", subscriptionId: process.env.OKIRU_SUB_ID || "OKR-2026-001", emailDomain: "okiru.co.za" },
+    { id: "param-solutions", name: "Param Solutions", subscriptionId: process.env.PARAM_SUB_ID || "PRM-2026-001", emailDomain: "paramsolutions.co.za" },
+  ];
+
+  app.get("/api/organizations", (_req, res) => {
+    res.json(REGISTERED_ORGANIZATIONS.map(o => ({ id: o.id, name: o.name, emailDomain: o.emailDomain })));
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { username, password, fullName, email, organizationName } = req.body;
-      if (!username || !password) {
+      const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
+
+      const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+      const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
+      const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      const trimmedSubId = typeof subscriptionId === 'string' ? subscriptionId.trim().toUpperCase() : '';
+
+      if (!trimmedUsername || !password) {
         return res.status(400).json({ message: "Username and password are required" });
+      }
+      if (trimmedUsername.length < 3) {
+        return res.status(400).json({ message: "Username must be at least 3 characters" });
       }
       if (password.length < 4) {
         return res.status(400).json({ message: "Password must be at least 4 characters" });
       }
-      const existing = await storage.getUserByUsername(username);
+      if (!trimmedFullName) {
+        return res.status(400).json({ message: "Full name is required" });
+      }
+      if (!trimmedEmail) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        return res.status(400).json({ message: "Invalid email address" });
+      }
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization is required" });
+      }
+      const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
+      if (!org) {
+        return res.status(400).json({ message: "Invalid organization selected" });
+      }
+      if (!trimmedSubId || trimmedSubId !== org.subscriptionId) {
+        return res.status(400).json({ message: "Invalid subscription ID for this organization" });
+      }
+
+      const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
+      const safeRole = ALLOWED_ROLES.includes(role) ? role : "auditor";
+
+      const existing = await storage.getUserByUsername(trimmedUsername);
       if (existing) {
         return res.status(400).json({ message: "Username already taken" });
       }
+      const existingEmail = await storage.getUserByUsernameOrEmail(trimmedEmail);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
       const hashedPassword = await bcrypt.hash(password, 8);
       const user = await storage.createUser({
-        username,
+        username: trimmedUsername,
         password: hashedPassword,
-        fullName: fullName || null,
-        email: email || null,
-        organizationName: organizationName || null,
-        role: "user",
-        organizationId: null,
+        fullName: trimmedFullName,
+        email: trimmedEmail,
+        organizationName: org.name,
+        organizationId: org.id,
+        role: safeRole,
         profilePicture: null,
       });
       const safeUser = sanitizeUser(user);
@@ -106,11 +166,12 @@ export async function registerRoutes(
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      if (!username || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
+      const { username, email, password } = req.body;
+      const loginId = username || email;
+      if (!loginId || !password) {
+        return res.status(400).json({ message: "Username/email and password are required" });
       }
-      const user = await storage.getUserByUsername(username);
+      const user = await storage.getUserByUsernameOrEmail(loginId);
       if (!user) {
         return res.status(401).json({ message: "Invalid username or password" });
       }
@@ -122,6 +183,12 @@ export async function registerRoutes(
       (req.session as any).userId = user.id;
       (req.session as any).userData = safeUser;
       res.json({ user: safeUser });
+
+      sendLoginNotification(
+        user.email || loginId,
+        user.fullName || null,
+        user.organizationName || null
+      ).catch(() => {});
     } catch (error: any) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Login failed" });
@@ -279,9 +346,10 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/templates", async (_req, res) => {
+  app.get("/api/templates", requireAuth, async (req, res) => {
     try {
-      const templates = await storage.getTemplates();
+      const userId = (req.session as any).userId;
+      const templates = await storage.getTemplatesByUser(userId);
       res.json(templates);
     } catch (error: any) {
       console.error("Error fetching templates:", error);
@@ -289,10 +357,11 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/templates/:id", async (req, res) => {
+  app.get("/api/templates/:id", requireAuth, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const id = parseInt(req.params.id);
-      const template = await storage.getTemplate(id);
+      const template = await storage.getTemplateForUser(id, userId);
       if (!template) return res.status(404).json({ error: "Template not found" });
       res.json(template);
     } catch (error: any) {
@@ -301,8 +370,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/templates", async (req, res) => {
+  app.post("/api/templates", requireAuth, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const { name, description, version, entities } = req.body;
       if (!name || !entities || !Array.isArray(entities)) {
         return res.status(400).json({ error: "name and entities array are required" });
@@ -312,6 +382,7 @@ export async function registerRoutes(
         description: description || "",
         version: version || "1.0",
         entities,
+        userId,
       });
       res.json(template);
     } catch (error: any) {
@@ -320,11 +391,12 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/templates/:id", async (req, res) => {
+  app.put("/api/templates/:id", requireAuth, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const id = parseInt(req.params.id);
       const { name, description, version, entities } = req.body;
-      const template = await storage.updateTemplate(id, {
+      const template = await storage.updateTemplateForUser(id, userId, {
         ...(name && { name }),
         ...(description !== undefined && { description }),
         ...(version && { version }),
@@ -338,10 +410,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/templates/:id", async (req, res) => {
+  app.delete("/api/templates/:id", requireAuth, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteTemplate(id);
+      const deleted = await storage.deleteTemplateForUser(id, userId);
       if (!deleted) return res.status(404).json({ error: "Template not found" });
       res.json({ success: true });
     } catch (error: any) {
@@ -354,102 +427,93 @@ export async function registerRoutes(
     try {
       const { description } = req.body;
 
-      if (!description || typeof description !== "string") {
+      if (!description || typeof description !== "string" || !description.trim()) {
         return res.status(400).json({ error: "description is required" });
       }
 
+      const descLower = description.toLowerCase();
+
       if (!groqApiKey) {
+        const noiseWords = new Set([
+          "the", "a", "an", "of", "for", "in", "on", "to", "and", "or", "is", "are", "was", "were",
+          "that", "this", "which", "with", "from", "by", "as", "at", "it", "its", "be", "been", "being",
+          "have", "has", "had", "do", "does", "did", "will", "would", "should", "could", "can", "may",
+          "might", "must", "shall", "i", "we", "you", "they", "he", "she", "my", "our", "your", "their",
+          "what", "how", "when", "where", "why", "who", "need", "want", "like", "also", "just", "very",
+          "really", "about", "into", "then", "than", "but", "not", "no", "so", "if", "only", "each",
+          "every", "all", "any", "some", "many", "more", "most", "other", "such", "these", "those",
+          "extract", "find", "get", "identify", "capture", "detect", "look", "looking", "trying",
+          "create", "describe", "pull", "grab", "fetch", "retrieve", "show", "display", "give", "tell",
+          "usually", "typically", "generally", "often", "always", "sometimes", "never", "here", "there",
+          "appear", "appears", "appearing", "first", "second", "third", "last", "next", "previous",
+          "document", "documents", "file", "files", "page", "pages", "paragraph", "paragraphs",
+          "section", "sections", "field", "fields", "data", "information", "details", "value", "values",
+          "text", "word", "words", "letter", "letters", "line", "lines", "column", "columns", "row", "rows",
+          "table", "tables", "form", "forms", "header", "footer", "body", "content", "record", "records",
+          "used", "use", "using", "called", "known", "found", "born", "made", "given", "taken",
+          "candidate", "person", "people", "thing", "things", "item", "items", "entry", "entries",
+          "means", "refer", "refers", "related", "based", "associated", "corresponding",
+        ]);
+
+        const entityConcepts: Record<string, { label: string; synonyms: string[]; positives: string[]; negatives: string[]; zones: string[]; mustKw: string[]; niceKw: string[]; negKw: string[]; pattern: string }> = {
+          date: { label: "", synonyms: ["Date", "Period", "Valid Until", "Effective Date"], positives: ["2024-06-15", "15 June 2024", "2024/06/15", "31 March 2025"], negatives: ["Reference Number", "Amount", "Name"], zones: ["PDF Header", "Tables"], mustKw: [], niceKw: ["date", "period"], negKw: ["amount", "name"], pattern: "\\d{4}[-/]\\d{2}[-/]\\d{2}|\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}" },
+          amount: { label: "", synonyms: ["Amount", "Cost", "Value", "Spend"], positives: ["R500,000", "R1,200,000", "R2.5M", "R75,000.00"], negatives: ["Percentage", "Count", "Date"], zones: ["Tables"], mustKw: [], niceKw: ["amount", "value"], negKw: ["date", "name"], pattern: "R\\s?[\\d,. ]+(\\.\\d{2})?(M|K)?" },
+          percentage: { label: "", synonyms: ["Percentage", "Rate", "Proportion", "Share"], positives: ["51%", "25.1%", "100%", "30.5%"], negatives: ["Amount", "Count", "Date"], zones: ["Tables"], mustKw: [], niceKw: ["percentage", "rate"], negKw: ["amount", "count"], pattern: "\\d{1,3}(\\.\\d{1,2})?%" },
+          name: { label: "", synonyms: ["Name", "Entity", "Organisation", "Company"], positives: ["Moyo Retail (Pty) Ltd", "Karoo Telecom", "John Doe"], negatives: ["Amount", "Date", "Number"], zones: ["PDF Header", "Email Body"], mustKw: [], niceKw: ["name", "entity"], negKw: ["amount", "date"], pattern: "" },
+          number: { label: "", synonyms: ["Number", "Reference", "ID", "Code"], positives: ["REF-2024-001", "12345", "ABC-001", "N/A"], negatives: ["Name", "Amount", "Date"], zones: ["PDF Header", "Tables"], mustKw: [], niceKw: ["number", "reference"], negKw: ["name", "amount"], pattern: "[A-Z]{2,4}[-/]?\\d{3,6}" },
+          status: { label: "", synonyms: ["Status", "Level", "Type", "Category"], positives: ["Active", "Compliant", "Level 1", "Approved"], negatives: ["Amount", "Date", "Name"], zones: ["PDF Header", "Tables"], mustKw: [], niceKw: ["status", "level"], negKw: ["amount", "date"], pattern: "" },
+        };
+
+        const typeMatchers: [RegExp, string][] = [
+          [/date|period|year|expir|valid|time|fiscal/i, "date"],
+          [/amount|cost|spend|price|budget|salary|revenue|rand|fee|turnover/i, "amount"],
+          [/percent|ratio|rate|proportion|%/i, "percentage"],
+          [/name|person|company|entity|beneficiary|director|member|employee|supplier|shareholder/i, "name"],
+          [/number|count|total|quantity|id\b|ref|code|registration/i, "number"],
+          [/status|level|type|category|class|grade|tier|rating/i, "status"],
+        ];
+
         const words = description.trim().split(/\s+/);
-        const label = words
-          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-          .join("")
-          .replace(/[^a-zA-Z0-9]/g, "")
-          || "CustomEntity";
+        const keyWords = words
+          .map((w: string) => w.replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
+          .filter((w: string) => w.length > 1 && !noiseWords.has(w));
 
-        const descLower = description.toLowerCase();
-        const isDate = /date|period|year|expir|valid|time/i.test(descLower);
-        const isAmount = /amount|cost|spend|price|value|budget|salary|revenue|rand|fee/i.test(descLower);
-        const isPercentage = /percent|ratio|rate|proportion|share|%/i.test(descLower);
-        const isName = /name|person|company|entity|beneficiary|director|member|employee/i.test(descLower);
-        const isNumber = /number|count|total|quantity|id|ref|code/i.test(descLower);
-        const isStatus = /status|level|type|category|class/i.test(descLower);
+        let label = keyWords.length > 0
+          ? keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1)
+          : "Entity";
+        if (/^\d/.test(label)) label = "Entity";
 
-        let synonyms: string[] = [];
-        let positives: string[] = [];
-        let negatives: string[] = [];
-        let zones: string[] = ["Email Body", "PDF Header"];
-        let mustKw: string[] = [];
-        let niceKw: string[] = [];
-        let negKw: string[] = [];
-        let pattern = "";
-
-        if (isDate) {
-          synonyms = ["Date", "Period", "Valid Until", "Effective Date"];
-          positives = ["2024-06-15", "15 June 2024", "2024/06/15", "31 March 2025"];
-          negatives = ["Reference Number", "Amount", "Name"];
-          zones = ["PDF Header", "Tables"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["date", "period"];
-          negKw = ["amount", "name"];
-          pattern = "\\d{4}[-/]\\d{2}[-/]\\d{2}|\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}";
-        } else if (isAmount) {
-          synonyms = ["Amount", "Cost", "Value", "Spend"];
-          positives = ["R500,000", "R1,200,000", "R2.5M", "R75,000.00"];
-          negatives = ["Percentage", "Count", "Date"];
-          zones = ["Tables"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["amount", "value"];
-          negKw = ["date", "name"];
-          pattern = "R\\s?[\\d,. ]+(\\.\\d{2})?(M|K)?";
-        } else if (isPercentage) {
-          synonyms = ["Percentage", "Rate", "Proportion", "Share"];
-          positives = ["51%", "25.1%", "100%", "30.5%"];
-          negatives = ["Amount", "Count", "Date"];
-          zones = ["Tables"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["percentage", "rate"];
-          negKw = ["amount", "count"];
-          pattern = "\\d{1,3}(\\.\\d{1,2})?%";
-        } else if (isName) {
-          synonyms = ["Name", "Entity", "Organisation", "Company"];
-          positives = ["Moyo Retail (Pty) Ltd", "Karoo Telecom", "John Doe"];
-          negatives = ["Amount", "Date", "Number"];
-          zones = ["PDF Header", "Email Body"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["name", "entity"];
-          negKw = ["amount", "date"];
-        } else if (isNumber) {
-          synonyms = ["Number", "Reference", "ID", "Code"];
-          positives = ["REF-2024-001", "12345", "ABC-001", "N/A"];
-          negatives = ["Name", "Amount", "Date"];
-          zones = ["PDF Header", "Tables"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["number", "reference"];
-          negKw = ["name", "amount"];
-          pattern = "[A-Z]{2,4}[-/]?\\d{3,6}";
-        } else if (isStatus) {
-          synonyms = ["Status", "Level", "Type", "Category"];
-          positives = ["Active", "Compliant", "Level 1", "Approved"];
-          negatives = ["Amount", "Date", "Name"];
-          zones = ["PDF Header", "Tables"];
-          mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-          niceKw = ["status", "level"];
-          negKw = ["amount", "date"];
-        } else {
-          const mainWords = words.slice(0, 3).map((w: string) => w.toLowerCase());
-          synonyms = mainWords.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1));
-          synonyms.push(label);
-          positives = ["Example value 1", "Example value 2", "Example value 3"];
-          negatives = ["Not applicable", "Unrelated value"];
-          mustKw = mainWords.slice(0, 2);
-          niceKw = mainWords.slice(2);
-          negKw = ["unrelated"];
+        let matchedType = "";
+        for (const [regex, type] of typeMatchers) {
+          if (regex.test(descLower)) { matchedType = type; break; }
         }
+
+        const base = matchedType ? entityConcepts[matchedType] : null;
+        const mustKw = keyWords.slice(0, 2);
+        const niceKw = base ? base.niceKw : keyWords.slice(2, 4);
+        const negKw = base ? base.negKw : ["unrelated"];
+        const synonyms = base ? base.synonyms : keyWords.slice(0, 3).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1));
+        const positives = base ? base.positives : ["Example value 1", "Example value 2", "Example value 3"];
+        const negatives = base ? base.negatives : ["Not applicable", "Unrelated value"];
+        const zones = base ? base.zones : ["Email Body", "PDF Header"];
+        const pattern = base ? base.pattern : "";
+
+        const definitionTemplates: Record<string, string> = {
+          date: `A date or time period value representing when ${label.toLowerCase()}-related events occur or are scheduled.`,
+          amount: `A monetary value or financial figure representing the ${label.toLowerCase()} in Rand or other currency.`,
+          percentage: `A percentage or proportional value indicating the ${label.toLowerCase()} rate or share.`,
+          name: `The name of a person, organisation, or entity associated with the ${label.toLowerCase()} context.`,
+          number: `A unique numeric or alphanumeric identifier used to reference the ${label.toLowerCase()}.`,
+          status: `A classification or status indicator describing the current ${label.toLowerCase()} state or level.`,
+        };
+        const definition = matchedType
+          ? definitionTemplates[matchedType]
+          : `The ${label.toLowerCase()} value to be extracted from the document.`;
 
         const fallbackEntity = {
           id: Date.now() + Math.random(),
           label,
-          definition: description.charAt(0).toUpperCase() + description.slice(1) + (description.endsWith('.') ? '' : '.'),
+          definition,
           completeness: 60,
           synonyms,
           positives,
@@ -463,42 +527,72 @@ export async function registerRoutes(
         return res.json({ entities: [fallbackEntity] });
       }
 
-      const systemPrompt = `You are an entity extraction configuration assistant. Given a user's natural language description, generate exactly ONE fully-configured entity definition.
+      const systemPrompt = `You are an expert NLP entity extraction configuration assistant for a B-BBEE compliance document intelligence platform used by South African businesses.
 
-Generate a SINGLE entity with ALL fields completely filled:
-- label: A PascalCase label (e.g. "InvoiceNumber", "DueDate")
-- definition: A clear 1-2 sentence definition of what this entity represents
-- synonyms: 3-5 alternative names or aliases for this entity
-- positives: 3-5 realistic example values that would be extracted
-- negatives: 2-3 examples of what should NOT be extracted (common false positives)
-- zones: Likely document zones (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
-- keywords: Object with must (2-3 required keywords), nice (2-3 nice-to-have), neg (1-2 negative keywords)
-- pattern: A regex pattern if applicable, empty string if not
+Your job: read the user's natural language description (it may be a single word, a phrase, or a full sentence) and deeply understand WHAT data they are trying to extract from documents. Then generate exactly ONE perfectly-configured entity definition.
 
-Respond ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no explanation.
+CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices — all in a South African business context.
 
-Example:
-[
-  {
-    "label": "InvoiceNumber",
-    "definition": "The unique alphanumeric identifier assigned to the invoice document.",
-    "synonyms": ["Invoice ID", "Bill Number", "Invoice No.", "Inv #"],
-    "positives": ["INV-2024-0042", "INV-001234", "BILL-99812"],
-    "negatives": ["PO-9981-X", "REF-2024", "Customer ID"],
-    "zones": ["PDF Header", "Email Body"],
-    "keywords": {"must": ["invoice", "number"], "nice": ["bill", "reference"], "neg": ["purchase order"]},
-    "pattern": "INV-\\\\d{4}-\\\\d{4}"
-  }
-]`;
+INSTRUCTIONS:
+1. Parse the user's intent — even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
+2. Infer the data type: date, monetary amount (Rand), percentage, name/organisation, identifier/reference, level/status, count, address, etc.
+3. Generate a label in PascalCase that is specific and descriptive (2-3 words is fine, e.g. "BBBEELevel", "CertificateExpiryDate", "BlackOwnership")
+4. Write a professional definition that explains exactly what the entity represents and when it appears in documents
+5. Synonyms: realistic alternative names as they appear in actual B-BBEE documents
+6. Positives: realistic South African examples of actual values (use Rand amounts like R1,200,000, percentages like 51%, dates like 31 March 2025, levels like "Level 2 Contributor")
+7. Negatives: common false positives — values that look similar but are NOT this entity
+8. Zones: where in documents this typically appears (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
+9. Keywords: actual words that appear near this value in documents (must = required co-occurrence, nice = helpful, neg = words that rule it out)
+10. Pattern: a precise regex if the value has a predictable format, otherwise ""
 
-      const content = await llmGenerate(systemPrompt, `User request: ${description}`);
+RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation — raw JSON only.
+
+Schema:
+{
+  "label": "PascalCaseLabel",
+  "definition": "Professional 1-2 sentence description.",
+  "synonyms": ["Alias1", "Alias2", "Alias3"],
+  "positives": ["Example1", "Example2", "Example3"],
+  "negatives": ["FalsePositive1", "FalsePositive2"],
+  "zones": ["PDF Header", "Tables"],
+  "keywords": {"must": ["word1", "word2"], "nice": ["word3"], "neg": ["word4"]},
+  "pattern": "regex_or_empty_string"
+}
+
+Examples:
+
+User: "bee level" →
+[{"label":"BBBEELevel","definition":"The B-BBEE contributor level (1–8) or Non-Compliant status assigned to the measured entity by a SANAS-accredited verification agency.","synonyms":["BEE Level","Contributor Level","B-BBEE Status","BBBEE Rating"],"positives":["Level 1 Contributor","Level 4","Level 8 Contributor","Non-Compliant"],"negatives":["Risk Level","Service Level Agreement","Employment Level"],"zones":["PDF Header","Tables"],"keywords":{"must":["level","contributor"],"nice":["B-BBEE","status","compliant"],"neg":["risk","service","agreement"]},"pattern":"Level\\s*[1-8](\\s*Contributor)?|Non-Compliant"}]
+
+User: "I want to know when the certificate expires" →
+[{"label":"CertificateExpiryDate","definition":"The date on which the B-BBEE certificate expires and re-verification becomes required for the measured entity.","synonyms":["Expiry Date","Valid Until","Certificate End Date","Validity Period End","Expiration Date"],"positives":["31 March 2026","2026-03-31","31/03/2026","30 June 2025"],"negatives":["Issue Date","Measurement Date","Financial Year End","Contract Expiry"],"zones":["PDF Header","Tables"],"keywords":{"must":["expir","valid"],"nice":["until","end","certificate"],"neg":["issue","start","financial year"]},"pattern":"\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}|\\d{4}[-/]\\d{2}[-/]\\d{2}"}]
+
+User: "the rand amount of their annual turnover" →
+[{"label":"AnnualTurnover","definition":"The total annual revenue or turnover of the measured entity as reported in their audited financial statements, used to determine the applicable B-BBEE scorecard.","synonyms":["Annual Revenue","Total Turnover","Gross Revenue","Annual Sales"],"positives":["R12,500,000","R 5,000,000.00","R2.3M","R150,000,000"],"negatives":["Monthly Revenue","Net Profit","Operating Expenses","Tax Amount"],"zones":["Tables","PDF Header"],"keywords":{"must":["turnover","revenue"],"nice":["annual","total","gross"],"neg":["monthly","net","profit","expenses"]},"pattern":"R\\s?[\\d,\\s]+(\\s*M|\\s*million|\\.\\d{2})?"}]`;
+
+      const content = await llmGenerate(systemPrompt, `User description: "${description}"\n\nGenerate the entity JSON now:`, { temperature: 0.3, maxTokens: 1200 });
 
       let entities;
       try {
-        const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        let cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (ch) => {
+          if (ch === '\n' || ch === '\r' || ch === '\t') return ch;
+          return '';
+        });
         entities = JSON.parse(cleaned);
-      } catch {
-        entities = [];
+      } catch (parseErr) {
+        try {
+          const arrayMatch = content.match(/\[[\s\S]*\]/);
+          if (arrayMatch) {
+            entities = JSON.parse(arrayMatch[0]);
+          } else {
+            console.error("Failed to parse Groq response:", content);
+            entities = [];
+          }
+        } catch {
+          console.error("Failed to parse Groq response (retry):", content);
+          entities = [];
+        }
       }
 
       if (!Array.isArray(entities)) {
@@ -608,6 +702,28 @@ Respond ONLY with a valid JSON array.`;
         return res.status(400).json({ error: "documents array is required" });
       }
 
+      const regexExtract = (text: string, entity: any): { value: string | null; conf: number; method: string; status: string } => {
+        if (entity.pattern) {
+          try {
+            const rx = new RegExp(entity.pattern, 'gi');
+            const m = rx.exec(text);
+            if (m) return { value: m[0].trim(), conf: 87, method: 'Pattern', status: 'extracted' };
+          } catch { /* bad regex, skip */ }
+        }
+        const terms = [entity.label, ...(entity.synonyms || []), ...(entity.keywords?.must || [])];
+        for (const kw of terms) {
+          if (!kw) continue;
+          const idx = text.toLowerCase().indexOf(kw.toLowerCase());
+          if (idx !== -1) {
+            const start = Math.max(0, idx - 20);
+            const end = Math.min(text.length, idx + 180);
+            const ctx = text.slice(start, end).replace(/\s+/g, ' ').trim();
+            return { value: ctx, conf: 55, method: 'Context', status: 'extracted' };
+          }
+        }
+        return { value: null, conf: 0, method: 'Pattern', status: 'not_found' };
+      };
+
       if (!groqApiKey) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
@@ -622,7 +738,13 @@ Respond ONLY with a valid JSON array.`;
         for (let i = 0; i < documents.length; i++) {
           const doc = documents[i];
           send("doc-start", { index: i, fileName: doc.fileName, templateName: doc.templateName });
-          send("doc-done", { index: i, fileName: doc.fileName, templateId: doc.templateId, templateName: doc.templateName, entities: [] });
+          const { fileName, templateId, templateName, entitiesToExtract, documentText } = doc;
+          const text = documentText || '';
+          const entities = (entitiesToExtract || []).map((e: any, idx: number) => {
+            const r = regexExtract(text, e);
+            return { id: idx + 1, entity: e.label, value: r.value, conf: r.conf, method: r.method, status: r.status };
+          }).filter((e: any) => e.value !== null);
+          send("doc-done", { index: i, fileName, templateId, templateName, entities });
         }
         send("complete", { total: documents.length });
         res.end();
@@ -825,6 +947,143 @@ Respond ONLY with a valid JSON array.`;
     } catch (error: any) {
       console.error("Error generating suggestions:", error);
       res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
+  app.get("/api/sector-templates", async (_req, res) => {
+    try {
+      const { listSectorConfigs } = await import('./pipeline');
+      const configs = listSectorConfigs();
+      res.json(configs);
+    } catch (error: any) {
+      console.error("Error fetching sector templates:", error);
+      res.status(500).json({ error: "Failed to fetch sector templates" });
+    }
+  });
+
+  app.post("/api/extract-and-score", requireAuth, async (req, res) => {
+    try {
+      const { documentTexts, sectorCode, scorecardType, clientName } = req.body;
+      
+      if (!Array.isArray(documentTexts) || documentTexts.length === 0 || !sectorCode || !scorecardType) {
+        return res.status(400).json({ error: "documentTexts, sectorCode, and scorecardType are required" });
+      }
+
+      const pipeline = await import('./pipeline');
+      const manifest = pipeline.buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      
+      const combinedText = documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
+      
+      const requests = manifest.requiredEntities.map((entity: any) => ({
+        entityName: entity.name,
+        entityType: entity.fieldType,
+        definition: entity.definition,
+        aliases: entity.aliases,
+        positiveExamples: entity.positiveExamples,
+        negativeExamples: entity.negativeExamples,
+        zones: entity.zones,
+        sourceText: combinedText,
+        sourcePageId: 'combined',
+      }));
+
+      const extractor = new pipeline.LLMExtractor();
+      const extractionResults = await extractor.extractBatch(requests);
+
+      const parseResult = pipeline.entityResultsToParseResult(extractionResults, {
+        clientName: clientName || 'Unnamed Client',
+        industrySector: sectorCode,
+        applicableScorecard: scorecardType,
+      });
+
+      const filename = `${sectorCode}_${scorecardType}_${clientName || 'entity'}`;
+      const scorecard = pipeline.buildPipelineResult(parseResult, filename);
+      
+      const requiredRoles = manifest.requiredEntities.map((e: any) => e.name);
+      const confidence = pipeline.buildConfidenceReport(extractionResults, requiredRoles);
+
+      return res.json({
+        success: true,
+        scorecard,
+        confidence,
+        extractedEntities: extractionResults.filter(r => r.extractedValue !== null).length,
+        totalEntities: extractionResults.length,
+        sectorCode,
+        scorecardType,
+        clientName: clientName || parseResult.client.name,
+      });
+    } catch (error: any) {
+      console.error("Error in extract-and-score:", error);
+      res.status(500).json({ error: error.message || "Failed to extract and score" });
+    }
+  });
+
+  app.get("/api/processor-sessions", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      const user = await storage.getUserById(userId);
+      const orgId = user?.organizationId || null;
+      const query = orgId ? { organizationId: orgId } : { createdByUserId: userId };
+      const sessions = await ProcessorSessionModel.find(query).sort({ updatedAt: -1 }).lean();
+      res.json(sessions.map((s: any) => ({ ...s, id: s.sessionId })));
+    } catch (error: any) {
+      console.error("Error fetching processor sessions:", error);
+      res.status(500).json({ error: "Failed to fetch sessions" });
+    }
+  });
+
+  app.get("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const doc = await ProcessorSessionModel.findOne({ sessionId }).lean() as any;
+      if (!doc) return res.status(404).json({ error: "Session not found" });
+      res.json({ ...doc, id: doc.sessionId });
+    } catch (error: any) {
+      console.error("Error fetching processor session:", error);
+      res.status(500).json({ error: "Failed to fetch session" });
+    }
+  });
+
+  app.post("/api/processor-sessions", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      const user = await storage.getUserById(userId);
+      const orgId = user?.organizationId || null;
+      const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete } = req.body;
+      if (!sessionId || !companyInfo?.name) {
+        return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
+      }
+      const doc = await ProcessorSessionModel.findOneAndUpdate(
+        { sessionId },
+        {
+          sessionId,
+          organizationId: orgId,
+          createdByUserId: userId,
+          companyInfo,
+          currentStep: currentStep || 'upload',
+          filesData: filesData || [],
+          fileClassifications: fileClassifications || {},
+          extractionResults: extractionResults || [],
+          docStatuses: docStatuses || {},
+          isComplete: isComplete || false,
+          updatedAt: new Date(),
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
+    } catch (error: any) {
+      console.error("Error saving processor session:", error);
+      res.status(500).json({ error: "Failed to save session" });
+    }
+  });
+
+  app.delete("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      await ProcessorSessionModel.deleteOne({ sessionId });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting processor session:", error);
+      res.status(500).json({ error: "Failed to delete session" });
     }
   });
 

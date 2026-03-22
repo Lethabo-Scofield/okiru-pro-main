@@ -9,14 +9,26 @@ interface AuthUser {
   email: string | null;
   role: string | null;
   organizationId: string | null;
+  organizationName: string | null;
   profilePicture: string | null;
+}
+
+interface RegisterData {
+  username: string;
+  password: string;
+  fullName?: string;
+  email?: string;
+  organizationId?: string;
+  organizationName?: string;
+  subscriptionId?: string;
+  role?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (data: { username: string; password: string; fullName?: string; email?: string; organizationName?: string }) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: { fullName?: string; email?: string }) => Promise<void>;
   uploadProfilePicture: (file: File) => Promise<void>;
@@ -39,14 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => { clearTimeout(timeout); setIsLoading(false); });
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
     } catch {
       throw new Error('Network error. Please try again.');
@@ -63,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
-  const register = useCallback(async (regData: { username: string; password: string; fullName?: string; email?: string; organizationName?: string }) => {
+  const register = useCallback(async (regData: RegisterData) => {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/api/auth/register`, {
