@@ -198,6 +198,133 @@ function FileFormatBadge({ type, size = 'md' }: { type: string; size?: 'sm' | 'm
   );
 }
 
+function parseCSVRows(text: string): string[][] {
+  const rows: string[][] = [];
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const raw = line.replace(/\r$/, '');
+    if (!raw.trim()) continue;
+    const fields: string[] = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '"') {
+        if (inQuotes && raw[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        fields.push(field); field = '';
+      } else {
+        field += ch;
+      }
+    }
+    fields.push(field);
+    rows.push(fields);
+  }
+  return rows;
+}
+
+function CSVTableViewer({ text, isExcel }: { text: string; isExcel: boolean }) {
+  const sections = useMemo(() => {
+    if (!text) return [];
+    if (isExcel) {
+      const chunks = text.split(/=== Sheet: (.+?) ===\n?/);
+      const sheets: { name: string; rows: string[][] }[] = [];
+      for (let i = 1; i < chunks.length; i += 2) {
+        const name = chunks[i]?.trim() || `Sheet ${Math.ceil(i / 2)}`;
+        const content = chunks[i + 1] || '';
+        const rows = parseCSVRows(content);
+        if (rows.length > 0) sheets.push({ name, rows });
+      }
+      return sheets.length > 0 ? sheets : [{ name: '', rows: parseCSVRows(text) }];
+    }
+    return [{ name: '', rows: parseCSVRows(text) }];
+  }, [text, isExcel]);
+
+  const [activeSheet, setActiveSheet] = useState(0);
+  const section = sections[activeSheet] || sections[0];
+
+  if (!section) return (
+    <div className="flex flex-col items-center justify-center py-16">
+      <FileQuestion className="w-8 h-8 text-gray-300 mb-3" />
+      <p className="text-gray-400 text-sm">No content to display</p>
+    </div>
+  );
+
+  const { rows } = section;
+  const header = rows[0] || [];
+  const body = rows.slice(1);
+  const maxCols = Math.max(...rows.map(r => r.length), 1);
+  const colsToShow = Math.min(maxCols, 20);
+
+  return (
+    <div className="flex flex-col h-full">
+      {sections.length > 1 && (
+        <div className="flex gap-1 px-4 pt-3 pb-0 flex-wrap">
+          {sections.map((s, i) => (
+            <button key={i} onClick={() => setActiveSheet(i)}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
+                activeSheet === i
+                  ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-white/60'
+              }`}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex-1 overflow-auto p-4">
+        <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+          <table className="w-full text-left border-collapse" style={{ fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f3f4f6' }}>
+                <th className="px-3 py-2 text-[10px] font-semibold text-gray-400 border-b border-gray-200 select-none" style={{ width: 36, minWidth: 36 }}>#</th>
+                {header.slice(0, colsToShow).map((h, ci) => (
+                  <th key={ci} className="px-3 py-2 text-[11px] font-semibold text-gray-600 border-b border-gray-200 border-l border-gray-100 whitespace-nowrap" style={{ maxWidth: 200 }}>
+                    {h || <span className="text-gray-300">Col {ci + 1}</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.length === 0 ? (
+                <tr><td colSpan={colsToShow + 1} className="px-4 py-6 text-center text-gray-400 text-sm">No data rows</td></tr>
+              ) : (
+                body.map((row, ri) => (
+                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td className="px-3 py-1.5 text-[10px] text-gray-300 font-mono select-none">{ri + 2}</td>
+                    {Array.from({ length: colsToShow }).map((_, ci) => {
+                      const val = row[ci] ?? '';
+                      const isNum = val !== '' && !isNaN(Number(val));
+                      return (
+                        <td key={ci} className="px-3 py-1.5 border-l border-gray-100 text-gray-700" style={{ maxWidth: 200 }}>
+                          <div className="truncate" style={{ maxWidth: 180 }}>
+                            {isNum
+                              ? <span className="font-mono text-[11px] text-blue-700">{val}</span>
+                              : <span className="text-[12px]">{val}</span>}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {maxCols > colsToShow && (
+            <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-400">
+              Showing {colsToShow} of {maxCols} columns
+            </div>
+          )}
+        </div>
+        <div className="mt-2 text-[11px] text-gray-400 text-right">
+          {body.length} row{body.length !== 1 ? 's' : ''} · {header.length} column{header.length !== 1 ? 's' : ''}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getEntityColors(_dark?: boolean) {
   const c = { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' };
   return [c, c, c, c, c, c, c, c];
@@ -1056,6 +1183,17 @@ export default function DocumentProcessor() {
     return name.endsWith('.pdf') || activeDocFile.file.type === 'application/pdf';
   }, [activeDocFile]);
 
+  const activeFileType = useMemo(() => {
+    if (!activeDocFile) return 'text';
+    const name = activeDocFile.name.toLowerCase();
+    if (name.endsWith('.pdf') || activeDocFile.file.type === 'application/pdf') return 'pdf';
+    if (name.endsWith('.xlsx') || name.endsWith('.xls') ||
+        activeDocFile.file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        activeDocFile.file.type === 'application/vnd.ms-excel') return 'excel';
+    if (name.endsWith('.csv') || activeDocFile.file.type === 'text/csv') return 'csv';
+    return 'text';
+  }, [activeDocFile]);
+
   const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : 4;
 
   return (
@@ -1863,9 +2001,16 @@ export default function DocumentProcessor() {
                 <div className="w-1/2 overflow-y-auto bg-[#f5f5f5]" style={{ borderRight: '1px solid #2c2c2e' }}>
                   <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700">{isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? 'Document Viewer' : 'Document'}</span>
-                      {!(isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0) && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      {activeFileType === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> :
+                       activeFileType === 'excel' ? <FileSpreadsheet className="w-4 h-4 text-green-500" /> :
+                       activeFileType === 'csv' ? <FileSpreadsheet className="w-4 h-4 text-green-400" /> :
+                       <FileText className="w-4 h-4 text-gray-400" />}
+                      <span className="text-sm font-medium text-gray-700">
+                        {activeFileType === 'pdf' ? 'PDF Viewer' :
+                         activeFileType === 'excel' ? 'Spreadsheet Viewer' :
+                         activeFileType === 'csv' ? 'CSV Viewer' : 'Document'}
+                      </span>
+                      {activeFileType === 'text' && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
@@ -1880,14 +2025,16 @@ export default function DocumentProcessor() {
                         })}
                     </div>
                   </div>
-                  <div className={isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? "px-2 py-2" : "p-5"}>
-                    {isPdfFile && activeDocFile && activeDocFile.file && activeDocFile.file.size > 0 ? (
+                  <div className={activeFileType === 'pdf' && activeDocFile?.file?.size ? "px-2 py-2" : activeFileType === 'csv' || activeFileType === 'excel' ? "" : "p-5"}>
+                    {activeFileType === 'pdf' && activeDocFile?.file?.size ? (
                       <PDFDocumentViewer
                         file={activeDocFile.file}
                         entities={[]}
                         hoveredEntity={null}
                         onHoverEntity={() => {}}
                       />
+                    ) : (activeFileType === 'csv' || activeFileType === 'excel') && activeDocText ? (
+                      <CSVTableViewer text={activeDocText} isExcel={activeFileType === 'excel'} />
                     ) : activeDocText ? (
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
                         <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{activeDocText}</p>
