@@ -1377,7 +1377,7 @@ export default function DocumentProcessor() {
                 onDrop={(e) => { e.preventDefault(); setIsDragActive(false); if (e.dataTransfer.files?.length) handleFiles(Array.from(e.dataTransfer.files)); }}
                 onClick={() => document.getElementById('fileInput')?.click()} data-testid="drop-zone"
               >
-                <input type="file" id="fileInput" multiple className="hidden" accept=".pdf,.txt,.csv,.doc,.docx,.eml,.json"
+                <input type="file" id="fileInput" multiple className="hidden" accept=".pdf,.txt,.csv,.doc,.docx,.xlsx,.xls,.eml,.json"
                   onChange={(e) => { if (e.target.files?.length) handleFiles(Array.from(e.target.files)); }} />
                 {uploadedFiles.length === 0 ? (
                   <>
@@ -1387,7 +1387,7 @@ export default function DocumentProcessor() {
                     <h3 className="text-lg font-semibold text-white mb-1">Drop files here</h3>
                     <p className="text-[#8e8e93] text-sm mb-3">or click to browse</p>
                     <div className="flex items-center justify-center gap-2 text-xs text-[#636366]">
-                      {['PDF', 'TXT', 'CSV', 'DOC'].map(ext => (
+                      {['PDF', 'XLSX', 'XLS', 'CSV', 'DOCX', 'TXT'].map(ext => (
                         <span key={ext} className="px-2 py-0.5 bg-[#2c2c2e] rounded-lg text-[#8e8e93]">{ext}</span>
                       ))}
                     </div>
