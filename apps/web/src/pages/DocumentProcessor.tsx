@@ -9,7 +9,8 @@ import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut
+  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
+  Pencil, Plus
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -648,6 +649,7 @@ export default function DocumentProcessor() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
+  const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
   const [completedCount, setCompletedCount] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
@@ -1906,6 +1908,7 @@ export default function DocumentProcessor() {
               setActiveReviewDoc(prev => prev + 1);
               setHoveredEntity(null);
               setReviewFilter('all');
+              setEditingEntity(null);
             };
             const handleSubmit = async () => {
               setIsSavingSession(true);
@@ -1962,7 +1965,7 @@ export default function DocumentProcessor() {
               <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
                   <button onClick={() => {
-                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); }
+                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); setEditingEntity(null); }
                     else setCurrentPage('extract');
                   }} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -2106,52 +2109,156 @@ export default function DocumentProcessor() {
                         const isApproved = entity.status === 'approved';
                         const isRejected = entity.status === 'rejected';
                         const isEdited = entity.status === 'edited';
+                        const isEditingThis = editingEntity?.docIdx === activeReviewDoc && editingEntity?.entityIdx === realIdx;
+
+                        const startEdit = () => setEditingEntity({ docIdx: activeReviewDoc, entityIdx: realIdx, draft: entity.value || '' });
+                        const cancelEdit = () => setEditingEntity(null);
+                        const saveEdit = () => {
+                          if (editingEntity && editingEntity.draft !== entity.value) {
+                            inlineEditEntity(activeReviewDoc, realIdx, editingEntity.draft);
+                          }
+                          setEditingEntity(null);
+                        };
+
                         return (
                           <div key={realIdx}
-                            className={`rounded-xl border transition-all ${isHovered ? 'border-[#48484a]' : 'border-[#2c2c2e]'} ${isApproved ? 'border-green-500/30' : ''} ${isRejected ? 'opacity-40' : ''}`}
+                            className={`rounded-2xl border transition-all duration-150 group ${
+                              isEditingThis ? 'border-purple-500/40 shadow-[0_0_0_3px_rgba(168,85,247,0.08)]' :
+                              isApproved ? 'border-green-500/25' :
+                              isRejected ? 'border-[#2c2c2e] opacity-35' :
+                              isHovered ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
+                            }`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
                             onMouseLeave={() => setHoveredEntity(null)}
                             data-testid={`review-entity-${realIdx}`}
                           >
-                            <div className="bg-[#1c1c1e] rounded-xl p-3.5">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest leading-none">
-                                      {fmtLabel(entity.name)}
+                            <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
+
+                              {/* Header row */}
+                              <div className="flex items-center justify-between mb-2.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest truncate">
+                                    {fmtLabel(entity.name)}
+                                  </span>
+                                  {isApproved && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-400 font-medium shrink-0">
+                                      <Check className="w-2.5 h-2.5" />Approved
                                     </span>
-                                    {isApproved && <span className="text-[10px] text-green-400 font-medium">· Approved</span>}
-                                    {isEdited && <span className="text-[10px] text-[#8e8e93] font-medium">· Edited</span>}
-                                    {isRejected && <span className="text-[10px] text-red-400 font-medium">· Rejected</span>}
-                                  </div>
-                                  {def && <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>}
-                                  <input
-                                    type="text"
-                                    defaultValue={entity.value || ''}
-                                    placeholder="No value extracted"
-                                    onBlur={(e) => { const val = e.target.value; if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val); }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                    className="w-full text-sm text-white bg-[#2c2c2e] rounded-lg px-3 py-2 border border-transparent focus:border-[#48484a] focus:outline-none transition-colors placeholder:text-[#48484a] placeholder:italic"
-                                    data-testid={`input-entity-value-${realIdx}`}
-                                  />
+                                  )}
+                                  {isEdited && !isEditingThis && (
+                                    <span className="text-[10px] text-purple-400 font-medium shrink-0">Edited</span>
+                                  )}
+                                  {isRejected && (
+                                    <span className="text-[10px] text-red-400 font-medium shrink-0">Rejected</span>
+                                  )}
                                 </div>
-                                <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
-                                  {!isApproved && (
-                                    <button onClick={() => approveEntity(activeReviewDoc, realIdx)}
-                                      className="p-1.5 text-[#636366] hover:text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve"
-                                      data-testid={`button-approve-${realIdx}`}>
+
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {!isEditingThis && (
+                                    <button
+                                      onClick={startEdit}
+                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
+                                        isHovered
+                                          ? 'text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e]'
+                                          : 'text-transparent'
+                                      }`}
+                                      title="Edit value"
+                                      data-testid={`button-edit-${realIdx}`}
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {!isRejected && !isEditingThis && (
+                                    <button
+                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
+                                        isApproved
+                                          ? 'text-green-400 bg-green-500/10'
+                                          : isHovered
+                                            ? 'text-[#636366] hover:text-green-400 hover:bg-green-500/10'
+                                            : 'text-transparent'
+                                      }`}
+                                      title="Approve"
+                                      data-testid={`button-approve-${realIdx}`}
+                                    >
                                       <Check className="w-3.5 h-3.5" />
                                     </button>
                                   )}
-                                  {!isRejected && (
-                                    <button onClick={() => rejectEntity(activeReviewDoc, realIdx)}
-                                      className="p-1.5 text-[#636366] hover:text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject"
-                                      data-testid={`button-reject-${realIdx}`}>
+                                  {!isApproved && !isEditingThis && (
+                                    <button
+                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
+                                        isRejected
+                                          ? 'text-red-400 bg-red-500/10'
+                                          : isHovered
+                                            ? 'text-[#636366] hover:text-red-400 hover:bg-red-500/10'
+                                            : 'text-transparent'
+                                      }`}
+                                      title="Reject"
+                                      data-testid={`button-reject-${realIdx}`}
+                                    >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                 </div>
                               </div>
+
+                              {/* Definition */}
+                              {def && !isEditingThis && (
+                                <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>
+                              )}
+
+                              {/* Value — read mode */}
+                              {!isEditingThis && (
+                                <div
+                                  onClick={startEdit}
+                                  className="cursor-text rounded-xl px-3 py-2.5 transition-colors hover:bg-[#2c2c2e]/60"
+                                  title="Click to edit"
+                                >
+                                  {entity.value ? (
+                                    <p className="text-[14px] text-white leading-snug break-words">{entity.value}</p>
+                                  ) : (
+                                    <p className="text-[13px] text-[#3a3a3c] italic flex items-center gap-1.5">
+                                      <Plus className="w-3 h-3" />Add value
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Value — edit mode */}
+                              {isEditingThis && (
+                                <div className="space-y-2">
+                                  {def && (
+                                    <p className="text-[10px] text-[#48484a] leading-relaxed line-clamp-2">{def}</p>
+                                  )}
+                                  <textarea
+                                    autoFocus
+                                    value={editingEntity.draft}
+                                    onChange={(e) => setEditingEntity(prev => prev ? { ...prev, draft: e.target.value } : null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+                                      if (e.key === 'Escape') cancelEdit();
+                                    }}
+                                    rows={Math.min(Math.max((editingEntity.draft.match(/\n/g) || []).length + 1, 1), 4)}
+                                    placeholder="Enter value…"
+                                    className="w-full text-[14px] text-white bg-[#2c2c2e] rounded-xl px-3 py-2.5 border border-purple-500/40 focus:border-purple-400 focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
+                                    data-testid={`input-entity-value-${realIdx}`}
+                                  />
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={cancelEdit}
+                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-white rounded-lg hover:bg-[#2c2c2e] smooth press-sm">
+                                      Cancel
+                                    </button>
+                                    <button onClick={saveEdit}
+                                      className="px-3 py-1.5 text-[12px] font-semibold text-white bg-purple-600 hover:bg-purple-500 rounded-lg smooth press-sm flex items-center gap-1"
+                                      data-testid={`button-save-entity-${realIdx}`}>
+                                      <Check className="w-3 h-3" />Save
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
                             </div>
                           </div>
                         );
