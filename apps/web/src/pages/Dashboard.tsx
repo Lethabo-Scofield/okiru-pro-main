@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useLocation } from 'wouter';
+import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
@@ -68,7 +68,9 @@ const categoryColor: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const [page, setPage] = useState<Page>('home');
+  const search = useSearch();
+  const initialTab = new URLSearchParams(search).get('tab') as Page | null;
+  const [page, setPage] = useState<Page>(initialTab && ['home', 'templates', 'scorecards'].includes(initialTab) ? initialTab : 'home');
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user, logout } = useAuth();
