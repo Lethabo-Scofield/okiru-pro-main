@@ -139,6 +139,65 @@ const FileIcon = ({ type, className }: { type: string; className?: string }) => 
   }
 };
 
+function FileFormatBadge({ type, size = 'md' }: { type: string; size?: 'sm' | 'md' | 'lg' }) {
+  const configs: Record<string, { bg: string; text: string; label: string }> = {
+    PDF:  { bg: '#FF3B30', text: '#fff', label: 'PDF' },
+    DOCX: { bg: '#007AFF', text: '#fff', label: 'DOC' },
+    DOC:  { bg: '#007AFF', text: '#fff', label: 'DOC' },
+    XLSX: { bg: '#34C759', text: '#fff', label: 'XLS' },
+    XLS:  { bg: '#34C759', text: '#fff', label: 'XLS' },
+    CSV:  { bg: '#30D158', text: '#fff', label: 'CSV' },
+    TXT:  { bg: '#636366', text: '#fff', label: 'TXT' },
+    JPG:  { bg: '#AF52DE', text: '#fff', label: 'JPG' },
+    JPEG: { bg: '#AF52DE', text: '#fff', label: 'JPG' },
+    PNG:  { bg: '#5E5CE6', text: '#fff', label: 'PNG' },
+    EML:  { bg: '#FF9F0A', text: '#fff', label: 'EML' },
+    JSON: { bg: '#FF6B00', text: '#fff', label: 'JSON' },
+  };
+  const cfg = configs[type?.toUpperCase()] || { bg: '#48484a', text: '#fff', label: type?.slice(0, 4)?.toUpperCase() || 'FILE' };
+
+  const dims = size === 'sm' ? { w: 36, h: 44, foldSize: 9, labelSize: 7 }
+             : size === 'lg' ? { w: 52, h: 64, foldSize: 14, labelSize: 10 }
+             : { w: 44, h: 54, foldSize: 11, labelSize: 8 };
+
+  const { w, h, foldSize, labelSize } = dims;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d={`M4 0 H${w - foldSize} L${w} ${foldSize} V${h - 4} Q${w} ${h} ${w - 4} ${h} H4 Q0 ${h} 0 ${h - 4} V4 Q0 0 4 0Z`}
+        fill={cfg.bg}
+        opacity="0.18"
+      />
+      <path
+        d={`M4 0.5 H${w - foldSize} L${w - 0.5} ${foldSize} V${h - 4} Q${w - 0.5} ${h - 0.5} ${w - 4} ${h - 0.5} H4 Q0.5 ${h - 0.5} 0.5 ${h - 4} V4 Q0.5 0.5 4 0.5Z`}
+        stroke={cfg.bg}
+        strokeWidth="1"
+        fill="none"
+        opacity="0.4"
+      />
+      <path
+        d={`M${w - foldSize} 0 L${w - foldSize} ${foldSize} L${w} ${foldSize}`}
+        fill={cfg.bg}
+        opacity="0.35"
+      />
+      <rect x={2} y={h - 18} width={w - 4} height={16} rx={3} fill={cfg.bg} />
+      <text
+        x={w / 2}
+        y={h - 7}
+        textAnchor="middle"
+        fill={cfg.text}
+        fontSize={labelSize}
+        fontWeight="800"
+        fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
+        letterSpacing="0.5"
+      >
+        {cfg.label}
+      </text>
+    </svg>
+  );
+}
+
 function getEntityColors(_dark?: boolean) {
   const c = { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.35)', text: '#c084fc', underline: '#a855f7' };
   return [c, c, c, c, c, c, c, c];
@@ -1355,8 +1414,8 @@ export default function DocumentProcessor() {
                   <div className="space-y-2 mb-6">
                     {uploadedFiles.map((file) => (
                       <div key={file.id} className={`bg-[#1c1c1e] rounded-2xl px-4 py-3 flex items-center gap-3 transition-all ${file.status === 'uploading' ? 'opacity-70' : ''}`} data-testid={`file-row-${file.id}`}>
-                        <div className="w-9 h-9 rounded-xl bg-[#2c2c2e] flex items-center justify-center shrink-0">
-                          <FileIcon type={file.type} className={`w-4 h-4 ${file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
+                        <div className="shrink-0">
+                          <FileFormatBadge type={file.type} size="sm" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-white truncate">{file.name}</div>
@@ -1405,134 +1464,150 @@ export default function DocumentProcessor() {
                     (() => {
                       const docType = fileDocTypes[String(file.id)] || 'digital';
                       const isScanned = docType === 'scanned';
+                      const isDropdownOpen = openTemplateDropdown === String(file.id);
                       return (
-                        <div key={file.id} className={`rounded-2xl overflow-hidden transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/20' : ''}`} style={{ background: '#1c1c1e' }} data-testid={`classify-row-${file.id}`}>
-                          {/* File identity row */}
-                          <div className="flex items-center gap-3.5 px-4 pt-4 pb-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedTemplate ? 'bg-purple-500/15' : 'bg-[#2c2c2e]'}`}>
-                              <FileIcon type={file.type} className={`w-4 h-4 ${selectedTemplate ? 'text-purple-400' : file.type === 'PDF' ? 'text-red-400' : 'text-purple-400'}`} />
+                        <div
+                          key={file.id}
+                          className={`rounded-2xl transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/25' : 'ring-1 ring-[#2c2c2e]'}`}
+                          style={{ background: '#1c1c1e', position: 'relative', zIndex: isDropdownOpen ? 50 : 1 }}
+                          data-testid={`classify-row-${file.id}`}
+                        >
+                          {/* Main row: icon + name + controls */}
+                          <div className="flex items-start gap-4 p-4">
+                            {/* File format badge */}
+                            <div className="shrink-0 pt-0.5">
+                              <FileFormatBadge type={file.type} size="md" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[13px] font-semibold text-white truncate">{file.name}</div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[11px] text-[#636366]">{file.size} KB</span>
-                                {selectedTemplate && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/12 text-purple-400 font-medium">{selectedTemplate.name}</span>
-                                )}
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${isScanned ? 'bg-amber-500/12 text-amber-400' : 'bg-blue-500/12 text-blue-400'}`}>
-                                  {isScanned ? 'Scanned' : 'Digital'}
-                                </span>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 space-y-3">
+                              {/* File name + size */}
+                              <div>
+                                <div className="text-[14px] font-semibold text-white truncate leading-tight">{file.name}</div>
+                                <div className="text-[11px] text-[#636366] mt-0.5">{file.size} KB</div>
                               </div>
-                            </div>
-                          </div>
 
-                          {/* Controls row */}
-                          <div className="px-4 pb-4 space-y-2.5">
-                            {/* Template custom dropdown */}
-                            <div className="relative" data-testid={`select-template-${file.id}`}>
-                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1.5">Template</label>
-                              <button
-                                type="button"
-                                onClick={() => setOpenTemplateDropdown(prev => prev === String(file.id) ? null : String(file.id))}
-                                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-left transition-all ${
-                                  selectedTemplate
-                                    ? 'bg-purple-500/10 border border-purple-500/25 text-white hover:border-purple-500/40'
-                                    : 'bg-[#141414] border border-[#2c2c2e] text-[#8e8e93] hover:border-[#3a3a3c] hover:text-white'
-                                }`}
-                              >
-                                <Puzzle className={`w-3.5 h-3.5 shrink-0 ${selectedTemplate ? 'text-purple-400' : 'text-[#636366]'}`} />
-                                <span className="flex-1 truncate">
-                                  {selectedTemplate ? selectedTemplate.name : 'Select a template…'}
-                                </span>
-                                {selectedTemplate && (
-                                  <span className="text-[10px] text-purple-400/70 shrink-0">{selectedTemplate.entities.length} fields</span>
-                                )}
-                                <ChevronRight className={`w-3.5 h-3.5 shrink-0 text-[#636366] transition-transform ${openTemplateDropdown === String(file.id) ? 'rotate-90' : ''}`} />
-                              </button>
+                              {/* Template picker */}
+                              <div className="relative" data-testid={`select-template-${file.id}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenTemplateDropdown(prev => prev === String(file.id) ? null : String(file.id))}
+                                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-left transition-all ${
+                                    selectedTemplate
+                                      ? 'bg-purple-500/10 border border-purple-500/30 text-white'
+                                      : 'bg-[#141414] border border-[#3a3a3c] text-[#8e8e93] hover:border-[#48484a] hover:text-white'
+                                  }`}
+                                >
+                                  <Puzzle className={`w-3.5 h-3.5 shrink-0 ${selectedTemplate ? 'text-purple-400' : 'text-[#48484a]'}`} />
+                                  <span className="flex-1 truncate">
+                                    {selectedTemplate ? selectedTemplate.name : 'Choose a template…'}
+                                  </span>
+                                  {selectedTemplate
+                                    ? <span className="text-[10px] text-purple-400/60 shrink-0 font-normal">{selectedTemplate.entities.length} fields</span>
+                                    : null}
+                                  <svg className={`w-4 h-4 shrink-0 text-[#48484a] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </button>
 
-                              {openTemplateDropdown === String(file.id) && (
-                                <>
-                                  <div className="fixed inset-0 z-10" onClick={() => setOpenTemplateDropdown(null)} />
-                                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[#1c1c1e] border border-[#3a3a3c] rounded-xl shadow-2xl overflow-hidden">
-                                    <div className="max-h-52 overflow-y-auto">
-                                      {loadingTemplates ? (
-                                        <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#8e8e93]">
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading templates…
-                                        </div>
-                                      ) : templates.length === 0 ? (
-                                        <div className="px-4 py-3 text-[13px] text-[#636366]">No templates available</div>
-                                      ) : (
-                                        templates.map((t, i) => (
-                                          <button
-                                            key={t.id}
-                                            type="button"
-                                            onClick={() => {
-                                              setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
-                                              setOpenTemplateDropdown(null);
-                                            }}
-                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                                              selectedId === t.id
-                                                ? 'bg-purple-500/15 text-purple-300'
-                                                : 'text-[#d1d1d6] hover:bg-[#2c2c2e]'
-                                            } ${i > 0 ? 'border-t border-[#2c2c2e]' : ''}`}
-                                          >
-                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${selectedId === t.id ? 'bg-purple-500/20' : 'bg-[#2c2c2e]'}`}>
-                                              <Puzzle className={`w-3 h-3 ${selectedId === t.id ? 'text-purple-400' : 'text-[#636366]'}`} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="text-[13px] font-medium truncate">{t.name}</div>
-                                              <div className="text-[11px] text-[#636366]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
-                                            </div>
-                                            {selectedId === t.id && <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
-                                          </button>
-                                        ))
-                                      )}
+                                {isDropdownOpen && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setOpenTemplateDropdown(null)} />
+                                    <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl shadow-2xl overflow-hidden" style={{ background: '#2c2c2e', border: '1px solid #3a3a3c' }}>
+                                      <div className="px-3 pt-3 pb-1.5">
+                                        <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Select Template</p>
+                                      </div>
+                                      <div className="max-h-56 overflow-y-auto pb-1.5">
+                                        {loadingTemplates ? (
+                                          <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#8e8e93]">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+                                          </div>
+                                        ) : templates.length === 0 ? (
+                                          <div className="px-4 py-3 text-[13px] text-[#636366]">No templates — create one in Builder first.</div>
+                                        ) : (
+                                          templates.map((t) => {
+                                            const isSel = selectedId === t.id;
+                                            return (
+                                              <button
+                                                key={t.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                                  setOpenTemplateDropdown(null);
+                                                }}
+                                                className={`w-full flex items-center gap-3 px-3 py-2.5 mx-1.5 rounded-xl text-left transition-colors mb-0.5 ${
+                                                  isSel ? 'bg-purple-500/20' : 'hover:bg-[#3a3a3c]'
+                                                }`}
+                                                style={{ width: 'calc(100% - 12px)' }}
+                                              >
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSel ? 'bg-purple-500/30' : 'bg-[#1c1c1e]'}`}>
+                                                  <Puzzle className={`w-3.5 h-3.5 ${isSel ? 'text-purple-300' : 'text-[#636366]'}`} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <div className={`text-[13px] font-semibold truncate ${isSel ? 'text-purple-200' : 'text-white'}`}>{t.name}</div>
+                                                  <div className="text-[11px] text-[#636366]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                                </div>
+                                                {isSel && (
+                                                  <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center shrink-0">
+                                                    <Check className="w-3 h-3 text-white" />
+                                                  </div>
+                                                )}
+                                              </button>
+                                            );
+                                          })
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
+                                  </>
+                                )}
+                              </div>
 
-                            {/* Document type segmented control */}
-                            <div>
-                              <label className="text-[9px] font-semibold text-[#636366] uppercase tracking-widest block mb-1.5">Document Type</label>
-                              <div className="flex gap-1 p-1 bg-[#141414] rounded-xl border border-[#2c2c2e]" data-testid={`select-doctype-${file.id}`}>
+                              {/* Document type segmented pill */}
+                              <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#141414', border: '1px solid #2c2c2e' }} data-testid={`select-doctype-${file.id}`}>
                                 <button
                                   type="button"
                                   onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
-                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
-                                    !isScanned
-                                      ? 'bg-blue-500/20 text-blue-300 shadow-sm'
-                                      : 'text-[#636366] hover:text-[#8e8e93]'
+                                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
+                                    !isScanned ? 'bg-[#1c4ed8]/25 text-blue-300' : 'text-[#636366] hover:text-[#8e8e93]'
                                   }`}
                                 >
-                                  <Monitor className="w-3 h-3" />
+                                  <Monitor className="w-3.5 h-3.5" />
                                   Digital
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
-                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
-                                    isScanned
-                                      ? 'bg-amber-500/20 text-amber-300 shadow-sm'
-                                      : 'text-[#636366] hover:text-[#8e8e93]'
+                                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
+                                    isScanned ? 'bg-amber-500/20 text-amber-300' : 'text-[#636366] hover:text-[#8e8e93]'
                                   }`}
                                 >
-                                  <ScanLine className="w-3 h-3" />
+                                  <ScanLine className="w-3.5 h-3.5" />
                                   Scanned
                                 </button>
                               </div>
-                            </div>
-                          </div>
 
-                          {/* Entity chips */}
-                          {selectedTemplate && (
-                            <div className="px-4 pb-4 flex flex-wrap gap-1.5">
-                              {selectedTemplate.entities.map((ent, i) => (
-                                <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-[#2c2c2e] text-[#8e8e93]">{ent.label}</span>
-                              ))}
+                              {/* Entity chips */}
+                              {selectedTemplate && selectedTemplate.entities.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {selectedTemplate.entities.slice(0, 6).map((ent, i) => (
+                                    <span key={i} className="text-[10px] px-2 py-1 rounded-lg font-medium" style={{ background: '#2c2c2e', color: '#8e8e93' }}>{ent.label}</span>
+                                  ))}
+                                  {selectedTemplate.entities.length > 6 && (
+                                    <span className="text-[10px] px-2 py-1 rounded-lg font-medium" style={{ background: '#2c2c2e', color: '#636366' }}>+{selectedTemplate.entities.length - 6} more</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
+
+                            {/* Remove button */}
+                            <button
+                              onClick={() => removeFile(file.id)}
+                              className="shrink-0 p-2 rounded-xl text-[#48484a] hover:text-red-400 hover:bg-red-500/10 transition-all mt-0.5"
+                              data-testid={`button-remove-${file.id}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })()
