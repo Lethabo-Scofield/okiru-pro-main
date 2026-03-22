@@ -743,13 +743,15 @@ export default function EntityBuilder() {
         </div>
       )}
 
-      <header className="h-[52px] shrink-0 z-20" style={{ borderBottom: '1px solid #2c2c2e', background: '#0a0a0a' }}>
-        <div className="max-w-5xl mx-auto w-full px-6 h-full flex items-center justify-between">
+      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 smooth press-sm group shrink-0" data-testid="btn-back">
-            <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-            <img src={logoCircle} alt="Okiru" className="h-7 w-7 rounded-[8px]" />
+          <Link href="/dashboard" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0" data-testid="btn-back">
+            <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
+            <span className="text-[13px] font-medium tracking-wide">Back to Dashboard</span>
           </Link>
+          <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
+          <img src={logoCircle} alt="Okiru" className="h-7 w-7 rounded-[8px]" />
           <div className="h-4 w-px bg-[#2c2c2e]" />
           {isEditingProjectName ? (
             <input ref={nameInputRef} autoFocus value={projectName}
@@ -811,7 +813,7 @@ export default function EntityBuilder() {
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col" style={{ background: '#080808' }}>
-        <div className="max-w-5xl mx-auto w-full px-6 py-5 flex flex-col flex-1 min-h-0">
+        <div className="max-w-[1400px] mx-auto w-full px-6 py-5 flex flex-col flex-1 min-h-0">
 
           {/* AI Prompt Bar */}
           <div className="mb-4">

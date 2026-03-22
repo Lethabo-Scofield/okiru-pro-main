@@ -32,7 +32,7 @@ export function GuestRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate("/dashboard", { replace: true });
+      navigate("/hub", { replace: true });
     }
   }, [user, isLoading, navigate]);
 

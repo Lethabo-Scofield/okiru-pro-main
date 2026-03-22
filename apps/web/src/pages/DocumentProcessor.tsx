@@ -3,12 +3,13 @@ import { Link, useLocation } from 'wouter';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion, Building2, ScanLine, Monitor
+  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -440,7 +441,8 @@ function PDFDocumentViewer({ file, entities, hoveredEntity, onHoverEntity }: {
 export default function DocumentProcessor() {
   const { isDark } = useTheme();
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
+  const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
   const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review'>('company-info');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
@@ -643,10 +645,31 @@ export default function DocumentProcessor() {
     }
   };
 
+  const extractXlsxText = async (file: File): Promise<string> => {
+    try {
+      const XLSX = await import('xlsx');
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheets: string[] = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        if (csv.trim()) {
+          sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`);
+        }
+      }
+      return sheets.join('\n\n') || `[No text content in Excel file: ${file.name}]`;
+    } catch (err) {
+      console.error('Excel extraction failed:', err);
+      return `[Could not extract text from Excel file: ${file.name}]`;
+    }
+  };
+
   const readFileText = async (file: File): Promise<string> => {
     const name = file.name.toLowerCase();
     if (name.endsWith('.pdf') || file.type === 'application/pdf') return extractPdfText(file);
     if (name.endsWith('.docx') || name.endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return extractDocxText(file);
+    if (name.endsWith('.xlsx') || name.endsWith('.xls') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel') return extractXlsxText(file);
     if (name.endsWith('.txt') || name.endsWith('.csv') || name.endsWith('.eml') || name.endsWith('.json') || name.endsWith('.md') || name.endsWith('.html') || name.endsWith('.xml') || file.type.startsWith('text/')) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -655,7 +678,7 @@ export default function DocumentProcessor() {
         reader.readAsText(file);
       });
     }
-    return `[Unsupported file format: ${file.name}. Supported formats: PDF, DOCX, TXT, CSV, EML, JSON]`;
+    return `[Unsupported file format: ${file.name}. Supported formats: PDF, DOCX, XLSX, XLS, TXT, CSV, EML, JSON]`;
   };
 
   const handleFiles = (files: File[]) => {
@@ -979,32 +1002,45 @@ export default function DocumentProcessor() {
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
 
-      <header className="h-14 shrink-0 z-20 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-5xl mx-auto w-full px-6 h-full flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => window.history.back()} className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors duration-200 press-sm group" data-testid="btn-back">
-            <ChevronLeft className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
-            <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg" />
-          </button>
-          <span className="text-lg font-semibold tracking-tight">
-            <span className="text-purple-400">Okiru</span><span className="text-white"> Processor</span>
-          </span>
-          <div className="h-5 w-px bg-[#3a3a3c]"></div>
-          <span className="text-[#d1d1d6] text-[13px] font-medium">Document Processor</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-dashboard-nav">
-            <Home className="w-3.5 h-3.5 mr-1 inline-block" /> Dashboard
-          </Link>
-          <Link href="/builder" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-builder-nav">
-            <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
-          </Link>
-        </div>
+      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0">
+              <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
+              <span className="text-[13px] font-medium tracking-wide">Back to Dashboard</span>
+            </Link>
+            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
+            <div className="flex items-center gap-3 press-sm">
+              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
+              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">Document Processor</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link href="/builder" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-builder-nav">
+              <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
+            </Link>
+            <div className="w-px h-4 bg-[#2c2c2e] mx-1"></div>
+            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
+              <span className="inline-flex h-5 w-5 rounded-full bg-purple-600 items-center justify-center text-white font-semibold text-[9px]">
+                {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
+              </span>
+              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
+            </div>
+            <button
+              onClick={async () => { await logout(); navigate('/auth'); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              data-testid="button-sign-out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
+        <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
           {['Company', 'Upload', 'Template', 'Extract', 'Review', 'Scorecard'].map((label, idx) => {
             const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck, FileText];
             const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'] as const;
@@ -1036,7 +1072,7 @@ export default function DocumentProcessor() {
       </div>
 
       <main className="flex-1 overflow-y-auto">
-        <div className={`${currentPage === 'review' ? '' : 'max-w-5xl mx-auto w-full'} p-6`}>
+        <div className={`${currentPage === 'review' ? '' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
 
           {currentPage === 'company-info' && (
             <div>
