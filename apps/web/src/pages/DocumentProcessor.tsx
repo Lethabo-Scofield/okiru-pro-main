@@ -2155,50 +2155,15 @@ export default function DocumentProcessor() {
 
                                 {/* Action buttons */}
                                 <div className="flex items-center gap-0.5 shrink-0">
+                                  {/* Pen — always dimly visible, brightens on hover */}
                                   {!isEditingThis && (
                                     <button
                                       onClick={startEdit}
-                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
-                                        isHovered
-                                          ? 'text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e]'
-                                          : 'text-transparent'
-                                      }`}
+                                      className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-[#2c2c2e]"
                                       title="Edit value"
                                       data-testid={`button-edit-${realIdx}`}
                                     >
                                       <Pencil className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  {!isRejected && !isEditingThis && (
-                                    <button
-                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
-                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
-                                        isApproved
-                                          ? 'text-green-400 bg-green-500/10'
-                                          : isHovered
-                                            ? 'text-[#636366] hover:text-green-400 hover:bg-green-500/10'
-                                            : 'text-transparent'
-                                      }`}
-                                      title="Approve"
-                                      data-testid={`button-approve-${realIdx}`}
-                                    >
-                                      <Check className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  {!isApproved && !isEditingThis && (
-                                    <button
-                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
-                                      className={`p-1.5 rounded-lg smooth press-sm transition-all ${
-                                        isRejected
-                                          ? 'text-red-400 bg-red-500/10'
-                                          : isHovered
-                                            ? 'text-[#636366] hover:text-red-400 hover:bg-red-500/10'
-                                            : 'text-transparent'
-                                      }`}
-                                      title="Reject"
-                                      data-testid={`button-reject-${realIdx}`}
-                                    >
-                                      <X className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                 </div>
@@ -2213,7 +2178,7 @@ export default function DocumentProcessor() {
                               {!isEditingThis && (
                                 <div
                                   onClick={startEdit}
-                                  className="cursor-text rounded-xl px-3 py-2.5 transition-colors hover:bg-[#2c2c2e]/60"
+                                  className="cursor-text rounded-xl px-3 py-2 mb-3 transition-colors hover:bg-[#2c2c2e]/60"
                                   title="Click to edit"
                                 >
                                   {entity.value ? (
@@ -2228,7 +2193,7 @@ export default function DocumentProcessor() {
 
                               {/* Value — edit mode */}
                               {isEditingThis && (
-                                <div className="space-y-2">
+                                <div className="space-y-2 mb-3">
                                   {def && (
                                     <p className="text-[10px] text-[#48484a] leading-relaxed line-clamp-2">{def}</p>
                                   )}
@@ -2256,6 +2221,46 @@ export default function DocumentProcessor() {
                                       <Check className="w-3 h-3" />Save
                                     </button>
                                   </div>
+                                </div>
+                              )}
+
+                              {/* Approve / Reject — always visible bottom action bar */}
+                              {!isEditingThis && (
+                                <div className="flex items-center gap-2 pt-2.5" style={{ borderTop: '1px solid #2c2c2e' }}>
+                                  {isApproved ? (
+                                    <button
+                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-semibold text-green-400 bg-green-500/10 smooth press-sm"
+                                      data-testid={`button-approve-${realIdx}`}
+                                    >
+                                      <Check className="w-3.5 h-3.5" />Approved
+                                    </button>
+                                  ) : isRejected ? null : (
+                                    <button
+                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-green-400 hover:bg-green-500/10 border border-[#2c2c2e] hover:border-green-500/20 smooth press-sm"
+                                      data-testid={`button-approve-${realIdx}`}
+                                    >
+                                      <Check className="w-3.5 h-3.5" />Approve
+                                    </button>
+                                  )}
+                                  {isRejected ? (
+                                    <button
+                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-semibold text-red-400 bg-red-500/10 smooth press-sm"
+                                      data-testid={`button-reject-${realIdx}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />Rejected
+                                    </button>
+                                  ) : isApproved ? null : (
+                                    <button
+                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-red-400 hover:bg-red-500/10 border border-[#2c2c2e] hover:border-red-500/20 smooth press-sm"
+                                      data-testid={`button-reject-${realIdx}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />Reject
+                                    </button>
+                                  )}
                                 </div>
                               )}
 
