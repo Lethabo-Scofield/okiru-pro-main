@@ -1,16 +1,16 @@
 {
-  "installCommand": "cd apps/web && npm install --legacy-peer-deps",
-  "buildCommand": "cd apps/web && npm run build",
-  "outputDirectory": "apps/web/dist",
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public",
   "functions": {
-    "apps/web/api/**/*.ts": {
+    "api/**/*.ts": {
       "maxDuration": 60
     }
   },
   "routes": [
-    { "src": "/api/health", "dest": "/apps/web/api/health.ts" },
-    { "src": "/api$", "dest": "/apps/web/api/[...path].ts" },
-    { "src": "/api/(.*)", "dest": "/apps/web/api/[...path].ts" },
+    { "src": "/api/health", "dest": "/api/health.ts" },
+    { "src": "/api$", "dest": "/api/[...path].ts" },
+    { "src": "/api/(.*)", "dest": "/api/[...path].ts" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]

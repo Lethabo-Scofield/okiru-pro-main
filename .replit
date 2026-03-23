@@ -1,9 +1,10 @@
-modules = ["nodejs-20", "web", "python-3.12"]
+modules = ["nodejs-20", "web"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["twelf"]
 
 [workflows]
 runButton = "Project"
@@ -21,23 +22,32 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd apps/web && npm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[[ports]]
+localPort = 3333
+externalPort = 3000
+
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 24678
-externalPort = 80
+externalPort = 3001
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd apps/web && cross-env NODE_ENV=production node dist/index.cjs"]
-build = ["bash", "-c", "cd apps/web && npm install --no-workspaces --legacy-peer-deps && npm run build"]
+run = ["node", "./dist/index.cjs"]
+build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+MONGODB_URI = "mongodb+srv://scofieldx911_db_user:bMn26IskYLn67m0n@kuriopro.qwmqzkd.mongodb.net/?appName=KurioPro"
