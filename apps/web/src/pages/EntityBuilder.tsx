@@ -8,8 +8,10 @@ import {
   Shapes, Folder, FilePlus, Copy, AlignLeft, Tags,
   Map, Code, CheckCircle2, RefreshCw, FolderOpen, ChevronLeft, Sparkles,
   Zap, Plus, ChevronRight, MoreHorizontal, Search, FlaskConical,
-  BookOpen, Play, ChevronDown, Clock,
+  BookOpen, Play, ChevronDown, Clock, FileText, File,
 } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 import { starterTemplates as starterTemplatesList } from '@/data/starterTemplates';
 const starterTemplatesMap = Object.fromEntries(starterTemplatesList.map(t => [t.key, t]));
@@ -79,7 +81,7 @@ export default function EntityBuilder() {
   });
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [leftTab, setLeftTab] = useState<'entities' | 'repository'>('entities');
+  const [leftTab, setLeftTab] = useState<'entities' | 'testing'>('entities');
   const [rightTab, setRightTab] = useState<'editor' | 'test'>('editor');
   const [testText, setTestText] = useState('');
   const [testResults, setTestResults] = useState<any[]>([]);
@@ -87,6 +89,10 @@ export default function EntityBuilder() {
   const [testTemplateId, setTestTemplateId] = useState<'current' | number>('current');
   const [testTemplateDropOpen, setTestTemplateDropOpen] = useState(false);
   const testTemplateDropRef = useRef<HTMLDivElement>(null);
+  const [testFile, setTestFile] = useState<File | null>(null);
+  const [testFileLoading, setTestFileLoading] = useState(false);
+  const testFileInputRef = useRef<HTMLInputElement>(null);
+  const [testDragOver, setTestDragOver] = useState(false);
   const [expandedRepoId, setExpandedRepoId] = useState<number | null>(null);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -510,6 +516,41 @@ export default function EntityBuilder() {
     setIsTesting(false);
   };
 
+  const extractTestFile = async (file: File) => {
+    setTestFileLoading(true);
+    setTestFile(file);
+    setTestText('');
+    setTestResults([]);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      if (ext === 'txt' || ext === 'csv') {
+        const text = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve((e.target?.result as string) || '');
+          reader.readAsText(file);
+        });
+        setTestText(text);
+      } else if (ext === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map((item: any) => ('str' in item ? item.str : '')).join(' ') + '\n';
+        }
+        setTestText(text.trim());
+      } else {
+        toast({ title: 'Unsupported file', description: 'Use PDF, TXT, or CSV files for testing.', variant: 'destructive' });
+        setTestFile(null);
+      }
+    } catch (err) {
+      toast({ title: 'Failed to read file', description: 'Could not extract text from this file.', variant: 'destructive' });
+      setTestFile(null);
+    }
+    setTestFileLoading(false);
+  };
+
   const completenessColor = (pct: number) => pct >= 80 ? 'text-emerald-400' : pct >= 40 ? 'text-purple-400' : 'text-amber-400';
   const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-emerald-500' : pct >= 40 ? 'bg-purple-500' : 'bg-amber-500';
 
@@ -839,15 +880,43 @@ export default function EntityBuilder() {
           {/* Entity list + Detail — side by side */}
           <div className="flex gap-4 flex-1 min-h-0">
 
-            {/* Left Column */}
-            <div className="w-[240px] shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+            {/* Left Column — collapses to icon strip when Live Testing is active */}
+            <div
+              className="shrink-0 flex flex-col rounded-2xl overflow-hidden"
+              style={{
+                background: '#0d0d0d',
+                border: '1px solid #1e1e1e',
+                width: leftTab === 'testing' ? '52px' : '240px',
+                transition: 'width 0.32s cubic-bezier(0.4,0,0.2,1)',
+                minWidth: leftTab === 'testing' ? '52px' : '240px',
+              }}>
+              {/* Collapsed icon strip shown in testing mode */}
+              {leftTab === 'testing' && (
+                <div className="flex flex-col items-center py-3 gap-2 flex-1">
+                  <button
+                    onClick={() => setLeftTab('entities')}
+                    title="Entities"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-[#636366] hover:text-white hover:bg-white/[0.08] smooth press-sm transition-colors">
+                    <Shapes className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setLeftTab('testing')}
+                    title="Live Testing"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center bg-purple-500/15 text-purple-400 smooth">
+                    <FlaskConical className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Full panel content when NOT in testing mode */}
+              {leftTab !== 'testing' && <>
               {/* Tab switcher */}
               <div className="flex shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                {(['entities', 'repository'] as const).map(tab => (
+                {(['entities', 'testing'] as const).map(tab => (
                   <button key={tab} onClick={() => setLeftTab(tab)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-colors smooth ${leftTab === tab ? 'text-white border-b-2 border-purple-500' : 'text-[#636366] hover:text-[#b0b0b8]'}`}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-colors smooth ${leftTab === tab ? 'text-white' : 'text-[#636366] hover:text-[#b0b0b8]'}`}
                     style={{ borderBottom: leftTab === tab ? '2px solid #a855f7' : '2px solid transparent' }}>
-                    {tab === 'entities' ? <><Shapes className="w-3 h-3" />Entities</> : <><BookOpen className="w-3 h-3" />Repository</>}
+                    {tab === 'entities' ? <><Shapes className="w-3 h-3" />Entities</> : <><FlaskConical className="w-3 h-3" />Testing</>}
                   </button>
                 ))}
               </div>
@@ -930,71 +999,227 @@ export default function EntityBuilder() {
                 )}
               </>}
 
-              {/* Repository tab */}
-              {leftTab === 'repository' && (
-                <div className="flex-1 overflow-y-auto">
-                  <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                    <span className="text-[10px] text-[#636366]">{storedTemplates.length} saved</span>
-                    <button onClick={fetchTemplates} className="p-1 text-[#636366] hover:text-white rounded-md smooth press-sm">
-                      <RefreshCw className={`w-3 h-3 ${loadingTemplates ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                  {loadingTemplates && storedTemplates.length === 0 && (
-                    <div className="space-y-1.5 p-2">{[1,2,3].map(i => <div key={i} className="h-12 rounded-xl bg-white/[0.03] animate-pulse" />)}</div>
-                  )}
-                  {!loadingTemplates && storedTemplates.length === 0 && (
-                    <div className="text-center py-12 px-3">
-                      <FolderOpen className="w-6 h-6 text-[#3a3a3c] mx-auto mb-2" />
-                      <p className="text-[11px] text-[#3a3a3c]">No saved templates</p>
-                    </div>
-                  )}
-                  <div className="p-2 space-y-1">
-                    {storedTemplates.map(tmpl => (
-                      <div key={tmpl.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e1e1e' }}>
-                        <div
-                          className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer smooth ${expandedRepoId === tmpl.id ? 'bg-purple-500/10' : 'bg-white/[0.02] hover:bg-white/[0.05]'}`}
-                          onClick={() => setExpandedRepoId(expandedRepoId === tmpl.id ? null : tmpl.id)}>
-                          <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
-                            <Folder className="w-3.5 h-3.5 text-purple-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold text-white truncate">{tmpl.name}</p>
-                            <p className="text-[10px] text-[#636366]">{tmpl.entities.length} entities</p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(tmpl); setLeftTab('entities'); }}
-                              className="px-2 py-0.5 text-[10px] font-semibold text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 rounded-md smooth press-sm" data-testid={`button-load-repo-${tmpl.id}`}>
-                              Load
-                            </button>
-                            <ChevronDown className={`w-3 h-3 text-[#636366] transition-transform ${expandedRepoId === tmpl.id ? 'rotate-180' : ''}`} />
-                          </div>
-                        </div>
-                        {expandedRepoId === tmpl.id && tmpl.entities.length > 0 && (
-                          <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop: '1px solid #1e1e1e' }}>
-                            {tmpl.entities.map((e: any, i: number) => (
-                              <div key={i} className="flex items-start gap-2 py-1.5">
-                                <div className="w-5 h-5 rounded-md bg-white/[0.05] flex items-center justify-center shrink-0 mt-0.5">
-                                  <span className="text-[8px] font-bold text-[#636366]">{e.label.substring(0,2).toUpperCase()}</span>
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-[10px] font-semibold text-[#b0b0b8] truncate">{e.label}</p>
-                                  {e.definition && <p className="text-[9px] text-[#3a3a3c] leading-relaxed line-clamp-2">{e.definition}</p>}
-                                  {e.pattern && <p className="text-[9px] text-purple-500/70 font-mono mt-0.5 truncate">{e.pattern}</p>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </>}
             </div>
 
             {/* Detail / Empty State Panel */}
             <div className="flex-1 min-w-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
 
+              {/* ═══════════════════════════════════════════════════════════
+                  IMMERSIVE LIVE TESTING MODE — shown when leftTab==='testing'
+                  ═══════════════════════════════════════════════════════════ */}
+              {leftTab === 'testing' && (
+                <div className="flex-1 min-h-0 flex flex-col">
+
+                  {/* Toolbar */}
+                  <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
+
+                    {/* Live Testing title */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
+                        <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+                      </div>
+                      <span className="text-[13px] font-semibold text-white tracking-tight">Live Testing</span>
+                    </div>
+
+                    <div className="w-px h-5 bg-white/[0.06] mx-1 shrink-0" />
+
+                    {/* Template selector */}
+                    <div className="flex-1 relative" ref={testTemplateDropRef}>
+                      <button onClick={() => setTestTemplateDropOpen(o => !o)}
+                        className="w-full flex items-center justify-between bg-[#1a1a1a] text-white text-[12px] rounded-lg px-3 py-1.5 border border-[#2a2a2a] hover:border-[#3a3a3c] smooth text-left"
+                        data-testid="select-test-template">
+                        <span className="text-[#636366] text-[11px] mr-1.5 shrink-0">Template</span>
+                        <span className="truncate flex-1 text-[12px] text-white">
+                          {testTemplateId === 'current'
+                            ? `Current build (${entities.length} entities)`
+                            : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${t.entities.length})` : 'Template'; })()}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-2 text-[#636366] transition-transform duration-150 ${testTemplateDropOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {testTemplateDropOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
+                          style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
+                          <div onClick={() => { setTestTemplateId('current'); setTestTemplateDropOpen(false); }}
+                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                            <span className="flex-1 truncate">Current build</span>
+                            <span className="text-[11px] text-[#636366] shrink-0">({entities.length} entities)</span>
+                            {testTemplateId === 'current' && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
+                          </div>
+                          {storedTemplates.length > 0 && <div style={{ borderTop: '1px solid #2c2c2e' }} />}
+                          {storedTemplates.map(t => (
+                            <div key={t.id} onClick={() => { setTestTemplateId(t.id); setTestTemplateDropOpen(false); }}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                              <span className="flex-1 truncate">{t.name}</span>
+                              <span className="text-[11px] text-[#636366] shrink-0">({t.entities.length})</span>
+                              {testTemplateId === t.id && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload button */}
+                    <input
+                      ref={testFileInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.csv"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) extractTestFile(f); e.target.value = ''; }}
+                    />
+                    <button
+                      onClick={() => testFileInputRef.current?.click()}
+                      disabled={testFileLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#b0b0b8] hover:text-white hover:bg-white/[0.07] smooth press-sm border border-[#2a2a2a] hover:border-[#3a3a3c] transition-colors disabled:opacity-40 shrink-0"
+                      title="Upload a document to test">
+                      {testFileLoading
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Reading…</>
+                        : <><Upload className="w-3.5 h-3.5" />Upload Doc</>}
+                    </button>
+
+                    {/* Run button */}
+                    <button onClick={runTest}
+                      disabled={isTesting || !testText.trim() || (testTemplateId === 'current' && entities.length === 0)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm shrink-0"
+                      data-testid="button-run-test">
+                      {isTesting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing…</> : <><Play className="w-3.5 h-3.5" />Run</>}
+                    </button>
+                  </div>
+
+                  {/* Two-column: document input + results */}
+                  <div className="flex flex-1 min-h-0">
+
+                    {/* Left: Document area */}
+                    <div className="flex-1 flex flex-col min-w-0" style={{ borderRight: '1px solid #1e1e1e' }}>
+                      <div className="px-4 py-2 shrink-0 flex items-center gap-2" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest flex-1">Document</span>
+                        {testFile && (
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-3 h-3 text-purple-400" />
+                            <span className="text-[10px] text-purple-300 font-medium truncate max-w-[160px]">{testFile.name}</span>
+                            <button onClick={() => { setTestFile(null); setTestText(''); setTestResults([]); }}
+                              className="p-0.5 text-[#636366] hover:text-red-400 smooth rounded ml-0.5">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Drag-and-drop zone OR textarea */}
+                      <div
+                        className={`flex-1 relative flex flex-col transition-colors ${testDragOver ? 'bg-purple-500/[0.04]' : ''}`}
+                        onDragOver={(e) => { e.preventDefault(); setTestDragOver(true); }}
+                        onDragLeave={() => setTestDragOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setTestDragOver(false);
+                          const f = e.dataTransfer.files?.[0];
+                          if (f) extractTestFile(f);
+                        }}>
+
+                        {testDragOver && (
+                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none"
+                            style={{ background: 'rgba(168,85,247,0.06)', border: '2px dashed rgba(168,85,247,0.3)', borderRadius: '0' }}>
+                            <Upload className="w-8 h-8 text-purple-400 mb-2" />
+                            <p className="text-[13px] font-semibold text-purple-300">Drop to extract text</p>
+                          </div>
+                        )}
+
+                        {testFileLoading && (
+                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60">
+                            <Loader2 className="w-7 h-7 text-purple-400 animate-spin mb-2" />
+                            <p className="text-[12px] text-[#636366]">Extracting text…</p>
+                          </div>
+                        )}
+
+                        {!testText && !testFileLoading && (
+                          <div
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-3 cursor-pointer"
+                            onClick={() => testFileInputRef.current?.click()}>
+                            <div className="w-14 h-14 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center">
+                              <Upload className="w-6 h-6 text-[#3a3a3c]" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[13px] font-semibold text-[#48484a] mb-1">Drop a document or click to upload</p>
+                              <p className="text-[11px] text-[#3a3a3c]">PDF · TXT · CSV</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <textarea
+                          value={testText}
+                          onChange={(e) => { setTestText(e.target.value); if (!e.target.value) { setTestFile(null); setTestResults([]); } }}
+                          placeholder=""
+                          className="flex-1 w-full h-full bg-transparent text-[12.5px] text-white resize-none p-4 focus:outline-none leading-relaxed font-mono"
+                          style={{ opacity: testText ? 1 : 0 }}
+                          data-testid="textarea-test-input"
+                        />
+                      </div>
+
+                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderTop: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#3a3a3c]">{testText.length.toLocaleString()} chars</span>
+                        {testText && (
+                          <button onClick={() => { setTestText(''); setTestFile(null); setTestResults([]); }}
+                            className="text-[10px] text-[#636366] hover:text-white smooth">
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Results */}
+                    <div className="w-[340px] shrink-0 flex flex-col overflow-hidden">
+                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Extracted Entities</span>
+                        {testResults.length > 0 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md"
+                            style={{ background: 'rgba(52,211,153,0.1)', color: '#34d399' }}>
+                            {testResults.filter(r => r.status === 'extracted').length}/{testResults.length} found
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                        {testResults.length === 0 && !isTesting && (
+                          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                            <FlaskConical className="w-8 h-8 text-[#2c2c2e] mb-3" />
+                            <p className="text-[12px] text-[#3a3a3c]">Upload a document and click Run</p>
+                            <p className="text-[11px] text-[#2c2c2e] mt-1">or paste text directly</p>
+                          </div>
+                        )}
+                        {isTesting && testResults.length === 0 && (
+                          <div className="flex flex-col items-center justify-center h-full py-12">
+                            <Loader2 className="w-6 h-6 text-purple-400 animate-spin mb-2" />
+                            <p className="text-[12px] text-[#636366]">Extracting…</p>
+                          </div>
+                        )}
+                        {testResults.map((r, i) => (
+                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`}
+                            style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
+                              <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest flex-1 truncate">{r.name}</span>
+                              {r.status === 'extracted' && (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold shrink-0 ${r.method === 'Pattern' ? 'bg-purple-500/15 text-purple-400' : 'bg-[#2c2c2e] text-[#636366]'}`}>
+                                  {r.method}
+                                </span>
+                              )}
+                            </div>
+                            {r.status === 'extracted'
+                              ? <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
+                              : <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  EDITOR MODE — shown when leftTab==='entities'
+                  ═══════════════════════════════════════════════════════════ */}
+              {leftTab === 'entities' && <>
               {/* Right panel tab header */}
               <div className="flex items-center gap-1 px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
                 {(['editor', 'test'] as const).map(tab => (
@@ -1005,7 +1230,7 @@ export default function EntityBuilder() {
                 ))}
               </div>
 
-              {/* Editor tab */}
+              {/* Editor tab empty state */}
               {rightTab === 'editor' && !selectedEntity && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                   <div className="w-16 h-16 rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.04] flex items-center justify-center mx-auto mb-5">
@@ -1022,16 +1247,15 @@ export default function EntityBuilder() {
                 </div>
               )}
 
-              {/* Live Test tab */}
+              {/* Compact Live Test panel (inside editor mode) */}
               {rightTab === 'test' && (
                 <div className="flex-1 min-h-0 flex flex-col">
-                  {/* Controls row */}
                   <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
                     <div className="flex-1 relative" ref={testTemplateDropRef}>
                       <label className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest block mb-1">Template</label>
                       <button onClick={() => setTestTemplateDropOpen(o => !o)}
                         className="w-full flex items-center justify-between bg-[#1c1c1e] text-white text-[12px] rounded-lg px-3 py-1.5 border border-[#2c2c2e] hover:border-[#48484a] smooth text-left"
-                        data-testid="select-test-template">
+                        data-testid="select-test-template-compact">
                         <span className="truncate">
                           {testTemplateId === 'current'
                             ? `Current build (${entities.length} entities)`
@@ -1062,37 +1286,28 @@ export default function EntityBuilder() {
                     </div>
                     <button onClick={runTest} disabled={isTesting || !testText.trim() || (testTemplateId === 'current' && entities.length === 0)}
                       className="mt-5 flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm"
-                      data-testid="button-run-test">
+                      data-testid="button-run-test-compact">
                       {isTesting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing…</> : <><Play className="w-3.5 h-3.5" />Run</>}
                     </button>
                   </div>
-                  {/* Two-column: text input + results */}
                   <div className="flex flex-1 min-h-0">
-                    {/* Text input */}
                     <div className="w-1/2 flex flex-col" style={{ borderRight: '1px solid #1e1e1e' }}>
                       <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest"><span className="underline">Document text</span></span>
+                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Document text</span>
                       </div>
-                      <textarea
-                        value={testText}
-                        onChange={(e) => setTestText(e.target.value)}
-                        placeholder="Paste or type document text here to test extraction…"
-                        className="flex-1 w-full bg-transparent text-[13px] text-white resize-none p-4 focus:outline-none placeholder:text-[#3a3a3c] leading-relaxed font-mono"
-                        data-testid="textarea-test-input"
-                      />
+                      <textarea value={testText} onChange={(e) => setTestText(e.target.value)}
+                        placeholder="Paste text here…"
+                        className="flex-1 w-full bg-transparent text-[13px] text-white resize-none p-4 focus:outline-none placeholder:text-[#3a3a3c] leading-relaxed font-mono" />
                       <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderTop: '1px solid #1e1e1e' }}>
                         <span className="text-[10px] text-[#3a3a3c]">{testText.length.toLocaleString()} chars</span>
                         {testText && <button onClick={() => { setTestText(''); setTestResults([]); }} className="text-[10px] text-[#636366] hover:text-white smooth">Clear</button>}
                       </div>
                     </div>
-                    {/* Results */}
                     <div className="w-1/2 flex flex-col overflow-hidden">
                       <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
                         <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Results</span>
                         {testResults.length > 0 && (
-                          <span className="text-[10px] text-[#636366]">
-                            {testResults.filter(r => r.status === 'extracted').length}/{testResults.length} <span className="underline">found</span>
-                          </span>
+                          <span className="text-[10px] text-[#636366]">{testResults.filter(r => r.status === 'extracted').length}/{testResults.length} found</span>
                         )}
                       </div>
                       <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
@@ -1109,7 +1324,8 @@ export default function EntityBuilder() {
                           </div>
                         )}
                         {testResults.map((r, i) => (
-                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`} style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
+                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`}
+                            style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
                             <div className="flex items-center gap-2 mb-1">
                               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
                               <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest">{r.name}</span>
@@ -1119,11 +1335,9 @@ export default function EntityBuilder() {
                                 </span>
                               )}
                             </div>
-                            {r.status === 'extracted' ? (
-                              <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
-                            ) : (
-                              <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>
-                            )}
+                            {r.status === 'extracted'
+                              ? <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
+                              : <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>}
                           </div>
                         ))}
                       </div>
@@ -1285,6 +1499,7 @@ export default function EntityBuilder() {
                 </div>
                 </div>
               )}
+              </>}
             </div>
           </div>
         </div>
