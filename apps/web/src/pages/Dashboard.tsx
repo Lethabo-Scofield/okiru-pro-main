@@ -149,6 +149,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  useEffect(() => {
     if (page === 'scorecards') {
       fetchSessions();
     }
