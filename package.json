@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "B-BBEE Compliance and Scorecard Management Platform",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "dev": "pnpm run --parallel dev",
     "dev:web": "pnpm --filter @okiru/web dev",
