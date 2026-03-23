@@ -1220,18 +1220,9 @@ export default function EntityBuilder() {
                   EDITOR MODE — shown when leftTab==='entities'
                   ═══════════════════════════════════════════════════════════ */}
               {leftTab === 'entities' && <>
-              {/* Right panel tab header */}
-              <div className="flex items-center gap-1 px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                {(['editor', 'test'] as const).map(tab => (
-                  <button key={tab} onClick={() => setRightTab(tab)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold smooth transition-colors ${rightTab === tab ? 'bg-white/[0.08] text-white' : 'text-[#636366] hover:text-[#b0b0b8]'}`}>
-                    {tab === 'editor' ? <><Pencil className="w-3 h-3" />Editor</> : <><FlaskConical className="w-3 h-3" />Live Test</>}
-                  </button>
-                ))}
-              </div>
 
-              {/* Editor tab empty state */}
-              {rightTab === 'editor' && !selectedEntity && (
+              {/* Editor empty state */}
+              {!selectedEntity && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                   <div className="w-16 h-16 rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.04] flex items-center justify-center mx-auto mb-5">
                     <Shapes className="w-7 h-7 text-[#2c2c2e]" />
@@ -1247,106 +1238,7 @@ export default function EntityBuilder() {
                 </div>
               )}
 
-              {/* Compact Live Test panel (inside editor mode) */}
-              {rightTab === 'test' && (
-                <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                    <div className="flex-1 relative" ref={testTemplateDropRef}>
-                      <label className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest block mb-1">Template</label>
-                      <button onClick={() => setTestTemplateDropOpen(o => !o)}
-                        className="w-full flex items-center justify-between bg-[#1c1c1e] text-white text-[12px] rounded-lg px-3 py-1.5 border border-[#2c2c2e] hover:border-[#48484a] smooth text-left"
-                        data-testid="select-test-template-compact">
-                        <span className="truncate">
-                          {testTemplateId === 'current'
-                            ? `Current build (${entities.length} entities)`
-                            : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${t.entities.length})` : 'Template'; })()}
-                        </span>
-                        <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-2 text-[#636366] transition-transform duration-150 ${testTemplateDropOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {testTemplateDropOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
-                          style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
-                          <div onClick={() => { setTestTemplateId('current'); setTestTemplateDropOpen(false); }}
-                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
-                            <span className="flex-1 truncate">Current build</span>
-                            <span className="text-[11px] text-[#636366] shrink-0">({entities.length} entities)</span>
-                            {testTemplateId === 'current' && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
-                          </div>
-                          {storedTemplates.length > 0 && <div style={{ borderTop: '1px solid #2c2c2e' }} />}
-                          {storedTemplates.map(t => (
-                            <div key={t.id} onClick={() => { setTestTemplateId(t.id); setTestTemplateDropOpen(false); }}
-                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-purple-500/15 text-purple-300' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
-                              <span className="flex-1 truncate">{t.name}</span>
-                              <span className="text-[11px] text-[#636366] shrink-0">({t.entities.length})</span>
-                              {testTemplateId === t.id && <Check className="w-3 h-3 text-purple-400 shrink-0" />}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={runTest} disabled={isTesting || !testText.trim() || (testTemplateId === 'current' && entities.length === 0)}
-                      className="mt-5 flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm"
-                      data-testid="button-run-test-compact">
-                      {isTesting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing…</> : <><Play className="w-3.5 h-3.5" />Run</>}
-                    </button>
-                  </div>
-                  <div className="flex flex-1 min-h-0">
-                    <div className="w-1/2 flex flex-col" style={{ borderRight: '1px solid #1e1e1e' }}>
-                      <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Document text</span>
-                      </div>
-                      <textarea value={testText} onChange={(e) => setTestText(e.target.value)}
-                        placeholder="Paste text here…"
-                        className="flex-1 w-full bg-transparent text-[13px] text-white resize-none p-4 focus:outline-none placeholder:text-[#3a3a3c] leading-relaxed font-mono" />
-                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderTop: '1px solid #1e1e1e' }}>
-                        <span className="text-[10px] text-[#3a3a3c]">{testText.length.toLocaleString()} chars</span>
-                        {testText && <button onClick={() => { setTestText(''); setTestResults([]); }} className="text-[10px] text-[#636366] hover:text-white smooth">Clear</button>}
-                      </div>
-                    </div>
-                    <div className="w-1/2 flex flex-col overflow-hidden">
-                      <div className="px-4 py-2 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                        <span className="text-[10px] text-[#636366] font-semibold uppercase tracking-widest">Results</span>
-                        {testResults.length > 0 && (
-                          <span className="text-[10px] text-[#636366]">{testResults.filter(r => r.status === 'extracted').length}/{testResults.length} found</span>
-                        )}
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                        {testResults.length === 0 && !isTesting && (
-                          <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                            <FlaskConical className="w-8 h-8 text-[#2c2c2e] mb-3" />
-                            <p className="text-[12px] text-[#3a3a3c]">Paste text and click Run</p>
-                          </div>
-                        )}
-                        {isTesting && testResults.length === 0 && (
-                          <div className="flex flex-col items-center justify-center h-full py-12">
-                            <Loader2 className="w-6 h-6 text-purple-400 animate-spin mb-2" />
-                            <p className="text-[12px] text-[#636366]">Extracting…</p>
-                          </div>
-                        )}
-                        {testResults.map((r, i) => (
-                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`}
-                            style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
-                              <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest">{r.name}</span>
-                              {r.status === 'extracted' && (
-                                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-md font-semibold ${r.method === 'Pattern' ? 'bg-purple-500/15 text-purple-400' : 'bg-[#2c2c2e] text-[#636366]'}`}>
-                                  {r.method}
-                                </span>
-                              )}
-                            </div>
-                            {r.status === 'extracted'
-                              ? <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
-                              : <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {rightTab === 'editor' && selectedEntity && (
+              {selectedEntity && (
                 <div className="flex-1 overflow-y-auto">
                   <div className="px-6 py-5 sticky top-0 z-10 shrink-0" style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e' }}>
                     <div className="flex items-start justify-between gap-4">
