@@ -1273,8 +1273,8 @@ export default function DocumentProcessor() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className={`${currentPage === 'review' ? '' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
+      <main className={`flex-1 flex flex-col min-h-0 ${currentPage === 'review' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+        <div className={`${currentPage === 'review' ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
 
           {currentPage === 'company-info' && (
             <div>
@@ -1975,7 +1975,7 @@ export default function DocumentProcessor() {
               }
             };
             return (
-            <div className="flex flex-col h-full -m-6">
+            <div className="flex flex-col flex-1 min-h-0 -m-6">
               <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
                   <button onClick={() => {
