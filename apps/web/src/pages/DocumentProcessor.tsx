@@ -1284,181 +1284,177 @@ export default function DocumentProcessor() {
                   <p className="text-[#8e8e93] text-sm">Loading session...</p>
                 </div>
               ) : (
-                <>
+                <div className="max-w-2xl mx-auto w-full">
+
+                  {/* Page header */}
                   <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto mb-4">
-                      <Building2 className="w-7 h-7" />
+                    <div className="w-14 h-14 rounded-2xl bg-purple-500/15 ring-1 ring-purple-500/20 flex items-center justify-center mx-auto mb-4">
+                      <Building2 className="w-6 h-6 text-purple-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-1">New Client Assessment</h2>
-                    <p className="text-[#8e8e93] text-sm">Enter the client company's details before uploading documents</p>
+                    <h2 className="text-[22px] font-bold text-white mb-1 tracking-tight">New Client Assessment</h2>
+                    <p className="text-[#636366] text-[13px]">Enter the client company's details before uploading documents</p>
                   </div>
 
-                  <div className="mb-6">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-3">Company Logo</p>
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-20 h-20 rounded-2xl bg-[#1c1c1e] border-2 border-dashed border-[#3a3a3c] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
-                        onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                        data-testid="logo-upload-zone"
-                      >
-                        {companyInfo.logo ? (
-                          <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
-                        ) : (
-                          <Building2 className="w-7 h-7 text-[#3a3a3c]" />
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          id="logo-input"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          data-testid="input-logo"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (file.size > 2 * 1024 * 1024) {
-                              toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' });
-                              e.target.value = '';
-                              return;
-                            }
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
-                            };
-                            reader.readAsDataURL(file);
-                            e.target.value = '';
-                          }}
-                        />
-                        <button
-                          type="button"
+                  {/* ── Card ── */}
+                  <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+
+                    {/* Section: Company Logo */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Logo</p>
+                      <div className="flex items-center gap-5">
+                        <div
+                          className="w-[72px] h-[72px] rounded-2xl bg-[#1a1a1a] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer transition-colors hover:ring-2 hover:ring-purple-500/30"
+                          style={{ border: '2px dashed #2c2c2e' }}
                           onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                          className="px-4 py-2 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-[#3a3a3c]"
-                          data-testid="button-upload-logo"
+                          data-testid="logo-upload-zone"
                         >
-                          {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
-                        </button>
-                        {companyInfo.logo && (
-                          <button
-                            type="button"
-                            onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
-                            className="ml-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[12px] font-medium smooth press-sm"
-                            data-testid="button-remove-logo"
-                          >
-                            Remove
-                          </button>
-                        )}
-                        <p className="text-[11px] text-[#636366] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                          {companyInfo.logo
+                            ? <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
+                            : <Building2 className="w-6 h-6 text-[#3a3a3c]" />}
+                        </div>
+                        <div>
+                          <input id="logo-input" type="file" accept="image/*" className="hidden" data-testid="input-logo"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 2 * 1024 * 1024) { toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' }); e.target.value = ''; return; }
+                              const reader = new FileReader();
+                              reader.onload = (ev) => setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }} />
+                          <div className="flex items-center gap-2">
+                            <button type="button"
+                              onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                              className="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.09] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-white/[0.08]"
+                              data-testid="button-upload-logo">
+                              {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
+                            </button>
+                            {companyInfo.logo && (
+                              <button type="button"
+                                onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
+                                className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/15 text-red-400 text-[12px] font-medium smooth press-sm border border-red-500/10"
+                                data-testid="button-remove-logo">
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#3a3a3c] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mb-3">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Company Details</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Company Name <span className="text-red-400">*</span></label>
-                      <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
-                        placeholder="e.g. Acme Holdings (Pty) Ltd"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-company-name" autoFocus />
+                    {/* Section: Company Details */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Company Name <span className="text-red-400">*</span></label>
+                          <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Acme Holdings (Pty) Ltd"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-company-name" autoFocus />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Registration Number</label>
+                          <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
+                            placeholder="e.g. 2021/123456/07"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-company-regno" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Industry Sector <span className="text-red-400">*</span></label>
+                          <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all appearance-none"
+                            data-testid="select-company-sector">
+                            <option value="">Select a sector…</option>
+                            {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover (ZAR)</label>
+                          <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
+                            placeholder="e.g. R 50,000,000"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-annual-turnover" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Number of Employees</label>
+                          <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
+                            placeholder="e.g. 150"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-employees" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End</label>
+                          <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all appearance-none"
+                            data-testid="select-fye">
+                            <option value="">Select month…</option>
+                            {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Current B-BBEE Level</label>
+                          <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all appearance-none"
+                            data-testid="select-bbee-level">
+                            <option value="">Select level…</option>
+                            {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Physical Address</label>
+                          <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
+                            placeholder="e.g. 10 Mandela Square, Sandton, 2196"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-address" />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Registration Number</label>
-                      <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
-                        placeholder="e.g. 2021/123456/07"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-company-regno" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Industry Sector <span className="text-red-400">*</span></label>
-                      <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-company-sector">
-                        <option value="">Select a sector...</option>
-                        {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Annual Turnover (ZAR)</label>
-                      <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
-                        placeholder="e.g. R 50,000,000"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-annual-turnover" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Number of Employees</label>
-                      <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
-                        placeholder="e.g. 150"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-employees" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Financial Year End</label>
-                      <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-fye">
-                        <option value="">Select month...</option>
-                        {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Current B-BBEE Level</label>
-                      <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-bbee-level">
-                        <option value="">Select level...</option>
-                        {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Physical Address</label>
-                      <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
-                        placeholder="e.g. 10 Mandela Square, Sandton, 2196"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-address" />
-                    </div>
-                  </div>
 
-                  <div className="mb-3 mt-6">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Contact Person</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Full Name</label>
-                      <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
-                        placeholder="e.g. Jane Dlamini"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-name" />
+                    {/* Section: Contact Person */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Contact Person</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Full Name</label>
+                          <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
+                            placeholder="e.g. Jane Dlamini"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-contact-name" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Email Address</label>
+                          <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
+                            placeholder="e.g. jane@company.co.za"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-contact-email" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Phone Number</label>
+                          <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
+                            placeholder="e.g. +27 82 123 4567"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                            data-testid="input-contact-phone" />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Email Address</label>
-                      <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
-                        placeholder="e.g. jane@company.co.za"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-email" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Phone Number</label>
-                      <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
-                        placeholder="e.g. +27 82 123 4567"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-phone" />
-                    </div>
-                  </div>
 
-                  <div className="mb-3">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Additional Notes</p>
-                  </div>
-                  <div className="mb-8">
-                    <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
-                      placeholder="Any additional context about this client or assessment..."
-                      rows={3}
-                      className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all resize-none"
-                      data-testid="input-notes" />
-                  </div>
+                    {/* Section: Notes */}
+                    <div className="px-6 py-5">
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Additional Notes</p>
+                      <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="Any additional context about this client or assessment…"
+                        rows={3}
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all resize-none"
+                        data-testid="input-notes" />
+                    </div>
 
+                  </div>
+                  {/* ── End Card ── */}
+
+                  {/* Submit */}
                   <button
                     onClick={async () => {
                       if (!companyInfo.name.trim() || !companyInfo.sector) {
@@ -1467,10 +1463,7 @@ export default function DocumentProcessor() {
                       }
                       setIsSavingSession(true);
                       const sid = sessionId || generateSessionId();
-                      if (!sessionId) {
-                        setSessionId(sid);
-                        sessionCreatedAt.current = new Date().toISOString();
-                      }
+                      if (!sessionId) { setSessionId(sid); sessionCreatedAt.current = new Date().toISOString(); }
                       await apiSaveSession({
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
@@ -1483,14 +1476,14 @@ export default function DocumentProcessor() {
                       setCurrentPage('upload');
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press"
+                    className="w-full mt-4 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] disabled:border disabled:border-[#2a2a2a] text-white rounded-2xl font-semibold text-[13px] smooth press transition-colors"
                     data-testid="button-next-upload"
                   >
                     {isSavingSession
-                      ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</>
+                      ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving…</>
                       : <>Continue to Upload <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
                   </button>
-                </>
+                </div>
               )}
             </div>
           )}
