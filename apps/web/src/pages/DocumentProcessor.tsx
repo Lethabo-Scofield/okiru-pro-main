@@ -10,7 +10,7 @@ import {
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
-  Pencil, Plus
+  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -650,6 +650,8 @@ export default function DocumentProcessor() {
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
   const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
+  const [savedDocs, setSavedDocs] = useState<Set<number>>(new Set());
+  const [docFullView, setDocFullView] = useState(false);
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
   const [completedCount, setCompletedCount] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
@@ -1901,14 +1903,26 @@ export default function DocumentProcessor() {
 
           {currentPage === 'review' && extractionResults.length > 0 && (() => {
             const isLastDoc = activeReviewDoc === extractionResults.length - 1;
+            const allSaved = savedDocs.size >= extractionResults.length;
+
+            const handleSave = async () => {
+              setIsSavingSession(true);
+              await persistSession('review', { results: extractionResults, complete: false });
+              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
+              setIsSavingSession(false);
+              toast({ title: "Saved", description: `Document ${activeReviewDoc + 1} review saved.` });
+            };
+
             const handleNext = async () => {
               setIsSavingSession(true);
               await persistSession('review', { results: extractionResults, complete: false });
+              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
               setIsSavingSession(false);
               setActiveReviewDoc(prev => prev + 1);
               setHoveredEntity(null);
               setReviewFilter('all');
               setEditingEntity(null);
+              setDocFullView(false);
             };
             const handleSubmit = async () => {
               setIsSavingSession(true);
@@ -1981,27 +1995,50 @@ export default function DocumentProcessor() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {isLastDoc ? (
-                    <button onClick={handleSubmit} disabled={isSubmitted || isSavingSession}
-                      className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
-                      data-testid="button-submit">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
-                        : isSubmitted ? <><Check className="w-3.5 h-3.5" />Complete</>
-                        : 'Submit & Complete'}
-                    </button>
-                  ) : (
-                    <button onClick={handleNext} disabled={isSavingSession}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-60"
-                      data-testid="button-next-doc">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
-                        : <>Next Document <ChevronRight className="w-3.5 h-3.5" /></>}
-                    </button>
-                  )}
+                  {/* Save button */}
+                  <button onClick={handleSave} disabled={isSavingSession || isSubmitted}
+                    className={`px-3.5 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 border transition-colors
+                      ${savedDocs.has(activeReviewDoc)
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15'
+                        : 'bg-[#1c1c1e] border-[#2c2c2e] text-[#d1d1d6] hover:text-white hover:border-[#48484a]'}
+                      disabled:opacity-40 disabled:cursor-not-allowed`}
+                    data-testid="button-save-doc">
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</>
+                      : savedDocs.has(activeReviewDoc)
+                        ? <><Check className="w-3.5 h-3.5" />Saved</>
+                        : <><Save className="w-3.5 h-3.5" />Save</>}
+                  </button>
+
+                  {/* Next button */}
+                  <button onClick={handleNext} disabled={isLastDoc || isSavingSession || isSubmitted}
+                    className="px-3.5 py-2 bg-[#1c1c1e] border border-[#2c2c2e] hover:border-[#48484a] text-[#d1d1d6] hover:text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                    data-testid="button-next-doc">
+                    Next <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Submit button — only enabled once all docs are saved */}
+                  <button onClick={handleSubmit} disabled={!allSaved || isSubmitted || isSavingSession}
+                    title={!allSaved ? `Save all ${extractionResults.length} document${extractionResults.length > 1 ? 's' : ''} before submitting` : undefined}
+                    className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 transition-colors
+                      ${isSubmitted
+                        ? 'bg-green-600 text-white'
+                        : allSaved
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                          : 'bg-[#1c1c1e] border border-[#2c2c2e] text-[#48484a] cursor-not-allowed'}
+                      disabled:opacity-60`}
+                    data-testid="button-submit">
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</>
+                      : isSubmitted
+                        ? <><Check className="w-3.5 h-3.5" />Complete</>
+                        : <><Send className="w-3.5 h-3.5" />Submit</>}
+                  </button>
                 </div>
               </div>
 
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                <div className="w-1/2 overflow-y-auto bg-[#f5f5f5]" style={{ borderRight: '1px solid #2c2c2e' }}>
+                <div className={`${docFullView ? 'w-full' : 'w-1/2'} overflow-y-auto bg-[#f5f5f5] flex flex-col transition-all duration-200`} style={docFullView ? {} : { borderRight: '1px solid #2c2c2e' }}>
                   <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
                       {activeFileType === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> :
@@ -2013,7 +2050,13 @@ export default function DocumentProcessor() {
                          activeFileType === 'excel' ? 'Spreadsheet Viewer' :
                          activeFileType === 'csv' ? 'CSV Viewer' : 'Document'}
                       </span>
-                      {activeFileType === 'text' && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      {activeFileType === 'text' && <span className="text-xs text-gray-400">{activeDocText.length.toLocaleString()} chars</span>}
+                      <button
+                        onClick={() => setDocFullView(v => !v)}
+                        title={docFullView ? 'Split view' : 'Full document view'}
+                        className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 smooth press-sm transition-colors">
+                        {docFullView ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
@@ -2051,7 +2094,7 @@ export default function DocumentProcessor() {
                   </div>
                 </div>
 
-                <div className="w-1/2 overflow-y-auto bg-black">
+                <div className={`${docFullView ? 'hidden' : 'w-1/2'} overflow-y-auto bg-black`}>
                   <div className="px-5 py-4 sticky top-0 bg-black z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
