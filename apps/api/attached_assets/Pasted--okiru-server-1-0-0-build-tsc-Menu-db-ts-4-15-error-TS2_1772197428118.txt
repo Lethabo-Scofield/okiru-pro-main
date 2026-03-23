@@ -1,0 +1,28 @@
+> okiru-server@1.0.0 build
+> tsc
+Menu
+db.ts(4,15): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+db.ts(16,35): error TS2345: Argument of type '{ serverSelectionTimeoutMS: number; socketTimeoutMS: number; }' is not assignable to parameter of type 'ConnectOptions'.
+  Type '{ serverSelectionTimeoutMS: number; socketTimeoutMS: number; }' is missing the following properties from type 'ConnectOptions': session, key, allowPartialTrustChain, ALPNProtocols, and 21 more.
+db.ts(22,27): error TS2339: Property 'on' does not exist on type 'Connection'.
+db.ts(26,27): error TS2339: Property 'on' does not exist on type 'Connection'.
+index.ts(9,30): error TS2307: Cannot find module 'http' or its corresponding type declarations.
+index.ts(14,16): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(16,16): error TS2664: Invalid module name in augmentation, module 'http' cannot be found.
+index.ts(29,24): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(58,1): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(59,1): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(60,1): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(60,64): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(61,1): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(61,62): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+index.ts(76,25): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+pipeline/excelParser.ts(1026,42): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+routes.ts(3,43): error TS2307: Cannot find module 'http' or its corresponding type declarations.
+routes.ts(20,16): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+routes.ts(46,16): error TS2665: Invalid module name in augmentation. Module 'express-session' resolves to an untyped module at '/opt/render/project/src/node_modules/express-session/index.js', which cannot be augmented.
+routes.ts(95,25): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+routes.ts(98,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+routes.ts(103,17): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+routes.ts(125,15): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+==> Build failed 😞
