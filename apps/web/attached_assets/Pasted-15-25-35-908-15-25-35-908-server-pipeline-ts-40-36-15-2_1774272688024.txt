@@ -1,0 +1,60 @@
+15:25:35.908 
+15:25:35.908 
+    server/pipeline.ts:40:36:
+15:25:35.908 
+      40 │ export { buildPipelineResult } from '../../api/pipeline/buildResult';
+15:25:35.909 
+         ╵                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+15:25:35.909 
+15:25:35.909 
+✘ [ERROR] Could not resolve "../../api/pipeline/sectorConfig"
+15:25:35.909 
+15:25:35.910 
+    server/pipeline.ts:53:7:
+15:25:35.910 
+      53 │ } from '../../api/pipeline/sectorConfig';
+15:25:35.910 
+         ╵        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+15:25:35.911 
+15:25:36.454 
+5 errors
+15:25:36.457 
+Error: Build failed with 5 errors:
+15:25:36.457 
+server/pipeline.ts:17:7: ERROR: Could not resolve "../../api/pipeline/extraction/entityManifest"
+15:25:36.457 
+server/pipeline.ts:27:7: ERROR: Could not resolve "../../api/pipeline/extraction/llmExtractor"
+15:25:36.457 
+server/pipeline.ts:37:7: ERROR: Could not resolve "../../api/pipeline/extraction/entityToParseResult"
+15:25:36.457 
+server/pipeline.ts:40:36: ERROR: Could not resolve "../../api/pipeline/buildResult"
+15:25:36.457 
+server/pipeline.ts:53:7: ERROR: Could not resolve "../../api/pipeline/sectorConfig"
+15:25:36.460 
+    at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1467:15)
+15:25:36.460 
+    at /vercel/path0/node_modules/esbuild/lib/main.js:926:25
+15:25:36.460 
+    at /vercel/path0/node_modules/esbuild/lib/main.js:878:52
+15:25:36.461 
+    at buildResponseToResult (/vercel/path0/node_modules/esbuild/lib/main.js:924:7)
+15:25:36.461 
+    at /vercel/path0/node_modules/esbuild/lib/main.js:951:16
+15:25:36.461 
+    at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:603:9)
+15:25:36.461 
+    at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:658:12)
+15:25:36.461 
+    at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:581:7)
+15:25:36.461 
+    at Socket.emit (node:events:508:28)
+15:25:36.461 
+    at addChunk (node:internal/streams/readable:559:12) {
+15:25:36.461 
+  errors: [Getter/Setter],
+15:25:36.461 
+  warnings: [Getter/Setter]
+15:25:36.461 
+}
+15:25:36.553 
+Error: Command "npm run build" exited with 1

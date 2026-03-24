@@ -5,9 +5,9 @@
   "license": "MIT",
   "scripts": {
     "dev:client": "vite dev --port 5000",
-    "dev": "cross-env NODE_ENV=development node_modules/.bin/tsx server/index.ts",
-    "build": "tsx script/build.ts",
-    "start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "dev": "node_modules/.bin/cross-env NODE_ENV=development node_modules/.bin/tsx server/index.ts",
+    "build": "node_modules/.bin/tsx script/build.ts",
+    "start": "node_modules/.bin/cross-env NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"

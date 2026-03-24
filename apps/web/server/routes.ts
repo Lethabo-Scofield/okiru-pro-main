@@ -6,7 +6,7 @@ import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { sendLoginNotification } from "./email";
-import { ProcessorSessionModel } from "../shared/schema";
+import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any)?.userId;
@@ -256,88 +256,130 @@ export async function registerRoutes(
     }
   });
 
-  const companyProfiles: Record<string, any> = {
-    "C-10483": { name: "Moyo Retail (Pty) Ltd", industry: "Retail", revenue: 85000000, npat: 6200000, leviableAmount: 28000000 },
-    "C-21907": { name: "Karoo Telecom", industry: "Telecoms", revenue: 320000000, npat: 41000000, leviableAmount: 95000000 },
-    "C-88712": { name: "Umhlaba Insurance Group", industry: "Insurance", revenue: 540000000, npat: 72000000, leviableAmount: 160000000 },
-    "C-54011": { name: "Aurum Financial Services", industry: "Financial Services", revenue: 210000000, npat: 28000000, leviableAmount: 62000000 },
-    "C-66309": { name: "Blue Crane Logistics", industry: "Logistics", revenue: 125000000, npat: 9800000, leviableAmount: 38000000 },
-    "C-77201": { name: "Saffron Health Network", industry: "Healthcare", revenue: 190000000, npat: 22000000, leviableAmount: 55000000 },
-    "C-30118": { name: "Vula Energy Partners", industry: "Energy", revenue: 410000000, npat: 53000000, leviableAmount: 120000000 },
-    "C-91145": { name: "CapeTech Manufacturing", industry: "Manufacturing", revenue: 275000000, npat: 31000000, leviableAmount: 82000000 },
-  };
+  app.get("/api/clients", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUserById((req.session as any).userId);
+      const filter: any = {};
+      if (user?.organizationId) filter.organizationId = user.organizationId;
+      const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
+      res.json(clients.map((c: any) => c.toJSON()));
+    } catch (error: any) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ error: "Failed to fetch clients" });
+    }
+  });
 
-  app.get("/api/clients/:clientId/data", async (req, res) => {
+  app.post("/api/clients", requireAuth, async (req, res) => {
+    try {
+      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
+      if (!name) return res.status(400).json({ error: "Client name is required" });
+      const userId = (req.session as any).userId;
+      const user = await storage.getUserById(userId);
+      const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
+      const client = await ClientModel.create({
+        clientId,
+        name,
+        financialYear: financialYear || new Date().getFullYear().toString(),
+        industrySector: industrySector || null,
+        eapProvince: eapProvince || null,
+        revenue: revenue || 0,
+        npat: npat || 0,
+        leviableAmount: leviableAmount || 0,
+        organizationId: user?.organizationId || null,
+        createdByUserId: userId,
+      });
+      res.json(client.toJSON());
+    } catch (error: any) {
+      console.error("Error creating client:", error);
+      res.status(500).json({ error: "Failed to create client" });
+    }
+  });
+
+  app.get("/api/clients/:clientId", requireAuth, async (req, res) => {
+    try {
+      const client = await ClientModel.findOne({ clientId: req.params.clientId });
+      if (!client) return res.status(404).json({ error: "Client not found" });
+      res.json(client.toJSON());
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch client" });
+    }
+  });
+
+  app.patch("/api/clients/:clientId", requireAuth, async (req, res) => {
+    try {
+      const updates: any = { updatedAt: new Date() };
+      const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      }
+      const client = await ClientModel.findOneAndUpdate(
+        { clientId: req.params.clientId },
+        updates,
+        { new: true }
+      );
+      if (!client) return res.status(404).json({ error: "Client not found" });
+      res.json(client.toJSON());
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to update client" });
+    }
+  });
+
+  app.delete("/api/clients/:clientId", requireAuth, async (req, res) => {
+    try {
+      const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+      if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/data", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
-      const profile = companyProfiles[clientId];
-      if (!profile) {
+      const client = await ClientModel.findOne({ clientId });
+      if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
+      const c = client.toJSON();
 
       res.json({
         client: {
-          id: clientId,
-          name: profile.name,
-          financialYear: "2025",
-          revenue: profile.revenue,
-          npat: profile.npat,
-          leviableAmount: profile.leviableAmount,
-          industrySector: profile.industry,
-          eapProvince: "National",
+          id: c.id,
+          name: c.name,
+          financialYear: c.financialYear,
+          revenue: c.revenue,
+          npat: c.npat,
+          leviableAmount: c.leviableAmount,
+          industrySector: c.industrySector,
+          eapProvince: c.eapProvince || "National",
           industryNorm: undefined,
         },
         ownership: {
           id: `own-${clientId}`,
-          shareholders: [
-            { id: "sh-1", name: "Black Equity Trust", ownershipType: "trust", blackOwnership: 30, blackWomenOwnership: 12, shares: 3000, shareValue: 300000 },
-            { id: "sh-2", name: "Management Consortium", ownershipType: "shareholder", blackOwnership: 15, blackWomenOwnership: 8, shares: 1500, shareValue: 150000 },
-          ],
-          companyValue: profile.revenue * 1.2,
-          outstandingDebt: profile.revenue * 0.15,
-          yearsHeld: 5,
+          shareholders: [],
+          companyValue: 0,
+          outstandingDebt: 0,
+          yearsHeld: 0,
         },
         management: {
-          employees: [
-            { id: "emp-1", name: "Thabo Mokoena", gender: "male", race: "african", designation: "top_management", isDisabled: false },
-            { id: "emp-2", name: "Naledi Khumalo", gender: "female", race: "african", designation: "senior_management", isDisabled: false },
-            { id: "emp-3", name: "Pieter van der Merwe", gender: "male", race: "white", designation: "top_management", isDisabled: false },
-            { id: "emp-4", name: "Priya Naidoo", gender: "female", race: "indian", designation: "middle_management", isDisabled: false },
-            { id: "emp-5", name: "Sizwe Dlamini", gender: "male", race: "african", designation: "junior_management", isDisabled: true },
-          ],
+          employees: [],
         },
         skills: {
-          leviableAmount: profile.leviableAmount,
-          trainingPrograms: [
-            { id: "tp-1", name: "Leadership Development", category: "learnerships", cost: profile.leviableAmount * 0.02, employeeId: "emp-1", isEmployed: true, isBlack: true, gender: "male", race: "african", isDisabled: false },
-            { id: "tp-2", name: "Technical Skills Programme", category: "skills_programmes", cost: profile.leviableAmount * 0.015, employeeId: "emp-2", isEmployed: true, isBlack: true, gender: "female", race: "african", isDisabled: false },
-            { id: "tp-3", name: "Bursary Programme", category: "bursaries", cost: profile.leviableAmount * 0.01, employeeId: null, isEmployed: false, isBlack: true, gender: "female", race: "african", isDisabled: false },
-          ],
+          leviableAmount: c.leviableAmount || 0,
+          trainingPrograms: [],
         },
         procurement: {
-          tmps: profile.revenue * 0.6,
-          suppliers: [
-            { id: "sup-1", name: "Isizwe Supplies", beeLevel: 1, blackOwnership: 51, blackWomenOwnership: 30, youthOwnership: 0, disabledOwnership: 0, enterpriseType: "eme", spend: profile.revenue * 0.08 },
-            { id: "sup-2", name: "National Distributors", beeLevel: 3, blackOwnership: 26, blackWomenOwnership: 10, youthOwnership: 5, disabledOwnership: 0, enterpriseType: "qse", spend: profile.revenue * 0.12 },
-            { id: "sup-3", name: "Tech Solutions SA", beeLevel: 2, blackOwnership: 40, blackWomenOwnership: 15, youthOwnership: 0, disabledOwnership: 0, enterpriseType: "generic", spend: profile.revenue * 0.05 },
-          ],
+          tmps: 0,
+          suppliers: [],
         },
         esd: {
-          contributions: [
-            { id: "esd-1", beneficiary: "Township Micro-Enterprise Fund", type: "grant", amount: profile.npat * 0.02, category: "enterprise_development" },
-            { id: "esd-2", beneficiary: "Youth Business Incubator", type: "loan", amount: profile.npat * 0.015, category: "supplier_development" },
-          ],
+          contributions: [],
         },
         sed: {
-          contributions: [
-            { id: "sed-1", beneficiary: "Local School Feeding Scheme", type: "monetary", amount: profile.npat * 0.01, category: "education" },
-            { id: "sed-2", beneficiary: "Community Health Clinic", type: "monetary", amount: profile.npat * 0.008, category: "health" },
-          ],
+          contributions: [],
         },
-        financialYears: [
-          { id: "fy-1", year: "2024", revenue: profile.revenue * 0.9, npat: profile.npat * 0.85, indicativeNpat: null, notes: "" },
-          { id: "fy-2", year: "2023", revenue: profile.revenue * 0.8, npat: profile.npat * 0.75, indicativeNpat: null, notes: "" },
-        ],
+        financialYears: [],
         scenarios: [],
       });
     } catch (error: any) {
@@ -1023,8 +1065,44 @@ Respond ONLY with a valid JSON array.`;
       const user = await storage.getUserById(userId);
       const orgId = user?.organizationId || null;
       const query = orgId ? { organizationId: orgId } : { createdByUserId: userId };
-      const sessions = await ProcessorSessionModel.find(query).sort({ updatedAt: -1 }).lean();
-      res.json(sessions.map((s: any) => ({ ...s, id: s.sessionId })));
+      const sessions = await ProcessorSessionModel.find(query)
+        .select({
+          sessionId: 1,
+          companyInfo: 1,
+          currentStep: 1,
+          isComplete: 1,
+          'filesData.id': 1,
+          'filesData.name': 1,
+          'filesData.size': 1,
+          'filesData.type': 1,
+          'extractionResults.fileName': 1,
+          'extractionResults.templateName': 1,
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .sort({ updatedAt: -1 })
+        .lean();
+      const lightweight = sessions.map((s: any) => ({
+        id: s.sessionId,
+        sessionId: s.sessionId,
+        companyInfo: {
+          name: s.companyInfo?.name || '',
+          sector: s.companyInfo?.sector || '',
+          registrationNumber: s.companyInfo?.registrationNumber || '',
+          annualTurnover: s.companyInfo?.annualTurnover || '',
+          employees: s.companyInfo?.employees || '',
+          contactName: s.companyInfo?.contactName || '',
+          contactEmail: s.companyInfo?.contactEmail || '',
+          currentBBEELevel: s.companyInfo?.currentBBEELevel || '',
+        },
+        currentStep: s.currentStep,
+        isComplete: s.isComplete,
+        filesData: (s.filesData || []).map((f: any) => ({ id: f.id, name: f.name, size: f.size, type: f.type })),
+        extractionResults: (s.extractionResults || []).map((r: any) => ({ fileName: r.fileName, templateName: r.templateName })),
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      }));
+      res.json(lightweight);
     } catch (error: any) {
       console.error("Error fetching processor sessions:", error);
       res.status(500).json({ error: "Failed to fetch sessions" });
@@ -1048,25 +1126,29 @@ Respond ONLY with a valid JSON array.`;
       const userId = (req.session as any)?.userId;
       const user = await storage.getUserById(userId);
       const orgId = user?.organizationId || null;
-      const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete } = req.body;
+      const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult } = req.body;
       if (!sessionId || !companyInfo?.name) {
         return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
       }
+      const updateData: any = {
+        sessionId,
+        organizationId: orgId,
+        createdByUserId: userId,
+        companyInfo,
+        currentStep: currentStep || 'upload',
+        filesData: filesData || [],
+        fileClassifications: fileClassifications || {},
+        extractionResults: extractionResults || [],
+        docStatuses: docStatuses || {},
+        isComplete: isComplete || false,
+        updatedAt: new Date(),
+      };
+      if (scorecardResult !== undefined) {
+        updateData.scorecardResult = scorecardResult;
+      }
       const doc = await ProcessorSessionModel.findOneAndUpdate(
         { sessionId },
-        {
-          sessionId,
-          organizationId: orgId,
-          createdByUserId: userId,
-          companyInfo,
-          currentStep: currentStep || 'upload',
-          filesData: filesData || [],
-          fileClassifications: fileClassifications || {},
-          extractionResults: extractionResults || [],
-          docStatuses: docStatuses || {},
-          isComplete: isComplete || false,
-          updatedAt: new Date(),
-        },
+        updateData,
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       res.json({ ...doc.toJSON(), id: (doc as any).sessionId });

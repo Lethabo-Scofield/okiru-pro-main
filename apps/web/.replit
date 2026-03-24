@@ -31,12 +31,16 @@ args = "npm run dev"
 waitForPort = 5000
 
 [[ports]]
+localPort = 3333
+externalPort = 3000
+
+[[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 24678
-externalPort = 80
+externalPort = 3001
 
 [deployment]
 deploymentTarget = "autoscale"
