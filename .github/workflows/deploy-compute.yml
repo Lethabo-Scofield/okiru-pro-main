@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/compute-engine
+  IMAGE_NAME: lethabo-scofield/okiru-pro-main/compute-engine
 
 jobs:
   build-and-deploy:
