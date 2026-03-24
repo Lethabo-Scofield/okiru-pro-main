@@ -1,0 +1,37 @@
+Entity Label,Extracted Value,Source Sheet
+TotalRevenue,R 120 000 000.00,1. General Information
+NPAT,R 18 500 000.00,1. General Information
+LeviableAmount,R 32 400 000.00,1. General Information
+TMPS,R 65 200 000.00,1. General Information
+FinancialYearEnd,2024-02-28,1. General Information
+ShareholderName,Nkosi Investments (Pty) Ltd,1. General Information
+BlackOwnershipPercentage,51.00%,1. General Information
+BlackWomenOwnershipPercentage,30.50%,1. General Information
+ShareholdingPercentage,51.00%,1. General Information
+ShareValue,R 15 000 000.00,1. General Information
+EmployeeName,Sipho Ndlovu,2. Management Control
+EmployeeGender,Male,2. Management Control
+EmployeeRace,African,2. Management Control
+EmployeeDesignation,Top Management,2. Management Control
+EmployeeDisabilityStatus,No,2. Management Control
+EmployeeName,Jane Doe,2. Management Control
+EmployeeGender,Female,2. Management Control
+EmployeeRace,White,2. Management Control
+EmployeeDesignation,Senior Management,2. Management Control
+EmployeeDisabilityStatus,No,2. Management Control
+TrainingProgrammeName,Advanced Leadership,3. Skills Development
+TrainingCost,R 120 000.00,3. Skills Development
+LearnerName,Thandi Mokoena,3. Skills Development
+LearnerEmploymentStatus,Employed,3. Skills Development
+LearnerRaceStatus,African,3. Skills Development
+SupplierName,Sizwe Logistics,4. Preferential Procurement
+SupplierBEELevel,Level 1,4. Preferential Procurement
+SupplierBlackOwnership,100%,4. Preferential Procurement
+SupplierSpend,R 4 500 000.00,4. Preferential Procurement
+ESDBeneficiary,Bright Future Trading,5. Supplier Development
+ESDContributionType,Grant,5. Supplier Development
+ESDAmount,R 350 000.00,5. Supplier Development
+ESDCategory,Supplier Development,5. Supplier Development
+SEDBeneficiary,Thembalethu Foundation,7. Socio-Economic Development
+SEDContributionType,Monetary,7. Socio-Economic Development
+SEDAmount,R 185 000.00,7. Socio-Economic Development

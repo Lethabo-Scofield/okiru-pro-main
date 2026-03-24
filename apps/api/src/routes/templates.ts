@@ -18,16 +18,20 @@ import {
   extractScorecardStructure,
   extractScorecardSubgraph,
 } from '../../pipeline/formulaGraphBuilder.js';
-import { ingestToolkitFromBuffer, ingestAllToolkits } from '../../arango/ingestion/templateIngester.js';
+import { ingestToolkitFromBuffer, ingestAllToolkits, getSectorAndScorecardFromFilename } from '../../arango/ingestion/templateIngester.js';
 import { GraphRepository } from '../../arango/repositories/graphRepository.js';
 import { ScorecardRepository } from '../../arango/repositories/scorecardRepository.js';
+import { ToolkitFileRepository } from '../../arango/repositories/toolkitFileRepository.js';
 import { getComputeClient } from '../../pipeline/computeClient.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
 const graphRepo = new GraphRepository();
+const toolkitFilesRepo = new ToolkitFileRepository();
 
 function p(req: Request, key: string): string {
   return String(req.params[key] || '');
@@ -415,6 +419,102 @@ router.post('/ingest-all', async (req: Request, res: Response) => {
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Bulk ingestion failed',
       detail: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : String(error),
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/templates/store-files - Store all 6 toolkit Excel files in ArangoDB
+// ---------------------------------------------------------------------------
+router.post('/store-files', async (req: Request, res: Response) => {
+  try {
+    const rawQueryBasePath = req.query?.basePath;
+    const rawBasePath = req.body?.basePath || (Array.isArray(rawQueryBasePath) ? rawQueryBasePath[0] : rawQueryBasePath);
+    const basePath = typeof rawBasePath === 'string' ? rawBasePath : undefined;
+    
+    if (!basePath) {
+      return res.status(400).json({
+        message: 'basePath is required (path to BBBEE Toolkits directory)',
+      });
+    }
+
+    // Read all files in the base directory
+    const files = fs.readdirSync(basePath).filter(f => f.endsWith('.xlsx') && !f.startsWith('~'));
+    const results = [];
+
+    for (const file of files) {
+      const filePath = path.join(basePath, file);
+      const mapping = getSectorAndScorecardFromFilename(file);
+      
+      if (!mapping) {
+        console.warn(`[Templates] Could not determine sector/type for file: ${file}`);
+        continue;
+      }
+
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64Data = fileBuffer.toString('base64');
+
+      const fileDoc = {
+        name: file,
+        sectorCode: mapping.sectorCode,
+        scorecardType: mapping.scorecardType,
+        sizeBytes: fileBuffer.length,
+        uploadedAt: new Date().toISOString(),
+        data: base64Data,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      };
+
+      const key = await toolkitFilesRepo.saveToolkitFile(fileDoc);
+      results.push({ file, key, sectorCode: mapping.sectorCode, scorecardType: mapping.scorecardType });
+    }
+
+    return res.json({ success: true, storedFiles: results });
+  } catch (error: unknown) {
+    console.error('[Templates] store-files error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'File storage failed'
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/templates/files - List stored toolkit files
+// ---------------------------------------------------------------------------
+router.get('/files', async (_req: Request, res: Response) => {
+  try {
+    const files = await toolkitFilesRepo.getAllToolkitFilesMetadata();
+    return res.json({ success: true, files });
+  } catch (error: unknown) {
+    console.error('[Templates] get files error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Failed to fetch files list'
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/templates/files/:key - Download a stored toolkit file
+// ---------------------------------------------------------------------------
+router.get('/files/:key', async (req: Request, res: Response) => {
+  try {
+    const keyParam = req.params.key;
+    const key = Array.isArray(keyParam) ? keyParam[0] : keyParam;
+    const file = await toolkitFilesRepo.getToolkitFileByKey(String(key));
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const fileBuffer = Buffer.from(file.data, 'base64');
+    
+    res.setHeader('Content-Type', file.contentType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    
+    return res.send(fileBuffer);
+  } catch (error: unknown) {
+    console.error('[Templates] download file error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Failed to download file'
     });
   }
 });

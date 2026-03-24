@@ -19,6 +19,7 @@ import {
   buildConfidenceReport,
 } from '../../pipeline/extraction/entityToParseResult.js';
 import { buildPipelineResult } from '../../pipeline/buildResult.js';
+import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
 
 const router = Router();
 
@@ -91,6 +92,9 @@ router.post('/extract-and-score', async (req, res) => {
     const filename = `${sectorCode}_${scorecardType}_${clientName ?? 'entity'}`;
     const scorecard = buildPipelineResult(parseResult, filename);
 
+    // 6.5 — Generate formatted scorecard summary
+    const scorecardSummary = generateScorecardSummary(scorecard);
+
     // 7 — Build confidence report for the UI
     const requiredRoles = manifest.requiredEntities.map((e) => e.name);
     const confidence = buildConfidenceReport(extractionResults, requiredRoles);
@@ -98,6 +102,7 @@ router.post('/extract-and-score', async (req, res) => {
     return res.json({
       success: true,
       scorecard,
+      scorecardSummary,
       confidence,
       extractedEntities: extractionResults.filter(
         (r) => r.extractedValue !== null,
