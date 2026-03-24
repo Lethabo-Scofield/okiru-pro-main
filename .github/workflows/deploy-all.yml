@@ -9,17 +9,74 @@ on:
         default: 'false'
 
 jobs:
-  deploy:
+  build-web:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/lethabo-scofield/okiru-pro-main/web:latest
+            ghcr.io/lethabo-scofield/okiru-pro-main/web:${{ github.sha }}
 
-      - name: Deploy to VM
+  build-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/lethabo-scofield/okiru-pro-main/api:latest
+            ghcr.io/lethabo-scofield/okiru-pro-main/api:${{ github.sha }}
+
+  build-compute:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: apps/Computation-Engine
+          file: apps/Computation-Engine/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/lethabo-scofield/okiru-pro-main/compute-engine:latest
+            ghcr.io/lethabo-scofield/okiru-pro-main/compute-engine:${{ github.sha }}
+
+  deploy:
+    needs: [build-web, build-api, build-compute]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy all services to VM
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VM_HOST }}
@@ -28,26 +85,23 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.VM_USER }}/okiru-pro-main
-            
-            echo "=== Pulling latest code ==="
-            git pull origin ${{ github.ref_name }}
-            
-            echo "=== Rebuilding all services ==="
-            docker compose -f docker-compose.production.yml build --no-cache
-            
-            echo "=== Starting services ==="
+
+            echo "=== Syncing code ==="
+            git stash || true
+            git pull origin main
+            git stash pop || true
+
+            echo "=== Logging into GHCR ==="
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "=== Pulling latest images ==="
+            docker compose -f docker-compose.production.yml pull
+
+            echo "=== Starting all services ==="
             docker compose -f docker-compose.production.yml up -d
-            
-            echo "=== Waiting for services ==="
-            sleep 15
-            
-            echo "=== Health checks ==="
+
+            echo "=== Service status ==="
+            sleep 10
             docker compose -f docker-compose.production.yml ps
-            
-            echo "=== Checking API ==="
-            curl -sf http://localhost:5000/health || echo "API not yet ready"
-            
-            echo "=== Checking Compute Engine ==="
-            curl -sf http://localhost:8000/admin/models/list || echo "Compute not yet ready"
-            
+
             echo "=== Deploy complete ==="

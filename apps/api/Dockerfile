@@ -6,7 +6,7 @@ COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate \
-    && pnpm install --frozen-lockfile
+    && pnpm install --no-frozen-lockfile
 
 COPY packages/types/ packages/types/
 COPY apps/api/ apps/api/
@@ -24,7 +24,7 @@ COPY --from=builder /build/packages/types/ packages/types/
 COPY --from=builder /build/apps/api/dist/ apps/api/dist/
 COPY --from=builder /build/apps/api/package.json apps/api/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
 
 EXPOSE 5000
 ENV NODE_ENV=production PORT=5000
