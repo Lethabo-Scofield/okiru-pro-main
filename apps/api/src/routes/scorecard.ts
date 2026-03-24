@@ -10,6 +10,7 @@ import { aql } from 'arangojs';
 import { getComputeClient } from '../../pipeline/computeClient.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
+import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
 
 const router = Router();
 const computeClient = getComputeClient();
@@ -182,6 +183,30 @@ router.get('/health', async (_req: Request, res: Response) => {
   } catch (error: unknown) {
     console.error('[Scorecard] health check error:', error);
     return res.json({ available: false });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/scorecard/generate-summary
+// Generate a formatted UI scorecard summary from a PipelineResult
+// ---------------------------------------------------------------------------
+router.post('/generate-summary', async (req: Request, res: Response) => {
+  try {
+    const { pipelineResult } = req.body;
+    
+    if (!pipelineResult || !pipelineResult.scorecard || !pipelineResult.client) {
+      return res.status(400).json({
+        message: 'Valid pipelineResult is required',
+      });
+    }
+
+    const summary = generateScorecardSummary(pipelineResult);
+    return res.json(summary);
+  } catch (error: unknown) {
+    console.error('[Scorecard] generate-summary error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Summary generation failed',
+    });
   }
 });
 

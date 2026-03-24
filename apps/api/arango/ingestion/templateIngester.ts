@@ -309,3 +309,21 @@ export async function ingestAllToolkits(basePath: string): Promise<BulkIngestion
 
   return { total: TOOLKITS.length, successful, failed, results };
 }
+
+/**
+ * Maps a toolkit filename to its sector code and scorecard type.
+ */
+export function getSectorAndScorecardFromFilename(filename: string): { sectorCode: string; scorecardType: string } | null {
+  const name = filename.toLowerCase();
+  
+  if (name.includes('rcogp') && name.includes('qse')) return { sectorCode: 'RCOGP', scorecardType: 'QSE' };
+  if (name.includes('rcogp') || name.includes('generic')) return { sectorCode: 'RCOGP', scorecardType: 'Generic' };
+  
+  if (name.includes('ict') && name.includes('qse')) return { sectorCode: 'ICT', scorecardType: 'QSE' };
+  if (name.includes('ict') || name.includes('generic') && !name.includes('fsc') && !name.includes('agri')) return { sectorCode: 'ICT', scorecardType: 'Generic' };
+  
+  if (name.includes('fsc')) return { sectorCode: 'FSC', scorecardType: 'Generic' };
+  if (name.includes('agri')) return { sectorCode: 'AGRI', scorecardType: 'Generic' };
+  
+  return null;
+}

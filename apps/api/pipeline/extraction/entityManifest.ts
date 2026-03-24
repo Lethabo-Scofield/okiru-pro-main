@@ -60,11 +60,11 @@ export interface EntityManifest {
 
 const SCORECARD_TYPES = [
   { sectorCode: 'RCOGP', scorecardType: 'Generic' },
-  { sectorCode: 'QSE', scorecardType: 'QSE' },
-  { sectorCode: 'EME', scorecardType: 'EME' },
-  { sectorCode: 'RCOGP', scorecardType: 'Specialised_Financial' },
-  { sectorCode: 'RCOGP', scorecardType: 'Specialised_Transport' },
-  { sectorCode: 'RCOGP', scorecardType: 'Specialised_Tourism' },
+  { sectorCode: 'ICT', scorecardType: 'Generic' },
+  { sectorCode: 'ICT', scorecardType: 'QSE' },
+  { sectorCode: 'RCOGP', scorecardType: 'QSE' },
+  { sectorCode: 'FSC', scorecardType: 'Generic' },
+  { sectorCode: 'AGRI', scorecardType: 'Generic' },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -584,6 +584,136 @@ const sedEntities: EntityRequirement[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// ICT-specific entities
+// ---------------------------------------------------------------------------
+
+const ictSpecificEntities: EntityRequirement[] = [
+  entity('ICT Black-Owned Spend', 'preferentialProcurement', 'currency',
+    'ICT procurement spend with 51%+ black-owned ICT suppliers.', {
+      aliases: ['ICT BO spend', 'black-owned ICT procurement', 'ICT BBBEE spend'],
+      zones: ['procurement', 'ICT procurement'],
+      positiveExamples: ['R 5 000 000', 'R5,000,000'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['ICT', 'black', 'owned'],
+        niceToHave: ['procurement', 'spend'],
+        dontHave: ['general', 'non-ICT'],
+      },
+    }),
+
+  entity('3rd Party ICT Spend', 'preferentialProcurement', 'currency',
+    'Total spend on 3rd-party ICT products and services for ICT sector code compliance.', {
+      aliases: ['third party ICT', 'ICT services spend', '3rd party ICT spend'],
+      zones: ['procurement', 'ICT procurement'],
+      positiveExamples: ['R 12 000 000', 'R12,000,000'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['ICT', 'third party'],
+        niceToHave: ['spend', 'services'],
+        dontHave: ['internal', 'hardware only'],
+      },
+    }),
+];
+
+// ---------------------------------------------------------------------------
+// FSC-specific entities
+// ---------------------------------------------------------------------------
+
+const fscSpecificEntities: EntityRequirement[] = [
+  entity('Access to Financial Services', 'financialInclusion', 'string',
+    'Initiatives extending financial services access to underserved communities.', {
+      aliases: ['financial inclusion', 'access products', 'underserved communities'],
+      zones: ['FSC', 'financial inclusion', 'access to services'],
+      positiveExamples: ['Micro-insurance products', 'Low-cost banking'],
+      negativeExamples: ['N/A'],
+      validation: { required: false },
+      hints: {
+        mustHave: ['access', 'financial services'],
+        niceToHave: ['inclusion', 'underserved'],
+        dontHave: ['premium', 'corporate'],
+      },
+    }),
+
+  entity('Empowerment Financing Amount', 'empowermentFinancing', 'currency',
+    'Total value of empowerment financing provided (BEE transaction financing, black-owned enterprise financing).', {
+      aliases: ['empowerment finance', 'BEE financing', 'transformation financing'],
+      zones: ['FSC', 'empowerment financing', 'transformation'],
+      positiveExamples: ['R 50 000 000', 'R50,000,000'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['empowerment', 'financing'],
+        niceToHave: ['BEE', 'transformation'],
+        dontHave: ['general', 'non-BEE'],
+      },
+    }),
+
+  entity('BEE Transaction Financing', 'empowermentFinancing', 'currency',
+    'Financing specifically for B-BBEE ownership transactions to enable black equity participation.', {
+      aliases: ['BEE deal financing', 'ownership transaction finance', 'equity transaction funding'],
+      zones: ['FSC', 'empowerment financing'],
+      positiveExamples: ['R 100 000 000', 'R100M BEE transaction'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['BEE', 'transaction', 'financing'],
+        niceToHave: ['equity', 'ownership'],
+        dontHave: ['working capital'],
+      },
+    }),
+];
+
+// ---------------------------------------------------------------------------
+// Agri-specific entities
+// ---------------------------------------------------------------------------
+
+const agriSpecificEntities: EntityRequirement[] = [
+  entity('Land Ownership Black', 'ownership', 'percentage',
+    'Hectares or percentage of agricultural land owned by black people.', {
+      aliases: ['black land ownership', 'agricultural land', 'farm ownership', 'land reform'],
+      zones: ['ownership', 'land reform', 'agriculture'],
+      positiveExamples: ['500 hectares', '30%', '1200ha'],
+      negativeExamples: ['N/A'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['land', 'ownership'],
+        niceToHave: ['agricultural', 'hectares', 'farm'],
+        dontHave: ['urban', 'commercial'],
+      },
+    }),
+
+  entity('Agricultural Development Contribution', 'enterpriseSupplierDevelopment', 'currency',
+    'Contributions towards agricultural development programmes for emerging black farmers.', {
+      aliases: ['agri development', 'farmer support', 'agricultural contribution'],
+      zones: ['agriculture', 'enterprise development', 'farmer support'],
+      positiveExamples: ['R 2 000 000', 'R2,000,000'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['agricultural', 'development'],
+        niceToHave: ['farmer', 'contribution'],
+        dontHave: ['general', 'non-agricultural'],
+      },
+    }),
+
+  entity('Farmworker Housing', 'socioEconomicDevelopment', 'currency',
+    'Investment in farmworker housing and living conditions improvements.', {
+      aliases: ['worker housing', 'farm housing', 'accommodation', 'staff quarters'],
+      zones: ['agriculture', 'housing', 'social development'],
+      positiveExamples: ['R 1 500 000', 'R1,500,000'],
+      negativeExamples: ['R 0'],
+      validation: { required: false, min: 0 },
+      hints: {
+        mustHave: ['farmworker', 'housing'],
+        niceToHave: ['accommodation', 'living conditions'],
+        dontHave: ['office', 'warehouse'],
+      },
+    }),
+];
+
+// ---------------------------------------------------------------------------
 // Sheet hints
 // ---------------------------------------------------------------------------
 
@@ -702,33 +832,78 @@ export function buildCustomManifest(
   };
 }
 
+/** Base entities shared by all Generic scorecards */
+function baseGenericEntities(): EntityRequirement[] {
+  return [
+    ...financialEntities,
+    ...ownershipEntities,
+    ...managementControlEntities,
+    ...skillsDevelopmentEntities,
+    ...procurementEntities,
+    ...esdEntities,
+    ...sedEntities,
+  ];
+}
+
+/** Reduced entity set for QSE (combined MC+EE, simplified ESD/SED) */
+function baseQSEEntities(): EntityRequirement[] {
+  return [
+    ...financialEntities,
+    ...ownershipEntities,
+    // QSE uses combined MC+EE — still extract the same employee-level entities
+    ...managementControlEntities,
+    ...skillsDevelopmentEntities,
+    ...procurementEntities,
+    // QSE combines ESD+SED into a single element
+    ...esdEntities,
+    ...sedEntities,
+  ];
+}
+
 export function buildRCOGPGenericManifest(): EntityManifest {
   return {
     sectorCode: 'RCOGP',
     scorecardType: 'Generic',
-    requiredEntities: [
-      ...financialEntities,
-      ...ownershipEntities,
-      ...managementControlEntities,
-      ...skillsDevelopmentEntities,
-      ...procurementEntities,
-      ...esdEntities,
-      ...sedEntities,
-    ],
+    requiredEntities: baseGenericEntities(),
     sheetHints: SHEET_HINTS,
     createdAt: new Date().toISOString(),
   };
 }
 
+/**
+ * Build a sector-specific entity manifest.
+ * Each sector adds its own entities on top of the base set.
+ */
 export function buildManifestForSector(
   sectorCode: string,
   scorecardType: string,
 ): EntityManifest {
-  const base = buildRCOGPGenericManifest();
+  const upper = sectorCode.toUpperCase();
+  const isQSE = scorecardType.toUpperCase() === 'QSE';
+  const base = isQSE ? baseQSEEntities() : baseGenericEntities();
+  let sectorEntities: EntityRequirement[] = [];
+
+  switch (upper) {
+    case 'ICT':
+      sectorEntities = ictSpecificEntities;
+      break;
+    case 'FSC':
+      sectorEntities = fscSpecificEntities;
+      break;
+    case 'AGRI':
+      sectorEntities = agriSpecificEntities;
+      break;
+    // RCOGP and others use the base set without sector-specific additions
+    default:
+      break;
+  }
+
   return {
-    ...base,
-    sectorCode,
+    sectorCode: upper,
     scorecardType,
+    requiredEntities: [...base, ...sectorEntities],
+    sheetHints: SHEET_HINTS,
+    createdAt: new Date().toISOString(),
   };
 }
 
