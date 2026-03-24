@@ -236,8 +236,7 @@ export default function Dashboard() {
 
   const filteredStaticTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
-    const base = q ? staticTemplates.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)) : staticTemplates.slice(0, 3);
-    return base;
+    return q ? staticTemplates.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q))) : staticTemplates;
   }, [templateSearch]);
 
   const filteredStoredTemplates = useMemo(() => {

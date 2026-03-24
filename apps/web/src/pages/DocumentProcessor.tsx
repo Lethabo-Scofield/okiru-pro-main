@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import { starterTemplates } from '@/data/starterTemplates';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
@@ -1710,36 +1711,77 @@ export default function DocumentProcessor() {
                                     className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden"
                                     style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
                                   >
-                                    <div className="max-h-56 overflow-y-auto py-1">
+                                    <div className="max-h-72 overflow-y-auto py-1">
                                       {loadingTemplates ? (
                                         <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#636366]">
                                           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading...
                                         </div>
-                                      ) : templates.length === 0 ? (
-                                        <div className="px-4 py-3 text-[13px] text-[#48484a]">No templates yet. Create one in Builder.</div>
                                       ) : (
-                                        templates.map((t) => {
-                                          const isSel = selectedId === t.id;
-                                          return (
+                                        <>
+                                          {templates.length > 0 && (
+                                            <>
+                                              <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-[#48484a] uppercase tracking-wider">Your Templates</div>
+                                              {templates.map((t) => {
+                                                const isSel = selectedId === t.id;
+                                                return (
+                                                  <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                                      setOpenTemplateDropdown(null);
+                                                    }}
+                                                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
+                                                  >
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className={`text-[13px] font-medium truncate ${isSel ? 'text-white' : 'text-[#d1d1d6]'}`}>{t.name}</div>
+                                                      <div className="text-[11px] text-[#48484a]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                                    </div>
+                                                    {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                                                  </button>
+                                                );
+                                              })}
+                                              <div className="mx-3.5 my-1 h-px" style={{ background: '#2c2c2e' }} />
+                                            </>
+                                          )}
+                                          <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-[#48484a] uppercase tracking-wider">B-BBEE Sector Presets</div>
+                                          {starterTemplates.map((preset) => (
                                             <button
-                                              key={t.id}
+                                              key={preset.key}
                                               type="button"
-                                              onClick={() => {
-                                                setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                              onClick={async () => {
                                                 setOpenTemplateDropdown(null);
+                                                const existing = templates.find(t => t.name === preset.name);
+                                                if (existing) {
+                                                  setFileClassifications(prev => ({ ...prev, [String(file.id)]: existing.id }));
+                                                  return;
+                                                }
+                                                try {
+                                                  const res = await fetch('/api/templates', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ name: preset.name, description: preset.description, version: '1.0', entities: preset.entities }),
+                                                  });
+                                                  if (res.ok) {
+                                                    const saved = await res.json();
+                                                    setTemplates(prev => [...prev, saved]);
+                                                    setFileClassifications(prev => ({ ...prev, [String(file.id)]: saved.id }));
+                                                  }
+                                                } catch { /* ignore */ }
                                               }}
                                               className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
                                             >
                                               <div className="flex-1 min-w-0">
-                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-white' : 'text-[#d1d1d6]'}`}>{t.name}</div>
-                                                <div className="text-[11px] text-[#48484a]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                                <div className="text-[13px] font-medium truncate text-[#d1d1d6]">{preset.name}</div>
+                                                <div className="text-[11px] text-[#48484a]">{preset.entities.length} fields · {preset.category}</div>
                                               </div>
-                                              {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold shrink-0">Preset</span>
                                             </button>
-                                          );
-                                        })
+                                          ))}
+                                        </>
                                       )}
                                     </div>
+
                                   </div>
                                 </>
                               )}
