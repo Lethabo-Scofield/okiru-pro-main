@@ -9,7 +9,8 @@ import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
-  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut
+  FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
+  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -68,6 +69,40 @@ interface ProcessorSession {
   scorecardResult?: any;
 }
 
+interface ManualEntryData {
+  blackOwnership: string;
+  blackFemaleOwnership: string;
+  blackBoardMembers: string;
+  blackExecutiveManagement: string;
+  skillsSpendOnBlack: string;
+  blackLearnerships: string;
+  customTargets: { name: string; value: string }[];
+}
+
+const EMPTY_MANUAL_ENTRY: ManualEntryData = {
+  blackOwnership: '',
+  blackFemaleOwnership: '',
+  blackBoardMembers: '',
+  blackExecutiveManagement: '',
+  skillsSpendOnBlack: '',
+  blackLearnerships: '',
+  customTargets: [],
+};
+
+const MANUAL_ENTRY_KEY = 'okiru-manual-entry-data';
+
+function loadManualEntryData(): ManualEntryData {
+  try {
+    const raw = localStorage.getItem(MANUAL_ENTRY_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { ...EMPTY_MANUAL_ENTRY, customTargets: [] };
+}
+
+function saveManualEntryData(data: ManualEntryData) {
+  localStorage.setItem(MANUAL_ENTRY_KEY, JSON.stringify(data));
+}
+
 const BBEE_SECTORS = [
   'Agriculture', 'Construction', 'Education', 'Financial Services',
   'Healthcare', 'Information Technology', 'Manufacturing', 'Mining',
@@ -101,6 +136,7 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
         extractionResults: session.extractionResults,
         docStatuses: session.docStatuses,
         isComplete: session.isComplete,
+        scorecardResult: session.scorecardResult,
       }),
     });
     if (!res.ok) return null;
@@ -140,61 +176,31 @@ const FileIcon = ({ type, className }: { type: string; className?: string }) => 
 };
 
 function FileFormatBadge({ type, size = 'md' }: { type: string; size?: 'sm' | 'md' | 'lg' }) {
-  const configs: Record<string, { bg: string; text: string; label: string }> = {
-    PDF:  { bg: '#FF3B30', text: '#fff', label: 'PDF' },
-    DOCX: { bg: '#007AFF', text: '#fff', label: 'DOC' },
-    DOC:  { bg: '#007AFF', text: '#fff', label: 'DOC' },
-    XLSX: { bg: '#34C759', text: '#fff', label: 'XLS' },
-    XLS:  { bg: '#34C759', text: '#fff', label: 'XLS' },
-    CSV:  { bg: '#30D158', text: '#fff', label: 'CSV' },
-    TXT:  { bg: '#636366', text: '#fff', label: 'TXT' },
-    JPG:  { bg: '#AF52DE', text: '#fff', label: 'JPG' },
-    JPEG: { bg: '#AF52DE', text: '#fff', label: 'JPG' },
-    PNG:  { bg: '#5E5CE6', text: '#fff', label: 'PNG' },
-    EML:  { bg: '#FF9F0A', text: '#fff', label: 'EML' },
-    JSON: { bg: '#FF6B00', text: '#fff', label: 'JSON' },
-  };
-  const cfg = configs[type?.toUpperCase()] || { bg: '#48484a', text: '#fff', label: type?.slice(0, 4)?.toUpperCase() || 'FILE' };
+  const label = type?.toUpperCase()?.slice(0, 4) || 'FILE';
+  const displayLabel = ({ PDF: 'PDF', DOCX: 'DOC', DOC: 'DOC', XLSX: 'XLS', XLS: 'XLS', CSV: 'CSV', TXT: 'TXT', JPG: 'JPG', JPEG: 'JPG', PNG: 'PNG', EML: 'EML', JSON: 'JSON' } as Record<string, string>)[type?.toUpperCase()] || label;
 
-  const dims = size === 'sm' ? { w: 36, h: 44, foldSize: 9, labelSize: 7 }
-             : size === 'lg' ? { w: 52, h: 64, foldSize: 14, labelSize: 10 }
-             : { w: 44, h: 54, foldSize: 11, labelSize: 8 };
+  const dims = size === 'sm' ? { w: 32, h: 38, r: 6, labelSize: 7 }
+             : size === 'lg' ? { w: 44, h: 52, r: 8, labelSize: 10 }
+             : { w: 38, h: 46, r: 7, labelSize: 8 };
 
-  const { w, h, foldSize, labelSize } = dims;
+  const { w, h, r, labelSize } = dims;
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d={`M4 0 H${w - foldSize} L${w} ${foldSize} V${h - 4} Q${w} ${h} ${w - 4} ${h} H4 Q0 ${h} 0 ${h - 4} V4 Q0 0 4 0Z`}
-        fill={cfg.bg}
-        opacity="0.18"
-      />
-      <path
-        d={`M4 0.5 H${w - foldSize} L${w - 0.5} ${foldSize} V${h - 4} Q${w - 0.5} ${h - 0.5} ${w - 4} ${h - 0.5} H4 Q0.5 ${h - 0.5} 0.5 ${h - 4} V4 Q0.5 0.5 4 0.5Z`}
-        stroke={cfg.bg}
-        strokeWidth="1"
-        fill="none"
-        opacity="0.4"
-      />
-      <path
-        d={`M${w - foldSize} 0 L${w - foldSize} ${foldSize} L${w} ${foldSize}`}
-        fill={cfg.bg}
-        opacity="0.35"
-      />
-      <rect x={2} y={h - 18} width={w - 4} height={16} rx={3} fill={cfg.bg} />
-      <text
-        x={w / 2}
-        y={h - 7}
-        textAnchor="middle"
-        fill={cfg.text}
-        fontSize={labelSize}
-        fontWeight="800"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
-        letterSpacing="0.5"
+    <div
+      className="inline-flex items-center justify-center shrink-0"
+      style={{
+        width: w, height: h,
+        borderRadius: r,
+        background: '#1c1c1e',
+        border: '1px solid #2c2c2e',
+      }}
+    >
+      <span
+        style={{ fontSize: labelSize, fontWeight: 700, letterSpacing: '0.5px', color: '#8e8e93', fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
       >
-        {cfg.label}
-      </text>
-    </svg>
+        {displayLabel}
+      </span>
+    </div>
   );
 }
 
@@ -630,7 +636,7 @@ export default function DocumentProcessor() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review'>('company-info');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'manual-entry' | 'scorecard'>('company-info');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSavingSession, setIsSavingSession] = useState(false);
@@ -648,11 +654,16 @@ export default function DocumentProcessor() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
+  const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
+  const [savedDocs, setSavedDocs] = useState<Set<number>>(new Set());
+  const [docFullView, setDocFullView] = useState(false);
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
   const [completedCount, setCompletedCount] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const processingFinalized = useRef(false);
+  const [manualEntry, setManualEntry] = useState<ManualEntryData>(loadManualEntryData);
+  const [manualErrors, setManualErrors] = useState<Record<string, string>>({});
 
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
@@ -1200,67 +1211,73 @@ export default function DocumentProcessor() {
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
 
-      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+      <header className="h-12 shrink-0 z-20 sticky top-0 bg-black/95 backdrop-blur-xl" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0">
-              <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
-              <span className="text-[13px] font-medium tracking-wide">Back to Dashboard</span>
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="flex items-center gap-1.5 text-[#636366] hover:text-white transition-colors group shrink-0">
+              <ChevronLeft className="h-4 w-4" />
+              <span className="text-[13px] font-medium hidden sm:inline">Dashboard</span>
             </Link>
-            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
-            <div className="flex items-center gap-3 press-sm">
-              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">Document Processor</span>
-            </div>
+            <div className="w-px h-4 bg-[#1c1c1e]"></div>
+            <span className="text-[14px] font-medium text-white">Document Processor</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/builder" className="text-[13px] font-medium text-[#8e8e93] hover:text-white smooth px-3 py-1.5 rounded-lg hover:bg-[#1c1c1e] press-sm" data-testid="link-builder-nav">
-              <ArrowLeft className="w-3.5 h-3.5 mr-1 inline-block" /> Builder
+            <Link href="/builder" className="text-[13px] font-medium text-[#48484a] hover:text-white transition-colors px-3 py-1.5 rounded-lg" data-testid="link-builder-nav">
+              Builder
             </Link>
-            <div className="w-px h-4 bg-[#2c2c2e] mx-1"></div>
-            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
-              <span className="inline-flex h-5 w-5 rounded-full bg-purple-600 items-center justify-center text-white font-semibold text-[9px]">
+            <div className="w-px h-4 bg-[#1c1c1e] mx-0.5"></div>
+            <div className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-[12px]" data-testid="user-menu">
+              <span className="inline-flex h-5 w-5 rounded-full bg-[#2c2c2e] items-center justify-center text-[#8e8e93] font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
-              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
+              <span className="text-[#8e8e93] font-medium">{user?.fullName || user?.username || ''}</span>
             </div>
             <button
               onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] text-[#48484a] hover:text-[#8e8e93] transition-colors"
               data-testid="button-sign-out"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #2c2c2e' }}>
+      <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
-          {['Company', 'Upload', 'Template', 'Extract', 'Review', 'Scorecard'].map((label, idx) => {
-            const StepIcons = [Building2, CloudUpload, Puzzle, Cpu, SearchCheck, FileText];
-            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'] as const;
+          {['Company', 'Upload', 'Template', 'Extract', 'Manual Entry', 'Review', 'Scorecard'].map((label, idx) => {
+            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'manual-entry', 'review', 'scorecard'] as const;
             type PageMapType = typeof pageMap[number];
             const safeCurrentPage = currentPage as PageMapType;
             const stepIdx = pageMap.indexOf(safeCurrentPage);
             const isComplete = idx < stepIdx;
             const isCurrent = idx === stepIdx;
             const canNavigate = isComplete && safeCurrentPage !== 'company-info';
-            const StepIcon = StepIcons[idx];
             return (
               <React.Fragment key={label}>
-                <div className={`flex items-center gap-2.5 ${canNavigate ? 'cursor-pointer group' : ''}`}
+                <div className={`flex items-center gap-2 ${canNavigate ? 'cursor-pointer group' : ''}`}
                   onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx] as PageMapType); }}>
-                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs smooth ${isComplete ? 'border-green-500 bg-green-500 text-white group-hover:bg-green-400' : isCurrent ? 'border-purple-600 bg-purple-600 text-white' : 'border-transparent text-[#636366]'}`}>
-                    {isComplete ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all ${
+                    isComplete
+                      ? 'bg-white text-black group-hover:bg-[#d1d1d6]'
+                      : isCurrent
+                        ? 'bg-white text-black'
+                        : 'bg-[#1c1c1e] text-[#48484a]'
+                  }`}>
+                    {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
                   </div>
-                  <span className={`text-[13px] font-medium hidden sm:inline smooth ${isComplete ? 'text-green-400 group-hover:text-green-300' : isCurrent ? 'text-purple-400' : 'text-[#636366]'}`}>{label}</span>
+                  <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
+                    isComplete
+                      ? 'text-[#d1d1d6] group-hover:text-white'
+                      : isCurrent
+                        ? 'text-white'
+                        : 'text-[#48484a]'
+                  }`}>{label}</span>
                 </div>
-                {idx < 5 && (
-                  <div className="flex-1 h-0.5 bg-[#1c1c1e] mx-4 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 transition-all duration-700 rounded-full" style={{ width: isComplete ? '100%' : '0%' }}></div>
+                {idx < 6 && (
+                  <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
+                    <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
                   </div>
                 )}
               </React.Fragment>
@@ -1269,192 +1286,184 @@ export default function DocumentProcessor() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className={`${currentPage === 'review' ? '' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
+      <main className={`flex-1 flex flex-col min-h-0 ${currentPage === 'review' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+        <div className={`${currentPage === 'review' ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
 
           {currentPage === 'company-info' && (
             <div>
               {isLoadingSession ? (
                 <div className="flex flex-col items-center justify-center py-24 gap-4">
-                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                  <Loader2 className="w-8 h-8 text-[#636366] animate-spin" />
                   <p className="text-[#8e8e93] text-sm">Loading session...</p>
                 </div>
               ) : (
-                <>
-                  <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto mb-4">
-                      <Building2 className="w-7 h-7" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-1">New Client Assessment</h2>
-                    <p className="text-[#8e8e93] text-sm">Enter the client company's details before uploading documents</p>
+                <div className="max-w-2xl mx-auto w-full">
+
+                  <div className="mb-10">
+                    <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">New Client Assessment</h2>
+                    <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter the client company's details before uploading documents.</p>
                   </div>
 
-                  <div className="mb-6">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-3">Company Logo</p>
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-20 h-20 rounded-2xl bg-[#1c1c1e] border-2 border-dashed border-[#3a3a3c] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
-                        onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                        data-testid="logo-upload-zone"
-                      >
-                        {companyInfo.logo ? (
-                          <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
-                        ) : (
-                          <Building2 className="w-7 h-7 text-[#3a3a3c]" />
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          id="logo-input"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          data-testid="input-logo"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (file.size > 2 * 1024 * 1024) {
-                              toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' });
-                              e.target.value = '';
-                              return;
-                            }
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
-                            };
-                            reader.readAsDataURL(file);
-                            e.target.value = '';
-                          }}
-                        />
-                        <button
-                          type="button"
+                  {/* ── Card ── */}
+                  <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+
+                    {/* Section: Company Logo */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Logo</p>
+                      <div className="flex items-center gap-5">
+                        <div
+                          className="w-[72px] h-[72px] rounded-2xl bg-[#1a1a1a] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer transition-colors hover:ring-2 hover:ring-[#48484a]/50"
+                          style={{ border: '2px dashed #2c2c2e' }}
                           onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                          className="px-4 py-2 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-[#3a3a3c]"
-                          data-testid="button-upload-logo"
+                          data-testid="logo-upload-zone"
                         >
-                          {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
-                        </button>
-                        {companyInfo.logo && (
-                          <button
-                            type="button"
-                            onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
-                            className="ml-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[12px] font-medium smooth press-sm"
-                            data-testid="button-remove-logo"
-                          >
-                            Remove
-                          </button>
-                        )}
-                        <p className="text-[11px] text-[#636366] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                          {companyInfo.logo
+                            ? <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain" />
+                            : <Building2 className="w-6 h-6 text-[#3a3a3c]" />}
+                        </div>
+                        <div>
+                          <input id="logo-input" type="file" accept="image/*" className="hidden" data-testid="input-logo"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 2 * 1024 * 1024) { toast({ title: 'File too large', description: 'Logo must be under 2 MB.', variant: 'destructive' }); e.target.value = ''; return; }
+                              const reader = new FileReader();
+                              reader.onload = (ev) => setCompanyInfo(p => ({ ...p, logo: ev.target?.result as string }));
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }} />
+                          <div className="flex items-center gap-2">
+                            <button type="button"
+                              onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
+                              className="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.09] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-white/[0.08]"
+                              data-testid="button-upload-logo">
+                              {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
+                            </button>
+                            {companyInfo.logo && (
+                              <button type="button"
+                                onClick={() => setCompanyInfo(p => ({ ...p, logo: '' }))}
+                                className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/15 text-red-400 text-[12px] font-medium smooth press-sm border border-red-500/10"
+                                data-testid="button-remove-logo">
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#3a3a3c] mt-2">PNG, JPG or SVG · max 2 MB</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mb-3">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Company Details</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Company Name <span className="text-red-400">*</span></label>
-                      <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
-                        placeholder="e.g. Acme Holdings (Pty) Ltd"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-company-name" autoFocus />
+                    {/* Section: Company Details */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Company Name <span className="text-red-400">*</span></label>
+                          <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Acme Holdings (Pty) Ltd"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-company-name" autoFocus />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Registration Number</label>
+                          <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
+                            placeholder="e.g. 2021/123456/07"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-company-regno" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Industry Sector <span className="text-red-400">*</span></label>
+                          <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            data-testid="select-company-sector">
+                            <option value="">Select a sector…</option>
+                            {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover (ZAR)</label>
+                          <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
+                            placeholder="e.g. R 50,000,000"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-annual-turnover" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Number of Employees</label>
+                          <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
+                            placeholder="e.g. 150"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-employees" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End</label>
+                          <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            data-testid="select-fye">
+                            <option value="">Select month…</option>
+                            {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Current B-BBEE Level</label>
+                          <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            data-testid="select-bbee-level">
+                            <option value="">Select level…</option>
+                            {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Physical Address</label>
+                          <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
+                            placeholder="e.g. 10 Mandela Square, Sandton, 2196"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-address" />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Registration Number</label>
-                      <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
-                        placeholder="e.g. 2021/123456/07"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-company-regno" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Industry Sector <span className="text-red-400">*</span></label>
-                      <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-company-sector">
-                        <option value="">Select a sector...</option>
-                        {BBEE_SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Annual Turnover (ZAR)</label>
-                      <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
-                        placeholder="e.g. R 50,000,000"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-annual-turnover" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Number of Employees</label>
-                      <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
-                        placeholder="e.g. 150"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-employees" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Financial Year End</label>
-                      <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-fye">
-                        <option value="">Select month...</option>
-                        {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Current B-BBEE Level</label>
-                      <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all appearance-none"
-                        data-testid="select-bbee-level">
-                        <option value="">Select level...</option>
-                        {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Physical Address</label>
-                      <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
-                        placeholder="e.g. 10 Mandela Square, Sandton, 2196"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-address" />
-                    </div>
-                  </div>
 
-                  <div className="mb-3 mt-6">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Contact Person</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Full Name</label>
-                      <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
-                        placeholder="e.g. Jane Dlamini"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-name" />
+                    {/* Section: Contact Person */}
+                    <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Contact Person</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Full Name</label>
+                          <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
+                            placeholder="e.g. Jane Dlamini"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-contact-name" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Email Address</label>
+                          <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
+                            placeholder="e.g. jane@company.co.za"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-contact-email" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Phone Number</label>
+                          <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
+                            placeholder="e.g. +27 82 123 4567"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            data-testid="input-contact-phone" />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Email Address</label>
-                      <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
-                        placeholder="e.g. jane@company.co.za"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-email" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#b0b0b8] uppercase tracking-wider mb-2">Phone Number</label>
-                      <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
-                        placeholder="e.g. +27 82 123 4567"
-                        className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all"
-                        data-testid="input-contact-phone" />
-                    </div>
-                  </div>
 
-                  <div className="mb-3">
-                    <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Additional Notes</p>
-                  </div>
-                  <div className="mb-8">
-                    <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
-                      placeholder="Any additional context about this client or assessment..."
-                      rows={3}
-                      className="w-full bg-[#1c1c1e] border border-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-[#636366] focus:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/15 transition-all resize-none"
-                      data-testid="input-notes" />
-                  </div>
+                    {/* Section: Notes */}
+                    <div className="px-6 py-5">
+                      <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Additional Notes</p>
+                      <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="Any additional context about this client or assessment…"
+                        rows={3}
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all resize-none"
+                        data-testid="input-notes" />
+                    </div>
 
+                  </div>
+                  {/* ── End Card ── */}
+
+                  {/* Submit */}
                   <button
                     onClick={async () => {
                       if (!companyInfo.name.trim() || !companyInfo.sector) {
@@ -1463,10 +1472,7 @@ export default function DocumentProcessor() {
                       }
                       setIsSavingSession(true);
                       const sid = sessionId || generateSessionId();
-                      if (!sessionId) {
-                        setSessionId(sid);
-                        sessionCreatedAt.current = new Date().toISOString();
-                      }
+                      if (!sessionId) { setSessionId(sid); sessionCreatedAt.current = new Date().toISOString(); }
                       await apiSaveSession({
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
@@ -1479,37 +1485,42 @@ export default function DocumentProcessor() {
                       setCurrentPage('upload');
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press"
+                    className="w-full mt-4 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
                     data-testid="button-next-upload"
                   >
                     {isSavingSession
                       ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</>
-                      : <>Continue to Upload <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                      : 'Continue'}
                   </button>
-                </>
+                </div>
               )}
             </div>
           )}
 
           {currentPage === 'upload' && (
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-white mb-1">Upload Documents</h2>
-                <p className="text-[#8e8e93] text-sm">Drag and drop files or click to browse</p>
+            <div className="max-w-2xl mx-auto w-full">
+              <div className="mb-10">
+                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Upload Documents</h2>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">Drag and drop files or click to browse.</p>
               </div>
 
               {templates.length === 0 && !loadingTemplates && (
-                <div className="bg-amber-500/10 rounded-xl p-4 mb-6 flex items-start gap-3">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                <div className="rounded-xl p-4 mb-6 flex items-start gap-3" style={{ background: '#1a1a1a', border: '1px solid #2c2c2e' }}>
+                  <AlertTriangle className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-amber-400">No templates in repository</p>
-                    <p className="text-xs text-amber-500/70 mt-1">Publish a template from the Entity Builder first. <Link href="/builder" className="underline font-medium text-amber-400">Go to Builder</Link></p>
+                    <p className="text-sm font-medium text-[#d1d1d6]">No templates available</p>
+                    <p className="text-xs text-[#636366] mt-1">Create a template in the Entity Builder first. <Link href="/builder" className="underline text-white">Go to Builder</Link></p>
                   </div>
                 </div>
               )}
 
               <div
-                className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer mb-6 ${isDragActive ? 'border-purple-500 bg-purple-500/10' : uploadedFiles.length > 0 ? 'border-[#2c2c2e] bg-[#1c1c1e] p-6' : 'border-[#2c2c2e] bg-[#1c1c1e] hover:border-[#3a3a3c]'}`}
+                className="rounded-2xl text-center transition-all cursor-pointer mb-8"
+                style={{
+                  background: '#111111',
+                  border: `1px dashed ${isDragActive ? '#636366' : '#2c2c2e'}`,
+                  padding: uploadedFiles.length > 0 ? '16px' : '48px 24px',
+                }}
                 onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
                 onDragLeave={(e) => { e.preventDefault(); setIsDragActive(false); }}
                 onDrop={(e) => { e.preventDefault(); setIsDragActive(false); if (e.dataTransfer.files?.length) handleFiles(Array.from(e.dataTransfer.files)); }}
@@ -1519,55 +1530,81 @@ export default function DocumentProcessor() {
                   onChange={(e) => { if (e.target.files?.length) handleFiles(Array.from(e.target.files)); }} />
                 {uploadedFiles.length === 0 ? (
                   <>
-                    <div className={`w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto mb-4 transition-transform ${isDragActive ? 'scale-110' : ''}`}>
-                      <CloudUpload className="w-7 h-7" />
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-transform ${isDragActive ? 'scale-105' : ''}`} style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                      <CloudUpload className="w-6 h-6 text-[#636366]" />
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Drop files here</h3>
-                    <p className="text-[#8e8e93] text-sm mb-3">or click to browse</p>
-                    <div className="flex items-center justify-center gap-2 text-xs text-[#636366]">
-                      {['PDF', 'XLSX', 'XLS', 'CSV', 'DOCX', 'TXT'].map(ext => (
-                        <span key={ext} className="px-2 py-0.5 bg-[#2c2c2e] rounded-lg text-[#8e8e93]">{ext}</span>
+                    <h3 className="text-[15px] font-medium text-white mb-1">Drop files here</h3>
+                    <p className="text-[13px] text-[#636366] mb-4">or click to browse</p>
+                    <div className="flex items-center justify-center gap-1.5 text-[11px]">
+                      {['PDF', 'XLSX', 'CSV', 'DOCX', 'TXT'].map(ext => (
+                        <span key={ext} className="px-2 py-0.5 rounded text-[#48484a]" style={{ background: '#1c1c1e' }}>{ext}</span>
                       ))}
                     </div>
                   </>
-                ) : (
-                  <div className="flex items-center gap-2 text-purple-400">
-                    <PlusCircle className="w-4 h-4" />
-                    <span className="text-sm font-medium">Add more files</span>
+                ) : /* files uploaded – compact "add more" prompt */ (
+                  <div className="flex items-center justify-center gap-2 text-[#636366] hover:text-[#8e8e93] transition-colors">
+                    <Plus className="w-4 h-4" />
+                    <span className="text-[13px] font-medium">Add more files</span>
                   </div>
                 )}
               </div>
 
+              {uploadedFiles.length === 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex-1 h-px bg-[#2c2c2e]" />
+                    <span className="text-[11px] text-[#48484a] font-medium uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-[#2c2c2e]" />
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setCurrentPage('manual-entry'); }}
+                    className="w-full py-3.5 rounded-xl text-[14px] font-semibold transition-all flex items-center justify-center gap-2.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white"
+                    style={{ border: '1px solid #2c2c2e' }}
+                    data-testid="button-skip-to-manual-empty"
+                  >
+                    <ClipboardEdit className="w-4 h-4" />
+                    Skip Upload — Enter Data Manually
+                  </button>
+                  <p className="text-[11px] text-[#48484a] text-center mt-2">No documents? You can enter all scorecard data by hand.</p>
+                  <div className="flex gap-3 mt-6">
+                    <button onClick={() => setCurrentPage('company-info')}
+                      className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-company-info-empty">
+                      Back
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {uploadedFiles.length > 0 && (
                 <>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-white text-sm">
+                    <p className="text-[13px] font-medium text-[#8e8e93]">
                       {uploadedFiles.length} document{uploadedFiles.length !== 1 ? 's' : ''}
-                      {!allReady && <span className="text-purple-400 ml-2 font-normal text-xs inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Loading...</span>}
-                    </h3>
-                    <button onClick={() => { setUploadedFiles([]); setFileClassifications({}); }} className="text-xs text-red-400 hover:text-red-300 smooth press-sm" data-testid="button-clear-all">
-                      <Trash2 className="w-3 h-3 mr-1 inline-block" />Clear all
+                      {!allReady && <span className="text-[#636366] ml-2 inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Processing...</span>}
+                    </p>
+                    <button onClick={() => { setUploadedFiles([]); setFileClassifications({}); }} className="text-[12px] text-[#48484a] hover:text-[#8e8e93] transition-colors" data-testid="button-clear-all">
+                      Clear all
                     </button>
                   </div>
-                  <div className="space-y-2 mb-6">
+                  <div className="space-y-1.5 mb-8">
                     {uploadedFiles.map((file) => (
-                      <div key={file.id} className={`bg-[#1c1c1e] rounded-2xl px-4 py-3 flex items-center gap-3 transition-all ${file.status === 'uploading' ? 'opacity-70' : ''}`} data-testid={`file-row-${file.id}`}>
+                      <div key={file.id} className={`rounded-xl px-4 py-3 flex items-center gap-3 transition-all ${file.status === 'uploading' ? 'opacity-70' : ''}`} style={{ background: '#111111', border: '1px solid #1c1c1e' }} data-testid={`file-row-${file.id}`}>
                         <div className="shrink-0">
                           <FileFormatBadge type={file.type} size="sm" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{file.name}</div>
+                          <div className="text-[13px] font-medium text-white truncate">{file.name}</div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-[#8e8e93]">{file.size} KB</span>
+                            <span className="text-[11px] text-[#48484a]">{file.size}</span>
                             {file.status === 'uploading' && (
-                              <div className="flex-1 h-1 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[100px]">
-                                <div className="h-full bg-purple-600 transition-all rounded-full" style={{ width: `${file.uploadProgress}%` }}></div>
+                              <div className="flex-1 h-0.5 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[100px]">
+                                <div className="h-full bg-white transition-all rounded-full" style={{ width: `${file.uploadProgress}%` }}></div>
                               </div>
                             )}
-                            {file.status === 'ready' && <span className="text-xs text-green-400 inline-flex items-center gap-0.5"><Check className="w-2.5 h-2.5" />Ready</span>}
+                            {file.status === 'ready' && <Check className="w-3 h-3 text-[#636366]" />}
                           </div>
                         </div>
-                        <button onClick={() => removeFile(file.id)} className="p-2 text-[#636366] hover:text-red-400 rounded-[10px] hover:bg-red-500/10 smooth press-sm" data-testid={`button-remove-${file.id}`}>
+                        <button onClick={() => removeFile(file.id)} className="p-1.5 text-[#3a3a3c] hover:text-[#8e8e93] rounded-lg transition-colors" data-testid={`button-remove-${file.id}`}>
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1575,26 +1612,35 @@ export default function DocumentProcessor() {
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setCurrentPage('company-info')}
-                      className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-company-info">
-                      <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
+                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-company-info">
+                      Back
                     </button>
                     <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
-                      className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-classify">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                     </button>
                   </div>
+                  <button
+                    onClick={() => setCurrentPage('manual-entry')}
+                    className="w-full mt-3 py-2.5 text-[13px] font-medium text-[#636366] hover:text-[#8e8e93] transition-colors flex items-center justify-center gap-2"
+                    data-testid="button-skip-to-manual"
+                  >
+                    <ClipboardEdit className="w-3.5 h-3.5" />
+                    Skip to Manual Entry
+                  </button>
                 </>
               )}
             </div>
           )}
 
           {currentPage === 'classify' && (
-            <div>
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Assign Templates</h2>
-                <p className="text-[#8e8e93] text-sm">Choose which template to use for each document</p>
+            <div className="max-w-2xl mx-auto w-full">
+              <div className="mb-10">
+                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Assign Templates</h2>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">Select a template for each document to define the fields to extract.</p>
               </div>
-              <div className="space-y-3 mb-8">
+
+              <div className="space-y-2 mb-10">
                 {uploadedFiles.map((file) => {
                   const selectedId = fileClassifications[String(file.id)];
                   const selectedTemplate = templates.find(t => t.id === selectedId);
@@ -1606,145 +1652,133 @@ export default function DocumentProcessor() {
                       return (
                         <div
                           key={file.id}
-                          className={`rounded-2xl transition-all ${selectedTemplate ? 'ring-1 ring-purple-500/25' : 'ring-1 ring-[#2c2c2e]'}`}
-                          style={{ background: '#1c1c1e', position: 'relative', zIndex: isDropdownOpen ? 50 : 1 }}
+                          className="rounded-2xl transition-all"
+                          style={{
+                            background: '#111111',
+                            border: `1px solid ${selectedTemplate ? '#3a3a3c' : '#222224'}`,
+                            position: 'relative',
+                            zIndex: isDropdownOpen ? 50 : 1,
+                          }}
                           data-testid={`classify-row-${file.id}`}
                         >
-                          {/* Main row: icon + name + controls */}
-                          <div className="flex items-start gap-4 p-4">
-                            {/* File format badge */}
-                            <div className="shrink-0 pt-0.5">
+                          <div className="flex items-center gap-4 p-4">
+                            <div className="shrink-0">
                               <FileFormatBadge type={file.type} size="md" />
                             </div>
 
-                            {/* Content */}
-                            <div className="flex-1 min-w-0 space-y-3">
-                              {/* File name + size */}
-                              <div>
-                                <div className="text-[14px] font-semibold text-white truncate leading-tight">{file.name}</div>
-                                <div className="text-[11px] text-[#636366] mt-0.5">{file.size} KB</div>
-                              </div>
-
-                              {/* Template picker */}
-                              <div className="relative" data-testid={`select-template-${file.id}`}>
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenTemplateDropdown(prev => prev === String(file.id) ? null : String(file.id))}
-                                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-left transition-all ${
-                                    selectedTemplate
-                                      ? 'bg-purple-500/10 border border-purple-500/30 text-white'
-                                      : 'bg-[#141414] border border-[#3a3a3c] text-[#8e8e93] hover:border-[#48484a] hover:text-white'
-                                  }`}
-                                >
-                                  <Puzzle className={`w-3.5 h-3.5 shrink-0 ${selectedTemplate ? 'text-purple-400' : 'text-[#48484a]'}`} />
-                                  <span className="flex-1 truncate">
-                                    {selectedTemplate ? selectedTemplate.name : 'Choose a template…'}
-                                  </span>
-                                  {selectedTemplate
-                                    ? <span className="text-[10px] text-purple-400/60 shrink-0 font-normal">{selectedTemplate.entities.length} fields</span>
-                                    : null}
-                                  <svg className={`w-4 h-4 shrink-0 text-[#48484a] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 16 16" fill="none">
-                                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                  </svg>
-                                </button>
-
-                                {isDropdownOpen && (
-                                  <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setOpenTemplateDropdown(null)} />
-                                    <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl shadow-2xl overflow-hidden" style={{ background: '#2c2c2e', border: '1px solid #3a3a3c' }}>
-                                      <div className="px-3 pt-3 pb-1.5">
-                                        <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest">Select Template</p>
-                                      </div>
-                                      <div className="max-h-56 overflow-y-auto pb-1.5">
-                                        {loadingTemplates ? (
-                                          <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#8e8e93]">
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
-                                          </div>
-                                        ) : templates.length === 0 ? (
-                                          <div className="px-4 py-3 text-[13px] text-[#636366]">No templates — create one in Builder first.</div>
-                                        ) : (
-                                          templates.map((t) => {
-                                            const isSel = selectedId === t.id;
-                                            return (
-                                              <button
-                                                key={t.id}
-                                                type="button"
-                                                onClick={() => {
-                                                  setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
-                                                  setOpenTemplateDropdown(null);
-                                                }}
-                                                className={`w-full flex items-center gap-3 px-3 py-2.5 mx-1.5 rounded-xl text-left transition-colors mb-0.5 ${
-                                                  isSel ? 'bg-purple-500/20' : 'hover:bg-[#3a3a3c]'
-                                                }`}
-                                                style={{ width: 'calc(100% - 12px)' }}
-                                              >
-                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSel ? 'bg-purple-500/30' : 'bg-[#1c1c1e]'}`}>
-                                                  <Puzzle className={`w-3.5 h-3.5 ${isSel ? 'text-purple-300' : 'text-[#636366]'}`} />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <div className={`text-[13px] font-semibold truncate ${isSel ? 'text-purple-200' : 'text-white'}`}>{t.name}</div>
-                                                  <div className="text-[11px] text-[#636366]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
-                                                </div>
-                                                {isSel && (
-                                                  <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center shrink-0">
-                                                    <Check className="w-3 h-3 text-white" />
-                                                  </div>
-                                                )}
-                                              </button>
-                                            );
-                                          })
-                                        )}
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-
-                              {/* Document type segmented pill */}
-                              <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#141414', border: '1px solid #2c2c2e' }} data-testid={`select-doctype-${file.id}`}>
-                                <button
-                                  type="button"
-                                  onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
-                                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
-                                    !isScanned ? 'bg-[#1c4ed8]/25 text-blue-300' : 'text-[#636366] hover:text-[#8e8e93]'
-                                  }`}
-                                >
-                                  <Monitor className="w-3.5 h-3.5" />
-                                  Digital
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
-                                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-semibold transition-all ${
-                                    isScanned ? 'bg-amber-500/20 text-amber-300' : 'text-[#636366] hover:text-[#8e8e93]'
-                                  }`}
-                                >
-                                  <ScanLine className="w-3.5 h-3.5" />
-                                  Scanned
-                                </button>
-                              </div>
-
-                              {/* Entity chips */}
-                              {selectedTemplate && selectedTemplate.entities.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {selectedTemplate.entities.slice(0, 6).map((ent, i) => (
-                                    <span key={i} className="text-[10px] px-2 py-1 rounded-lg font-medium" style={{ background: '#2c2c2e', color: '#8e8e93' }}>{ent.label}</span>
-                                  ))}
-                                  {selectedTemplate.entities.length > 6 && (
-                                    <span className="text-[10px] px-2 py-1 rounded-lg font-medium" style={{ background: '#2c2c2e', color: '#636366' }}>+{selectedTemplate.entities.length - 6} more</span>
-                                  )}
-                                </div>
-                              )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[14px] font-medium text-white truncate leading-tight">{file.name}</div>
+                              <div className="text-[12px] text-[#636366] mt-0.5">{file.size}</div>
                             </div>
 
-                            {/* Remove button */}
                             <button
                               onClick={() => removeFile(file.id)}
-                              className="shrink-0 p-2 rounded-xl text-[#48484a] hover:text-red-400 hover:bg-red-500/10 transition-all mt-0.5"
+                              className="shrink-0 p-1.5 rounded-lg text-[#3a3a3c] hover:text-[#8e8e93] transition-colors"
                               data-testid={`button-remove-${file.id}`}
                             >
                               <X className="w-4 h-4" />
                             </button>
+                          </div>
+
+                          <div className="px-4 pb-4 space-y-3">
+                            <div className="relative" data-testid={`select-template-${file.id}`}>
+                              <button
+                                type="button"
+                                onClick={() => setOpenTemplateDropdown(prev => prev === String(file.id) ? null : String(file.id))}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-left transition-all"
+                                style={{
+                                  background: selectedTemplate ? '#1a1a1a' : '#0c0c0c',
+                                  border: `1px solid ${selectedTemplate ? '#3a3a3c' : '#222224'}`,
+                                  color: selectedTemplate ? '#ffffff' : '#636366',
+                                }}
+                              >
+                                <span className="flex-1 truncate">
+                                  {selectedTemplate ? selectedTemplate.name : 'Select template...'}
+                                </span>
+                                {selectedTemplate && (
+                                  <span className="text-[11px] text-[#636366] shrink-0">{selectedTemplate.entities.length} fields</span>
+                                )}
+                                <svg className={`w-4 h-4 shrink-0 text-[#48484a] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 16 16" fill="none">
+                                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+
+                              {isDropdownOpen && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={() => setOpenTemplateDropdown(null)} />
+                                  <div
+                                    className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden"
+                                    style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+                                  >
+                                    <div className="max-h-56 overflow-y-auto py-1">
+                                      {loadingTemplates ? (
+                                        <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#636366]">
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading...
+                                        </div>
+                                      ) : templates.length === 0 ? (
+                                        <div className="px-4 py-3 text-[13px] text-[#48484a]">No templates yet. Create one in Builder.</div>
+                                      ) : (
+                                        templates.map((t) => {
+                                          const isSel = selectedId === t.id;
+                                          return (
+                                            <button
+                                              key={t.id}
+                                              type="button"
+                                              onClick={() => {
+                                                setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                                setOpenTemplateDropdown(null);
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
+                                            >
+                                              <div className="flex-1 min-w-0">
+                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-white' : 'text-[#d1d1d6]'}`}>{t.name}</div>
+                                                <div className="text-[11px] text-[#48484a]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                              </div>
+                                              {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                                            </button>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            <div className="flex rounded-lg overflow-hidden" style={{ background: '#0c0c0c', border: '1px solid #222224' }} data-testid={`select-doctype-${file.id}`}>
+                              <button
+                                type="button"
+                                onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
+                                  !isScanned ? 'bg-[#1c1c1e] text-white' : 'text-[#48484a] hover:text-[#636366]'
+                                }`}
+                              >
+                                <Monitor className="w-3 h-3" />
+                                Digital
+                              </button>
+                              <div className="w-px" style={{ background: '#222224' }} />
+                              <button
+                                type="button"
+                                onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
+                                  isScanned ? 'bg-[#1c1c1e] text-white' : 'text-[#48484a] hover:text-[#636366]'
+                                }`}
+                              >
+                                <ScanLine className="w-3 h-3" />
+                                Scanned
+                              </button>
+                            </div>
+
+                            {selectedTemplate && selectedTemplate.entities.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {selectedTemplate.entities.slice(0, 5).map((ent, i) => (
+                                  <span key={i} className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#636366]" style={{ background: '#1a1a1a' }}>{ent.label}</span>
+                                ))}
+                                {selectedTemplate.entities.length > 5 && (
+                                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#48484a]" style={{ background: '#1a1a1a' }}>+{selectedTemplate.entities.length - 5}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -1752,13 +1786,14 @@ export default function DocumentProcessor() {
                   );
                 })}
               </div>
+
               <div className="flex gap-3">
-                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-upload">
-                  <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
+                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-upload">
+                  Back
                 </button>
                 <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
-                  className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-next-extract">
-                  {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : <>Continue <ChevronRight className="w-3 h-3 ml-1.5 inline-block" /></>}
+                  className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
+                  {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                 </button>
               </div>
             </div>
@@ -1780,71 +1815,57 @@ export default function DocumentProcessor() {
             const anyDone = Object.values(docStatuses).some(s => s === 'done');
             const allDone = uploadedFiles.length > 0 && uploadedFiles.every((_, i) => docStatuses[i] === 'done');
             return (
-              <div>
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-bold text-white mb-2">
+              <div className="max-w-2xl mx-auto w-full">
+                <div className="mb-10">
+                  <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">
                     {anyProcessing ? 'Extracting...' : allDone ? 'Extraction Complete' : 'Ready to Extract'}
                   </h2>
-                  <p className="text-[#8e8e93] text-sm">
+                  <p className="text-[#8e8e93] text-[15px] mt-1.5">
                     {anyProcessing ? `Processing ${Object.values(docStatuses).filter(s => s === 'processing').length} of ${uploadedFiles.length} documents` :
-                     allDone ? 'All entities have been extracted from your documents' :
-                     `${allEntities.length} entities will be extracted from ${uploadedFiles.length} document${uploadedFiles.length !== 1 ? 's' : ''}`}
+                     allDone ? 'All entities have been extracted from your documents.' :
+                     `${allEntities.length} entities will be extracted from ${uploadedFiles.length} document${uploadedFiles.length !== 1 ? 's' : ''}.`}
                   </p>
                 </div>
 
                 {!anyProcessing && !allDone && (
-                  <div className="bg-[#1c1c1e] rounded-2xl p-5 mb-6">
+                  <div className="rounded-2xl p-5 mb-6" style={{ background: '#111111', border: '1px solid #1c1c1e' }}>
                     <div className="flex items-center gap-2 mb-4">
-                      <ListChecks className="w-4 h-4 text-purple-400" />
-                      <span className="text-sm font-semibold text-white">Entities to Extract</span>
-                      <span className="text-xs text-[#636366] ml-auto">{allEntities.length} total</span>
+                      <span className="text-[13px] font-medium text-[#8e8e93]">Entities to Extract</span>
+                      <span className="text-[12px] text-[#48484a] ml-auto">{allEntities.length}</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {allEntities.map((ent, i) => {
-                        const color = entityColors[i % entityColors.length];
-                        return (
-                          <div key={ent.label} className="flex items-start gap-3 p-3 rounded-xl bg-[#2c2c2e]">
-                            <div className="w-1.5 h-full min-h-[36px] rounded-full shrink-0 mt-0.5" style={{ backgroundColor: color.underline }}></div>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-white">{ent.label}</span>
-                              {ent.definition && <p className="text-[11px] text-[#8e8e93] mt-0.5 line-clamp-1">{ent.definition}</p>}
-                            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {allEntities.map((ent) => (
+                        <div key={ent.label} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#1a1a1a' }}>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[13px] font-medium text-[#d1d1d6]">{ent.label}</span>
+                            {ent.definition && <p className="text-[11px] text-[#48484a] mt-0.5 line-clamp-1">{ent.definition}</p>}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2 mb-8">
+                <div className="space-y-1.5 mb-8">
                   {uploadedFiles.map((file, idx) => {
                     const status = docStatuses[idx] || 'waiting';
                     const tid = fileClassifications[String(file.id)];
                     const tmpl = templates.find(t => t.id === tid);
                     return (
-                      <div key={file.id} className={`bg-[#1c1c1e] rounded-2xl px-4 py-3 flex items-center gap-3 transition-all ${status === 'done' ? 'ring-1 ring-green-500/20' : status === 'error' ? 'ring-1 ring-red-500/20' : status === 'processing' ? 'ring-1 ring-purple-500/20' : ''}`} data-testid={`extract-row-${idx}`}>
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${status === 'done' ? 'bg-green-500/15' : status === 'processing' ? 'bg-purple-500/15' : status === 'error' ? 'bg-red-500/15' : 'bg-[#2c2c2e]'}`}>
-                          {status === 'waiting' && <Circle className="w-2 h-2 text-[#636366]" />}
-                          {status === 'processing' && <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />}
-                          {status === 'done' && <Check className="w-4 h-4 text-green-400" />}
-                          {status === 'error' && <X className="w-4 h-4 text-red-400" />}
+                      <div key={file.id} className="rounded-xl px-4 py-3 flex items-center gap-3 transition-all" style={{ background: '#111111', border: `1px solid ${status === 'done' ? '#2c2c2e' : '#1c1c1e'}` }} data-testid={`extract-row-${idx}`}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#1c1c1e' }}>
+                          {status === 'waiting' && <Circle className="w-2 h-2 text-[#48484a]" />}
+                          {status === 'processing' && <Loader2 className="w-3.5 h-3.5 text-[#8e8e93] animate-spin" />}
+                          {status === 'done' && <Check className="w-3.5 h-3.5 text-white" />}
+                          {status === 'error' && <X className="w-3.5 h-3.5 text-[#8e8e93]" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{file.name}</div>
-                          <div className="text-xs text-[#636366] mt-0.5">
-                            {status === 'processing' ? 'Extracting entities...' : status === 'done' ? 'Complete' : status === 'error' ? 'Failed' : tmpl ? tmpl.name : ''}
+                          <div className="text-[13px] font-medium text-white truncate">{file.name}</div>
+                          <div className="text-[11px] text-[#48484a] mt-0.5">
+                            {status === 'processing' ? 'Extracting...' : status === 'done' ? 'Complete' : status === 'error' ? 'Failed' : tmpl ? tmpl.name : ''}
                           </div>
                         </div>
-                        {status === 'processing' && (
-                          <div className="flex gap-1">
-                            {[0, 1, 2].map(i => (
-                              <div key={i} className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: `${i * 0.15}s` }}></div>
-                            ))}
-                          </div>
-                        )}
-                        {status === 'done' && (
-                          <span className="text-xs text-green-400 font-medium inline-flex items-center gap-1"><Check className="w-2.5 h-2.5" />Done</span>
-                        )}
+                        {status === 'done' && <Check className="w-3.5 h-3.5 text-[#636366] shrink-0" />}
                       </div>
                     );
                   })}
@@ -1852,25 +1873,23 @@ export default function DocumentProcessor() {
 
                 {anyProcessing && (
                   <div className="max-w-md mx-auto mb-8">
-                    <div className="h-1.5 bg-[#2c2c2e] rounded-full overflow-hidden">
-                      <div className="h-full bg-purple-600 transition-all duration-500 rounded-full" style={{ width: `${uploadedFiles.length > 0 ? (Object.values(docStatuses).filter(s => s === 'done').length / uploadedFiles.length) * 100 : 0}%` }}></div>
+                    <div className="h-1 bg-[#1c1c1e] rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-500 rounded-full" style={{ width: `${uploadedFiles.length > 0 ? (Object.values(docStatuses).filter(s => s === 'done').length / uploadedFiles.length) * 100 : 0}%` }}></div>
                     </div>
                   </div>
                 )}
 
                 <div className="flex gap-3">
                   <button onClick={() => { if (!anyProcessing) setCurrentPage('classify'); }} disabled={anyProcessing}
-                    className="px-5 py-3.5 bg-[#1c1c1e] text-[#d1d1d6] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl text-[13px] font-medium smooth press-sm" data-testid="button-back-classify">
-                    <ChevronLeft className="w-3 h-3 mr-1.5 inline-block" /> Back
+                    className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-classify">
+                    Back
                   </button>
                   {!allDone && (
                     <button onClick={startProcessing} disabled={anyProcessing}
-                      className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-[#1c1c1e] disabled:text-[#636366] text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-start-extract">
+                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
                       {anyProcessing ? (
                         <><Loader2 className="w-3.5 h-3.5 mr-1.5 inline-block animate-spin" />Extracting...</>
-                      ) : (
-                        <><Zap className="w-3.5 h-3.5 mr-1.5 inline-block" />Extract All</>
-                      )}
+                      ) : 'Extract All'}
                     </button>
                   )}
                   {allDone && (
@@ -1887,8 +1906,8 @@ export default function DocumentProcessor() {
                         setCurrentPage('review');
                       }
                     }}
-                    className="flex-1 py-3.5 bg-green-600 hover:bg-green-500 text-white rounded-2xl font-semibold text-[13px] smooth press" data-testid="button-go-review">
-                      Review Results <ChevronRight className="w-3 h-3 ml-1.5 inline-block" />
+                    className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-go-review">
+                      Review Results
                     </button>
                   )}
                 </div>
@@ -1899,13 +1918,26 @@ export default function DocumentProcessor() {
 
           {currentPage === 'review' && extractionResults.length > 0 && (() => {
             const isLastDoc = activeReviewDoc === extractionResults.length - 1;
+            const allSaved = savedDocs.size >= extractionResults.length;
+
+            const handleSave = async () => {
+              setIsSavingSession(true);
+              await persistSession('review', { results: extractionResults, complete: false });
+              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
+              setIsSavingSession(false);
+              toast({ title: "Saved", description: `Document ${activeReviewDoc + 1} review saved.` });
+            };
+
             const handleNext = async () => {
               setIsSavingSession(true);
               await persistSession('review', { results: extractionResults, complete: false });
+              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
               setIsSavingSession(false);
               setActiveReviewDoc(prev => prev + 1);
               setHoveredEntity(null);
               setReviewFilter('all');
+              setEditingEntity(null);
+              setDocFullView(false);
             };
             const handleSubmit = async () => {
               setIsSavingSession(true);
@@ -1958,11 +1990,11 @@ export default function DocumentProcessor() {
               }
             };
             return (
-            <div className="flex flex-col h-full -m-6">
+            <div className="flex flex-col flex-1 min-h-0 -m-6">
               <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
                   <button onClick={() => {
-                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); }
+                    if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); setEditingEntity(null); }
                     else setCurrentPage('extract');
                   }} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -1978,27 +2010,50 @@ export default function DocumentProcessor() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {isLastDoc ? (
-                    <button onClick={handleSubmit} disabled={isSubmitted || isSavingSession}
-                      className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 ${isSubmitted ? 'bg-green-600 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}
-                      data-testid="button-submit">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
-                        : isSubmitted ? <><Check className="w-3.5 h-3.5" />Complete</>
-                        : 'Submit & Complete'}
-                    </button>
-                  ) : (
-                    <button onClick={handleNext} disabled={isSavingSession}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-60"
-                      data-testid="button-next-doc">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving...</>
-                        : <>Next Document <ChevronRight className="w-3.5 h-3.5" /></>}
-                    </button>
-                  )}
+                  {/* Save button */}
+                  <button onClick={handleSave} disabled={isSavingSession || isSubmitted}
+                    className={`px-3.5 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 border transition-colors
+                      ${savedDocs.has(activeReviewDoc)
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15'
+                        : 'bg-[#1c1c1e] border-[#2c2c2e] text-[#d1d1d6] hover:text-white hover:border-[#48484a]'}
+                      disabled:opacity-40 disabled:cursor-not-allowed`}
+                    data-testid="button-save-doc">
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</>
+                      : savedDocs.has(activeReviewDoc)
+                        ? <><Check className="w-3.5 h-3.5" />Saved</>
+                        : <><Save className="w-3.5 h-3.5" />Save</>}
+                  </button>
+
+                  {/* Next button */}
+                  <button onClick={handleNext} disabled={isLastDoc || isSavingSession || isSubmitted}
+                    className="px-3.5 py-2 bg-[#1c1c1e] border border-[#2c2c2e] hover:border-[#48484a] text-[#d1d1d6] hover:text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                    data-testid="button-next-doc">
+                    Next <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Submit button — only enabled once all docs are saved */}
+                  <button onClick={handleSubmit} disabled={!allSaved || isSubmitted || isSavingSession}
+                    title={!allSaved ? `Save all ${extractionResults.length} document${extractionResults.length > 1 ? 's' : ''} before submitting` : undefined}
+                    className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 transition-colors
+                      ${isSubmitted
+                        ? 'bg-green-600 text-white'
+                        : allSaved
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                          : 'bg-[#1c1c1e] border border-[#2c2c2e] text-[#48484a] cursor-not-allowed'}
+                      disabled:opacity-60`}
+                    data-testid="button-submit">
+                    {isSavingSession
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</>
+                      : isSubmitted
+                        ? <><Check className="w-3.5 h-3.5" />Complete</>
+                        : <><Send className="w-3.5 h-3.5" />Submit</>}
+                  </button>
                 </div>
               </div>
 
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                <div className="w-1/2 overflow-y-auto bg-[#f5f5f5]" style={{ borderRight: '1px solid #2c2c2e' }}>
+                <div className={`${docFullView ? 'w-full' : 'w-1/2'} overflow-y-auto bg-[#f5f5f5] flex flex-col transition-all duration-200`} style={docFullView ? {} : { borderRight: '1px solid #2c2c2e' }}>
                   <div className="px-5 py-4 sticky top-0 bg-[#f5f5f5] z-10" style={{ borderBottom: '1px solid #d1d5db' }}>
                     <div className="flex items-center gap-2">
                       {activeFileType === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> :
@@ -2010,7 +2065,13 @@ export default function DocumentProcessor() {
                          activeFileType === 'excel' ? 'Spreadsheet Viewer' :
                          activeFileType === 'csv' ? 'CSV Viewer' : 'Document'}
                       </span>
-                      {activeFileType === 'text' && <span className="text-xs text-gray-400 ml-auto">{activeDocText.length.toLocaleString()} chars</span>}
+                      {activeFileType === 'text' && <span className="text-xs text-gray-400">{activeDocText.length.toLocaleString()} chars</span>}
+                      <button
+                        onClick={() => setDocFullView(v => !v)}
+                        title={docFullView ? 'Split view' : 'Full document view'}
+                        className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 smooth press-sm transition-colors">
+                        {docFullView ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {extractionResults[activeReviewDoc]?.entities
@@ -2048,7 +2109,7 @@ export default function DocumentProcessor() {
                   </div>
                 </div>
 
-                <div className="w-1/2 overflow-y-auto bg-black">
+                <div className={`${docFullView ? 'hidden' : 'w-1/2'} overflow-y-auto bg-black`}>
                   <div className="px-5 py-4 sticky top-0 bg-black z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -2106,52 +2167,161 @@ export default function DocumentProcessor() {
                         const isApproved = entity.status === 'approved';
                         const isRejected = entity.status === 'rejected';
                         const isEdited = entity.status === 'edited';
+                        const isEditingThis = editingEntity?.docIdx === activeReviewDoc && editingEntity?.entityIdx === realIdx;
+
+                        const startEdit = () => setEditingEntity({ docIdx: activeReviewDoc, entityIdx: realIdx, draft: entity.value || '' });
+                        const cancelEdit = () => setEditingEntity(null);
+                        const saveEdit = () => {
+                          if (editingEntity && editingEntity.draft !== entity.value) {
+                            inlineEditEntity(activeReviewDoc, realIdx, editingEntity.draft);
+                          }
+                          setEditingEntity(null);
+                        };
+
                         return (
                           <div key={realIdx}
-                            className={`rounded-xl border transition-all ${isHovered ? 'border-[#48484a]' : 'border-[#2c2c2e]'} ${isApproved ? 'border-green-500/30' : ''} ${isRejected ? 'opacity-40' : ''}`}
+                            className={`rounded-2xl border transition-all duration-150 group ${
+                              isEditingThis ? 'border-purple-500/40 shadow-[0_0_0_3px_rgba(168,85,247,0.08)]' :
+                              isApproved ? 'border-green-500/25' :
+                              isRejected ? 'border-[#2c2c2e] opacity-35' :
+                              isHovered ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
+                            }`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
                             onMouseLeave={() => setHoveredEntity(null)}
                             data-testid={`review-entity-${realIdx}`}
                           >
-                            <div className="bg-[#1c1c1e] rounded-xl p-3.5">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest leading-none">
-                                      {fmtLabel(entity.name)}
+                            <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
+
+                              {/* Header row */}
+                              <div className="flex items-center justify-between mb-2.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest truncate">
+                                    {fmtLabel(entity.name)}
+                                  </span>
+                                  {isApproved && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] text-green-400 font-medium shrink-0">
+                                      <Check className="w-2.5 h-2.5" />Approved
                                     </span>
-                                    {isApproved && <span className="text-[10px] text-green-400 font-medium">· Approved</span>}
-                                    {isEdited && <span className="text-[10px] text-[#8e8e93] font-medium">· Edited</span>}
-                                    {isRejected && <span className="text-[10px] text-red-400 font-medium">· Rejected</span>}
-                                  </div>
-                                  {def && <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>}
-                                  <input
-                                    type="text"
-                                    defaultValue={entity.value || ''}
-                                    placeholder="No value extracted"
-                                    onBlur={(e) => { const val = e.target.value; if (val !== entity.value) inlineEditEntity(activeReviewDoc, realIdx, val); }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                    className="w-full text-sm text-white bg-[#2c2c2e] rounded-lg px-3 py-2 border border-transparent focus:border-[#48484a] focus:outline-none transition-colors placeholder:text-[#48484a] placeholder:italic"
-                                    data-testid={`input-entity-value-${realIdx}`}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
-                                  {!isApproved && (
-                                    <button onClick={() => approveEntity(activeReviewDoc, realIdx)}
-                                      className="p-1.5 text-[#636366] hover:text-green-400 hover:bg-green-500/10 rounded-lg smooth press-sm" title="Approve"
-                                      data-testid={`button-approve-${realIdx}`}>
-                                      <Check className="w-3.5 h-3.5" />
-                                    </button>
                                   )}
-                                  {!isRejected && (
-                                    <button onClick={() => rejectEntity(activeReviewDoc, realIdx)}
-                                      className="p-1.5 text-[#636366] hover:text-red-400 hover:bg-red-500/10 rounded-lg smooth press-sm" title="Reject"
-                                      data-testid={`button-reject-${realIdx}`}>
-                                      <X className="w-3.5 h-3.5" />
+                                  {isEdited && !isEditingThis && (
+                                    <span className="text-[10px] text-purple-400 font-medium shrink-0">Edited</span>
+                                  )}
+                                  {isRejected && (
+                                    <span className="text-[10px] text-red-400 font-medium shrink-0">Rejected</span>
+                                  )}
+                                </div>
+
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {/* Pen — always dimly visible, brightens on hover */}
+                                  {!isEditingThis && (
+                                    <button
+                                      onClick={startEdit}
+                                      className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-[#2c2c2e]"
+                                      title="Edit value"
+                                      data-testid={`button-edit-${realIdx}`}
+                                    >
+                                      <Pencil className="w-3 h-3" />
                                     </button>
                                   )}
                                 </div>
                               </div>
+
+                              {/* Definition */}
+                              {def && !isEditingThis && (
+                                <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>
+                              )}
+
+                              {/* Value — read mode */}
+                              {!isEditingThis && (
+                                <div
+                                  onClick={startEdit}
+                                  className="cursor-text rounded-xl px-3 py-2 mb-3 transition-colors hover:bg-[#2c2c2e]/60"
+                                  title="Click to edit"
+                                >
+                                  {entity.value ? (
+                                    <p className="text-[14px] text-white leading-snug break-words">{entity.value}</p>
+                                  ) : (
+                                    <p className="text-[13px] text-[#3a3a3c] italic flex items-center gap-1.5">
+                                      <Plus className="w-3 h-3" />Add value
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Value — edit mode */}
+                              {isEditingThis && (
+                                <div className="space-y-2 mb-3">
+                                  {def && (
+                                    <p className="text-[10px] text-[#48484a] leading-relaxed line-clamp-2">{def}</p>
+                                  )}
+                                  <textarea
+                                    autoFocus
+                                    value={editingEntity.draft}
+                                    onChange={(e) => setEditingEntity(prev => prev ? { ...prev, draft: e.target.value } : null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+                                      if (e.key === 'Escape') cancelEdit();
+                                    }}
+                                    rows={Math.min(Math.max((editingEntity.draft.match(/\n/g) || []).length + 1, 1), 4)}
+                                    placeholder="Enter value…"
+                                    className="w-full text-[14px] text-white bg-[#2c2c2e] rounded-xl px-3 py-2.5 border border-purple-500/40 focus:border-purple-400 focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
+                                    data-testid={`input-entity-value-${realIdx}`}
+                                  />
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={cancelEdit}
+                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-white rounded-lg hover:bg-[#2c2c2e] smooth press-sm">
+                                      Cancel
+                                    </button>
+                                    <button onClick={saveEdit}
+                                      className="px-3 py-1.5 text-[12px] font-semibold text-white bg-purple-600 hover:bg-purple-500 rounded-lg smooth press-sm flex items-center gap-1"
+                                      data-testid={`button-save-entity-${realIdx}`}>
+                                      <Check className="w-3 h-3" />Save
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Approve / Reject — always visible bottom action bar */}
+                              {!isEditingThis && (
+                                <div className="flex items-center gap-2 pt-2.5" style={{ borderTop: '1px solid #2c2c2e' }}>
+                                  {isApproved ? (
+                                    <button
+                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-semibold text-green-400 bg-green-500/10 smooth press-sm"
+                                      data-testid={`button-approve-${realIdx}`}
+                                    >
+                                      <Check className="w-3.5 h-3.5" />Approved
+                                    </button>
+                                  ) : isRejected ? null : (
+                                    <button
+                                      onClick={() => approveEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-green-400 hover:bg-green-500/10 border border-[#2c2c2e] hover:border-green-500/20 smooth press-sm"
+                                      data-testid={`button-approve-${realIdx}`}
+                                    >
+                                      <Check className="w-3.5 h-3.5" />Approve
+                                    </button>
+                                  )}
+                                  {isRejected ? (
+                                    <button
+                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-semibold text-red-400 bg-red-500/10 smooth press-sm"
+                                      data-testid={`button-reject-${realIdx}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />Rejected
+                                    </button>
+                                  ) : isApproved ? null : (
+                                    <button
+                                      onClick={() => rejectEntity(activeReviewDoc, realIdx)}
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-red-400 hover:bg-red-500/10 border border-[#2c2c2e] hover:border-red-500/20 smooth press-sm"
+                                      data-testid={`button-reject-${realIdx}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />Reject
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
                             </div>
                           </div>
                         );
@@ -2164,7 +2334,321 @@ export default function DocumentProcessor() {
             );
           })()}
 
-          {currentPage === ('scorecard' as 'scorecard' | 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review') && (
+          {currentPage === 'manual-entry' && (
+            <div className="max-w-2xl mx-auto w-full">
+              <div className="mb-10">
+                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Manual Data Entry</h2>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter B-BBEE metrics directly to generate a scorecard without document extraction.</p>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Ownership Metrics</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Ownership (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={manualEntry.blackOwnership}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, blackOwnership: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.blackOwnership; return n; });
+                        }}
+                        placeholder="0.0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-black-ownership"
+                      />
+                      {manualErrors.blackOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackOwnership}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Female Ownership (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={manualEntry.blackFemaleOwnership}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, blackFemaleOwnership: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.blackFemaleOwnership; return n; });
+                        }}
+                        placeholder="0.0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackFemaleOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-black-female-ownership"
+                      />
+                      {manualErrors.blackFemaleOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackFemaleOwnership}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Management Control</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Board Members (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={manualEntry.blackBoardMembers}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, blackBoardMembers: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.blackBoardMembers; return n; });
+                        }}
+                        placeholder="0.0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackBoardMembers ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-black-board-members"
+                      />
+                      {manualErrors.blackBoardMembers && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackBoardMembers}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Executive Management (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={manualEntry.blackExecutiveManagement}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, blackExecutiveManagement: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.blackExecutiveManagement; return n; });
+                        }}
+                        placeholder="0.0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackExecutiveManagement ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-black-executive-mgmt"
+                      />
+                      {manualErrors.blackExecutiveManagement && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackExecutiveManagement}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Skills Development</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Skills Development Spend on Black People (R)</label>
+                      <input
+                        type="number" min="0" step="1"
+                        value={manualEntry.skillsSpendOnBlack}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, skillsSpendOnBlack: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.skillsSpendOnBlack; return n; });
+                        }}
+                        placeholder="0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.skillsSpendOnBlack ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-skills-spend"
+                      />
+                      {manualErrors.skillsSpendOnBlack && <p className="text-[11px] text-red-400 mt-1">{manualErrors.skillsSpendOnBlack}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Number of Black Learnerships</label>
+                      <input
+                        type="number" min="0" step="1"
+                        value={manualEntry.blackLearnerships}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setManualEntry(p => { const d = { ...p, blackLearnerships: v }; saveManualEntryData(d); return d; });
+                          setManualErrors(p => { const n = { ...p }; delete n.blackLearnerships; return n; });
+                        }}
+                        placeholder="0"
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackLearnerships ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                        data-testid="input-black-learnerships"
+                      />
+                      {manualErrors.blackLearnerships && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackLearnerships}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Custom Entity Targets</p>
+                  <div className="space-y-3">
+                    {manualEntry.customTargets.map((ct, i) => (
+                      <div key={i} className="flex items-start gap-2" data-testid={`custom-target-row-${i}`}>
+                        <div className="flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={ct.name}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setManualEntry(p => {
+                                const d = { ...p, customTargets: p.customTargets.map((c, j) => j === i ? { ...c, name: v } : c) };
+                                saveManualEntryData(d);
+                                return d;
+                              });
+                            }}
+                            placeholder="Entity Name"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none focus:ring-1 focus:ring-[#48484a] transition-colors"
+                            style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                            data-testid={`input-custom-name-${i}`}
+                          />
+                        </div>
+                        <div className="w-[140px] shrink-0">
+                          <input
+                            type="number"
+                            value={ct.value}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setManualEntry(p => {
+                                const d = { ...p, customTargets: p.customTargets.map((c, j) => j === i ? { ...c, value: v } : c) };
+                                saveManualEntryData(d);
+                                return d;
+                              });
+                            }}
+                            placeholder="Target Value"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none focus:ring-1 focus:ring-[#48484a] transition-colors"
+                            style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                            data-testid={`input-custom-value-${i}`}
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            setManualEntry(p => {
+                              const d = { ...p, customTargets: p.customTargets.filter((_, j) => j !== i) };
+                              saveManualEntryData(d);
+                              return d;
+                            });
+                          }}
+                          className="p-2.5 rounded-xl text-[#3a3a3c] hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                          data-testid={`button-remove-custom-${i}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        setManualEntry(p => {
+                          const d = { ...p, customTargets: [...p.customTargets, { name: '', value: '' }] };
+                          saveManualEntryData(d);
+                          return d;
+                        });
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-[#8e8e93] hover:text-white hover:bg-white/[0.06] transition-colors"
+                      style={{ border: '1px dashed #2c2c2e' }}
+                      data-testid="button-add-custom-target"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Add Custom Entity Target
+                    </button>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setCurrentPage(uploadedFiles.length > 0 ? 'extract' : 'upload')}
+                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                      data-testid="button-manual-back"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const errors: Record<string, string> = {};
+                        const pctFields: { key: keyof ManualEntryData; label: string }[] = [
+                          { key: 'blackOwnership', label: 'Black Ownership' },
+                          { key: 'blackFemaleOwnership', label: 'Black Female Ownership' },
+                          { key: 'blackBoardMembers', label: 'Black Board Members' },
+                          { key: 'blackExecutiveManagement', label: 'Black Executive Management' },
+                        ];
+                        for (const f of pctFields) {
+                          const raw = manualEntry[f.key] as string;
+                          if (!raw || raw.trim() === '') { errors[f.key] = `${f.label} is required`; continue; }
+                          const v = parseFloat(raw);
+                          if (isNaN(v) || v < 0 || v > 100) errors[f.key] = 'Must be between 0 and 100';
+                        }
+                        const spendRaw = manualEntry.skillsSpendOnBlack;
+                        if (!spendRaw || spendRaw.trim() === '') { errors.skillsSpendOnBlack = 'Spend amount is required'; }
+                        else { const sv = parseFloat(spendRaw); if (isNaN(sv) || sv < 0) errors.skillsSpendOnBlack = 'Must be a positive number'; }
+
+                        const learnRaw = manualEntry.blackLearnerships;
+                        if (!learnRaw || learnRaw.trim() === '') { errors.blackLearnerships = 'Number of learnerships is required'; }
+                        else { const lv = parseFloat(learnRaw); if (isNaN(lv) || lv < 0 || !Number.isInteger(lv)) errors.blackLearnerships = 'Must be a non-negative integer'; }
+
+                        if (Object.keys(errors).length > 0) { setManualErrors(errors); return; }
+                        setManualErrors({});
+
+                        setIsSavingSession(true);
+                        try {
+                          const manualScorecardResult = {
+                            ownership: { score: Math.round(parseFloat(manualEntry.blackOwnership) / 100 * 25 * 10) / 10, target: 25, weighting: 25, subMinimumMet: parseFloat(manualEntry.blackOwnership) >= 40 },
+                            managementControl: { score: Math.round(((parseFloat(manualEntry.blackBoardMembers) + parseFloat(manualEntry.blackExecutiveManagement)) / 200) * 19 * 10) / 10, target: 19, weighting: 19 },
+                            skillsDevelopment: { score: Math.min(25, Math.round((parseFloat(manualEntry.skillsSpendOnBlack) / Math.max(1, parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 1000000) * 100) * 25 * 10) / 10), target: 25, weighting: 25, subMinimumMet: true },
+                            procurement: { score: 0, target: 29, weighting: 29, subMinimumMet: false },
+                            supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
+                            enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
+                            socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
+                            yesInitiative: { score: 0, target: 5, weighting: 5 },
+                            total: { score: 0, target: 120, weighting: 120 },
+                            achievedLevel: 9,
+                            discountedLevel: 9,
+                            isDiscounted: false,
+                            recognitionLevel: '0%',
+                            manualEntryData: manualEntry,
+                          };
+                          const totalScore =
+                            manualScorecardResult.ownership.score +
+                            manualScorecardResult.managementControl.score +
+                            manualScorecardResult.skillsDevelopment.score +
+                            manualScorecardResult.procurement.score +
+                            manualScorecardResult.supplierDevelopment.score +
+                            manualScorecardResult.enterpriseDevelopment.score +
+                            manualScorecardResult.socioEconomicDevelopment.score;
+                          manualScorecardResult.total.score = Math.round(totalScore * 10) / 10;
+
+                          const pct = totalScore / 120 * 100;
+                          let level = 9;
+                          if (pct >= 100) level = 1;
+                          else if (pct >= 95) level = 2;
+                          else if (pct >= 90) level = 3;
+                          else if (pct >= 80) level = 4;
+                          else if (pct >= 51) level = 5;
+                          else if (pct >= 40) level = 6;
+                          else if (pct >= 30) level = 7;
+                          else if (pct >= 15) level = 8;
+                          manualScorecardResult.achievedLevel = level;
+                          manualScorecardResult.discountedLevel = level;
+                          const recMap: Record<number, string> = { 1: '135%', 2: '125%', 3: '110%', 4: '100%', 5: '80%', 6: '60%', 7: '50%', 8: '10%', 9: '0%' };
+                          manualScorecardResult.recognitionLevel = recMap[level] || '0%';
+
+                          await persistSession('scorecard', {
+                            results: [],
+                            complete: true,
+                            scorecardResult: manualScorecardResult,
+                          });
+
+                          localStorage.removeItem(MANUAL_ENTRY_KEY);
+                          setIsSubmitted(true);
+                          setCurrentPage('scorecard');
+                          toast({ title: "Scorecard generated", description: "Manual entry data has been processed successfully." });
+                        } catch (err: any) {
+                          console.error("Manual scorecard generation error:", err);
+                          toast({ title: "Generation Failed", description: "Could not generate scorecard from manual data.", variant: "destructive" });
+                        } finally {
+                          setIsSavingSession(false);
+                        }
+                      }}
+                      disabled={isSavingSession}
+                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors flex items-center justify-center gap-2"
+                      data-testid="button-generate-scorecard"
+                    >
+                      {isSavingSession ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating...</>
+                      ) : (
+                        <><Zap className="w-3.5 h-3.5" />Generate Scorecard</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentPage === 'scorecard' && (
             <div className="max-w-4xl mx-auto py-8">
               <div className="bg-[#1c1c1e] rounded-2xl p-8 border border-[#2c2c2e] shadow-xl">
                 <div className="flex items-center justify-between mb-8">

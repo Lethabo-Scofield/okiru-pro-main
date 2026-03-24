@@ -282,11 +282,64 @@ processorSessionSchema.set("toJSON", {
   },
 });
 
+export interface Client {
+  id: string;
+  name: string;
+  financialYear: string;
+  industrySector: string | null;
+  eapProvince: string | null;
+  logo: string | null;
+  revenue: number;
+  npat: number;
+  leviableAmount: number;
+  organizationId: string | null;
+  createdByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InsertClient {
+  name: string;
+  financialYear?: string;
+  industrySector?: string | null;
+  eapProvince?: string | null;
+  revenue?: number;
+  npat?: number;
+  leviableAmount?: number;
+}
+
+const clientSchema = new Schema({
+  clientId: { type: String, required: true, unique: true, index: true },
+  name: { type: String, required: true },
+  financialYear: { type: String, default: () => new Date().getFullYear().toString() },
+  industrySector: { type: String, default: null },
+  eapProvince: { type: String, default: null },
+  logo: { type: String, default: null },
+  revenue: { type: Number, default: 0 },
+  npat: { type: Number, default: 0 },
+  leviableAmount: { type: Number, default: 0 },
+  organizationId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+clientSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.clientId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
 export const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 export const TemplateModel = mongoose.models.Template || mongoose.model("Template", templateSchema);
 export const CalculatorConfigModel = mongoose.models.CalculatorConfig || mongoose.model("CalculatorConfig", calculatorConfigSchema);
 export const ConversationModel = mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema);
 export const MessageModel = mongoose.models.Message || mongoose.model("Message", messageSchema);
 export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
+export const ClientModel = mongoose.models.Client || mongoose.model("Client", clientSchema);
 
 export { getNextSequence };

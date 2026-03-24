@@ -38,6 +38,9 @@ Full-stack Vite + Express application for B-BBEE compliance management. Migrated
 - Protected routes: `/dashboard`, `/builder`, `/processor`, `/toolkit/:clientId`
 - Guest-only routes: `/` (landing), `/auth` (login/register)
 - 404 page is auth-aware: links to Dashboard if logged in, Home if not
+- Clients (companies) are stored in MongoDB `clients` collection with full CRUD via `/api/clients` endpoints
+- `ClientModel` in `shared/schema.ts` stores: clientId, name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, organizationId, createdByUserId
+- Both Express (`server/routes.ts`) and Vercel (`api/[...path].ts`) use MongoDB-backed client routes
 - Toolkit client data (ownership, management, skills, procurement) will move to ArangoDB (not yet implemented)
 
 ## Registration Wizard (4-step flow)
@@ -62,9 +65,27 @@ Full-stack Vite + Express application for B-BBEE compliance management. Migrated
 - **Saved Drafts system**: When starting a new template or loading a repo template while having unfinished work, an Instagram-style prompt appears ("Save your work?") offering "Save to Drafts" or "Discard". Up to 5 drafts stored in `okiru-entity-drafts` (localStorage). Drafts visible in the left sidebar Entities tab with Resume + delete. Amber draft count badge shows in the header. `guardedNew()` intercepts `startNew` and `loadTemplateFromRepo`. URL-param template loads bypass the guard via `_loadTemplateFromRepo`.
 - Onboarding tour (`src/components/OnboardingTour.tsx`): welcome modal + 5-step guided tour for new users. Completion tracked per-user in localStorage (`okiru-onboarding-complete:{userId}`). Help button (?) in dashboard header replays tour. Dismissing (X/backdrop) does not mark as complete; only explicit skip or finishing all steps does.
 - Vercel API (`api/[...path].ts`) includes middleware to preserve pre-parsed request body for proper POST/PUT handling in serverless environment
-- Vercel API gracefully handles missing MONGODB_URI: auth uses session-only mode (any credentials accepted), templates use in-memory storage with 3 starter templates
+- Vercel API requires MONGODB_URI: returns 503 if database not available (no broken no-DB auth fallback)
+- Vercel auth synced with Replit server: organization validation, subscription ID checks, case-insensitive login lookup, proper field extraction
+- Vercel `REGISTERED_ORGANIZATIONS` mirrors `server/routes.ts` config (org + subscription ID validation)
 - Vercel routing (`vercel.json`) uses explicit `routes` array: API routes → catch-all serverless function, then filesystem, then SPA fallback to `index.html`
 - `api/tsconfig.json` uses ES2020 modules (matching `api/package.json` type: module)
+
+## Processor Sessions API
+- `GET /api/processor-sessions` returns lightweight summaries (no base64 file content, no logo, no extraction data payloads) using MongoDB projection for performance
+- `GET /api/processor-sessions/:sessionId` returns full session data (used when loading a session for editing)
+- `POST /api/processor-sessions` upserts a session (creates or updates by sessionId)
+- `DELETE /api/processor-sessions/:sessionId` deletes a session
+
+## Document Processor — Manual Entry Tab
+- Manual Entry step added between Extract and Scorecard in the processor wizard
+- Allows users to enter B-BBEE metrics directly without document extraction
+- Form sections: Ownership Metrics (% black, % black female), Management Control (% board, % exec), Skills Development (spend R, learnerships count)
+- Custom Entity Targets: dynamic add/remove rows with name + target value
+- Data persisted to localStorage (`okiru-manual-entry-data`) for cross-session persistence
+- On submit: validates all fields, generates scorecard result, saves to server via `/api/processor-sessions` with `scorecardResult`, navigates to Scorecard step
+- "Skip to Manual Entry" link available from the Upload step
+- Scoring uses simplified proportional calculation against pillar targets (Ownership 25, Management 19, Skills 25)
 
 ## B-BBEE Scorecard — RCOGP Generic Codes Alignment (March 2026)
 

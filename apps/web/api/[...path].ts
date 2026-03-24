@@ -108,10 +108,60 @@ const calculatorConfigSchema = new Schema({
 });
 calculatorConfigSchema.set("toJSON", { virtuals: true, transform: (_d: any, ret: any) => { ret.id = ret._id; delete ret._id; delete ret.__v; return ret; } });
 
+const clientSchema = new Schema({
+  clientId: { type: String, required: true, unique: true, index: true },
+  name: { type: String, required: true },
+  financialYear: { type: String, default: () => new Date().getFullYear().toString() },
+  industrySector: { type: String, default: null },
+  eapProvince: { type: String, default: null },
+  logo: { type: String, default: null },
+  revenue: { type: Number, default: 0 },
+  npat: { type: Number, default: 0 },
+  leviableAmount: { type: Number, default: 0 },
+  organizationId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+clientSchema.set("toJSON", { virtuals: true, transform: (_d: any, ret: any) => { ret.id = ret.clientId; delete ret._id; delete ret.__v; return ret; } });
+
+const processorSessionSchema = new Schema({
+  sessionId: { type: String, required: true, unique: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
+  companyInfo: {
+    name: { type: String, required: true },
+    registrationNumber: { type: String, default: '' },
+    sector: { type: String, default: '' },
+    annualTurnover: { type: String, default: '' },
+    employees: { type: String, default: '' },
+    financialYearEnd: { type: String, default: '' },
+    address: { type: String, default: '' },
+    contactName: { type: String, default: '' },
+    contactEmail: { type: String, default: '' },
+    contactPhone: { type: String, default: '' },
+    currentBBEELevel: { type: String, default: '' },
+    notes: { type: String, default: '' },
+    logo: { type: String, default: '' },
+  },
+  currentStep: { type: String, default: 'company-info' },
+  filesData: { type: Schema.Types.Mixed, default: [] },
+  fileClassifications: { type: Schema.Types.Mixed, default: {} },
+  extractionResults: { type: Schema.Types.Mixed, default: [] },
+  docStatuses: { type: Schema.Types.Mixed, default: {} },
+  isComplete: { type: Boolean, default: false },
+  scorecardResult: { type: Schema.Types.Mixed, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+processorSessionSchema.set("toJSON", { virtuals: true, transform: (_d: any, ret: any) => { ret.id = ret.sessionId; delete ret._id; delete ret.__v; return ret; } });
+
 const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 const TemplateModel = mongoose.models.Template || mongoose.model("Template", templateSchema);
 const CounterModel = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 const CalculatorConfigModel = mongoose.models.CalculatorConfig || mongoose.model("CalculatorConfig", calculatorConfigSchema);
+const ClientModel = mongoose.models.Client || mongoose.model("Client", clientSchema);
+const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
 
 async function getNextSequence(name: string): Promise<number> {
   const counter = await CounterModel.findByIdAndUpdate(name, { $inc: { seq: 1 } }, { new: true, upsert: true });
@@ -195,35 +245,61 @@ async function getApp(): Promise<express.Express> {
     }
     app.use(session(sessionConfig));
 
+    const REGISTERED_ORGANIZATIONS = [
+      { id: "okiru", name: "Okiru", subscriptionId: (process.env.OKIRU_SUB_ID || "OKR-2026-001").toUpperCase(), emailDomain: "okiru.co.za" },
+      { id: "param-solutions", name: "Param Solutions", subscriptionId: (process.env.PARAM_SUB_ID || "PRM-2026-001").toUpperCase(), emailDomain: "paramsolutions.co.za" },
+    ];
+
     app.get("/api/health", (_req, res) => {
       res.json({ status: "ok", timestamp: Date.now() });
     });
 
+    app.get("/api/organizations", (_req, res) => {
+      res.json(REGISTERED_ORGANIZATIONS.map(o => ({ id: o.id, name: o.name, emailDomain: o.emailDomain })));
+    });
+
     app.post("/api/auth/register", async (req, res) => {
       try {
-        const { username, password, fullName, email, organizationName } = req.body;
-        if (!username || !password) return res.status(400).json({ message: "Username and password are required" });
-        if (password.length < 4) return res.status(400).json({ message: "Password must be at least 4 characters" });
+        const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
 
-        if (isDbConnected) {
-          const existing = await UserModel.findOne({ username });
-          if (existing) return res.status(400).json({ message: "Username already taken" });
-          const hashedPassword = await bcrypt.hash(password, 8);
-          const doc = await UserModel.create({ username, password: hashedPassword, fullName: fullName || null, email: email || null, organizationName: organizationName || null, role: "user", organizationId: null, profilePicture: null });
-          const user = toUser(doc)!;
-          const safeUser = sanitizeUser(user);
-          (req.session as any).userId = user.id;
-          (req.session as any).userData = safeUser;
-          return res.json({ user: safeUser });
+        const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+        const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
+        const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+        const trimmedSubId = typeof subscriptionId === 'string' ? subscriptionId.trim().toUpperCase() : '';
+
+        if (!trimmedUsername || !password) return res.status(400).json({ message: "Username and password are required" });
+        if (trimmedUsername.length < 3) return res.status(400).json({ message: "Username must be at least 3 characters" });
+        if (password.length < 4) return res.status(400).json({ message: "Password must be at least 4 characters" });
+        if (!trimmedFullName) return res.status(400).json({ message: "Full name is required" });
+        if (!trimmedEmail) return res.status(400).json({ message: "Email is required" });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) return res.status(400).json({ message: "Invalid email address" });
+        if (!organizationId) return res.status(400).json({ message: "Organization is required" });
+
+        const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
+        if (!org) return res.status(400).json({ message: "Invalid organization selected" });
+        if (!trimmedSubId || trimmedSubId !== org.subscriptionId) return res.status(400).json({ message: "Invalid subscription ID for this organization" });
+
+        const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
+        const safeRole = ALLOWED_ROLES.includes(role) ? role : "auditor";
+
+        if (!isDbConnected) {
+          return res.status(503).json({ message: "Database is not available. Please try again later." });
         }
 
-        const safeUser = { id: `user-${Date.now()}`, username, fullName: fullName || null, email: email || null, role: "user", organizationId: null, organizationName: organizationName || null, profilePicture: null };
-        const token = signToken(safeUser);
-        res.cookie("okiru_auth", token, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
+        const existing = await UserModel.findOne({ username: trimmedUsername });
+        if (existing) return res.status(400).json({ message: "Username already taken" });
+        const existingEmail = await UserModel.findOne({ email: trimmedEmail });
+        if (existingEmail) return res.status(400).json({ message: "Email already registered" });
+        const hashedPassword = await bcrypt.hash(password, 8);
+        const doc = await UserModel.create({ username: trimmedUsername, password: hashedPassword, fullName: trimmedFullName, email: trimmedEmail, organizationName: org.name, organizationId: org.id, role: safeRole, profilePicture: null });
+        const user = toUser(doc)!;
+        const safeUser = sanitizeUser(user);
+        (req.session as any).userId = user.id;
+        (req.session as any).userData = safeUser;
         res.json({ user: safeUser });
       } catch (error: any) {
         console.error("Register error:", error);
-        res.status(500).json({ message: "Registration failed" });
+        res.status(500).json({ message: error.message || "Registration failed" });
       }
     });
 
@@ -233,25 +309,28 @@ async function getApp(): Promise<express.Express> {
         const loginId = username || email;
         if (!loginId || !password) return res.status(400).json({ message: "Username/email and password are required" });
 
-        if (isDbConnected) {
-          const doc = await UserModel.findOne({ $or: [{ username: loginId }, { email: loginId.toLowerCase() }] });
-          if (!doc) return res.status(401).json({ message: "Invalid username or password" });
-          const user = toUser(doc)!;
-          const valid = await bcrypt.compare(password, user.password);
-          if (!valid) return res.status(401).json({ message: "Invalid username or password" });
-          const safeUser = sanitizeUser(user);
-          (req.session as any).userId = user.id;
-          (req.session as any).userData = safeUser;
-          return res.json({ user: safeUser });
+        if (!isDbConnected) {
+          return res.status(503).json({ message: "Database is not available. Please try again later." });
         }
 
-        const safeUser = { id: `user-${Date.now()}`, username: loginId, fullName: null, email: null, role: "user", organizationId: null, organizationName: null, profilePicture: null };
-        const token = signToken(safeUser);
-        res.cookie("okiru_auth", token, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
-        res.json({ user: safeUser });
+        const loginLower = loginId.toLowerCase();
+        const doc = await UserModel.findOne({
+          $or: [
+            { username: { $regex: new RegExp(`^${loginId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { email: loginLower }
+          ]
+        });
+        if (!doc) return res.status(401).json({ message: "Invalid username or password" });
+        const user = toUser(doc)!;
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(401).json({ message: "Invalid username or password" });
+        const safeUser = sanitizeUser(user);
+        (req.session as any).userId = user.id;
+        (req.session as any).userData = safeUser;
+        return res.json({ user: safeUser });
       } catch (error: any) {
         console.error("Login error:", error);
-        res.status(500).json({ message: "Login failed" });
+        res.status(500).json({ message: error.message || "Login failed" });
       }
     });
 
@@ -648,57 +727,120 @@ Respond ONLY with a valid JSON array.`;
       }
     });
 
-    const companyProfiles: Record<string, any> = {
-      "C-10483": { name: "Moyo Retail (Pty) Ltd", industry: "Retail", revenue: 85000000, npat: 6200000, leviableAmount: 28000000 },
-      "C-21907": { name: "Karoo Telecom", industry: "Telecoms", revenue: 320000000, npat: 41000000, leviableAmount: 95000000 },
-      "C-88712": { name: "Umhlaba Insurance Group", industry: "Insurance", revenue: 540000000, npat: 72000000, leviableAmount: 160000000 },
-      "C-54011": { name: "Aurum Financial Services", industry: "Financial Services", revenue: 210000000, npat: 28000000, leviableAmount: 62000000 },
-      "C-66309": { name: "Blue Crane Logistics", industry: "Logistics", revenue: 125000000, npat: 9800000, leviableAmount: 38000000 },
-      "C-77201": { name: "Saffron Health Network", industry: "Healthcare", revenue: 190000000, npat: 22000000, leviableAmount: 55000000 },
-      "C-30118": { name: "Vula Energy Partners", industry: "Energy", revenue: 410000000, npat: 53000000, leviableAmount: 120000000 },
-      "C-91145": { name: "CapeTech Manufacturing", industry: "Manufacturing", revenue: 275000000, npat: 31000000, leviableAmount: 82000000 },
-    };
+    app.get("/api/clients", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const user = await UserModel.findById(userId);
+        const filter: any = {};
+        if (user?.organizationId) filter.organizationId = user.organizationId;
+        const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
+        res.json(clients.map((c: any) => c.toJSON()));
+      } catch (error: any) {
+        console.error("Error fetching clients:", error);
+        res.status(500).json({ error: "Failed to fetch clients" });
+      }
+    });
+
+    app.post("/api/clients", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
+        if (!name) return res.status(400).json({ error: "Client name is required" });
+        const user = await UserModel.findById(userId);
+        const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
+        const client = await ClientModel.create({
+          clientId,
+          name,
+          financialYear: financialYear || new Date().getFullYear().toString(),
+          industrySector: industrySector || null,
+          eapProvince: eapProvince || null,
+          revenue: revenue || 0,
+          npat: npat || 0,
+          leviableAmount: leviableAmount || 0,
+          organizationId: user?.organizationId || null,
+          createdByUserId: userId,
+        });
+        res.json(client.toJSON());
+      } catch (error: any) {
+        console.error("Error creating client:", error);
+        res.status(500).json({ error: "Failed to create client" });
+      }
+    });
+
+    app.get("/api/clients/:clientId", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const client = await ClientModel.findOne({ clientId: req.params.clientId });
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        res.json(client.toJSON());
+      } catch (error: any) {
+        res.status(500).json({ error: "Failed to fetch client" });
+      }
+    });
+
+    app.patch("/api/clients/:clientId", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const updates: any = { updatedAt: new Date() };
+        const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+        for (const key of allowed) {
+          if (req.body[key] !== undefined) updates[key] = req.body[key];
+        }
+        const client = await ClientModel.findOneAndUpdate(
+          { clientId: req.params.clientId },
+          updates,
+          { new: true }
+        );
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        res.json(client.toJSON());
+      } catch (error: any) {
+        res.status(500).json({ error: "Failed to update client" });
+      }
+    });
+
+    app.delete("/api/clients/:clientId", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+        if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: "Failed to delete client" });
+      }
+    });
 
     app.get("/api/clients/:clientId/data", async (req, res) => {
       try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
         const { clientId } = req.params;
-        const profile = companyProfiles[clientId];
-        if (!profile) return res.status(404).json({ error: "Client not found" });
+        const client = await ClientModel.findOne({ clientId });
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        const c = client.toJSON();
         res.json({
-          client: { id: clientId, name: profile.name, financialYear: "2025", revenue: profile.revenue, npat: profile.npat, leviableAmount: profile.leviableAmount, industrySector: profile.industry, eapProvince: "National" },
-          ownership: { id: `own-${clientId}`, shareholders: [
-            { id: "sh-1", name: "Black Equity Trust", ownershipType: "trust", blackOwnership: 30, blackWomenOwnership: 12, shares: 3000, shareValue: 300000 },
-            { id: "sh-2", name: "Management Consortium", ownershipType: "shareholder", blackOwnership: 15, blackWomenOwnership: 8, shares: 1500, shareValue: 150000 },
-          ], companyValue: profile.revenue * 1.2, outstandingDebt: profile.revenue * 0.15, yearsHeld: 5 },
-          management: { employees: [
-            { id: "emp-1", name: "Thabo Mokoena", gender: "male", race: "african", designation: "top_management", isDisabled: false },
-            { id: "emp-2", name: "Naledi Khumalo", gender: "female", race: "african", designation: "senior_management", isDisabled: false },
-            { id: "emp-3", name: "Pieter van der Merwe", gender: "male", race: "white", designation: "top_management", isDisabled: false },
-            { id: "emp-4", name: "Priya Naidoo", gender: "female", race: "indian", designation: "middle_management", isDisabled: false },
-            { id: "emp-5", name: "Sizwe Dlamini", gender: "male", race: "african", designation: "junior_management", isDisabled: true },
-          ] },
-          skills: { leviableAmount: profile.leviableAmount, trainingPrograms: [
-            { id: "tp-1", name: "Leadership Development", category: "learnerships", cost: profile.leviableAmount * 0.02, employeeId: "emp-1", isEmployed: true, isBlack: true, gender: "male", race: "african", isDisabled: false },
-            { id: "tp-2", name: "Technical Skills Programme", category: "skills_programmes", cost: profile.leviableAmount * 0.015, employeeId: "emp-2", isEmployed: true, isBlack: true, gender: "female", race: "african", isDisabled: false },
-            { id: "tp-3", name: "Bursary Programme", category: "bursaries", cost: profile.leviableAmount * 0.01, employeeId: null, isEmployed: false, isBlack: true, gender: "female", race: "african", isDisabled: false },
-          ] },
-          procurement: { tmps: profile.revenue * 0.6, suppliers: [
-            { id: "sup-1", name: "Isizwe Supplies", beeLevel: 1, blackOwnership: 51, blackWomenOwnership: 30, youthOwnership: 0, disabledOwnership: 0, enterpriseType: "eme", spend: profile.revenue * 0.08 },
-            { id: "sup-2", name: "National Distributors", beeLevel: 3, blackOwnership: 26, blackWomenOwnership: 10, youthOwnership: 5, disabledOwnership: 0, enterpriseType: "qse", spend: profile.revenue * 0.12 },
-            { id: "sup-3", name: "Tech Solutions SA", beeLevel: 2, blackOwnership: 40, blackWomenOwnership: 15, youthOwnership: 0, disabledOwnership: 0, enterpriseType: "generic", spend: profile.revenue * 0.05 },
-          ] },
-          esd: { contributions: [
-            { id: "esd-1", beneficiary: "Township Micro-Enterprise Fund", type: "grant", amount: profile.npat * 0.02, category: "enterprise_development" },
-            { id: "esd-2", beneficiary: "Youth Business Incubator", type: "loan", amount: profile.npat * 0.015, category: "supplier_development" },
-          ] },
-          sed: { contributions: [
-            { id: "sed-1", beneficiary: "Local School Feeding Scheme", type: "monetary", amount: profile.npat * 0.01, category: "education" },
-            { id: "sed-2", beneficiary: "Community Health Clinic", type: "monetary", amount: profile.npat * 0.008, category: "health" },
-          ] },
-          financialYears: [
-            { id: "fy-1", year: "2024", revenue: profile.revenue * 0.9, npat: profile.npat * 0.85, indicativeNpat: null, notes: "" },
-            { id: "fy-2", year: "2023", revenue: profile.revenue * 0.8, npat: profile.npat * 0.75, indicativeNpat: null, notes: "" },
-          ],
+          client: {
+            id: c.id,
+            name: c.name,
+            financialYear: c.financialYear,
+            revenue: c.revenue,
+            npat: c.npat,
+            leviableAmount: c.leviableAmount,
+            industrySector: c.industrySector,
+            eapProvince: c.eapProvince || "National",
+            industryNorm: undefined,
+          },
+          ownership: { id: `own-${clientId}`, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
+          management: { employees: [] },
+          skills: { leviableAmount: c.leviableAmount || 0, trainingPrograms: [] },
+          procurement: { tmps: 0, suppliers: [] },
+          esd: { contributions: [] },
+          sed: { contributions: [] },
+          financialYears: [],
           scenarios: [],
         });
       } catch (error: any) {
@@ -758,6 +900,122 @@ Respond ONLY with a valid JSON array.`;
       } catch (error: any) {
         console.error("Error generating suggestions:", error);
         res.status(500).json({ error: "Failed to generate suggestions" });
+      }
+    });
+
+    app.get("/api/processor-sessions", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const user = await UserModel.findById(userId);
+        const orgId = user?.organizationId || null;
+        const query = orgId ? { organizationId: orgId } : { createdByUserId: userId };
+        const sessions = await ProcessorSessionModel.find(query)
+          .select({
+            sessionId: 1,
+            companyInfo: 1,
+            currentStep: 1,
+            isComplete: 1,
+            'filesData.id': 1,
+            'filesData.name': 1,
+            'filesData.size': 1,
+            'filesData.type': 1,
+            'extractionResults.fileName': 1,
+            'extractionResults.templateName': 1,
+            createdAt: 1,
+            updatedAt: 1,
+          })
+          .sort({ updatedAt: -1 })
+          .lean();
+        const lightweight = sessions.map((s: any) => ({
+          id: s.sessionId,
+          sessionId: s.sessionId,
+          companyInfo: {
+            name: s.companyInfo?.name || '',
+            sector: s.companyInfo?.sector || '',
+            registrationNumber: s.companyInfo?.registrationNumber || '',
+            annualTurnover: s.companyInfo?.annualTurnover || '',
+            employees: s.companyInfo?.employees || '',
+            contactName: s.companyInfo?.contactName || '',
+            contactEmail: s.companyInfo?.contactEmail || '',
+            currentBBEELevel: s.companyInfo?.currentBBEELevel || '',
+          },
+          currentStep: s.currentStep,
+          isComplete: s.isComplete,
+          filesData: (s.filesData || []).map((f: any) => ({ id: f.id, name: f.name, size: f.size, type: f.type })),
+          extractionResults: (s.extractionResults || []).map((r: any) => ({ fileName: r.fileName, templateName: r.templateName })),
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+        }));
+        res.json(lightweight);
+      } catch (error: any) {
+        console.error("Error fetching processor sessions:", error);
+        res.status(500).json({ error: "Failed to fetch sessions" });
+      }
+    });
+
+    app.get("/api/processor-sessions/:sessionId", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const { sessionId } = req.params;
+        const doc = await ProcessorSessionModel.findOne({ sessionId }).lean() as any;
+        if (!doc) return res.status(404).json({ error: "Session not found" });
+        res.json({ ...doc, id: doc.sessionId });
+      } catch (error: any) {
+        console.error("Error fetching processor session:", error);
+        res.status(500).json({ error: "Failed to fetch session" });
+      }
+    });
+
+    app.post("/api/processor-sessions", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const user = await UserModel.findById(userId);
+        const orgId = user?.organizationId || null;
+        const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult } = req.body;
+        if (!sessionId || !companyInfo?.name) {
+          return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
+        }
+        const updateData: any = {
+          sessionId,
+          organizationId: orgId,
+          createdByUserId: userId,
+          companyInfo,
+          currentStep: currentStep || 'upload',
+          filesData: filesData || [],
+          fileClassifications: fileClassifications || {},
+          extractionResults: extractionResults || [],
+          docStatuses: docStatuses || {},
+          isComplete: isComplete || false,
+          updatedAt: new Date(),
+        };
+        if (scorecardResult !== undefined) {
+          updateData.scorecardResult = scorecardResult;
+        }
+        const doc = await ProcessorSessionModel.findOneAndUpdate(
+          { sessionId },
+          updateData,
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
+      } catch (error: any) {
+        console.error("Error saving processor session:", error);
+        res.status(500).json({ error: "Failed to save session" });
+      }
+    });
+
+    app.delete("/api/processor-sessions/:sessionId", async (req, res) => {
+      try {
+        const userId = (req.session as any)?.userId;
+        if (!userId) return res.status(401).json({ error: "Not authenticated" });
+        const { sessionId } = req.params;
+        await ProcessorSessionModel.deleteOne({ sessionId });
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error("Error deleting processor session:", error);
+        res.status(500).json({ error: "Failed to delete session" });
       }
     });
 
