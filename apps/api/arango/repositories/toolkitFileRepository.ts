@@ -15,11 +15,11 @@ export interface ToolkitFile {
 }
 
 export class ToolkitFileRepository {
-  private db: Database;
-
-  constructor() {
-    this.db = getArangoDB();
+  private get db(): Database {
+    return getArangoDB();
   }
+
+  constructor() {}
 
   /**
    * Save a new toolkit file to ArangoDB, replacing any existing file
