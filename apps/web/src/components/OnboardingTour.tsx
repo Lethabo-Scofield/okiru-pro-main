@@ -21,15 +21,15 @@ const steps: TourStep[] = [
     title: "Welcome to Okiru",
     description: "Okiru helps you manage B-BBEE compliance for South African businesses. Let's take a quick tour of what you can do here.",
     icon: Rocket,
-    iconColor: "text-purple-400",
-    iconBg: "bg-purple-500/15",
+    iconColor: "text-[#d1d1d6]",
+    iconBg: "bg-white/[0.08]",
   },
   {
     title: "Entity Templates",
     description: "Start by creating entity templates — these define what data to extract from your compliance documents. Use AI to generate entities or build them manually.",
     icon: Sparkles,
-    iconColor: "text-purple-400",
-    iconBg: "bg-purple-500/15",
+    iconColor: "text-[#d1d1d6]",
+    iconBg: "bg-white/[0.08]",
     highlight: "card-create-entity",
   },
   {
@@ -109,8 +109,8 @@ export function OnboardingWelcome({ onStart, onSkip, userName }: OnboardingWelco
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="onboarding-welcome-title" aria-describedby="onboarding-welcome-desc" className="relative w-full max-w-md mx-4 scale-in">
         <div className="rounded-3xl bg-[#1c1c1e] p-8 shadow-2xl" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }}>
           <div className="text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-400/10 ring-1 ring-purple-500/20 flex items-center justify-center mx-auto mb-6">
-              <Rocket className="w-7 h-7 text-purple-400" />
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-white/[0.06] to-white/[0.05] ring-1 ring-white/[0.08] flex items-center justify-center mx-auto mb-6">
+              <Rocket className="w-7 h-7 text-[#d1d1d6]" />
             </div>
             <h2 id="onboarding-welcome-title" className="text-[22px] font-bold tracking-tight text-white mb-2">
               {userName ? `Welcome, ${userName.split(' ')[0]}!` : 'Welcome to Okiru!'}
@@ -122,7 +122,7 @@ export function OnboardingWelcome({ onStart, onSkip, userName }: OnboardingWelco
             <div className="flex flex-col gap-3">
               <button
                 onClick={onStart}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl text-[14px] font-semibold smooth press-sm shadow-sm shadow-purple-500/20 flex items-center justify-center gap-2"
+                className="w-full py-3 bg-white/[0.12] hover:bg-white/[0.18] text-white rounded-2xl text-[14px] font-semibold smooth press-sm shadow-sm shadow-black/10 flex items-center justify-center gap-2"
                 data-testid="button-start-tour"
               >
                 <Sparkles className="w-4 h-4" />
@@ -213,7 +213,7 @@ export function OnboardingTour({ onComplete, onDismiss }: OnboardingTourProps) {
                 <div
                   key={i}
                   className={`h-1.5 rounded-full smooth ${
-                    i === currentStep ? 'w-5 bg-purple-500' : i < currentStep ? 'w-1.5 bg-purple-500/40' : 'w-1.5 bg-[#3a3a3c]'
+                    i === currentStep ? 'w-5 bg-[#636366]' : i < currentStep ? 'w-1.5 bg-white/[0.16]' : 'w-1.5 bg-[#3a3a3c]'
                   }`}
                 />
               ))}
@@ -227,7 +227,7 @@ export function OnboardingTour({ onComplete, onDismiss }: OnboardingTourProps) {
               )}
               <button
                 onClick={next}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[13px] font-semibold smooth press-sm shadow-sm shadow-purple-500/20"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-white/[0.12] hover:bg-white/[0.18] text-white rounded-xl text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10"
                 data-testid="button-tour-next"
               >
                 {isLast ? 'Get Started' : 'Next'}
@@ -237,7 +237,7 @@ export function OnboardingTour({ onComplete, onDismiss }: OnboardingTourProps) {
           </div>
 
           <div className="h-1 bg-[#2c2c2e]">
-            <div className="h-full bg-purple-500 smooth" style={{ width: `${((currentStep + 1) / steps.length) * 100}%`, transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)' }} />
+            <div className="h-full bg-[#636366] smooth" style={{ width: `${((currentStep + 1) / steps.length) * 100}%`, transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)' }} />
           </div>
         </div>
       </div>

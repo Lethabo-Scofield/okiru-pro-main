@@ -6,7 +6,7 @@ export default function NotFound() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="h-10 w-10 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+        <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

@@ -7,6 +7,7 @@ export default function LandingWrapper() {
   return (
     <LandingPage
       onNavigateAuth={() => navigate("/auth")}
+      onNavigateRegister={() => navigate("/auth?mode=register")}
     />
   );
 }

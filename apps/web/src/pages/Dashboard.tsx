@@ -4,7 +4,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink } from 'lucide-react';
-import { starterTemplates as staticTemplates } from '@/data/starterTemplates';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 
 interface ProcessorSession {
@@ -58,14 +57,6 @@ function statusPillClass(status: string) {
   return `${base} bg-white/[0.06] text-[#8e8e93]`;
 }
 
-const categoryColor: Record<string, string> = {
-  "B-BBEE": "bg-emerald-500/15 text-emerald-400",
-  Finance: "bg-purple-500/15 text-purple-400",
-  Compliance: "bg-purple-500/10 text-purple-400",
-  Governance: "bg-indigo-500/15 text-indigo-400",
-  Corporate: "bg-white/[0.06] text-[#8e8e93]",
-};
-
 export default function Dashboard() {
   const search = useSearch();
   const initialTab = new URLSearchParams(search).get('tab') as Page | null;
@@ -82,7 +73,6 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [storedTemplates, setStoredTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [publishingKey, setPublishingKey] = useState<string | null>(null);
   const { needsOnboarding, showTour, startTour, completeTour, dismissTour } = useOnboarding(user?.id);
   const [processorSessions, setProcessorSessions] = useState<ProcessorSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -169,37 +159,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  const useTemplate = useCallback(async (template: typeof staticTemplates[0]) => {
-    if (publishingKey) return;
-    setPublishingKey(template.key);
-    try {
-      const templateEntities = template.entities.map(e => ({
-        label: e.label, definition: e.definition, synonyms: e.synonyms,
-        positives: e.positives, negatives: e.negatives, zones: e.zones,
-        keywords: e.keywords, pattern: e.pattern,
-      }));
-      const freshRes = await fetch("/api/templates");
-      const freshTemplates: StoredTemplate[] = freshRes.ok ? await freshRes.json() : [];
-      const existing = freshTemplates.find(t => t.name === template.name);
-      const url = existing ? `/api/templates/${existing.id}` : "/api/templates";
-      const method = existing ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: template.name, description: template.description, version: "1.0", entities: templateEntities }),
-      });
-      if (!res.ok) throw new Error("Failed to publish");
-      await fetchTemplates();
-      toast({ title: "Template ready", description: `"${template.name}" published — select it in Document Processor` });
-      navigate("/processor");
-    } catch (err) {
-      console.error("Error publishing starter template:", err);
-      toast({ title: "Publish failed", description: "Could not save template to repository", variant: "destructive" });
-    } finally {
-      setPublishingKey(null);
-    }
-  }, [publishingKey, fetchTemplates, toast, navigate]);
-
   const allCompanies = useMemo<CompanyRow[]>(() => {
     return processorSessions.map(s => ({
       name: s.companyInfo.name,
@@ -233,11 +192,6 @@ export default function Dashboard() {
     }
     return result;
   }, [allCompanies, companySearch, industryFilter, statusFilter, rowOrder]);
-
-  const filteredStaticTemplates = useMemo(() => {
-    const q = templateSearch.toLowerCase();
-    return q ? staticTemplates.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q))) : staticTemplates;
-  }, [templateSearch]);
 
   const filteredStoredTemplates = useMemo(() => {
     const q = templateSearch.toLowerCase();
@@ -320,7 +274,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setPage('home'); startTour(); }}
-              className="p-2 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-purple-400"
+              className="p-2 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
               title="Take a tour"
               aria-label="Take a guided tour"
               data-testid="button-help-tour"
@@ -328,7 +282,7 @@ export default function Dashboard() {
               <HelpCircle className="h-4 w-4" />
             </button>
             <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
-              <span className="inline-flex h-5 w-5 rounded-full bg-purple-600 items-center justify-center text-white font-semibold text-[9px]">
+              <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.12] items-center justify-center text-white font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
               <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
@@ -365,8 +319,8 @@ export default function Dashboard() {
                     <div className="text-[15px] font-semibold tracking-tight text-white">Entity Templates</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse, edit, or create templates.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-purple-500/10 grid place-items-center group-hover:bg-purple-500/15 smooth">
-                    <Plus className="h-5 w-5 text-purple-400" />
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                    <Plus className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -384,8 +338,8 @@ export default function Dashboard() {
                     <div className="text-[15px] font-semibold tracking-tight text-white">Upload Documents</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Process PDFs, images, and more.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-purple-500/10 grid place-items-center group-hover:bg-purple-500/15 smooth">
-                    <FileText className="h-5 w-5 text-purple-400" />
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                    <FileText className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -403,8 +357,8 @@ export default function Dashboard() {
                     <div className="text-[15px] font-semibold tracking-tight text-white">View Scorecards</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse companies and compliance.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-purple-500/10 grid place-items-center group-hover:bg-purple-500/15 smooth">
-                    <Building2 className="h-5 w-5 text-purple-400" />
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                    <Building2 className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -434,7 +388,7 @@ export default function Dashboard() {
                 <p className="text-[14px] text-[#98989f] mt-1">Start from a template, then customise fields & extraction rules.</p>
               </div>
               <Link href="/builder"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-500 text-[13px] font-semibold smooth press-sm shrink-0 shadow-sm shadow-purple-500/20"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.12] text-white hover:bg-white/[0.18] text-[13px] font-semibold smooth press-sm shrink-0 shadow-sm shadow-black/10"
                 data-testid="button-build-entity"
               >
                 <Sparkles className="h-4 w-4" />
@@ -448,7 +402,7 @@ export default function Dashboard() {
                 <input
                   type="text"
                   placeholder="Search templates..."
-                  className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-purple-500/30 smooth placeholder:text-[#48484a]"
+                  className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
                   data-testid="input-template-search"
@@ -478,7 +432,7 @@ export default function Dashboard() {
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Your Templates</h2>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-semibold">{filteredStoredTemplates.length}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-[#d1d1d6] font-semibold">{filteredStoredTemplates.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {filteredStoredTemplates.map((t, idx) => (
@@ -488,7 +442,7 @@ export default function Dashboard() {
                           <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
                           <div className="text-[11px] text-[#98989f] mt-1">{t.entities.length} entities &middot; v{t.version || '1.0'}</div>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-semibold shrink-0">Custom</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-[#d1d1d6] font-semibold shrink-0">Custom</span>
                       </div>
                       <p className="text-[13px] text-[#98989f] mt-3 leading-relaxed">{t.description || 'Custom entity template'}</p>
 
@@ -513,17 +467,17 @@ export default function Dashboard() {
                           </button>
                           <button
                             onClick={() => { setEditingTemplateId(t.id); navigate(`/builder?template=${t.id}`); }}
-                            className="p-2 text-[#636366] hover:text-purple-400 hover:bg-purple-500/10 rounded-lg smooth press-sm"
+                            className="p-2 text-[#636366] hover:text-[#d1d1d6] hover:bg-white/[0.18]/10 rounded-lg smooth press-sm"
                             title="Edit template"
                             data-testid={`button-edit-${t.id}`}
                           >
                             {editingTemplateId === t.id
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#d1d1d6]" />
                               : <Pencil className="h-3.5 w-3.5" />}
                           </button>
                         </div>
                         <Link href="/processor"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-500 text-[12px] font-semibold smooth press-sm shadow-sm shadow-purple-500/15"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/[0.12] text-white hover:bg-white/[0.18] text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/8"
                           data-testid={`button-use-${t.id}`}
                         >
                           Use Template
@@ -536,60 +490,11 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="mb-4">
-              <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Starter Templates</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="templates-grid">
-              {filteredStaticTemplates.map((t, idx) => (
-                <div key={t.key} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`template-${t.key}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
-                      <div className={`text-[10px] font-semibold mt-1.5 px-2 py-0.5 rounded-full inline-block ${categoryColor[t.category] || 'bg-white/[0.06] text-[#8e8e93]'}`}>{t.category}</div>
-                    </div>
-                  </div>
-                  <p className="text-[13px] text-[#98989f] mt-3 leading-relaxed">{t.description}</p>
-
-                  <div className="mt-4">
-                    <div className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">Entities</div>
-                    <ul className="mt-2 space-y-1 text-[12px] text-[#98989f]">
-                      {t.entities.slice(0, 4).map((e, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className="h-1 w-1 rounded-full bg-purple-400 shrink-0" />
-                          {e.label}
-                        </li>
-                      ))}
-                      {t.entities.length > 4 && <li className="text-[#636366] font-medium">+ {t.entities.length - 4} more</li>}
-                    </ul>
-                  </div>
-
-                  <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                    <Link href={`/builder?starter=${t.key}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-[12px] font-medium smooth press-sm text-[#8e8e93]"
-                      data-testid={`button-edit-${t.key}`}
-                    >
-                      Edit
-                      <Pencil className="h-3 w-3 text-[#636366]" />
-                    </Link>
-                    <button
-                      onClick={() => useTemplate(t)}
-                      disabled={publishingKey === t.key}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-500 text-[12px] font-semibold smooth press-sm shadow-sm shadow-purple-500/15 disabled:opacity-60"
-                      data-testid={`button-use-${t.key}`}
-                    >
-                      {publishingKey === t.key ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                      {publishingKey === t.key ? "Publishing…" : "Use Template"}
-                      {publishingKey !== t.key && <ChevronRight className="h-3 w-3" />}
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {filteredStaticTemplates.length === 0 && filteredStoredTemplates.length === 0 && (
-                <div className="rounded-2xl bg-[#1c1c1e] p-8 text-[14px] text-[#636366] col-span-full text-center fade-in">
-                  No templates found. Try a different search.
-                </div>
-              )}
-            </div>
+            {filteredStoredTemplates.length === 0 && (
+              <div className="rounded-2xl bg-[#1c1c1e] p-8 text-[14px] text-[#636366] text-center fade-in" data-testid="templates-empty">
+                No templates found. Try a different search.
+              </div>
+            )}
           </section>
         )}
 
@@ -613,7 +518,7 @@ export default function Dashboard() {
               </div>
               <Link
                 href="/processor"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-purple-500/20 shrink-0 mt-8"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-8"
                 data-testid="button-new-assessment"
               >
                 <UploadCloud className="h-4 w-4" />
@@ -654,7 +559,7 @@ export default function Dashboard() {
                       id="companySearch"
                       type="text"
                       placeholder="Search by company name or ID..."
-                      className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-purple-500/30 smooth placeholder:text-[#48484a]"
+                      className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                       value={companySearch}
                       onChange={(e) => setCompanySearch(e.target.value)}
                       data-testid="input-company-search"
@@ -667,7 +572,7 @@ export default function Dashboard() {
                     <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="industryFilter">Industry</label>
                     <select
                       id="industryFilter"
-                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-purple-500/30 smooth"
+                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
                       value={industryFilter}
                       onChange={(e) => setIndustryFilter(e.target.value)}
                       data-testid="select-industry"
@@ -680,7 +585,7 @@ export default function Dashboard() {
                     <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="statusFilter">Status</label>
                     <select
                       id="statusFilter"
-                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-purple-500/30 smooth"
+                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
                       data-testid="select-status"
@@ -704,7 +609,7 @@ export default function Dashboard() {
 
               {loadingSessions ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-[#d1d1d6] animate-spin" />
                   <p className="text-[#8e8e93] text-sm">Loading assessments...</p>
                 </div>
               ) : (
@@ -812,7 +717,7 @@ export default function Dashboard() {
                                   ) : (
                                     <Link
                                       href={`/processor?session=${c.sessionId}`}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[12px] font-semibold smooth press-sm"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white text-[12px] font-semibold smooth press-sm"
                                       data-testid={`button-resume-${c.id}`}
                                     >
                                       <Play className="h-2.5 w-2.5" />
@@ -832,7 +737,7 @@ export default function Dashboard() {
                             <div className="flex flex-col items-center gap-3">
                               <Building2 className="w-8 h-8 text-[#3a3a3c]" />
                               <p className="text-[14px] text-[#636366]">No assessments yet</p>
-                              <Link href="/processor" className="text-[13px] text-purple-400 hover:text-purple-300 font-medium smooth">
+                              <Link href="/processor" className="text-[13px] text-[#d1d1d6] hover:text-[#e5e5e7] font-medium smooth">
                                 Start a new assessment →
                               </Link>
                             </div>
