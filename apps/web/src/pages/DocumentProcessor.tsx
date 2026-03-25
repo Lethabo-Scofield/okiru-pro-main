@@ -61,7 +61,7 @@ interface ProcessorSession {
   companyInfo: CompanyInfo;
   createdAt: string;
   updatedAt: string;
-  currentStep: 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'scorecard';
+  currentStep: 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'scorecard';
   filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
   fileClassifications: Record<string, number>;
   extractionResults: any[];
@@ -911,7 +911,7 @@ export default function DocumentProcessor() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'manual-entry' | 'populating' | 'scorecard'>('company-info');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'manual-entry' | 'populating' | 'scorecard'>('company-info');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSavingSession, setIsSavingSession] = useState(false);
@@ -999,7 +999,7 @@ export default function DocumentProcessor() {
         });
         setUploadedFiles(restored);
       }
-      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'scorecard'];
+      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard'];
       const step = sess.currentStep && validSteps.includes(sess.currentStep)
         ? sess.currentStep
         : sess.scorecardResult ? 'scorecard'
@@ -1619,7 +1619,7 @@ export default function DocumentProcessor() {
     return 'text';
   }, [activeDocFile]);
 
-  const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : 4;
+  const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : currentPage === 'manual-entry' ? 4 : currentPage === 'review' ? 5 : currentPage === 'summary' ? 6 : 7;
 
   // Called by PopulatingScreen when its animation completes
   const handlePopulatingDone = async () => {
@@ -1755,8 +1755,8 @@ export default function DocumentProcessor() {
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
-          {['Company', 'Upload', 'Template', 'Extract', 'Manual Entry', 'Review', 'Scorecard'].map((label, idx) => {
-            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'manual-entry', 'review', 'scorecard'] as const;
+          {['Company', 'Upload', 'Template', 'Extract', 'Manual Entry', 'Review', 'Summary', 'Scorecard'].map((label, idx) => {
+            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'manual-entry', 'review', 'summary', 'scorecard'] as const;
             type PageMapType = typeof pageMap[number];
             const safeCurrentPage = currentPage as PageMapType;
             const stepIdx = pageMap.indexOf(safeCurrentPage);
@@ -1784,7 +1784,7 @@ export default function DocumentProcessor() {
                         : 'text-[#48484a]'
                   }`}>{label}</span>
                 </div>
-                {idx < 6 && (
+                {idx < 7 && (
                   <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
                     <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
                   </div>
@@ -2581,9 +2581,9 @@ export default function DocumentProcessor() {
                 };
 
                 setScorecardResult(normalised);
-                await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult: normalised });
+                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: normalised });
                 setIsSubmitted(true);
-                setCurrentPage('scorecard');
+                setCurrentPage('summary');
                 toast({ title: "Assessment complete", description: "Scorecard generated successfully!" });
 
               } catch (err: any) {
@@ -2615,9 +2615,9 @@ export default function DocumentProcessor() {
                   _error: err.message,
                 };
                 setScorecardResult(fallback);
-                await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult: fallback });
+                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: fallback });
                 setIsSubmitted(true);
-                setCurrentPage('scorecard');
+                setCurrentPage('summary');
                 toast({ title: "Partial Scorecard", description: "Scorecard generated from reviewed entities.", variant: "default" });
               } finally {
                 setIsSavingSession(false);
@@ -3282,6 +3282,161 @@ export default function DocumentProcessor() {
               </div>
             </div>
           )}
+
+          {currentPage === 'summary' && (() => {
+            const PILLAR_META: { key: string; label: string; color: string; icon: string }[] = [
+              { key: 'Ownership', label: 'Ownership', color: '#5e9bff', icon: '○' },
+              { key: 'Management Control', label: 'Management Control', color: '#34d399', icon: '○' },
+              { key: 'Skills Development', label: 'Skills Development', color: '#f59e0b', icon: '○' },
+              { key: 'Preferential Procurement', label: 'Preferential Procurement', color: '#a78bfa', icon: '○' },
+              { key: 'Enterprise & Supplier Development', label: 'Enterprise & Supplier Dev.', color: '#38bdf8', icon: '○' },
+              { key: 'Socio-Economic Development', label: 'Socio-Economic Dev.', color: '#f472b6', icon: '○' },
+              { key: 'Financials', label: 'Financials', color: '#fb923c', icon: '○' },
+            ];
+
+            const allEntities: any[] = [];
+            for (const doc of extractionResults) {
+              for (const e of (doc.entities || [])) {
+                if (e.status !== 'rejected' && e.status !== 'not_found' && e.value) {
+                  allEntities.push({ ...e, _docName: doc.fileName });
+                }
+              }
+            }
+
+            const byPillar: Record<string, any[]> = {};
+            for (const e of allEntities) {
+              const pillar = e.pillar || 'Other';
+              if (!byPillar[pillar]) byPillar[pillar] = [];
+              byPillar[pillar].push(e);
+            }
+            const otherEntities = byPillar['Other'] || [];
+
+            const fmtLabel = (s: string) => s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/([a-z\d])([A-Z])/g, '$1 $2');
+            const confidenceColor = (c: number) => c >= 0.85 ? '#34d399' : c >= 0.6 ? '#f59e0b' : '#f87171';
+            const confidenceLabel = (c: number) => c >= 0.85 ? 'High' : c >= 0.6 ? 'Medium' : 'Low';
+
+            return (
+              <div className="max-w-4xl mx-auto py-8 space-y-6">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-[24px] font-bold text-white tracking-tight">Extraction Summary</h2>
+                    <p className="text-[#8e8e93] text-[14px] mt-1">
+                      {allEntities.length} entities extracted across {extractionResults.length} document{extractionResults.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage('scorecard')}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                    View Scorecard
+                  </button>
+                </div>
+
+                {/* Stats bar */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Total Entities', value: allEntities.length },
+                    { label: 'High Confidence', value: allEntities.filter(e => (e.confidence || 0) >= 0.85).length },
+                    { label: 'Documents Processed', value: extractionResults.length },
+                  ].map(stat => (
+                    <div key={stat.label} className="rounded-xl p-4 flex flex-col gap-1" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                      <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">{stat.label}</span>
+                      <span className="text-[28px] font-bold text-white leading-none">{stat.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pillars */}
+                {PILLAR_META.filter(p => (byPillar[p.key] || []).length > 0).map(pillar => {
+                  const entities = byPillar[pillar.key] || [];
+                  const avgConf = entities.reduce((s, e) => s + (e.confidence || 0), 0) / entities.length;
+                  return (
+                    <div key={pillar.key} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                      {/* Pillar header */}
+                      <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: pillar.color }} />
+                          <span className="text-[14px] font-semibold text-white">{pillar.label}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ background: `${pillar.color}18`, color: pillar.color }}>
+                            {entities.length} {entities.length === 1 ? 'entity' : 'entities'}
+                          </span>
+                          <span className="text-[11px] text-[#636366]">
+                            avg {Math.round(avgConf * 100)}% confidence
+                          </span>
+                        </div>
+                      </div>
+                      {/* Entity rows */}
+                      <div className="divide-y" style={{ borderColor: '#1a1a1a' }}>
+                        {entities.map((e: any, i: number) => (
+                          <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
+                              {e._docName && (
+                                <span className="text-[11px] text-[#48484a] truncate mt-0.5">{e._docName}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-[13px] font-semibold text-white max-w-[200px] truncate text-right">{e.value}</span>
+                              {e.confidence != null && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{
+                                  background: `${confidenceColor(e.confidence)}18`,
+                                  color: confidenceColor(e.confidence),
+                                }}>
+                                  {confidenceLabel(e.confidence)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Uncategorised entities */}
+                {otherEntities.length > 0 && (
+                  <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                    <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#636366]" />
+                      <span className="text-[14px] font-semibold text-white">Other</span>
+                      <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#1c1c1e] text-[#636366] ml-auto">{otherEntities.length} entities</span>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: '#1a1a1a' }}>
+                      {otherEntities.map((e: any, i: number) => (
+                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
+                          <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
+                          <span className="text-[13px] font-semibold text-white max-w-[240px] truncate text-right">{e.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {allEntities.length === 0 && (
+                  <div className="rounded-2xl flex flex-col items-center justify-center py-20 gap-3" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                    <FileQuestion className="w-8 h-8 text-[#48484a]" />
+                    <p className="text-[#8e8e93] text-sm">No entities were extracted.</p>
+                  </div>
+                )}
+
+                {/* Footer action */}
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => setCurrentPage('scorecard')}
+                    className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors press-sm"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                    View Full Scorecard
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {currentPage === 'scorecard' && (() => {
             const sc = scorecardResult;
