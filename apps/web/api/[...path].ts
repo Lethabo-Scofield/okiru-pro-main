@@ -506,103 +506,7 @@ async function getApp(): Promise<express.Express> {
         if (!description || typeof description !== "string") return res.status(400).json({ error: "description is required" });
 
         if (!groqApiKey) {
-          const words = description.trim().split(/\s+/);
-          const label = words
-            .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-            .join("")
-            .replace(/[^a-zA-Z0-9]/g, "")
-            || "CustomEntity";
-
-          const descLower = description.toLowerCase();
-          const isDate = /date|period|year|expir|valid|time/i.test(descLower);
-          const isAmount = /amount|cost|spend|price|value|budget|salary|revenue|rand|fee/i.test(descLower);
-          const isPercentage = /percent|ratio|rate|proportion|share|%/i.test(descLower);
-          const isName = /name|person|company|entity|beneficiary|director|member|employee/i.test(descLower);
-          const isNumber = /number|count|total|quantity|id|ref|code/i.test(descLower);
-          const isStatus = /status|level|type|category|class/i.test(descLower);
-
-          let synonyms: string[] = [];
-          let positives: string[] = [];
-          let negatives: string[] = [];
-          let zones: string[] = ["Email Body", "PDF Header"];
-          let mustKw: string[] = [];
-          let niceKw: string[] = [];
-          let negKw: string[] = [];
-          let pattern = "";
-
-          if (isDate) {
-            synonyms = ["Date", "Period", "Valid Until", "Effective Date"];
-            positives = ["2024-06-15", "15 June 2024", "2024/06/15", "31 March 2025"];
-            negatives = ["Reference Number", "Amount", "Name"];
-            zones = ["PDF Header", "Tables"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["date", "period"];
-            negKw = ["amount", "name"];
-            pattern = "\\d{4}[-/]\\d{2}[-/]\\d{2}|\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}";
-          } else if (isAmount) {
-            synonyms = ["Amount", "Cost", "Value", "Spend"];
-            positives = ["R500,000", "R1,200,000", "R2.5M", "R75,000.00"];
-            negatives = ["Percentage", "Count", "Date"];
-            zones = ["Tables"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["amount", "value"];
-            negKw = ["date", "name"];
-            pattern = "R\\s?[\\d,. ]+(\\.\\d{2})?(M|K)?";
-          } else if (isPercentage) {
-            synonyms = ["Percentage", "Rate", "Proportion", "Share"];
-            positives = ["51%", "25.1%", "100%", "30.5%"];
-            negatives = ["Amount", "Count", "Date"];
-            zones = ["Tables"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["percentage", "rate"];
-            negKw = ["amount", "count"];
-            pattern = "\\d{1,3}(\\.\\d{1,2})?%";
-          } else if (isName) {
-            synonyms = ["Name", "Entity", "Organisation", "Company"];
-            positives = ["Moyo Retail (Pty) Ltd", "Karoo Telecom", "John Doe"];
-            negatives = ["Amount", "Date", "Number"];
-            zones = ["PDF Header", "Email Body"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["name", "entity"];
-            negKw = ["amount", "date"];
-          } else if (isNumber) {
-            synonyms = ["Number", "Reference", "ID", "Code"];
-            positives = ["REF-2024-001", "12345", "ABC-001", "N/A"];
-            negatives = ["Name", "Amount", "Date"];
-            zones = ["PDF Header", "Tables"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["number", "reference"];
-            negKw = ["name", "amount"];
-            pattern = "[A-Z]{2,4}[-/]?\\d{3,6}";
-          } else if (isStatus) {
-            synonyms = ["Status", "Level", "Type", "Category"];
-            positives = ["Active", "Compliant", "Level 1", "Approved"];
-            negatives = ["Amount", "Date", "Name"];
-            zones = ["PDF Header", "Tables"];
-            mustKw = words.slice(0, 2).map((w: string) => w.toLowerCase());
-            niceKw = ["status", "level"];
-            negKw = ["amount", "date"];
-          } else {
-            const mainWords = words.slice(0, 3).map((w: string) => w.toLowerCase());
-            synonyms = mainWords.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1));
-            synonyms.push(label);
-            positives = ["Example value 1", "Example value 2", "Example value 3"];
-            negatives = ["Not applicable", "Unrelated value"];
-            mustKw = mainWords.slice(0, 2);
-            niceKw = mainWords.slice(2);
-            negKw = ["unrelated"];
-          }
-
-          const fallbackEntity = {
-            id: Date.now() + Math.random(),
-            label,
-            definition: description.charAt(0).toUpperCase() + description.slice(1) + (description.endsWith('.') ? '' : '.'),
-            completeness: 60,
-            synonyms, positives, negatives, zones,
-            keywords: { must: mustKw, nice: niceKw, neg: negKw },
-            pattern, expanded: true, activeTab: "definition",
-          };
-          return res.json({ entities: [fallbackEntity] });
+          throw new Error("GROQ_API_KEY is missing. Cannot generate entities.");
         }
 
         const systemPrompt = `You are an entity extraction configuration assistant. Given a user's natural language description, generate exactly ONE fully-configured entity definition.
@@ -641,10 +545,7 @@ Respond ONLY with a valid JSON array containing exactly ONE entity object.`;
         if (!documentText || !entities || !Array.isArray(entities)) return res.status(400).json({ error: "documentText and entities array are required" });
 
         if (!groqApiKey) {
-          const fallbackResults = entities.map((e: any, idx: number) => ({
-            id: idx + 1, entity: e.label, value: null, conf: 0, method: "NER", status: "pending",
-          }));
-          return res.json({ extractions: fallbackResults });
+          throw new Error("GROQ_API_KEY is missing. Cannot perform extraction.");
         }
 
         const entityLabels = entities.map((e: any) => `${e.label}: ${e.definition || e.label}`).join("\n");
@@ -674,14 +575,7 @@ Respond ONLY with a valid JSON array.`;
         const send = (event: string, data: any) => { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
 
         if (!groqApiKey) {
-          send("start", { total: documents.length });
-          for (let i = 0; i < documents.length; i++) {
-            const doc = documents[i];
-            send("doc-start", { index: i, fileName: doc.fileName, templateName: doc.templateName });
-            send("doc-done", { index: i, fileName: doc.fileName, templateId: doc.templateId, templateName: doc.templateName, entities: [] });
-          }
-          send("complete", { total: documents.length });
-          return res.end();
+          throw new Error("GROQ_API_KEY is missing.");
         }
 
         send("start", { total: documents.length });
@@ -710,7 +604,7 @@ Respond ONLY with a valid JSON array.`;
             const content = await llmGenerate(sp, up, { temperature: 0.2 });
             let entities;
             try { const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim(); entities = JSON.parse(cleaned); } catch {
-              entities = entitiesToExtract.map((e: any) => ({ name: e.label, value: `Extracted ${e.label}`, confidence: Math.floor(Math.random() * 15) + 85, status: "extracted" }));
+              throw new Error("Failed to parse LLM extraction into valid JSON");
             }
             send("doc-done", { index: i, fileName, templateId, templateName, entities: Array.isArray(entities) ? entities : [] });
           } catch (docError: any) {
@@ -882,10 +776,7 @@ Respond ONLY with a valid JSON array.`;
         const { type, industry, existing } = req.body;
 
         if (!groqApiKey) {
-          const suggestion = type === "benefitFactor"
-            ? { type: "new_contribution", factor: 0.8, description: "New contribution type" }
-            : { name: industry || "Generic", norm: "Standard industry norm" };
-          return res.json({ suggestion });
+          throw new Error("GROQ_API_KEY missing");
         }
 
         const prompt = type === "benefitFactor"
