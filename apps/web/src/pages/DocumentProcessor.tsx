@@ -11,8 +11,10 @@ import {
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
-  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit
+  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit, Star
 } from 'lucide-react';
+import { ALL_ENTITIES, buildManifestForSector } from '@/lib/pipeline/extraction/entityManifest';
+import { buildPipelineResult } from '@/lib/pipeline/buildResult';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -71,22 +73,12 @@ interface ProcessorSession {
 }
 
 interface ManualEntryData {
-  blackOwnership: string;
-  blackFemaleOwnership: string;
-  blackBoardMembers: string;
-  blackExecutiveManagement: string;
-  skillsSpendOnBlack: string;
-  blackLearnerships: string;
+  entities: Record<string, string>;
   customTargets: { name: string; value: string }[];
 }
 
 const EMPTY_MANUAL_ENTRY: ManualEntryData = {
-  blackOwnership: '',
-  blackFemaleOwnership: '',
-  blackBoardMembers: '',
-  blackExecutiveManagement: '',
-  skillsSpendOnBlack: '',
-  blackLearnerships: '',
+  entities: {},
   customTargets: [],
 };
 
@@ -1745,39 +1737,59 @@ export default function DocumentProcessor() {
                                             </>
                                           )}
                                           <div className="px-3.5 pt-2 pb-1 text-[10px] font-semibold text-[#48484a] uppercase tracking-wider">B-BBEE Sector Presets</div>
-                                          {starterTemplates.map((preset) => (
-                                            <button
-                                              key={preset.key}
-                                              type="button"
-                                              onClick={async () => {
-                                                setOpenTemplateDropdown(null);
-                                                const existing = templates.find(t => t.name === preset.name);
-                                                if (existing) {
-                                                  setFileClassifications(prev => ({ ...prev, [String(file.id)]: existing.id }));
-                                                  return;
-                                                }
-                                                try {
-                                                  const res = await fetch('/api/templates', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ name: preset.name, description: preset.description, version: '1.0', entities: preset.entities }),
-                                                  });
-                                                  if (res.ok) {
-                                                    const saved = await res.json();
-                                                    setTemplates(prev => [...prev, saved]);
-                                                    setFileClassifications(prev => ({ ...prev, [String(file.id)]: saved.id }));
+                                          {(() => {
+                                            const turnover = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 0;
+                                            const dType = turnover <= 10000000 ? 'EME' : turnover <= 50000000 ? 'QSE' : 'Generic';
+                                            const dSector = companyInfo.sector === 'Information Technology' ? 'ICT' : companyInfo.sector === 'Financial Services' ? 'FSC' : companyInfo.sector === 'Agriculture' ? 'Agri' : 'RCOGP';
+                                            const recommendedName = `${dSector} ${dType} Scorecard`;
+                                            
+                                            // Sort such that the recommended preset is at the top
+                                            const presets = [...starterTemplates].sort((a, b) => {
+                                              if (a.name === recommendedName) return -1;
+                                              if (b.name === recommendedName) return 1;
+                                              return 0;
+                                            });
+
+                                            return presets.map((preset) => (
+                                              <button
+                                                key={preset.key}
+                                                type="button"
+                                                onClick={async () => {
+                                                  setOpenTemplateDropdown(null);
+                                                  const existing = templates.find(t => t.name === preset.name);
+                                                  if (existing) {
+                                                    setFileClassifications(prev => ({ ...prev, [String(file.id)]: existing.id }));
+                                                    return;
                                                   }
-                                                } catch { /* ignore */ }
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
-                                            >
-                                              <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-medium truncate text-[#d1d1d6]">{preset.name}</div>
-                                                <div className="text-[11px] text-[#48484a]">{preset.entities.length} fields · {preset.category}</div>
-                                              </div>
-                                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold shrink-0">Preset</span>
-                                            </button>
-                                          ))}
+                                                  try {
+                                                    const res = await fetch('/api/templates', {
+                                                      method: 'POST',
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({ name: preset.name, description: preset.description, version: '1.0', entities: preset.entities }),
+                                                    });
+                                                    if (res.ok) {
+                                                      const saved = await res.json();
+                                                      setTemplates(prev => [...prev, saved]);
+                                                      setFileClassifications(prev => ({ ...prev, [String(file.id)]: saved.id }));
+                                                    }
+                                                  } catch { /* ignore */ }
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
+                                                style={{ background: preset.name === recommendedName ? 'rgba(52, 199, 89, 0.05)' : 'transparent' }}
+                                              >
+                                                <div className="flex-1 min-w-0">
+                                                  <div className="flex items-center gap-2">
+                                                    <div className="text-[13px] font-medium truncate text-[#d1d1d6]">{preset.name}</div>
+                                                    {preset.name === recommendedName && (
+                                                      <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-semibold" title="Recommended based on company turnover and sector"><Star className="w-2.5 h-2.5 fill-amber-500"/> Recommended</span>
+                                                    )}
+                                                  </div>
+                                                  <div className="text-[11px] text-[#48484a]">{preset.entities.length} fields · {preset.category}</div>
+                                                </div>
+                                                {preset.name !== recommendedName && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold shrink-0">Preset</span>}
+                                              </button>
+                                            ));
+                                          })()}
                                         </>
                                       )}
                                     </div>
@@ -1989,12 +2001,22 @@ export default function DocumentProcessor() {
                 .filter(file => file.textContent)
                 .map(file => file.textContent);
 
-              // 2. Base fallback if info missing
-              const sectorCode = 'RCOGP'; // Defaulting to generic for now until sector logic upgraded
-              const scorecardType = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) <= 50000000 ? 'QSE' : 'Generic';
+              console.log(`[DocumentProcessor] 📋 handleSubmit called`);
+              console.log(`[DocumentProcessor]   uploadedFiles count: ${uploadedFiles.length}`);
+              uploadedFiles.forEach((f, i) => {
+                console.log(`[DocumentProcessor]   File ${i}: name=${f.name}, type=${f.type}, textContent length=${f.textContent?.length || 0}, status=${f.status}`);
+              });
+              console.log(`[DocumentProcessor]   documentTexts count (with content): ${documentTexts.length}`);
+              // 2. Derive sector and type from company info
+              const turnover = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 0;
+              const scorecardType = turnover <= 10000000 ? 'EME' : turnover <= 50000000 ? 'QSE' : 'Generic';
+              const sectorCode = companyInfo.sector === 'Information Technology' ? 'ICT' : companyInfo.sector === 'Financial Services' ? 'FSC' : companyInfo.sector === 'Agriculture' ? 'AGRI' : 'RCOGP';
+
+              console.log(`[DocumentProcessor]   sectorCode=${sectorCode}, scorecardType=${scorecardType}, clientName=${companyInfo.name}`);
 
               try {
                 // 3. Make the API Call to extract-and-score
+                console.log(`[DocumentProcessor] 🚀 Calling POST /api/extract-and-score...`);
                 const res = await fetch('/api/extract-and-score', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -2006,7 +2028,11 @@ export default function DocumentProcessor() {
                   }),
                 });
 
-                if (!res.ok) throw new Error('Scoring failed');
+                console.log(`[DocumentProcessor] 📡 Response status: ${res.status}`);
+                if (!res.ok) {
+                  const errorData = await res.json().catch(() => null);
+                  throw new Error(errorData?.error || 'Scoring failed due to an unknown error');
+                }
                 
                 const scoreData = await res.json();
                 
@@ -2023,10 +2049,7 @@ export default function DocumentProcessor() {
 
               } catch (err: any) {
                 console.error("Scorecard generation error", err);
-                toast({ title: "Generation Failed", description: "Could not generate scorecard. Review extraction results.", variant: "destructive" });
-                // Fallback to basic complete if scoring fails
-                await persistSession('review', { results: extractionResults, complete: true });
-                setIsSubmitted(true);
+                toast({ title: "Generation Failed", description: err.message || "Could not generate scorecard. Review extraction results.", variant: "destructive" });
               } finally {
                 setIsSavingSession(false);
               }
@@ -2384,126 +2407,48 @@ export default function DocumentProcessor() {
               </div>
 
               <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Ownership Metrics</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Ownership (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackOwnership}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackOwnership: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackOwnership; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-ownership"
-                      />
-                      {manualErrors.blackOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackOwnership}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Female Ownership (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackFemaleOwnership}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackFemaleOwnership: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackFemaleOwnership; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackFemaleOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-female-ownership"
-                      />
-                      {manualErrors.blackFemaleOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackFemaleOwnership}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Management Control</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Board Members (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackBoardMembers}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackBoardMembers: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackBoardMembers; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackBoardMembers ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-board-members"
-                      />
-                      {manualErrors.blackBoardMembers && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackBoardMembers}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Executive Management (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackExecutiveManagement}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackExecutiveManagement: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackExecutiveManagement; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackExecutiveManagement ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-executive-mgmt"
-                      />
-                      {manualErrors.blackExecutiveManagement && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackExecutiveManagement}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Skills Development</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Skills Development Spend on Black People (R)</label>
-                      <input
-                        type="number" min="0" step="1"
-                        value={manualEntry.skillsSpendOnBlack}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, skillsSpendOnBlack: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.skillsSpendOnBlack; return n; });
-                        }}
-                        placeholder="0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.skillsSpendOnBlack ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-skills-spend"
-                      />
-                      {manualErrors.skillsSpendOnBlack && <p className="text-[11px] text-red-400 mt-1">{manualErrors.skillsSpendOnBlack}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Number of Black Learnerships</label>
-                      <input
-                        type="number" min="0" step="1"
-                        value={manualEntry.blackLearnerships}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackLearnerships: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackLearnerships; return n; });
-                        }}
-                        placeholder="0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackLearnerships ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-learnerships"
-                      />
-                      {manualErrors.blackLearnerships && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackLearnerships}</p>}
-                    </div>
-                  </div>
-                </div>
+                {(() => {
+                  const pillars = Array.from(new Set(ALL_ENTITIES.map(e => e.pillar)));
+                  return pillars.map((pillar) => {
+                    const entities = ALL_ENTITIES.filter(e => e.pillar === pillar);
+                    return (
+                      <div key={pillar} className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">{pillar}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {entities.map(ent => (
+                            <div key={ent.name}>
+                              <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">
+                                {ent.name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                {ent.required && <span className="text-red-400 ml-1">*</span>}
+                              </label>
+                              <div className="relative group">
+                                <input
+                                  type={ent.fieldType === 'number' || ent.fieldType === 'percentage' || ent.fieldType === 'currency' ? 'number' : ent.fieldType === 'date' ? 'date' : 'text'}
+                                  step={ent.fieldType !== 'text' ? 'any' : undefined}
+                                  value={manualEntry.entities[ent.name] || ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setManualEntry(p => { const d = { ...p, entities: { ...p.entities, [ent.name]: v } }; saveManualEntryData(d); return d; });
+                                    setManualErrors(p => { const n = { ...p }; delete n[ent.name]; return n; });
+                                  }}
+                                  placeholder={ent.positiveExamples?.[0] || '...'}
+                                  className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors[ent.name] ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
+                                  style={{ background: '#111111', border: '1px solid #2c2c2e' }}
+                                />
+                                {ent.definition && (
+                                  <div className="absolute right-3 top-2.5 text-[#48484a] group-hover:text-[#8e8e93] cursor-help transition-colors" title={ent.definition}>
+                                    <HelpCircle className="w-4 h-4" />
+                                  </div>
+                                )}
+                              </div>
+                              {manualErrors[ent.name] && <p className="text-[11px] text-red-400 mt-1">{manualErrors[ent.name]}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
 
                 <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
                   <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Custom Entity Targets</p>
@@ -2591,82 +2536,49 @@ export default function DocumentProcessor() {
                     <button
                       onClick={async () => {
                         const errors: Record<string, string> = {};
-                        const pctFields: { key: keyof ManualEntryData; label: string }[] = [
-                          { key: 'blackOwnership', label: 'Black Ownership' },
-                          { key: 'blackFemaleOwnership', label: 'Black Female Ownership' },
-                          { key: 'blackBoardMembers', label: 'Black Board Members' },
-                          { key: 'blackExecutiveManagement', label: 'Black Executive Management' },
-                        ];
-                        for (const f of pctFields) {
-                          const raw = manualEntry[f.key] as string;
-                          if (!raw || raw.trim() === '') { errors[f.key] = `${f.label} is required`; continue; }
-                          const v = parseFloat(raw);
-                          if (isNaN(v) || v < 0 || v > 100) errors[f.key] = 'Must be between 0 and 100';
-                        }
-                        const spendRaw = manualEntry.skillsSpendOnBlack;
-                        if (!spendRaw || spendRaw.trim() === '') { errors.skillsSpendOnBlack = 'Spend amount is required'; }
-                        else { const sv = parseFloat(spendRaw); if (isNaN(sv) || sv < 0) errors.skillsSpendOnBlack = 'Must be a positive number'; }
-
-                        const learnRaw = manualEntry.blackLearnerships;
-                        if (!learnRaw || learnRaw.trim() === '') { errors.blackLearnerships = 'Number of learnerships is required'; }
-                        else { const lv = parseFloat(learnRaw); if (isNaN(lv) || lv < 0 || !Number.isInteger(lv)) errors.blackLearnerships = 'Must be a non-negative integer'; }
+                        
+                        // Validate strictly required entities
+                        ALL_ENTITIES.filter(e => e.required).forEach(ent => {
+                          const val = manualEntry.entities[ent.name];
+                          if (!val || String(val).trim() === '') {
+                            errors[ent.name] = 'Required field';
+                          }
+                        });
 
                         if (Object.keys(errors).length > 0) { setManualErrors(errors); return; }
                         setManualErrors({});
 
                         setIsSavingSession(true);
                         try {
-                          const manualScorecardResult = {
-                            ownership: { score: Math.round(parseFloat(manualEntry.blackOwnership) / 100 * 25 * 10) / 10, target: 25, weighting: 25, subMinimumMet: parseFloat(manualEntry.blackOwnership) >= 40 },
-                            managementControl: { score: Math.round(((parseFloat(manualEntry.blackBoardMembers) + parseFloat(manualEntry.blackExecutiveManagement)) / 200) * 19 * 10) / 10, target: 19, weighting: 19 },
-                            skillsDevelopment: { score: Math.min(25, Math.round((parseFloat(manualEntry.skillsSpendOnBlack) / Math.max(1, parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 1000000) * 100) * 25 * 10) / 10), target: 25, weighting: 25, subMinimumMet: true },
-                            procurement: { score: 0, target: 29, weighting: 29, subMinimumMet: false },
-                            supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
-                            enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
-                            socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
-                            yesInitiative: { score: 0, target: 5, weighting: 5 },
-                            total: { score: 0, target: 120, weighting: 120 },
-                            achievedLevel: 9,
-                            discountedLevel: 9,
-                            isDiscounted: false,
-                            recognitionLevel: '0%',
-                            manualEntryData: manualEntry,
+                          const turnover = parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 0;
+                          const derivedType = turnover <= 10000000 ? 'EME' : turnover <= 50000000 ? 'QSE' : 'Generic';
+                          const derivedSector = companyInfo.sector === 'Information Technology' ? 'ICT' : companyInfo.sector === 'Financial Services' ? 'FSC' : companyInfo.sector === 'Agriculture' ? 'AGRI' : 'RCOGP';
+                          
+                          // Run via the shared TS pipeline calculator!
+                          const parseResult = {
+                            client: { industrySector: derivedSector, applicableScorecard: derivedType },
+                            documents: [],
+                            metadata: { processedAt: new Date().toISOString(), totalTokens: 0, model: 'manual' },
+                            extractedData: manualEntry.entities,
                           };
-                          const totalScore =
-                            manualScorecardResult.ownership.score +
-                            manualScorecardResult.managementControl.score +
-                            manualScorecardResult.skillsDevelopment.score +
-                            manualScorecardResult.procurement.score +
-                            manualScorecardResult.supplierDevelopment.score +
-                            manualScorecardResult.enterpriseDevelopment.score +
-                            manualScorecardResult.socioEconomicDevelopment.score;
-                          manualScorecardResult.total.score = Math.round(totalScore * 10) / 10;
 
-                          const pct = totalScore / 120 * 100;
-                          let level = 9;
-                          if (pct >= 100) level = 1;
-                          else if (pct >= 95) level = 2;
-                          else if (pct >= 90) level = 3;
-                          else if (pct >= 80) level = 4;
-                          else if (pct >= 51) level = 5;
-                          else if (pct >= 40) level = 6;
-                          else if (pct >= 30) level = 7;
-                          else if (pct >= 15) level = 8;
-                          manualScorecardResult.achievedLevel = level;
-                          manualScorecardResult.discountedLevel = level;
-                          const recMap: Record<number, string> = { 1: '135%', 2: '125%', 3: '110%', 4: '100%', 5: '80%', 6: '60%', 7: '50%', 8: '10%', 9: '0%' };
-                          manualScorecardResult.recognitionLevel = recMap[level] || '0%';
+                          const pipelineResult = buildPipelineResult(parseResult, 'Manual Entry Result');
 
+                          setSession(prev => ({
+                            ...prev!,
+                            currentStep: 'scorecard',
+                            scorecardResult: pipelineResult,
+                          }));
+                          setCurrentPage('scorecard');
+                          toast({ title: 'Assessment complete', description: 'Calculated perfectly using exact mathematical formulas.' });
                           await persistSession('scorecard', {
                             results: [],
                             complete: true,
-                            scorecardResult: manualScorecardResult,
+                            scorecardResult: pipelineResult,
                           });
 
                           localStorage.removeItem(MANUAL_ENTRY_KEY);
                           setIsSubmitted(true);
-                          setCurrentPage('scorecard');
-                          toast({ title: "Scorecard generated", description: "Manual entry data has been processed successfully." });
                         } catch (err: any) {
                           console.error("Manual scorecard generation error:", err);
                           toast({ title: "Generation Failed", description: "Could not generate scorecard from manual data.", variant: "destructive" });

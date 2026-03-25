@@ -17,6 +17,27 @@ export interface PillarScore {
   }>;
 }
 
+export interface ScorecardPillarScores {
+  ownership: number;
+  managementControl: number;
+  employmentEquity: number;
+  skillsDevelopment: number;
+  preferentialProcurement: number;
+  enterpriseSupplierDevelopment: number;
+  socioEconomicDevelopment: number;
+  yesInitiative: number;
+  totalPoints: number;
+}
+
+export interface ScorecardSummary {
+  beeLevel: string;
+  recognitionLevelPercent: number;
+  subMinimumsMet: boolean;
+  isDiscounted: boolean;
+  discountedLevel: string;
+  pillars: ScorecardPillarScores;
+}
+
 export interface PipelineResult {
   filename: string;
   client: {
@@ -27,6 +48,7 @@ export interface PipelineResult {
   totalScore: number;
   level: string;
   pillars: PillarScore[];
+  scorecard?: ScorecardSummary;
   logs: PipelineLog[];
   createdAt: string;
 }

@@ -429,6 +429,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         procurement: procurementState,
         esd: esdState,
         sed: sedState,
+        pipelineOverrides: data.pipelineOverrides || null,
         scenarios: scenariosData,
         isScenarioMode: false,
         activeScenarioId: null,

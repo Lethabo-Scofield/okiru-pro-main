@@ -337,11 +337,132 @@ export async function registerRoutes(
   app.get("/api/clients/:clientId/data", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
+      
+      if (clientId.startsWith('sess-')) {
+        const session = await ProcessorSessionModel.findOne({ sessionId: clientId }).lean() as any;
+        if (!session) {
+          return res.status(404).json({ error: "Session not found" });
+        }
+
+        const srData = session.scorecardResult;
+        
+        let overrides;
+        if (srData) {
+          // The scorecardResult could be from the API pipeline or the Web pipeline.
+          // Web PipelineResult: srData.scorecard = { totalScore, level, pillars: [ { pillar: 'Ownership', weightedScore: ...}, ... ] }
+          // API PipelineResult: srData.scorecard = { scorecard: { beeLevel, pillars: { ownership: ..., ... } } }
+          const pipelineResult = srData.scorecard; 
+          
+          let isPipeline = false;
+          let overridesDict: any = {};
+          
+          if (pipelineResult?.scorecard?.pillars) {
+            // API Structure
+            isPipeline = true;
+            const pillars = pipelineResult.scorecard.pillars;
+            const sc = pipelineResult.scorecard;
+            
+            overridesDict = {
+              ownership: pillars.ownership ?? 0,
+              managementControl: pillars.managementControl ?? 0,
+              skillsDevelopment: pillars.skillsDevelopment ?? 0,
+              procurement: pillars.preferentialProcurement ?? 0,
+              supplierDevelopment: pillars.enterpriseSupplierDevelopment ?? 0,
+              enterpriseDevelopment: 0,
+              socioEconomicDevelopment: pillars.socioEconomicDevelopment ?? 0,
+              yesInitiative: pillars.yesInitiative ?? 0,
+              totalPoints: pillars.totalPoints ?? 0,
+              achievedLevel: parseInt(String(sc.beeLevel).replace(/\D/g, "") || "9") || 9,
+              discountedLevel: parseInt(String(sc.discountedLevel).replace(/\D/g, "") || "9") || 9,
+              isDiscounted: !!sc.isDiscounted,
+              recognitionLevel: sc.recognitionLevelPercent ?? "0%",
+              subMinimumsMet: !!sc.subMinimumsMet,
+            };
+          } else if (Array.isArray(pipelineResult?.pillars)) {
+            // Web Structure
+            isPipeline = true;
+            const pillarsArray = pipelineResult.pillars;
+            const findScore = (name: string) => pillarsArray.find((p: any) => p.pillar === name)?.weightedScore || 0;
+            
+            overridesDict = {
+              ownership: findScore('Ownership'),
+              managementControl: findScore('Management Control'),
+              skillsDevelopment: findScore('Skills Development'),
+              // ESD pillar combines Procurement and Supplier Dev
+              procurement: pillarsArray.find((p: any) => p.pillar === 'Enterprise & Supplier Development')?.subItems?.find((s: any) => s.indicator === 'Preferential Procurement')?.score || 0,
+              supplierDevelopment: pillarsArray.find((p: any) => p.pillar === 'Enterprise & Supplier Development')?.subItems?.find((s: any) => s.indicator === 'Supplier Development')?.score || 0,
+              enterpriseDevelopment: 0,
+              socioEconomicDevelopment: findScore('Socio-Economic Development'),
+              yesInitiative: 0,
+              totalPoints: pipelineResult.totalScore ?? 0,
+              achievedLevel: parseInt(String(pipelineResult.level).replace(/\D/g, "") || "9") || 9,
+              discountedLevel: parseInt(String(pipelineResult.level).replace(/\D/g, "") || "9") || 9,
+              isDiscounted: false, 
+              recognitionLevel: "0%", // Will be calculated by UI or default
+              subMinimumsMet: true,
+            };
+          }
+
+          console.log(`[Session Data] 🔍 Session ${clientId}: scorecardResult exists=${!!srData}, isPipeline=${isPipeline}`);
+
+          if (isPipeline) {
+            console.log(`[Session Data] 📊 Pipeline data loaded successfully.`);
+            overrides = overridesDict;
+          } else {
+            // Manual entry shape
+            console.log(`[Session Data] 📝 Manual entry shape detected`);
+            overrides = {
+              ownership: srData.ownership?.score ?? 0,
+              managementControl: srData.managementControl?.score ?? 0,
+              skillsDevelopment: srData.skillsDevelopment?.score ?? 0,
+              procurement: srData.procurement?.score ?? 0,
+              supplierDevelopment: srData.supplierDevelopment?.score ?? 0,
+              enterpriseDevelopment: srData.enterpriseDevelopment?.score ?? 0,
+              socioEconomicDevelopment: srData.socioEconomicDevelopment?.score ?? 0,
+              yesInitiative: 0,
+              totalPoints: srData.total?.score ?? 0,
+              achievedLevel: srData.achievedLevel ?? 9,
+              discountedLevel: srData.discountedLevel ?? 9,
+              isDiscounted: !!srData.isDiscounted,
+              recognitionLevel: srData.recognitionLevel ?? "0%",
+              subMinimumsMet: true,
+            };
+          }
+          
+          console.log(`[Session Data] ✅ Final overrides:`, JSON.stringify(overrides));
+        } else {
+          console.log(`[Session Data] ⚠️ Session ${clientId}: No scorecardResult found in database`);
+        }
+
+        return res.json({
+          client: {
+            id: clientId,
+            name: session.companyInfo?.name || "Draft Session",
+            financialYear: new Date().getFullYear().toString(),
+            revenue: session.companyInfo?.annualTurnover || 0,
+            npat: 0,
+            leviableAmount: 0,
+            industrySector: session.companyInfo?.sector || "Generic",
+            eapProvince: "National",
+            industryNorm: undefined,
+          },
+          ownership: { id: `own-${clientId}`, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
+          management: { employees: [] },
+          skills: { leviableAmount: 0, trainingPrograms: [] },
+          procurement: { tmps: 0, suppliers: [] },
+          esd: { contributions: [] },
+          sed: { contributions: [] },
+          financialYears: [],
+          scenarios: [],
+          pipelineOverrides: overrides,
+        });
+      }
+
       const client = await ClientModel.findOne({ clientId });
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
-      const c = client.toJSON();
+      const c = client.toJSON() as any;
 
       res.json({
         client: {
@@ -672,15 +793,7 @@ User: "the rand amount of their annual turnover" →
       }
 
       if (!groqApiKey) {
-        const fallbackResults = entities.map((e: any, idx: number) => ({
-          id: idx + 1,
-          entity: e.label,
-          value: null,
-          conf: 0,
-          method: "NER",
-          status: "pending",
-        }));
-        return res.json({ extractions: fallbackResults });
+        throw new Error("GROQ_API_KEY is missing. Cannot perform extraction.");
       }
 
       const entityLabels = entities.map((e: any) => `${e.label}: ${e.definition || e.label}`).join("\n");
@@ -874,12 +987,7 @@ Respond ONLY with a valid JSON array.`;
             const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             entities = JSON.parse(cleaned);
           } catch {
-            entities = entitiesToExtract.map((e: any) => ({
-              name: e.label,
-              value: `Extracted ${e.label}`,
-              confidence: Math.floor(Math.random() * 15) + 85,
-              status: "extracted",
-            }));
+            throw new Error("Failed to parse LLM extraction into valid JSON");
           }
 
           send("doc-done", {
@@ -960,10 +1068,7 @@ Respond ONLY with a valid JSON array.`;
       const { type, industry, existing } = req.body;
 
       if (!groqApiKey) {
-        const suggestion = type === 'benefitFactor'
-          ? { type: 'new_contribution', factor: 0.8, description: 'New contribution type' }
-          : { name: industry || 'New Industry', norm: 'Standard industry norm' };
-        return res.json({ suggestion });
+        throw new Error("GROQ_API_KEY missing");
       }
 
       const prompt = type === 'benefitFactor'
@@ -1007,12 +1112,17 @@ Respond ONLY with a valid JSON array.`;
     try {
       const { documentTexts, sectorCode, scorecardType, clientName } = req.body;
       
+      console.log(`\n[Scorecard Pipeline] 🚀 Starting extract-and-score for Client: ${clientName || 'Unknown'}, Sector: ${sectorCode}, Type: ${scorecardType}`);
+      
       if (!Array.isArray(documentTexts) || documentTexts.length === 0 || !sectorCode || !scorecardType) {
+        console.error("[Scorecard Pipeline] ❌ Missing required fields in request body.");
         return res.status(400).json({ error: "documentTexts, sectorCode, and scorecardType are required" });
       }
 
       const pipeline = await import('./pipeline');
       const manifest = pipeline.buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      
+      console.log(`[Scorecard Pipeline] 📋 Manifest generated. Looking for ${manifest.requiredEntities.length} entities.`);
       
       const combinedText = documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
       
@@ -1028,26 +1138,48 @@ Respond ONLY with a valid JSON array.`;
         sourcePageId: 'combined',
       }));
 
+      console.log(`[Scorecard Pipeline] 🧠 Sending ${requests.length} requests to LLMExtractor...`);
       const extractor = new pipeline.LLMExtractor();
       const extractionResults = await extractor.extractBatch(requests);
+      
+      const validEntitiesCount = extractionResults.filter((r: any) => r.extractedValue !== null).length;
+      console.log(`[Scorecard Pipeline] ✅ Extraction complete! Found ${validEntitiesCount} valid entities.`);
+
+      if (validEntitiesCount === 0 && requests.length > 0) {
+        return res.status(422).json({
+          error: "Document contains insufficient B-BBEE data. The system could not extract any required scorecard fields from the text."
+        });
+      }
+      
+      const completenessRatio = requests.length > 0 ? validEntitiesCount / requests.length : 0;
+      if (completenessRatio < 0.1) {
+        return res.status(422).json({
+          error: `Insufficient data structure (${Math.round(completenessRatio * 100)}% parsed). A valid B-BBEE scorecard cannot be generated from this document's content.`
+        });
+      }
 
       const parseResult = pipeline.entityResultsToParseResult(extractionResults, {
         clientName: clientName || 'Unnamed Client',
         industrySector: sectorCode,
         applicableScorecard: scorecardType,
       });
+      
+      console.log(`[Scorecard Pipeline] 🧩 ParseResult structured successfully.`);
 
       const filename = `${sectorCode}_${scorecardType}_${clientName || 'entity'}`;
       const scorecard = pipeline.buildPipelineResult(parseResult, filename);
       
+      console.log(`[Scorecard Pipeline] 🧮 Scorecard calculated! Total Points: ${scorecard.scorecard?.pillars?.totalPoints}, Level: ${scorecard.scorecard?.beeLevel}`);
+      
       const requiredRoles = manifest.requiredEntities.map((e: any) => e.name);
       const confidence = pipeline.buildConfidenceReport(extractionResults, requiredRoles);
 
+      console.log(`[Scorecard Pipeline] 🏁 Return to frontend. Returning shape: { success: true, scorecard: { ... }, confidence: { ... } }`);
       return res.json({
         success: true,
         scorecard,
         confidence,
-        extractedEntities: extractionResults.filter(r => r.extractedValue !== null).length,
+        extractedEntities: extractionResults.filter((r: any) => r.extractedValue !== null).length,
         totalEntities: extractionResults.length,
         sectorCode,
         scorecardType,

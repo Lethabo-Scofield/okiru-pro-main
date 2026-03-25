@@ -81,6 +81,21 @@ router.post('/extract-and-score', async (req, res) => {
     const extractor = new LLMExtractor();
     const extractionResults = await extractor.extractBatch(requests);
 
+    const validEntitiesCount = extractionResults.filter(r => r.extractedValue !== null).length;
+    
+    if (validEntitiesCount === 0 && requests.length > 0) {
+      return res.status(422).json({
+        error: "Document contains insufficient B-BBEE data. The system could not extract any required scorecard fields from the text."
+      });
+    }
+
+    const completenessRatio = requests.length > 0 ? validEntitiesCount / requests.length : 0;
+    if (completenessRatio < 0.1) {
+      return res.status(422).json({
+        error: `Insufficient data structure (${Math.round(completenessRatio * 100)}% parsed). A valid B-BBEE scorecard cannot be generated from this document's content.`
+      });
+    }
+
     // 5 — Map to ParseResult
     const parseResult = entityResultsToParseResult(extractionResults, {
       clientName: clientName ?? 'Unnamed Entity',

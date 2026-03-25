@@ -94,11 +94,80 @@ function isBlackRace(race: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Name normalisation: map human-readable manifest names → camelCase keys
+// ---------------------------------------------------------------------------
+
+const ENTITY_NAME_TO_KEY: Record<string, string> = {
+  // Financials
+  'Total Revenue':                  'revenue',
+  'NPAT':                           'npat',
+  'Leviable Amount':                'leviableAmount',
+  'TMPS':                           'tmps',
+  'Financial Year End':             'financialYearEnd',
+  // Ownership
+  'Shareholder Name':               'shareholderName',
+  'Black Ownership Percentage':     'blackOwnershipPct',
+  'Black Women Ownership Percentage': 'blackWomenOwnershipPct',
+  'Shareholding Percentage':        'shareholdingPct',
+  'Share Value':                    'shareValue',
+  // Management Control
+  'Employee Name':                  'employeeName',
+  'Employee Gender':                'employeeGender',
+  'Employee Race':                  'employeeRace',
+  'Employee Designation':           'employeeDesignation',
+  'Employee Disability Status':     'employeeDisability',
+  // Skills Development
+  'Training Programme Name':        'trainingProgramme',
+  'Training Cost':                  'trainingCost',
+  'Learner Name':                   'learnerName',
+  'Learner Employment Status':      'learnerEmploymentStatus',
+  'Learner Race Status':            'learnerRace',
+  // Procurement
+  'Supplier Name':                  'supplierName',
+  'Supplier BEE Level':             'supplierBeeLevel',
+  'Supplier Black Ownership':       'supplierBlackOwnership',
+  'Supplier Spend':                 'supplierSpend',
+  // ESD
+  'ESD Beneficiary':                'esdBeneficiary',
+  'ESD Contribution Type':          'esdContributionType',
+  'ESD Amount':                     'esdAmount',
+  'ESD Category':                   'esdCategory',
+  // SED
+  'SED Beneficiary':                'sedBeneficiary',
+  'SED Contribution Type':          'sedContributionType',
+  'SED Amount':                     'sedAmount',
+  // Sector-specific (ICT)
+  'ICT Black-Owned Spend':          'ictBlackOwnedSpend',
+  '3rd Party ICT Spend':            'ictThirdPartySpend',
+  // Sector-specific (FSC)
+  'Access to Financial Services':   'accessFinancialServices',
+  'Empowerment Financing Amount':   'empowermentFinancingAmount',
+  'BEE Transaction Financing':      'beeTransactionFinancing',
+  // Sector-specific (Agri)
+  'Land Ownership Black':           'landOwnershipBlack',
+  'Agricultural Development Contribution': 'agriDevelopmentContribution',
+  'Farmworker Housing':             'farmworkerHousing',
+};
+
+function normaliseEntityName(raw: string): string {
+  // 1. Direct lookup in the mapping table
+  if (ENTITY_NAME_TO_KEY[raw]) return ENTITY_NAME_TO_KEY[raw];
+  // 2. Case-insensitive lookup
+  const lower = raw.toLowerCase();
+  for (const [manifestName, key] of Object.entries(ENTITY_NAME_TO_KEY)) {
+    if (manifestName.toLowerCase() === lower) return key;
+  }
+  // 3. Fallback: return the raw name as-is (supports old camelCase callers)
+  return raw;
+}
+
+// ---------------------------------------------------------------------------
 // Grouping: collect multi-row entity results by entity type
 // ---------------------------------------------------------------------------
 
 /**
- * Build a keyed lookup: formulaRole → values in order
+ * Build a keyed lookup: normalised formulaRole → values in order.
+ * Accepts both human-readable manifest names and legacy camelCase keys.
  */
 function buildRoleMap(
   results: LLMExtractionResult[],
@@ -106,11 +175,7 @@ function buildRoleMap(
   const map: Record<string, Array<string | number | null>> = {};
   for (const r of results) {
     if (!r.entityName) continue;
-    // Strip "Entity:" prefix if present, then look for "formulaRole" tag via entity naming convention
-    // The formulaRole is encoded in LLMExtractionResult.entityName as "formulaRole|<role>"
-    // or simply the entityName itself maps to its formulaRole (set during manifest build).
-    // Here we treat entityName as the formulaRole key.
-    const key = r.entityName;
+    const key = normaliseEntityName(r.entityName);
     if (!map[key]) map[key] = [];
     map[key].push(r.extractedValue);
   }

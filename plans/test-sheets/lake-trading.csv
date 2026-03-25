@@ -4,34 +4,35 @@ NPAT,R 18 500 000.00,1. General Information
 LeviableAmount,R 32 400 000.00,1. General Information
 TMPS,R 65 200 000.00,1. General Information
 FinancialYearEnd,2024-02-28,1. General Information
-ShareholderName,Nkosi Investments (Pty) Ltd,1. General Information
-BlackOwnershipPercentage,51.00%,1. General Information
-BlackWomenOwnershipPercentage,30.50%,1. General Information
-ShareholdingPercentage,51.00%,1. General Information
-ShareValue,R 15 000 000.00,1. General Information
-EmployeeName,Sipho Ndlovu,2. Management Control
-EmployeeGender,Male,2. Management Control
-EmployeeRace,African,2. Management Control
-EmployeeDesignation,Top Management,2. Management Control
-EmployeeDisabilityStatus,No,2. Management Control
-EmployeeName,Jane Doe,2. Management Control
-EmployeeGender,Female,2. Management Control
-EmployeeRace,White,2. Management Control
-EmployeeDesignation,Senior Management,2. Management Control
-EmployeeDisabilityStatus,No,2. Management Control
-TrainingProgrammeName,Advanced Leadership,3. Skills Development
-TrainingCost,R 120 000.00,3. Skills Development
-LearnerName,Thandi Mokoena,3. Skills Development
-LearnerEmploymentStatus,Employed,3. Skills Development
-LearnerRaceStatus,African,3. Skills Development
-SupplierName,Sizwe Logistics,4. Preferential Procurement
-SupplierBEELevel,Level 1,4. Preferential Procurement
-SupplierBlackOwnership,100%,4. Preferential Procurement
-SupplierSpend,R 4 500 000.00,4. Preferential Procurement
-ESDBeneficiary,Bright Future Trading,5. Supplier Development
-ESDContributionType,Grant,5. Supplier Development
-ESDAmount,R 350 000.00,5. Supplier Development
-ESDCategory,Supplier Development,5. Supplier Development
-SEDBeneficiary,Thembalethu Foundation,7. Socio-Economic Development
-SEDContributionType,Monetary,7. Socio-Economic Development
-SEDAmount,R 185 000.00,7. Socio-Economic Development
+CompanyName,Lake Trading 447 (Pty) Ltd,1. General Information
+Sector,Generic,1. General Information
+ScorecardType,Generic,1. General Information
+Black Ownership Percentage,51%,2. Ownership
+Black Women Ownership Percentage,30.5%,2. Ownership
+Black Economic Interest,51%,2. Ownership
+Black Women Economic Interest,30.5%,2. Ownership
+Shareholder Name,Nkosi Investments (Pty) Ltd,2. Ownership
+Shareholding Percentage,51%,2. Ownership
+Share Value,R 15 000 000.00,2. Ownership
+Black Board Members,60%,3. Management Control
+Black Women Board Members,30%,3. Management Control
+Black Executive Directors,75%,3. Management Control
+Black Women Executive,40%,3. Management Control
+Skills Development Spend,R 1 200 000.00,4. Skills Development
+Training Programme Name,Advanced Leadership Programme,4. Skills Development
+Training Cost,R 120 000.00,4. Skills Development
+Learner Name,Thandi Mokoena,4. Skills Development
+Learner Employment Status,Employed,4. Skills Development
+Learner Race Status,African,4. Skills Development
+Supplier Name,Sizwe Logistics,5. Preferential Procurement
+Supplier BEE Level,Level 1,5. Preferential Procurement
+Supplier Black Ownership,100%,5. Preferential Procurement
+Supplier Spend,R 52 160 000.00,5. Preferential Procurement
+Preferential Procurement Spend,R 52 160 000.00,5. Preferential Procurement
+ESD Beneficiary,Bright Future Trading,6. Enterprise & Supplier Development
+ESD Contribution Type,Grant,6. Enterprise & Supplier Development
+ESD Amount,R 370 000.00,6. Enterprise & Supplier Development
+ESD Category,Supplier Development,6. Enterprise & Supplier Development
+SED Beneficiary,Thembalethu Foundation,7. Socio-Economic Development
+SED Contribution Type,Monetary,7. Socio-Economic Development
+SED Amount,R 185 000.00,7. Socio-Economic Development
