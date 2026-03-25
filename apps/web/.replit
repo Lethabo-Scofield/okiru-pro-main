@@ -51,3 +51,10 @@ build = ["npm", "run", "build"]
 
 [userenv.shared]
 MONGODB_URI = "mongodb+srv://scofieldx911_db_user:bMn26IskYLn67m0n@kuriopro.qwmqzkd.mongodb.net/?appName=KurioPro"
+SMTP_HOST = "smtp.zoho.com"
+SMTP_PORT = "587"
+SMTP_USER = "contact@okiru.co.za"
+SMTP_FROM = "contact@okiru.co.za"
+OTP_LENGTH = "6"
+OTP_EXPIRY_MINUTES = "5"
+MAX_OTP_ATTEMPTS = "5"

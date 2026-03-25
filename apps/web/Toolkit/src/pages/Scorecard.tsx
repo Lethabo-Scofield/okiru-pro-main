@@ -219,7 +219,7 @@ export default function Scorecard() {
       key: "yesInitiative",
       name: "YES Initiative",
       ...scorecard.yesInitiative,
-      accentColor: "text-purple-500 dark:text-purple-400",
+      accentColor: "text-purple-500 dark:text-[#d1d1d6]",
       barColor: "bg-purple-500",
       subIndicators: [
         { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 5, score: scorecard.yesInitiative.score, formula: `Bonus points for YES programme participation` },

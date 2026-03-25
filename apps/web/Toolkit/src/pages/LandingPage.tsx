@@ -12,9 +12,9 @@ const GLOBAL_CSS = `
     --muted: rgba(255,255,255,0.32);
     --body:  rgba(255,255,255,0.56);
     --hi:    rgba(255,255,255,0.92);
-    --pur:   #8b5cf6;
-    --pur-d: #6d28d9;
-    --pur-l: #a78bfa;
+    --pur:   #6366f1;
+    --pur-d: #4338ca;
+    --pur-l: #818cf8;
     --mono:  'Geist Mono', monospace;
     --serif: 'Instrument Serif', serif;
     --sans:  'Geist', sans-serif;
@@ -28,7 +28,7 @@ const GLOBAL_CSS = `
     overflow-x: hidden;
     min-height: 100%;
   }
-  .okiru-root ::selection { background: rgba(139,92,246,0.25); }
+  .okiru-root ::selection { background: rgba(99,102,241,0.25); }
 
   /* grain */
   .okiru-root .okiru-grain {
@@ -124,7 +124,7 @@ const GLOBAL_CSS = `
     padding: 12px 22px; border-radius: 4px;
     transition: color .2s, border-color .2s;
   }
-  .okiru-root .ok-btn-sec:hover { color: var(--pur-l); border-color: rgba(139,92,246,.35); }
+  .okiru-root .ok-btn-sec:hover { color: var(--pur-l); border-color: rgba(99,102,241,.35); }
 
   /* stats */
   .okiru-root .ok-stats {
@@ -175,12 +175,12 @@ const GLOBAL_CSS = `
     position: relative; border-radius: 12px; overflow: hidden;
     background: #0d0c15;
     border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.08);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.08);
     font-family: var(--mono);
   }
   .okiru-root .ok-sc::before {
     content: ''; position: absolute; inset: -1px; border-radius: 13px; z-index: -1;
-    background: linear-gradient(135deg,rgba(139,92,246,0.15),transparent 60%);
+    background: linear-gradient(135deg,rgba(99,102,241,0.15),transparent 60%);
     pointer-events: none;
   }
   .okiru-root .ok-sc-chrome {
@@ -195,12 +195,12 @@ const GLOBAL_CSS = `
   .okiru-root .ok-sc-live { display: flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(255,255,255,.3); }
 
   @keyframes okiru-scPulse {
-    0%,100% { opacity:1; box-shadow: 0 0 6px #8b5cf6; }
-    50% { opacity:.3; box-shadow: 0 0 2px #8b5cf6; }
+    0%,100% { opacity:1; box-shadow: 0 0 6px #6366f1; }
+    50% { opacity:.3; box-shadow: 0 0 2px #6366f1; }
   }
   .okiru-root .ok-sc-livedot {
     width: 5px; height: 5px; border-radius: 50%;
-    background: #8b5cf6; box-shadow: 0 0 6px #8b5cf6;
+    background: #6366f1; box-shadow: 0 0 6px #6366f1;
     animation: okiru-scPulse 1.8s ease-in-out infinite;
   }
   .okiru-root .ok-sc-body { padding: 20px 20px 18px; }
@@ -220,8 +220,8 @@ const GLOBAL_CSS = `
   .okiru-root .ok-sc-badge-rec {
     font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
     padding: 3px 10px; border-radius: 3px;
-    color: #a78bfa; background: rgba(139,92,246,.12);
-    border: 1px solid rgba(139,92,246,.2);
+    color: #818cf8; background: rgba(99,102,241,.12);
+    border: 1px solid rgba(99,102,241,.2);
     transition: opacity .4s ease;
   }
   .okiru-root .ok-sc-badge-sub {
@@ -262,20 +262,20 @@ const GLOBAL_CSS = `
     transition: opacity .5s ease;
   }
   .okiru-root .ok-sc-export {
-    font-size: 10px; color: rgba(139,92,246,.7);
-    background: none; border: 1px solid rgba(139,92,246,.2);
+    font-size: 10px; color: rgba(99,102,241,.7);
+    background: none; border: 1px solid rgba(99,102,241,.2);
     padding: 4px 11px; border-radius: 3px; cursor: pointer;
     font-family: var(--mono); letter-spacing: .04em;
     transition: background .2s, color .2s, opacity .5s ease;
   }
-  .okiru-root .ok-sc-export:hover { background: rgba(139,92,246,.12); color: var(--pur-l); }
+  .okiru-root .ok-sc-export:hover { background: rgba(99,102,241,.12); color: var(--pur-l); }
   .okiru-root .ok-sc-replay {
     text-align: center; padding: 10px 0 4px;
     font-size: 10px; font-family: var(--mono);
     color: rgba(255,255,255,.15); letter-spacing: .08em; cursor: pointer;
     transition: color .2s;
   }
-  .okiru-root .ok-sc-replay:hover { color: rgba(139,92,246,.6); }
+  .okiru-root .ok-sc-replay:hover { color: rgba(99,102,241,.6); }
 
   /* features */
   .okiru-root .ok-feats { display: grid; grid-template-columns: repeat(4,1fr); border-bottom: 1px solid var(--rule); }
@@ -284,17 +284,17 @@ const GLOBAL_CSS = `
     border-top: 1px solid var(--rule); transition: background .35s; cursor: default;
   }
   .okiru-root .ok-feat:last-child { border-right: none; }
-  .okiru-root .ok-feat:hover { background: rgba(139,92,246,0.04); }
+  .okiru-root .ok-feat:hover { background: rgba(99,102,241,0.04); }
   .okiru-root .ok-feat--hl {
-    background: rgba(139,92,246,0.03);
-    border-left: 1px solid rgba(139,92,246,0.18) !important;
+    background: rgba(99,102,241,0.03);
+    border-left: 1px solid rgba(99,102,241,0.18) !important;
   }
-  .okiru-root .ok-feat--hl:hover { background: rgba(139,92,246,0.07); }
+  .okiru-root .ok-feat--hl:hover { background: rgba(99,102,241,0.07); }
   .okiru-root .ok-feat-idx {
     font-family: var(--mono); font-size: 10px; text-transform: uppercase;
-    letter-spacing: .12em; color: rgba(139,92,246,.45); margin-bottom: 22px;
+    letter-spacing: .12em; color: rgba(99,102,241,.45); margin-bottom: 22px;
   }
-  .okiru-root .ok-feat--hl .ok-feat-idx { color: rgba(139,92,246,.65); }
+  .okiru-root .ok-feat--hl .ok-feat-idx { color: rgba(99,102,241,.65); }
   .okiru-root .ok-feat-h {
     font-family: var(--serif); font-size: 1.45rem; font-weight: 400;
     letter-spacing: -0.02em; color: var(--hi); line-height: 1.2; margin-bottom: 12px;
@@ -315,7 +315,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-eb-list li { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--body); }
   .okiru-root .ok-eb-dot {
     flex-shrink: 0; width: 5px; height: 5px; border-radius: 50%;
-    background: var(--pur); box-shadow: 0 0 6px rgba(139,92,246,.5);
+    background: var(--pur); box-shadow: 0 0 6px rgba(99,102,241,.5);
   }
   .okiru-root .ok-eb-card {
     background: #0d0c15; border: 1px solid rgba(255,255,255,.07);
@@ -330,18 +330,18 @@ const GLOBAL_CSS = `
   .okiru-root .ok-eb-card-title { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.35); }
   .okiru-root .ok-eb-add {
     font-size: 11px; font-family: var(--mono); color: var(--pur-l);
-    background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.2);
+    background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.2);
     padding: 4px 12px; border-radius: 4px; cursor: pointer; transition: background .2s;
   }
-  .okiru-root .ok-eb-add:hover { background: rgba(139,92,246,.2); }
+  .okiru-root .ok-eb-add:hover { background: rgba(99,102,241,.2); }
   .okiru-root .ok-eb-entity {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,.04);
     transition: background .2s; cursor: default;
   }
-  .okiru-root .ok-eb-entity:hover { background: rgba(139,92,246,.05); }
+  .okiru-root .ok-eb-entity:hover { background: rgba(99,102,241,.05); }
   .okiru-root .ok-eb-entity:last-child { border-bottom: none; }
-  .okiru-root .ok-eb-entity--active { background: rgba(139,92,246,.04); }
+  .okiru-root .ok-eb-entity--active { background: rgba(99,102,241,.04); }
   .okiru-root .ok-eb-entity--draft { opacity: .5; }
   .okiru-root .ok-eb-entity-l { display: flex; align-items: center; gap: 12px; }
   .okiru-root .ok-eb-avatar {
@@ -357,7 +357,7 @@ const GLOBAL_CSS = `
     padding: 2px 8px; border-radius: 3px;
   }
   .okiru-root .ok-eb-chip--1 { color:#34d399; background:rgba(6,95,70,.2); border:1px solid rgba(52,211,153,.2); }
-  .okiru-root .ok-eb-chip--2 { color:#a78bfa; background:rgba(124,58,237,.15); border:1px solid rgba(139,92,246,.25); }
+  .okiru-root .ok-eb-chip--2 { color:#818cf8; background:rgba(79,70,229,.15); border:1px solid rgba(99,102,241,.25); }
   .okiru-root .ok-eb-chip--4 { color:#38bdf8; background:rgba(14,116,144,.15); border:1px solid rgba(56,189,248,.2); }
   .okiru-root .ok-eb-chip--d { color:rgba(255,255,255,.25); background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
   .okiru-root .ok-eb-members { display: flex; align-items: center; }
@@ -391,7 +391,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-proc-step:last-child { border-bottom: none; }
   .okiru-root .ok-proc-num {
     font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
-    text-transform: uppercase; color: rgba(139,92,246,.45); padding-top: 3px;
+    text-transform: uppercase; color: rgba(99,102,241,.45); padding-top: 3px;
   }
   .okiru-root .ok-proc-title {
     font-family: var(--serif); font-size: 1.3rem; color: var(--hi);
@@ -465,7 +465,7 @@ const GLOBAL_CSS = `
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 const PILLARS = [
-  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#7c3aed,#a78bfa)" },
+  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f46e5,#818cf8)" },
   { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#0ea5e9,#38bdf8)" },
   { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#34d399)" },
   { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#d97706,#fbbf24)" },
@@ -482,8 +482,8 @@ const FEATURES = [
 const ENTITIES = [
   {
     letter: "A", name: "Acme Holdings (Pty) Ltd", meta: "Level 2 · 125% · 5 pillars", chipClass: "ok-eb-chip--2", chip: "Lvl 2", active: true,
-    avatarBg: "rgba(139,92,246,.2)", avatarColor: "#a78bfa",
-    members: [{ initials: "JM", bg: "#7c3aed" }, { initials: "SR", bg: "#0e7490" }, { initials: "TN", bg: "#065f46" }]
+    avatarBg: "rgba(99,102,241,.2)", avatarColor: "#818cf8",
+    members: [{ initials: "JM", bg: "#4f46e5" }, { initials: "SR", bg: "#0e7490" }, { initials: "TN", bg: "#065f46" }]
   },
   {
     letter: "B", name: "BlueSky Ventures (Pty) Ltd", meta: "Level 4 · 100% · 5 pillars", chipClass: "ok-eb-chip--4", chip: "Lvl 4",
@@ -493,7 +493,7 @@ const ENTITIES = [
   {
     letter: "C", name: "Cedar Invest Group", meta: "Level 1 · 135% · 5 pillars", chipClass: "ok-eb-chip--1", chip: "Lvl 1",
     avatarBg: "rgba(6,95,70,.2)", avatarColor: "#34d399",
-    members: [{ initials: "JM", bg: "#7c3aed" }, { initials: "TN", bg: "#065f46" }, { initials: "PK", bg: "#92400e" }, { initials: "+2", more: true }]
+    members: [{ initials: "JM", bg: "#4f46e5" }, { initials: "TN", bg: "#065f46" }, { initials: "PK", bg: "#92400e" }, { initials: "+2", more: true }]
   },
   {
     letter: "+", name: "New entity in progress…", meta: "Draft · 0 pillars configured", chipClass: "ok-eb-chip--d", chip: "Draft", draft: true,
@@ -662,7 +662,8 @@ function Reveal({ children, delay = "", className = "" }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () => void }) {
+export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { onNavigateAuth: () => void; onNavigateRegister?: () => void }) {
+  const goRegister = onNavigateRegister || onNavigateAuth;
   // Inject scoped CSS once, keyed by ID so it's never duplicated
   useEffect(() => {
     const id = "okiru-styles";
@@ -693,7 +694,7 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button className="ok-btn-ghost" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-btn-pur" onClick={onNavigateAuth}>Get started</button>
+            <button className="ok-btn-pur" onClick={goRegister}>Get started</button>
           </div>
         </div>
       </nav>
@@ -711,7 +712,7 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
               Import your Excel toolkit. Get an instant, verified scorecard across all five pillars. Export compliance packs in one click.
             </p>
             <div className="ok-hero-btns ok-anim-4">
-              <button className="ok-btn-main" onClick={onNavigateAuth}>
+              <button className="ok-btn-main" onClick={goRegister}>
                 Start for free <span className="arr"><ArrowRight size={14} /></span>
               </button>
               <button className="ok-btn-sec" onClick={onNavigateAuth}>Learn more</button>
@@ -827,7 +828,7 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
             <Reveal className="ok-cta-grid">
               <h2 className="ok-cta-h2">Compliance shouldn't<br />take <em>all week.</em></h2>
               <div className="ok-cta-r">
-                <button className="ok-btn-main" style={{ fontSize: 15, padding: "14px 34px" }} onClick={onNavigateAuth}>
+                <button className="ok-btn-main" style={{ fontSize: 15, padding: "14px 34px" }} onClick={goRegister}>
                   Start for free <span className="arr"><ArrowRight size={15} /></span>
                 </button>
                 <span className="ok-cta-note">No credit card · Free to start</span>

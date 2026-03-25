@@ -9,15 +9,13 @@ export default defineConfig({
     tailwindcss(),
   ],
   resolve: {
-    // `@/lib/pipeline/*` lives under apps/web/lib/pipeline (not src/lib). List before `@` → src.
-    alias: [
-      { find: "@/lib/pipeline", replacement: path.resolve(import.meta.dirname, "lib/pipeline") },
-      { find: "@toolkit-assets", replacement: path.resolve(import.meta.dirname, "Toolkit/attached_assets") },
-      { find: "@toolkit", replacement: path.resolve(import.meta.dirname, "Toolkit/src") },
-      { find: "@shared", replacement: path.resolve(import.meta.dirname, "shared") },
-      { find: "@assets", replacement: path.resolve(import.meta.dirname, "attached_assets") },
-      { find: "@", replacement: path.resolve(import.meta.dirname, "src") },
-    ],
+    alias: {
+      "@toolkit-assets": path.resolve(import.meta.dirname, "Toolkit/attached_assets"),
+      "@toolkit": path.resolve(import.meta.dirname, "Toolkit/src"),
+      "@": path.resolve(import.meta.dirname, "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+    },
   },
   css: {
     postcss: {

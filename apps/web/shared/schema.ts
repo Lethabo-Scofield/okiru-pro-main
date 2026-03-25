@@ -72,6 +72,12 @@ export interface User {
   organizationId: string | null;
   organizationName: string | null;
   profilePicture: string | null;
+  isVerified: boolean;
+  twofaEnabled: boolean;
+  otpCode: string | null;
+  otpExpiry: Date | null;
+  otpAttempts: number;
+  lastLogin: Date | null;
   createdAt: Date;
 }
 
@@ -84,6 +90,8 @@ export interface InsertUser {
   organizationId?: string | null;
   organizationName?: string | null;
   profilePicture?: string | null;
+  isVerified?: boolean;
+  twofaEnabled?: boolean;
 }
 
 export interface Template {
@@ -135,6 +143,12 @@ const userSchema = new Schema({
   organizationId: { type: String, default: null },
   organizationName: { type: String, default: null },
   profilePicture: { type: String, default: null },
+  isVerified: { type: Boolean, default: false },
+  twofaEnabled: { type: Boolean, default: false },
+  otpCode: { type: String, default: null },
+  otpExpiry: { type: Date, default: null },
+  otpAttempts: { type: Number, default: 0 },
+  lastLogin: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -318,10 +332,19 @@ const clientSchema = new Schema({
   revenue: { type: Number, default: 0 },
   npat: { type: Number, default: 0 },
   leviableAmount: { type: Number, default: 0 },
+  tmps: { type: Number, default: 0 },
+  companyValue: { type: Number, default: 0 },
+  outstandingDebt: { type: Number, default: 0 },
   organizationId: { type: String, default: null, index: true },
   createdByUserId: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  shareholders: { type: [Schema.Types.Mixed], default: [] },
+  employees: { type: [Schema.Types.Mixed], default: [] },
+  trainingPrograms: { type: [Schema.Types.Mixed], default: [] },
+  suppliers: { type: [Schema.Types.Mixed], default: [] },
+  esdContributions: { type: [Schema.Types.Mixed], default: [] },
+  sedContributions: { type: [Schema.Types.Mixed], default: [] },
 });
 
 clientSchema.set("toJSON", {

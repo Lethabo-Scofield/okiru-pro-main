@@ -26,6 +26,12 @@ export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
+  setUserOtp(id: string, otpCode: string, otpExpiry: Date): Promise<void>;
+  clearUserOtp(id: string): Promise<void>;
+  incrementOtpAttempts(id: string): Promise<number>;
+  setTwofaEnabled(id: string, enabled: boolean): Promise<User | undefined>;
+  setLastLogin(id: string): Promise<void>;
+  getAllUsers(): Promise<User[]>;
   getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined>;
   saveCalculatorConfig(clientId: string, config: CalculatorConfig): Promise<CalculatorConfigRow>;
 }
@@ -145,6 +151,12 @@ export class MemoryStorage implements IStorage {
       organizationId: user.organizationId || null,
       organizationName: user.organizationName || null,
       profilePicture: user.profilePicture || null,
+      isVerified: user.isVerified ?? false,
+      twofaEnabled: user.twofaEnabled ?? false,
+      otpCode: null,
+      otpExpiry: null,
+      otpAttempts: 0,
+      lastLogin: null,
       createdAt: new Date(),
     };
     this.users.set(id, doc);
@@ -157,6 +169,49 @@ export class MemoryStorage implements IStorage {
     const updated: User = { ...existing, ...data, id };
     this.users.set(id, updated);
     return updated;
+  }
+
+  async setUserOtp(id: string, otpCode: string, otpExpiry: Date): Promise<void> {
+    const user = this.users.get(id);
+    if (user) {
+      user.otpCode = otpCode;
+      user.otpExpiry = otpExpiry;
+      user.otpAttempts = 0;
+    }
+  }
+
+  async clearUserOtp(id: string): Promise<void> {
+    const user = this.users.get(id);
+    if (user) {
+      user.otpCode = null;
+      user.otpExpiry = null;
+      user.otpAttempts = 0;
+    }
+  }
+
+  async incrementOtpAttempts(id: string): Promise<number> {
+    const user = this.users.get(id);
+    if (user) {
+      user.otpAttempts = (user.otpAttempts || 0) + 1;
+      return user.otpAttempts;
+    }
+    return 0;
+  }
+
+  async setTwofaEnabled(id: string, enabled: boolean): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    user.twofaEnabled = enabled;
+    return user;
+  }
+
+  async setLastLogin(id: string): Promise<void> {
+    const user = this.users.get(id);
+    if (user) user.lastLogin = new Date();
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 
   async getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined> {
@@ -189,6 +244,12 @@ function toUser(doc: any): User | undefined {
     organizationId: obj.organizationId || null,
     organizationName: obj.organizationName || null,
     profilePicture: obj.profilePicture || null,
+    isVerified: obj.isVerified ?? false,
+    twofaEnabled: obj.twofaEnabled ?? false,
+    otpCode: obj.otpCode || null,
+    otpExpiry: obj.otpExpiry || null,
+    otpAttempts: obj.otpAttempts || 0,
+    lastLogin: obj.lastLogin || null,
     createdAt: obj.createdAt,
   };
 }
@@ -303,6 +364,33 @@ export class DatabaseStorage implements IStorage {
   async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {
     const doc = await UserModel.findByIdAndUpdate(id, data, { new: true });
     return toUser(doc);
+  }
+
+  async setUserOtp(id: string, otpCode: string, otpExpiry: Date): Promise<void> {
+    await UserModel.findByIdAndUpdate(id, { otpCode, otpExpiry, otpAttempts: 0 });
+  }
+
+  async clearUserOtp(id: string): Promise<void> {
+    await UserModel.findByIdAndUpdate(id, { otpCode: null, otpExpiry: null, otpAttempts: 0 });
+  }
+
+  async incrementOtpAttempts(id: string): Promise<number> {
+    const doc = await UserModel.findByIdAndUpdate(id, { $inc: { otpAttempts: 1 } }, { new: true });
+    return doc?.otpAttempts || 0;
+  }
+
+  async setTwofaEnabled(id: string, enabled: boolean): Promise<User | undefined> {
+    const doc = await UserModel.findByIdAndUpdate(id, { twofaEnabled: enabled }, { new: true });
+    return toUser(doc);
+  }
+
+  async setLastLogin(id: string): Promise<void> {
+    await UserModel.findByIdAndUpdate(id, { lastLogin: new Date() });
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    const docs = await UserModel.find().sort({ createdAt: -1 });
+    return docs.map((d) => toUser(d)!);
   }
 
   async getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined> {
