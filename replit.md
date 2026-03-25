@@ -1,46 +1,47 @@
-# Okiru Pro - B-BBEE Compliance Platform
+# Okiru Pro - B-BBEE Compliance & Scorecard Management Platform
 
-## Overview
-B-BBEE Compliance and Scorecard Management Platform. A monorepo containing a React + Express web app, a separate API server, and a Python computation engine.
+## Project Overview
+Okiru Pro is a comprehensive B-BBEE (Broad-Based Black Economic Empowerment) Compliance and Scorecard Management Platform for South Africa. It automates B-BBEE score calculations, manages compliance data, and generates reports across all five pillars: Ownership, Management Control, Skills Development, ESD, and SED.
 
-## Monorepo Structure
-- `apps/web/` — Main full-stack app (React frontend + Express backend). **This is the primary app.**
-- `apps/api/` — Separate API server (references `@okiru/types` workspace package)
-- `apps/Computation-Engine/` — Python computation service
-- `packages/types/` — Shared TypeScript types
+## Architecture
 
-## Running the App
-The primary app (`apps/web`) runs on **port 5000**. It combines:
-- React frontend served via Vite middleware in dev mode
-- Express backend with session auth, storage, and AI features
+### Monorepo Structure (pnpm workspaces)
+- **`apps/web`** - Main web application (React + Vite + Express server)
+- **`apps/api`** - Separate backend API service (Node.js/Express/TypeScript)
+- **`apps/Computation-Engine`** - Python FastAPI service for Excel-based scorecard computation
+- **`packages/types`** - Shared TypeScript types
 
-**Workflow**: `cd apps/web && npm run dev`
+### Tech Stack
+- **Frontend**: React 19, Vite, Tailwind CSS 4, Radix UI, Tanstack Query, Zustand, Wouter
+- **Backend**: Express 5, TypeScript (tsx), Passport.js (local auth), Express Session
+- **Databases**: MongoDB (primary data), ArangoDB (knowledge graph)
+- **AI/LLM**: Groq SDK (Llama-3), OpenAI, Google Generative AI
+- **Computation**: FastAPI (Python), xlcalculator, networkx
+- **Auth**: Passport.js local strategy with session-based auth
 
-## Dependency Installation
-Because this is a pnpm monorepo with workspace: protocol references, use npm with flags to install in `apps/web`:
+## Running the Project
+
+### Development
+The workflow `Start application` runs:
 ```
-cd apps/web && npm install --no-workspaces --legacy-peer-deps
+cd apps/web && pnpm run dev
+```
+This starts the Express server (with Vite middleware) on port 5000.
+
+### Package Management
+Uses pnpm workspaces. Install dependencies from the root:
+```
+pnpm install --no-frozen-lockfile --ignore-scripts
 ```
 
-## Environment Variables
-The app gracefully degrades without these (using in-memory storage):
-- `MONGODB_URI` — MongoDB Atlas connection string (optional; enables persistence)
-- `GROQ_API_KEY` — Groq API key for AI features (optional)
-- `SESSION_SECRET` — Express session secret (auto-generates if not set)
+## Environment Variables Required
+- `MONGODB_URI` - MongoDB connection string (without this, uses in-memory storage)
+- `GROQ_API_KEY` - For AI/LLM features
+- `SESSION_SECRET` - Express session secret
+- `OPENAI_API_KEY` - Optional, for OpenAI features
+- `GOOGLE_AI_API_KEY` - Optional, for Google AI features
 
-## Demo Mode
-Without `MONGODB_URI`, the app runs in in-memory mode with:
-- Demo user: username `demo`, password `demo`
-- 3 pre-seeded B-BBEE templates
-
-## Tech Stack
-- **Frontend**: React 19, Vite, TailwindCSS, Radix UI, Wouter
-- **Backend**: Express.js (TypeScript), express-session, bcryptjs
-- **Database**: MongoDB (Mongoose), with in-memory fallback
-- **AI**: Groq SDK (llama-3.3-70b)
-- **Build**: esbuild (server), Vite (client)
-
-## Deployment
-- **Target**: autoscale
-- **Build**: `cd apps/web && npm install --no-workspaces --legacy-peer-deps && npm run build`
-- **Run**: `cd apps/web && cross-env NODE_ENV=production node dist/index.cjs`
+## Notes
+- Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)
+- The `packageManager` field was removed from root `package.json` to avoid pnpm version conflicts in Replit
+- Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility

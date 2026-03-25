@@ -21,21 +21,21 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd apps/web && npm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/web && pnpm run dev"
+waitForPort = 5000
+
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 24678
-externalPort = 80
+externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
