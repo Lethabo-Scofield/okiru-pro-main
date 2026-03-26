@@ -106,17 +106,33 @@ describe('calculateProcurementScore', () => {
   });
 
   describe('designated group bonus', () => {
-    it('should award bonus for 51%+ black-owned suppliers', () => {
+    it('should award bonus for 51%+ black-owned suppliers with youth or disabled ownership', () => {
       const result = calculateProcurementScore(makeProcurementData({
-        suppliers: [makeSupplier({ blackOwnership: 0.60, spend: 5_000_000 })],
+        suppliers: [makeSupplier({ blackOwnership: 0.60, youthOwnership: 0.1, spend: 5_000_000 })],
       }));
 
       expect(result.designatedGroup).toBeGreaterThan(0);
     });
 
-    it('should not award bonus for < 51% black-owned', () => {
+    it('should not award designated group bonus without youth or disabled ownership', () => {
       const result = calculateProcurementScore(makeProcurementData({
-        suppliers: [makeSupplier({ blackOwnership: 0.40, spend: 5_000_000 })],
+        suppliers: [makeSupplier({ blackOwnership: 0.60, youthOwnership: 0, disabledOwnership: 0, spend: 5_000_000 })],
+      }));
+
+      expect(result.designatedGroup).toBe(0);
+    });
+
+    it('should award bonus for 51%+ black-owned suppliers with disabled ownership', () => {
+      const result = calculateProcurementScore(makeProcurementData({
+        suppliers: [makeSupplier({ blackOwnership: 0.60, disabledOwnership: 0.05, spend: 5_000_000 })],
+      }));
+
+      expect(result.designatedGroup).toBeGreaterThan(0);
+    });
+
+    it('should not award bonus for < 51% black-owned even with youth ownership', () => {
+      const result = calculateProcurementScore(makeProcurementData({
+        suppliers: [makeSupplier({ blackOwnership: 0.40, youthOwnership: 0.2, spend: 5_000_000 })],
       }));
 
       expect(result.designatedGroup).toBe(0);

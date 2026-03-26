@@ -29,13 +29,26 @@ describe('calculateSkillsScore', () => {
     it('should return all required fields', () => {
       const result = calculateSkillsScore(makeSkillsData());
       const keys: (keyof SkillsResult)[] = [
-        'general', 'bursaries', 'total', 'subMinimumMet',
-        'targetOverall', 'targetBursaries', 'actualSpend',
-        'actualBursarySpend', 'eapIndicators', 'rawStats',
+        'learningProgrammes', 'bursaries', 'disabledLearning',
+        'learnerships', 'absorption', 'total', 'subMinimumMet',
+        'categoryBreakdown', 'subLines', 'rawStats',
       ];
       for (const key of keys) {
         expect(result).toHaveProperty(key);
       }
+    });
+
+    it('should return rawStats with all sub-fields', () => {
+      const result = calculateSkillsScore(makeSkillsData());
+      expect(result.rawStats).toHaveProperty('blackSpend');
+      expect(result.rawStats).toHaveProperty('bursarySpend');
+      expect(result.rawStats).toHaveProperty('disabledSpend');
+      expect(result.rawStats).toHaveProperty('learnershipCount');
+      expect(result.rawStats).toHaveProperty('absorbedCount');
+      expect(result.rawStats).toHaveProperty('totalBlackLearners');
+      expect(result.rawStats).toHaveProperty('absorptionRate');
+      expect(result.rawStats).toHaveProperty('targetOverall');
+      expect(result.rawStats).toHaveProperty('targetBursaries');
     });
   });
 
@@ -44,7 +57,7 @@ describe('calculateSkillsScore', () => {
       const result = calculateSkillsScore(makeSkillsData());
 
       expect(result.total).toBe(0);
-      expect(result.general).toBe(0);
+      expect(result.learningProgrammes).toBe(0);
       expect(result.bursaries).toBe(0);
       expect(result.subMinimumMet).toBe(false);
     });
@@ -57,65 +70,116 @@ describe('calculateSkillsScore', () => {
       expect(result.total).toBe(0);
       expect(Number.isFinite(result.total)).toBe(true);
     });
+
+    it('should return empty categoryBreakdown when no programs', () => {
+      const result = calculateSkillsScore(makeSkillsData());
+      expect(Array.isArray(result.categoryBreakdown)).toBe(true);
+    });
+
+    it('should return 5 subLines always', () => {
+      const result = calculateSkillsScore(makeSkillsData());
+      expect(result.subLines).toHaveLength(5);
+    });
   });
 
   describe('score calculations', () => {
-    it('should calculate general score proportionally — 50% spend = 50% score', () => {
+    it('should calculate learning programmes score proportionally — 50% spend = ~50% score', () => {
       const leviableAmount = 10_000_000;
-      const target = leviableAmount * 0.035;
+      const TARGET_OVERALL = leviableAmount * 0.06;
       const result = calculateSkillsScore(makeSkillsData({
         leviableAmount,
-        trainingPrograms: [makeTrainingProgram({ cost: target * 0.5 })],
+        trainingPrograms: [makeTrainingProgram({ category: 'short_course', cost: TARGET_OVERALL * 0.5 })],
       }));
 
-      expect(result.general).toBeCloseTo(10, 0);
+      expect(result.learningProgrammes).toBeCloseTo(3, 0);
     });
 
-    it('should calculate bursary score separately', () => {
+    it('should calculate bursary score from bursary category spend', () => {
       const leviableAmount = 10_000_000;
+      const TARGET_BURSARIES = leviableAmount * 0.025;
       const result = calculateSkillsScore(makeSkillsData({
         leviableAmount,
-        trainingPrograms: [makeTrainingProgram({ category: 'bursary', cost: leviableAmount * 0.025 })],
+        trainingPrograms: [makeTrainingProgram({ category: 'bursary', cost: TARGET_BURSARIES })],
       }));
 
-      expect(result.bursaries).toBeCloseTo(5, 0);
+      expect(result.bursaries).toBeCloseTo(4, 0);
     });
 
-    it('should only count black training spend', () => {
+    it('should cap bursary score at 4 points', () => {
       const result = calculateSkillsScore(makeSkillsData({
-        trainingPrograms: [makeTrainingProgram({ isBlack: false, cost: 1_000_000 })],
+        leviableAmount: 1_000_000,
+        trainingPrograms: [makeTrainingProgram({ category: 'bursary', cost: 10_000_000 })],
       }));
 
-      expect(result.total).toBe(0);
-      expect(result.actualSpend).toBe(0);
+      expect(result.bursaries).toBeLessThanOrEqual(4);
+    });
+
+    it('should only count black training spend in rawStats.blackSpend', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        leviableAmount: 10_000_000,
+        trainingPrograms: [
+          makeTrainingProgram({ id: '1', isBlack: false, cost: 1_000_000, category: 'short_course' }),
+        ],
+      }));
+
+      expect(result.rawStats.blackSpend).toBe(0);
+      expect(result.learningProgrammes).toBe(0);
+    });
+
+    it('should track rawStats.bursarySpend separately', () => {
+      const leviableAmount = 10_000_000;
+      const bursaryCost = 250_000;
+      const result = calculateSkillsScore(makeSkillsData({
+        leviableAmount,
+        trainingPrograms: [makeTrainingProgram({ category: 'bursary', cost: bursaryCost })],
+      }));
+
+      expect(result.rawStats.bursarySpend).toBe(bursaryCost);
     });
   });
 
   describe('caps and thresholds', () => {
-    it('should cap at maximum points (20 general + 5 bursary = 25)', () => {
+    it('should cap total at 25 points maximum', () => {
       const result = calculateSkillsScore(makeSkillsData({
-        leviableAmount: 100_000,
-        trainingPrograms: [makeTrainingProgram({ cost: 100_000, category: 'bursary' })],
+        leviableAmount: 10_000,
+        trainingPrograms: Array.from({ length: 20 }, (_, i) =>
+          makeTrainingProgram({ id: String(i), cost: 5_000_000 })
+        ),
       }));
 
-      expect(result.general).toBeLessThanOrEqual(20);
-      expect(result.bursaries).toBeLessThanOrEqual(5);
       expect(result.total).toBeLessThanOrEqual(25);
     });
 
-    it('should handle zero leviable amount', () => {
+    it('should return finite results for zero leviable amount', () => {
       const result = calculateSkillsScore(makeSkillsData({
         leviableAmount: 0,
         trainingPrograms: [makeTrainingProgram()],
       }));
 
-      expect(result.total).toBe(0);
       expect(Number.isFinite(result.total)).toBe(true);
+      expect(result.learningProgrammes).toBe(0);
+      expect(result.bursaries).toBe(0);
+      expect(result.disabledLearning).toBe(0);
+    });
+
+    it('should mark subMinimumMet=true when total >= 10', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        leviableAmount: 10_000_000,
+        trainingPrograms: Array.from({ length: 10 }, (_, i) =>
+          makeTrainingProgram({ id: String(i), cost: 600_000 })
+        ),
+      }));
+
+      if (result.total >= 10) {
+        expect(result.subMinimumMet).toBe(true);
+      } else {
+        expect(result.subMinimumMet).toBe(false);
+      }
     });
   });
 
-  describe('EAP indicators', () => {
-    it('should calculate absorption rate correctly', () => {
+  describe('absorption rate', () => {
+    it('should calculate absorption rate correctly in rawStats', () => {
       const result = calculateSkillsScore(makeSkillsData({
         trainingPrograms: [
           makeTrainingProgram({ id: '1', isEmployed: true, isBlack: true }),
@@ -124,17 +188,62 @@ describe('calculateSkillsScore', () => {
         ],
       }));
 
-      expect(result.eapIndicators.absorption.rate).toBeCloseTo(2 / 3, 5);
-      expect(result.eapIndicators.absorption.count).toBe(2);
-      expect(result.eapIndicators.absorption.total).toBe(3);
+      expect(result.rawStats.absorptionRate).toBeCloseTo(2 / 3, 5);
+      expect(result.rawStats.absorbedCount).toBe(2);
+      expect(result.rawStats.totalBlackLearners).toBe(3);
     });
 
-    it('should track disabled spend separately', () => {
+    it('should return absorption rate of 0 with no black learners', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        trainingPrograms: [makeTrainingProgram({ isBlack: false })],
+      }));
+
+      expect(result.rawStats.absorptionRate).toBe(0);
+      expect(result.rawStats.totalBlackLearners).toBe(0);
+    });
+  });
+
+  describe('disabled spend tracking', () => {
+    it('should track disabled spend separately in rawStats', () => {
       const result = calculateSkillsScore(makeSkillsData({
         trainingPrograms: [makeTrainingProgram({ isDisabled: true, isBlack: true, cost: 5000 })],
       }));
 
       expect(result.rawStats.disabledSpend).toBe(5000);
+    });
+
+    it('should not count non-black disabled spend', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        trainingPrograms: [makeTrainingProgram({ isDisabled: true, isBlack: false, cost: 5000 })],
+      }));
+
+      expect(result.rawStats.disabledSpend).toBe(0);
+    });
+  });
+
+  describe('target calculations', () => {
+    it('should set rawStats.targetOverall to 6% of leviable amount', () => {
+      const leviableAmount = 5_000_000;
+      const result = calculateSkillsScore(makeSkillsData({ leviableAmount }));
+
+      expect(result.rawStats.targetOverall).toBeCloseTo(leviableAmount * 0.06, 0);
+    });
+
+    it('should set rawStats.targetBursaries to 2.5% of leviable amount', () => {
+      const leviableAmount = 5_000_000;
+      const result = calculateSkillsScore(makeSkillsData({ leviableAmount }));
+
+      expect(result.rawStats.targetBursaries).toBeCloseTo(leviableAmount * 0.025, 0);
+    });
+  });
+
+  describe('custom config', () => {
+    it('should respect custom overallTarget config', () => {
+      const leviableAmount = 10_000_000;
+      const config = { skills: { overallTarget: 0.03, bursaryTarget: 0.01, subMinThreshold: 10 } };
+      const result = calculateSkillsScore(makeSkillsData({ leviableAmount }), config as any);
+
+      expect(result.rawStats.targetOverall).toBeCloseTo(leviableAmount * 0.03, 0);
     });
   });
 });

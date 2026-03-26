@@ -20,13 +20,16 @@ const makeManagementData = (overrides: Partial<ManagementData> = {}): Management
   ...overrides,
 });
 
-function assertFiniteResult(result: ManagementResult) {
+function assertAllFinite(result: ManagementResult) {
   expect(Number.isFinite(result.total)).toBe(true);
-  expect(Number.isFinite(result.boardTotal)).toBe(true);
-  expect(Number.isFinite(result.execTotal)).toBe(true);
-  expect(Number.isFinite(result.senior)).toBe(true);
-  expect(Number.isFinite(result.middle)).toBe(true);
-  expect(Number.isFinite(result.junior)).toBe(true);
+  expect(Number.isFinite(result.boardVotingBlack)).toBe(true);
+  expect(Number.isFinite(result.boardVotingBWO)).toBe(true);
+  expect(Number.isFinite(result.execDirectorsBlack)).toBe(true);
+  expect(Number.isFinite(result.execDirectorsBWO)).toBe(true);
+  expect(Number.isFinite(result.seniorBlack)).toBe(true);
+  expect(Number.isFinite(result.middleBlack)).toBe(true);
+  expect(Number.isFinite(result.juniorBlack)).toBe(true);
+  expect(Number.isFinite(result.disabled)).toBe(true);
 }
 
 describe('calculateManagementScore', () => {
@@ -34,14 +37,34 @@ describe('calculateManagementScore', () => {
     it('should return all required fields', () => {
       const result = calculateManagementScore(makeManagementData());
       const keys: (keyof ManagementResult)[] = [
-        'boardExecBlack', 'boardNonExec', 'boardBWO', 'boardTotal',
-        'otherExecBlack', 'otherExecBWO', 'execTotal',
-        'senior', 'middle', 'junior', 'disabled', 'adjustedRecognition',
-        'total', 'subMinimumMet', 'rawStats',
+        'boardVotingBlack', 'boardVotingBWO',
+        'execDirectorsBlack', 'execDirectorsBWO',
+        'otherExecBlack', 'otherExecBWO',
+        'seniorBlack', 'seniorBWO',
+        'middleBlack', 'middleBWO',
+        'juniorBlack', 'juniorBWO',
+        'disabled', 'total', 'subMinimumMet', 'subLines', 'rawStats',
       ];
       for (const key of keys) {
         expect(result).toHaveProperty(key);
       }
+    });
+
+    it('should return rawStats with all sub-fields', () => {
+      const result = calculateManagementScore(makeManagementData());
+      expect(result.rawStats).toHaveProperty('boardBlackPct');
+      expect(result.rawStats).toHaveProperty('boardBWOPct');
+      expect(result.rawStats).toHaveProperty('execBlackPct');
+      expect(result.rawStats).toHaveProperty('execBWOPct');
+      expect(result.rawStats).toHaveProperty('seniorBlackPct');
+      expect(result.rawStats).toHaveProperty('middleBlackPct');
+      expect(result.rawStats).toHaveProperty('juniorBlackPct');
+      expect(result.rawStats).toHaveProperty('disabledBlackPct');
+    });
+
+    it('should always return 13 subLines', () => {
+      const result = calculateManagementScore(makeManagementData());
+      expect(result.subLines).toHaveLength(13);
     });
   });
 
@@ -50,11 +73,13 @@ describe('calculateManagementScore', () => {
       const result = calculateManagementScore(makeManagementData());
 
       expect(result.total).toBe(0);
-      expect(result.boardTotal).toBe(0);
-      expect(result.execTotal).toBe(0);
-      expect(result.senior).toBe(0);
-      expect(result.middle).toBe(0);
-      expect(result.junior).toBe(0);
+      expect(result.boardVotingBlack).toBe(0);
+      expect(result.boardVotingBWO).toBe(0);
+      expect(result.execDirectorsBlack).toBe(0);
+      expect(result.execDirectorsBWO).toBe(0);
+      expect(result.seniorBlack).toBe(0);
+      expect(result.middleBlack).toBe(0);
+      expect(result.juniorBlack).toBe(0);
     });
 
     it('should handle null employees gracefully', () => {
@@ -63,7 +88,7 @@ describe('calculateManagementScore', () => {
       const result = calculateManagementScore(data);
 
       expect(result.total).toBe(0);
-      assertFiniteResult(result);
+      assertAllFinite(result);
     });
   });
 
@@ -76,8 +101,8 @@ describe('calculateManagementScore', () => {
         ],
       }));
 
-      expect(result.boardTotal).toBeGreaterThan(0);
-      expect(result.rawStats.boardBlackVotingPercentage).toBe(0.5);
+      expect(result.boardVotingBlack).toBeGreaterThan(0);
+      expect(result.rawStats.boardBlackPct).toBe(0.5);
     });
 
     it('should return zero board scores for all-white board', () => {
@@ -88,23 +113,68 @@ describe('calculateManagementScore', () => {
         ],
       }));
 
-      expect(result.boardTotal).toBe(0);
-      expect(result.rawStats.boardBlackVotingPercentage).toBe(0);
+      expect(result.boardVotingBlack).toBe(0);
+      expect(result.rawStats.boardBlackPct).toBe(0);
+    });
+
+    it('should award BWO points for black female board members', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female' }),
+          makeEmployee({ id: '2', designation: 'Board', race: 'African', gender: 'Female' }),
+        ],
+      }));
+
+      expect(result.boardVotingBWO).toBeGreaterThan(0);
+      expect(result.rawStats.boardBWOPct).toBe(1.0);
+    });
+
+    it('should return 0 BWO for all-male board', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Male' }),
+        ],
+      }));
+
+      expect(result.boardVotingBWO).toBe(0);
+      expect(result.rawStats.boardBWOPct).toBe(0);
     });
   });
 
   describe('executive scoring', () => {
-    it('should combine all executive designations', () => {
+    it('should count Executive and Executive Director designations together', () => {
       const result = calculateManagementScore(makeManagementData({
         employees: [
           makeEmployee({ id: '1', designation: 'Executive', race: 'African' }),
           makeEmployee({ id: '2', designation: 'Executive Director', race: 'Indian' }),
-          makeEmployee({ id: '3', designation: 'Other Executive Management', race: 'White' }),
+          makeEmployee({ id: '3', designation: 'Executive', race: 'White' }),
         ],
       }));
 
-      expect(result.execTotal).toBeGreaterThan(0);
-      expect(result.rawStats.execBlackVotingPercentage).toBeCloseTo(2 / 3, 5);
+      expect(result.execDirectorsBlack).toBeGreaterThan(0);
+      expect(result.rawStats.execBlackPct).toBeCloseTo(2 / 3, 5);
+    });
+
+    it('should score other executive management separately', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Other Executive Management', race: 'African' }),
+          makeEmployee({ id: '2', designation: 'Other Executive Management', race: 'African' }),
+        ],
+      }));
+
+      expect(result.otherExecBlack).toBeGreaterThan(0);
+      expect(result.rawStats.otherExecBlackPct).toBe(1.0);
+    });
+
+    it('should return 0 exec score for all-white executives', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Executive', race: 'White' }),
+        ],
+      }));
+
+      expect(result.execDirectorsBlack).toBe(0);
     });
   });
 
@@ -119,43 +189,48 @@ describe('calculateManagementScore', () => {
         ],
       }));
 
-      expect(result.senior).toBeGreaterThan(0);
-      expect(result.middle).toBeGreaterThan(0);
-      expect(result.junior).toBeGreaterThan(0);
+      expect(result.seniorBlack).toBeGreaterThan(0);
+      expect(result.middleBlack).toBeGreaterThan(0);
+      expect(result.juniorBlack).toBeGreaterThan(0);
+    });
+
+    it('should return 0 for designation level with no black employees', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Senior', race: 'White' }),
+          makeEmployee({ id: '2', designation: 'Senior', race: 'White' }),
+        ],
+      }));
+
+      expect(result.seniorBlack).toBe(0);
+      expect(result.rawStats.seniorBlackPct).toBe(0);
     });
   });
 
-  describe('disability and gender', () => {
+  describe('disability scoring', () => {
     it('should award disabled employee points', () => {
-      const result = calculateManagementScore(makeManagementData({
-        employees: [
-          makeEmployee({ id: '1', designation: 'Senior', race: 'African', isDisabled: true }),
-          makeEmployee({ id: '2', designation: 'Senior', race: 'White', isDisabled: false }),
-        ],
-      }));
+      const employees = [
+        makeEmployee({ id: '1', designation: 'Senior', race: 'African', isDisabled: true }),
+        ...Array.from({ length: 32 }, (_, i) =>
+          makeEmployee({ id: `e${i}`, designation: 'Senior', race: 'African', isDisabled: false })
+        ),
+      ];
+      const result = calculateManagementScore(makeManagementData({ employees }));
 
       expect(result.disabled).toBeGreaterThan(0);
     });
 
-    it('should award adjusted recognition when female employees exist', () => {
+    it('should return 0 disabled points when no disabled employees', () => {
       const result = calculateManagementScore(makeManagementData({
-        employees: [makeEmployee({ id: '1', gender: 'Female' })],
+        employees: [makeEmployee({ isDisabled: false })],
       }));
 
-      expect(result.adjustedRecognition).toBe(2);
-    });
-
-    it('should not award adjusted recognition for all-male workforce', () => {
-      const result = calculateManagementScore(makeManagementData({
-        employees: [makeEmployee({ id: '1', gender: 'Male' })],
-      }));
-
-      expect(result.adjustedRecognition).toBe(0);
+      expect(result.disabled).toBe(0);
     });
   });
 
   describe('total cap', () => {
-    it('should cap at 27 points', () => {
+    it('should cap at 27 points maximum', () => {
       const employees: Employee[] = Array.from({ length: 50 }, (_, i) =>
         makeEmployee({
           id: `emp-${i}`,
@@ -168,6 +243,30 @@ describe('calculateManagementScore', () => {
 
       const result = calculateManagementScore(makeManagementData({ employees }));
       expect(result.total).toBeLessThanOrEqual(27);
+    });
+
+    it('should never return negative total', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [makeEmployee({ race: 'White' })],
+      }));
+
+      expect(result.total).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('all results are finite', () => {
+    it('should return finite values for mixed workforce', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female' }),
+          makeEmployee({ id: '2', designation: 'Executive', race: 'Indian', gender: 'Male' }),
+          makeEmployee({ id: '3', designation: 'Senior', race: 'Coloured', gender: 'Female' }),
+          makeEmployee({ id: '4', designation: 'Middle', race: 'White', gender: 'Male' }),
+          makeEmployee({ id: '5', designation: 'Junior', race: 'African', isDisabled: true }),
+        ],
+      }));
+
+      assertAllFinite(result);
     });
   });
 });
