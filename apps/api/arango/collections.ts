@@ -26,6 +26,7 @@ export const COLLECTIONS = {
   entityManifests: 'entity_manifests',
   sectorModelMappings: 'sector_model_mappings',
   toolkitFiles: 'toolkit_files',
+  entityCellMappings: 'entity_cell_mappings',
 } as const;
 
 // Edge collection names
@@ -78,4 +79,5 @@ async function ensureIndexes(db: Database): Promise<void> {
   await col(COLLECTIONS.entityManifests).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'] });
   await col(COLLECTIONS.sectorModelMappings).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'], unique: true });
   await col(COLLECTIONS.toolkitFiles).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'] });
+  await col(COLLECTIONS.entityCellMappings).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'], unique: true });
 }
