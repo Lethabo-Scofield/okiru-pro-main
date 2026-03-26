@@ -2491,6 +2491,7 @@ export default function DocumentProcessor() {
                       try {
                         const clientRes = await fetch('/api/clients', {
                           method: 'POST',
+                          credentials: 'include',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             name: companyInfo.name || 'Imported Company',
@@ -2507,6 +2508,7 @@ export default function DocumentProcessor() {
 
                         const importRes = await fetch(`/api/clients/${toolkitClientId}/bulk-import`, {
                           method: 'POST',
+                          credentials: 'include',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             shareholders: combinedResult.shareholders,
@@ -2521,6 +2523,18 @@ export default function DocumentProcessor() {
                         if (!importRes.ok) throw new Error('Bulk import failed');
 
                         populatingClientIdRef.current = toolkitClientId;
+
+                        // Save the toolkit client ID back to the processor session so the
+                        // Dashboard can link directly to /toolkit/:clientId
+                        const sid = sessionId;
+                        if (sid) {
+                          fetch(`/api/processor-sessions/${sid}`, {
+                            method: 'PATCH',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ toolkitClientId }),
+                          }).catch(() => { /* non-critical */ });
+                        }
                       } catch (err) {
                         console.error('Background import failed:', err);
                         populatingErrorRef.current = true;

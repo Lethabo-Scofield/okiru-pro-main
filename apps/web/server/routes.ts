@@ -1511,6 +1511,27 @@ Respond ONLY with a valid JSON array.`;
     }
   });
 
+  app.patch("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const allowedFields = ['currentStep', 'isComplete', 'scorecardResult', 'toolkitClientId'];
+      const patch: any = { updatedAt: new Date() };
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) patch[field] = req.body[field];
+      }
+      const doc = await ProcessorSessionModel.findOneAndUpdate(
+        { sessionId },
+        { $set: patch },
+        { new: true }
+      );
+      if (!doc) return res.status(404).json({ error: "Session not found" });
+      res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
+    } catch (error: any) {
+      console.error("Error patching processor session:", error);
+      res.status(500).json({ error: "Failed to patch session" });
+    }
+  });
+
   app.delete("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
     try {
       const { sessionId } = req.params;

@@ -29,6 +29,7 @@ interface CompanyRow {
   sessionId: string;
   subtitle?: string;
   isComplete: boolean;
+  toolkitClientId?: string | null;
 }
 
 interface StoredTemplate {
@@ -167,6 +168,7 @@ export default function Dashboard() {
       status: s.isComplete ? 'complete' : 'in_progress',
       sessionId: s.id,
       isComplete: s.isComplete,
+      toolkitClientId: (s as any).toolkitClientId || null,
       subtitle: s.isComplete
         ? `${s.extractionResults?.length || 0} doc${(s.extractionResults?.length || 0) !== 1 ? 's' : ''} processed · Assessment complete`
         : s.currentStep === 'review'
@@ -706,14 +708,25 @@ export default function Dashboard() {
                                     </button>
                                   </div>
                                   {c.isComplete ? (
-                                    <Link
-                                      href={`/toolkit/${c.sessionId}`}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
-                                      data-testid={`button-toolkit-${c.id}`}
-                                    >
-                                      <ExternalLink className="h-3 w-3" />
-                                      View in Toolkit
-                                    </Link>
+                                    c.toolkitClientId ? (
+                                      <Link
+                                        href={`/toolkit/${c.toolkitClientId}`}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
+                                        data-testid={`button-toolkit-${c.id}`}
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                        View in Toolkit
+                                      </Link>
+                                    ) : (
+                                      <Link
+                                        href={`/processor?session=${c.sessionId}`}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.10] hover:bg-white/[0.16] text-white text-[12px] font-semibold smooth press-sm"
+                                        data-testid={`button-toolkit-${c.id}`}
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                        View Scorecard
+                                      </Link>
+                                    )
                                   ) : (
                                     <Link
                                       href={`/processor?session=${c.sessionId}`}
