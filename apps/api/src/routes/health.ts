@@ -1,16 +1,20 @@
 import { Router, type Request as ExpressRequest, type Response } from 'express';
+import { checkArangoHealth } from '../../arango/connection.js';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 
 const router = Router();
 const isProd = process.env.NODE_ENV === "production";
 
-router.get('/health', (_req: Request, res: Response) => {
+router.get('/health', async (_req: Request, res: Response) => {
+  const arangoHealth = await checkArangoHealth();
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: isProd ? 'production' : 'development',
+    arangodb: arangoHealth,
   });
 });
 

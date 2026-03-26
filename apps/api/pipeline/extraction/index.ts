@@ -38,8 +38,9 @@ export type {
 
 export { HybridRetriever } from './hybridRetriever.js';
 export type { RetrievalResult, HybridRetrieverConfig } from './hybridRetriever.js';
+export { normalizeScores } from './hybridRetriever.js';
 
-export { LLMExtractor, buildExtractionPrompt, structuralVerify, isAvailable as isLLMAvailable } from './llmExtractor.js';
+export { LLMExtractor, buildExtractionPrompt, structuralVerify, isAvailable as isLLMAvailable, getPreferredProvider } from './llmExtractor.js';
 export type { LLMExtractionRequest, LLMExtractionResult, LLMExtractorConfig } from './llmExtractor.js';
 
 export {
@@ -54,3 +55,23 @@ export {
   createPatternSet,
 } from './nerEngine.js';
 export type { PageEntity, PageEntitiesResult, EntityType, PatternSet } from './nerEngine.js';
+
+// Azure OpenAI integration
+export {
+  getAzureChatClient,
+  getAzureEmbeddingClient,
+  isAzureOpenAIConfigured,
+  generateEmbeddings,
+  generateEmbedding,
+  chatCompletion,
+  rerankWithLLM,
+  EMBEDDING_DIMENSIONS,
+} from './azureOpenAIClient.js';
+
+// Embedding store
+export {
+  InMemoryVectorStore,
+  createVectorStore,
+  batchCosineSimilarity,
+} from './embeddingStore.js';
+export type { ChunkEmbedding, VectorSearchResult } from './embeddingStore.js';

@@ -77,12 +77,21 @@ importers:
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       mongoose:
         specifier: ^9.2.3
         version: 9.3.1
       multer:
         specifier: ^2.0.2
         version: 2.1.1
+      openai:
+        specifier: ^4.86.0
+        version: 4.104.0(ws@8.19.0(bufferutil@4.1.0))(zod@3.25.76)
+      pdfjs-dist:
+        specifier: ^5.5.207
+        version: 5.5.207
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -3687,6 +3696,18 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@4.104.0:
+    resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   openai@6.32.0:
     resolution: {integrity: sha512-j3k+BjydAf8yQlcOI7WUQMQTbbF5GEIMAE2iZYCOzwwB3S2pCheaWYp+XZRNAch4jWVc52PMDGRRjutao3lLCg==}
@@ -7616,6 +7637,21 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@4.104.0(ws@8.19.0(bufferutil@4.1.0))(zod@3.25.76):
+    dependencies:
+      '@types/node': 18.19.130
+      '@types/node-fetch': 2.6.13
+      abort-controller: 3.0.0
+      agentkeepalive: 4.6.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0
+    optionalDependencies:
+      ws: 8.19.0(bufferutil@4.1.0)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - encoding
 
   openai@6.32.0(ws@8.19.0(bufferutil@4.1.0))(zod@3.25.76):
     optionalDependencies:

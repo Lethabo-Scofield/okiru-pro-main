@@ -1,7 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import type { BM25SearchResult } from './bm25Index.js';
 import type { EntitySearchResult } from './entityIndex.js';
 import { BM25Index } from './bm25Index.js';
 import { EntityIndex } from './entityIndex.js';
+import type { InMemoryVectorStore, VectorSearchResult } from './embeddingStore.js';
+import { rerankWithLLM } from './azureOpenAIClient.js';
 
 export interface RetrievalResult {
   pageId: string;
@@ -22,6 +27,8 @@ export interface HybridRetrieverConfig {
   semanticWeight: number;
   topK: number;
   deduplicateThreshold: number;
+  enableReranking?: boolean; // Enable LLM reranking of top results
+  rerankTopK?: number; // Number of results to rerank (default 5)
 }
 
 const DEFAULT_CONFIG: HybridRetrieverConfig = {
@@ -30,6 +37,8 @@ const DEFAULT_CONFIG: HybridRetrieverConfig = {
   semanticWeight: 0.5,
   topK: 10,
   deduplicateThreshold: 0.01,
+  enableReranking: true,
+  rerankTopK: 5,
 };
 
 /**
@@ -59,15 +68,25 @@ export class HybridRetriever {
   config: HybridRetrieverConfig;
   private bm25Index: BM25Index | undefined;
   private entityIndex: EntityIndex | undefined;
+  private vectorStore: InMemoryVectorStore | undefined;
 
   constructor(
     bm25Index?: BM25Index,
     entityIndex?: EntityIndex,
+    vectorStore?: InMemoryVectorStore,
     config: Partial<HybridRetrieverConfig> = {}
   ) {
     this.bm25Index = bm25Index;
     this.entityIndex = entityIndex;
+    this.vectorStore = vectorStore;
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Set the vector store for semantic search.
+   */
+  setVectorStore(vectorStore: InMemoryVectorStore): void {
+    this.vectorStore = vectorStore;
   }
 
   /**
@@ -100,6 +119,81 @@ export class HybridRetriever {
     topK?: number
   ): RetrievalResult[] {
     return this.searchInternal(query, semanticResults, topK);
+  }
+
+  /**
+   * Async search that generates query embedding and performs semantic search.
+   * Returns hybrid fusion of BM25 + Entity + Semantic results.
+   * Optionally reranks top results using LLM.
+   */
+  async searchWithEmbeddings(
+    query: string,
+    topK?: number,
+    options?: {
+      rerank?: boolean;
+      rerankTopK?: number;
+      getChunkText?: (pageId: string) => string | undefined;
+    }
+  ): Promise<RetrievalResult[]> {
+    // Generate semantic results from vector store
+    let semanticResults: Array<{ pageId: string; score: number }> = [];
+
+    if (this.vectorStore) {
+      try {
+        const vectorResults = await this.vectorStore.search(query, Math.max((topK ?? this.config.topK) * 3, 30));
+        semanticResults = vectorResults.map(r => ({
+          pageId: r.pageId,
+          score: r.score,
+        }));
+      } catch (error) {
+        console.warn('[HybridRetriever] Vector search failed:', error);
+        // Continue without semantic results
+      }
+    }
+
+    // Perform hybrid fusion
+    let results = this.searchInternal(query, semanticResults, topK);
+
+    // Optional LLM reranking
+    if (options?.rerank ?? this.config.enableReranking) {
+      const rerankTopK = options?.rerankTopK ?? this.config.rerankTopK ?? 5;
+
+      if (results.length > 0 && options?.getChunkText) {
+        try {
+          const candidates = results.slice(0, rerankTopK).map(r => ({
+            id: r.pageId,
+            text: options.getChunkText!(r.pageId) || '',
+            initialScore: r.score,
+          }));
+
+          const reranked = await rerankWithLLM(query, candidates, rerankTopK);
+
+          // Update results with reranked scores
+          const rerankedMap = new Map(reranked.map(r => [r.id, r.llmScore]));
+
+          results = results.map(r => {
+            const rerankScore = rerankedMap.get(r.pageId);
+            if (rerankScore !== undefined) {
+              // Blend original score with LLM score (50/50)
+              const blendedScore = (r.score * 0.5) + (rerankScore / 10 * 0.5);
+              return { ...r, score: blendedScore };
+            }
+            return r;
+          });
+
+          // Re-sort by blended score
+          results.sort((a, b) => b.score - a.score);
+
+          // Update ranks
+          results = results.map((r, idx) => ({ ...r, rank: idx + 1 }));
+        } catch (error) {
+          console.warn('[HybridRetriever] Reranking failed:', error);
+          // Continue with original results
+        }
+      }
+    }
+
+    return results;
   }
 
   private searchInternal(
@@ -199,6 +293,7 @@ export class HybridRetriever {
   addPage(pageId: string, text: string): void {
     this.bm25Index?.addPage(pageId, text);
     this.entityIndex?.indexPage(pageId, text);
+    // Note: Vector store requires async indexing via indexChunks()
   }
 
   build(): void {
@@ -208,11 +303,13 @@ export class HybridRetriever {
   getStats(): {
     bm25Stats: ReturnType<BM25Index['getStats']> | null;
     entityStats: ReturnType<EntityIndex['getStats']> | null;
+    vectorStats: { totalChunks: number; isReady: boolean; dimensions: number } | null;
     config: HybridRetrieverConfig;
   } {
     return {
       bm25Stats: this.bm25Index?.getStats() ?? null,
       entityStats: this.entityIndex?.getStats() ?? null,
+      vectorStats: this.vectorStore?.getStats() ?? null,
       config: { ...this.config },
     };
   }

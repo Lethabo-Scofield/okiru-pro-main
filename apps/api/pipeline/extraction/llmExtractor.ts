@@ -1,9 +1,15 @@
 /**
- * LLM-based value extraction using Groq llama-3.3-70b-versatile.
- * Matches the same model used by apps/web/server/routes.ts for consistency.
+ * LLM-based value extraction using Azure OpenAI GPT-4o-mini (primary)
+ * with Groq llama-3.3-70b-versatile as fallback.
+ *
  * Anti-hallucination controls: structural verification, JSON schema, temperature 0,
  * explicit null instruction, and dual extraction agreement scoring.
  */
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { isAzureOpenAIConfigured, chatCompletion } from './azureOpenAIClient.js';
 
 export interface LLMExtractionRequest {
   entityName: string;
@@ -37,7 +43,10 @@ export interface LLMExtractorConfig {
 }
 
 const DEFAULT_CONFIG = {
-  model: 'llama-3.3-70b-versatile',
+  // Azure OpenAI GPT-4o-mini (preferred)
+  azureDeployment: 'gpt-4o-mini',
+  // Groq fallback
+  groqModel: 'llama-3.3-70b-versatile',
   temperature: 0,
   maxTokens: 500,
   timeoutMs: 30000,
@@ -123,11 +132,23 @@ export function structuralVerify(
   return false;
 }
 
+// Log LLM configuration status on module load
+console.log(`[LLMExtractor] Provider status - Azure:${isAzureOpenAIConfigured()}, Groq:${!!process.env.GROQ_API_KEY}`);
+
 /**
- * Check if Groq API key is configured.
+ * Check if any LLM provider is available (Azure OpenAI preferred, Groq fallback).
  */
 export function isAvailable(): boolean {
-  return !!process.env.GROQ_API_KEY;
+  return isAzureOpenAIConfigured() || !!process.env.GROQ_API_KEY;
+}
+
+/**
+ * Check which LLM provider is being used.
+ */
+export function getPreferredProvider(): 'azure' | 'groq' | 'none' {
+  if (isAzureOpenAIConfigured()) return 'azure';
+  if (!!process.env.GROQ_API_KEY) return 'groq';
+  return 'none';
 }
 
 export class LLMExtractor {
@@ -136,17 +157,53 @@ export class LLMExtractor {
   private temperature: number;
   private maxTokens: number;
   private timeoutMs: number;
+  private useAzure: boolean;
 
   constructor(partial?: LLMExtractorConfig) {
     this.apiKey = partial?.apiKey ?? process.env.GROQ_API_KEY ?? '';
-    this.model = partial?.model ?? DEFAULT_CONFIG.model;
+    // Prefer Azure OpenAI if configured, otherwise use Groq
+    this.useAzure = isAzureOpenAIConfigured();
+    this.model = partial?.model ?? (this.useAzure ? DEFAULT_CONFIG.azureDeployment : DEFAULT_CONFIG.groqModel);
     this.temperature = partial?.temperature ?? DEFAULT_CONFIG.temperature;
     this.maxTokens = partial?.maxTokens ?? DEFAULT_CONFIG.maxTokens;
     this.timeoutMs = partial?.timeoutMs ?? DEFAULT_CONFIG.timeoutMs;
   }
 
   /**
-   * Call Groq chat completions API.
+   * Get the provider being used.
+   */
+  getProvider(): 'azure' | 'groq' {
+    return this.useAzure ? 'azure' : 'groq';
+  }
+
+  /**
+   * Call Azure OpenAI chat completions API (GPT-4o-mini).
+   */
+  private async callAzure(prompt: string): Promise<string> {
+    try {
+      const response = await chatCompletion(
+        [
+          {
+            role: 'system',
+            content: 'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values. Respond with valid JSON only.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        {
+          temperature: this.temperature,
+          maxTokens: this.maxTokens,
+          responseFormat: { type: 'json_object' },
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error('[LLMExtractor] Azure OpenAI error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Call Groq chat completions API (fallback when Azure is not available).
    */
   private async callGroq(prompt: string): Promise<string> {
     if (!this.apiKey) {
@@ -205,11 +262,31 @@ export class LLMExtractor {
   }
 
   /**
-   * Extract a single value using Groq LLM.
+   * Call LLM API (Azure preferred, Groq fallback).
+   */
+  private async callLLM(prompt: string): Promise<{ response: string; provider: 'azure' | 'groq' }> {
+    // Try Azure first if configured
+    if (this.useAzure) {
+      try {
+        const response = await this.callAzure(prompt);
+        return { response, provider: 'azure' };
+      } catch (azureError) {
+        console.warn('[LLMExtractor] Azure failed, falling back to Groq:', azureError);
+        // Fall through to Groq
+      }
+    }
+
+    // Use Groq as fallback
+    const response = await this.callGroq(prompt);
+    return { response, provider: 'groq' };
+  }
+
+  /**
+   * Extract a single value using LLM (Azure OpenAI GPT-4o-mini preferred, Groq fallback).
    */
   async extract(req: LLMExtractionRequest): Promise<LLMExtractionResult> {
     const prompt = buildExtractionPrompt(req);
-    const rawLLMResponse = await this.callGroq(prompt);
+    const { response: rawLLMResponse, provider } = await this.callLLM(prompt);
 
     let parsed: { value?: unknown; reasoning?: string; source_quote?: string };
     try {
@@ -256,7 +333,7 @@ export class LLMExtractor {
       confidence,
       sourcePageId: req.sourcePageId,
       structuralVerification: verified,
-      method: 'llm',
+      method: provider === 'azure' ? 'llm' : 'llm_fallback',
       reasoning: parsed.reasoning,
     };
   }

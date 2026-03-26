@@ -81,7 +81,7 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
     return res.status(status).json({ message });
   });
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5001", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port} [${isProd ? "production" : "development"}]`);
   });

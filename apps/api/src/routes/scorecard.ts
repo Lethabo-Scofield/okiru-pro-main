@@ -2,15 +2,24 @@
  * Scorecard Routes
  *
  * Proxies scorecard operations to the Computation Engine via the compute client.
+ * Falls back to TypeScript graph evaluator when the Python engine is unavailable.
  * Supports listing models, compiling toolkits, evaluating scorecards, and health checks.
  */
 
 import { Router, type Request, type Response } from 'express';
 import { aql } from 'arangojs';
 import { getComputeClient } from '../../pipeline/computeClient.js';
+import { evaluateGraphWithOverrides } from '../../pipeline/tsGraphEvaluator.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
 import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
+import {
+  getEntityCellMapping,
+  applyEntitiesToScorecard,
+  validateEntityCoverage,
+  buildEntityCellMapping,
+} from '../../arango/entityCellMapping.js';
+import { buildManifestForSector } from '../../pipeline/extraction/entityManifest.js';
 
 const router = Router();
 const computeClient = getComputeClient();
@@ -157,14 +166,40 @@ router.post('/evaluate-by-sector', async (req: Request, res: Response) => {
     const rows = await cursor.all();
     const versionId = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
-    if (!versionId || typeof versionId !== 'string') {
+    let result;
+
+    if (versionId && typeof versionId === 'string') {
+      try {
+        const available = await computeClient.isAvailable();
+        if (available) {
+          result = await computeClient.evaluateModel(versionId, overrides ?? undefined);
+          return res.json(result);
+        }
+      } catch (engineErr) {
+        console.warn('[Scorecard] Computation Engine unavailable:', engineErr);
+      }
+    }
+
+    const graphCursor = await db.query(aql`
+      FOR g IN ${db.collection(COLLECTIONS.formulaGraphs)}
+        FILTER g.sectorCode == ${sectorCode} AND g.scorecardType == ${scorecardType}
+        LIMIT 1
+        RETURN g._key
+    `);
+    const graphKeys = await graphCursor.all();
+    if (graphKeys.length === 0) {
       return res.status(404).json({
-        message: `No active model found for sector ${sectorCode}/${scorecardType}. Compile a toolkit first with sectorCode and scorecardType.`,
+        message: `No formula graph found for ${sectorCode}/${scorecardType}.`,
       });
     }
 
-    const result = await computeClient.evaluateModel(versionId, overrides ?? undefined);
-    return res.json(result);
+    const tsResult = await evaluateGraphWithOverrides(graphKeys[0], (overrides ?? {}) as Record<string, unknown>);
+    return res.json({
+      results: tsResult.results,
+      stats: tsResult.stats,
+      pillarScores: tsResult.pillarScores,
+      engine: 'typescript-evaluator',
+    });
   } catch (error: unknown) {
     console.error('[Scorecard] evaluate-by-sector error:', error);
     return res.status(500).json({
@@ -183,6 +218,122 @@ router.get('/health', async (_req: Request, res: Response) => {
   } catch (error: unknown) {
     console.error('[Scorecard] health check error:', error);
     return res.json({ available: false });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/scorecard/evaluate-from-entities
+// Combined endpoint: entities → cell mapping → evaluation → scorecard
+// ---------------------------------------------------------------------------
+router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
+  try {
+    const { sectorCode, scorecardType, entities } = req.body as {
+      sectorCode?: string;
+      scorecardType?: string;
+      entities?: Record<string, number | string>;
+    };
+
+    if (!sectorCode || !scorecardType || !entities) {
+      return res.status(400).json({
+        message: 'sectorCode, scorecardType, and entities are required',
+      });
+    }
+
+    let mapping = await getEntityCellMapping(sectorCode.toUpperCase(), scorecardType);
+
+    if (!mapping) {
+      const db = getArangoDB();
+      const graphCursor = await db.query(aql`
+        FOR g IN ${db.collection(COLLECTIONS.formulaGraphs)}
+          FILTER g.sectorCode == ${sectorCode.toUpperCase()}
+             AND g.scorecardType == ${scorecardType}
+          LIMIT 1
+          RETURN g._key
+      `);
+      const graphKeys = await graphCursor.all();
+
+      if (graphKeys.length === 0) {
+        return res.status(404).json({
+          message: `No formula graph found for ${sectorCode}/${scorecardType}. Ingest the toolkit first.`,
+        });
+      }
+
+      const manifest = buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      mapping = await buildEntityCellMapping(
+        graphKeys[0],
+        sectorCode.toUpperCase(),
+        scorecardType,
+        manifest.requiredEntities,
+      );
+    }
+
+    const cellOverrides = applyEntitiesToScorecard(mapping, entities);
+    const coverage = validateEntityCoverage(mapping, entities);
+
+    let evaluationResult: Record<string, unknown> = {};
+    let evaluationStats: Record<string, unknown> = {};
+    let usedEngine = 'none';
+
+    try {
+      const available = await computeClient.isAvailable();
+      if (available) {
+        const db = getArangoDB();
+        const col = db.collection(COLLECTIONS.sectorModelMappings);
+        const cursor = await db.query(aql`
+          FOR doc IN ${col}
+            FILTER doc.sectorCode == ${sectorCode.toUpperCase()}
+               AND doc.scorecardType == ${scorecardType}
+            SORT doc.updatedAt DESC LIMIT 1
+            RETURN doc.versionId
+        `);
+        const rows = await cursor.all();
+        const versionId = rows[0];
+
+        if (versionId) {
+          const result = await computeClient.evaluateModel(versionId, cellOverrides);
+          evaluationResult = result.results;
+          evaluationStats = result.stats;
+          usedEngine = 'computation-engine';
+        }
+      }
+    } catch (engineErr) {
+      console.warn('[Scorecard] Computation Engine unavailable, falling back to TS evaluator:', engineErr);
+    }
+
+    if (usedEngine === 'none') {
+      try {
+        const tsResult = await evaluateGraphWithOverrides(mapping.graphKey, cellOverrides);
+        evaluationResult = tsResult.results;
+        evaluationStats = tsResult.stats;
+        usedEngine = 'typescript-evaluator';
+      } catch (tsErr) {
+        console.error('[Scorecard] TypeScript evaluator also failed:', tsErr);
+        return res.status(500).json({
+          message: 'Both Computation Engine and TS evaluator failed. Check that the toolkit is properly ingested.',
+          cellOverrides,
+          coverage,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      sectorCode,
+      scorecardType,
+      engine: usedEngine,
+      cellOverrides,
+      overrideCount: Object.keys(cellOverrides).length,
+      coverage,
+      evaluation: {
+        results: evaluationResult,
+        stats: evaluationStats,
+      },
+    });
+  } catch (error: unknown) {
+    console.error('[Scorecard] evaluate-from-entities error:', error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Entity evaluation failed',
+    });
   }
 });
 
