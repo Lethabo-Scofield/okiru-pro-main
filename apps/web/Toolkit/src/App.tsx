@@ -52,14 +52,61 @@ function RouteAwareSkeleton() {
 }
 
 function DataLoader({ children }: { children: React.ReactNode }) {
+  const [, navigate] = useLocation();
   const { activeClientId } = useActiveClient();
   const { loadClientData, isLoaded, activeClientId: storeClientId } = useBbeeStore();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(0);
 
   useEffect(() => {
-    if (activeClientId && activeClientId !== storeClientId) {
-      loadClientData(activeClientId);
+    if (activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
+      setLoadError(null);
+      loadClientData(activeClientId).catch((err: any) => {
+        const msg: string = err?.message || '';
+        if (msg.includes('401') || msg.toLowerCase().includes('not authenticated')) {
+          setLoadError('session');
+        } else if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+          setLoadError('notfound');
+        } else {
+          setLoadError(msg || 'unknown');
+        }
+      });
     }
-  }, [activeClientId, storeClientId, loadClientData]);
+  }, [activeClientId, storeClientId, loadClientData, retrying]);
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center h-full py-24">
+        <div className="max-w-sm w-full bg-card rounded-2xl border border-border p-8 flex flex-col items-center gap-5 text-center">
+          <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-bold text-foreground text-base mb-1">
+              {loadError === 'session' ? 'Session expired' : loadError === 'notfound' ? 'Client not found' : 'Failed to load data'}
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              {loadError === 'session'
+                ? 'Your session has expired. Please log in again.'
+                : loadError === 'notfound'
+                ? 'This client record was not found. It may still be saving — try retrying in a moment.'
+                : `An unexpected error occurred: ${loadError}`}
+            </p>
+          </div>
+          <div className="flex gap-3 w-full">
+            <button onClick={() => setRetrying(r => r + 1)} className="flex-1 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-semibold text-sm transition-colors">
+              Retry
+            </button>
+            <button onClick={() => navigate('/')} className="flex-1 py-2 bg-muted hover:bg-muted/70 text-muted-foreground rounded-lg font-semibold text-sm transition-colors">
+              Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isLoaded) {
     return <RouteAwareSkeleton />;
@@ -68,7 +115,7 @@ function DataLoader({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AppRoutes() {
+export function AppRoutes() {
   return (
     <AppLayout>
       <DataLoader>
