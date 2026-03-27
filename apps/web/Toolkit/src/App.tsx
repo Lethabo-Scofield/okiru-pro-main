@@ -22,6 +22,7 @@ import Reports from "@toolkit/pages/Reports";
 import Scenarios from "@toolkit/pages/Scenarios";
 import ExcelImport from "@toolkit/pages/ExcelImport";
 import Scorecard from "@toolkit/pages/Scorecard";
+import ScorecardSummary from "@toolkit/pages/ScorecardSummary";
 import Settings from "@toolkit/pages/Settings";
 import Profile from "@toolkit/pages/Profile";
 import AuthPage from "@toolkit/pages/AuthPage";
@@ -122,6 +123,7 @@ export function AppRoutes() {
         <Switch>
           <Route path="/" component={Dashboard}/>
           <Route path="/scorecard" component={Scorecard}/>
+          <Route path="/scorecard-summary" component={ScorecardSummary}/>
           <Route path="/import" component={ExcelImport}/>
           <Route path="/scenarios" component={Scenarios}/>
           <Route path="/reports" component={Reports}/>

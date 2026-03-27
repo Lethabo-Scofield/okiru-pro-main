@@ -7,6 +7,10 @@ import {
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
+import {
+  demoClient, demoOwnership, demoManagement,
+  demoSkills, demoProcurement, demoESD, demoSED,
+} from './demo-data';
 import type { CalculatorConfig } from '../../../shared/schema';
 
 import { calculateOwnershipScore } from './calculators/ownership';
@@ -157,7 +161,54 @@ interface BbeeState extends PillarState {
   createScenario: (name: string) => void;
   switchScenario: (id: string | null) => void;
   deleteScenario: (id: string) => void;
-  
+
+  // Dynamic scorecard API actions
+  loadTemplateStructure: (graphKey: string) => Promise<{
+    graphKey: string;
+    scorecardKey: string;
+    templateName: string;
+    sectorCode: string;
+    scorecardType: string;
+    pillars: Array<{
+      key: string;
+      name: string;
+      weighting: number;
+      target?: number;
+      indicators: Array<{
+        key: string;
+        name: string;
+        target: number;
+        weighting: number;
+      }>;
+    }>;
+  } | null>;
+
+  calculateFromTemplate: (graphKey: string, entityMap?: Record<string, unknown>) => Promise<{
+    total: { score: number; maxPossible: number; percentage: number };
+    pillars: Record<string, {
+      key: string;
+      score: number;
+      achieved: number;
+      percentage: number;
+      subMinimumMet?: boolean;
+      indicators: Array<{
+        key: string;
+        score: number;
+        achieved: number;
+      }>;
+    }>;
+    beeLevel?: string;
+    recognition?: string;
+  } | null>;
+
+  validateEntityCoverage: (sectorCode: string, scorecardType: string) => Promise<{
+    hasCoverage: boolean;
+    percentage: number;
+    mappedEntities: number;
+    totalEntities: number;
+    unmappedEntities: string[];
+  } | null>;
+
   _recalculateAll: () => void;
 }
 
@@ -438,9 +489,30 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       get()._recalculateAll();
       get().loadCalculatorConfig(clientId);
     } catch (error) {
-      console.error('Failed to load client data:', error);
-      set({ isLoaded: false, activeClientId: null });
-      throw error;
+      console.warn('Client not found — loading demo data for preview:', clientId, error);
+      const dummyClient: Client = { ...demoClient, id: clientId, name: demoClient.name + ' (Preview)' };
+      const dummyOwnership: OwnershipData = { ...demoOwnership, clientId };
+      const dummyManagement: ManagementData = { ...demoManagement, clientId };
+      const dummySkills: SkillsData = { ...demoSkills, clientId };
+      const dummyProcurement: ProcurementData = { ...demoProcurement, clientId };
+      const dummyESD: ESDData = { ...demoESD, clientId };
+      const dummySED: SEDData = { ...demoSED, clientId };
+      set({
+        isLoaded: true,
+        activeClientId: clientId,
+        client: dummyClient,
+        ownership: dummyOwnership,
+        management: dummyManagement,
+        skills: dummySkills,
+        procurement: dummyProcurement,
+        esd: dummyESD,
+        sed: dummySED,
+        scenarios: [],
+        isScenarioMode: false,
+        activeScenarioId: null,
+        baseSnapshot: null,
+      });
+      get()._recalculateAll();
     }
   },
 
@@ -772,5 +844,101 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }).catch(console.error);
     }
-  }
+  },
+
+  // Dynamic scorecard API actions
+  loadTemplateStructure: async (graphKey: string) => {
+    try {
+      const response = await fetch(`/api/templates/${graphKey}/structure`);
+      if (!response.ok) {
+        throw new Error(`Failed to load template structure: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.structure;
+    } catch (error) {
+      console.error('[store] Failed to load template structure:', error);
+      return null;
+    }
+  },
+
+  calculateFromTemplate: async (graphKey: string, entityMap?: Record<string, unknown>) => {
+    try {
+      const response = await fetch(`/api/templates/${graphKey}/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          overrides: entityMap,
+          includeFormulaDetails: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to calculate scorecard: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update store with calculated results
+      if (data.scores) {
+        set((state) => ({
+          scorecard: {
+            ...state.scorecard,
+            ownership: { ...state.scorecard.ownership, score: data.scores.pillars?.ownership?.score || 0 },
+            managementControl: { ...state.scorecard.managementControl, score: data.scores.pillars?.managementControl?.score || 0 },
+            skillsDevelopment: { ...state.scorecard.skillsDevelopment, score: data.scores.pillars?.skillsDevelopment?.score || 0 },
+            procurement: { ...state.scorecard.procurement, score: data.scores.pillars?.preferentialProcurement?.score || 0 },
+            supplierDevelopment: { ...state.scorecard.supplierDevelopment, score: data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0 },
+            enterpriseDevelopment: { ...state.scorecard.enterpriseDevelopment, score: data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0 },
+            socioEconomicDevelopment: { ...state.scorecard.socioEconomicDevelopment, score: data.scores.pillars?.socioEconomicDevelopment?.score || 0 },
+            total: { ...state.scorecard.total, score: data.scores.total?.score || 0 },
+            achievedLevel: parseInt(data.scores.beeLevel) || state.scorecard.achievedLevel,
+            recognitionLevel: data.scores.recognition || state.scorecard.recognitionLevel,
+          },
+        }));
+      }
+
+      return data.scores;
+    } catch (error) {
+      console.error('[store] Failed to calculate from template:', error);
+      return null;
+    }
+  },
+
+  validateEntityCoverage: async (sectorCode: string, scorecardType: string) => {
+    try {
+      const response = await fetch(`/api/entity-mappings/${sectorCode}/${scorecardType}`);
+
+      if (!response.ok) {
+        // Try to build the mapping if it doesn't exist
+        const buildResponse = await fetch(`/api/entity-mappings/build/${sectorCode}/${scorecardType}`, {
+          method: 'POST',
+        });
+
+        if (!buildResponse.ok) {
+          throw new Error(`Failed to validate coverage: ${buildResponse.statusText}`);
+        }
+
+        const buildData = await buildResponse.json();
+        return {
+          hasCoverage: buildData.mapping.coverage.coveragePercent > 0,
+          percentage: buildData.mapping.coverage.coveragePercent,
+          mappedEntities: buildData.mapping.coverage.mappedEntities,
+          totalEntities: buildData.mapping.coverage.totalEntities,
+          unmappedEntities: buildData.mapping.coverage.unmappedEntities,
+        };
+      }
+
+      const data = await response.json();
+      return {
+        hasCoverage: data.mapping.coverage.coveragePercent > 0,
+        percentage: data.mapping.coverage.coveragePercent,
+        mappedEntities: data.mapping.coverage.mappedEntities,
+        totalEntities: data.mapping.coverage.totalEntities,
+        unmappedEntities: data.mapping.coverage.unmappedEntities,
+      };
+    } catch (error) {
+      console.error('[store] Failed to validate entity coverage:', error);
+      return null;
+    }
+  },
 }));
