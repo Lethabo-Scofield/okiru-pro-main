@@ -11,7 +11,8 @@ import {
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
-  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit
+  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit,
+  ExternalLink
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -940,6 +941,7 @@ export default function DocumentProcessor() {
   const [manualEntry, setManualEntry] = useState<ManualEntryData>(loadManualEntryData);
   const [manualErrors, setManualErrors] = useState<Record<string, string>>({});
   const [scorecardResult, setScorecardResult] = useState<any>(null);
+  const [toolkitClientId, setToolkitClientId] = useState<string | null>(null);
   const [populatingData, setPopulatingData] = useState<ClientSideImportResult | null>(null);
   const populatingClientIdRef = useRef<string | null>(null);
   const populatingErrorRef = useRef<boolean>(false);
@@ -1008,6 +1010,10 @@ export default function DocumentProcessor() {
         : 'upload';
       setCurrentPage(step as any);
       if (sess.scorecardResult) setScorecardResult(sess.scorecardResult);
+      if ((sess as any).toolkitClientId) {
+        setToolkitClientId((sess as any).toolkitClientId);
+        populatingClientIdRef.current = (sess as any).toolkitClientId;
+      }
       toast({ title: `Resumed: ${sess.companyInfo.name}`, description: 'Your session has been loaded.' });
     });
   }, [location]);
@@ -2523,6 +2529,7 @@ export default function DocumentProcessor() {
                         if (!importRes.ok) throw new Error('Bulk import failed');
 
                         populatingClientIdRef.current = toolkitClientId;
+                        setToolkitClientId(toolkitClientId);
 
                         // Save the toolkit client ID back to the processor session so the
                         // Dashboard can link directly to /toolkit/:clientId
@@ -3340,7 +3347,14 @@ export default function DocumentProcessor() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setCurrentPage('scorecard')}
+                    onClick={() => {
+                      if (toolkitClientId) {
+                        localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                        navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                      } else {
+                        setCurrentPage('scorecard');
+                      }
+                    }}
                     className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
                   >
                     <ScanLine className="w-4 h-4" />
@@ -3587,9 +3601,22 @@ export default function DocumentProcessor() {
 
                     {/* Actions */}
                     <div className="flex gap-3">
-                      <Link href="/dashboard" className="flex-1 text-center px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]">
-                        Go to Dashboard
-                      </Link>
+                      {toolkitClientId ? (
+                        <button
+                          onClick={() => {
+                            localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                            navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Open in Toolkit
+                        </button>
+                      ) : (
+                        <Link href="/dashboard" className="flex-1 text-center px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]">
+                          Go to Dashboard
+                        </Link>
+                      )}
                       <button
                         onClick={() => {
                           setScorecardResult(null);
