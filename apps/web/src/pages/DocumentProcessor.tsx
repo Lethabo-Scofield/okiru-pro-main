@@ -3352,7 +3352,7 @@ export default function DocumentProcessor() {
                         localStorage.setItem('okiru-pro-active-client', toolkitClientId);
                         navigate(`/toolkit/${toolkitClientId}/scorecard`);
                       } else {
-                        setCurrentPage('scorecard');
+                        navigate('/toolkit');
                       }
                     }}
                     className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
@@ -3601,22 +3601,20 @@ export default function DocumentProcessor() {
 
                     {/* Actions */}
                     <div className="flex gap-3">
-                      {toolkitClientId ? (
-                        <button
-                          onClick={() => {
+                      <button
+                        onClick={() => {
+                          if (toolkitClientId) {
                             localStorage.setItem('okiru-pro-active-client', toolkitClientId);
                             navigate(`/toolkit/${toolkitClientId}/scorecard`);
-                          }}
-                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Open in Toolkit
-                        </button>
-                      ) : (
-                        <Link href="/dashboard" className="flex-1 text-center px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]">
-                          Go to Dashboard
-                        </Link>
-                      )}
+                          } else {
+                            navigate('/toolkit');
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Open in Toolkit
+                      </button>
                       <button
                         onClick={() => {
                           setScorecardResult(null);
