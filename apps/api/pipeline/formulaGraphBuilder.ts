@@ -31,9 +31,9 @@ export interface CellNode {
 }
 
 export type SemanticTag =
-  | { pillar: string; indicator: string; role: 'target' | 'actual' | 'score' | 'weight' | 'input' | 'label' }
-  | { pillar: string; role: 'pillar_total' | 'sub_minimum' }
-  | { role: 'total_score' | 'bee_level' | 'recognition' | 'client_info' | 'financial' };
+  | { pillar: string; indicator: string; role: 'target' | 'actual' | 'score' | 'weight' | 'input' | 'label'; description?: string }
+  | { pillar: string; role: 'pillar_total' | 'sub_minimum'; description?: string }
+  | { role: 'total_score' | 'bee_level' | 'recognition' | 'client_info' | 'financial'; description?: string };
 
 export interface FormulaGraph {
   cells: Record<string, CellNode>;
@@ -220,8 +220,69 @@ const ROLE_KEYWORDS: Record<string, RegExp[]> = {
   bee_level: [/b-?bbee\s*level/i, /contributor\s*level/i, /recognition\s*level/i, /^level$/i],
 };
 
-function tagCell(sheetName: string, _cellAddress: string, value: unknown, neighborLabels: string[]): SemanticTag | null {
+// Field type patterns for input cell detection
+const FINANCIAL_PATTERNS = [
+  /revenue|turnover|sales|income/i,
+  /npat|net\s*profit|profit\s*after\s*tax/i,
+  /payroll|remuneration|salaries|wages|leviable/i,
+  /spend|expenditure|expenses?|costs?/i,
+  /amount|value|price/i,
+  /rand|\br\b|ZAR/i,
+  /million|billion|thousand/i,
+  /tmps|total\s*measured\s*procurement/i,
+];
+
+const PERCENTAGE_PATTERNS = [
+  /percentage|percent|\%/i,
+  /ownership|shareholding|equity|stake/i,
+  /voting\s*rights/i,
+  /black\s*ownership|black\s*held/i,
+  /management\s*control|board/i,
+  /exempt\s*micro/i,
+  /qualifying\s*small/i,
+];
+
+const COUNT_PATTERNS = [
+  /number\s*of|count|total\s*employees?/i,
+  /headcount|staff|workforce/i,
+  /black\s*employees?/i,
+  /senior|middle|junior\s*management/i,
+  /employees\s*with\s*disabilities/i,
+];
+
+const FINANCIAL_KEYWORDS = [
+  'revenue', 'turnover', 'npat', 'profit', 'payroll', 'spend', 'leviable',
+  'expenditure', 'amount', 'value', 'cost', 'income', 'sales', 'tmps',
+  'measured procurement', 'total measured procurement spend'
+];
+
+/**
+ * Enhanced cell tagging with comprehensive field type detection
+ */
+function tagCell(sheetName: string, cellAddress: string, value: unknown, neighborLabels: string[]): SemanticTag | null {
   const context = [sheetName, ...neighborLabels].join(' ');
+  // Build description from neighbor labels for entity matching
+  const description = neighborLabels.filter(l => l && l.trim()).join(' | ').substring(0, 120).trim() || sheetName;
+
+  // Field type detection from context
+  const isFinancialValue = typeof value === 'number' && (
+    FINANCIAL_PATTERNS.some(p => p.test(context)) ||
+    FINANCIAL_KEYWORDS.some(k => context.toLowerCase().includes(k))
+  );
+
+  const isPercentageValue = typeof value === 'number' && (
+    PERCENTAGE_PATTERNS.some(p => p.test(context)) ||
+    (value >= 0 && value <= 100 && /percent|%/i.test(context))
+  );
+
+  const isCountValue = typeof value === 'number' && COUNT_PATTERNS.some(p => p.test(context));
+
+  // Detect if this is a numeric input cell (not a calculated value)
+  const isNumericInput = typeof value === 'number' && (
+    isFinancialValue || isPercentageValue || isCountValue ||
+    // Check if neighbor labels suggest this is an input field
+    neighborLabels.some(l => /input|enter|value|data/i.test(l))
+  );
 
   let detectedPillar: string | null = null;
   for (const [pillar, patterns] of Object.entries(PILLAR_KEYWORDS)) {
@@ -234,26 +295,78 @@ function tagCell(sheetName: string, _cellAddress: string, value: unknown, neighb
   for (const [role, patterns] of Object.entries(ROLE_KEYWORDS)) {
     if (patterns.some(p => p.test(context))) {
       if (role === 'total_score' || role === 'bee_level' || role === 'recognition') {
-        return { role: role as 'total_score' | 'bee_level' | 'recognition' };
+        return { role: role as 'total_score' | 'bee_level' | 'recognition', description };
       }
       if (role === 'pillar_total' || role === 'sub_minimum') {
         if (detectedPillar) {
-          return { pillar: detectedPillar, role: role as 'pillar_total' | 'sub_minimum' };
+          return { pillar: detectedPillar, role: role as 'pillar_total' | 'sub_minimum', description };
         }
       }
       if (detectedPillar && (role === 'target' || role === 'actual' || role === 'score' || role === 'weight')) {
-        return { pillar: detectedPillar, indicator: context.substring(0, 60).trim(), role };
+        return { pillar: detectedPillar, indicator: context.substring(0, 60).trim(), role, description };
       }
     }
   }
 
   if (detectedPillar) {
-    const isNumeric = typeof value === 'number';
-    return { pillar: detectedPillar, indicator: context.substring(0, 60).trim(), role: isNumeric ? 'input' : 'label' };
+    // Enhanced role detection based on field type
+    let role: SemanticTag['role'] = isNumericInput ? 'input' : 'label';
+
+    // If we have a numeric value with financial/percentage patterns, mark as input
+    if (isNumericInput) {
+      role = 'input';
+    }
+
+    return { pillar: detectedPillar, indicator: context.substring(0, 60).trim(), role, description };
   }
 
-  if (/revenue|turnover|npat|net\s*profit|payroll|leviable/i.test(context)) return { role: 'financial' };
-  if (/company|client|entity|registration|vat/i.test(context)) return { role: 'client_info' };
+  // Tag financial cells even without pillar detection
+  if (isFinancialValue || isPercentageValue || isCountValue) {
+    // Try to infer pillar from context
+    let inferredPillar: string | null = null;
+    if (/ownership|shareholding|equity|voting/i.test(context)) {
+      inferredPillar = 'ownership';
+    } else if (/management|board|executive/i.test(context)) {
+      inferredPillar = 'managementControl';
+    } else if (/skills|training|learnership|bursary/i.test(context)) {
+      inferredPillar = 'skillsDevelopment';
+    } else if (/procurement|supplier|TMPS|measured.*procurement/i.test(context)) {
+      inferredPillar = 'preferentialProcurement';
+    } else if (/enterprise|esd|supplier.*develop/i.test(context)) {
+      inferredPillar = 'enterpriseSupplierDevelopment';
+    } else if (/socio|sed|social|csi/i.test(context)) {
+      inferredPillar = 'socioEconomicDevelopment';
+    } else if (/yes|youth.*employ/i.test(context)) {
+      inferredPillar = 'yesInitiative';
+    }
+
+    if (inferredPillar) {
+      return { pillar: inferredPillar, indicator: context.substring(0, 60).trim(), role: 'input', description };
+    }
+
+    // For General Information sheet or core financial metrics - tag as financials pillar input
+    if (/general\s*information|client\s*information|financials/i.test(sheetName) ||
+        /revenue|turnover|npat|net\s*profit|payroll|leviable|tmps|total.*measured.*procurement/i.test(context)) {
+      return { pillar: 'financials', indicator: context.substring(0, 60).trim(), role: 'input', description };
+    }
+  }
+
+  // Specific patterns for core financial fields - ensure they get tagged as financials pillar inputs
+  if (/revenue|turnover|npat|net\s*profit|payroll|leviable|tmps|total.*measured.*procurement/i.test(context)) {
+    // Check if this is in a general/client info sheet - these are always financial inputs
+    if (/general\s*information|client\s*information|financials/i.test(sheetName)) {
+      return { pillar: 'financials', indicator: context.substring(0, 60).trim(), role: 'input', description };
+    }
+    // Otherwise tag as financial role (backward compatibility)
+    return { role: 'financial', description };
+  }
+
+  if (/company|client|entity|registration|vat|tax/i.test(context)) return { role: 'client_info', description };
+
+  // Tag numeric input cells in scorecard sheets even without explicit pillar
+  if (isNumericInput && /score|element|indicator/i.test(sheetName)) {
+    return { role: 'input', description };
+  }
 
   return null;
 }
@@ -453,11 +566,44 @@ export function buildFormulaGraph(buffer: Buffer, filename: string, opts?: Graph
       const formula = cell.f ? String(cell.f) : null;
       const deps = formula ? extractDependencies(formula, sheetName) : [];
 
-      const leftKey = c > 0 ? XLSX.utils.encode_cell({ r, c: c - 1 }) : null;
-      const aboveKey = r > 0 ? XLSX.utils.encode_cell({ r: r - 1, c }) : null;
+      // Enhanced neighbor label extraction for B-BBEE templates
+      // Look at cells up to 3 columns to the left and above for labels
       const neighborLabels: string[] = [];
-      if (leftKey && ws[leftKey]?.t === 's') neighborLabels.push(String((ws[leftKey] as XLSX.CellObject).v || ''));
-      if (aboveKey && ws[aboveKey]?.t === 's') neighborLabels.push(String((ws[aboveKey] as XLSX.CellObject).v || ''));
+
+      // Look left up to 3 columns (for label-in-A-value-in-C patterns)
+      for (let offset = 1; offset <= 3 && c - offset >= 0; offset++) {
+        const leftKey = XLSX.utils.encode_cell({ r, c: c - offset });
+        if (ws[leftKey]?.t === 's') {
+          const label = String((ws[leftKey] as XLSX.CellObject).v || '').trim();
+          if (label && label.length > 1 && !neighborLabels.includes(label)) {
+            neighborLabels.push(label);
+          }
+        }
+      }
+
+      // Look above
+      const aboveKey = r > 0 ? XLSX.utils.encode_cell({ r: r - 1, c }) : null;
+      if (aboveKey && ws[aboveKey]?.t === 's') {
+        const label = String((ws[aboveKey] as XLSX.CellObject).v || '').trim();
+        if (label && label.length > 1) {
+          neighborLabels.push(label);
+        }
+      }
+
+      // Look at row header (column A) for this row - common in B-BBEE templates
+      if (c > 0) {
+        const rowHeaderKey = XLSX.utils.encode_cell({ r, c: 0 });
+        if (ws[rowHeaderKey]?.t === 's') {
+          const rowHeader = String((ws[rowHeaderKey] as XLSX.CellObject).v || '').trim();
+          // Add row header if it's a meaningful label (not just a number or single char)
+          if (rowHeader && rowHeader.length > 2 && !neighborLabels.includes(rowHeader)) {
+            // Check if row header looks like a label (contains letters)
+            if (/[a-zA-Z]{2,}/.test(rowHeader)) {
+              neighborLabels.push(rowHeader);
+            }
+          }
+        }
+      }
 
       const tag = tagCell(sheetName, canonical, cell.v, neighborLabels);
 

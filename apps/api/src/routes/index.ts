@@ -24,7 +24,9 @@ import scorecardRouter from './scorecard.js';
 import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
 import extractAndScoreRouter from './extractAndScore.js';
+import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
+import entityMappingRouter from './entityMapping.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -133,8 +135,14 @@ export async function registerRoutes(
   // Sector toolkit: extract from document texts → full B-BBEE scorecard
   app.use('/api', extractAndScoreRouter);
 
+  // Hybrid extraction endpoint: file upload → BM25 + Semantic + LLM extraction
+  app.use('/api', hybridExtractionRouter);
+
   // Entity templates (Dashboard CRUD) — stored in MongoDB
   app.use('/api/entity-templates', entityTemplatesRouter);
+
+  // Entity-to-cell mappings (extracted entities → Excel cells)
+  app.use('/api/entity-mappings', entityMappingRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

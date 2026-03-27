@@ -9,12 +9,114 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
+import * as XLSX from 'xlsx';
 import { Document, DocumentChunk } from '../../models.js';
+import { DocumentChunker } from '../../pipeline/extraction/documentChunker.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // Document extraction will be handled internally using patterns from audit-ai as reference
+
+/**
+ * Parse uploaded file to text pages based on file type.
+ */
+async function parseFileToPages(
+  buffer: Buffer,
+  mimetype: string,
+  originalname: string
+): Promise<Array<{ pageId: string; text: string; metadata?: Record<string, any> }>> {
+  const ext = originalname.toLowerCase().split('.').pop() || '';
+
+  // CSV / Excel
+  if (mimetype === 'text/csv' || ext === 'csv' || mimetype.includes('excel') || ext === 'xlsx' || ext === 'xls') {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][];
+
+      // Convert sheet to text representation
+      let sheetText = `Sheet: ${sheetName}\n`;
+      for (const row of jsonData) {
+        const rowText = row.map(cell => String(cell)).filter(cell => cell).join(' | ');
+        if (rowText) sheetText += rowText + '\n';
+      }
+
+      pages.push({
+        pageId: `sheet_${sheetName}`,
+        text: sheetText,
+        metadata: { sheetName, type: 'spreadsheet' }
+      });
+    }
+
+    return pages;
+  }
+
+  // PDF - would need pdfjs, simplified for now
+  if (mimetype === 'application/pdf' || ext === 'pdf') {
+    // PDF parsing would go here - for now return placeholder
+    return [{ pageId: 'pdf_1', text: buffer.toString('base64').slice(0, 1000), metadata: { type: 'pdf', needsOcr: true } }];
+  }
+
+  // TXT / Text files
+  if (mimetype === 'text/plain' || ext === 'txt') {
+    const text = buffer.toString('utf-8');
+    // Split into chunks if very long
+    const maxChunkSize = 5000;
+    const chunks: Array<{ pageId: string; text: string }> = [];
+
+    if (text.length <= maxChunkSize) {
+      chunks.push({ pageId: 'text_1', text });
+    } else {
+      let currentChunk = '';
+      let chunkNum = 1;
+      const lines = text.split('\n');
+
+      for (const line of lines) {
+        if ((currentChunk + line).length > maxChunkSize) {
+          chunks.push({ pageId: `text_${chunkNum}`, text: currentChunk });
+          currentChunk = line + '\n';
+          chunkNum++;
+        } else {
+          currentChunk += line + '\n';
+        }
+      }
+
+      if (currentChunk) {
+        chunks.push({ pageId: `text_${chunkNum}`, text: currentChunk });
+      }
+    }
+
+    return chunks.map(c => ({ ...c, metadata: { type: 'text' } }));
+  }
+
+  // DOCX (basic support - extract text from XML)
+  if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || ext === 'docx') {
+    try {
+      const JSZip = await import('jszip');
+      const zip = await JSZip.default.loadAsync(buffer);
+      const documentXml = await zip.file('word/document.xml')?.async('text');
+
+      if (documentXml) {
+        const textMatches = documentXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        const text = textMatches
+          .map(match => match.replace(/<w:t[^>]*>|<\/w:t>/g, ''))
+          .join(' ');
+
+        return [{ pageId: 'docx_1', text, metadata: { type: 'docx' } }];
+      }
+    } catch (error) {
+      console.warn('[documents] DOCX parsing failed:', error);
+    }
+
+    return [{ pageId: 'docx_1', text: '', metadata: { type: 'docx', error: 'Failed to parse' } }];
+  }
+
+  // Unsupported type - return as raw text
+  return [{ pageId: 'raw_1', text: buffer.toString('utf-8'), metadata: { type: 'raw' } }];
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/documents/upload - Upload a document for storage and chunking
@@ -39,6 +141,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       });
     }
 
+    // Create document record first
     const doc = await Document.create({
       filename,
       fileType,
@@ -51,9 +154,57 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       status: 'uploaded',
     });
 
-    // For now, just store the document. Chunking will be implemented later using audit-ai patterns
-    let chunkCount = 0;
-    await Document.findByIdAndUpdate(doc._id, { status: 'uploaded', chunkCount });
+    // Parse and chunk the document immediately on upload
+    console.log(`[documents] Parsing ${filename} for chunking...`);
+    const parseStart = Date.now();
+    const pages = await parseFileToPages(buffer, fileType, filename);
+    const parseTime = Date.now() - parseStart;
+    console.log(`[documents] Parsed ${pages.length} pages in ${parseTime}ms`);
+
+    if (pages.length === 0 || pages.every(p => !p.text.trim())) {
+      await Document.findByIdAndUpdate(doc._id, { status: 'uploaded', chunkCount: 0 });
+      return res.json({
+        documentId: doc._id,
+        filename,
+        fileType,
+        fileHash,
+        fileSize: buffer.length,
+        chunkCount: 0,
+        status: 'uploaded',
+        warning: 'No text content extracted from file',
+      });
+    }
+
+    // Build chunks
+    console.log(`[documents] Building chunks...`);
+    const chunkStart = Date.now();
+    const chunker = new DocumentChunker();
+    const documentId = doc._id.toString();
+    const chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), documentId);
+    const chunkTime = Date.now() - chunkStart;
+    console.log(`[documents] Created ${chunks.length} chunks in ${chunkTime}ms`);
+
+    // Save chunks to MongoDB
+    console.log(`[documents] Saving ${chunks.length} chunks to database...`);
+    const saveStart = Date.now();
+    const chunkDocs = chunks.map((chunk, index) => ({
+      documentId: doc._id,
+      chunkIndex: index,
+      text: chunk.text,
+      pageNumber: chunk.metadata?.pageNumber || null,
+      sheetName: chunk.metadata?.sheetName || null,
+      sectionPath: chunk.metadata?.sectionPath || '',
+      chunkType: chunk.metadata?.chunkType || 'text',
+      metadata: chunk.metadata || {},
+      tokenCount: chunk.text.length / 4, // Rough approximation
+    }));
+
+    await DocumentChunk.insertMany(chunkDocs);
+    const saveTime = Date.now() - saveStart;
+    console.log(`[documents] Saved chunks in ${saveTime}ms`);
+
+    // Update document status
+    await Document.findByIdAndUpdate(doc._id, { status: 'chunked', chunkCount: chunks.length });
 
     return res.json({
       documentId: doc._id,
@@ -61,10 +212,17 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       fileType,
       fileHash,
       fileSize: buffer.length,
-      chunkCount,
-      status: chunkCount > 0 ? 'chunked' : 'uploaded',
+      chunkCount: chunks.length,
+      status: 'chunked',
+      timing: {
+        parse: parseTime,
+        chunk: chunkTime,
+        save: saveTime,
+        total: parseTime + chunkTime + saveTime,
+      },
     });
   } catch (error: unknown) {
+    console.error('[documents] Upload failed:', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Upload failed',
     });
