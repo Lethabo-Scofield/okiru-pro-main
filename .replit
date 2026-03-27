@@ -40,4 +40,4 @@ externalPort = 3000
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd apps/web && cross-env NODE_ENV=production node dist/index.cjs"]
-build = ["bash", "-c", "cd apps/web && npm install --no-workspaces --legacy-peer-deps && npm run build"]
+build = ["bash", "-c", "pnpm install --frozen-lockfile && cd apps/web && pnpm run build"]
