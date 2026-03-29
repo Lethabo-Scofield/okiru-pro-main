@@ -1,40 +1,28 @@
-name: Build, Push, Deploy
+name: Build & Deploy Directly to VM
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main" ]  # Trigger on pushes to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read   # needed for actions/checkout
-
     steps:
-      # 1. Checkout repository
+      # 1. Checkout the repo
       - uses: actions/checkout@v4
 
-      # 2. Login to GHCR using your Personal Access Token
-      - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      # 3. Build Docker image
-      - name: Build image
-        run: docker build -t ghcr.io/lethabo-scofield/web:latest -f apps/web/Dockerfile .
-
-      # 4. Push Docker image to GitHub Container Registry
-      - name: Push image
-        run: docker push ghcr.io/lethabo-scofield/web:latest
-
-      # 5. Deploy to your VM over SSH
-      - name: Deploy to VM
+      # 2. Deploy to VM via SSH
+      - name: Build and Deploy on VM
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: okiru
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.VM_HOST }}          # Public IP of your VM
+          username: okiru                       # VM username
+          key: ${{ secrets.SSH_PRIVATE_KEY }}  # Private SSH key
           script: |
-            docker pull ghcr.io/lethabo-scofield/web:latest
+            cd /home/okiru/okiru-pro-main      # Path to repo on VM
+            git reset --hard HEAD
+            git pull origin main               # Pull latest changes
+            docker build -t web-prod:latest -f apps/web/Dockerfile .
             docker rm -f web-prod || true
-            docker run -d --name web-prod -p 80:80 ghcr.io/lethabo-scofield/web:latest
+            docker run -d --name web-prod -p 80:80 web-prod:latest
