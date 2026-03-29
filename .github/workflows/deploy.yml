@@ -13,24 +13,21 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build image
-        run: |
-          docker build -t ghcr.io/lethabo-scofield/web:latest -f apps/web/Dockerfile .
+        run: docker build -t ghcr.io/lethabo-scofield/web:latest -f apps/web/Dockerfile .
 
       - name: Push image
-        run: |
-          docker push ghcr.io/lethabo-scofield/web:latest
+        run: docker push ghcr.io/lethabo-scofield/web:latest
 
-      - name: Deploy to Azure VM
+      - name: Deploy to VM
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 20.164.207.196
+          host: ${{ secrets.VM_HOST }}
           username: okiru
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
