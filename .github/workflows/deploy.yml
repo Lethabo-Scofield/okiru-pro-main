@@ -23,5 +23,9 @@ jobs:
             git pull origin main
 
             docker build -t web-prod:latest -f apps/web/Dockerfile .
+
+            # Stop and remove old container if exists
             docker rm -f web-prod || true
-            docker run -d --name web-prod -p 80:80 web-prod:latest
+
+            # Run on a free port (3000 instead of 80)
+            docker run -d --name web-prod -p 3000:80 web-prod:latest
