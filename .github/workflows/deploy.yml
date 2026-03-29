@@ -1,28 +1,27 @@
-name: Build & Deploy Directly to VM
+name: Deploy Directly to VM
 
 on:
   push:
-    branches: [ "main" ]  # Trigger on pushes to main
+    branches: [ "main" ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the repo
       - uses: actions/checkout@v4
 
-      # 2. Deploy to VM via SSH
-      - name: Build and Deploy on VM
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VM_HOST }}          # Public IP of your VM
-          username: okiru                       # VM username
-          key: ${{ secrets.SSH_PRIVATE_KEY }}  # Private SSH key
+          host: ${{ secrets.VM_HOST }}
+          username: okiru
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/okiru/okiru-pro-main      # Path to repo on VM
-            git reset --hard HEAD
-            git pull origin main               # Pull latest changes
+            cd /home/okiru/okiru-pro-main || git clone https://github.com/Lethabo-Scofield/okiru-pro-main.git
+            cd /home/okiru/okiru-pro-main
+            git pull origin main
+
             docker build -t web-prod:latest -f apps/web/Dockerfile .
             docker rm -f web-prod || true
             docker run -d --name web-prod -p 80:80 web-prod:latest
