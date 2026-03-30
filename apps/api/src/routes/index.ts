@@ -27,6 +27,7 @@ import extractAndScoreRouter from './extractAndScore.js';
 import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
 import entityMappingRouter from './entityMapping.js';
+import scorecardBuilderRouter from './scorecardBuilder.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -143,6 +144,9 @@ export async function registerRoutes(
 
   // Entity-to-cell mappings (extracted entities → Excel cells)
   app.use('/api/entity-mappings', entityMappingRouter);
+
+  // Scorecard builder: manifest + calculate + save (Phase 4)
+  app.use('/api', scorecardBuilderRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

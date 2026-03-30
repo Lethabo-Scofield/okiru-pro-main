@@ -7,7 +7,9 @@
     "dev": "tsx index.ts",
     "build": "tsc",
     "start": "cross-env NODE_ENV=production node dist/index.js",
-    "test": "echo \"No tests configured\" && exit 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:lake": "vitest run pipeline/__tests__/lakeTrading.test.ts",
     "test:arango-calc": "tsx __tests__/accuracy/arangoCalcPathTest.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
@@ -52,6 +54,7 @@
     "cross-env": "^10.1.0",
     "eslint": "^9.0.0",
     "tsx": "^4.21.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
   }
 }

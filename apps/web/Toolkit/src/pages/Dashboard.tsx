@@ -1,7 +1,7 @@
 import { Button } from "@toolkit/components/ui/button";
 import { Skeleton } from "@toolkit/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
-import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, DollarSign, Info } from "lucide-react";
+import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, DollarSign, Info, Building2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import type { Client, SkillsData, ProcurementData, ESDData, SEDData, ScorecardResult } from "@toolkit/lib/types";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
@@ -153,11 +153,11 @@ export default function Dashboard() {
           </div>
           <Button
             className="gap-2 rounded-full px-6 h-9 text-[13px]"
-            onClick={() => navigate("/import")}
-            data-testid="btn-upload-excel"
+            onClick={() => navigate("/processor")}
+            data-testid="btn-build-scorecard"
           >
-            <FileSpreadsheet className="h-4 w-4" />
-            Upload Excel
+            <Building2 className="h-4 w-4" />
+            Build Scorecard
           </Button>
         </motion.div>
       </motion.div>
@@ -308,7 +308,7 @@ export default function Dashboard() {
             <h3 className="text-[12px] font-medium text-muted-foreground/40 tracking-wide">Quick Actions</h3>
             <div className="space-y-0.5">
               {[
-                { label: "Re-import Data", desc: "Upload a new or updated toolkit", icon: FileSpreadsheet, href: "/import", testId: "btn-reimport", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400" },
+                { label: "New Assessment", desc: "Build or upload a scorecard", icon: Building2, href: "/processor", testId: "btn-reimport", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400" },
                 { label: "Full Scorecard", desc: "Pillar-by-pillar breakdown", icon: Table, href: "/scorecard", testId: "btn-view-scorecard", iconBg: "bg-blue-500/15", iconColor: "text-blue-400" },
               ].map((action) => (
                 <button

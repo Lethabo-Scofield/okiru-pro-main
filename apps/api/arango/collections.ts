@@ -27,6 +27,13 @@ export const COLLECTIONS = {
   sectorModelMappings: 'sector_model_mappings',
   toolkitFiles: 'toolkit_files',
   entityCellMappings: 'entity_cell_mappings',
+  // Phase 2: Ontology collections (hierarchical B-BBEE scoring)
+  sectorRules: 'sector_rules',
+  criteria: 'criteria',
+  entityFields: 'entity_fields',
+  evidenceRefs: 'evidence_refs',
+  scoreResults: 'score_results',
+  calculationRuns: 'calculation_runs',
 } as const;
 
 // Edge collection names
@@ -38,6 +45,14 @@ export const EDGE_COLLECTIONS = {
   sectorApplies: 'sector_applies',
   indicatorOf: 'indicator_of',
   cellDependency: 'cell_dependency',
+  // Phase 2: Ontology edges (hierarchical relationships)
+  criterionOf: 'criterion_of',
+  entityOf: 'entity_of',
+  feedsInto: 'feeds_into',
+  calculatedBy: 'calculated_by',
+  hasEvidence: 'has_evidence',
+  appliesTo: 'applies_to',
+  overridesFor: 'overrides_for',
 } as const;
 
 const DOCUMENT_COLLECTIONS = Object.values(COLLECTIONS);
@@ -80,4 +95,15 @@ async function ensureIndexes(db: Database): Promise<void> {
   await col(COLLECTIONS.sectorModelMappings).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'], unique: true });
   await col(COLLECTIONS.toolkitFiles).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'] });
   await col(COLLECTIONS.entityCellMappings).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'], unique: true });
+  // Phase 2: Ontology indexes
+  await col(COLLECTIONS.sectorRules).ensureIndex({ type: 'persistent', fields: ['sectorCode', 'scorecardType'], unique: true });
+  await col(COLLECTIONS.criteria).ensureIndex({ type: 'persistent', fields: ['code', 'sectorCode', 'scorecardType'] });
+  await col(COLLECTIONS.criteria).ensureIndex({ type: 'persistent', fields: ['pillarCode'] });
+  await col(COLLECTIONS.entityFields).ensureIndex({ type: 'persistent', fields: ['id', 'sectorCode', 'scorecardType'] });
+  await col(COLLECTIONS.entityFields).ensureIndex({ type: 'persistent', fields: ['pillarCode'] });
+  await col(COLLECTIONS.entityFields).ensureIndex({ type: 'persistent', fields: ['criterionCodes[*]'] });
+  await col(COLLECTIONS.evidenceRefs).ensureIndex({ type: 'persistent', fields: ['assessmentId', 'entityFieldId'] });
+  await col(COLLECTIONS.scoreResults).ensureIndex({ type: 'persistent', fields: ['assessmentId', 'pillarCode'] });
+  await col(COLLECTIONS.scoreResults).ensureIndex({ type: 'persistent', fields: ['assessmentId', 'criterionCode'] });
+  await col(COLLECTIONS.calculationRuns).ensureIndex({ type: 'persistent', fields: ['assessmentId', 'runAt'] });
 }

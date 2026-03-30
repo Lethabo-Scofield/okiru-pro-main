@@ -11,7 +11,7 @@
  */
 
 import { Router } from 'express';
-import { buildManifestForSector } from '../../pipeline/extraction/entityManifest.js';
+import { buildManifest, getAllEntities, toExtractionRequest } from '../../pipeline/extraction/entityManifest.js';
 import { LLMExtractor } from '../../pipeline/extraction/llmExtractor.js';
 import type { LLMExtractionRequest } from '../../pipeline/extraction/llmExtractor.js';
 import {
@@ -54,7 +54,7 @@ router.post('/extract-and-score', async (req, res) => {
 
   try {
     // 1 — Build sector entity manifest
-    const manifest = buildManifestForSector(
+    const manifest = buildManifest(
       sectorCode.toUpperCase(),
       scorecardType,
     );
@@ -65,17 +65,10 @@ router.post('/extract-and-score', async (req, res) => {
       .join('\n\n');
 
     // 3 — Build LLM extraction requests: one per entity in the manifest
-    const requests: LLMExtractionRequest[] = manifest.requiredEntities.map((entity) => ({
-      entityName: entity.name,
-      entityType: entity.fieldType,
-      definition: entity.definition,
-      aliases: entity.aliases,
-      positiveExamples: entity.positiveExamples,
-      negativeExamples: entity.negativeExamples,
-      zones: entity.zones,
-      sourceText: combinedText,
-      sourcePageId: 'combined',
-    }));
+    const allFields = getAllEntities(manifest);
+    const requests: LLMExtractionRequest[] = allFields.map((field) =>
+      toExtractionRequest(field, combinedText, 'combined') as LLMExtractionRequest,
+    );
 
     // 4 — Run Groq extraction
     const extractor = new LLMExtractor();
@@ -111,7 +104,7 @@ router.post('/extract-and-score', async (req, res) => {
     const scorecardSummary = generateScorecardSummary(scorecard);
 
     // 7 — Build confidence report for the UI
-    const requiredRoles = manifest.requiredEntities.map((e) => e.name);
+    const requiredRoles = allFields.map((f) => f.name);
     const confidence = buildConfidenceReport(extractionResults, requiredRoles);
 
     return res.json({

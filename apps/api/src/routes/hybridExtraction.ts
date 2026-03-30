@@ -24,9 +24,11 @@ import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
 import { HybridRetriever } from '../../pipeline/extraction/hybridRetriever.js';
 import { InMemoryVectorStore, createVectorStore } from '../../pipeline/extraction/embeddingStore.js';
 import {
-  buildManifestForSector,
+  buildManifest,
+  getAllEntities,
+  toExtractionRequest,
   type EntityManifest,
-  type EntityRequirement,
+  type EntityField,
 } from '../../pipeline/extraction/entityManifest.js';
 import {
   LLMExtractor,
@@ -380,7 +382,7 @@ router.post(
       console.log(`[hybridExtraction] Indexes built in ${indexTime}ms`);
 
       // Step 4: Load entity manifest
-      const manifest = buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
 
       // Step 5: Extract entities
       const extractStart = Date.now();
@@ -390,7 +392,7 @@ router.post(
 
       // Process entities in batches to avoid overwhelming the LLM
       const BATCH_SIZE = 5;
-      const entities = manifest.requiredEntities;
+      const entities = getAllEntities(manifest);
 
       for (let i = 0; i < entities.length; i += BATCH_SIZE) {
         const batch = entities.slice(i, i + BATCH_SIZE);
@@ -399,7 +401,7 @@ router.post(
           batch.map(async (entity) => {
             try {
               // Build search query from entity
-              const searchQuery = [entity.name, ...entity.aliases].join(' ');
+              const searchQuery = [entity.name, ...entity.extraction.aliases].join(' ');
 
               // Hybrid retrieval with embeddings and optional reranking
               const retrievalResults = await retriever.searchWithEmbeddings(
@@ -421,16 +423,16 @@ router.post(
                   value: null,
                   confidence: 0.3,
                   status: 'pending' as const,
-                  pillar: entity.pillar,
-                  fieldType: entity.fieldType,
-                  definition: entity.definition,
-                  provenance: {
-                    pageId: 'none',
-                    chunkId: 'none',
-                    textSnippet: 'No relevant passages found',
-                    retrievalScore: 0,
-                    method: 'llm_fallback' as const,
-                  },
+                   pillar: entity.pillarCode,
+                   fieldType: entity.fieldType,
+                   definition: entity.extraction.definition,
+                   provenance: {
+                     pageId: 'none',
+                     chunkId: 'none',
+                     textSnippet: 'No relevant passages found',
+                     retrievalScore: 0,
+                     method: 'llm_fallback' as const,
+                   },
                 };
               }
 
@@ -446,31 +448,21 @@ router.post(
                   value: null,
                   confidence: 0.3,
                   status: 'pending' as const,
-                  pillar: entity.pillar,
+                  pillar: entity.pillarCode,
                   fieldType: entity.fieldType,
-                  definition: entity.definition,
+                  definition: entity.extraction.definition,
                   provenance: {
-                    pageId: topResult.pageId,
-                    chunkId: topResult.pageId,
-                    textSnippet: 'Chunk not found',
-                    retrievalScore: topResult.score,
-                    method: 'llm_fallback' as const,
-                  },
+                     pageId: topResult.pageId,
+                     chunkId: topResult.pageId,
+                     textSnippet: 'Chunk not found',
+                     retrievalScore: topResult.score,
+                     method: 'llm_fallback' as const,
+                   },
                 };
               }
 
               // Build LLM extraction request
-              const extractionRequest = {
-                entityName: entity.name,
-                entityType: entity.fieldType,
-                definition: entity.definition,
-                aliases: entity.aliases,
-                positiveExamples: entity.positiveExamples || [],
-                negativeExamples: entity.negativeExamples || [],
-                zones: entity.zones || [],
-                sourceText: topChunk.text,
-                sourcePageId: topChunk.pageId,
-              };
+              const extractionRequest = toExtractionRequest(entity, topChunk.text, topChunk.pageId);
 
               // Extract using LLM
               const llmResult = await llmExtractor.extract(extractionRequest);
@@ -493,9 +485,9 @@ router.post(
                 value: llmResult.extractedValue,
                 confidence: confidenceResult.score,
                 status: 'pending' as const,
-                pillar: entity.pillar,
+                pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
-                definition: entity.definition,
+                definition: entity.extraction.definition,
                 provenance: {
                   pageId: topChunk.pageId,
                   chunkId: topChunk.chunkId,
@@ -513,9 +505,9 @@ router.post(
                 value: null,
                 confidence: 0,
                 status: 'pending' as const,
-                pillar: entity.pillar,
+                pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
-                definition: entity.definition,
+                definition: entity.extraction.definition,
                 provenance: {
                   pageId: 'error',
                   chunkId: 'error',

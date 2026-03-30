@@ -337,15 +337,15 @@ export default function Dashboard() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">Upload Documents</div>
-                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Process PDFs, images, and more.</div>
+                    <div className="text-[15px] font-semibold tracking-tight text-white">Create Scorecard</div>
+                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Build B-BBEE scorecards manually or upload documents.</div>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
                     <FileText className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                  Documents <ChevronRight className="w-3 h-3" /> Upload
+                  Scorecard <ChevronRight className="w-3 h-3" /> Create
                 </div>
               </button>
 

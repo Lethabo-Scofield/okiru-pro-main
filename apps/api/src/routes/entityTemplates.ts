@@ -1,15 +1,80 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { EntityTemplateModel } from '../../models.js';
+import { getAllManifests } from '../../pipeline/extraction/entityManifest.js';
 
 const router = Router();
 
-// GET /api/entity-templates — list all
+// GET /api/entity-templates — list all (MongoDB + new ontology)
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    const templates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
-    return res.json(templates);
+    // Get old MongoDB templates
+    const oldTemplates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
+
+    // Get new ontology manifests and convert to template format
+    const manifests = getAllManifests();
+    const ontologyTemplates = manifests.map(m => ({
+      id: `ontology-${m.sectorCode}-${m.scorecardType}`,
+      userId: null,
+      name: `${m.sectorCode} ${m.scorecardType} Scorecard`,
+      description: `Ontology-based template for ${m.sectorCode} ${m.scorecardType} with ${m.pillarPacks.reduce((sum: number, p: any) => sum + p.criteria.length, 0)} criteria across ${m.pillarPacks.length} pillars`,
+      version: '2.0',
+      // Flat entity list for backward compatibility
+      entities: m.pillarPacks.flatMap(p => p.entities).map(e => ({
+        label: e.id,
+        definition: e.name,
+        pillarCode: e.pillarCode,
+        criterionCodes: e.criterionCodes,
+        fieldType: e.fieldType,
+        synonyms: e.extraction.aliases,
+        positives: e.extraction.positiveExamples,
+        negatives: e.extraction.negativeExamples,
+        zones: e.extraction.zones,
+        keywords: {
+          must: e.extraction.mustHaveKeywords,
+          nice: e.extraction.niceToHaveKeywords,
+          neg: e.extraction.excludeKeywords,
+        },
+        pattern: '',
+      })),
+      // Hierarchical structure for the new UI
+      pillarPacks: m.pillarPacks.map(p => ({
+        pillarCode: p.pillarCode,
+        pillarName: p.pillarName,
+        maxPoints: p.maxPoints,
+        hasSubMinimum: p.hasSubMinimum,
+        subMinimumThreshold: p.subMinimumThreshold,
+        criteriaCount: p.criteria.length,
+        entityCount: p.entities.length,
+        criteria: p.criteria.map(c => ({
+          code: c.code,
+          name: c.name,
+          target: c.target,
+          maxPoints: c.maxPoints,
+          formula: c.formula,
+          inputEntities: c.inputEntities,
+        })),
+        entities: p.entities.map(e => ({
+          id: e.id,
+          name: e.name,
+          fieldType: e.fieldType,
+          pillarCode: e.pillarCode,
+          criterionCodes: e.criterionCodes,
+          required: e.required,
+        })),
+      })),
+      isOntology: true,
+      sectorCode: m.sectorCode,
+      scorecardType: m.scorecardType,
+      rootContext: m.rootContext,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    // Combine both, with ontology templates first
+    return res.json([...ontologyTemplates, ...oldTemplates]);
   } catch (err) {
+    console.error('[EntityTemplates] Error:', err);
     return res.status(500).json({ message: 'Failed to list entity templates' });
   }
 });

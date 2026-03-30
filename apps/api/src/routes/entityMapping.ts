@@ -17,7 +17,7 @@ import {
   applyEntitiesToScorecard,
   validateEntityCoverage,
 } from '../../arango/entityCellMapping.js';
-import { buildManifestForSector } from '../../pipeline/extraction/entityManifest.js';
+import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
 
@@ -63,14 +63,14 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
     }
 
     // Get required entities for this sector/type
-    const manifest = buildManifestForSector(sectorCode, scorecardType);
+    const manifest = buildManifest(sectorCode, scorecardType);
 
     // Build the mapping
     const mapping = await buildEntityCellMapping(
       graphKey,
       sectorCode.toUpperCase(),
       scorecardType,
-      manifest.requiredEntities,
+      getAllEntities(manifest),
     );
 
     return res.json({
@@ -107,12 +107,12 @@ router.post('/build-all', async (_req: Request, res: Response) => {
   try {
     // Build manifests for all 6 templates
     const manifests = [
-      buildManifestForSector('RCOGP', 'Generic'),
-      buildManifestForSector('ICT', 'Generic'),
-      buildManifestForSector('ICT', 'QSE'),
-      buildManifestForSector('RCOGP', 'QSE'),
-      buildManifestForSector('FSC', 'Generic'),
-      buildManifestForSector('AGRI', 'Generic'),
+      buildManifest('RCOGP', 'Generic'),
+      buildManifest('ICT', 'Generic'),
+      buildManifest('ICT', 'QSE'),
+      buildManifest('RCOGP', 'QSE'),
+      buildManifest('FSC', 'Generic'),
+      buildManifest('AGRI', 'Generic'),
     ];
 
     const results: Array<{
@@ -124,7 +124,7 @@ router.post('/build-all', async (_req: Request, res: Response) => {
     }> = [];
 
     for (const manifest of manifests) {
-      const allMappings = await buildAllMappings(manifest.requiredEntities);
+      const allMappings = await buildAllMappings(getAllEntities(manifest));
       for (const { sectorCode, scorecardType, mapping } of allMappings) {
         if (sectorCode === manifest.sectorCode && scorecardType === manifest.scorecardType) {
           results.push({
