@@ -21,17 +21,17 @@ Okiru Pro is a comprehensive B-BBEE (Broad-Based Black Economic Empowerment) Com
 
 ## Running the Project
 
-### Development
-The workflow `Start application` runs:
-```
-cd apps/web && pnpm run dev
-```
-This starts the Express server (with Vite middleware) on port 5000.
+### Development (3 services, started in parallel by the "Project" workflow)
+1. **Web App** (port 5000): `cd apps/web && pnpm run dev` — Express + Vite frontend
+2. **API Server** (port 3000): `cd apps/api && npx tsx index.ts` — Business logic, routes, proxied from web
+3. **Computation Engine** (port 8000): Python FastAPI — Excel model compilation and evaluation
+
+The web app proxies scorecard/entity/template routes to the API server, which in turn calls the Computation Engine for formula evaluation.
 
 ### Package Management
 Uses pnpm workspaces. Install dependencies from the root:
 ```
-pnpm install --no-frozen-lockfile --ignore-scripts
+pnpm install
 ```
 
 ## Environment Variables Required

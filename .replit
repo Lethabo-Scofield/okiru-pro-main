@@ -17,6 +17,14 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "API Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Computation Engine"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -29,13 +37,45 @@ task = "shell.exec"
 args = "cd apps/web && pnpm run dev"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "API Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/api && npx tsx index.ts"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Computation Engine"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/Computation-Engine/backend && ALLOW_IN_MEMORY_DB=1 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 24678
-externalPort = 3000
+localPort = 5001
+externalPort = 3002
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
 
 [[ports]]
 localPort = 24679

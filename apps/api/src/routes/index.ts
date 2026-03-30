@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import { Router } from 'express';
+import { isMongoConnected } from '../../db.js';
 
 // Import route modules
 import healthRouter from './health.js';
@@ -56,12 +57,8 @@ export async function registerRoutes(
     process.exit(1);
   }
 
-  app.use(session({
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: "sessions",
-      ttl: 7 * 24 * 60 * 60,
-    }),
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  const sessionConfig: session.SessionOptions = {
     secret: sessionSecret || 'okiru-dev-secret-local-only',
     resave: false,
     saveUninitialized: false,
@@ -72,7 +69,19 @@ export async function registerRoutes(
       sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
-  }));
+  };
+
+  if (isMongoConnected() && mongoUri) {
+    sessionConfig.store = MongoStore.create({
+      mongoUrl: mongoUri,
+      collectionName: "sessions",
+      ttl: 7 * 24 * 60 * 60,
+    });
+  } else {
+    console.warn("[Session] Using in-memory session store (MongoDB unavailable).");
+  }
+
+  app.use(session(sessionConfig));
 
   app.use('/api/', apiLimiter);
 
