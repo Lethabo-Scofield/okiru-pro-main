@@ -18,7 +18,7 @@ import logging
 import os
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
@@ -316,10 +316,9 @@ def create_model_version(
 
     file_hash = _compute_file_hash(filepath)
     version_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.now(timezone.utc).isoformat()
 
-    # Version label (timestamp-based)
-    version_label = datetime.utcnow().strftime("v%Y%m%d%H%M%S")
+    version_label = datetime.now(timezone.utc).strftime("v%Y%m%d%H%M%S")
 
     # Immutable model document (each upload is a distinct version)
     doc = {
@@ -395,7 +394,7 @@ def compile_model_version(version_id: str, filepath: str) -> Dict[str, Any]:
             "input_count": len(inputs),
             "output_count": len(outputs),
             "status": "active",
-            "compiled_at": datetime.utcnow().isoformat() + "Z",
+            "compiled_at": datetime.now(timezone.utc).isoformat(),
             "error": None,
         }
 
@@ -464,7 +463,7 @@ def evaluate_model(
     snapshot = {
         "_key": str(uuid.uuid4()),
         "model_version_id": version_id,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "overrides": overrides or {},
         "results": results,
         "stats": stats,
@@ -522,7 +521,7 @@ def set_active_model(version_id: str, company_id: str = "global") -> Dict[str, A
 
     _get_model_doc(version_id)  # Validate version exists
 
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.now(timezone.utc).isoformat()
     doc = {
         "_key": company_id,
         "active_model_id": version_id,

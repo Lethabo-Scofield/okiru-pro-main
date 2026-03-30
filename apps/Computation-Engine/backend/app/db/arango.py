@@ -1,25 +1,121 @@
 import logging
 import uuid
-from datetime import datetime
-
-from arango import ArangoClient
+from datetime import datetime, timezone
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+COLLECTION_NAMES = [
+    "scorecard_models",
+    "cells",
+    "dependencies",
+    "scorecard_snapshots",
+    "companies",
+    "overrides",
+    "audit_logs",
+]
+
+
+class _InMemoryCollection:
+    def __init__(self, name: str, edge: bool = False):
+        self._name = name
+        self._edge = edge
+        self._docs: dict[str, dict] = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def insert(self, doc: dict, **kwargs):
+        key = doc.get("_key", str(uuid.uuid4()))
+        doc["_key"] = key
+        doc["_id"] = f"{self._name}/{key}"
+        self._docs[key] = dict(doc)
+        return {"_key": key, "_id": doc["_id"]}
+
+    def get(self, key: str, **kwargs):
+        return self._docs.get(key)
+
+    def update(self, doc: dict, **kwargs):
+        key = doc.get("_key")
+        if key and key in self._docs:
+            self._docs[key].update(doc)
+        return doc
+
+    def delete(self, key_or_doc, **kwargs):
+        key = key_or_doc if isinstance(key_or_doc, str) else key_or_doc.get("_key")
+        self._docs.pop(key, None)
+
+    def all(self, **kwargs):
+        return list(self._docs.values())
+
+    def find(self, filters: dict, **kwargs):
+        results = []
+        for doc in self._docs.values():
+            if all(doc.get(k) == v for k, v in filters.items()):
+                results.append(doc)
+        return results
+
+    def truncate(self):
+        self._docs.clear()
+
+    def count(self):
+        return len(self._docs)
+
+    def has(self, key: str, **kwargs):
+        return key in self._docs
+
+    def import_bulk(self, docs: list, **kwargs):
+        for doc in docs:
+            self.insert(doc)
+        return {"created": len(docs), "errors": 0}
+
+
+class _InMemoryDB:
+    def __init__(self):
+        self._collections: dict[str, _InMemoryCollection] = {}
+
+    def has_collection(self, name: str) -> bool:
+        return name in self._collections
+
+    def create_collection(self, name: str, edge: bool = False, **kwargs):
+        col = _InMemoryCollection(name, edge=edge)
+        self._collections[name] = col
+        return col
+
+    def collection(self, name: str):
+        if name not in self._collections:
+            self._collections[name] = _InMemoryCollection(name)
+        return self._collections[name]
+
+    def aql(self):
+        raise NotImplementedError("AQL queries are not supported in in-memory mode")
+
 
 def _init_arango_client():
-    """Initialize ArangoDB client and ensure required collections exist.
+    if settings.ALLOW_IN_MEMORY_DB:
+        logger.warning("Using in-memory database (ALLOW_IN_MEMORY_DB=1). Data will NOT persist.")
+        mem_db = _InMemoryDB()
+        required_collections = {
+            "scorecard_models": False,
+            "cells": False,
+            "dependencies": True,
+            "scorecard_snapshots": False,
+            "companies": False,
+            "overrides": False,
+            "audit_logs": False,
+        }
+        for name, is_edge in required_collections.items():
+            mem_db.create_collection(name, edge=is_edge)
+        return mem_db
 
-    This function will raise on any connection failure. The server must not
-    start without a reachable ArangoDB instance.
-    """
+    from arango import ArangoClient
 
     required_collections = {
         "scorecard_models": False,
         "cells": False,
-        "dependencies": True,  # Edge collection for cell dependencies
+        "dependencies": True,
         "scorecard_snapshots": False,
         "companies": False,
         "overrides": False,
@@ -43,7 +139,6 @@ def _init_arango_client():
             f"{settings.ARANGO_URL}."
         ) from e
 
-    # Ensure required collections exist
     try:
         for name, is_edge in required_collections.items():
             if not db.has_collection(name):
@@ -56,10 +151,8 @@ def _init_arango_client():
     return db
 
 
-# Initialize database connection (must succeed)
 db = _init_arango_client()
 
-# Export collections
 scorecard_models = db.collection("scorecard_models")
 cells = db.collection("cells")
 dependencies = db.collection("dependencies")
@@ -70,10 +163,9 @@ audit_logs = db.collection("audit_logs")
 
 
 def log_audit(action: str, user: str = None, details: dict = None):
-    """Log an audit event and return the generated key."""
     doc = {
         "_key": str(uuid.uuid4()),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "action": action,
         "user": user,
         "details": details or {},
