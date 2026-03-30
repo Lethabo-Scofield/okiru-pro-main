@@ -1,9 +1,16 @@
 import mongoose from "mongoose";
 
+let mongoConnected = false;
+
+export function isMongoConnected(): boolean {
+  return mongoConnected;
+}
+
 export async function connectDB(): Promise<void> {
   const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
   if (!uri) {
-    throw new Error("MONGO_URI or MONGODB_URI environment variable is not set. Please provide your MongoDB Atlas connection string.");
+    console.warn("[MongoDB] MONGO_URI/MONGODB_URI not set. Running without MongoDB — data-dependent routes will be unavailable.");
+    return;
   }
 
   const maxRetries = 3;
@@ -18,6 +25,7 @@ export async function connectDB(): Promise<void> {
         socketTimeoutMS: 45000,
       });
       console.log("[MongoDB] Connected successfully");
+      mongoConnected = true;
 
       mongoose.connection.on("error", (err) => {
         console.error("[MongoDB] Connection error:", err.message);
@@ -32,7 +40,8 @@ export async function connectDB(): Promise<void> {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[MongoDB] Connection attempt ${attempt} failed:`, msg);
       if (attempt >= maxRetries) {
-        throw new Error(`Failed to connect to MongoDB after ${maxRetries} attempts: ${msg}`);
+        console.warn(`[MongoDB] Failed to connect after ${maxRetries} attempts. Continuing without MongoDB.`);
+        return;
       }
       await new Promise((r) => setTimeout(r, 2000 * attempt));
     }

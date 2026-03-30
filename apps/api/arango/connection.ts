@@ -12,12 +12,17 @@
 import { Database } from 'arangojs';
 
 let _db: Database | null = null;
+let _arangoConnected = false;
 
 export interface ArangoConfig {
   url: string;
   databaseName: string;
   username: string;
   password: string;
+}
+
+export function isArangoConnected(): boolean {
+  return _arangoConnected;
 }
 
 function getConfig(): ArangoConfig {
@@ -29,26 +34,33 @@ function getConfig(): ArangoConfig {
   };
 }
 
-export async function connectArango(): Promise<Database> {
+export async function connectArango(): Promise<Database | null> {
   if (_db) return _db;
 
   const cfg = getConfig();
   console.log(`[ArangoDB] Connecting to ${cfg.url}/${cfg.databaseName}...`);
 
-  const systemDb = new Database({
-    url: cfg.url,
-    auth: { username: cfg.username, password: cfg.password },
-  });
+  try {
+    const systemDb = new Database({
+      url: cfg.url,
+      auth: { username: cfg.username, password: cfg.password },
+    });
 
-  const databases = await systemDb.listDatabases();
-  if (!databases.includes(cfg.databaseName)) {
-    console.log(`[ArangoDB] Creating database "${cfg.databaseName}"...`);
-    await systemDb.createDatabase(cfg.databaseName);
+    const databases = await systemDb.listDatabases();
+    if (!databases.includes(cfg.databaseName)) {
+      console.log(`[ArangoDB] Creating database "${cfg.databaseName}"...`);
+      await systemDb.createDatabase(cfg.databaseName);
+    }
+
+    _db = systemDb.database(cfg.databaseName);
+    _arangoConnected = true;
+    console.log(`[ArangoDB] Connected to "${cfg.databaseName}"`);
+    return _db;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ArangoDB] Failed to connect: ${msg}. Routes requiring ArangoDB will be unavailable.`);
+    return null;
   }
-
-  _db = systemDb.database(cfg.databaseName);
-  console.log(`[ArangoDB] Connected to "${cfg.databaseName}"`);
-  return _db;
 }
 
 export function getArangoDB(): Database {

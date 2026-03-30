@@ -9,7 +9,7 @@
 import http from "http";
 import type { Express, Request, Response, NextFunction } from "express";
 
-const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:5001";
+const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
 
 const PROXIED_PREFIXES = [
   "/api/extract-entities-hybrid",

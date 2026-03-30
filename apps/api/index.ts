@@ -64,17 +64,24 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
 
 (async () => {
   await connectDB();
-  await connectArango();
-  await ensureCollections();
+  const arangoDB = await connectArango();
+  if (arangoDB) {
+    await ensureCollections();
+  } else {
+    console.warn("[Startup] Skipping ArangoDB collection setup — not connected.");
+  }
 
-  // Seed B-BBEE ontology (non-blocking — skip if already seeded)
-  seedOntology().then(summary => {
-    if (summary.totalCriteria > 0) {
-      console.log(`[Seed] Ontology: ${summary.totalSectors} sectors, ${summary.totalCriteria} criteria, ${summary.totalEntityFields} fields (${summary.durationMs}ms)`);
-    }
-  }).catch(err => {
-    console.warn('[Seed] Ontology seeding failed (non-fatal):', err instanceof Error ? err.message : err);
-  });
+  if (arangoDB) {
+    seedOntology().then(summary => {
+      if (summary.totalCriteria > 0) {
+        console.log(`[Seed] Ontology: ${summary.totalSectors} sectors, ${summary.totalCriteria} criteria, ${summary.totalEntityFields} fields (${summary.durationMs}ms)`);
+      }
+    }).catch(err => {
+      console.warn('[Seed] Ontology seeding failed (non-fatal):', err instanceof Error ? err.message : err);
+    });
+  } else {
+    console.warn("[Startup] Skipping ontology seeding — ArangoDB not connected.");
+  }
 
   await registerRoutes(httpServer, app);
 
@@ -92,7 +99,7 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
     return res.status(status).json({ message });
   });
 
-  const port = parseInt(process.env.PORT || "5001", 10);
+  const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port} [${isProd ? "production" : "development"}]`);
   });
