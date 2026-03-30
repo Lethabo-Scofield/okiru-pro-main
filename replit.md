@@ -41,7 +41,27 @@ pnpm install --no-frozen-lockfile --ignore-scripts
 - `OPENAI_API_KEY` - Optional, for OpenAI features
 - `GOOGLE_AI_API_KEY` - Optional, for Google AI features
 
+## Testing
+
+### Web App (apps/web) — Vitest
+```
+cd apps/web && pnpm run test
+```
+10 test files, 181 tests covering: Toolkit utilities, calculator engines (skills, shared, scorecard-integration, procurement, ownership, management, esd-sed), server routes, and email.
+
+### API (apps/api) — Vitest
+```
+cd apps/api && pnpm run test
+```
+Tests the B-BBEE scoring engine: manifest building, scorecard calculation, and all sector variants.
+
+### Computation Engine (apps/Computation-Engine) — Pytest
+```
+cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
+```
+Tests model compilation and evaluation. Uses in-memory DB when `ALLOW_IN_MEMORY_DB=1` (set automatically in tests).
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)
-- The `packageManager` field was removed from root `package.json` to avoid pnpm version conflicts in Replit
+- The Computation Engine uses `ALLOW_IN_MEMORY_DB=1` to bypass ArangoDB for unit tests
 - Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility
