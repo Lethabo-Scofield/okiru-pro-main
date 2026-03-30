@@ -19,7 +19,7 @@ import {
   validateEntityCoverage,
   buildEntityCellMapping,
 } from '../../arango/entityCellMapping.js';
-import { buildManifestForSector } from '../../pipeline/extraction/entityManifest.js';
+import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
 
 const router = Router();
 const computeClient = getComputeClient();
@@ -258,12 +258,12 @@ router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
         });
       }
 
-      const manifest = buildManifestForSector(sectorCode.toUpperCase(), scorecardType);
+      const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
       mapping = await buildEntityCellMapping(
         graphKeys[0],
         sectorCode.toUpperCase(),
         scorecardType,
-        manifest.requiredEntities,
+        getAllEntities(manifest),
       );
     }
 

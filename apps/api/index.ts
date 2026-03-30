@@ -9,6 +9,7 @@ import { registerRoutes } from "./routes.js";
 import { createServer } from "http";
 import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
+import { seedOntology } from "./pipeline/seedOntology.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -65,6 +66,16 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
   await connectDB();
   await connectArango();
   await ensureCollections();
+
+  // Seed B-BBEE ontology (non-blocking — skip if already seeded)
+  seedOntology().then(summary => {
+    if (summary.totalCriteria > 0) {
+      console.log(`[Seed] Ontology: ${summary.totalSectors} sectors, ${summary.totalCriteria} criteria, ${summary.totalEntityFields} fields (${summary.durationMs}ms)`);
+    }
+  }).catch(err => {
+    console.warn('[Seed] Ontology seeding failed (non-fatal):', err instanceof Error ? err.message : err);
+  });
+
   await registerRoutes(httpServer, app);
 
   // Error middleware

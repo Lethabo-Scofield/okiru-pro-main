@@ -20,8 +20,27 @@ export {
 } from './validator.js';
 export type { ValidationIssue, ValidationResult } from './validator.js';
 
-export { buildRCOGPGenericManifest, buildManifestForSector, getAllManifests, buildGenericManifest, buildCustomManifest } from './entityManifest.js';
-export type { EntityManifest, EntityRequirement, SheetHint, RetrievalHints, ValidationRules } from './entityManifest.js';
+export {
+  buildManifest,
+  buildManifestForSector,
+  buildRCOGPGenericManifest,
+  buildGenericManifest,
+  buildCustomManifest,
+  getAllManifests,
+  getAllEntities,
+  getPillarEntities,
+  getPillarCriteria,
+  toExtractionRequest,
+} from './entityManifest.js';
+export type {
+  EntityManifest,
+  EntityField,
+  CriterionEntity,
+  PillarPack,
+  RootContext,
+  EvidenceRef,
+  SheetHint,
+} from './entityManifest.js';
 
 export { BM25Index } from './bm25Index.js';
 export type { BM25SearchResult } from './bm25Index.js';

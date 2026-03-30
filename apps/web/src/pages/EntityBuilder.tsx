@@ -202,12 +202,17 @@ export default function EntityBuilder() {
 
   const loadTemplateFromRepo = (template: StoredTemplate) => guardedNew(() => _loadTemplateFromRepo(template));
   const _loadTemplateFromRepo = (template: StoredTemplate) => {
+    const isOntology = (template as any).isOntology;
     const loadedEntities = template.entities.map((e: any) => ({
-      ...createEntity(e.label, e.definition, 60),
+      ...createEntity(e.label, e.definition, isOntology ? 80 : 60),
       synonyms: e.synonyms || [], positives: e.positives || [], negatives: e.negatives || [],
       zones: e.zones || ["Email Body", "PDF Header"],
       keywords: e.keywords || { must: [], nice: [], neg: [] },
       pattern: e.pattern || "",
+      // Preserve hierarchical metadata from ontology templates
+      ...(e.pillarCode && { pillarCode: e.pillarCode }),
+      ...(e.criterionCodes && { criterionCodes: e.criterionCodes }),
+      ...(e.fieldType && { fieldType: e.fieldType }),
     }));
     setEntities(loadedEntities);
     setProjectName(template.name);
@@ -216,7 +221,13 @@ export default function EntityBuilder() {
     setSelectedEntityId(loadedEntities.length > 0 ? loadedEntities[0].id : null);
     setShowTemplatesPanel(false);
     setIsLoadingTemplate(false);
-    toast({ title: "Template loaded", description: `"${template.name}" — ${loadedEntities.length} entities` });
+    const pillarCount = (template as any).pillarPacks?.length;
+    toast({
+      title: "Template loaded",
+      description: isOntology
+        ? `"${template.name}" — ${loadedEntities.length} entities across ${pillarCount || '?'} pillars`
+        : `"${template.name}" — ${loadedEntities.length} entities`,
+    });
   };
 
   const deleteTemplateFromRepo = async (id: number) => {
@@ -232,6 +243,58 @@ export default function EntityBuilder() {
       }
     } catch {
       toast({ title: "Delete failed", description: "Network error", variant: "destructive" });
+    }
+  };
+
+  const loadSectorPreset = async (sectorKey: string) => {
+    const sectorMap: Record<string, { name: string; sector: string; type: string }> = {
+      rcogp: { name: 'RCOGP Generic', sector: 'rcogp', type: 'generic' },
+      ict_generic: { name: 'ICT Generic', sector: 'ict', type: 'generic' },
+      ict_qse: { name: 'ICT QSE', sector: 'ict', type: 'qse' },
+      rcogp_qse: { name: 'RCOGP QSE', sector: 'rcogp', type: 'qse' },
+      fsc: { name: 'FSC Generic', sector: 'fsc', type: 'generic' },
+      agri: { name: 'Agri Generic', sector: 'agri', type: 'generic' },
+    };
+
+    const config = sectorMap[sectorKey];
+    if (!config) return;
+
+    setIsLoadingTemplate(true);
+    try {
+      const res = await fetch(`/api/entity-manifest?sector=${config.sector}&type=${config.type}`);
+      if (!res.ok) throw new Error('Failed to load sector manifest');
+      const manifest = await res.json();
+
+      // Convert manifest entities to EntityBuilder format
+      const loadedEntities = manifest.entities.map((e: any) => ({
+        ...createEntity(e.name, e.definition || `${e.name} field`, 80),
+        synonyms: e.aliases || [],
+        positives: [],
+        negatives: [],
+        zones: e.source?.documentType ? [e.source.documentType] : ["Manual Input"],
+        keywords: { must: e.aliases || [], nice: [], neg: [] },
+        pattern: "",
+        pillarCode: e.pillarCode,
+        criterionCodes: e.criterionCodes,
+        fieldType: e.fieldType,
+      }));
+
+      setEntities(loadedEntities);
+      setProjectName(config.name);
+      setEditingTemplateId(null); // New unsaved template
+      setHasUnsavedChanges(true);
+      setSelectedEntityId(loadedEntities.length > 0 ? loadedEntities[0].id : null);
+      setShowTemplatesPanel(false);
+
+      const pillarCount = manifest.pillarPacks?.length || 0;
+      toast({
+        title: "Sector preset loaded",
+        description: `"${config.name}" — ${loadedEntities.length} entities across ${pillarCount} pillars`,
+      });
+    } catch (err) {
+      toast({ title: "Failed to load sector", description: String(err), variant: "destructive" });
+    } finally {
+      setIsLoadingTemplate(false);
     }
   };
 
@@ -715,6 +778,52 @@ export default function EntityBuilder() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
+              {/* Sector Presets Section */}
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Sector Presets</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { key: 'rcogp', name: 'RCOGP Generic', desc: 'Revised Codes of Good Practice', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+                    { key: 'ict_generic', name: 'ICT Generic', desc: 'Information & Communication Technology', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+                    { key: 'ict_qse', name: 'ICT QSE', desc: 'ICT Qualifying Small Enterprise', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+                    { key: 'rcogp_qse', name: 'RCOGP QSE', desc: 'RCOGP Qualifying Small Enterprise', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+                    { key: 'fsc', name: 'FSC Generic', desc: 'Financial Sector Code', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+                    { key: 'agri', name: 'Agri Generic', desc: 'AgriBEE Sector Code', color: 'bg-green-500/10 text-green-400 border-green-500/20' },
+                  ].map(sector => (
+                    <button
+                      key={sector.key}
+                      onClick={() => loadSectorPreset(sector.key)}
+                      className="w-full text-left p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] smooth transition-all group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 border ${sector.color}`}>
+                            {sector.key.split('_')[0].substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-[12px] font-semibold text-white group-hover:text-emerald-400 transition-colors">{sector.name}</p>
+                            <p className="text-[10px] text-[#636366]">{sector.desc}</p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-[#3a3a3c] group-hover:text-white transition-colors" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/[0.06] mb-5" />
+
+              {/* Custom Templates Section */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-wider">Custom Templates</span>
+                <span className="text-[10px] text-[#3a3a3c]">{storedTemplates.length}</span>
+              </div>
+
               {loadingTemplates && storedTemplates.length === 0 && (
                 <div className="space-y-2">
                   {[1, 2, 3].map(i => (
@@ -723,53 +832,103 @@ export default function EntityBuilder() {
                 </div>
               )}
               {!loadingTemplates && storedTemplates.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="w-16 h-16 rounded-3xl bg-white/[0.04] ring-1 ring-white/[0.06] flex items-center justify-center mx-auto mb-4">
-                    <FolderOpen className="w-7 h-7 text-[#636366]" />
-                  </div>
-                  <p className="text-white font-medium text-[14px] mb-1">No templates yet</p>
-                  <p className="text-[#636366] text-[12px]">Create entities and publish them here</p>
+                <div className="text-center py-8">
+                  <p className="text-[#636366] text-[12px]">No custom templates yet</p>
+                  <p className="text-[#3a3a3c] text-[11px] mt-1">Create and publish your own</p>
                 </div>
               )}
               <div className="space-y-2">
-                {storedTemplates.map(template => (
-                  <div key={template.id}
-                    className={`rounded-2xl p-4 cursor-pointer smooth group ${editingTemplateId === template.id ? 'bg-white/[0.05] ring-1 ring-white/[0.08]' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
-                    onClick={() => setSelectedRepoTemplate(selectedRepoTemplate?.id === template.id ? null : template)}
-                    data-testid={`template-card-${template.id}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0 ring-1 ring-white/[0.06]">
-                        <Folder className="w-4.5 h-4.5 text-[#d1d1d6]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-white truncate">{template.name}</span>
-                          {editingTemplateId === template.id && (
-                            <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.08] text-[#d1d1d6] rounded font-semibold shrink-0">Active</span>
+                {storedTemplates.map(template => {
+                  const isOntology = (template as any).isOntology;
+                  const pillarPacks = (template as any).pillarPacks;
+                  const isExpanded = expandedRepoId === template.id || selectedRepoTemplate?.id === template.id;
+
+                  return (
+                    <div key={template.id}
+                      className={`rounded-2xl p-4 cursor-pointer smooth group ${editingTemplateId === template.id ? 'bg-white/[0.05] ring-1 ring-white/[0.08]' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
+                      onClick={() => setSelectedRepoTemplate(selectedRepoTemplate?.id === template.id ? null : template)}
+                      data-testid={`template-card-${template.id}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ring-1 ${isOntology ? 'bg-emerald-500/10 ring-emerald-500/20' : 'bg-white/[0.06] ring-white/[0.06]'}`}>
+                          <Folder className={`w-4.5 h-4.5 ${isOntology ? 'text-emerald-400' : 'text-[#d1d1d6]'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold text-white truncate">{template.name}</span>
+                            {isOntology && (
+                              <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-semibold shrink-0">Ontology</span>
+                            )}
+                            {editingTemplateId === template.id && (
+                              <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.08] text-[#d1d1d6] rounded font-semibold shrink-0">Active</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#636366] mt-0.5">
+                            {isOntology && pillarPacks
+                              ? `${pillarPacks.length} pillars · ${pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${template.entities.length} entities`
+                              : `${template.entities.length} entities · v${template.version || '1.0'}`
+                            }
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(template); }}
+                            className="px-3 py-1.5 text-[11px] font-semibold text-[#d1d1d6] bg-white/[0.06] hover:bg-white/[0.18]/20 rounded-lg smooth press-sm" data-testid={`button-load-${template.id}`}>
+                            Load
+                          </button>
+                          {!isOntology && (
+                            <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(template.id as number); }}
+                              className="p-1.5 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-template-${template.id}`}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
-                        <p className="text-[11px] text-[#636366] mt-0.5">{template.entities.length} entities · v{template.version || '1.0'}</p>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(template); }}
-                          className="px-3 py-1.5 text-[11px] font-semibold text-[#d1d1d6] bg-white/[0.06] hover:bg-white/[0.18]/20 rounded-lg smooth press-sm" data-testid={`button-load-${template.id}`}>
-                          Load
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(template.id); }}
-                          className="p-1.5 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-template-${template.id}`}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+
+                      {/* Hierarchical pillar/criterion view for ontology templates */}
+                      {isExpanded && isOntology && pillarPacks && pillarPacks.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
+                          {pillarPacks.map((pack: any) => (
+                            <div key={pack.pillarCode} className="rounded-lg bg-white/[0.03] border border-white/[0.04] overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  <span className="text-[11px] font-semibold text-[#d1d1d6]">{pack.pillarName}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {pack.maxPoints > 0 && (
+                                    <span className="text-[9px] text-[#636366] font-mono">{pack.maxPoints} pts</span>
+                                  )}
+                                  <span className="text-[9px] text-[#636366]">{pack.entityCount} fields</span>
+                                </div>
+                              </div>
+                              {pack.criteria && pack.criteria.length > 0 && (
+                                <div className="px-3 pb-2 space-y-1">
+                                  {pack.criteria.slice(0, 5).map((cr: any) => (
+                                    <div key={cr.code} className="flex items-center justify-between py-0.5">
+                                      <span className="text-[10px] text-[#8e8e93] truncate flex-1">{cr.name}</span>
+                                      <span className="text-[9px] text-[#636366] font-mono shrink-0 ml-2">{cr.maxPoints} pts</span>
+                                    </div>
+                                  ))}
+                                  {pack.criteria.length > 5 && (
+                                    <span className="text-[9px] text-[#48484a]">+{pack.criteria.length - 5} more criteria</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Flat entity list for non-ontology templates */}
+                      {isExpanded && !isOntology && template.entities.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap gap-1.5">
+                          {template.entities.map((e: any, i: number) => (
+                            <span key={i} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.06] text-[#b0b0b8]">{e.label}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {selectedRepoTemplate?.id === template.id && template.entities.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap gap-1.5">
-                        {template.entities.map((e: any, i: number) => (
-                          <span key={i} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.06] text-[#b0b0b8]">{e.label}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -962,28 +1121,101 @@ export default function EntityBuilder() {
                       <p className="text-[11px] text-[#3a3a3c] leading-relaxed">Type above to create your first entity</p>
                     </div>
                   )}
-                  {filteredEntities.map((entity) => {
-                    const isSelected = selectedEntityId === entity.id;
-                    return (
-                      <div key={entity.id}
-                        onClick={() => setSelectedEntityId(entity.id)}
-                        className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}
-                        data-testid={`entity-row-${entity.id}`}>
-                        {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#636366]" />}
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-white/[0.10] text-[#e5e5e7]' : 'bg-white/[0.05] text-[#636366]'}`}>
-                          {entity.label.substring(0, 2).toUpperCase()}
+                  {(() => {
+                    // Check if entities have pillarCode (ontology template loaded)
+                    const hasPillarCodes = filteredEntities.some((e: any) => e.pillarCode);
+
+                    if (hasPillarCodes) {
+                      // Group entities by pillar using plain object
+                      const pillarGroups: Record<string, any[]> = {};
+                      const pillarOrder: string[] = [];
+                      for (const entity of filteredEntities) {
+                        const pillar = (entity as any).pillarCode || 'other';
+                        if (!pillarGroups[pillar]) {
+                          pillarGroups[pillar] = [];
+                          pillarOrder.push(pillar);
+                        }
+                        pillarGroups[pillar].push(entity);
+                      }
+
+                      const PILLAR_LABELS: Record<string, string> = {
+                        financials: 'Financials',
+                        ownership: 'Ownership',
+                        managementControl: 'Management Control',
+                        employmentEquity: 'Employment Equity',
+                        skillsDevelopment: 'Skills Development',
+                        preferentialProcurement: 'Preferential Procurement',
+                        enterpriseSupplierDevelopment: 'Enterprise & Supplier Dev.',
+                        socioEconomicDevelopment: 'Socio-Economic Dev.',
+                        yesInitiative: 'YES Initiative',
+                        other: 'Other',
+                      };
+
+                      return pillarOrder.map((pillarCode) => {
+                        const pillarEntities = pillarGroups[pillarCode];
+                        return (
+                        <div key={pillarCode} className="mb-2">
+                          <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">
+                              {PILLAR_LABELS[pillarCode] || pillarCode}
+                            </span>
+                            <span className="text-[9px] text-[#3a3a3c] ml-auto">{pillarEntities.length}</span>
+                          </div>
+                          {pillarEntities.map((entity: any) => {
+                            const isSelected = selectedEntityId === entity.id;
+                            return (
+                              <div key={entity.id}
+                                onClick={() => setSelectedEntityId(entity.id)}
+                                className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}
+                                data-testid={`entity-row-${entity.id}`}>
+                                {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-400" />}
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold shrink-0 transition-all ${isSelected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/[0.05] text-[#636366]'}`}>
+                                  {entity.label.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-[11px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                                  {entity.definition && (
+                                    <p className="text-[9px] text-[#3a3a3c] truncate">{entity.definition}</p>
+                                  )}
+                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
+                                  className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
+                                  title="Delete" data-testid={`button-delete-${entity.id}`}>
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                        );
+                      });
+                    }
+
+                    // Default flat list
+                    return filteredEntities.map((entity) => {
+                      const isSelected = selectedEntityId === entity.id;
+                      return (
+                        <div key={entity.id}
+                          onClick={() => setSelectedEntityId(entity.id)}
+                          className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}
+                          data-testid={`entity-row-${entity.id}`}>
+                          {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#636366]" />}
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-white/[0.10] text-[#e5e5e7]' : 'bg-white/[0.05] text-[#636366]'}`}>
+                            {entity.label.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
+                            title="Delete" data-testid={`button-delete-${entity.id}`}>
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
-                          title="Delete" data-testid={`button-delete-${entity.id}`}>
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
                 {entities.length > 0 && (
                   <div className="px-3 py-2.5 shrink-0 text-[11px] text-[#636366]" style={{ borderTop: '1px solid #1e1e1e' }}>

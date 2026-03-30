@@ -15,6 +15,7 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      "@api": path.resolve(import.meta.dirname, "../api"),
     },
   },
   css: {
@@ -30,6 +31,9 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    hmr: {
+      port: 24679,
+    },
     fs: {
       strict: false,
       deny: ["**/.*"],
@@ -39,6 +43,7 @@ export default defineConfig({
         path.resolve(import.meta.dirname, "Toolkit/attached_assets"),
         path.resolve(import.meta.dirname, "attached_assets"),
         path.resolve(import.meta.dirname, "shared"),
+        path.resolve(import.meta.dirname, "../api"),
         path.resolve(import.meta.dirname, "node_modules"),
       ],
     },

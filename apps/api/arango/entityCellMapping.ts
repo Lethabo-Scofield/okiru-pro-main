@@ -14,7 +14,7 @@ import { aql } from 'arangojs';
 import { getArangoDB } from './connection.js';
 import { COLLECTIONS } from './collections.js';
 import { GraphRepository } from './repositories/graphRepository.js';
-import type { EntityRequirement } from '../pipeline/extraction/entityManifest.js';
+import type { EntityField } from '../pipeline/extraction/entityManifest.js';
 
 export interface CellMatch {
   address: string;
@@ -62,7 +62,7 @@ export async function buildEntityCellMapping(
   graphKey: string,
   sectorCode: string,
   scorecardType: string,
-  requiredEntities: EntityRequirement[],
+  requiredEntities: EntityField[],
 ): Promise<ScorecardMapping> {
   const db = getArangoDB();
   const graphRepo = new GraphRepository();
@@ -205,10 +205,10 @@ function containsAllWords(haystack: string, needle: string): boolean {
  * Calculate fuzzy match score between entity name/aliases and cell description
  * Returns score 0-1 and match type
  */
-function fuzzyMatchScore(entity: EntityRequirement, cellDescription: string): { score: number; matchType: string } {
+function fuzzyMatchScore(entity: EntityField, cellDescription: string): { score: number; matchType: string } {
   const desc = cellDescription.toLowerCase();
   const entityName = entity.name.toLowerCase();
-  const aliases = entity.aliases.map(a => a.toLowerCase());
+  const aliases = entity.extraction.aliases.map(a => a.toLowerCase());
 
   // Exact match (substring)
   if (desc.includes(entityName)) {
@@ -271,7 +271,7 @@ function fuzzyMatchScore(entity: EntityRequirement, cellDescription: string): { 
  * Find cells that match an entity requirement based on semantic tags.
  */
 function findMatchingCells(
-  entity: EntityRequirement,
+  entity: EntityField,
   cells: Array<{ sheet: string; address: string; semanticTag: Record<string, unknown> }>,
 ): MatchResult[] {
   const matches: MatchResult[] = [];
@@ -298,7 +298,7 @@ function findMatchingCells(
       reasons.push(`${fuzzyResult.matchType}`);
     } else {
       // Legacy substring matching for aliases as fallback
-      const aliasesLower = entity.aliases.map(a => a.toLowerCase());
+      const aliasesLower = entity.extraction.aliases.map(a => a.toLowerCase());
       for (const alias of aliasesLower) {
         if (tagDesc.includes(alias)) {
           confidence += 0.3;
@@ -324,7 +324,7 @@ function findMatchingCells(
     }
 
     // Bonus for cells in expected zones
-    for (const zone of entity.zones) {
+    for (const zone of entity.extraction.zones) {
       if (sheetLower.includes(zone.toLowerCase())) {
         confidence += 0.1;
         reasons.push(`zone:${zone}`);
@@ -394,7 +394,7 @@ export async function getEntityCellMapping(
  * Build mappings for all 6 scorecard templates.
  */
 export async function buildAllMappings(
-  requiredEntities: EntityRequirement[],
+  requiredEntities: EntityField[],
 ): Promise<Array<{ sectorCode: string; scorecardType: string; mapping: ScorecardMapping }>> {
   const db = getArangoDB();
 

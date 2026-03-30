@@ -19,6 +19,9 @@ const PROXIED_PREFIXES = [
   "/api/accuracy",
   "/api/documents",
   "/api/extract-and-score",
+  "/api/manifest",
+  "/api/calculate",
+  "/api/assessments",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [

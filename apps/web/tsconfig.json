@@ -17,7 +17,10 @@
     "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@api/*": ["./api/*"],
+      "@toolkit/*": ["./Toolkit/src/*"],
+      "@toolkit-assets/*": ["./Toolkit/src/assets/*"]
     }
   }
 }

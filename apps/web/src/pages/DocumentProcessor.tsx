@@ -4,15 +4,19 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
+import { ModeChooser } from '@/components/processor/ModeChooser';
+import { PillarForm } from '@/components/builder/PillarForm';
+import { PillarSidebar } from '@/components/builder/PillarSidebar';
+import type { EntityManifest, PillarPack, ScorecardResult, EntityValue, ClientSideImportResult } from '@/components/builder/types';
 // Import removed - using hybrid extraction endpoint instead of client-side parsing
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
-  Circle, Zap, ListChecks, CheckCheck, FileText, FileSpreadsheet,
+  Circle, Zap, ListChecks, CheckCheck, CheckCircle2, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
   Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit,
-  ExternalLink
+  ExternalLink, Calculator
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -62,7 +66,7 @@ interface ProcessorSession {
   companyInfo: CompanyInfo;
   createdAt: string;
   updatedAt: string;
-  currentStep: 'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'scorecard';
+  currentStep: 'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'scorecard' | 'build-foundation' | 'build-pillars';
   filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
   fileClassifications: Record<string, number>;
   extractionResults: any[];
@@ -969,7 +973,7 @@ export default function DocumentProcessor() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'company-info' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'manual-entry' | 'populating' | 'scorecard'>('company-info');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'manual-entry' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSavingSession, setIsSavingSession] = useState(false);
@@ -1002,6 +1006,16 @@ export default function DocumentProcessor() {
   const [populatingData, setPopulatingData] = useState<ClientSideImportResult | null>(null);
   const populatingClientIdRef = useRef<string | null>(null);
   const populatingErrorRef = useRef<boolean>(false);
+
+  // Build flow state
+  const [flowMode, setFlowMode] = useState<'upload' | 'build' | null>(null);
+  const [manifest, setManifest] = useState<EntityManifest | null>(null);
+  const [buildValues, setBuildValues] = useState<Record<string, unknown>>({});
+  const [activePillarCode, setActivePillarCode] = useState<string>('');
+  const [pillarValidation, setPillarValidation] = useState<Map<string, boolean>>(new Map());
+  const [isLoadingManifest, setIsLoadingManifest] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [expandedPillarCode, setExpandedPillarCode] = useState<string | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
@@ -1140,6 +1154,126 @@ export default function DocumentProcessor() {
     const t = setTimeout(() => { persistSession('classify', { classifications: fileClassifications }); }, 800);
     return () => clearTimeout(t);
   }, [fileClassifications, currentPage, sessionId, persistSession]);
+
+  // ============================================================================
+  // Build Flow Functions
+  // ============================================================================
+
+  const loadManifest = useCallback(async (sector: string, type: string) => {
+    setIsLoadingManifest(true);
+    try {
+      const response = await fetch(`/api/manifest?sector=${sector}&type=${type}`);
+      if (!response.ok) throw new Error('Failed to load manifest');
+      const data: EntityManifest = await response.json();
+      setManifest(data);
+      if (data.pillarPacks.length > 0) {
+        setActivePillarCode(data.pillarPacks[0].pillarCode);
+      }
+    } catch (err) {
+      toast({
+        title: 'Error loading manifest',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingManifest(false);
+    }
+  }, [toast]);
+
+  const handleModeSelect = useCallback((mode: 'upload' | 'build') => {
+    setFlowMode(mode);
+    if (mode === 'upload') {
+      setCurrentPage('upload');
+    } else {
+      setCurrentPage('build-foundation');
+    }
+  }, []);
+
+  const handleBuildValueChange = useCallback((entityId: string, value: unknown) => {
+    setBuildValues(prev => ({ ...prev, [entityId]: value }));
+    setScorecardResult(null); // Invalidate previous results
+  }, []);
+
+  const handlePillarValidate = useCallback((pillarCode: string, isValid: boolean) => {
+    setPillarValidation(prev => {
+      const next = new Map(prev);
+      next.set(pillarCode, isValid);
+      return next;
+    });
+  }, []);
+
+  const calculateViaApi = useCallback(async () => {
+    if (!manifest) return;
+    setIsCalculating(true);
+
+    try {
+      // Convert values to EntityValue format
+      const entityValues: Record<string, EntityValue> = {};
+      for (const [key, value] of Object.entries(buildValues)) {
+        if (value !== undefined && value !== null) {
+          entityValues[key] = {
+            entityId: key,
+            value,
+            source: 'manual',
+          };
+        }
+      }
+
+      const sectorCode = manifest.rootContext.sector || 'RCOGP';
+      const scorecardType = manifest.rootContext.scorecardType || 'Generic';
+
+      const response = await fetch('/api/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId: sessionId || `assessment-${Date.now()}`,
+          sectorCode,
+          scorecardType,
+          entityValues,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Calculation failed');
+
+      const result: ScorecardResult = await response.json();
+      setScorecardResult(result);
+      setCurrentPage('scorecard');
+
+      toast({
+        title: 'Scorecard calculated',
+        description: `Total: ${result.totalPoints.toFixed(2)} points · Level ${result.beeLevel}`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Calculation failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  }, [buildValues, manifest, sessionId, toast]);
+
+  const activePillar = useMemo(() => {
+    if (!manifest) return null;
+    return manifest.pillarPacks.find(p => p.pillarCode === activePillarCode) || null;
+  }, [manifest, activePillarCode]);
+
+  const activeCriterionResults = useMemo(() => {
+    if (!scorecardResult || !activePillar) return [];
+    const pillarResult = scorecardResult.pillars.find(p => p.pillarCode === activePillar.pillarCode);
+    return pillarResult?.criteria || [];
+  }, [scorecardResult, activePillar]);
+
+  // Check if all required pillars have valid data for calculation
+  const canCalculateScorecard = useMemo(() => {
+    if (!manifest || !manifest.pillarPacks) return false;
+    // Require at least some data in buildValues
+    const hasAnyData = Object.keys(buildValues).length > 0;
+    // Check if all pillars have been validated (visited)
+    const allPillarsValid = manifest.pillarPacks.every(p => pillarValidation.get(p.pillarCode) === true);
+    return hasAnyData && allPillarsValid;
+  }, [manifest, buildValues, pillarValidation]);
 
   const extractPdfText = async (file: File): Promise<string> => {
     try {
@@ -1668,7 +1802,7 @@ export default function DocumentProcessor() {
     return 'text';
   }, [activeDocFile]);
 
-  const stepIdx = currentPage === 'company-info' ? 0 : currentPage === 'upload' ? 1 : currentPage === 'classify' ? 2 : (currentPage === 'extract' || currentPage === 'processing') ? 3 : currentPage === 'manual-entry' ? 4 : currentPage === 'review' ? 5 : currentPage === 'summary' ? 6 : 7;
+  // stepIdx is computed inline in the step navigation bar
 
   // Called by PopulatingScreen when its animation completes
   const handlePopulatingDone = async () => {
@@ -1804,43 +1938,62 @@ export default function DocumentProcessor() {
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
-          {['Company', 'Upload', 'Template', 'Extract', 'Manual Entry', 'Review', 'Summary', 'Scorecard'].map((label, idx) => {
-            const pageMap = ['company-info', 'upload', 'classify', 'extract', 'manual-entry', 'review', 'summary', 'scorecard'] as const;
-            type PageMapType = typeof pageMap[number];
-            const safeCurrentPage = currentPage as PageMapType;
-            const stepIdx = pageMap.indexOf(safeCurrentPage);
-            const isComplete = idx < stepIdx;
-            const isCurrent = idx === stepIdx;
-            const canNavigate = isComplete && safeCurrentPage !== 'company-info';
-            return (
-              <React.Fragment key={label}>
-                <div className={`flex items-center gap-2 ${canNavigate ? 'cursor-pointer group' : ''}`}
-                  onClick={() => { if (canNavigate) setCurrentPage(pageMap[idx] as PageMapType); }}>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all ${
-                    isComplete
-                      ? 'bg-white text-black group-hover:bg-[#d1d1d6]'
-                      : isCurrent
-                        ? 'bg-white text-black'
-                        : 'bg-[#1c1c1e] text-[#48484a]'
-                  }`}>
-                    {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
+          {(() => {
+            // Build mode has its own step flow
+            const isBuildFlow = flowMode === 'build' || currentPage === 'build-foundation' || currentPage === 'build-pillars';
+            const steps = isBuildFlow
+              ? [
+                  { label: 'Mode', page: 'choose-mode' },
+                  { label: 'Foundation', page: 'build-foundation' },
+                  { label: 'Pillars', page: 'build-pillars' },
+                  { label: 'Scorecard', page: 'scorecard' },
+                ]
+              : [
+                  { label: 'Mode', page: 'choose-mode' },
+                  { label: 'Upload', page: 'upload' },
+                  { label: 'Template', page: 'classify' },
+                  { label: 'Extract', page: 'extract' },
+                  { label: 'Review', page: 'review' },
+                  { label: 'Summary', page: 'summary' },
+                  { label: 'Scorecard', page: 'scorecard' },
+                ];
+
+            const currentStepIdx = steps.findIndex(s => s.page === currentPage);
+
+            return steps.map((step, idx) => {
+              const isComplete = idx < currentStepIdx;
+              const isCurrent = idx === currentStepIdx;
+              const canNavigate = isComplete;
+              return (
+                <React.Fragment key={step.label}>
+                  <div className={`flex items-center gap-2 ${canNavigate ? 'cursor-pointer group' : ''}`}
+                    onClick={() => { if (canNavigate) setCurrentPage(step.page as any); }}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all ${
+                      isComplete
+                        ? 'bg-white text-black group-hover:bg-[#d1d1d6]'
+                        : isCurrent
+                          ? 'bg-white text-black'
+                          : 'bg-[#1c1c1e] text-[#48484a]'
+                    }`}>
+                      {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
+                    </div>
+                    <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
+                      isComplete
+                        ? 'text-[#d1d1d6] group-hover:text-white'
+                        : isCurrent
+                          ? 'text-white'
+                          : 'text-[#48484a]'
+                    }`}>{step.label}</span>
                   </div>
-                  <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
-                    isComplete
-                      ? 'text-[#d1d1d6] group-hover:text-white'
-                      : isCurrent
-                        ? 'text-white'
-                        : 'text-[#48484a]'
-                  }`}>{label}</span>
-                </div>
-                {idx < 7 && (
-                  <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
-                    <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+                  {idx < steps.length - 1 && (
+                    <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
+                      <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            });
+          })()}
         </div>
       </div>
 
@@ -2044,16 +2197,16 @@ export default function DocumentProcessor() {
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
                         updatedAt: new Date().toISOString(),
-                        currentStep: 'upload',
+                        currentStep: 'choose-mode',
                         filesData: [], fileClassifications: {},
                         extractionResults: [], docStatuses: {}, isComplete: false,
                       });
                       setIsSavingSession(false);
-                      setCurrentPage('upload');
+                      setCurrentPage('choose-mode');
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
                     className="w-full mt-4 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
-                    data-testid="button-next-upload"
+                    data-testid="button-next-mode"
                   >
                     {isSavingSession
                       ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</>
@@ -2061,6 +2214,149 @@ export default function DocumentProcessor() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {currentPage === 'choose-mode' && (
+            <ModeChooser onSelectMode={handleModeSelect} />
+          )}
+
+          {currentPage === 'build-foundation' && (
+            <div className="max-w-2xl mx-auto w-full">
+              <div className="mb-10">
+                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Scorecard Foundation</h2>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter the root context for this B-BBEE assessment.</p>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Assessment Context</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Sector Code <span className="text-red-400">*</span></label>
+                      <select
+                        value={manifest?.rootContext.sector || companyInfo.sector || ''}
+                        onChange={(e) => {
+                          const sector = e.target.value;
+                          const type = manifest?.rootContext.scorecardType || 'Generic';
+                          if (sector) loadManifest(sector, type);
+                        }}
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
+                      >
+                        <option value="">Select sector...</option>
+                        <option value="RCOGP">Revised Codes of Good Practice (RCOGP)</option>
+                        <option value="ICT">ICT Sector Code</option>
+                        <option value="FSC">Financial Sector Code (FSC)</option>
+                        <option value="AGRI">AgriBEE Sector Code</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Scorecard Type</label>
+                      <select
+                        value={manifest?.rootContext.scorecardType || 'Generic'}
+                        onChange={(e) => {
+                          const sector = manifest?.rootContext.sector || companyInfo.sector;
+                          const type = e.target.value;
+                          if (sector) loadManifest(sector, type);
+                        }}
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
+                      >
+                        <option value="Generic">Generic</option>
+                        <option value="QSE">QSE (Qualifying Small Enterprise)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End <span className="text-red-400">*</span></label>
+                      <input
+                        type="date"
+                        value={companyInfo.financialYearEnd}
+                        onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover</label>
+                      <input
+                        type="text"
+                        value={companyInfo.annualTurnover}
+                        onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
+                        placeholder="e.g. R 50 000 000"
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (!manifest) {
+                    toast({ title: "Missing sector", description: "Please select a sector code.", variant: "destructive" });
+                    return;
+                  }
+                  setCurrentPage('build-pillars');
+                }}
+                disabled={!manifest || isLoadingManifest}
+                className="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-white rounded-xl font-semibold text-[13px] transition-colors"
+              >
+                {isLoadingManifest
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Loading...</>
+                  : 'Start Building'}
+              </button>
+            </div>
+          )}
+
+          {currentPage === 'build-pillars' && manifest && (
+            <div className="flex gap-6 max-w-[1600px] mx-auto">
+              <PillarSidebar
+                pillars={manifest.pillarPacks}
+                values={buildValues}
+                activePillarCode={activePillarCode}
+                onSelectPillar={setActivePillarCode}
+                validationStatus={pillarValidation}
+              />
+
+              <main className="flex-1 min-w-0">
+                {activePillar && (
+                  <PillarForm
+                    pillar={activePillar}
+                    values={buildValues}
+                    onChange={handleBuildValueChange}
+                    onValidate={(isValid) => handlePillarValidate(activePillar.pillarCode, isValid)}
+                    criterionResults={activeCriterionResults}
+                    isCalculating={isCalculating}
+                  />
+                )}
+
+                <div className="mt-6 flex items-center justify-between">
+                  <button
+                    onClick={() => setCurrentPage('build-foundation')}
+                    className="flex items-center gap-2 px-4 py-2 text-[#636366] hover:text-white transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {!canCalculateScorecard && !isCalculating && (
+                      <span className="text-[12px] text-amber-400">
+                        Fill all pillar fields to calculate
+                      </span>
+                    )}
+                    <button
+                      onClick={calculateViaApi}
+                      disabled={isCalculating || !canCalculateScorecard}
+                      className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-colors"
+                    >
+                      {isCalculating ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</>
+                      ) : (
+                        <><Calculator className="w-4 h-4" /> Calculate Scorecard</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </main>
             </div>
           )}
 
@@ -3469,25 +3765,88 @@ export default function DocumentProcessor() {
 
           {currentPage === 'scorecard' && (() => {
             const sc = scorecardResult;
-            const PILLARS = [
-              { key: 'ownership', label: 'Ownership', target: 25, color: '#5e9bff' },
-              { key: 'managementControl', label: 'Management Control', target: 19, color: '#34d399' },
-              { key: 'skillsDevelopment', label: 'Skills Development', target: 25, color: '#f59e0b' },
-              { key: 'procurement', label: 'Preferential Procurement', target: 29, color: '#a78bfa' },
-              { key: 'supplierDevelopment', label: 'Supplier Development', target: 10, color: '#38bdf8' },
-              { key: 'enterpriseDevelopment', label: 'Enterprise Development', target: 7, color: '#fb923c' },
-              { key: 'socioEconomicDevelopment', label: 'Socio-Economic Dev.', target: 5, color: '#f472b6' },
-            ];
-            const totalScore = sc?.total?.score ?? 0;
-            const totalTarget = sc?.total?.target ?? 120;
-            const level = sc?.discountedLevel ?? sc?.achievedLevel ?? 9;
-            const recognition = sc?.recognitionLevel ?? '0%';
+            // Detect format: new hierarchical (from calculation engine) vs legacy flat
+            const isHierarchical = sc?.pillars && Array.isArray(sc.pillars);
+
+            // Pillar color map for both formats
+            const PILLAR_COLORS: Record<string, string> = {
+              ownership: '#5e9bff', managementControl: '#34d399', employmentEquity: '#34d399',
+              skillsDevelopment: '#f59e0b', preferentialProcurement: '#a78bfa',
+              enterpriseSupplierDevelopment: '#38bdf8', socioEconomicDevelopment: '#f472b6',
+              yesInitiative: '#fbbf24', financials: '#fb923c',
+              // Legacy keys
+              procurement: '#a78bfa', supplierDevelopment: '#38bdf8',
+              enterpriseDevelopment: '#fb923c',
+            };
+
+            // Normalize to a unified shape
+            let totalScore = 0;
+            let totalTarget = 120;
+            let level = 9;
+            let recognition = '0%';
+            let isDiscounted = false;
+            let source = sc?._source;
+            let pillarRows: { code: string; label: string; score: number; maxPoints: number; color: string; subMinimumMet?: boolean; criteria?: any[] }[] = [];
+
+            if (isHierarchical) {
+              // New ScorecardResult format from calculation engine
+              totalScore = typeof sc.totalPoints === 'number' ? Math.round(sc.totalPoints * 100) / 100 : 0;
+              totalTarget = sc.maxPoints ?? 120;
+              level = sc.beeLevel ?? 9;
+              const recLevel = sc.recognitionLevel;
+              const REC_MAP: Record<number, string> = { 135: '135%', 125: '125%', 110: '110%', 100: '100%', 80: '80%', 60: '60%', 50: '50%', 10: '10%' };
+              recognition = typeof recLevel === 'number' ? (REC_MAP[recLevel] || `${recLevel}%`) : (recLevel ?? '0%');
+              isDiscounted = sc.isDiscounted ?? false;
+              source = sc._source || 'calculation_engine';
+
+              pillarRows = (sc.pillars || [])
+                .filter((p: any) => p.pillarCode !== 'financials') // Don't show financials as a scored pillar
+                .map((p: any) => ({
+                  code: p.pillarCode,
+                  label: p.pillarName,
+                  score: Math.round((p.points ?? 0) * 100) / 100,
+                  maxPoints: p.maxPoints ?? 0,
+                  color: PILLAR_COLORS[p.pillarCode] || '#636366',
+                  subMinimumMet: p.subMinimumMet,
+                  criteria: p.criteria || [],
+                }));
+            } else if (sc) {
+              // Legacy flat format
+              const LEGACY_PILLARS = [
+                { key: 'ownership', label: 'Ownership', target: 25 },
+                { key: 'managementControl', label: 'Management Control', target: 19 },
+                { key: 'skillsDevelopment', label: 'Skills Development', target: 25 },
+                { key: 'procurement', label: 'Preferential Procurement', target: 29 },
+                { key: 'supplierDevelopment', label: 'Supplier Development', target: 10 },
+                { key: 'enterpriseDevelopment', label: 'Enterprise Development', target: 7 },
+                { key: 'socioEconomicDevelopment', label: 'Socio-Economic Dev.', target: 5 },
+              ];
+              totalScore = sc.total?.score ?? 0;
+              totalTarget = sc.total?.target ?? 120;
+              level = sc.discountedLevel ?? sc.achievedLevel ?? 9;
+              recognition = sc.recognitionLevel ?? '0%';
+              isDiscounted = sc.isDiscounted ?? false;
+              source = sc._source;
+
+              pillarRows = LEGACY_PILLARS.map(lp => {
+                const p = sc[lp.key] || { score: 0, target: lp.target };
+                return {
+                  code: lp.key,
+                  label: lp.label,
+                  score: p.score ?? 0,
+                  maxPoints: lp.target,
+                  color: PILLAR_COLORS[lp.key] || '#636366',
+                  subMinimumMet: p.subMinimumMet,
+                  criteria: [],
+                };
+              });
+            }
+
             const levelColors: Record<number, string> = {
               1: '#22c55e', 2: '#4ade80', 3: '#86efac', 4: '#fbbf24',
               5: '#f59e0b', 6: '#fb923c', 7: '#f87171', 8: '#ef4444', 9: '#6b7280'
             };
             const levelColor = levelColors[level] || '#6b7280';
-            const source = sc?._source;
 
             return (
               <div className="max-w-4xl mx-auto py-8 space-y-5" data-testid="scorecard-result">
@@ -3505,6 +3864,9 @@ export default function DocumentProcessor() {
                   <div className="flex items-center gap-3">
                     {source === 'csv_import' && (
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">CSV Import</span>
+                    )}
+                    {source === 'calculation_engine' && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Build Mode</span>
                     )}
                     <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
                       Export PDF
@@ -3535,7 +3897,7 @@ export default function DocumentProcessor() {
                         </div>
                         <div className="flex items-center gap-4 mt-1">
                           <span className="text-[#8e8e93] text-sm">Recognition: <strong className="text-white" data-testid="scorecard-recognition">{recognition}</strong></span>
-                          {sc.isDiscounted && (
+                          {isDiscounted && (
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                               Level discounted (sub-minimum not met)
                             </span>
@@ -3544,37 +3906,96 @@ export default function DocumentProcessor() {
                       </div>
                     </div>
 
+                    {/* Sub-minimum summary (for hierarchical results) */}
+                    {isHierarchical && sc.subMinimums && (
+                      <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-[#2c2c2e]">
+                        <h3 className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider mb-3">Sub-Minimum Requirements</h3>
+                        <div className="flex flex-wrap gap-3">
+                          {Object.entries(sc.subMinimums as Record<string, boolean>).map(([pillarCode, met]) => (
+                            <div key={pillarCode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+                              <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {met ? '✓' : '⚠'} {pillarCode.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Pillar breakdown */}
                     <div className="bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] overflow-hidden" data-testid="scorecard-pillars">
                       <div className="px-6 py-4 border-b border-[#2c2c2e]">
                         <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Pillar Breakdown</h3>
                       </div>
                       <div className="divide-y divide-[#2c2c2e]">
-                        {PILLARS.map(pillar => {
-                          const p = sc[pillar.key] || { score: 0, target: pillar.target, weighting: pillar.target };
-                          const pct = pillar.target > 0 ? Math.min(100, (p.score / pillar.target) * 100) : 0;
+                        {pillarRows.map(pillar => {
+                          const pct = pillar.maxPoints > 0 ? Math.min(100, (pillar.score / pillar.maxPoints) * 100) : 0;
+                          const hasCriteria = pillar.criteria && pillar.criteria.length > 0;
+                          const isExpanded = expandedPillarCode === pillar.code;
+
                           return (
-                            <div key={pillar.key} className="px-6 py-4" data-testid={`scorecard-pillar-${pillar.key}`}>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-[#d1d1d6]">{pillar.label}</span>
-                                <div className="flex items-center gap-3">
-                                  {p.subMinimumMet === false && (
-                                    <span className="text-[10px] font-semibold uppercase text-amber-500" title="Sub-minimum not met">⚠ Sub-min</span>
-                                  )}
-                                  {p.subMinimumMet === true && (
-                                    <span className="text-[10px] font-semibold uppercase text-green-500">✓ Sub-min</span>
-                                  )}
-                                  <span className="text-sm font-bold text-white">
-                                    {p.score} <span className="font-normal text-[#8e8e93]">/ {pillar.target}</span>
-                                  </span>
+                            <div key={pillar.code} data-testid={`scorecard-pillar-${pillar.code}`}>
+                              <div
+                                className={`px-6 py-4 ${hasCriteria ? 'cursor-pointer hover:bg-white/[0.02]' : ''} transition-colors`}
+                                onClick={() => hasCriteria && setExpandedPillarCode(isExpanded ? null : pillar.code)}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    {hasCriteria && (
+                                      <ChevronRight className={`w-3.5 h-3.5 text-[#636366] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                    )}
+                                    <span className="text-sm font-medium text-[#d1d1d6]">{pillar.label}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    {pillar.subMinimumMet === false && (
+                                      <span className="text-[10px] font-semibold uppercase text-amber-500" title="Sub-minimum not met">⚠ Sub-min</span>
+                                    )}
+                                    {pillar.subMinimumMet === true && (
+                                      <span className="text-[10px] font-semibold uppercase text-green-500">✓ Sub-min</span>
+                                    )}
+                                    <span className="text-sm font-bold text-white">
+                                      {pillar.score} <span className="font-normal text-[#8e8e93]">/ {pillar.maxPoints}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="w-full h-2 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${pct}%`, background: pillar.color }}
+                                  />
                                 </div>
                               </div>
-                              <div className="w-full h-2 bg-[#2c2c2e] rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{ width: `${pct}%`, background: pillar.color }}
-                                />
-                              </div>
+
+                              {/* Criterion detail drill-down */}
+                              {isExpanded && hasCriteria && (
+                                <div className="px-6 pb-4 space-y-1.5 bg-[#141414]">
+                                  <div className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-1.5 text-[10px] font-semibold text-[#636366] uppercase tracking-wider">
+                                    <span>Criterion</span>
+                                    <span className="text-right">Points</span>
+                                    <span className="text-right">Max</span>
+                                    <span className="text-right">%</span>
+                                  </div>
+                                  {pillar.criteria!.map((cr: any) => {
+                                    const crPct = cr.maxPoints > 0 ? Math.round((cr.points / cr.maxPoints) * 100) : 0;
+                                    return (
+                                      <div key={cr.criterionCode} className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#1e1e1e] items-center">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
+                                          <span className="text-[12px] text-[#d1d1d6] truncate">{cr.name || cr.criterionCode}</span>
+                                          {cr.targetMet && <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />}
+                                        </div>
+                                        <span className={`text-[12px] font-mono text-right ${cr.points > 0 ? 'text-emerald-400' : 'text-[#636366]'}`}>
+                                          {typeof cr.points === 'number' ? cr.points.toFixed(2) : '0.00'}
+                                        </span>
+                                        <span className="text-[12px] font-mono text-right text-[#636366]">
+                                          {typeof cr.maxPoints === 'number' ? cr.maxPoints.toFixed(2) : '0.00'}
+                                        </span>
+                                        <span className="text-[11px] text-right text-[#8e8e93]">{crPct}%</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -3584,6 +4005,21 @@ export default function DocumentProcessor() {
                         <span className="text-sm font-bold text-white" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
                       </div>
                     </div>
+
+                    {/* Calculation errors (if any) */}
+                    {isHierarchical && sc.calculationErrors && sc.calculationErrors.length > 0 && (
+                      <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-amber-500/20">
+                        <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">Calculation Warnings</h3>
+                        <div className="space-y-1.5">
+                          {sc.calculationErrors.map((err: string, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-[12px] text-amber-300/80">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <span>{err}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Source info */}
                     {sc._entityCounts && (
@@ -3602,39 +4038,95 @@ export default function DocumentProcessor() {
 
                     {/* Actions */}
                     <div className="flex gap-3">
-                      <button
-                        onClick={() => {
-                          if (toolkitClientId) {
-                            localStorage.setItem('okiru-pro-active-client', toolkitClientId);
-                            navigate(`/toolkit/${toolkitClientId}/scorecard`);
-                          } else {
-                            navigate('/toolkit');
-                          }
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Open in Toolkit
-                      </button>
-                      <button
-                        onClick={() => {
-                          setScorecardResult(null);
-                          setCurrentPage('company-info');
-                          setUploadedFiles([]);
-                          setExtractionResults([]);
-                          setIsSubmitted(false);
-                        }}
-                        className="px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#8e8e93] hover:text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
-                      >
-                        New Assessment
-                      </button>
+                      {flowMode === 'build' ? (
+                        <>
+                          <button
+                            onClick={() => setCurrentPage('build-pillars')}
+                            className="flex items-center gap-2 px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            Edit Data
+                          </button>
+                          <button
+                            onClick={async () => {
+                              // Save assessment via API
+                              try {
+                                await fetch('/api/assessments', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    assessmentId: sessionId || `assessment-${Date.now()}`,
+                                    sectorCode: manifest?.rootContext.sector || 'RCOGP',
+                                    scorecardType: manifest?.rootContext.scorecardType || 'Generic',
+                                    values: buildValues,
+                                    result: sc,
+                                  }),
+                                });
+                                toast({ title: 'Assessment saved', description: 'Your scorecard has been saved.' });
+                              } catch {
+                                toast({ title: 'Save failed', description: 'Could not save assessment.', variant: 'destructive' });
+                              }
+                            }}
+                            className="flex items-center gap-2 px-6 py-3 bg-white/[0.08] hover:bg-white/[0.12] text-white rounded-xl font-semibold transition-colors"
+                          >
+                            <Save className="w-4 h-4" />
+                            Save Assessment
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (toolkitClientId) {
+                                localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                                navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                              } else {
+                                navigate('/toolkit');
+                              }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Open in Toolkit
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              if (toolkitClientId) {
+                                localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                                navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                              } else {
+                                navigate('/toolkit');
+                              }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Open in Toolkit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setScorecardResult(null);
+                              setCurrentPage('company-info');
+                              setUploadedFiles([]);
+                              setExtractionResults([]);
+                              setIsSubmitted(false);
+                            }}
+                            className="px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#8e8e93] hover:text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                          >
+                            New Assessment
+                          </button>
+                        </>
+                      )}
                     </div>
                   </>
                 ) : (
                   <div className="text-center py-16 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
                     <p className="text-[#8e8e93] mb-4">No scorecard data yet. Complete the previous steps to generate a scorecard.</p>
-                    <button onClick={() => setCurrentPage('review')} className="px-6 py-2.5 bg-white/[0.08] hover:bg-white/[0.12] text-white rounded-xl text-sm transition-colors">
-                      Back to Review
+                    <button
+                      onClick={() => setCurrentPage(flowMode === 'build' ? 'build-pillars' : 'review')}
+                      className="px-6 py-2.5 bg-white/[0.08] hover:bg-white/[0.12] text-white rounded-xl text-sm transition-colors"
+                    >
+                      {flowMode === 'build' ? 'Back to Build' : 'Back to Review'}
                     </button>
                   </div>
                 )}
