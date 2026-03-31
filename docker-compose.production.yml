@@ -8,7 +8,7 @@ services:
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-okiru}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-OkiruMongo123!}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD must be set in .env}
     volumes:
       - mongo_data:/data/db
     ports:
@@ -24,7 +24,7 @@ services:
     container_name: okiru_arango
     restart: always
     environment:
-      ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD:-Okiru123!}
+      ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD:?ARANGO_PASSWORD must be set in .env}
     volumes:
       - arango_data:/var/lib/arangodb3
     ports:
@@ -61,7 +61,7 @@ services:
     environment:
       ARANGO_URL: http://arangodb:8529
       ARANGO_USER: root
-      ARANGO_PASSWORD: ${ARANGO_PASSWORD:-Okiru123!}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       ARANGO_DB: ${ARANGO_DB:-bbbee_db}
       REDIS_URL: redis://redis:6379
       API_HOST: "0.0.0.0"
@@ -69,6 +69,7 @@ services:
       API_RELOAD: "false"
       LOG_LEVEL: info
       ALLOW_IN_MEMORY_DB: "0"
+      CORS_ORIGINS: http://api:5000,http://web:5001
     ports:
       - "127.0.0.1:8000:8000"
 
@@ -84,15 +85,18 @@ services:
     environment:
       NODE_ENV: production
       PORT: "5000"
-      MONGO_URI: mongodb://${MONGO_USER:-okiru}:${MONGO_PASSWORD:-OkiruMongo123!}@mongodb:27017/okiru?authSource=admin
+      MONGO_URI: mongodb://${MONGO_USER:-okiru}:${MONGO_PASSWORD}@mongodb:27017/okiru?authSource=admin
       ARANGO_URL: http://arangodb:8529
       ARANGO_DB: ${ARANGO_DB:-bbbee_db}
       ARANGO_USER: root
-      ARANGO_PASSWORD: ${ARANGO_PASSWORD:-Okiru123!}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       COMPUTE_ENGINE_URL: http://computation-engine:8000
-      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set in .env}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://20.164.207.196,http://20.164.207.196}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}
     ports:
       - "127.0.0.1:5000:5000"
 
@@ -103,10 +107,15 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      api:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: "5001"
-      MONGODB_URI: mongodb://${MONGO_USER:-okiru}:${MONGO_PASSWORD:-OkiruMongo123!}@mongodb:27017/okiru_web?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_USER:-okiru}:${MONGO_PASSWORD}@mongodb:27017/okiru_web?authSource=admin
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set in .env}
+      API_SERVER_URL: http://api:5000
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     ports:
       - "127.0.0.1:5001:5001"
 

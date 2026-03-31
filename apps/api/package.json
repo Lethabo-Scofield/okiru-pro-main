@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx index.ts",
-    "build": "tsc",
-    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "build": "node build.js",
+    "build:typecheck": "tsc",
+    "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:lake": "vitest run pipeline/__tests__/lakeTrading.test.ts",
