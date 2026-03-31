@@ -253,30 +253,22 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
   return (
     <div className={cn("space-y-6", className)}>
       {/* Score Overview */}
-      <Card className={cn(
-        scoreResult.subMinimumMet ? "bg-green-50/50 border-green-200" : "bg-amber-50/50 border-amber-200"
-      )}>
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={cn(
-                "p-2 rounded-lg",
-                scoreResult.subMinimumMet ? "bg-green-100" : "bg-amber-100"
-              )}>
-                <Award className={cn(
-                  "h-5 w-5",
-                  scoreResult.subMinimumMet ? "text-green-600" : "text-amber-600"
-                )} />
+              <div className="p-2 rounded-lg bg-muted/50 text-muted-foreground">
+                <Award className="h-5 w-5" />
               </div>
               <div>
                 <div className="font-semibold">Ownership Score</div>
                 <div className="text-sm text-muted-foreground">
                   {scoreResult.subMinimumMet ? (
-                    <span className="text-green-600 flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <CheckCircle2 className="h-3 w-3" /> Sub-minimum met
                     </span>
                   ) : (
-                    <span className="text-amber-600 flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <AlertCircle className="h-3 w-3" /> Sub-minimum not met (need 40% = 10 pts)
                     </span>
                   )}
@@ -288,25 +280,17 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
               <div className="text-sm text-muted-foreground">of 25 points</div>
             </div>
           </div>
-          
-          {/* Score Breakdown */}
-          <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Voting Rights (Black)</span>
-              <div className="font-semibold">{scoreResult.votingRightsBlack.toFixed(1)}/4</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Voting Rights (BWO)</span>
-              <div className="font-semibold">{scoreResult.votingRightsBWO.toFixed(1)}/2</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Economic Interest</span>
-              <div className="font-semibold">{scoreResult.economicInterestBlack.toFixed(1)}/4</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Net Value</span>
-              <div className="font-semibold">{scoreResult.netValue.toFixed(1)}/7</div>
-            </div>
+
+          {/* Score Breakdown — use calculator sub-lines (correct max per row, incl. Net Value 8) */}
+          <div className="mt-4 pt-4 border-t border-border/60 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+            {scoreResult.subLines.map((line) => (
+              <div key={line.name}>
+                <span className="text-muted-foreground text-xs leading-tight block">{line.name}</span>
+                <div className="font-semibold tabular-nums">
+                  {line.score.toFixed(1)}/{line.weighting}
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -548,7 +532,7 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
             </TabsContent>
 
             <TabsContent value="rights" className="space-y-4 mt-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+              <div className="p-3 border border-border/80 rounded-lg text-sm text-muted-foreground bg-muted/15">
                 <Info className="h-4 w-4 inline mr-2" />
                 Voting rights and economic interest may differ from ownership percentage. 
                 Leave blank to use ownership percentage.

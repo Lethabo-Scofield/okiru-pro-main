@@ -50,6 +50,8 @@ import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 interface ManagementFormProps {
   data: ManagementData;
   onChange: (data: ManagementData) => void;
+  /** EAP province for Senior/Middle/Junior targets (defaults to National). */
+  eapProvince?: string;
   className?: string;
 }
 
@@ -111,7 +113,7 @@ const BLACK_RACES = ['African', 'Coloured', 'Indian'];
 // Component
 // ============================================================================
 
-export function ManagementForm({ data, onChange, className }: ManagementFormProps) {
+export function ManagementForm({ data, onChange, eapProvince, className }: ManagementFormProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formState, setFormState] = useState<EmployeeFormState>(emptyEmployeeForm);
@@ -155,8 +157,8 @@ export function ManagementForm({ data, onChange, className }: ManagementFormProp
 
   // Calculate score
   const scoreResult = useMemo(() => {
-    return calculateManagementScore(data);
-  }, [data]);
+    return calculateManagementScore(data, undefined, eapProvince);
+  }, [data, eapProvince]);
 
   // Filter employees
   const filteredEmployees = useMemo(() => {
@@ -238,12 +240,12 @@ export function ManagementForm({ data, onChange, className }: ManagementFormProp
   return (
     <div className={cn("space-y-6", className)}>
       {/* Score Overview */}
-      <Card>
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-100">
-                <Briefcase className="h-5 w-5 text-purple-600" />
+              <div className="p-2 rounded-lg bg-muted/50 text-muted-foreground">
+                <Briefcase className="h-5 w-5" />
               </div>
               <div>
                 <div className="font-semibold">Management Control Score</div>

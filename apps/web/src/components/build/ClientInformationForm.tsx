@@ -125,20 +125,15 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
   return (
     <div className={cn("space-y-6", className)}>
       {/* Company Size Banner */}
-      <div className={cn(
-        "p-4 rounded-lg border flex items-center gap-3",
-        effectiveSize === 'EME' ? "bg-blue-50 border-blue-200 text-blue-800" :
-        effectiveSize === 'QSE' ? "bg-purple-50 border-purple-200 text-purple-800" :
-        "bg-amber-50 border-amber-200 text-amber-800"
-      )}>
-        <Building2 className="h-5 w-5" />
-        <div className="flex-1">
+      <div className="p-4 rounded-lg border border-border/80 bg-muted/20 flex items-center gap-3 text-foreground">
+        <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0">
           <span className="font-semibold">
             {effectiveSize === 'EME' ? 'EME (Exempted Micro Enterprise)' : 
              effectiveSize === 'QSE' ? 'QSE (Qualifying Small Enterprise)' : 
              'Generic Enterprise'}
           </span>
-          <span className="text-sm ml-2 opacity-80">
+          <span className="text-sm ml-2 text-muted-foreground">
             Based on R {data.annualTurnover.toLocaleString()} turnover
           </span>
         </div>

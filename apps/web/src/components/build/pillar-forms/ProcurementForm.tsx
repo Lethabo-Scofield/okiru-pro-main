@@ -47,7 +47,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
   const result = useMemo(() => calculateProcurementScore(data), [data]);
 
   const totalSpend = data.suppliers.reduce((s, sup) => s + sup.spend, 0);
-  const scorePercent = (result.total / 27) * 100;
+  const scorePercent = (result.total / 29) * 100;
 
   const openAdd = () => {
     setForm({ ...emptySupplier });
@@ -104,7 +104,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
   return (
     <div className={cn("space-y-5", className)}>
       {/* Score summary */}
-      <Card className="bg-muted/30">
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -113,7 +113,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold">{result.total.toFixed(1)}</span>
-              <span className="text-sm text-muted-foreground"> / 27</span>
+              <span className="text-sm text-muted-foreground"> / 29</span>
             </div>
           </div>
           <Progress value={scorePercent} className="h-1.5" />
@@ -128,7 +128,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
             </div>
             <div>
               <p className="text-muted-foreground">Sub-minimum</p>
-              <p className={cn("font-medium", result.subMinimumMet ? "text-green-600" : "text-red-500")}>
+              <p className="font-medium text-muted-foreground">
                 {result.subMinimumMet ? 'Met' : 'Not met'}
               </p>
             </div>

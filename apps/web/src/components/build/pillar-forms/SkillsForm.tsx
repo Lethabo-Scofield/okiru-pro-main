@@ -140,18 +140,18 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
 
   const totalTrainingSpend = data.trainingPrograms.reduce((s, p) => s + (p.courseCost + p.travelCost + p.accommodationCost + p.cateringCost + p.stationeryCost + p.facilityCost + p.salaryCost + p.otherCosts), 0);
   const scorePercent = (result.total / 25) * 100;
-  const targetSpend = data.leviableAmount * 0.06;
+  const targetSpend = data.leviableAmount * 0.035;
 
   return (
     <div className={cn("space-y-5", className)}>
       {/* Score card */}
-      <Card className="bg-muted/30">
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-medium">Skills Score</p>
               <p className="text-xs text-muted-foreground">
-                Target spend: {formatRand(targetSpend)} (6% of leviable)
+                Learning programmes target: {formatRand(targetSpend)} (3.5% of leviable)
               </p>
             </div>
             <div className="text-right">
@@ -171,7 +171,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
             </div>
             <div>
               <p className="text-muted-foreground">Sub-minimum</p>
-              <p className={cn("font-medium", result.subMinimumMet ? "text-green-600" : "text-red-500")}>
+              <p className="font-medium text-muted-foreground">
                 {result.subMinimumMet ? 'Met' : 'Not met'}
               </p>
             </div>

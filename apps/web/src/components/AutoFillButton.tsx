@@ -100,7 +100,7 @@ export function AutoFillButton({ target, onFill, className }: AutoFillButtonProp
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56" sideOffset={6}>
           <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-            Lake Trading (Pty) Ltd — test data
+            Silver Lake demo — test data
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {relevantOptions.map((opt) => (

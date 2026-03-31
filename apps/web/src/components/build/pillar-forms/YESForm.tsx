@@ -141,7 +141,7 @@ export function YESForm({ data, onChange, totalEmployees, className }: YESFormPr
   return (
     <div className={cn("space-y-5", className)}>
       {/* Score card */}
-      <Card className="bg-muted/30">
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-3">
             <div>
