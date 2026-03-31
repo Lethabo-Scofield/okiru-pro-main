@@ -56,13 +56,14 @@ function proxyRequest(req: Request, res: Response): void {
   delete headers["host"];
   headers["host"] = url.host;
 
+  const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,
     path: url.pathname + url.search,
     method: req.method,
     headers,
-    timeout: 120_000,
+    timeout: isHybridExtract ? 600_000 : 120_000,
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
@@ -87,18 +88,37 @@ function proxyRequest(req: Request, res: Response): void {
     }
   });
 
+  const method = (req.method || "GET").toUpperCase();
+  const ct = String(req.headers["content-type"] || "").toLowerCase();
+
+  if (method === "GET" || method === "HEAD") {
+    proxyReq.end();
+    return;
+  }
+
+  // Multipart / binary uploads must stream — never send JSON.stringify(req.body)
+  if (ct.includes("multipart/form-data") || ct.includes("application/octet-stream")) {
+    req.pipe(proxyReq, { end: true });
+    return;
+  }
+
   if (req.readable && !req.complete) {
     req.pipe(proxyReq, { end: true });
-  } else if ((req as any).rawBody) {
-    proxyReq.write(req.rawBody as Buffer);
-    proxyReq.end();
-  } else {
-    const body = JSON.stringify(req.body);
-    if (body && body !== "undefined") {
-      proxyReq.write(body);
-    }
-    proxyReq.end();
+    return;
   }
+
+  const raw = (req as any).rawBody as Buffer | undefined;
+  if (raw && Buffer.isBuffer(raw) && raw.length > 0) {
+    proxyReq.write(raw);
+    proxyReq.end();
+    return;
+  }
+
+  const body = JSON.stringify(req.body);
+  if (body && body !== "undefined" && body !== "{}") {
+    proxyReq.write(body);
+  }
+  proxyReq.end();
 }
 
 export function registerApiProxy(app: Express): void {

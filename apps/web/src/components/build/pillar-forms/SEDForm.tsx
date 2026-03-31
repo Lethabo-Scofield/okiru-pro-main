@@ -93,7 +93,7 @@ export function SEDForm({ data, onChange, npat = 0, className }: SEDFormProps) {
   return (
     <div className={cn("space-y-5", className)}>
       {/* Score card */}
-      <Card className="bg-muted/30">
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>

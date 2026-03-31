@@ -25,8 +25,8 @@ import {
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
   Circle, Zap, ListChecks, CheckCheck, CheckCircle2, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
-  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send, ClipboardEdit,
-  ExternalLink, Calculator
+  Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send,
+  ExternalLink
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -42,6 +42,9 @@ interface StoredTemplate {
   entities: { label: string; definition: string; synonyms?: string[]; zones?: string[]; keywords?: any; pattern?: string; positives?: string[]; negatives?: string[] }[];
   createdAt: string;
   updatedAt: string;
+  /** Toolkit / sector manifest — drives hybrid extraction sector + type. */
+  sectorCode?: string;
+  scorecardType?: 'Generic' | 'QSE' | 'EME';
 }
 
 interface UploadedFile {
@@ -85,38 +88,39 @@ interface ProcessorSession {
   scorecardResult?: any;
 }
 
-interface ManualEntryData {
-  blackOwnership: string;
-  blackFemaleOwnership: string;
-  blackBoardMembers: string;
-  blackExecutiveManagement: string;
-  skillsSpendOnBlack: string;
-  blackLearnerships: string;
-  customTargets: { name: string; value: string }[];
+const VALID_SECTOR_CODES = new Set(['RCOGP', 'ICT', 'FSC', 'AGRI']);
+
+function normalizeSectorCodeForExtraction(raw: string): string {
+  const t = (raw || '').trim().toUpperCase();
+  if (VALID_SECTOR_CODES.has(t)) return t;
+  return 'RCOGP';
 }
 
-const EMPTY_MANUAL_ENTRY: ManualEntryData = {
-  blackOwnership: '',
-  blackFemaleOwnership: '',
-  blackBoardMembers: '',
-  blackExecutiveManagement: '',
-  skillsSpendOnBlack: '',
-  blackLearnerships: '',
-  customTargets: [],
-};
-
-const MANUAL_ENTRY_KEY = 'okiru-manual-entry-data';
-
-function loadManualEntryData(): ManualEntryData {
-  try {
-    const raw = localStorage.getItem(MANUAL_ENTRY_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return { ...EMPTY_MANUAL_ENTRY, customTargets: [] };
+function resolveExtractionFromTemplateAndCompany(
+  template: StoredTemplate | undefined,
+  ci: CompanyInfo,
+): { sectorCode: string; scorecardType: 'Generic' | 'QSE' } {
+  if (template?.sectorCode && template?.scorecardType) {
+    return {
+      sectorCode: normalizeSectorCodeForExtraction(template.sectorCode),
+      scorecardType: template.scorecardType === 'QSE' ? 'QSE' : 'Generic',
+    };
+  }
+  const sectorCode = normalizeSectorCodeForExtraction(ci.sector);
+  const { scorecardType } = determineScorecardType(sectorCode, ci.annualTurnover);
+  return { sectorCode, scorecardType };
 }
 
-function saveManualEntryData(data: ManualEntryData) {
-  localStorage.setItem(MANUAL_ENTRY_KEY, JSON.stringify(data));
+const TOOLKIT_TEMPLATE_ID_BASE = 1_000_001;
+
+function manifestEntitiesForTemplate(manifest: any): StoredTemplate['entities'] {
+  const packs = manifest?.pillarPacks || [];
+  return packs.flatMap((p: any) => (p.entities || []) as any[]).map((e: any) => ({
+    label: e.name,
+    definition: e.extraction?.definition ?? '',
+    synonyms: e.extraction?.aliases,
+    zones: e.extraction?.zones,
+  }));
 }
 
 function bbeeLevel(total: number): number {
@@ -335,6 +339,27 @@ const EMPTY_COMPANY_INFO: CompanyInfo = {
   name: '', sector: '', registrationNumber: '', annualTurnover: '', employees: '',
   financialYearEnd: '', address: '', contactName: '', contactEmail: '',
   contactPhone: '', currentBBEELevel: '', notes: '',
+};
+
+/** Persists foundation + pillars while in the build flow (refresh / mode switch). */
+const BUILD_FLOW_STORAGE_KEY = 'okiru-processor-build-flow-v1';
+
+const EMPTY_YES_DATA: YESData = {
+  id: '',
+  clientId: '',
+  totalEmployees: 0,
+  yesHeadcountTarget: 0,
+  candidates: [],
+  yesYouthEnrolled: 0,
+  yesBlackYouthCount: 0,
+  yesBlackYouthPercentage: 0,
+  yesAbsorbedCount: 0,
+  yesAbsorptionRate: 0,
+  totalYesCost: 0,
+  yesCostPerCandidate: 0,
+  yesTierAchieved: 'None',
+  yesBeeLevelIncrease: 0,
+  qualifiesForLevelUplift: false,
 };
 
 function generateSessionId() {
@@ -1011,7 +1036,7 @@ export default function DocumentProcessor() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
-  const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'manual-entry' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
+  const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSavingSession, setIsSavingSession] = useState(false);
@@ -1037,8 +1062,6 @@ export default function DocumentProcessor() {
   const [processingError, setProcessingError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const processingFinalized = useRef(false);
-  const [manualEntry, setManualEntry] = useState<ManualEntryData>(loadManualEntryData);
-  const [manualErrors, setManualErrors] = useState<Record<string, string>>({});
   const [scorecardResult, setScorecardResult] = useState<any>(null);
   const [toolkitClientId, setToolkitClientId] = useState<string | null>(null);
   const [populatingData, setPopulatingData] = useState<ClientSideImportResult | null>(null);
@@ -1065,6 +1088,7 @@ export default function DocumentProcessor() {
   const [pillarData, setPillarData] = useState<{
     ownership: any;
     management: any;
+    employmentEquity: any;
     skills: any;
     procurement: any;
     esd: any;
@@ -1073,6 +1097,7 @@ export default function DocumentProcessor() {
   }>({
     ownership: null,
     management: null,
+    employmentEquity: null,
     skills: null,
     procurement: null,
     esd: null,
@@ -1086,13 +1111,66 @@ export default function DocumentProcessor() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/templates");
-      if (res.ok) setTemplates(await res.json());
-    } catch (err) { console.error("Error fetching templates:", err); }
-    finally { setLoadingTemplates(false); }
+      const [userRes, sectorRes] = await Promise.all([
+        fetch('/api/templates'),
+        fetch('/api/sector-templates'),
+      ]);
+      const userList: StoredTemplate[] = userRes.ok ? await userRes.json() : [];
+      let toolkitList: StoredTemplate[] = [];
+      if (sectorRes.ok) {
+        const sectors = await sectorRes.json();
+        if (Array.isArray(sectors) && sectors.length > 0) {
+          toolkitList = await Promise.all(
+            sectors.map(async (s: { code: string; name: string; type: string }, i: number) => {
+              const scorecardType = s.type === 'QSE' ? 'QSE' : 'Generic';
+              const mr = await fetch(
+                `/api/manifest?sector=${encodeURIComponent(s.code)}&type=${encodeURIComponent(scorecardType)}`,
+              );
+              const manifest = mr.ok ? await mr.json() : null;
+              const entities = manifest ? manifestEntitiesForTemplate(manifest) : [];
+              return {
+                id: TOOLKIT_TEMPLATE_ID_BASE + i,
+                name: `${s.name} (${scorecardType})`,
+                description: `${s.code} · ${entities.length} manifest entities (same as hybrid extraction)`,
+                version: 'manifest-v1',
+                entities,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                sectorCode: s.code,
+                scorecardType,
+              } satisfies StoredTemplate;
+            }),
+          );
+        }
+      }
+      setTemplates([...toolkitList, ...userList]);
+    } catch (err) {
+      console.error('Error fetching templates:', err);
+    } finally {
+      setLoadingTemplates(false);
+    }
   }, []);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  useEffect(() => {
+    if (templates.length === 0 || uploadedFiles.length === 0) return;
+    const preferred =
+      templates.find(t => t.sectorCode === 'RCOGP' && t.scorecardType === 'Generic') ?? templates[0];
+    if (!preferred) return;
+    setFileClassifications(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const f of uploadedFiles) {
+        const k = String(f.id);
+        if (next[k] == null) {
+          next[k] = preferred.id;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [templates, uploadedFiles]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1251,9 +1329,48 @@ export default function DocumentProcessor() {
     if (mode === 'upload') {
       setCurrentPage('upload');
     } else {
+      try {
+        const raw = sessionStorage.getItem(BUILD_FLOW_STORAGE_KEY);
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.foundationData && typeof d.foundationData === 'object') {
+            setFoundationData(d.foundationData);
+          }
+          if (d.pillarData && typeof d.pillarData === 'object') {
+            setPillarData((prev) => ({
+              ...prev,
+              ...d.pillarData,
+              employmentEquity:
+                d.pillarData.employmentEquity ?? d.pillarData.management ?? prev.employmentEquity,
+            }));
+          }
+          if (d.currentPage === 'build-pillars' || d.currentPage === 'build-foundation') {
+            setCurrentPage(d.currentPage);
+            return;
+          }
+        }
+      } catch {
+        /* ignore corrupt draft */
+      }
       setCurrentPage('build-foundation');
     }
   }, []);
+
+  useEffect(() => {
+    if (flowMode !== 'build') return;
+    if (currentPage !== 'build-foundation' && currentPage !== 'build-pillars') return;
+    const t = setTimeout(() => {
+      try {
+        sessionStorage.setItem(
+          BUILD_FLOW_STORAGE_KEY,
+          JSON.stringify({ foundationData, pillarData, currentPage }),
+        );
+      } catch {
+        /* quota / private mode */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [flowMode, currentPage, foundationData, pillarData]);
 
   const handleBuildValueChange = useCallback((entityId: string, value: unknown) => {
     setBuildValues(prev => ({ ...prev, [entityId]: value }));
@@ -1650,18 +1767,28 @@ export default function DocumentProcessor() {
       uploadProgress: 0, status: 'uploading' as const, textContent: '',
     }));
     setUploadedFiles(prev => [...prev, ...newFiles]);
-    newFiles.forEach(async (newFile) => {
-      const textContent = await readFileText(newFile.file);
-      let prog = 0;
-      const interval = setInterval(() => {
-        prog += Math.random() * 30 + 10;
-        if (prog >= 100) {
-          clearInterval(interval);
-          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent } : f));
-        } else {
-          setUploadedFiles(prev => prev.map(f => f.id === newFile.id ? { ...f, uploadProgress: Math.min(prog, 99) } : f));
+    newFiles.forEach((newFile) => {
+      void (async () => {
+        try {
+          const textContent = await readFileText(newFile.file);
+          setUploadedFiles(prev =>
+            prev.map(f =>
+              f.id === newFile.id
+                ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent }
+                : f,
+            ),
+          );
+        } catch (e) {
+          console.error('File read failed:', e);
+          setUploadedFiles(prev =>
+            prev.map(f =>
+              f.id === newFile.id
+                ? { ...f, uploadProgress: 0, status: 'error' as const, textContent: '' }
+                : f,
+            ),
+          );
         }
-      }, 150);
+      })();
     });
   };
 
@@ -1855,16 +1982,16 @@ export default function DocumentProcessor() {
     // The new /api/extract-entities-hybrid endpoint handles ALL file types:
     // CSV, XLSX, PDF, TXT, DOCX with BM25 + Semantic + LLM extraction
 
-    const sectorCode = companyInfo.sector || 'RCOGP';
-    const { scorecardType } = determineScorecardType(sectorCode, companyInfo.annualTurnover);
-
     // Process files sequentially using the hybrid extraction endpoint
     for (let i = 0; i < uploadedFiles.length; i++) {
       const file = uploadedFiles[i];
       handleEvent('doc-start', { index: i, fileName: file.name });
 
+      const templateId = fileClassifications[String(file.id)];
+      const tmpl = templates.find(t => t.id === templateId);
       try {
-        // Use the new hybrid extraction endpoint
+        const { sectorCode, scorecardType } = resolveExtractionFromTemplateAndCompany(tmpl, companyInfo);
+
         const formData = new FormData();
         formData.append('file', file.file);
         formData.append('sectorCode', sectorCode);
@@ -1877,8 +2004,13 @@ export default function DocumentProcessor() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || `HTTP ${response.status}`);
+          const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+          const msg =
+            (typeof errorData.error === 'string' && errorData.error) ||
+            (typeof errorData.message === 'string' && errorData.message) ||
+            (typeof errorData.detail === 'string' && errorData.detail) ||
+            `HTTP ${response.status}`;
+          throw new Error(msg);
         }
 
         const data = await response.json();
@@ -1900,14 +2032,11 @@ export default function DocumentProcessor() {
           validation: e.validation,
         }));
 
-        const templateId = fileClassifications[String(file.id)];
-        const template = templates.find(t => t.id === templateId);
-
         handleEvent('doc-done', {
           index: i,
           fileName: file.name,
           templateId,
-          templateName: template?.name || 'Hybrid Extraction',
+          templateName: tmpl?.name || 'Toolkit extraction',
           entities,
           timing: data.timing,
           stats: data.stats,
@@ -1918,7 +2047,7 @@ export default function DocumentProcessor() {
           index: i,
           fileName: file.name,
           templateId: fileClassifications[String(file.id)],
-          templateName: 'Extraction',
+          templateName: tmpl?.name || 'Extraction',
           entities: [{ name: 'ExtractionError', value: err.message || 'Could not extract entities', confidence: 0, status: 'error' }],
         });
       }
@@ -1939,9 +2068,7 @@ export default function DocumentProcessor() {
     setDocStatuses(prev => ({ ...prev, [fileIdx]: 'processing' }));
 
     try {
-      // Use the new hybrid extraction endpoint
-      const sectorCode = companyInfo.sector || 'RCOGP';
-      const { scorecardType } = determineScorecardType(sectorCode, companyInfo.annualTurnover);
+      const { sectorCode, scorecardType } = resolveExtractionFromTemplateAndCompany(template, companyInfo);
 
       const formData = new FormData();
       formData.append('file', file.file);
@@ -1954,8 +2081,13 @@ export default function DocumentProcessor() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+        const msg =
+          (typeof errorData.error === 'string' && errorData.error) ||
+          (typeof errorData.message === 'string' && errorData.message) ||
+          (typeof errorData.detail === 'string' && errorData.detail) ||
+          `HTTP ${response.status}`;
+        throw new Error(msg);
       }
 
       const data = await response.json();
@@ -1968,7 +2100,7 @@ export default function DocumentProcessor() {
       const result = {
         fileName: file.name,
         templateId,
-        templateName: template?.name || 'Hybrid Extraction',
+        templateName: template?.name || 'Toolkit extraction',
         entities: data.entities.map((e: any) => ({
           name: e.name,
           value: e.value,
@@ -2557,18 +2689,21 @@ export default function DocumentProcessor() {
                 data={{
                   ownership: pillarData.ownership || { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0, ownershipScorePoints: 0, ownershipScorePercent: 0, netValuePoints: 0, netValuePercent: 0 },
                   management: pillarData.management || { id: '', clientId: '', employees: [] },
-                  employmentEquity: pillarData.management || { id: '', clientId: '', employees: [] },
+                  employmentEquity:
+                    pillarData.employmentEquity
+                    ?? pillarData.management
+                    ?? { id: '', clientId: '', employees: [] },
                   skills: pillarData.skills || { id: '', clientId: '', leviableAmount: foundationData.financials.leviableAmount || 0, trainingPrograms: [], yesCandidatesCount: 0, yesAbsorbedCount: 0 },
                   procurement: pillarData.procurement || { id: '', clientId: '', tmps: foundationData.financials.tmps || 0, suppliers: [], graduationBonus: false, jobsCreatedBonus: false },
                   esd: pillarData.esd || { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
                   sed: pillarData.sed || { id: '', clientId: '', contributions: [] },
-                  yes: pillarData.yes || { id: '', clientId: '', candidates: [], absorbed: [], bonusLevel: 1, absorbedBonus: 0, graduationBonus: false, targetYear: '1-3' },
+                  yes: pillarData.yes ?? EMPTY_YES_DATA,
                 }}
                 onChange={(newData) => {
-                  // Sync pillar data back to store
                   setPillarData({
                     ownership: newData.ownership,
                     management: newData.management,
+                    employmentEquity: newData.employmentEquity,
                     skills: newData.skills,
                     procurement: newData.procurement,
                     esd: newData.esd,
@@ -2638,28 +2773,15 @@ export default function DocumentProcessor() {
               </div>
 
               {uploadedFiles.length === 0 && (
-                <div className="mt-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="flex-1 h-px bg-[#2c2c2e]" />
-                    <span className="text-[11px] text-[#48484a] font-medium uppercase tracking-wider">or</span>
-                    <div className="flex-1 h-px bg-[#2c2c2e]" />
-                  </div>
+                <div className="mt-6 flex gap-3">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setCurrentPage('manual-entry'); }}
-                    className="w-full py-3.5 rounded-xl text-[14px] font-semibold transition-all flex items-center justify-center gap-2.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white"
-                    style={{ border: '1px solid #2c2c2e' }}
-                    data-testid="button-skip-to-manual-empty"
+                    type="button"
+                    onClick={() => setCurrentPage('choose-mode')}
+                    className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                    data-testid="button-back-choose-mode-empty"
                   >
-                    <ClipboardEdit className="w-4 h-4" />
-                    Skip Upload — Enter Data Manually
+                    Back
                   </button>
-                  <p className="text-[11px] text-[#48484a] text-center mt-2">No documents? You can enter all scorecard data by hand.</p>
-                  <div className="flex gap-3 mt-6">
-                    <button onClick={() => setCurrentPage('company-info')}
-                      className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-company-info-empty">
-                      Back
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -2699,8 +2821,12 @@ export default function DocumentProcessor() {
                     ))}
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={() => setCurrentPage('company-info')}
-                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-company-info">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage('choose-mode')}
+                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                      data-testid="button-back-choose-mode-upload"
+                    >
                       Back
                     </button>
                     <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
@@ -2708,14 +2834,6 @@ export default function DocumentProcessor() {
                       {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                     </button>
                   </div>
-                  <button
-                    onClick={() => setCurrentPage('manual-entry')}
-                    className="w-full mt-3 py-2.5 text-[13px] font-medium text-[#636366] hover:text-[#8e8e93] transition-colors flex items-center justify-center gap-2"
-                    data-testid="button-skip-to-manual"
-                  >
-                    <ClipboardEdit className="w-3.5 h-3.5" />
-                    Skip to Manual Entry
-                  </button>
                 </>
               )}
             </div>
@@ -3510,321 +3628,6 @@ export default function DocumentProcessor() {
             </div>
             );
           })()}
-
-          {currentPage === 'manual-entry' && (
-            <div className="max-w-2xl mx-auto w-full">
-              <div className="mb-10">
-                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Manual Data Entry</h2>
-                <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter B-BBEE metrics directly to generate a scorecard without document extraction.</p>
-              </div>
-
-              <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Ownership Metrics</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Ownership (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackOwnership}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackOwnership: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackOwnership; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-ownership"
-                      />
-                      {manualErrors.blackOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackOwnership}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Female Ownership (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackFemaleOwnership}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackFemaleOwnership: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackFemaleOwnership; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackFemaleOwnership ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-female-ownership"
-                      />
-                      {manualErrors.blackFemaleOwnership && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackFemaleOwnership}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Management Control</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Board Members (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackBoardMembers}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackBoardMembers: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackBoardMembers; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackBoardMembers ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-board-members"
-                      />
-                      {manualErrors.blackBoardMembers && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackBoardMembers}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Black Executive Management (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={manualEntry.blackExecutiveManagement}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackExecutiveManagement: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackExecutiveManagement; return n; });
-                        }}
-                        placeholder="0.0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackExecutiveManagement ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-executive-mgmt"
-                      />
-                      {manualErrors.blackExecutiveManagement && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackExecutiveManagement}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Skills Development</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Skills Development Spend on Black People (R)</label>
-                      <input
-                        type="number" min="0" step="1"
-                        value={manualEntry.skillsSpendOnBlack}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, skillsSpendOnBlack: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.skillsSpendOnBlack; return n; });
-                        }}
-                        placeholder="0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.skillsSpendOnBlack ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-skills-spend"
-                      />
-                      {manualErrors.skillsSpendOnBlack && <p className="text-[11px] text-red-400 mt-1">{manualErrors.skillsSpendOnBlack}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-[13px] font-medium text-[#d1d1d6] mb-1.5">Number of Black Learnerships</label>
-                      <input
-                        type="number" min="0" step="1"
-                        value={manualEntry.blackLearnerships}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setManualEntry(p => { const d = { ...p, blackLearnerships: v }; saveManualEntryData(d); return d; });
-                          setManualErrors(p => { const n = { ...p }; delete n.blackLearnerships; return n; });
-                        }}
-                        placeholder="0"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none transition-colors ${manualErrors.blackLearnerships ? 'ring-1 ring-red-500/50' : 'focus:ring-1 focus:ring-[#48484a]'}`}
-                        style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                        data-testid="input-black-learnerships"
-                      />
-                      {manualErrors.blackLearnerships && <p className="text-[11px] text-red-400 mt-1">{manualErrors.blackLearnerships}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-5">Custom Entity Targets</p>
-                  <div className="space-y-3">
-                    {manualEntry.customTargets.map((ct, i) => (
-                      <div key={i} className="flex items-start gap-2" data-testid={`custom-target-row-${i}`}>
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            value={ct.name}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setManualEntry(p => {
-                                const d = { ...p, customTargets: p.customTargets.map((c, j) => j === i ? { ...c, name: v } : c) };
-                                saveManualEntryData(d);
-                                return d;
-                              });
-                            }}
-                            placeholder="Entity Name"
-                            className="w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none focus:ring-1 focus:ring-[#48484a] transition-colors"
-                            style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                            data-testid={`input-custom-name-${i}`}
-                          />
-                        </div>
-                        <div className="w-[140px] shrink-0">
-                          <input
-                            type="number"
-                            value={ct.value}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setManualEntry(p => {
-                                const d = { ...p, customTargets: p.customTargets.map((c, j) => j === i ? { ...c, value: v } : c) };
-                                saveManualEntryData(d);
-                                return d;
-                              });
-                            }}
-                            placeholder="Target Value"
-                            className="w-full px-3.5 py-2.5 rounded-xl text-[13px] text-white placeholder-[#3a3a3c] outline-none focus:ring-1 focus:ring-[#48484a] transition-colors"
-                            style={{ background: '#111111', border: '1px solid #2c2c2e' }}
-                            data-testid={`input-custom-value-${i}`}
-                          />
-                        </div>
-                        <button
-                          onClick={() => {
-                            setManualEntry(p => {
-                              const d = { ...p, customTargets: p.customTargets.filter((_, j) => j !== i) };
-                              saveManualEntryData(d);
-                              return d;
-                            });
-                          }}
-                          className="p-2.5 rounded-xl text-[#3a3a3c] hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
-                          data-testid={`button-remove-custom-${i}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => {
-                        setManualEntry(p => {
-                          const d = { ...p, customTargets: [...p.customTargets, { name: '', value: '' }] };
-                          saveManualEntryData(d);
-                          return d;
-                        });
-                      }}
-                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] font-medium text-[#8e8e93] hover:text-white hover:bg-white/[0.06] transition-colors"
-                      style={{ border: '1px dashed #2c2c2e' }}
-                      data-testid="button-add-custom-target"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      Add Custom Entity Target
-                    </button>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setCurrentPage(uploadedFiles.length > 0 ? 'extract' : 'upload')}
-                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
-                      data-testid="button-manual-back"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const errors: Record<string, string> = {};
-                        const pctFields: { key: keyof ManualEntryData; label: string }[] = [
-                          { key: 'blackOwnership', label: 'Black Ownership' },
-                          { key: 'blackFemaleOwnership', label: 'Black Female Ownership' },
-                          { key: 'blackBoardMembers', label: 'Black Board Members' },
-                          { key: 'blackExecutiveManagement', label: 'Black Executive Management' },
-                        ];
-                        for (const f of pctFields) {
-                          const raw = manualEntry[f.key] as string;
-                          if (!raw || raw.trim() === '') { errors[f.key] = `${f.label} is required`; continue; }
-                          const v = parseFloat(raw);
-                          if (isNaN(v) || v < 0 || v > 100) errors[f.key] = 'Must be between 0 and 100';
-                        }
-                        const spendRaw = manualEntry.skillsSpendOnBlack;
-                        if (!spendRaw || spendRaw.trim() === '') { errors.skillsSpendOnBlack = 'Spend amount is required'; }
-                        else { const sv = parseFloat(spendRaw); if (isNaN(sv) || sv < 0) errors.skillsSpendOnBlack = 'Must be a positive number'; }
-
-                        const learnRaw = manualEntry.blackLearnerships;
-                        if (!learnRaw || learnRaw.trim() === '') { errors.blackLearnerships = 'Number of learnerships is required'; }
-                        else { const lv = parseFloat(learnRaw); if (isNaN(lv) || lv < 0 || !Number.isInteger(lv)) errors.blackLearnerships = 'Must be a non-negative integer'; }
-
-                        if (Object.keys(errors).length > 0) { setManualErrors(errors); return; }
-                        setManualErrors({});
-
-                        setIsSavingSession(true);
-                        try {
-                          const manualScorecardResult = {
-                            ownership: { score: Math.round(parseFloat(manualEntry.blackOwnership) / 100 * 25 * 10) / 10, target: 25, weighting: 25, subMinimumMet: parseFloat(manualEntry.blackOwnership) >= 40 },
-                            managementControl: { score: Math.round(((parseFloat(manualEntry.blackBoardMembers) + parseFloat(manualEntry.blackExecutiveManagement)) / 200) * 19 * 10) / 10, target: 19, weighting: 19 },
-                            skillsDevelopment: { score: Math.min(25, Math.round((parseFloat(manualEntry.skillsSpendOnBlack) / Math.max(1, parseFloat(companyInfo.annualTurnover.replace(/[^\d]/g, '')) || 1000000) * 100) * 25 * 10) / 10), target: 25, weighting: 25, subMinimumMet: true },
-                            procurement: { score: 0, target: 29, weighting: 29, subMinimumMet: false },
-                            supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
-                            enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
-                            socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
-                            yesInitiative: { score: 0, target: 5, weighting: 5 },
-                            total: { score: 0, target: 120, weighting: 120 },
-                            achievedLevel: 9,
-                            discountedLevel: 9,
-                            isDiscounted: false,
-                            recognitionLevel: '0%',
-                            manualEntryData: manualEntry,
-                          };
-                          const totalScore =
-                            manualScorecardResult.ownership.score +
-                            manualScorecardResult.managementControl.score +
-                            manualScorecardResult.skillsDevelopment.score +
-                            manualScorecardResult.procurement.score +
-                            manualScorecardResult.supplierDevelopment.score +
-                            manualScorecardResult.enterpriseDevelopment.score +
-                            manualScorecardResult.socioEconomicDevelopment.score;
-                          manualScorecardResult.total.score = Math.round(totalScore * 10) / 10;
-
-                          const pct = totalScore / 120 * 100;
-                          let level = 9;
-                          if (pct >= 100) level = 1;
-                          else if (pct >= 95) level = 2;
-                          else if (pct >= 90) level = 3;
-                          else if (pct >= 80) level = 4;
-                          else if (pct >= 51) level = 5;
-                          else if (pct >= 40) level = 6;
-                          else if (pct >= 30) level = 7;
-                          else if (pct >= 15) level = 8;
-                          manualScorecardResult.achievedLevel = level;
-                          manualScorecardResult.discountedLevel = level;
-                          const recMap: Record<number, string> = { 1: '135%', 2: '125%', 3: '110%', 4: '100%', 5: '80%', 6: '60%', 7: '50%', 8: '10%', 9: '0%' };
-                          manualScorecardResult.recognitionLevel = recMap[level] || '0%';
-
-                          await persistSession('scorecard', {
-                            results: [],
-                            complete: true,
-                            scorecardResult: manualScorecardResult,
-                          });
-
-                          setScorecardResult(manualScorecardResult);
-                          localStorage.removeItem(MANUAL_ENTRY_KEY);
-                          setIsSubmitted(true);
-                          setCurrentPage('scorecard');
-                          toast({ title: "Scorecard generated", description: "Manual entry data has been processed successfully." });
-                        } catch (err: any) {
-                          console.error("Manual scorecard generation error:", err);
-                          toast({ title: "Generation Failed", description: "Could not generate scorecard from manual data.", variant: "destructive" });
-                        } finally {
-                          setIsSavingSession(false);
-                        }
-                      }}
-                      disabled={isSavingSession}
-                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors flex items-center justify-center gap-2"
-                      data-testid="button-generate-scorecard"
-                    >
-                      {isSavingSession ? (
-                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating...</>
-                      ) : (
-                        <><Zap className="w-3.5 h-3.5" />Generate Scorecard</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {currentPage === 'summary' && (() => {
             const PILLAR_META: { key: string; label: string; color: string; icon: string }[] = [

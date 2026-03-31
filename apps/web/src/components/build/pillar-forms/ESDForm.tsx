@@ -67,7 +67,8 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
 
   const result = useMemo(() => calculateEsdScore(data, npat), [data, npat]);
   const totalESD = data.contributions.reduce((s, c) => s + c.amount, 0);
-  const scorePercent = (result.total / 15) * 100;
+  const esdMaxDisplay = 17; // SD 10 + ED 7 (RCOGP Generic)
+  const scorePercent = (result.total / esdMaxDisplay) * 100;
 
   const sdContribs = data.contributions.filter(c => c.category === 'supplier_development');
   const edContribs = data.contributions.filter(c => c.category === 'enterprise_development');
@@ -178,16 +179,16 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
   return (
     <div className={cn("space-y-5", className)}>
       {/* Score card */}
-      <Card className="bg-muted/30">
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-sm font-medium">ESD Score</p>
-              <p className="text-xs text-muted-foreground">NPAT: {formatRand(npat)}</p>
+              <p className="text-sm font-medium">Enterprise & Supplier Development</p>
+              <p className="text-xs text-muted-foreground">NPAT: {formatRand(npat)} · SD max 10 + ED max 7</p>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold">{result.total.toFixed(1)}</span>
-              <span className="text-sm text-muted-foreground"> / 15</span>
+              <span className="text-sm text-muted-foreground"> / {esdMaxDisplay}</span>
             </div>
           </div>
           <Progress value={scorePercent} className="h-1.5" />

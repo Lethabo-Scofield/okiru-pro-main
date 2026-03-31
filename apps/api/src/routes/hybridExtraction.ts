@@ -108,10 +108,15 @@ async function parseFileToPages(
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      const MAX_XLSX_ROWS = 3000;
+      const rowLimit = Math.min(jsonData.length, MAX_XLSX_ROWS);
 
-      // Convert sheet to text format (row-based)
+      // Convert sheet to text format (row-based); cap rows so huge toolkits don't OOM or time out
       let text = `Sheet: ${sheetName}\n\n`;
-      for (let i = 0; i < jsonData.length; i++) {
+      if (jsonData.length > MAX_XLSX_ROWS) {
+        text += `[Note: first ${MAX_XLSX_ROWS} of ${jsonData.length} rows included for extraction]\n\n`;
+      }
+      for (let i = 0; i < rowLimit; i++) {
         const row = jsonData[i];
         if (row && row.length > 0) {
           text += `Row ${i + 1}: ${row.map(cell => String(cell || '')).join(' | ')}\n`;
@@ -121,7 +126,7 @@ async function parseFileToPages(
       pages.push({
         pageId: `sheet_${sheetName}`,
         text,
-        metadata: { sheetName, rowCount: jsonData.length, type: 'spreadsheet' },
+        metadata: { sheetName, rowCount: jsonData.length, type: 'spreadsheet', rowsIncluded: rowLimit },
       });
     }
 

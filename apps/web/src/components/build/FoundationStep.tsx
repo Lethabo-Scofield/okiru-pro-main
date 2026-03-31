@@ -122,9 +122,8 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
       <div className="grid gap-4 md:grid-cols-2">
         <Card 
           className={cn(
-            "cursor-pointer transition-colors",
-            activeTab === 'client' ? "border-primary ring-1 ring-primary" : "",
-            clientInfoValid ? "bg-green-50/50" : ""
+            "cursor-pointer transition-colors border-border/80 bg-card",
+            activeTab === 'client' ? "border-primary/60 ring-1 ring-primary/30" : ""
           )}
           onClick={() => setActiveTab('client')}
         >
@@ -132,8 +131,8 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={cn(
-                  "p-2 rounded-lg",
-                  clientInfoValid ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
+                  "p-2 rounded-lg bg-muted/50 text-muted-foreground",
+                  clientInfoValid && "text-foreground"
                 )}>
                   <Building2 className="h-5 w-5" />
                 </div>
@@ -145,9 +144,9 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
                 </div>
               </div>
               {clientInfoValid ? (
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <AlertCircle className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
             <div className="mt-3 flex gap-2">
@@ -169,9 +168,8 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
 
         <Card 
           className={cn(
-            "cursor-pointer transition-colors",
-            activeTab === 'financials' ? "border-primary ring-1 ring-primary" : "",
-            financialsValid ? "bg-green-50/50" : ""
+            "cursor-pointer transition-colors border-border/80 bg-card",
+            activeTab === 'financials' ? "border-primary/60 ring-1 ring-primary/30" : ""
           )}
           onClick={() => setActiveTab('financials')}
         >
@@ -179,8 +177,8 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={cn(
-                  "p-2 rounded-lg",
-                  financialsValid ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
+                  "p-2 rounded-lg bg-muted/50 text-muted-foreground",
+                  financialsValid && "text-foreground"
                 )}>
                   <DollarSign className="h-5 w-5" />
                 </div>
@@ -192,9 +190,9 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
                 </div>
               </div>
               {financialsValid ? (
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <AlertCircle className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
             <div className="mt-3 flex gap-2">
@@ -217,7 +215,7 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
       </div>
 
       {/* Input Mode Toggle */}
-      <Card>
+      <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -289,13 +287,13 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
 
       {/* Validation Summary */}
       {!allValid && (
-        <Card className="bg-amber-50 border-amber-200">
+        <Card className="border-border/80 bg-muted/20">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
-                <h4 className="font-semibold text-amber-800">Required Fields Missing</h4>
-                <ul className="text-sm text-amber-700 mt-1 list-disc list-inside">
+                <h4 className="font-semibold text-foreground">Required Fields Missing</h4>
+                <ul className="text-sm text-muted-foreground mt-1 list-disc list-inside">
                   {!clientInfoValid && <li>Complete Client Information (company, contact, sector)</li>}
                   {!financialsValid && <li>Complete Financials (revenue, NPAT, TMPS)</li>}
                 </ul>

@@ -75,7 +75,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
 
       {/* Hint */}
       <p className="text-center text-[12px] text-[#636366] mt-6">
-        You can always switch between modes or come back later. Your progress is saved.
+        Use Back on any step to return here and pick the other path. Build progress is saved in this browser.
       </p>
     </div>
   );
