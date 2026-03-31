@@ -30,7 +30,7 @@ function getConfig(): ArangoConfig {
     url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
     databaseName: process.env.ARANGO_DB || 'bbbee_db',
     username: process.env.ARANGO_USER || 'root',
-    password: process.env.ARANGO_PASSWORD || 'Okiru123!',
+    password: process.env.ARANGO_PASSWORD || '',
   };
 }
 

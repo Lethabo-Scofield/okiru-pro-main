@@ -1,43 +1,32 @@
-# --------------------
-# Build stage
-# --------------------
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Use corepack+pnpm (no global setup required)
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Copy monorepo manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Copy only web package manifest in order to install only web deps
 COPY apps/web/package.json apps/web/package.json
 
-# Install dependencies for apps/web only (includes dev deps for build)
-RUN pnpm install --frozen-lockfile --filter ./apps/web...
+RUN pnpm install --no-frozen-lockfile --filter ./apps/web...
 
-# Copy web source (monorepo root ignored by .dockerignore)
 COPY apps/web/ apps/web/
 
-# Build only client assets for frontend deployment (skip server API path dependencies)
 WORKDIR /app/apps/web
-RUN pnpm exec vite build
+RUN pnpm run build
 
-# --------------------
-# Production stage
-# --------------------
-FROM nginx:alpine
+FROM node:20-alpine
+WORKDIR /app
 
-# Remove default nginx html
-RUN rm -rf /usr/share/nginx/html/*
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Configure nginx to serve SPA index fallback
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/apps/web/package.json apps/web/package.json
 
-# Copy built assets from `dist/public` to nginx root
-COPY --from=builder /app/apps/web/dist/public /usr/share/nginx/html
+RUN pnpm install --no-frozen-lockfile --prod --filter ./apps/web...
 
-EXPOSE 80
+COPY --from=builder /app/apps/web/dist/ apps/web/dist/
 
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 5001
+ENV NODE_ENV=production PORT=5001
+WORKDIR /app/apps/web
+CMD ["node", "dist/index.cjs"]

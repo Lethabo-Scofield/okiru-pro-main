@@ -12,7 +12,7 @@ COPY packages/types/ packages/types/
 COPY apps/api/ apps/api/
 
 RUN pnpm --filter @okiru/types build \
-    && pnpm --filter @okiru/api build
+    && cd apps/api && node build.js
 
 FROM node:20-alpine
 WORKDIR /app
@@ -29,4 +29,4 @@ RUN pnpm install --no-frozen-lockfile --prod
 EXPOSE 5000
 ENV NODE_ENV=production PORT=5000
 WORKDIR /app/apps/api
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/index.cjs"]

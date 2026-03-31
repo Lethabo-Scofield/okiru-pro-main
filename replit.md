@@ -13,11 +13,11 @@ Okiru Pro is a comprehensive B-BBEE (Broad-Based Black Economic Empowerment) Com
 
 ### Tech Stack
 - **Frontend**: React 19, Vite, Tailwind CSS 4, Radix UI, Tanstack Query, Zustand, Wouter
-- **Backend**: Express 5, TypeScript (tsx), Passport.js (local auth), Express Session
+- **Backend**: Express 5, TypeScript (tsx), Helmet (security headers), Express Session
 - **Databases**: MongoDB (primary data), ArangoDB (knowledge graph)
-- **AI/LLM**: Groq SDK (Llama-3), OpenAI, Google Generative AI
+- **AI/LLM**: Groq SDK (Llama-3), Azure OpenAI (gpt-4o-mini), Google Generative AI
 - **Computation**: FastAPI (Python), xlcalculator, networkx
-- **Auth**: Passport.js local strategy with session-based auth
+- **Auth**: Session-based auth with bcrypt, OTP email verification, optional 2FA
 
 ## Running the Project
 
@@ -36,10 +36,36 @@ pnpm install
 
 ## Environment Variables Required
 - `MONGODB_URI` - MongoDB connection string (without this, uses in-memory storage)
+- `SESSION_SECRET` - Express session secret (required in production, will crash without it)
 - `GROQ_API_KEY` - For AI/LLM features
-- `SESSION_SECRET` - Express session secret
-- `OPENAI_API_KEY` - Optional, for OpenAI features
-- `GOOGLE_AI_API_KEY` - Optional, for Google AI features
+- `ARANGO_URL` - ArangoDB connection URL
+- `ARANGO_PASSWORD` - ArangoDB password (no hardcoded default — must be set)
+- `ARANGO_DB` - ArangoDB database name (defaults to `bbbee_db`)
+- `CORS_ORIGIN` - API server allowed origins (comma-separated)
+- `API_SERVER_URL` - URL of API server for web proxy (default: http://127.0.0.1:3000)
+- `COMPUTE_ENGINE_URL` - URL of Computation Engine (default: http://127.0.0.1:8000)
+- `AZURE_OPENAI_ENDPOINT` - Optional, for Azure OpenAI extraction
+- `AZURE_OPENAI_API_KEY` - Optional, for Azure OpenAI extraction
+- `CORS_ORIGINS` - Computation Engine allowed origins (comma-separated)
+
+## Production Deployment (Azure VM)
+Uses Docker Compose (`docker-compose.production.yml`) with:
+- MongoDB 7, ArangoDB 3.11, Redis 7
+- Nginx reverse proxy with SSL
+- All three app services containerized
+
+Dockerfiles:
+- `apps/api/Dockerfile` — builds to `dist/index.cjs` via esbuild, runs with Node.js
+- `apps/web/Dockerfile` — builds client + server to `dist/index.cjs`, runs with Node.js (includes Express backend)
+- `apps/Computation-Engine/Dockerfile` — Python FastAPI with uvicorn
+
+## Security
+- Helmet enabled on both web and API servers
+- Session secret enforced in production (crashes if missing)
+- No hardcoded database passwords in source code (must be set via env vars)
+- CORS restricted on all services (Computation Engine uses `CORS_ORIGINS` env var)
+- Rate limiting on API routes and login attempts
+- OTP-based 2FA support
 
 ## Testing
 
@@ -47,19 +73,16 @@ pnpm install
 ```
 cd apps/web && pnpm run test
 ```
-10 test files, 181 tests covering: Toolkit utilities, calculator engines (skills, shared, scorecard-integration, procurement, ownership, management, esd-sed), server routes, and email.
 
 ### API (apps/api) — Vitest
 ```
 cd apps/api && pnpm run test
 ```
-Tests the B-BBEE scoring engine: manifest building, scorecard calculation, and all sector variants.
 
 ### Computation Engine (apps/Computation-Engine) — Pytest
 ```
 cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 ```
-Tests model compilation and evaluation. Uses in-memory DB when `ALLOW_IN_MEMORY_DB=1` (set automatically in tests).
 
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)

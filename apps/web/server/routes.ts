@@ -66,8 +66,14 @@ export async function registerRoutes(
     app.set("trust proxy", 1);
   }
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (isProduction && !sessionSecret) {
+    console.error("FATAL: SESSION_SECRET must be set in production.");
+    process.exit(1);
+  }
+
   const sessionConfig: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "okiru-entity-studio-dev-secret",
+    secret: sessionSecret || "okiru-entity-studio-dev-secret",
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -309,8 +315,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Verification code has expired. Please log in again." });
       }
 
-      const BYPASS_OTP = "654321";
-      if (otp.trim() !== BYPASS_OTP && otp.trim() !== user.otpCode) {
+      if (otp.trim() !== user.otpCode) {
         const attempts = await storage.incrementOtpAttempts(user.id);
         const remaining = maxAttempts - attempts;
         return res.status(401).json({
