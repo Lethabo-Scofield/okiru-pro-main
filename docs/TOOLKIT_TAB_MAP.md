@@ -226,7 +226,7 @@ ELSE:
 |----------------|----------------|--------|------------|---------|
 | MC-BOARD-BLACK | Board participation - Black | 50% | 1 | `min((actual / 0.50) * 1, 1)` |
 | MC-BOARD-BWO | Board participation - Black women | 25% | 1 | `min((actual / 0.25) * 1, 1)` |
-| MC-EXEC-BLACK | Executive management - Black | 60% | 2 | `min((actual / 0.60) * 2, 2)` |
+| MC-EXEC-BLACK | Executive management - Black | **50%** | 2 | `min((actual / 0.50) * 2, 2)` |
 | MC-EXEC-BWO | Executive management - Black women | 30% | 2 | `min((actual / 0.30) * 2, 2)` |
 
 **QSE Criteria** (combined MC+EE):
@@ -235,7 +235,7 @@ ELSE:
 |----------------|----------------|--------|------------|
 | MC-BOARD-BLACK | Board participation - Black | 50% | 3 |
 | MC-BOARD-BWO | Board participation - Black women | 25% | 2 |
-| MC-EXEC-BLACK | Executive management - Black | 60% | 4 |
+| MC-EXEC-BLACK | Executive management - Black | **50%** | 4 |
 | MC-EXEC-BWO | Executive management - Black women | 30% | 4 |
 | MC-SENIOR | Senior management | EAP-based | 3 |
 | MC-MIDDLE | Middle management | EAP-based | 3 |
@@ -372,7 +372,7 @@ ELSE:
 
 **Excel Location**: Sheet "Procurement Scorecard"  
 **System Pillar**: Preferential Procurement  
-**Max Points**: RCOGP 27, ICT 25, FSC 20, AGRI 25, QSE 25  
+**Max Points**: **RCOGP 29**, ICT 25, FSC 20, AGRI 25, QSE 25  
 **Has Sub-Minimum**: Yes (40%)
 
 **Criteria**:
@@ -382,9 +382,9 @@ ELSE:
 | PROC-EMP | Spend from Empowering Suppliers | 80% of TMPS | 5 | `min((empoweringSpend / (tmps * 0.80)) * 5, 5)` |
 | PROC-QSE | Spend on QSE Suppliers | 15% of TMPS | 3 | `min((qseSpend / (tmps * 0.15)) * 3, 3)` |
 | PROC-EME | Spend on EME Suppliers | 15% of TMPS | 4 | `min((emeSpend / (tmps * 0.15)) * 4, 4)` |
-| PROC-BO51 | Spend on ≥51% Black-Owned | 40% of TMPS | 10 (RCOGP), 9 (ICT/AGRI), 5 (FSC) | `min((bo51Spend / (tmps * 0.40)) * maxPoints, maxPoints)` |
+| PROC-BO51 | Spend on ≥51% Black-Owned | **50% of TMPS** | **11 (RCOGP)**, 9 (ICT/AGRI), 5 (FSC) | `min((bo51Spend / (tmps * 0.50)) * maxPoints, maxPoints)` |
 | PROC-BWO30 | Spend on >30% Black Women-Owned | 12% of TMPS | 4 (RCOGP/ICT/AGRI), 4 (FSC) | `min((bwo30Spend / (tmps * 0.12)) * 4, 4)` |
-| PROC-DG | Spend on Designated Group Suppliers | 12% of TMPS | 2 | `min((dgSpend / (tmps * 0.12)) * 2, 2)` |
+| PROC-DG | Spend on Designated Group Suppliers | **2% of TMPS** | 2 | `min((dgSpend / (tmps * 0.02)) * 2, 2)` |
 | PROC-GRAD | Bonus: Graduation of ED Beneficiaries | Tick-box | 1 | `graduationBonus ? 1 : 0` |
 | PROC-JOBS | Bonus: Jobs Created | Tick-box | 1 | `jobsCreatedBonus ? 1 : 0` |
 
@@ -455,7 +455,7 @@ ELSE:
 | Criterion Code | Criterion Name | Target | Max Points | Formula |
 |----------------|----------------|--------|------------|---------|
 | ESD-SD | Supplier Development | 2% of NPAT | 10 (Generic), 15 (QSE) | `min((sdSpend / (npat * 0.02)) * maxPoints, maxPoints)` |
-| ESD-ED | Enterprise Development | 1% of NPAT | 5 (Generic), 10 (QSE) | `min((edSpend / (npat * 0.01)) * maxPoints, maxPoints)` |
+| ESD-ED | Enterprise Development | 1% of NPAT | **7 (Generic: 5 base + 2 bonus)**, 10 (QSE) | `min((edSpend / (npat * 0.01)) * maxPoints, maxPoints)` |
 | ESD-GRAD | Bonus: Graduation to SD | Tick-box | 1 | `graduationBonus ? 1 : 0` |
 | ESD-JOBS | Bonus: Jobs Created | Tick-box | 1 | `jobsCreatedBonus ? 1 : 0` |
 

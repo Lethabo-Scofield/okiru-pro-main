@@ -346,6 +346,30 @@ const clientSchema = new Schema({
   suppliers: { type: [Schema.Types.Mixed], default: [] },
   esdContributions: { type: [Schema.Types.Mixed], default: [] },
   sedContributions: { type: [Schema.Types.Mixed], default: [] },
+  
+  // Extended Foundation Layer fields from TOOLKIT_TAB_MAP.md Sheet 1
+  registrationNumber: { type: String, default: null, index: true },
+  tradingName: { type: String, default: null },
+  vatNumber: { type: String, default: null },
+  taxNumber: { type: String, default: null },
+  physicalAddress: { type: String, default: null },
+  postalAddress: { type: String, default: null },
+  contactPerson: { type: String, default: null },
+  contactEmail: { type: String, default: null },
+  contactPhone: { type: String, default: null },
+  sectorCode: { type: String, default: 'RCOGP' },
+  industry: { type: String, default: 'Other' },
+  companySize: { type: String, default: 'Generic' },
+  annualTurnover: { type: Number, default: 0 },
+  numberOfEmployees: { type: Number, default: 0 },
+  measurementPeriodStart: { type: String, default: null },
+  measurementPeriodEnd: { type: String, default: null },
+  beeCertificateNumber: { type: String, default: null },
+  beeCertificateExpiry: { type: String, default: null },
+  beeCertificateLevel: { type: Number, default: null },
+  verificationAgency: { type: String, default: null },
+  financials: { type: Schema.Types.Mixed, default: null },
+  pillars: { type: Schema.Types.Mixed, default: null },
 });
 
 clientSchema.set("toJSON", {

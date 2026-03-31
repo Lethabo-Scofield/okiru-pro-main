@@ -1544,5 +1544,280 @@ Respond ONLY with a valid JSON array.`;
     }
   });
 
+  // ============================================================================
+  // Foundation Layer API - Assessment Management
+  // ============================================================================
+  
+  // Save foundation data (client info + financials)
+  app.post("/api/assessments/foundation", requireAuth, async (req, res) => {
+    try {
+      const { sessionId, clientInfo, financials, assessmentId } = req.body;
+      const userId = (req.session as any)?.userId;
+      
+      // Generate or use provided assessment ID
+      const finalAssessmentId = assessmentId || `assessment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create/update client record from foundation data
+      const clientData = {
+        name: clientInfo.companyName,
+        registrationNumber: clientInfo.registrationNumber,
+        vatNumber: clientInfo.vatNumber || '',
+        taxNumber: clientInfo.taxNumber || '',
+        industrySector: clientInfo.industry || 'Generic',
+        physicalAddress: clientInfo.physicalAddress,
+        postalAddress: clientInfo.postalAddress || '',
+        contactPerson: clientInfo.contactPerson,
+        contactEmail: clientInfo.contactEmail,
+        contactPhone: clientInfo.contactPhone,
+        annualTurnover: clientInfo.annualTurnover,
+        numberOfEmployees: clientInfo.numberOfEmployees,
+        financialYear: clientInfo.financialYearEnd,
+        sectorCode: clientInfo.sectorCode,
+        companySize: clientInfo.annualTurnover < 10000000 ? 'EME' : clientInfo.annualTurnover <= 50000000 ? 'QSE' : 'Generic',
+        revenue: financials.totalRevenue,
+        npat: financials.deemedNpatUsed ? financials.deemedNpat : financials.npat,
+        leviableAmount: financials.leviableAmount,
+        financials: {
+          totalRevenue: financials.totalRevenue,
+          npat: financials.npat,
+          leviableAmount: financials.leviableAmount,
+          totalPayroll: financials.totalPayroll || 0,
+          tmpsInclusions: financials.tmpsInclusions || 0,
+          tmpsExclusions: financials.tmpsExclusions || 0,
+          tmps: financials.tmps || 0,
+          industry: financials.industry,
+          deemedNpat: financials.deemedNpat,
+          deemedNpatUsed: financials.deemedNpatUsed,
+        },
+        beeCertificateNumber: clientInfo.beeCertificateNumber || '',
+        beeCertificateExpiry: clientInfo.beeCertificateExpiry || '',
+        beeCertificateLevel: clientInfo.beeCertificateLevel || null,
+        verificationAgency: clientInfo.verificationAgency || '',
+        userId: userId,
+        updatedAt: new Date(),
+      };
+      
+      // Save to database via storage module
+      const client = await storage.createOrUpdateClient(clientData);
+      
+      // Save assessment record linking session to client
+      await storage.createOrUpdateAssessment({
+        assessmentId: finalAssessmentId,
+        sessionId,
+        clientId: client.id,
+        clientInfo,
+        financials,
+        status: 'foundation_complete',
+        updatedAt: new Date(),
+        createdBy: userId,
+      });
+      
+      res.json({
+        success: true,
+        assessmentId: finalAssessmentId,
+        clientId: client.id,
+        message: 'Foundation data saved successfully',
+      });
+    } catch (error: any) {
+      console.error("Error saving foundation data:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to save foundation data",
+        message: error.message,
+      });
+    }
+  });
+  
+  // Save pillar data
+  app.post("/api/assessments/pillars", requireAuth, async (req, res) => {
+    try {
+      const { sessionId, assessmentId, pillars } = req.body;
+      const userId = (req.session as any)?.userId;
+      
+      // Update assessment with pillar data
+      await storage.createOrUpdateAssessment({
+        assessmentId,
+        sessionId,
+        pillars,
+        status: 'pillars_in_progress',
+        updatedAt: new Date(),
+      });
+      
+      // If client exists, update client with pillar data
+      const assessment = await storage.getAssessment(assessmentId);
+      if (assessment?.clientId) {
+        await storage.updateClientPillarData(assessment.clientId, pillars);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Pillar data saved successfully',
+      });
+    } catch (error: any) {
+      console.error("Error saving pillar data:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to save pillar data",
+        message: error.message,
+      });
+    }
+  });
+  
+  // Load assessment data
+  app.get("/api/assessments/:assessmentId", requireAuth, async (req, res) => {
+    try {
+      const { assessmentId } = req.params;
+      const userId = (req.session as any)?.userId;
+      
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ 
+          success: false,
+          error: "Assessment not found" 
+        });
+      }
+      
+      // Verify ownership
+      if (assessment.createdBy !== userId) {
+        return res.status(403).json({ 
+          success: false,
+          error: "Access denied" 
+        });
+      }
+      
+      res.json({
+        success: true,
+        foundation: {
+          clientInfo: assessment.clientInfo,
+          financials: assessment.financials,
+        },
+        pillars: assessment.pillars || {},
+        scorecard: assessment.scorecardResult,
+      });
+    } catch (error: any) {
+      console.error("Error loading assessment:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to load assessment",
+        message: error.message,
+      });
+    }
+  });
+  
+  // List user's assessments
+  app.get("/api/assessments", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      const assessments = await storage.getUserAssessments(userId);
+      
+      res.json({
+        success: true,
+        assessments: assessments.map(a => ({
+          assessmentId: a.assessmentId,
+          clientName: a.clientInfo?.companyName || 'Unnamed Client',
+          status: a.status,
+          updatedAt: a.updatedAt,
+          createdAt: a.createdAt,
+        })),
+      });
+    } catch (error: any) {
+      console.error("Error listing assessments:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to list assessments",
+        message: error.message,
+      });
+    }
+  });
+
+  // CRITICAL FIX: Create new assessment with server-backed clientId
+  // This enables DocumentProcessor→Toolkit handoff with proper persistence
+  app.post("/api/assessments", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      const { 
+        sessionId, 
+        clientInfo, 
+        financials, 
+        pillars, 
+        scorecardResult 
+      } = req.body;
+
+      // Generate server-backed clientId for Toolkit handoff
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const clientId = `assessment-${userId}-${timestamp}-${randomSuffix}`;
+
+      // Create assessment in storage using existing method
+      const assessment = await storage.createOrUpdateAssessment({
+        assessmentId: clientId,
+        userId,
+        status: 'complete',
+        clientInfo: {
+          companyName: clientInfo?.companyName || clientInfo?.name || 'Unnamed Client',
+          registrationNumber: clientInfo?.registrationNumber || '',
+          sectorCode: clientInfo?.sectorCode || 'RCOGP',
+          industry: clientInfo?.industry || 'Generic',
+          financialYearEnd: clientInfo?.financialYearEnd || '',
+          physicalAddress: clientInfo?.physicalAddress || '',
+          contactPerson: clientInfo?.contactPerson || '',
+          contactEmail: clientInfo?.contactEmail || '',
+          contactPhone: clientInfo?.contactPhone || '',
+        },
+        financials: {
+          totalRevenue: financials?.totalRevenue || financials?.revenue || 0,
+          npat: financials?.npat || 0,
+          leviableAmount: financials?.leviableAmount || 0,
+          tmps: financials?.tmps || 0,
+        },
+        pillars: pillars || {},
+        scorecardResult: scorecardResult || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // Also create a proper client record for Toolkit integration
+      const clientRecord = await storage.createOrUpdateClient({
+        clientId,
+        userId,
+        name: clientInfo?.companyName || clientInfo?.name || 'Unnamed Client',
+        financialYear: clientInfo?.financialYearEnd?.substring(0, 4) || new Date().getFullYear().toString(),
+        revenue: financials?.totalRevenue || financials?.revenue || 0,
+        npat: financials?.npat || 0,
+        leviableAmount: financials?.leviableAmount || 0,
+        industrySector: clientInfo?.industry || 'Generic',
+        eapProvince: clientInfo?.eapProvince || 'National',
+        sectorCode: clientInfo?.sectorCode || 'RCOGP',
+        registrationNumber: clientInfo?.registrationNumber || '',
+        logo: clientInfo?.logo || null,
+        updatedAt: new Date(),
+      });
+
+      // Update client pillar data if provided
+      if (pillars) {
+        await storage.updateClientPillarData(clientId, pillars);
+      }
+
+      res.status(201).json({
+        success: true,
+        message: "Assessment created successfully",
+        assessment: {
+          assessmentId: clientId,
+          clientId,
+          clientName: clientInfo?.companyName || clientInfo?.name || 'Unnamed Client',
+          status: 'complete',
+          createdAt: assessment.createdAt || new Date(),
+        },
+      });
+    } catch (error: any) {
+      console.error("Error creating assessment:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create assessment",
+        message: error.message,
+      });
+    }
+  });
+
   return httpServer;
 }

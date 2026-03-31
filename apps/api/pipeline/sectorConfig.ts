@@ -33,10 +33,20 @@ export interface MCTargets {
   boardBlackMaxPts: number;
   boardBWTarget: number;
   boardBWMaxPts: number;
-  execBlackTarget: number;
+  execBlackTarget: number;           // Executive Directors Black: 50% (NOT 60%)
   execBlackMaxPts: number;
-  execBWTarget: number;
+  execBWTarget: number;              // Executive Directors Women: 25% (NOT 30%)
   execBWMaxPts: number;
+  otherExecBlackTarget: number;      // Other Exec Black: 60%
+  otherExecBlackMaxPts: number;
+  otherExecBWTarget: number;         // Other Exec Women: 30%
+  otherExecBWMaxPts: number;
+  seniorMaxPts: number;
+  seniorBWMaxPts: number;
+  middleMaxPts: number;
+  middleBWMaxPts: number;
+  juniorMaxPts: number;
+  juniorBWMaxPts: number;
 }
 
 export interface EETargets {
@@ -65,14 +75,19 @@ export interface ProcurementTargets {
   bo51MaxPts: number;
   bwo30Target: number;
   bwo30MaxPts: number;
-  bonusMaxPts: number;
+  dgTarget: number;      // Designated Group target (bonus row)
+  dgMaxPts: number;      // Designated Group max points
+  // NOTE: Procurement has NO bonus points - bonuses are ED only
 }
 
 export interface EsdTargets {
   sdPercent: number;
   sdMaxPts: number;
   edPercent: number;
-  edMaxPts: number;
+  edMaxPts: number;              // Base ED points (5 for RCOGP Generic)
+  edGraduationBonus: number;     // ED Bonus 1: graduation
+  edJobsBonus: number;           // ED Bonus 2: jobs created
+  // NOTE: Bonuses are ED-only. Procurement does NOT have graduation/jobs bonuses.
 }
 
 export interface SedTargets {
@@ -86,20 +101,21 @@ export interface SectorConfig {
   scorecardType: 'Generic' | 'QSE' | 'EME';
   pillarConfigs: {
     ownership: PillarConfig;
-    managementControl: PillarConfig;
-    employmentEquity: PillarConfig;
+    managementControl: PillarConfig;        // Combined MC + EE (19 pts for RCOGP Generic)
+    employmentEquity?: PillarConfig;      // Optional - included in MC for most codes
     skillsDevelopment: PillarConfig;
     preferentialProcurement: PillarConfig;
-    enterpriseSupplierDevelopment: PillarConfig;
+    supplierDevelopment: PillarConfig;      // Separated from combined ESD
+    enterpriseDevelopment: PillarConfig;    // Separated from combined ESD (includes 2 bonus pts)
     socioEconomicDevelopment: PillarConfig;
   };
   targets: {
     ownership: OwnershipTargets;
-    managementControl: MCTargets;
-    employmentEquity: EETargets;
+    managementControl: MCTargets;          // Board + Exec targets (50% Black / 25% Women for exec directors)
+    employmentEquity: EETargets;           // Senior/Middle/Junior/Disabled (EAP-based)
     skills: SkillsTargets;
-    procurement: ProcurementTargets;
-    esd: EsdTargets;
+    procurement: ProcurementTargets;       // Includes DG 2% bonus row
+    esd: EsdTargets;                       // SD + ED targets (ED includes graduation/jobs bonuses)
     sed: SedTargets;
   };
   levelThresholds: Array<{ level: number; minPoints: number; recognition: number }>;
@@ -124,18 +140,28 @@ const STANDARD_LEVELS = [
 // RCOGP Generic (Revised Codes of Good Practice)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// RCOGP Generic (Revised Codes of Good Practice)
+// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
+// Grand Total: 120 points (NOT 111, NOT 132)
+// MC: 19 combined (NOT 8+11 split)
+// PP: 29 (BO51=11 at 50%, DG=2 at 2% - bonus row)
+// ESD: SD=10 + ED=7 (5 base + 2 bonuses)
+// ---------------------------------------------------------------------------
+
 export const RCOGP_GENERIC: SectorConfig = {
   sectorCode: 'RCOGP',
   sectorName: 'Revised Codes of Good Practice (Generic)',
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },  // FIXED: was 8
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },  // FIXED: was 27
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },  // NEW: separated from ESD
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },  // NEW: 5 base + 2 bonuses
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    // NOTE: employmentEquity is INCLUDED in managementControl (19 pts combined)
   },
   targets: {
     ownership: {
@@ -146,35 +172,53 @@ export const RCOGP_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 1,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 1,
+      // Board representation
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,   // FIXED: was 1
       boardBWTarget: 0.25, boardBWMaxPts: 1,
-      execBlackTarget: 0.60, execBlackMaxPts: 2,
-      execBWTarget: 0.30, execBWMaxPts: 2,
+      // Executive Directors (the critical fix!)
+      execBlackTarget: 0.50, execBlackMaxPts: 2,   // FIXED: was 0.60
+      execBWTarget: 0.25, execBWMaxPts: 1,        // FIXED: was 0.30 (was 2 pts)
+      // Other Executives
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      // Senior/Middle/Junior - these are used with EAP-based targets from separate lookup
+      seniorMaxPts: 2, seniorBWMaxPts: 1,
+      middleMaxPts: 2, middleBWMaxPts: 1,
+      juniorMaxPts: 1, juniorBWMaxPts: 1,
     },
     employmentEquity: {
-      seniorMaxPts: 5, middleMaxPts: 4, juniorMaxPts: 4,
-      disabledMaxPts: 2, disabledTarget: 0.02,
+      // These max pts are part of the 19 total in managementControl
+      seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,
+      disabledMaxPts: 2, disabledTarget: 0.03,  // 3% of headcount
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 20,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      overallSpendPercent: 3.5, overallMaxPts: 6,   // FIXED: was 20
+      bursarySpendPercent: 2.5, bursaryMaxPts: 4,  // FIXED: was 5
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.40, bo51MaxPts: 10,
-      bwo30Target: 0.12, bwo30MaxPts: 5,
-      bonusMaxPts: 2,
+      bo51Target: 0.50, bo51MaxPts: 11,   // FIXED: was 0.40, 10
+      bwo30Target: 0.12, bwo30MaxPts: 4,   // FIXED: was 5
+      dgTarget: 0.02, dgMaxPts: 2,          // NEW: Designated Group bonus row (was missing!)
+      // NOTE: NO procurement bonuses - bonuses are ED-only
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5 },
+    esd: {
+      sdPercent: 2.0, sdMaxPts: 10,
+      edPercent: 1.0, edMaxPts: 5,        // Base ED points
+      edGraduationBonus: 1,               // Bonus 1 for graduations
+      edJobsBonus: 1,                     // Bonus 2 for jobs created
+    },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
 };
+// Grand total verification: 25+19+25+29+10+7+5 = 120
 
 // ---------------------------------------------------------------------------
 // ICT Generic (Information & Communication Technology)
+// TODO: Verify against ICT Sector Code toolkit Excel
 // ---------------------------------------------------------------------------
 
 export const ICT_GENERIC: SectorConfig = {
@@ -183,11 +227,12 @@ export const ICT_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+15 combined
     employmentEquity: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -201,8 +246,13 @@ export const ICT_GENERIC: SectorConfig = {
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 2,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
-      execBlackTarget: 0.60, execBlackMaxPts: 3,
-      execBWTarget: 0.30, execBWMaxPts: 2,
+      execBlackTarget: 0.50, execBlackMaxPts: 3,
+      execBWTarget: 0.25, execBWMaxPts: 2,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      seniorMaxPts: 6, seniorBWMaxPts: 3,
+      middleMaxPts: 5, middleBWMaxPts: 2,
+      juniorMaxPts: 2, juniorBWMaxPts: 1,
     },
     employmentEquity: {
       seniorMaxPts: 6, middleMaxPts: 5, juniorMaxPts: 2,
@@ -216,11 +266,11 @@ export const ICT_GENERIC: SectorConfig = {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.40, bo51MaxPts: 9,
+      bo51Target: 0.50, bo51MaxPts: 9,
       bwo30Target: 0.12, bwo30MaxPts: 4,
-      bonusMaxPts: 2,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
@@ -228,6 +278,7 @@ export const ICT_GENERIC: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // FSC Generic (Financial Sector Code)
+// TODO: Verify against FSC Sector Code toolkit Excel
 // ---------------------------------------------------------------------------
 
 export const FSC_GENERIC: SectorConfig = {
@@ -236,11 +287,12 @@ export const FSC_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+12 combined
     employmentEquity: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -254,8 +306,13 @@ export const FSC_GENERIC: SectorConfig = {
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 2,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
-      execBlackTarget: 0.60, execBlackMaxPts: 3,
-      execBWTarget: 0.30, execBWMaxPts: 2,
+      execBlackTarget: 0.50, execBlackMaxPts: 3,
+      execBWTarget: 0.25, execBWMaxPts: 2,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      seniorMaxPts: 5, seniorBWMaxPts: 2,
+      middleMaxPts: 4, middleBWMaxPts: 2,
+      juniorMaxPts: 2, juniorBWMaxPts: 1,
     },
     employmentEquity: {
       seniorMaxPts: 5, middleMaxPts: 4, juniorMaxPts: 2,
@@ -271,9 +328,9 @@ export const FSC_GENERIC: SectorConfig = {
       emeTarget: 0.12, emeMaxPts: 3,
       bo51Target: 0.30, bo51MaxPts: 5,
       bwo30Target: 0.10, bwo30MaxPts: 4,
-      bonusMaxPts: 2,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
@@ -281,6 +338,7 @@ export const FSC_GENERIC: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // Agri Generic (Agriculture / AgriBEE)
+// TODO: Verify against AgriBEE Sector Code toolkit Excel
 // ---------------------------------------------------------------------------
 
 export const AGRI_GENERIC: SectorConfig = {
@@ -289,11 +347,12 @@ export const AGRI_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+11 combined
     employmentEquity: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -305,10 +364,15 @@ export const AGRI_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 1,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 1,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
-      execBlackTarget: 0.60, execBlackMaxPts: 2,
-      execBWTarget: 0.30, execBWMaxPts: 2,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      seniorMaxPts: 5, seniorBWMaxPts: 2,
+      middleMaxPts: 4, middleBWMaxPts: 2,
+      juniorMaxPts: 4, juniorBWMaxPts: 2,
     },
     employmentEquity: {
       seniorMaxPts: 5, middleMaxPts: 4, juniorMaxPts: 4,
@@ -322,11 +386,11 @@ export const AGRI_GENERIC: SectorConfig = {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.40, bo51MaxPts: 9,
+      bo51Target: 0.50, bo51MaxPts: 9,
       bwo30Target: 0.12, bwo30MaxPts: 4,
-      bonusMaxPts: 2,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
@@ -334,6 +398,7 @@ export const AGRI_GENERIC: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // QSE Scorecard (for Qualifying Small Enterprises, R10m-R50m turnover)
+// TODO: Verify against QSE toolkit Excel
 // ---------------------------------------------------------------------------
 
 export const RCOGP_QSE: SectorConfig = {
@@ -343,11 +408,12 @@ export const RCOGP_QSE: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },  // Combined higher for QSE
+    enterpriseDevelopment: { maxPoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    // NOTE: employmentEquity is INCLUDED in managementControl for QSE
   },
   targets: {
     ownership: {
@@ -360,8 +426,13 @@ export const RCOGP_QSE: SectorConfig = {
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3,
       boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.60, execBlackMaxPts: 4,
-      execBWTarget: 0.30, execBWMaxPts: 4,
+      execBlackTarget: 0.50, execBlackMaxPts: 4,
+      execBWTarget: 0.25, execBWMaxPts: 4,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
@@ -375,11 +446,11 @@ export const RCOGP_QSE: SectorConfig = {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.40, bo51MaxPts: 9,
+      bo51Target: 0.50, bo51MaxPts: 9,
       bwo30Target: 0.12, bwo30MaxPts: 4,
-      bonusMaxPts: 2,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10 },
+    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10, edGraduationBonus: 0, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
@@ -387,6 +458,7 @@ export const RCOGP_QSE: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // ICT QSE (Information & Communication Technology - Qualifying Small Enterprise)
+// TODO: Verify against ICT QSE toolkit Excel
 // ---------------------------------------------------------------------------
 
 export const ICT_QSE: SectorConfig = {
@@ -396,10 +468,10 @@ export const ICT_QSE: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseSupplierDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -413,8 +485,13 @@ export const ICT_QSE: SectorConfig = {
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3,
       boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.60, execBlackMaxPts: 4,
-      execBWTarget: 0.30, execBWMaxPts: 4,
+      execBlackTarget: 0.50, execBlackMaxPts: 4,
+      execBWTarget: 0.25, execBWMaxPts: 4,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
@@ -428,11 +505,11 @@ export const ICT_QSE: SectorConfig = {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.40, bo51MaxPts: 9,
+      bo51Target: 0.50, bo51MaxPts: 9,
       bwo30Target: 0.12, bwo30MaxPts: 4,
-      bonusMaxPts: 2,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10 },
+    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10, edGraduationBonus: 0, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,

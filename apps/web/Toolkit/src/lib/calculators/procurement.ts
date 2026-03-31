@@ -1,6 +1,6 @@
 import type { ProcurementData, Supplier } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore } from './shared';
+import { safeRatio, clampScore, round2 } from './shared';
 
 const RECOGNITION_TABLE: Readonly<Record<number, number>> = {
   1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00,
@@ -49,6 +49,9 @@ function getRecognitionMultiplier(beeLevel: number): number {
   return RECOGNITION_TABLE[beeLevel] ?? 0;
 }
 
+// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
+// CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, NO procurement bonuses
+
 export function calculateProcurementScore(data: ProcurementData, config?: CalculatorConfig): ProcurementResult {
   const { tmps } = data;
   const suppliers = data.suppliers || [];
@@ -59,9 +62,11 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const TARGET_80 = tmps * 0.80;
   const TARGET_15_QSE = tmps * 0.15;
   const TARGET_15_EME = tmps * 0.15;
-  const TARGET_40_BLACK51 = tmps * 0.40;
+  // CRITICAL FIX: BO51 target is 50% (NOT 40%)
+  const TARGET_50_BLACK51 = tmps * 0.50;
   const TARGET_12_FEMALE30 = tmps * 0.12;
-  const TARGET_12_DESIGNATED = tmps * 0.12;
+  // CRITICAL FIX: Designated Group target is 2% (NOT 12%)
+  const TARGET_2_DESIGNATED = tmps * 0.02;
 
   let recognisedSpend = 0;
   let empoweringSpend = 0;
@@ -103,51 +108,57 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const empoweringScore = clampScore(safeRatio(empoweringSpend, TARGET_80, 5), 5);
   const qseScore = clampScore(safeRatio(qseSpend, TARGET_15_QSE, 3), 3);
   const emeScore = clampScore(safeRatio(emeSpend, TARGET_15_EME, 4), 4);
-  const blackOwned51Score = clampScore(safeRatio(blackOwned51Spend, TARGET_40_BLACK51, 11), 11);
+  // CRITICAL FIX: 50% target (not 40%), 11 pts (not 10)
+  const blackOwned51Score = clampScore(safeRatio(blackOwned51Spend, TARGET_50_BLACK51, 11), 11);
   const blackFemaleOwned30Score = clampScore(safeRatio(blackFemaleOwned30Spend, TARGET_12_FEMALE30, 4), 4);
-  const designatedGroupScore = clampScore(safeRatio(designatedGroupSpend, TARGET_12_DESIGNATED, 2), 2);
+  // CRITICAL FIX: 2% target (not 12%)
+  const designatedGroupScore = clampScore(safeRatio(designatedGroupSpend, TARGET_2_DESIGNATED, 2), 2);
 
-  const graduationBonusScore = data.graduationBonus ? 1 : 0;
-  const jobsCreatedBonusScore = data.jobsCreatedBonus ? 1 : 0;
+  // CRITICAL FIX: Procurement has NO graduation/jobs bonuses - these are ED only!
+  // The graduationBonus and jobsCreatedBonus fields in ProcurementData should not be used
+  const graduationBonusScore = 0;  // NOT data.graduationBonus
+  const jobsCreatedBonusScore = 0; // NOT data.jobsCreatedBonus
 
   const baseTotal = empoweringScore + qseScore + emeScore + blackOwned51Score + blackFemaleOwned30Score + designatedGroupScore;
-  const totalScore = clampScore(baseTotal + graduationBonusScore + jobsCreatedBonusScore, 29 + 2);
+  // CRITICAL FIX: Cap at 29 (not 31) - procurement has NO bonus points
+  const totalScore = clampScore(baseTotal, 29);
 
   const subLines: ProcurementSubLine[] = [
     { name: "B-BBEE Procurement Spend from Empowering Suppliers", target: "80% of TMPS", weighting: 5, score: empoweringScore, spend: empoweringSpend },
     { name: "Spend on QSE Empowering Suppliers", target: "15% of TMPS", weighting: 3, score: qseScore, spend: qseSpend },
     { name: "Spend on EME Suppliers", target: "15% of TMPS", weighting: 4, score: emeScore, spend: emeSpend },
-    { name: "Spend on Empowering Suppliers ≥51% Black Owned", target: "40% of TMPS", weighting: 11, score: blackOwned51Score, spend: blackOwned51Spend },
+    // CRITICAL FIX: 50% target (not 40%)
+    { name: "Spend on Empowering Suppliers ≥51% Black Owned", target: "50% of TMPS", weighting: 11, score: blackOwned51Score, spend: blackOwned51Spend },
     { name: "Spend on Empowering Suppliers >30% Black Female Owned", target: "12% of TMPS", weighting: 4, score: blackFemaleOwned30Score, spend: blackFemaleOwned30Spend },
-    { name: "Spend on Designated Group Suppliers ≥51% Black Owned", target: "12% of TMPS", weighting: 2, score: designatedGroupScore, spend: designatedGroupSpend },
-    { name: "Bonus: Graduation of ED Beneficiaries to SD", target: "Tick-box", weighting: 1, score: graduationBonusScore, spend: 0, isBonus: true },
-    { name: "Bonus: Jobs Created from ED & SD Initiatives", target: "Tick-box", weighting: 1, score: jobsCreatedBonusScore, spend: 0, isBonus: true },
+    // CRITICAL FIX: 2% target (not 12%)
+    { name: "Spend on Designated Group Suppliers ≥51% Black Owned", target: "2% of TMPS (bonus row)", weighting: 2, score: designatedGroupScore, spend: designatedGroupSpend },
+    // NOTE: No procurement bonus rows - bonuses are ED only
   ];
 
   return {
-    base: baseTotal,
-    empoweringSuppliers: empoweringScore,
-    qseSuppliers: qseScore,
-    emeSuppliers: emeScore,
-    blackOwned51: blackOwned51Score,
-    blackFemaleOwned30: blackFemaleOwned30Score,
-    designatedGroup: designatedGroupScore,
-    graduationBonus: graduationBonusScore,
-    jobsCreatedBonus: jobsCreatedBonusScore,
-    total: totalScore,
+    base: round2(baseTotal),
+    empoweringSuppliers: round2(empoweringScore),
+    qseSuppliers: round2(qseScore),
+    emeSuppliers: round2(emeScore),
+    blackOwned51: round2(blackOwned51Score),
+    blackFemaleOwned30: round2(blackFemaleOwned30Score),
+    designatedGroup: round2(designatedGroupScore),
+    graduationBonus: round2(graduationBonusScore),
+    jobsCreatedBonus: round2(jobsCreatedBonusScore),
+    total: round2(totalScore),
     subMinimumMet: baseTotal >= subMinThreshold,
-    recognisedSpend,
-    target: TARGET_80,
-    subLines,
+    recognisedSpend: round2(recognisedSpend),
+    target: round2(TARGET_80),
+    subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),
     rawStats: {
-      spendAllBlackOwned: suppliers.filter(s => s.blackOwnership >= 0.51).reduce((acc, s) => acc + s.spend, 0),
-      spendBlackWomenOwned: suppliers.filter(s => s.blackWomenOwnership >= BLACK_WOMEN_OWNERSHIP_THRESHOLD).reduce((acc, s) => acc + s.spend, 0),
-      spendQSE: qseSpend,
-      spendEME: emeSpend,
-      designatedGroupSpend,
-      empoweringSpend,
-      blackOwned51Spend,
-      blackFemaleOwned30Spend,
+      spendAllBlackOwned: round2(suppliers.filter(s => s.blackOwnership >= 0.51).reduce((acc, s) => acc + s.spend, 0)),
+      spendBlackWomenOwned: round2(suppliers.filter(s => s.blackWomenOwnership >= BLACK_WOMEN_OWNERSHIP_THRESHOLD).reduce((acc, s) => acc + s.spend, 0)),
+      spendQSE: round2(qseSpend),
+      spendEME: round2(emeSpend),
+      designatedGroupSpend: round2(designatedGroupSpend),
+      empoweringSpend: round2(empoweringSpend),
+      blackOwned51Spend: round2(blackOwned51Spend),
+      blackFemaleOwned30Spend: round2(blackFemaleOwned30Spend),
     },
   };
 }

@@ -8,6 +8,16 @@ import { ModeChooser } from '@/components/processor/ModeChooser';
 import { PillarForm } from '@/components/builder/PillarForm';
 import { PillarSidebar } from '@/components/builder/PillarSidebar';
 import type { EntityManifest, PillarPack, ScorecardResult, EntityValue, ClientSideImportResult } from '@/components/builder/types';
+// New Build Components - matching TOOLKIT_TAB_MAP.md structure
+import { FoundationStep, FoundationData } from '@/components/build/FoundationStep';
+import { ClientInformationData, EMPTY_CLIENT_INFO, determineCompanySize, hasQSEVariant } from '@/components/build/ClientInformationForm';
+import { FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from '@/components/build/FinancialsForm';
+import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPillarsStep';
+import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills } from '@/lib/foundationApi';
+import { useBbeeStore } from '@toolkit/lib/store';
+import { DevModeBadge } from '@/components/AutoFillButton';
+import { calculateYESScore } from '@toolkit/lib/calculators/yes';
+import type { YESData, Client } from '@toolkit/lib/types';
 // Import removed - using hybrid extraction endpoint instead of client-side parsing
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
@@ -261,6 +271,34 @@ export const BBEE_SECTORS: SectorOption[] = [
     hasQSE: false,
   },
 ];
+
+/**
+ * Get the total available points for a sector
+ * CRITICAL: These values are verified against Excel toolkits
+ * RCOGP Generic: 120 points
+ * - Ownership: 25
+ * - Management Control: 19 (includes Employment Equity)
+ * - Skills Development: 25
+ * - Preferential Procurement: 29 (no bonus points)
+ * - Supplier Development: 10
+ * - Enterprise Development: 7 (5 base + 2 bonus)
+ * - Socio-Economic Development: 5
+ * - YES Initiative: 5 (bonus, not included in 120 base)
+ */
+export function getSectorTotal(sectorCode: string, isQSE: boolean = false): number {
+  switch (sectorCode) {
+    case 'RCOGP':
+      return isQSE ? 100 : 120; // QSE has 100 points
+    case 'ICT':
+      return isQSE ? 100 : 120; // ICT mirrors RCOGP
+    case 'FSC':
+      return 105; // FSC has different weightings
+    case 'AGRI':
+      return 100; // AgriBEE has 100 points
+    default:
+      return 120; // Default to RCOGP Generic
+  }
+}
 
 /**
  * Determine scorecard type based on sector and annual turnover
@@ -1016,6 +1054,34 @@ export default function DocumentProcessor() {
   const [isLoadingManifest, setIsLoadingManifest] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedPillarCode, setExpandedPillarCode] = useState<string | null>(null);
+  
+  // Foundation Layer State - matching TOOLKIT_TAB_MAP.md Sheets 1-2
+  const [foundationData, setFoundationData] = useState<FoundationData>({
+    clientInfo: EMPTY_CLIENT_INFO,
+    financials: EMPTY_FINANCIALS,
+  });
+  
+  // Pillar Data State - for Toolkit Store sync
+  const [pillarData, setPillarData] = useState<{
+    ownership: any;
+    management: any;
+    skills: any;
+    procurement: any;
+    esd: any;
+    sed: any;
+    yes: any;
+  }>({
+    ownership: null,
+    management: null,
+    skills: null,
+    procurement: null,
+    esd: null,
+    sed: null,
+    yes: null,
+  });
+  
+  // Foundation sync hook - for Toolkit store integration
+  const { saveFoundation, syncToStore } = useFoundationSync(sessionId || 'temp-session');
 
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
@@ -1254,14 +1320,234 @@ export default function DocumentProcessor() {
     }
   }, [buildValues, manifest, sessionId, toast]);
 
+  // Build mode: single source of truth — hydrate Toolkit store and use store.calculateScorecard
+  const calculateFromPillarData = useCallback(async () => {
+    setIsSavingSession(true);
+    try {
+      const ci = foundationData.clientInfo ?? EMPTY_CLIENT_INFO;
+      const fin = foundationData.financials ?? EMPTY_FINANCIALS;
+      const buildClientId = `build-${sessionId || 'local'}`;
+      const clientPartial = clientInfoToToolkitClient(ci, fin);
+
+      const skillsBase = pillarData.skills
+        ? {
+            ...pillarData.skills,
+            id: pillarData.skills.id || '',
+            clientId: buildClientId,
+            leviableAmount: fin.leviableAmount || pillarData.skills.leviableAmount || 0,
+          }
+        : {
+            id: '',
+            clientId: buildClientId,
+            leviableAmount: fin.leviableAmount || 0,
+            trainingPrograms: [],
+            yesCandidatesCount: 0,
+            yesAbsorbedCount: 0,
+          };
+      const skillsMerged = mergeYesIntoSkills(skillsBase, pillarData.yes);
+
+      setCompanyInfo(prev => ({
+        ...prev,
+        name: ci.companyName || prev.name,
+        sector: ci.sectorCode || prev.sector,
+      }));
+
+      useBbeeStore.setState({
+        isLoaded: true,
+        pipelineOverrides: null,
+        activeClientId: buildClientId,
+        client: {
+          id: buildClientId,
+          name: clientPartial.name || ci.companyName || 'Client',
+          financialYear:
+            clientPartial.financialYear
+            || (ci.financialYearEnd ? String(ci.financialYearEnd).substring(0, 4) : String(new Date().getFullYear())),
+          revenue: clientPartial.revenue ?? fin.totalRevenue ?? 0,
+          npat: clientPartial.npat ?? fin.npat ?? 0,
+          leviableAmount: clientPartial.leviableAmount ?? fin.leviableAmount ?? 0,
+          industryNorm: clientPartial.industryNorm,
+          eapProvince: clientPartial.eapProvince ?? 'National',
+          registrationNumber: clientPartial.registrationNumber ?? ci.registrationNumber ?? '',
+          tradingName: clientPartial.tradingName,
+          vatNumber: clientPartial.vatNumber,
+          taxNumber: clientPartial.taxNumber,
+          physicalAddress: clientPartial.physicalAddress ?? ci.physicalAddress ?? '',
+          postalAddress: clientPartial.postalAddress,
+          contactPerson: clientPartial.contactPerson ?? ci.contactPerson ?? '',
+          contactEmail: clientPartial.contactEmail ?? ci.contactEmail ?? '',
+          contactPhone: clientPartial.contactPhone ?? ci.contactPhone ?? '',
+          sectorCode: (clientPartial.sectorCode ?? ci.sectorCode ?? 'RCOGP') as Client['sectorCode'],
+          industry: clientPartial.industry ?? ci.industry ?? 'Generic',
+          companySize: clientPartial.companySize ?? 'Generic',
+          annualTurnover: clientPartial.annualTurnover ?? ci.annualTurnover ?? 0,
+          numberOfEmployees: clientPartial.numberOfEmployees ?? ci.numberOfEmployees ?? 0,
+          measurementPeriodStart: clientPartial.measurementPeriodStart,
+          measurementPeriodEnd: clientPartial.measurementPeriodEnd,
+          beeCertificateNumber: clientPartial.beeCertificateNumber,
+          beeCertificateExpiry: clientPartial.beeCertificateExpiry,
+          beeCertificateLevel: clientPartial.beeCertificateLevel,
+          verificationAgency: clientPartial.verificationAgency,
+          financialHistory: [],
+        },
+        ownership: pillarData.ownership
+          ? { ...pillarData.ownership, id: pillarData.ownership.id || '', clientId: buildClientId }
+          : {
+              id: '',
+              clientId: buildClientId,
+              shareholders: [],
+              companyValue: 0,
+              outstandingDebt: 0,
+              yearsHeld: 0,
+              ownershipScorePoints: 0,
+              ownershipScorePercent: 0,
+              netValuePoints: 0,
+              netValuePercent: 0,
+            },
+        management: pillarData.management
+          ? { ...pillarData.management, id: pillarData.management.id || '', clientId: buildClientId }
+          : { id: '', clientId: buildClientId, employees: [] },
+        skills: {
+          ...skillsMerged,
+          id: skillsMerged.id || '',
+          clientId: buildClientId,
+        },
+        procurement: pillarData.procurement
+          ? {
+              ...pillarData.procurement,
+              id: pillarData.procurement.id || '',
+              clientId: buildClientId,
+              tmps: fin.tmps || pillarData.procurement.tmps || 0,
+            }
+          : {
+              id: '',
+              clientId: buildClientId,
+              tmps: fin.tmps || 0,
+              suppliers: [],
+              graduationBonus: false,
+              jobsCreatedBonus: false,
+            },
+        esd: pillarData.esd
+          ? { ...pillarData.esd, id: pillarData.esd.id || '', clientId: buildClientId }
+          : { id: '', clientId: buildClientId, contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+        sed: pillarData.sed
+          ? { ...pillarData.sed, id: pillarData.sed.id || '', clientId: buildClientId }
+          : { id: '', clientId: buildClientId, contributions: [] },
+      });
+
+      useBbeeStore.getState()._recalculateAll();
+      const { scorecard, management, skills } = useBbeeStore.getState();
+
+      const yesCandidates =
+        skills.trainingPrograms
+          ?.filter(p => p.isYesEmployee)
+          ?.map(p => ({
+            id: p.id,
+            name: p.learnerName || 'YES Candidate',
+            race: p.race || 'African',
+            gender: p.gender || 'Male',
+            isDisabled: p.isDisabled || false,
+            isBlack: (p as { isBlack?: boolean }).isBlack ?? p.race !== 'White',
+            startDate: p.startDate || p.transactionDate || new Date().toISOString().slice(0, 10),
+            isAbsorbed: p.isAbsorbed || false,
+            cost: typeof (p as { totalCost?: number }).totalCost === 'number'
+              ? (p as { totalCost: number }).totalCost
+              : ((p as { cost?: number }).cost ?? p.courseCost ?? 0),
+          })) ?? [];
+
+      const yesForLevel = calculateYESScore({
+        id: '',
+        clientId: buildClientId,
+        totalEmployees: management.employees?.length || 0,
+        candidates: yesCandidates,
+        yesHeadcountTarget: 0,
+        yesYouthEnrolled: yesCandidates.length,
+        yesBlackYouthCount: 0,
+        yesBlackYouthPercentage: 0,
+        yesAbsorbedCount: 0,
+        yesAbsorptionRate: 0,
+        totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
+      } as YESData);
+
+      const recMap: Record<number, string> = {
+        1: '135%',
+        2: '125%',
+        3: '110%',
+        4: '100%',
+        5: '80%',
+        6: '60%',
+        7: '50%',
+        8: '10%',
+      };
+      const finalLevel = Math.max(1, scorecard.discountedLevel - (yesForLevel.yesBeeLevelIncrease || 0));
+
+      const scorecardLegacy = {
+        ownership: {
+          score: scorecard.ownership.score,
+          target: scorecard.ownership.target,
+          subMinimumMet: scorecard.ownership.subMinimumMet,
+        },
+        managementControl: { score: scorecard.managementControl.score, target: scorecard.managementControl.target },
+        skillsDevelopment: {
+          score: scorecard.skillsDevelopment.score,
+          target: scorecard.skillsDevelopment.target,
+          subMinimumMet: scorecard.skillsDevelopment.subMinimumMet,
+        },
+        procurement: {
+          score: scorecard.procurement.score,
+          target: scorecard.procurement.target,
+          subMinimumMet: scorecard.procurement.subMinimumMet,
+        },
+        supplierDevelopment: { score: scorecard.supplierDevelopment.score, target: scorecard.supplierDevelopment.target },
+        enterpriseDevelopment: {
+          score: scorecard.enterpriseDevelopment.score,
+          target: scorecard.enterpriseDevelopment.target,
+        },
+        socioEconomicDevelopment: {
+          score: scorecard.socioEconomicDevelopment.score,
+          target: scorecard.socioEconomicDevelopment.target,
+        },
+        yesInitiative: {
+          score: scorecard.yesInitiative.score,
+          target: scorecard.yesInitiative.target,
+          tier: yesForLevel.yesTierAchieved,
+        },
+        total: { score: scorecard.total.score, target: scorecard.total.target },
+        achievedLevel: scorecard.achievedLevel,
+        discountedLevel: scorecard.discountedLevel,
+        finalLevel,
+        isDiscounted: scorecard.isDiscounted,
+        recognitionLevel: recMap[finalLevel] || scorecard.recognitionLevel || '0%',
+        _source: 'build_mode',
+      };
+
+      localStorage.setItem('okiru-pro-active-client', buildClientId);
+      setScorecardResult(scorecardLegacy);
+      setCurrentPage('scorecard');
+
+      toast({
+        title: 'Scorecard calculated',
+        description: `Total: ${scorecard.total.score.toFixed(2)} pts · Level ${finalLevel}`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Calculation error',
+        description: err instanceof Error ? err.message : 'Could not calculate scorecard',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingSession(false);
+    }
+  }, [pillarData, foundationData, sessionId, toast]);
+
   const activePillar = useMemo(() => {
-    if (!manifest) return null;
+    if (!manifest || !manifest.pillarPacks) return null;
     return manifest.pillarPacks.find(p => p.pillarCode === activePillarCode) || null;
   }, [manifest, activePillarCode]);
 
   const activeCriterionResults = useMemo(() => {
     if (!scorecardResult || !activePillar) return [];
-    const pillarResult = scorecardResult.pillars.find(p => p.pillarCode === activePillar.pillarCode);
+    if (!Array.isArray(scorecardResult.pillars)) return [];
+    const pillarResult = scorecardResult.pillars.find((p: any) => p.pillarCode === activePillar.pillarCode);
     return pillarResult?.criteria || [];
   }, [scorecardResult, activePillar]);
 
@@ -1892,7 +2178,7 @@ export default function DocumentProcessor() {
       <div className="bg-[#0a0a0b] h-screen overflow-y-auto">
         <PopulatingScreen
           pillars={populatingPillars}
-          totalEntities={populatingData.entityCount}
+          totalEntities={Object.values(populatingData.entityCounts || {}).reduce((a: number, b) => a + (b as number), 0)}
           companyName={companyInfo.name || 'Company'}
           onDone={handlePopulatingDone}
         />
@@ -2222,141 +2508,80 @@ export default function DocumentProcessor() {
           )}
 
           {currentPage === 'build-foundation' && (
-            <div className="max-w-2xl mx-auto w-full">
-              <div className="mb-10">
-                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Scorecard Foundation</h2>
-                <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter the root context for this B-BBEE assessment.</p>
-              </div>
-
-              <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
-                <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                  <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Assessment Context</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Sector Code <span className="text-red-400">*</span></label>
-                      <select
-                        value={manifest?.rootContext.sector || companyInfo.sector || ''}
-                        onChange={(e) => {
-                          const sector = e.target.value;
-                          const type = manifest?.rootContext.scorecardType || 'Generic';
-                          if (sector) loadManifest(sector, type);
-                        }}
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
-                      >
-                        <option value="">Select sector...</option>
-                        <option value="RCOGP">Revised Codes of Good Practice (RCOGP)</option>
-                        <option value="ICT">ICT Sector Code</option>
-                        <option value="FSC">Financial Sector Code (FSC)</option>
-                        <option value="AGRI">AgriBEE Sector Code</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Scorecard Type</label>
-                      <select
-                        value={manifest?.rootContext.scorecardType || 'Generic'}
-                        onChange={(e) => {
-                          const sector = manifest?.rootContext.sector || companyInfo.sector;
-                          const type = e.target.value;
-                          if (sector) loadManifest(sector, type);
-                        }}
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
-                      >
-                        <option value="Generic">Generic</option>
-                        <option value="QSE">QSE (Qualifying Small Enterprise)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End <span className="text-red-400">*</span></label>
-                      <input
-                        type="date"
-                        value={companyInfo.financialYearEnd}
-                        onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover</label>
-                      <input
-                        type="text"
-                        value={companyInfo.annualTurnover}
-                        onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
-                        placeholder="e.g. R 50 000 000"
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (!manifest) {
-                    toast({ title: "Missing sector", description: "Please select a sector code.", variant: "destructive" });
-                    return;
-                  }
+            <div className="max-w-5xl mx-auto w-full">
+              <FoundationStep
+                data={foundationData}
+                onChange={setFoundationData}
+                onNext={() => {
+                  // Sync foundation data to companyInfo for backward compatibility
+                  const clientInfo = foundationData.clientInfo;
+                  const financials = foundationData.financials;
+                  
+                  setCompanyInfo(prev => ({
+                    ...prev,
+                    name: clientInfo.companyName,
+                    sector: clientInfo.sectorCode,
+                    registrationNumber: clientInfo.registrationNumber,
+                    annualTurnover: clientInfo.annualTurnover > 0 
+                      ? `R ${clientInfo.annualTurnover.toLocaleString()}` 
+                      : '',
+                    employees: clientInfo.numberOfEmployees.toString(),
+                    financialYearEnd: clientInfo.financialYearEnd,
+                    address: clientInfo.physicalAddress,
+                    contactName: clientInfo.contactPerson,
+                    contactEmail: clientInfo.contactEmail,
+                    contactPhone: clientInfo.contactPhone,
+                    currentBBEELevel: clientInfo.beeCertificateLevel 
+                      ? `Level ${clientInfo.beeCertificateLevel}` 
+                      : '',
+                  }));
+                  
+                  // Determine scorecard type based on company size
+                  const companySize = determineCompanySize(clientInfo.annualTurnover);
+                  const scorecardType = (companySize === 'QSE' && hasQSEVariant(clientInfo.sectorCode)) 
+                    ? 'QSE' 
+                    : 'Generic';
+                  
+                  // Load the manifest for this sector/type
+                  loadManifest(clientInfo.sectorCode, scorecardType);
                   setCurrentPage('build-pillars');
                 }}
-                disabled={!manifest || isLoadingManifest}
-                className="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-white rounded-xl font-semibold text-[13px] transition-colors"
-              >
-                {isLoadingManifest
-                  ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Loading...</>
-                  : 'Start Building'}
-              </button>
+                onBack={() => setCurrentPage('choose-mode')}
+              />
             </div>
           )}
 
-          {currentPage === 'build-pillars' && manifest && (
-            <div className="flex gap-6 max-w-[1600px] mx-auto">
-              <PillarSidebar
-                pillars={manifest.pillarPacks}
-                values={buildValues}
-                activePillarCode={activePillarCode}
-                onSelectPillar={setActivePillarCode}
-                validationStatus={pillarValidation}
+          {currentPage === 'build-pillars' && (
+            <div className="max-w-[1600px] mx-auto w-full">
+              <BuildPillarsStep
+                data={{
+                  ownership: pillarData.ownership || { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0, ownershipScorePoints: 0, ownershipScorePercent: 0, netValuePoints: 0, netValuePercent: 0 },
+                  management: pillarData.management || { id: '', clientId: '', employees: [] },
+                  employmentEquity: pillarData.management || { id: '', clientId: '', employees: [] },
+                  skills: pillarData.skills || { id: '', clientId: '', leviableAmount: foundationData.financials.leviableAmount || 0, trainingPrograms: [], yesCandidatesCount: 0, yesAbsorbedCount: 0 },
+                  procurement: pillarData.procurement || { id: '', clientId: '', tmps: foundationData.financials.tmps || 0, suppliers: [], graduationBonus: false, jobsCreatedBonus: false },
+                  esd: pillarData.esd || { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+                  sed: pillarData.sed || { id: '', clientId: '', contributions: [] },
+                  yes: pillarData.yes || { id: '', clientId: '', candidates: [], absorbed: [], bonusLevel: 1, absorbedBonus: 0, graduationBonus: false, targetYear: '1-3' },
+                }}
+                onChange={(newData) => {
+                  // Sync pillar data back to store
+                  setPillarData({
+                    ownership: newData.ownership,
+                    management: newData.management,
+                    skills: newData.skills,
+                    procurement: newData.procurement,
+                    esd: newData.esd,
+                    sed: newData.sed,
+                    yes: newData.yes,
+                  });
+                }}
+                onNext={calculateFromPillarData}
+                onBack={() => setCurrentPage('build-foundation')}
+                sessionId={sessionId || 'temp-session'}
+                clientInfo={foundationData.clientInfo}
+                financials={foundationData.financials}
               />
-
-              <main className="flex-1 min-w-0">
-                {activePillar && (
-                  <PillarForm
-                    pillar={activePillar}
-                    values={buildValues}
-                    onChange={handleBuildValueChange}
-                    onValidate={(isValid) => handlePillarValidate(activePillar.pillarCode, isValid)}
-                    criterionResults={activeCriterionResults}
-                    isCalculating={isCalculating}
-                  />
-                )}
-
-                <div className="mt-6 flex items-center justify-between">
-                  <button
-                    onClick={() => setCurrentPage('build-foundation')}
-                    className="flex items-center gap-2 px-4 py-2 text-[#636366] hover:text-white transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Back
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    {!canCalculateScorecard && !isCalculating && (
-                      <span className="text-[12px] text-amber-400">
-                        Fill all pillar fields to calculate
-                      </span>
-                    )}
-                    <button
-                      onClick={calculateViaApi}
-                      disabled={isCalculating || !canCalculateScorecard}
-                      className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-colors"
-                    >
-                      {isCalculating ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</>
-                      ) : (
-                        <><Calculator className="w-4 h-4" /> Calculate Scorecard</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </main>
             </div>
           )}
 
@@ -2786,7 +3011,7 @@ export default function DocumentProcessor() {
             const handleSave = async () => {
               setIsSavingSession(true);
               await persistSession('review', { results: extractionResults, complete: false });
-              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
+              setSavedDocs(prev => new Set(Array.from(prev).concat([activeReviewDoc])));
               setIsSavingSession(false);
               toast({ title: "Saved", description: `Document ${activeReviewDoc + 1} review saved.` });
             };
@@ -2794,7 +3019,7 @@ export default function DocumentProcessor() {
             const handleNext = async () => {
               setIsSavingSession(true);
               await persistSession('review', { results: extractionResults, complete: false });
-              setSavedDocs(prev => new Set([...prev, activeReviewDoc]));
+              setSavedDocs(prev => new Set(Array.from(prev).concat([activeReviewDoc])));
               setIsSavingSession(false);
               setActiveReviewDoc(prev => prev + 1);
               setHoveredEntity(null);
@@ -3812,18 +4037,22 @@ export default function DocumentProcessor() {
                 }));
             } else if (sc) {
               // Legacy flat format
+              // CRITICAL FIX: All targets verified against RCOGP Generic Excel toolkit (120 points total)
               const LEGACY_PILLARS = [
                 { key: 'ownership', label: 'Ownership', target: 25 },
                 { key: 'managementControl', label: 'Management Control', target: 19 },
                 { key: 'skillsDevelopment', label: 'Skills Development', target: 25 },
+                // CRITICAL FIX: Procurement target is 29 (not 27)
                 { key: 'procurement', label: 'Preferential Procurement', target: 29 },
                 { key: 'supplierDevelopment', label: 'Supplier Development', target: 10 },
+                // CRITICAL FIX: ED target is 7 (5 base + 2 bonus)
                 { key: 'enterpriseDevelopment', label: 'Enterprise Development', target: 7 },
                 { key: 'socioEconomicDevelopment', label: 'Socio-Economic Dev.', target: 5 },
+                { key: 'yesInitiative', label: 'YES Initiative', target: 5 },
               ];
               totalScore = sc.total?.score ?? 0;
               totalTarget = sc.total?.target ?? 120;
-              level = sc.discountedLevel ?? sc.achievedLevel ?? 9;
+              level = sc.finalLevel ?? sc.discountedLevel ?? sc.achievedLevel ?? 9;
               recognition = sc.recognitionLevel ?? '0%';
               isDiscounted = sc.isDiscounted ?? false;
               source = sc._source;
@@ -4074,12 +4303,9 @@ export default function DocumentProcessor() {
                           </button>
                           <button
                             onClick={() => {
-                              if (toolkitClientId) {
-                                localStorage.setItem('okiru-pro-active-client', toolkitClientId);
-                                navigate(`/toolkit/${toolkitClientId}/scorecard`);
-                              } else {
-                                navigate('/toolkit');
-                              }
+                              // Navigate with build clientId in URL so ClientProvider picks it up
+                              const buildClientId = `build-${sessionId || 'local'}`;
+                              navigate(`/toolkit/${buildClientId}`);
                             }}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
                           >
@@ -4136,6 +4362,9 @@ export default function DocumentProcessor() {
 
         </div>
       </main>
+
+      {/* Development Mode Indicator */}
+      <DevModeBadge />
     </div>
   );
 }
