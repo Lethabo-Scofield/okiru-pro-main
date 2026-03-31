@@ -11,46 +11,71 @@
  */
 
 import * as path from 'path';
+import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { config as loadDotenv } from 'dotenv';
 import { connectArango, checkArangoHealth } from '../apps/api/arango/connection.js';
 import { ingestAllToolkits, BulkIngestionResult } from '../apps/api/arango/ingestion/templateIngester.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to BBBEE Toolkits directory
-const TOOLKITS_PATH = path.resolve(__dirname, '../docs/BBBEE Toolkits');
+// Load environment variables from apps/api/.env
+loadDotenv({ path: path.resolve(__dirname, '../apps/api/.env') });
+
+// Path to BBBEE Toolkits directory.
+// Priority:
+//   1. --path argument: npx tsx scripts/ingest-toolkits-standalone.ts --path "C:/..."
+//   2. docs/BBBEE Toolkits (if it exists)
+//   3. ~/Downloads/BBBEE Toolkit.../BBBEE Toolkits (Windows default download location)
+const argPathIdx = process.argv.indexOf('--path');
+const DEFAULT_PATHS = [
+  path.resolve(__dirname, '../docs/BBBEE Toolkits'),
+  path.resolve(process.env.USERPROFILE || process.env.HOME || '', 'Downloads/BBBEE Toolkit-20260318T172641Z-1-001/BBBEE Toolkit/BBBEE Toolkits'),
+];
+
+let TOOLKITS_PATH: string;
+if (argPathIdx !== -1 && process.argv[argPathIdx + 1]) {
+  TOOLKITS_PATH = process.argv[argPathIdx + 1];
+} else {
+  TOOLKITS_PATH = DEFAULT_PATHS.find(p => fs.existsSync(p)) || DEFAULT_PATHS[0];
+}
 
 async function main() {
   console.log('========================================');
   console.log('B-BBEE Toolkit Standalone Ingestion');
   console.log('========================================\n');
 
-  // Step 1: Check ArangoDB connection
-  console.log('Step 1: Checking ArangoDB connection...');
-  const health = await checkArangoHealth();
-
-  if (!health.ok) {
-    console.error('  ✗ ArangoDB not connected');
-    console.error(`  Error: ${health.error}`);
+  // Step 1: Connect to ArangoDB
+  console.log('Step 1: Connecting to ArangoDB...');
+  try {
+    const db = await connectArango();
+    if (!db) {
+      console.error('  ✗ ArangoDB connection returned null');
+      console.log('\nOptions to fix this:');
+      console.log('  1. Start local ArangoDB (if installed)');
+      console.log('  2. Use ArangoDB Oasis cloud: https://cloud.arangodb.com/');
+      console.log('  3. See docs/ARANGODB_CLOUD_SETUP.md for detailed instructions');
+      process.exit(1);
+    }
+    console.log('  ✓ Database connection established\n');
+  } catch (error) {
+    console.error(`  ✗ ArangoDB connection failed: ${error instanceof Error ? error.message : String(error)}`);
     console.log('\nOptions to fix this:');
     console.log('  1. Start local ArangoDB (if installed)');
     console.log('  2. Use ArangoDB Oasis cloud: https://cloud.arangodb.com/');
-    console.log('  3. See docs/ARANGODB_CLOUD_SETUP.md for detailed instructions');
+    console.log('  3. Check ARANGO_URL/ARANGO_USER/ARANGO_PASSWORD in apps/api/.env');
     process.exit(1);
   }
 
-  console.log(`  ✓ ArangoDB connected (version: ${health.version})\n`);
-
-  // Step 2: Ensure database exists
-  console.log('Step 2: Ensuring database connection...');
-  try {
-    await connectArango();
-    console.log('  ✓ Database ready\n');
-  } catch (error) {
-    console.error(`  ✗ Database connection failed: ${error instanceof Error ? error.message : String(error)}`);
+  // Step 2: Verify health
+  console.log('Step 2: Verifying ArangoDB health...');
+  const health = await checkArangoHealth();
+  if (!health.ok) {
+    console.error(`  ✗ Health check failed: ${health.error}`);
     process.exit(1);
   }
+  console.log(`  ✓ ArangoDB healthy (version: ${health.version})\n`);
 
   // Step 3: Ingest all toolkits
   console.log('Step 3: Ingesting all 6 toolkit templates...');

@@ -14,8 +14,10 @@ import Dashboard from "@toolkit/pages/Dashboard";
 import Ownership from "@toolkit/pages/pillars/Ownership";
 import ManagementControl from "@toolkit/pages/pillars/ManagementControl";
 import SkillsDevelopment from "@toolkit/pages/pillars/SkillsDevelopment";
+import Procurement from "@toolkit/pages/pillars/Procurement";
 import ESD from "@toolkit/pages/pillars/ESD";
 import SED from "@toolkit/pages/pillars/SED";
+import YES from "@toolkit/pages/pillars/YES";
 import Financials from "@toolkit/pages/pillars/Financials";
 import IndustryNorms from "@toolkit/pages/pillars/IndustryNorms";
 import Reports from "@toolkit/pages/Reports";
@@ -60,7 +62,9 @@ function DataLoader({ children }: { children: React.ReactNode }) {
   const [retrying, setRetrying] = useState(0);
 
   useEffect(() => {
-    if (activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
+    // Build-mode data is pre-hydrated from DocumentProcessor — skip API load
+    const isBuildMode = storeClientId?.startsWith('build-');
+    if (!isBuildMode && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
       setLoadError(null);
       loadClientData(activeClientId).catch((err: any) => {
         const msg: string = err?.message || '';
@@ -134,11 +138,13 @@ export function AppRoutes() {
           <Route path="/pillars/industry-norms" component={IndustryNorms}/>
           <Route path="/pillars/ownership" component={Ownership}/>
           <Route path="/pillars/management" component={ManagementControl}/>
-          <Route path="/pillars/employment-equity" component={ManagementControl}/>
+          {/* NOTE: Removed duplicate /pillars/employment-equity route - MC covers both */}
           <Route path="/pillars/skills" component={SkillsDevelopment}/>
-          <Route path="/pillars/procurement" component={ESD}/>
+          {/* CRITICAL FIX: Procurement now uses proper Procurement component (not ESD) */}
+          <Route path="/pillars/procurement" component={Procurement}/>
           <Route path="/pillars/esd" component={ESD}/>
           <Route path="/pillars/sed" component={SED}/>
+          <Route path="/pillars/yes" component={YES}/>
           
           <Route component={NotFound} />
         </Switch>

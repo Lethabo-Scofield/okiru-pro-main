@@ -1,7 +1,7 @@
 import { Button } from "@toolkit/components/ui/button";
 import { Skeleton } from "@toolkit/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
-import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, DollarSign, Info, Building2 } from "lucide-react";
+import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, TrendingUp, DollarSign, Info, Building2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import type { Client, SkillsData, ProcurementData, ESDData, SEDData, ScorecardResult } from "@toolkit/lib/types";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
@@ -30,13 +30,14 @@ const item = {
 };
 
 const pillarMeta = [
-  { key: "ownership", name: "Ownership", icon: Users, color: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15", iconColor: "text-violet-400", barColor: "bg-violet-500" },
-  { key: "managementControl", name: "Management Control", icon: UserCog, color: "from-blue-500 to-cyan-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500" },
-  { key: "skillsDevelopment", name: "Skills Development", icon: BookOpen, color: "from-emerald-400 to-green-500", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", barColor: "bg-emerald-500" },
-  { key: "procurement", name: "Procurement", icon: ShoppingCart, color: "from-amber-400 to-orange-500", iconBg: "bg-amber-500/15", iconColor: "text-amber-400", barColor: "bg-amber-500" },
-  { key: "supplierDevelopment", name: "Supplier Development", icon: Handshake, color: "from-rose-400 to-pink-500", iconBg: "bg-rose-500/15", iconColor: "text-rose-400", barColor: "bg-rose-500" },
-  { key: "enterpriseDevelopment", name: "Enterprise Development", icon: Handshake, color: "from-orange-400 to-red-500", iconBg: "bg-orange-500/15", iconColor: "text-orange-400", barColor: "bg-orange-500" },
-  { key: "socioEconomicDevelopment", name: "Socio-Economic Dev", icon: HeartHandshake, color: "from-fuchsia-400 to-purple-500", iconBg: "bg-fuchsia-500/15", iconColor: "text-fuchsia-400", barColor: "bg-fuchsia-500" },
+  { key: "ownership", name: "Ownership", icon: Users, color: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15", iconColor: "text-violet-400", barColor: "bg-violet-500", route: "/pillars/ownership" },
+  { key: "managementControl", name: "Management Control", icon: UserCog, color: "from-blue-500 to-cyan-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/management" },
+  { key: "skillsDevelopment", name: "Skills Development", icon: BookOpen, color: "from-emerald-400 to-green-500", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", barColor: "bg-emerald-500", route: "/pillars/skills" },
+  { key: "procurement", name: "Procurement", icon: ShoppingCart, color: "from-amber-400 to-orange-500", iconBg: "bg-amber-500/15", iconColor: "text-amber-400", barColor: "bg-amber-500", route: "/pillars/procurement" },
+  { key: "supplierDevelopment", name: "Supplier Development", icon: Handshake, color: "from-rose-400 to-pink-500", iconBg: "bg-rose-500/15", iconColor: "text-rose-400", barColor: "bg-rose-500", route: "/pillars/esd" },
+  { key: "enterpriseDevelopment", name: "Enterprise Development", icon: Handshake, color: "from-orange-400 to-red-500", iconBg: "bg-orange-500/15", iconColor: "text-orange-400", barColor: "bg-orange-500", route: "/pillars/esd" },
+  { key: "socioEconomicDevelopment", name: "Socio-Economic Dev", icon: HeartHandshake, color: "from-fuchsia-400 to-purple-500", iconBg: "bg-fuchsia-500/15", iconColor: "text-fuchsia-400", barColor: "bg-fuchsia-500", route: "/pillars/sed" },
+  { key: "yesInitiative", name: "YES 4 Youth", icon: TrendingUp, color: "from-blue-400 to-indigo-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/yes" },
 ];
 
 function DashboardSkeleton() {
@@ -243,15 +244,7 @@ export default function Dashboard() {
                   failedSubMin && "border-destructive/20"
                 )}
                 onClick={() => {
-                  const routes: Record<string, string> = {
-                    ownership: "/pillars/ownership",
-                    managementControl: "/pillars/management",
-                    skillsDevelopment: "/pillars/skills",
-                    procurement: "/pillars/procurement",
-                    enterpriseDevelopment: "/pillars/esd",
-                    socioEconomicDevelopment: "/pillars/sed",
-                  };
-                  navigate(routes[p.key] || "/scorecard");
+                  navigate(p.route || "/scorecard");
                 }}
                 data-testid={`card-pillar-${p.key}`}
               >

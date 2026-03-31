@@ -1,6 +1,6 @@
 import type { OwnershipData } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore } from './shared';
+import { safeRatio, clampScore, round2 } from './shared';
 
 const FULL_OWNERSHIP_THRESHOLD = 0.25;
 const WOMEN_VOTING_TARGET = 0.10;
@@ -82,7 +82,10 @@ export function calculateOwnershipScore(data: OwnershipData, config?: Calculator
     totalBlackWomenVoting += pct * sh.blackWomenOwnership;
     totalEconomicInterest += pct * sh.blackOwnership;
     totalEconomicInterestBWO += pct * sh.blackWomenOwnership;
-    totalDesignatedGroup += pct * sh.blackOwnership;
+    // CRITICAL FIX: Only count designated group if explicitly flagged
+    if (sh.isDesignatedGroup) {
+      totalDesignatedGroup += pct * sh.blackOwnership;
+    }
 
     if (sh.blackNewEntrant) hasNewEntrant = true;
 
@@ -152,24 +155,24 @@ export function calculateOwnershipScore(data: OwnershipData, config?: Calculator
   ];
 
   return {
-    votingRightsBlack,
-    votingRightsBWO,
-    economicInterestBlack,
-    economicInterestBWO,
-    designatedGroups,
-    newEntrants,
-    netValue: netValuePoints,
-    total: clampScore(totalPoints, MAX_TOTAL),
+    votingRightsBlack: round2(votingRightsBlack),
+    votingRightsBWO: round2(votingRightsBWO),
+    economicInterestBlack: round2(economicInterestBlack),
+    economicInterestBWO: round2(economicInterestBWO),
+    designatedGroups: round2(designatedGroups),
+    newEntrants: round2(newEntrants),
+    netValue: round2(netValuePoints),
+    total: round2(clampScore(totalPoints, MAX_TOTAL)),
     subMinimumMet,
     fullOwnershipAwarded,
-    subLines,
+    subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
-      blackVotingPercentage: totalBlackVoting,
-      blackWomenVotingPercentage: totalBlackWomenVoting,
-      economicInterestPercentage: totalEconomicInterest,
-      economicInterestBWOPercentage: totalEconomicInterestBWO,
-      designatedGroupPercentage: totalDesignatedGroup,
-      netValuePercentage: fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / 8),
+      blackVotingPercentage: round2(totalBlackVoting),
+      blackWomenVotingPercentage: round2(totalBlackWomenVoting),
+      economicInterestPercentage: round2(totalEconomicInterest),
+      economicInterestBWOPercentage: round2(totalEconomicInterestBWO),
+      designatedGroupPercentage: round2(totalDesignatedGroup),
+      netValuePercentage: round2(fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / 8)),
     },
   };
 }

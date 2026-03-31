@@ -1,0 +1,526 @@
+/**
+ * Foundation API - Connects DocumentProcessor to Toolkit Store
+ * 
+ * This module provides:
+ * 1. Sync between DocumentProcessor foundation data and Toolkit store
+ * 2. API endpoints for saving/loading foundation data
+ * 3. Integration with ArangoDB for persistent storage
+ */
+
+import type { ClientInformationData } from '@/components/build/ClientInformationForm';
+import type { FinancialsData } from '@/components/build/FinancialsForm';
+import type { FoundationData } from '@/components/build/FoundationStep';
+import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
+import type { 
+  Client, 
+  OwnershipData, 
+  ManagementData, 
+  SkillsData, 
+  ProcurementData,
+  ESDData,
+  SEDData,
+  YESData,
+  TrainingProgram,
+  YESCandidate,
+} from '@toolkit/lib/types';
+import { useBbeeStore } from '@toolkit/lib/store';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface FoundationSaveRequest {
+  sessionId: string;
+  clientInfo: ClientInformationData;
+  financials: FinancialsData;
+  assessmentId?: string;
+}
+
+export interface FoundationSaveResponse {
+  success: boolean;
+  assessmentId: string;
+  clientId: string;
+  message?: string;
+}
+
+export interface PillarsSaveRequest {
+  sessionId: string;
+  assessmentId: string;
+  pillars: BuildPillarsData;
+}
+
+export interface PillarsSaveResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface AssessmentLoadResponse {
+  success: boolean;
+  foundation: FoundationData;
+  pillars: BuildPillarsData;
+  scorecard?: any;
+}
+
+// ============================================================================
+// Data Transformation
+// ============================================================================
+
+/** Map address text to Client.eapProvince when explicit field is missing. */
+export function inferEapProvinceFromAddress(address: string): Client['eapProvince'] {
+  const a = (address || '').toLowerCase();
+  if (/gauteng|johannesburg|pretoria|midrand|sandton/i.test(a)) return 'Gauteng';
+  if (/kwazulu|kzn|durban|pietermaritzburg/i.test(a)) return 'KZN';
+  if (/western cape|cape town|stellenbosch/i.test(a)) return 'Western Cape';
+  if (/eastern cape|gqeberha|port elizabeth|east london/i.test(a)) return 'Eastern Cape';
+  return 'National';
+}
+
+/**
+ * YES pillar candidates are not stored as a separate slice in the Toolkit store; the
+ * scorecard derives YES from skills.trainingPrograms with isYesEmployee=true.
+ */
+export function mergeYesIntoSkills(skills: SkillsData, yes: YESData | undefined): SkillsData {
+  const base = skills.trainingPrograms || [];
+  if (!yes?.candidates?.length) {
+    return { ...skills, trainingPrograms: [...base] };
+  }
+  const extra: TrainingProgram[] = yes.candidates.map((c: YESCandidate, i: number) => {
+    const courseCost = c.cost ?? 0;
+    return {
+      id: c.id || `yes-sync-${i}`,
+      programName: 'YES Youth Placement',
+      categoryCode: 'E',
+      learnerName: c.name,
+      gender: c.gender,
+      race: c.race,
+      isBlack: c.isBlack ?? c.race !== 'White',
+      isDisabled: c.isDisabled,
+      isForeign: false,
+      employmentStatus: 'Fixed-Term',
+      isYesEmployee: true,
+      isCompleted: true,
+      isAbsorbed: c.isAbsorbed,
+      transactionDate: c.startDate || new Date().toISOString().slice(0, 10),
+      startDate: c.startDate,
+      endDate: c.endDate,
+      courseCost,
+      travelCost: 0,
+      accommodationCost: 0,
+      cateringCost: 0,
+      stationeryCost: 0,
+      facilityCost: 0,
+      salaryCost: 0,
+      otherCosts: 0,
+      isAbet: false,
+      isMandatory: false,
+      isBursary: false,
+      cost: courseCost,
+      get totalCost() {
+        return courseCost;
+      },
+    } as TrainingProgram;
+  });
+  return { ...skills, trainingPrograms: [...base, ...extra] };
+}
+
+/**
+ * Transform ClientInformationData to Toolkit Client format
+ */
+export function clientInfoToToolkitClient(
+  clientInfo: ClientInformationData,
+  financials: FinancialsData
+): Partial<Client> {
+  const companySize = clientInfo.annualTurnover < 10000000 
+    ? 'EME' 
+    : clientInfo.annualTurnover <= 50000000 
+      ? 'QSE' 
+      : 'Generic';
+
+  return {
+    id: '', // Will be assigned by backend
+    name: clientInfo.companyName,
+    financialYear: clientInfo.financialYearEnd,
+    revenue: financials.totalRevenue,
+    npat: financials.deemedNpatUsed ? financials.deemedNpat : financials.npat,
+    leviableAmount: financials.leviableAmount,
+    industryNorm: financials.industry ? getIndustryNorm(financials.industry) : undefined,
+    eapProvince:
+      clientInfo.eapProvince
+      || inferEapProvinceFromAddress(clientInfo.physicalAddress || ''),
+    financialHistory: [], // Empty for new clients
+    
+    // Extended fields from TOOLKIT_TAB_MAP.md Sheet 1
+    registrationNumber: clientInfo.registrationNumber,
+    tradingName: clientInfo.tradingName,
+    vatNumber: clientInfo.vatNumber,
+    taxNumber: clientInfo.taxNumber,
+    physicalAddress: clientInfo.physicalAddress,
+    postalAddress: clientInfo.postalAddress,
+    contactPerson: clientInfo.contactPerson,
+    contactEmail: clientInfo.contactEmail,
+    contactPhone: clientInfo.contactPhone,
+    sectorCode: clientInfo.sectorCode,
+    industry: clientInfo.industry,
+    companySize,
+    annualTurnover: clientInfo.annualTurnover,
+    numberOfEmployees: clientInfo.numberOfEmployees,
+    measurementPeriodStart: clientInfo.measurementPeriodStart,
+    measurementPeriodEnd: clientInfo.measurementPeriodEnd,
+    beeCertificateNumber: clientInfo.beeCertificateNumber,
+    beeCertificateExpiry: clientInfo.beeCertificateExpiry,
+    beeCertificateLevel: clientInfo.beeCertificateLevel,
+    verificationAgency: clientInfo.verificationAgency,
+  };
+}
+
+/**
+ * Transform Toolkit Client to ClientInformationData
+ */
+export function toolkitClientToClientInfo(client: Client): ClientInformationData {
+  return {
+    companyName: client.name || '',
+    tradingName: client.tradingName || '',
+    registrationNumber: client.registrationNumber || '',
+    vatNumber: client.vatNumber || '',
+    taxNumber: client.taxNumber || '',
+    physicalAddress: client.physicalAddress || '',
+    postalAddress: client.postalAddress || '',
+    contactPerson: client.contactPerson || '',
+    contactEmail: client.contactEmail || '',
+    contactPhone: client.contactPhone || '',
+    sectorCode: (client.sectorCode as any) || 'RCOGP',
+    industry: client.industry || 'Other',
+    eapProvince: client.eapProvince,
+    annualTurnover: client.annualTurnover || client.revenue || 0,
+    numberOfEmployees: client.numberOfEmployees || 0,
+    financialYearEnd: client.financialYear || '',
+    measurementPeriodStart: client.measurementPeriodStart || '',
+    measurementPeriodEnd: client.measurementPeriodEnd || '',
+    beeCertificateNumber: client.beeCertificateNumber || '',
+    beeCertificateExpiry: client.beeCertificateExpiry || '',
+    beeCertificateLevel: client.beeCertificateLevel,
+    verificationAgency: client.verificationAgency || '',
+  };
+}
+
+/**
+ * Transform Toolkit data to FinancialsData
+ */
+export function toolkitClientToFinancials(client: Client): FinancialsData {
+  const industry = client.industry || 'Other';
+  const industryNorm = getIndustryNorm(industry);
+  
+  // Reconstruct financials from client data
+  const totalRevenue = client.revenue || 0;
+  const npat = client.npat || 0;
+  const leviableAmount = client.leviableAmount || 0;
+  
+  // TMPS would need to come from procurement data
+  // For now, estimate from revenue
+  const tmpsInclusions = totalRevenue * 0.8; // Estimate
+  const tmpsExclusions = 0; // Would need to be stored separately
+  
+  const currentMargin = totalRevenue > 0 ? (npat / totalRevenue) * 100 : 0;
+  const quarterThreshold = industryNorm / 4;
+  const isBelowQuarter = currentMargin < quarterThreshold;
+  const deemedNpat = isBelowQuarter 
+    ? totalRevenue * (industryNorm / 100) 
+    : npat;
+  
+  return {
+    totalRevenue,
+    npat,
+    leviableAmount,
+    totalPayroll: leviableAmount / 0.8, // Reverse estimate
+    tmpsInclusions,
+    tmpsExclusions,
+    industry,
+    tmps: tmpsInclusions - tmpsExclusions,
+    currentMargin,
+    quarterThreshold,
+    isBelowQuarter,
+    deemedNpat,
+    deemedNpatUsed: isBelowQuarter,
+  };
+}
+
+/**
+ * Get industry norm percentage
+ */
+function getIndustryNorm(industry: string): number {
+  const norms: Record<string, number> = {
+    'Retail': 4,
+    'Manufacturing': 6,
+    'IT Services': 10,
+    'Financial Services': 15,
+    'Construction': 4,
+    'Agriculture': 6,
+    'Mining': 12,
+    'Transport': 5,
+    'Hospitality': 8,
+    'Healthcare': 10,
+    'Education': 5,
+    'Professional Services': 12,
+    'Real Estate': 15,
+    'Telecommunications': 12,
+    'Energy': 15,
+    'Generic': 6,
+    'Other': 6,
+  };
+  return norms[industry] || 6;
+}
+
+// ============================================================================
+// Store Sync
+// ============================================================================
+
+/**
+ * Sync foundation data TO the Toolkit store
+ * Call this when user updates foundation data in DocumentProcessor
+ */
+export function syncFoundationToStore(foundationData: FoundationData): void {
+  const store = useBbeeStore.getState();
+  
+  // Transform to Toolkit format
+  const clientData = clientInfoToToolkitClient(
+    foundationData.clientInfo,
+    foundationData.financials
+  );
+  
+  // Update store with new client data (without saving to backend yet)
+  // We use the store's internal state update methods
+  const currentState = useBbeeStore.getState();
+  
+  // Merge with existing client data
+  const mergedClient = {
+    ...currentState.client,
+    ...clientData,
+  };
+  
+  // Update store state
+  useBbeeStore.setState({
+    client: mergedClient,
+  });
+  
+  // Update financials via store method
+  if (clientData.revenue !== undefined || clientData.npat !== undefined || clientData.leviableAmount !== undefined) {
+    currentState.updateFinancials(
+      clientData.revenue || 0,
+      clientData.npat || 0,
+      clientData.leviableAmount || 0,
+      clientData.industryNorm
+    );
+  }
+  
+  // Update TMPS if available
+  if (foundationData.financials.tmps > 0) {
+    currentState.updateTMPS(foundationData.financials.tmps);
+  }
+  
+  // Update settings (EAP province, industry)
+  if (clientData.eapProvince || clientData.industry) {
+    currentState.updateSettings(
+      clientData.eapProvince || 'National',
+      clientData.industry || 'Generic',
+      clientData.measurementPeriodStart,
+      clientData.measurementPeriodEnd
+    );
+  }
+}
+
+/**
+ * Sync foundation data FROM the Toolkit store
+ * Call this when loading an existing assessment
+ */
+export function syncFoundationFromStore(): FoundationData {
+  const store = useBbeeStore.getState();
+  const { client } = store;
+  
+  return {
+    clientInfo: toolkitClientToClientInfo(client),
+    financials: toolkitClientToFinancials(client),
+  };
+}
+
+// ============================================================================
+// API Calls
+// ============================================================================
+
+const API_BASE = '/api';
+
+/**
+ * Save foundation data to backend
+ */
+export async function saveFoundationData(
+  request: FoundationSaveRequest
+): Promise<FoundationSaveResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/assessments/foundation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to save foundation data:', error);
+    return {
+      success: false,
+      assessmentId: '',
+      clientId: '',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Save pillar data to backend
+ */
+export async function savePillarData(
+  request: PillarsSaveRequest
+): Promise<PillarsSaveResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/assessments/pillars`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to save pillar data:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Load assessment data from backend
+ */
+export async function loadAssessmentData(
+  assessmentId: string
+): Promise<AssessmentLoadResponse | null> {
+  try {
+    const response = await fetch(`${API_BASE}/assessments/${assessmentId}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to load assessment data:', error);
+    return null;
+  }
+}
+
+/**
+ * Auto-save foundation data (debounced)
+ */
+export function createAutoSaveFoundation(
+  sessionId: string,
+  delay: number = 2000
+) {
+  let timeoutId: NodeJS.Timeout | null = null;
+  
+  return (foundationData: FoundationData) => {
+    // Sync to store immediately
+    syncFoundationToStore(foundationData);
+    
+    // Debounce API call
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    
+    timeoutId = setTimeout(async () => {
+      await saveFoundationData({
+        sessionId,
+        clientInfo: foundationData.clientInfo,
+        financials: foundationData.financials,
+      });
+    }, delay);
+  };
+}
+
+// ============================================================================
+// React Hook
+// ============================================================================
+
+import { useCallback, useEffect, useRef } from 'react';
+
+/**
+ * React hook for foundation data management
+ */
+export function useFoundationSync(sessionId: string) {
+  const autoSaveRef = useRef(createAutoSaveFoundation(sessionId));
+  
+  /**
+   * Save foundation data (debounced auto-save)
+   */
+  const saveFoundation = useCallback((data: FoundationData) => {
+    autoSaveRef.current(data);
+  }, []);
+  
+  /**
+   * Load foundation data from store (for existing clients)
+   */
+  const loadFoundationFromStore = useCallback((): FoundationData => {
+    return syncFoundationFromStore();
+  }, []);
+  
+  /**
+   * Sync to store immediately (for real-time updates)
+   */
+  const syncToStore = useCallback((data: FoundationData) => {
+    syncFoundationToStore(data);
+  }, []);
+  
+  /**
+   * Create new client in backend
+   */
+  const createClient = useCallback(async (
+    data: FoundationData
+  ): Promise<FoundationSaveResponse> => {
+    // First sync to store
+    syncFoundationToStore(data);
+    
+    // Then save to backend
+    return saveFoundationData({
+      sessionId,
+      clientInfo: data.clientInfo,
+      financials: data.financials,
+    });
+  }, [sessionId]);
+  
+  return {
+    saveFoundation,
+    loadFoundationFromStore,
+    syncToStore,
+    createClient,
+  };
+}
+
+export default {
+  syncFoundationToStore,
+  syncFoundationFromStore,
+  saveFoundationData,
+  savePillarData,
+  loadAssessmentData,
+  createAutoSaveFoundation,
+  useFoundationSync,
+  clientInfoToToolkitClient,
+  toolkitClientToClientInfo,
+  toolkitClientToFinancials,
+  inferEapProvinceFromAddress,
+  mergeYesIntoSkills,
+};

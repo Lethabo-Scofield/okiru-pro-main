@@ -181,6 +181,14 @@ function mapEntityToInputName(entityId: string, criterionCode: string): string {
 
 /**
  * Compute derived inputs (counts, percentages) from raw entity values.
+ * 
+ * TODO: Full implementation requires array aggregation from:
+ * - employees[]: for MC/EE percentages (boardBlackPct, execBlackPct, seniorBlackPct, etc.)
+ * - shareholders[]: for ownership weighted calculations
+ * - suppliers[]: for procurement recognised spend calculations
+ * 
+ * These arrays should be passed in the CalculationOptions and made available
+ * in the context for aggregation here.
  */
 function computeDerivedInputs(
   criterion: CriterionEntity,
@@ -194,17 +202,26 @@ function computeDerivedInputs(
 
     for (const desig of designations) {
       if (criterion.code.toLowerCase().includes(desig.toLowerCase())) {
-        // This is a simplified count - in production, you'd have employee arrays
+        // PLACEHOLDER: This needs actual employee array aggregation
+        // The full implementation should:
+        // 1. Accept employees[] array in CalculationOptions
+        // 2. Filter by designation (Board, Executive, Senior, Middle, Junior)
+        // 3. Count total and black employees at each level
+        // 4. Calculate percentages for EAP-based targets
         const key = `${desig.toLowerCase()}Count`;
-        computed[key] = 0; // Placeholder - actual counting happens elsewhere
+        computed[key] = 0; // TODO: Implement when API accepts employee arrays
       }
     }
   }
 
   // Ownership: compute weighted ownership from shareholder data
   if (criterion.pillarCode === 'ownership') {
-    // Weighted ownership calculation would go here
-    computed.yearsHeld = 0; // Default - should come from entity values
+    // PLACEHOLDER: This needs actual shareholder array aggregation
+    // The full implementation should:
+    // 1. Accept shareholders[] array in CalculationOptions
+    // 2. Calculate weighted black ownership percentage
+    // 3. Compute economic interest with graduation factors
+    computed.yearsHeld = 0; // TODO: Implement when API accepts shareholder arrays
     computed.companyValue = 0;
     computed.outstandingDebt = 0;
   }
@@ -276,7 +293,7 @@ function buildFormulaParams(
           'PROC-EME': t.emeTarget,
           'PROC-BO51': t.bo51Target,
           'PROC-BWO30': t.bwo30Target,
-          'PROC-DG': 0.12,
+          'PROC-DG': t.dgTarget || 0.02,   // FIXED: was hardcoded 0.12, now reads from sectorConfig
         };
         return {
           targetPercent: targetMap[criterion.code] || 0,
@@ -559,6 +576,10 @@ export interface CalculationOptions {
   scorecardType: string;
   entityValues: Map<string, EntityValue>;
   crossPillarValues?: Map<string, number>;
+  // TODO: Add these for proper array aggregation (see todo: fix-api-calculate-body)
+  // employees?: Array<{ race: string; gender: string; designation: string; isDisabled: boolean }>;
+  // shareholders?: Array<{ blackOwnership: number; isDesignatedGroup: boolean; yearsHeld: number; shareValue: number }>;
+  // suppliers?: Array<{ spend: number; beeLevel: number; blackOwnership: number; isBlackOwned51: boolean }>;
 }
 
 export async function createCalculationEngine(options: CalculationOptions): Promise<CalculationEngine> {

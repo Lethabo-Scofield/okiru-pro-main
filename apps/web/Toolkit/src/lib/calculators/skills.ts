@@ -1,6 +1,6 @@
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore } from './shared';
+import { safeRatio, clampScore, round2 } from './shared';
 
 const CATEGORY_E_CAP = 0.25;
 const CATEGORY_F_CAP = 0.15;
@@ -95,7 +95,8 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     if (prog.category === 'bursary' || catCode === 'A') acc.bursary += prog.cost;
     if (prog.isDisabled) acc.disabled += prog.cost;
     if (prog.category === 'learnership' || prog.category === 'internship' || catCode === 'B') acc.learnershipCount++;
-    if (prog.isEmployed) acc.absorbedCount++;
+    // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
+    if (prog.isAbsorbed) acc.absorbedCount++;
   }
 
   return acc;
@@ -144,7 +145,8 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
   const trainingPrograms = data.trainingPrograms || [];
   const sc = config?.skills;
 
-  const overallTargetPct = sc?.overallTarget ?? 0.06;
+  // CRITICAL FIX: Skills overall target is 3.5% (NOT 6%)
+  const overallTargetPct = sc?.overallTarget ?? 0.035;
   const bursaryTargetPct = sc?.bursaryTarget ?? 0.025;
   const disabledTargetPct = 0.003;
   const subMinThreshold = sc?.subMinThreshold ?? 10;
@@ -183,27 +185,27 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
   ];
 
   return {
-    learningProgrammes: learningScore,
-    bursaries: bursaryScore,
-    disabledLearning: disabledScore,
-    learnerships: learnershipScore,
-    absorption: absorptionScore,
-    total: totalScore,
+    learningProgrammes: round2(learningScore),
+    bursaries: round2(bursaryScore),
+    disabledLearning: round2(disabledScore),
+    learnerships: round2(learnershipScore),
+    absorption: round2(absorptionScore),
+    total: round2(totalScore),
     subMinimumMet: totalScore >= subMinThreshold,
     categoryBreakdown: breakdown,
-    subLines,
+    subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
-      blackSpend: totalRecognised,
-      bursarySpend: spend.bursary,
-      disabledSpend: spend.disabled,
+      blackSpend: round2(totalRecognised),
+      bursarySpend: round2(spend.bursary),
+      disabledSpend: round2(spend.disabled),
       learnershipCount: spend.learnershipCount,
       absorbedCount: spend.absorbedCount,
       totalBlackLearners: spend.totalBlackLearners,
-      absorptionRate,
-      totalRecognisedSpend: totalRecognised,
-      targetOverall: TARGET_OVERALL,
-      targetBursaries: TARGET_BURSARIES,
-      targetDisabled: TARGET_DISABLED,
+      absorptionRate: round2(absorptionRate),
+      totalRecognisedSpend: round2(totalRecognised),
+      targetOverall: round2(TARGET_OVERALL),
+      targetBursaries: round2(TARGET_BURSARIES),
+      targetDisabled: round2(TARGET_DISABLED),
     },
   };
 }

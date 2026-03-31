@@ -59,9 +59,47 @@ export async function ingestToolkitTemplate(
   }
 
   const buffer = fs.readFileSync(filePath);
+  const fileSizeMB = buffer.length / 1024 / 1024;
+  console.log(`    [${fileName}] File read (${fileSizeMB.toFixed(1)} MB). Building formula graph...`);
 
-  const fullGraph = buildFormulaGraph(buffer, fileName);
+  // Scale cell limits inversely with file size to avoid OOM on large files.
+  // XLSX parsing with formulas can use 10-50x the file size in heap space.
+  let maxTotalCells = 50_000;
+  let maxCellsPerSheet = 15_000;
+  if (fileSizeMB > 50) {
+    maxTotalCells = 2_000;
+    maxCellsPerSheet = 500;
+  } else if (fileSizeMB > 20) {
+    maxTotalCells = 5_000;
+    maxCellsPerSheet = 1_500;
+  } else if (fileSizeMB > 5) {
+    maxTotalCells = 20_000;
+    maxCellsPerSheet = 6_000;
+  }
+
+  let fullGraph: ReturnType<typeof buildFormulaGraph>;
+  const t0 = Date.now();
+  try {
+    fullGraph = buildFormulaGraph(buffer, fileName, {
+      skipCycleDetection: true,
+      maxTotalCells,
+      maxCellsPerSheet,
+    });
+    console.log(`    [${fileName}] Graph built: ${fullGraph.nodes.length} nodes, ${fullGraph.edges.length} edges (${Date.now() - t0}ms). Extracting structure...`);
+  } catch (graphErr: unknown) {
+    const msg = graphErr instanceof Error ? graphErr.message : String(graphErr);
+    console.warn(`    [${fileName}] Formula graph failed (${msg}). Falling back to value-only extraction...`);
+    errors.push(`Formula graph skipped: ${msg}`);
+    // Build a minimal empty graph so structure extraction can still run via scorecardSheet path
+    fullGraph = {
+      cells: {}, nodes: [], edges: [], inputs: [], outputs: [],
+      sheets: [], processedSheets: [], skippedSheets: [], defaultSheet: null,
+      metadata: { totalCells: 0, formulaCells: 0, inputCells: 0, edgeCount: 0, hasCycles: false, cyclePaths: [] },
+    };
+  }
+
   const structure = extractScorecardStructure(fullGraph, buffer, fileName);
+  console.log(`    [${fileName}] Structure extracted: ${structure.pillars.length} pillars. Storing in ArangoDB...`);
 
   if (sectorCodeOverride) structure.sectorCode = sectorCodeOverride;
   if (scorecardTypeOverride) structure.scorecardType = scorecardTypeOverride;

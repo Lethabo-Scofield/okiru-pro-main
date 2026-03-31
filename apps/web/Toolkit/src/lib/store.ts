@@ -18,7 +18,8 @@ import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
-import { deepClone } from './calculators/shared';
+import { calculateYESScore } from './calculators/yes';
+import { deepClone, round2 } from './calculators/shared';
 
 export interface ScenarioSnapshot {
   id: string;
@@ -62,14 +63,33 @@ const emptyClient: Client = {
   id: '', name: '', financialYear: '', revenue: 0, npat: 0,
   leviableAmount: 0, industrySector: 'Generic', eapProvince: 'National',
   financialHistory: [],
+  // New fields with defaults
+  registrationNumber: '',
+  physicalAddress: '',
+  contactPerson: '',
+  contactEmail: '',
+  contactPhone: '',
+  sectorCode: 'RCOGP',
+  industry: 'Generic',
+  companySize: 'Generic',
+  annualTurnover: 0,
+  numberOfEmployees: 0,
 };
 
 const emptyOwnership: OwnershipData = {
   id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0,
+  ownershipScorePoints: 0,
+  ownershipScorePercent: 0,
+  netValuePoints: 0,
+  netValuePercent: 0,
 };
 
 const emptyManagement: ManagementData = { id: '', clientId: '', employees: [] };
-const emptySkills: SkillsData = { id: '', clientId: '', leviableAmount: 0, trainingPrograms: [] };
+const emptySkills: SkillsData = { 
+  id: '', clientId: '', leviableAmount: 0, trainingPrograms: [],
+  yesCandidatesCount: 0,
+  yesAbsorbedCount: 0,
+};
 const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppliers: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
@@ -126,6 +146,7 @@ interface BbeeState extends PillarState {
   updateCompanyValue: (value: number, debt: number) => void;
 
   addEmployee: (employee: Employee) => void;
+  updateEmployee: (id: string, data: Partial<Employee>) => void;
   removeEmployee: (id: string) => void;
 
   addTrainingProgram: (program: TrainingProgram) => void;
@@ -236,11 +257,33 @@ function calculateScorecard(
 ): ScorecardResult {
   const cfg = state.calculatorConfig ?? undefined;
   const ownScore = calculateOwnershipScore(state.ownership, cfg);
-  const mgtScore = calculateManagementScore(state.management, cfg);
+  const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
   const skillScore = calculateSkillsScore(state.skills, cfg);
   const procScore = calculateProcurementScore(state.procurement, cfg);
   const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
   const sedScore = calculateSedScore(state.sed, state.client.npat, cfg);
+  // CRITICAL: Wire YES calculator - construct YESData from skills and management state
+  // Training programs with isYesEmployee=true are treated as YES candidates
+  const yesCandidates = state.skills.trainingPrograms
+    ?.filter(p => p.isYesEmployee)
+    ?.map(p => ({
+      id: p.id,
+      name: p.learnerName || 'YES Candidate',
+      race: p.race || 'African',
+      gender: p.gender || 'Male',
+      isDisabled: p.isDisabled || false,
+      isBlack: p.race !== 'White', // Computed: African/Coloured/Indian = Black
+      startDate: p.startDate || new Date().toISOString(),
+      isAbsorbed: p.isAbsorbed || false,
+      cost: (p as any).totalCost || ((p as any).cost || 0),
+    })) || [];
+
+  const yesData = {
+    totalEmployees: state.management.employees?.length || 0,
+    candidates: yesCandidates,
+    totalYesCost: yesCandidates.reduce((sum, c) => sum + c.cost, 0),
+  };
+  const yesScore = calculateYESScore(yesData);
 
   if (overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0) {
     const ov = overrides;
@@ -251,7 +294,7 @@ function calculateScorecard(
     const sdPts = ov.supplierDevelopment ?? esdScore.sdTotal;
     const edPts = ov.enterpriseDevelopment ?? esdScore.edTotal;
     const sedPts = ov.socioEconomicDevelopment ?? sedScore.total;
-    const yesPts = ov.yesInitiative ?? 0;
+    const yesPts = ov.yesInitiative ?? yesScore.score;
     const total = ov.totalPoints ?? (ownPts + mcPts + skPts + prPts + sdPts + edPts + sedPts + yesPts);
 
     const level = ov.achievedLevel ?? pointsToLevel(total);
@@ -267,21 +310,23 @@ function calculateScorecard(
     const sdSubMin = allSubMinMet !== undefined ? allSubMinMet : esdScore.sdSubMinimumMet;
     const edSubMin = allSubMinMet !== undefined ? allSubMinMet : esdScore.edSubMinimumMet;
 
+    // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
     return {
-      ownership: { score: ownPts, target: 25, weighting: 25, subMinimumMet: ownSubMin },
-      managementControl: { score: mcPts, target: 19, weighting: 19 },
-      skillsDevelopment: { score: skPts, target: 25, weighting: 25, subMinimumMet: skSubMin },
-      procurement: { score: prPts, target: 29, weighting: 29, subMinimumMet: prSubMin },
-      supplierDevelopment: { score: sdPts, target: 10, weighting: 10, subMinimumMet: sdSubMin },
-      enterpriseDevelopment: { score: edPts, target: 7, weighting: 7, subMinimumMet: edSubMin },
-      socioEconomicDevelopment: { score: sedPts, target: 5, weighting: 5 },
-      yesInitiative: { score: yesPts, target: 5, weighting: 5 },
-      total: { score: total, target: 120, weighting: 120 },
+      ownership: { score: round2(ownPts), target: 25, weighting: 25, subMinimumMet: ownSubMin },
+      managementControl: { score: round2(mcPts), target: 19, weighting: 19 },
+      skillsDevelopment: { score: round2(skPts), target: 25, weighting: 25, subMinimumMet: skSubMin },
+      procurement: { score: round2(prPts), target: 29, weighting: 29, subMinimumMet: prSubMin },
+      supplierDevelopment: { score: round2(sdPts), target: 10, weighting: 10, subMinimumMet: sdSubMin },
+      enterpriseDevelopment: { score: round2(edPts), target: 7, weighting: 7, subMinimumMet: edSubMin },
+      socioEconomicDevelopment: { score: round2(sedPts), target: 5, weighting: 5 },
+      yesInitiative: { score: round2(yesPts), target: 5, weighting: 5 },
+      total: { score: round2(total), target: 120, weighting: 120 },
       achievedLevel: level, discountedLevel: disc, isDiscounted: isDisc, recognitionLevel: recog,
     };
   }
 
-  const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total + esdScore.sdTotal + esdScore.edTotal + sedScore.total;
+  // CRITICAL FIX: Include YES in total points calculation
+  const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score;
   const level = pointsToLevel(totalPoints);
 
   const ownSubMinMet = ownScore.total >= 10 || ownScore.subMinimumMet;
@@ -293,16 +338,17 @@ function calculateScorecard(
   const isDiscounted = level < 9 && anySubMinFailed;
   const discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
 
+  // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
   return {
-    ownership: { score: ownScore.total, target: 25, weighting: 25, subMinimumMet: ownSubMinMet },
-    managementControl: { score: mgtScore.total, target: 19, weighting: 19 },
-    skillsDevelopment: { score: skillScore.total, target: 25, weighting: 25, subMinimumMet: skSubMinMet },
-    procurement: { score: procScore.total, target: 29, weighting: 29, subMinimumMet: prSubMinMet },
-    supplierDevelopment: { score: esdScore.sdTotal, target: 10, weighting: 10, subMinimumMet: sdSubMinMet },
-    enterpriseDevelopment: { score: esdScore.edTotal, target: 7, weighting: 7, subMinimumMet: edSubMinMet },
-    socioEconomicDevelopment: { score: sedScore.total, target: 5, weighting: 5 },
-    yesInitiative: { score: 0, target: 5, weighting: 5 },
-    total: { score: totalPoints, target: 120, weighting: 120 },
+    ownership: { score: round2(ownScore.total), target: 25, weighting: 25, subMinimumMet: ownSubMinMet },
+    managementControl: { score: round2(mgtScore.total), target: 19, weighting: 19 },
+    skillsDevelopment: { score: round2(skillScore.total), target: 25, weighting: 25, subMinimumMet: skSubMinMet },
+    procurement: { score: round2(procScore.total), target: 29, weighting: 29, subMinimumMet: prSubMinMet },
+    supplierDevelopment: { score: round2(esdScore.sdTotal), target: 10, weighting: 10, subMinimumMet: sdSubMinMet },
+    enterpriseDevelopment: { score: round2(esdScore.edTotal), target: 7, weighting: 7, subMinimumMet: edSubMinMet },
+    socioEconomicDevelopment: { score: round2(sedScore.total), target: 5, weighting: 5 },
+    yesInitiative: { score: round2(yesScore.score), target: 5, weighting: 5 },
+    total: { score: round2(totalPoints), target: 120, weighting: 120 },
     achievedLevel: level, discountedLevel, isDiscounted, recognitionLevel: levelToRecognition(discountedLevel),
   };
 }
@@ -692,6 +738,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }).catch(console.error);
     }
   },
+  updateEmployee: (id, data) => {
+    set((state) => ({
+      management: {
+        ...state.management,
+        employees: state.management.employees.map(e => e.id === id ? { ...e, ...data } : e)
+      }
+    }));
+    get()._recalculateAll();
+  },
   removeEmployee: (id) => {
     set((state) => ({ management: { ...state.management, employees: state.management.employees.filter(e => e.id !== id) } }));
     get()._recalculateAll();
@@ -854,7 +909,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         throw new Error(`Failed to load template structure: ${response.statusText}`);
       }
       const data = await response.json();
-      return data.structure;
+      // CRITICAL FIX: API returns full object directly, not wrapped in 'structure'
+      return data;
     } catch (error) {
       console.error('[store] Failed to load template structure:', error);
       return null;
@@ -883,14 +939,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         set((state) => ({
           scorecard: {
             ...state.scorecard,
-            ownership: { ...state.scorecard.ownership, score: data.scores.pillars?.ownership?.score || 0 },
-            managementControl: { ...state.scorecard.managementControl, score: data.scores.pillars?.managementControl?.score || 0 },
-            skillsDevelopment: { ...state.scorecard.skillsDevelopment, score: data.scores.pillars?.skillsDevelopment?.score || 0 },
-            procurement: { ...state.scorecard.procurement, score: data.scores.pillars?.preferentialProcurement?.score || 0 },
-            supplierDevelopment: { ...state.scorecard.supplierDevelopment, score: data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0 },
-            enterpriseDevelopment: { ...state.scorecard.enterpriseDevelopment, score: data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0 },
-            socioEconomicDevelopment: { ...state.scorecard.socioEconomicDevelopment, score: data.scores.pillars?.socioEconomicDevelopment?.score || 0 },
-            total: { ...state.scorecard.total, score: data.scores.total?.score || 0 },
+            // CRITICAL FIX: Apply round2 to all API-returned scores for consistent display
+            ownership: { ...state.scorecard.ownership, score: round2(data.scores.pillars?.ownership?.score || 0) },
+            managementControl: { ...state.scorecard.managementControl, score: round2(data.scores.pillars?.managementControl?.score || 0) },
+            skillsDevelopment: { ...state.scorecard.skillsDevelopment, score: round2(data.scores.pillars?.skillsDevelopment?.score || 0) },
+            procurement: { ...state.scorecard.procurement, score: round2(data.scores.pillars?.preferentialProcurement?.score || 0) },
+            supplierDevelopment: { ...state.scorecard.supplierDevelopment, score: round2(data.scores.pillars?.supplierDevelopment?.score || data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0) },
+            enterpriseDevelopment: { ...state.scorecard.enterpriseDevelopment, score: round2(data.scores.pillars?.enterpriseDevelopment?.score || 0) },
+            socioEconomicDevelopment: { ...state.scorecard.socioEconomicDevelopment, score: round2(data.scores.pillars?.socioEconomicDevelopment?.score || 0) },
+            yesInitiative: { ...state.scorecard.yesInitiative, score: round2(data.scores.pillars?.yesInitiative?.score || 0) },
+            total: { ...state.scorecard.total, score: round2(data.scores.total?.score || 0) },
             achievedLevel: parseInt(data.scores.beeLevel) || state.scorecard.achievedLevel,
             recognitionLevel: data.scores.recognition || state.scorecard.recognitionLevel,
           },

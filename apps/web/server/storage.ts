@@ -11,6 +11,51 @@ import {
   type CalculatorConfigRow,
 } from "../shared/schema";
 
+// Assessment types
+export interface Assessment {
+  id?: string;
+  assessmentId: string;
+  sessionId: string;
+  clientId?: string;
+  clientInfo?: any;
+  financials?: any;
+  pillars?: any;
+  scorecardResult?: any;
+  status: string;
+  createdBy?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface Client {
+  id?: string;
+  name: string;
+  registrationNumber?: string;
+  vatNumber?: string;
+  taxNumber?: string;
+  industrySector?: string;
+  physicalAddress?: string;
+  postalAddress?: string;
+  contactPerson?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  annualTurnover?: number;
+  numberOfEmployees?: number;
+  financialYear?: string;
+  sectorCode?: string;
+  companySize?: string;
+  revenue?: number;
+  npat?: number;
+  leviableAmount?: number;
+  financials?: any;
+  beeCertificateNumber?: string;
+  beeCertificateExpiry?: string;
+  beeCertificateLevel?: number | null;
+  verificationAgency?: string;
+  userId?: string;
+  updatedAt?: Date;
+}
+
 export interface IStorage {
   getTemplatesByUser(userId: string): Promise<Template[]>;
   getTemplates(): Promise<Template[]>;
@@ -34,6 +79,16 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined>;
   saveCalculatorConfig(clientId: string, config: CalculatorConfig): Promise<CalculatorConfigRow>;
+  
+  // Assessment methods
+  createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment>;
+  getAssessment(assessmentId: string): Promise<Assessment | undefined>;
+  getUserAssessments(userId: string): Promise<Assessment[]>;
+  
+  // Client methods
+  createOrUpdateClient(client: Partial<Client>): Promise<Client>;
+  getClientById(clientId: string): Promise<Client | undefined>;
+  updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined>;
 }
 
 export class MemoryStorage implements IStorage {
@@ -229,6 +284,95 @@ export class MemoryStorage implements IStorage {
     this.calculatorConfigs.set(clientId, doc);
     return doc;
   }
+  
+  // Assessment and Client storage
+  private assessments: Map<string, Assessment> = new Map();
+  private clients: Map<string, Client> = new Map();
+  private assessmentSeq = 0;
+  private clientSeq = 0;
+  
+  async createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment> {
+    const existing = assessment.assessmentId 
+      ? this.assessments.get(assessment.assessmentId)
+      : undefined;
+    
+    const doc: Assessment = {
+      id: existing?.id || (++this.assessmentSeq).toString(),
+      assessmentId: assessment.assessmentId || `assessment-${Date.now()}`,
+      sessionId: assessment.sessionId || existing?.sessionId || '',
+      clientId: assessment.clientId || existing?.clientId,
+      clientInfo: assessment.clientInfo || existing?.clientInfo,
+      financials: assessment.financials || existing?.financials,
+      pillars: assessment.pillars || existing?.pillars,
+      scorecardResult: assessment.scorecardResult || existing?.scorecardResult,
+      status: assessment.status || existing?.status || 'draft',
+      createdBy: assessment.createdBy || existing?.createdBy,
+      createdAt: existing?.createdAt || new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.assessments.set(doc.assessmentId, doc);
+    return doc;
+  }
+  
+  async getAssessment(assessmentId: string): Promise<Assessment | undefined> {
+    return this.assessments.get(assessmentId);
+  }
+  
+  async getUserAssessments(userId: string): Promise<Assessment[]> {
+    return Array.from(this.assessments.values())
+      .filter(a => a.createdBy === userId)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
+  }
+  
+  async createOrUpdateClient(client: Partial<Client>): Promise<Client> {
+    const existing = client.id ? this.clients.get(client.id) : undefined;
+    
+    const doc: Client = {
+      id: existing?.id || (++this.clientSeq).toString(),
+      name: client.name || existing?.name || '',
+      registrationNumber: client.registrationNumber || existing?.registrationNumber,
+      vatNumber: client.vatNumber || existing?.vatNumber,
+      taxNumber: client.taxNumber || existing?.taxNumber,
+      industrySector: client.industrySector || existing?.industrySector,
+      physicalAddress: client.physicalAddress || existing?.physicalAddress,
+      postalAddress: client.postalAddress || existing?.postalAddress,
+      contactPerson: client.contactPerson || existing?.contactPerson,
+      contactEmail: client.contactEmail || existing?.contactEmail,
+      contactPhone: client.contactPhone || existing?.contactPhone,
+      annualTurnover: client.annualTurnover || existing?.annualTurnover,
+      numberOfEmployees: client.numberOfEmployees || existing?.numberOfEmployees,
+      financialYear: client.financialYear || existing?.financialYear,
+      sectorCode: client.sectorCode || existing?.sectorCode,
+      companySize: client.companySize || existing?.companySize,
+      revenue: client.revenue || existing?.revenue,
+      npat: client.npat || existing?.npat,
+      leviableAmount: client.leviableAmount || existing?.leviableAmount,
+      financials: client.financials || existing?.financials,
+      beeCertificateNumber: client.beeCertificateNumber || existing?.beeCertificateNumber,
+      beeCertificateExpiry: client.beeCertificateExpiry || existing?.beeCertificateExpiry,
+      beeCertificateLevel: client.beeCertificateLevel !== undefined ? client.beeCertificateLevel : existing?.beeCertificateLevel,
+      verificationAgency: client.verificationAgency || existing?.verificationAgency,
+      userId: client.userId || existing?.userId,
+      updatedAt: new Date(),
+    };
+    
+    this.clients.set(doc.id!, doc);
+    return doc;
+  }
+  
+  async getClientById(clientId: string): Promise<Client | undefined> {
+    return this.clients.get(clientId);
+  }
+  
+  async updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined> {
+    const client = this.clients.get(clientId);
+    if (!client) return undefined;
+    
+    client.pillars = pillars;
+    client.updatedAt = new Date();
+    return client;
+  }
 }
 
 function toUser(doc: any): User | undefined {
@@ -419,6 +563,132 @@ export class DatabaseStorage implements IStorage {
       updatedAt: obj.updatedAt,
     };
   }
+  
+  // Assessment methods - using ProcessorSessionModel as base
+  async createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment> {
+    const { ProcessorSessionModel } = await import("../shared/schema");
+    
+    const updateData = {
+      ...assessment,
+      updatedAt: new Date(),
+    };
+    
+    const doc = await ProcessorSessionModel.findOneAndUpdate(
+      { assessmentId: assessment.assessmentId },
+      updateData,
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    
+    return toAssessment(doc) || {
+      assessmentId: assessment.assessmentId || '',
+      sessionId: assessment.sessionId || '',
+      status: assessment.status || 'draft',
+      updatedAt: new Date(),
+    };
+  }
+  
+  async getAssessment(assessmentId: string): Promise<Assessment | undefined> {
+    const { ProcessorSessionModel } = await import("../shared/schema");
+    const doc = await ProcessorSessionModel.findOne({ assessmentId });
+    return toAssessment(doc);
+  }
+  
+  async getUserAssessments(userId: string): Promise<Assessment[]> {
+    const { ProcessorSessionModel } = await import("../shared/schema");
+    const docs = await ProcessorSessionModel.find({ createdBy: userId })
+      .sort({ updatedAt: -1 });
+    return docs.map(d => toAssessment(d)!).filter(Boolean);
+  }
+  
+  // Client methods - also using ProcessorSessionModel with client data
+  async createOrUpdateClient(client: Partial<Client>): Promise<Client> {
+    const { ClientModel } = await import("../shared/schema");
+    
+    const updateData = {
+      ...client,
+      updatedAt: new Date(),
+    };
+    
+    const doc = await ClientModel.findOneAndUpdate(
+      { registrationNumber: client.registrationNumber },
+      updateData,
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    
+    return toClient(doc) || {
+      id: '',
+      name: client.name || '',
+    };
+  }
+  
+  async getClientById(clientId: string): Promise<Client | undefined> {
+    const { ClientModel } = await import("../shared/schema");
+    const doc = await ClientModel.findById(clientId);
+    return toClient(doc);
+  }
+  
+  async updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined> {
+    const { ClientModel } = await import("../shared/schema");
+    const doc = await ClientModel.findByIdAndUpdate(
+      clientId,
+      { pillars, updatedAt: new Date() },
+      { new: true }
+    );
+    return toClient(doc);
+  }
+}
+
+// Helper functions for Assessment and Client
+function toAssessment(doc: any): Assessment | undefined {
+  if (!doc) return undefined;
+  const obj = doc.toJSON ? doc.toJSON() : doc;
+  return {
+    id: obj.id || obj._id?.toString(),
+    assessmentId: obj.assessmentId || obj.sessionId,
+    sessionId: obj.sessionId,
+    clientId: obj.clientId,
+    clientInfo: obj.clientInfo,
+    financials: obj.financials,
+    pillars: obj.pillars,
+    scorecardResult: obj.scorecardResult,
+    status: obj.status || 'draft',
+    createdBy: obj.createdBy || obj.userId,
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
+}
+
+function toClient(doc: any): Client | undefined {
+  if (!doc) return undefined;
+  const obj = doc.toJSON ? doc.toJSON() : doc;
+  return {
+    id: obj.id || obj._id?.toString(),
+    name: obj.name,
+    registrationNumber: obj.registrationNumber,
+    vatNumber: obj.vatNumber,
+    taxNumber: obj.taxNumber,
+    industrySector: obj.industrySector,
+    physicalAddress: obj.physicalAddress,
+    postalAddress: obj.postalAddress,
+    contactPerson: obj.contactPerson,
+    contactEmail: obj.contactEmail,
+    contactPhone: obj.contactPhone,
+    annualTurnover: obj.annualTurnover,
+    numberOfEmployees: obj.numberOfEmployees,
+    financialYear: obj.financialYear,
+    sectorCode: obj.sectorCode,
+    companySize: obj.companySize,
+    revenue: obj.revenue,
+    npat: obj.npat,
+    leviableAmount: obj.leviableAmount,
+    financials: obj.financials,
+    beeCertificateNumber: obj.beeCertificateNumber,
+    beeCertificateExpiry: obj.beeCertificateExpiry,
+    beeCertificateLevel: obj.beeCertificateLevel,
+    verificationAgency: obj.verificationAgency,
+    userId: obj.userId,
+    updatedAt: obj.updatedAt,
+  };
 }
 
 const useDatabase = !!process.env.MONGODB_URI;

@@ -1,11 +1,30 @@
 import type { ESDData, SEDData, Contribution } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore } from './shared';
+import { safeRatio, clampScore, round2 } from './shared';
 
+// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
+// Complete table of 14 contribution types and their benefit factors
 const DEFAULT_BENEFIT_FACTORS: Record<string, number> = {
+  // Category 1: Direct monetary contributions (1.0 factor)
   grant: 1.0,
-  interest_free_loan: 0.7,
-  professional_services: 0.8,
+  direct_cost: 1.0,
+  cost_covering: 1.0,
+  discounts: 1.0,
+  overhead_costs: 1.0,
+  // CRITICAL FIX: Interest-free loan factor is 1.0 (not 0.7)
+  interest_free_loan: 1.0,
+  // Category 2: Partial benefits
+  standard_loan: 0.7,  // Interest-bearing loan
+  guarantees: 0.03,    // 3% of guarantee value
+  lower_interest_loan: 0.7,  // Differential benefit (simplified)
+  // Category 3: Special investment types (1.0 factor)
+  minority_investment: 1.0,  // In EME/QSE
+  professional_services_free: 1.0,
+  professional_services_discount: 0.8,  // Discount percentage
+  employee_time: 1.0,  // Secondment
+  // Category 4: Procurement-specific (SD only)
+  shorter_payment_terms: 0.7,  // Differential benefit (simplified)
+  equity_investment: 1.0,  // ED only, special formula
 };
 
 export interface EsdSubLine {
@@ -114,23 +133,23 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const subLines: EsdSubLine[] = [...sdSubLines, ...edSubLines];
 
   return {
-    supplierDev: sdScore,
-    enterpriseDev: edScore,
-    graduationBonus: graduationBonusScore,
-    jobsCreatedBonus: jobsCreatedBonusScore,
-    sdTotal,
-    edTotal,
-    total: sdTotal + edTotal,
+    supplierDev: round2(sdScore),
+    enterpriseDev: round2(edScore),
+    graduationBonus: round2(graduationBonusScore),
+    jobsCreatedBonus: round2(jobsCreatedBonusScore),
+    sdTotal: round2(sdTotal),
+    edTotal: round2(edTotal),
+    total: round2(sdTotal + edTotal),
     sdSubMinimumMet,
     edSubMinimumMet,
     subMinimumMet: sdSubMinimumMet && edSubMinimumMet,
-    sdSpend,
-    edSpend,
-    sdTarget,
-    edTarget,
-    sdSubLines,
-    edSubLines,
-    subLines,
+    sdSpend: round2(sdSpend),
+    edSpend: round2(edSpend),
+    sdTarget: round2(sdTarget),
+    edTarget: round2(edTarget),
+    sdSubLines: sdSubLines.map(l => ({ ...l, score: round2(l.score) })),
+    edSubLines: edSubLines.map(l => ({ ...l, score: round2(l.score) })),
+    subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
   };
 }
 
@@ -146,10 +165,10 @@ export function calculateSedScore(data: SEDData, npat: number, config?: Calculat
   const score = safeRatio(totalSpend, target, maxPoints);
 
   return {
-    total: score,
+    total: round2(score),
     subMinimumMet: true,
-    actualSpend: totalSpend,
-    target,
-    rawStats: { spendSED: totalSpend },
+    actualSpend: round2(totalSpend),
+    target: round2(target),
+    rawStats: { spendSED: round2(totalSpend) },
   };
 }
