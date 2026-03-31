@@ -1,3 +1,9 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+onlyBuiltDependencies:
+  - bcrypt
+  - bufferutil
+  - esbuild
+  - core-js
