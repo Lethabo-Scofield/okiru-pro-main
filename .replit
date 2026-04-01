@@ -74,6 +74,10 @@ externalPort = 80
 localPort = 8000
 externalPort = 8000
 
+[[ports]]
+localPort = 24679
+externalPort = 3001
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd apps/web && cross-env NODE_ENV=production node dist/index.cjs"]
