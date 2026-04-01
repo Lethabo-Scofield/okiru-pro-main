@@ -35,7 +35,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd apps/web && pnpm run dev"
+args = "cd apps/web && pnpm dev"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -47,38 +47,39 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd apps/api && pnpm run dev"
+args = "cd apps/api && pnpm dev"
 waitForPort = 3000
 
 [[workflows.workflow]]
 name = "Computation Engine"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd apps/Computation-Engine/backend && ALLOW_IN_MEMORY_DB=1 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/Computation-Engine && python run_server.py"
+waitForPort = 8000
 
 [[ports]]
 localPort = 3000
 externalPort = 3000
 
 [[ports]]
-localPort = 5001
-externalPort = 3002
+localPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 8000
 externalPort = 8000
 
-[[ports]]
-localPort = 24679
-externalPort = 3001
-
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd apps/web && cross-env NODE_ENV=production node dist/index.cjs"]
 build = ["bash", "-c", "pnpm install --frozen-lockfile && cd apps/web && pnpm run build"]
+
+[userenv]
+
+[userenv.shared]
+ALLOW_IN_MEMORY_DB = "1"

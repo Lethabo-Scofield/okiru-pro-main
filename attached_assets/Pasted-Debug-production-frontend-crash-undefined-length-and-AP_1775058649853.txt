@@ -1,0 +1,82 @@
+Debug production frontend crash (undefined.length) and API routing
+
+Context:
+
+App is deployed on a VM at: http://20.164.207.196
+Uses Docker with:
+okiru_web (frontend)
+okiru_api (backend on port 5000)
+nginx (reverse proxy on port 80)
+Frontend loads but crashes with:
+Application Error
+Cannot read properties of undefined (reading 'length')
+Stack trace points to compiled frontend bundle (index-*.js)
+The page that should render is the template page, but it fails at runtime
+Observations from VM:
+curl http://localhost → returns frontend HTML ✅
+curl http://localhost:5000 → backend responds ✅
+curl http://localhost/api/health → returns 404 ❌
+Problem hypothesis:
+
+Frontend is calling /api/... endpoints but:
+
+Nginx is not correctly routing /api/* → backend
+API calls return 404 or empty
+Frontend receives undefined instead of expected array/data
+Code tries .length or .map() → crashes
+Tasks:
+Fix API routing
+
+Ensure Nginx routes:
+
+/api/* → okiru_api:5000
+/ → okiru_web:5001
+
+Verify:
+
+curl http://localhost/api/health
+
+returns valid JSON (not HTML or 404)
+
+Verify frontend API base URL
+
+Ensure frontend uses:
+
+/api/...
+
+(not localhost:5000 or wrong host)
+
+Confirm production environment variables are correct
+Add frontend safety checks
+Prevent crashes when API returns undefined:
+
+Replace unsafe usage like:
+
+data.length
+data.map(...)
+
+With safe guards:
+
+(data || []).length
+(data || []).map(...)
+Ensure loading / empty states are handled
+Validate template page data flow
+Identify which API endpoint feeds the template page
+Log response structure
+Ensure response is:
+defined
+correct shape (array/object as expected)
+Production debugging
+Add temporary logging in frontend:
+log API responses before rendering
+Confirm no undefined/null values passed to UI components
+Expected outcome:
+http://20.164.207.196 loads without crash
+Template page renders correctly
+/api/... endpoints return valid data
+No undefined.length errors
+Deliverables:
+Fixed Nginx config (if needed)
+Correct frontend API configuration
+Defensive frontend code updates
+Explanation of root cause
