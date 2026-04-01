@@ -9,7 +9,8 @@ COPY packages/types/package.json packages/types/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
 
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile \
+    && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
 COPY apps/api/src/ apps/api/src/
@@ -17,6 +18,9 @@ COPY apps/api/pipeline/ apps/api/pipeline/
 COPY apps/api/models.ts apps/api/models.ts
 COPY apps/api/schema.ts apps/api/schema.ts
 COPY apps/web/ apps/web/
+
+WORKDIR /app/packages/types
+RUN pnpm run build
 
 WORKDIR /app/apps/web
 RUN pnpm run build

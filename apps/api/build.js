@@ -9,6 +9,7 @@ await esbuild.build({
   outfile: "dist/index.cjs",
   external: [
     "bcrypt",
+    "pdfjs-dist",
   ],
   sourcemap: true,
   minify: false,
