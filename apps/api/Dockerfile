@@ -6,7 +6,8 @@ COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
 RUN corepack enable && corepack prepare pnpm@10.26.1 --activate \
-    && pnpm install --no-frozen-lockfile
+    && pnpm install --no-frozen-lockfile \
+    && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
 COPY apps/api/ apps/api/
