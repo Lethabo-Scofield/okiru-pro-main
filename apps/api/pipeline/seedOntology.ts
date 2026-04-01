@@ -145,10 +145,10 @@ function toStoredSectorRule(
     : [
         { code: 'ownership', name: 'Ownership', ...config.pillarConfigs.ownership, displayOrder: 0 },
         { code: 'managementControl', name: 'Management Control', ...config.pillarConfigs.managementControl, displayOrder: 1 },
-        { code: 'employmentEquity', name: 'Employment Equity', ...config.pillarConfigs.employmentEquity, displayOrder: 2 },
+        { code: 'employmentEquity', name: 'Employment Equity', ...(config.pillarConfigs.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }), displayOrder: 2 },
         { code: 'skillsDevelopment', name: 'Skills Development', ...config.pillarConfigs.skillsDevelopment, displayOrder: 3 },
         { code: 'preferentialProcurement', name: 'Preferential Procurement', ...config.pillarConfigs.preferentialProcurement, displayOrder: 4 },
-        { code: 'enterpriseSupplierDevelopment', name: 'Enterprise & Supplier Development', ...config.pillarConfigs.enterpriseSupplierDevelopment, displayOrder: 5 },
+        { code: 'enterpriseSupplierDevelopment', name: 'Enterprise & Supplier Development', maxPoints: (config.pillarConfigs.supplierDevelopment?.maxPoints ?? 0) + (config.pillarConfigs.enterpriseDevelopment?.maxPoints ?? 0), hasSubMinimum: config.pillarConfigs.supplierDevelopment?.hasSubMinimum ?? false, subMinimumPercent: config.pillarConfigs.supplierDevelopment?.subMinimumPercent ?? 0, displayOrder: 5 },
         { code: 'socioEconomicDevelopment', name: 'Socio-Economic Development', ...config.pillarConfigs.socioEconomicDevelopment, displayOrder: 6 },
       ].map(p => ({
         code: p.code,

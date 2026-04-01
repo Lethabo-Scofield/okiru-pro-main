@@ -7,6 +7,11 @@ import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
+import mongoose from "mongoose";
+
+function isMongoConnected(): boolean {
+  return mongoose.connection.readyState === 1;
+}
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any)?.userId;
@@ -1504,6 +1509,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.get("/api/processor-sessions", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.json([]);
+    }
     try {
       const userId = (req.session as any)?.userId;
       const user = await storage.getUserById(userId);
@@ -1554,6 +1562,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.get("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(404).json({ error: "Session not found (database unavailable)" });
+    }
     try {
       const { sessionId } = req.params;
       const doc = await ProcessorSessionModel.findOne({ sessionId }).lean() as any;
@@ -1566,6 +1577,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.post("/api/processor-sessions", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const userId = (req.session as any)?.userId;
       const user = await storage.getUserById(userId);
@@ -1603,6 +1617,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.patch("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const { sessionId } = req.params;
       const allowedFields = ['currentStep', 'isComplete', 'scorecardResult', 'toolkitClientId'];
@@ -1624,6 +1641,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.delete("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const { sessionId } = req.params;
       await ProcessorSessionModel.deleteOne({ sessionId });

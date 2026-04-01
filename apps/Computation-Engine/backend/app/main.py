@@ -57,6 +57,16 @@ async def startup_event():
         logger.info("Connected to ArangoDB and initialized collections")
 
 
+@app.get("/health")
+async def health_check():
+    import time
+    return {
+        "status": "ok",
+        "service": "computation-engine",
+        "timestamp": time.time(),
+    }
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown hook."""
