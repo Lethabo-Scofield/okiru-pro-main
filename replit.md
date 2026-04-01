@@ -47,6 +47,12 @@ pnpm install
 - `AZURE_OPENAI_ENDPOINT` - Optional, for Azure OpenAI extraction
 - `AZURE_OPENAI_API_KEY` - Optional, for Azure OpenAI extraction
 - `CORS_ORIGINS` - Computation Engine allowed origins (comma-separated)
+- `SMTP_HOST` - SMTP server hostname for email sending (OTP, password reset)
+- `SMTP_PORT` - SMTP port (default: 587)
+- `SMTP_USER` - SMTP authentication username
+- `SMTP_PASS` - SMTP authentication password
+- `SMTP_FROM` - Email "from" address (defaults to SMTP_USER)
+- `APP_URL` - Public URL of the application (used in email links)
 
 ## Production Deployment (Azure VM: 20.164.207.196)
 

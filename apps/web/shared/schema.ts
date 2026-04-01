@@ -149,6 +149,8 @@ const userSchema = new Schema({
   otpExpiry: { type: Date, default: null },
   otpAttempts: { type: Number, default: 0 },
   lastLogin: { type: Date, default: null },
+  resetToken: { type: String, default: null },
+  resetTokenExpiry: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

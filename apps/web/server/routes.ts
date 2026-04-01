@@ -5,7 +5,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
-import { sendLoginNotification, sendOtpEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
+import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -406,6 +406,82 @@ export async function registerRoutes(
       res.clearCookie("connect.sid");
       res.json({ success: true });
     });
+  });
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByUsernameOrEmail(email.trim());
+      res.json({ message: "If an account with that email exists, a reset code has been sent." });
+
+      if (!user || !user.email) return;
+
+      const resetToken = generateOtp(6);
+      const expiry = new Date(Date.now() + 15 * 60 * 1000);
+      await storage.setPasswordResetToken(user.id, resetToken, expiry);
+      await sendPasswordResetEmail(user.email, resetToken, user.fullName);
+    } catch (error: any) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "An error occurred. Please try again." });
+    }
+  });
+
+  const resetAttempts = new Map<string, { count: number; firstAttempt: number }>();
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { email, token, newPassword } = req.body;
+      if (!email || !token || !newPassword) {
+        return res.status(400).json({ message: "Email, reset code, and new password are required" });
+      }
+      if (typeof newPassword !== "string" || newPassword.length < 4) {
+        return res.status(400).json({ message: "Password must be at least 4 characters" });
+      }
+
+      const ip = req.ip || "unknown";
+      const attemptKey = `${ip}:${email.trim().toLowerCase()}`;
+      const now = Date.now();
+      const existing = resetAttempts.get(attemptKey);
+      if (existing) {
+        if (now - existing.firstAttempt > 15 * 60 * 1000) {
+          resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
+        } else if (existing.count >= 5) {
+          return res.status(429).json({ message: "Too many attempts. Please wait before trying again." });
+        } else {
+          existing.count++;
+        }
+      } else {
+        resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
+      }
+
+      const user = await storage.getUserByUsernameOrEmail(email.trim());
+      if (!user) {
+        return res.status(400).json({ message: "Invalid reset code or email" });
+      }
+
+      const stored = await storage.getPasswordResetToken(user.id);
+      if (!stored || stored.token !== token.trim()) {
+        return res.status(400).json({ message: "Invalid reset code" });
+      }
+      if (new Date() > stored.expiry) {
+        await storage.clearPasswordResetToken(user.id);
+        return res.status(400).json({ message: "Reset code has expired. Please request a new one." });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(user.id, { password: hashedPassword });
+      await storage.clearPasswordResetToken(user.id);
+      resetAttempts.delete(attemptKey);
+
+      res.json({ message: "Password has been reset successfully. You can now sign in." });
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "An error occurred. Please try again." });
+    }
   });
 
   app.get("/api/auth/me", async (req, res) => {

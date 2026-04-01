@@ -84,6 +84,46 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
   }
 }
 
+export async function sendPasswordResetEmail(toEmail: string, resetToken: string, userName?: string | null) {
+  const t = getTransporter();
+  if (!t) {
+    console.log(`[email] SMTP not configured — skipping password reset email for ${toEmail}`);
+    return false;
+  }
+
+  const displayName = userName || toEmail;
+  const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/auth?mode=reset&token=${resetToken}`;
+
+  try {
+    await t.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: toEmail,
+      subject: `Password Reset — Okiru Pro`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <div style="background: #1a1a2e; border-radius: 12px; padding: 32px; color: #ffffff; text-align: center;">
+            <h2 style="margin: 0 0 8px; font-size: 16px; color: #818cf8; font-weight: 600;">Password Reset</h2>
+            <p style="margin: 0 0 24px; font-size: 13px; color: #9ca3af;">Hi ${displayName}, use the code below to reset your password.</p>
+            <div style="background: #2d2d4a; border-radius: 8px; padding: 20px; margin: 0 0 24px;">
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #818cf8; font-family: 'SF Mono', Monaco, 'Courier New', monospace;">${resetToken}</span>
+            </div>
+            <p style="margin: 0 0 4px; font-size: 12px; color: #9ca3af;">This code expires in <strong style="color: #ffffff;">15 minutes</strong>.</p>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">If you didn't request a password reset, please ignore this email.</p>
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #2d2d4a;">
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru — B-BBEE Compliance Platform</p>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[email] Password reset email sent to ${toEmail}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[email] Failed to send password reset email:`, err.message);
+    return false;
+  }
+}
+
 export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
   const t = getTransporter();
   if (!t) {
