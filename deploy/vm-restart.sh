@@ -1,42 +1,42 @@
 #!/bin/bash
+set -e
 export HOME=/root
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-git config --global --add safe.directory /home/okiru/okiru-pro-main
-cd /home/okiru/okiru-pro-main
+PROJECT=/home/okiru/okiru-pro-main
+VM_IP="20.164.207.196"
+BRANCH="${DEPLOY_BRANCH:-main}"
 
-echo "=== Git current ==="
+git config --global --add safe.directory $PROJECT
+cd $PROJECT
+
+echo '=== Git current ==='
 git log -1 --format='%h %s'
 
-echo "=== Fetching ==="
-git fetch origin feat/okiru-integrated
+echo '=== Fetching ==='
+git fetch origin $BRANCH
 
-echo "=== Hard reset ==="
-git reset --hard origin/feat/okiru-integrated
+echo '=== Hard reset ==='
+git reset --hard origin/$BRANCH
 
-echo "=== Now at ==="
+echo '=== Now at ==='
 git log -1 --format='%h %s'
 
-echo "=== ArangoDB condition in compose ==="
-grep -A3 'arangodb:' docker-compose.production.yml | grep condition
-
-echo "=== Starting api and nginx ==="
-docker rm -f okiru_api okiru_nginx 2>/dev/null || true
-docker compose -f docker-compose.production.yml up -d --no-deps api nginx
+echo '=== Rebuilding and restarting ==='
+docker compose -f docker-compose.production.yml build api web computation-engine 2>&1
+docker compose -f docker-compose.production.yml up -d --remove-orphans
 
 sleep 20
 
-echo "=== Container status ==="
+echo '=== Container status ==='
 docker ps --format "{{.Names}} | {{.Status}}"
 
-echo "=== API health ==="
-curl -sk http://localhost:5000/health | cut -c1-300
+echo '=== Health checks ==='
+curl -sf http://localhost:5000/health | cut -c1-300 || echo 'API direct: not responding'
+HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost/ 2>/dev/null || echo "000")
+echo "Frontend HTTP: $HTTP_CODE"
+HTTPS_CODE=$(curl -sfk -o /dev/null -w "%{http_code}" https://localhost/ 2>/dev/null || echo "000")
+echo "Frontend HTTPS: $HTTPS_CODE"
 
-echo "=== HTTPS check ==="
-curl -sk --insecure -o /dev/null -w "HTTPS:%{http_code}" https://localhost/
-
-echo "=== HTTP check ==="
-curl -sk -o /dev/null -w "HTTP:%{http_code}" http://localhost/
-
-echo ""
-echo "=== DONE ==="
+echo ''
+echo '=== RESTART COMPLETE ==='

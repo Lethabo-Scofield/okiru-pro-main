@@ -1,27 +1,27 @@
-# keep context minimal
 node_modules
 **/node_modules
-dist
 **/dist
-build
-**/build
-
-# monorepo non-web paths
-apps/api
-packages
-scripts
-deploy
-docs
-__pycache__
 **/__pycache__
-*.pyc
-.vscode
-.cursor
+**/*.pyc
+
 .git
 .gitignore
-*.md
-*.pdf
-*.pptx
+.replit
+replit.nix
+.config
+.local
+.cache
+.upm
+.pythonlibs
+.vscode
+.cursor
+
+deploy/ssl
 .env
 .env.*
 
+*.pdf
+*.pptx
+
+apps/Computation-Engine/test_models
+apps/Computation-Engine/pytest.ini

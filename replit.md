@@ -48,16 +48,43 @@ pnpm install
 - `AZURE_OPENAI_API_KEY` - Optional, for Azure OpenAI extraction
 - `CORS_ORIGINS` - Computation Engine allowed origins (comma-separated)
 
-## Production Deployment (Azure VM)
-Uses Docker Compose (`docker-compose.production.yml`) with:
-- MongoDB 7, ArangoDB 3.11, Redis 7
-- Nginx reverse proxy with SSL
-- All three app services containerized
+## Production Deployment (Azure VM: 20.164.207.196)
 
-Dockerfiles:
-- `apps/api/Dockerfile` — builds to `dist/index.cjs` via esbuild, runs with Node.js
-- `apps/web/Dockerfile` — builds client + server to `dist/index.cjs`, runs with Node.js (includes Express backend)
-- `apps/Computation-Engine/Dockerfile` — Python FastAPI with uvicorn
+### Architecture
+- **Nginx** (port 80/443) → reverse proxy for all services
+  - `/` → `web:5001` (frontend + server-side proxy)
+  - `/api/` → `api:5000` (backend API)
+  - `/compute/` → `computation-engine:8000` (Python engine)
+  - `/arango/` → `arangodb:8529` (admin UI)
+- All containers on `okiru_net` Docker bridge network, communicate by service name
+- Databases (MongoDB, ArangoDB, Redis) bound to 127.0.0.1 only
+
+### Docker Compose (`docker-compose.production.yml`)
+Services: mongodb, arangodb, redis, computation-engine, api, web, nginx, certbot
+Network: `okiru_net` (bridge) — containers resolve each other by service name
+
+### Dockerfiles
+- `apps/api/Dockerfile` — multi-stage Node.js build, outputs `dist/index.cjs`, port 5000
+- `apps/web/Dockerfile` — multi-stage Node.js build (Vite client + Express server), outputs `dist/index.cjs`, port 5001
+- `apps/Computation-Engine/Dockerfile` — Python 3.13-slim, FastAPI/uvicorn, port 8000
+
+### Deploy Scripts (`deploy/`)
+- `azure-deploy.sh` — Provision Azure VM, install Docker, open ports 22/80/443
+- `remote-setup.sh` — Clone repo, generate .env with random secrets
+- `vm-deploy-run.sh` — Full deploy: pull code, build images, start all services, health checks
+- `vm-restart.sh` — Quick rebuild + restart after code changes
+- `ssl-setup.sh` — Generate self-signed SSL cert for the VM IP
+- `.env.production.template` — Template for production environment variables
+
+### Quick Deploy (on VM)
+```bash
+sudo bash deploy/remote-setup.sh
+nano .env  # review and edit passwords
+sudo bash deploy/vm-deploy-run.sh
+```
+
+### Firewall / Azure NSG
+Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) must be open in the Azure NSG
 
 ## Security
 - Helmet enabled on both web and API servers
