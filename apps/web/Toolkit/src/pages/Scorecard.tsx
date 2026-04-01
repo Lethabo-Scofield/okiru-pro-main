@@ -35,11 +35,15 @@ interface ScorecardElement {
   barColor: string;
 }
 
+const EMPTY_PILLAR = { score: 0, target: 0, weighting: 0, subMinimumMet: false };
+
 function fmt(value: number, full: boolean): string {
+  if (value === null || value === undefined || isNaN(value)) return full ? "0.0000" : "0.00";
   return full ? value.toFixed(4) : value.toFixed(2);
 }
 
 function pct(value: number): string {
+  if (value === null || value === undefined || isNaN(value)) return "0.0%";
   return `${(value * 100).toFixed(1)}%`;
 }
 
@@ -103,7 +107,7 @@ export default function Scorecard() {
     {
       key: "ownership",
       name: "Ownership",
-      ...scorecard.ownership,
+      ...(scorecard.ownership || EMPTY_PILLAR),
       accentColor: "text-violet-500 dark:text-violet-400",
       barColor: "bg-violet-500",
       subMinLabel: ownResult.fullOwnershipAwarded
@@ -120,7 +124,7 @@ export default function Scorecard() {
     {
       key: "managementControl",
       name: "Management Control",
-      ...scorecard.managementControl,
+      ...(scorecard.managementControl || EMPTY_PILLAR),
       accentColor: "text-blue-500 dark:text-blue-400",
       barColor: "bg-blue-500",
       subIndicators: mgtResult.subLines.map(sl => ({
@@ -134,7 +138,7 @@ export default function Scorecard() {
     {
       key: "skillsDevelopment",
       name: "Skills Development",
-      ...scorecard.skillsDevelopment,
+      ...(scorecard.skillsDevelopment || EMPTY_PILLAR),
       accentColor: "text-emerald-500 dark:text-emerald-400",
       barColor: "bg-emerald-500",
       subMinLabel: `Skills total ≥ 10 pts (40% of 25): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}`,
@@ -158,7 +162,7 @@ export default function Scorecard() {
     {
       key: "procurement",
       name: "Preferential Procurement",
-      ...scorecard.procurement,
+      ...(scorecard.procurement || EMPTY_PILLAR),
       accentColor: "text-amber-500 dark:text-amber-400",
       barColor: "bg-amber-500",
       subMinLabel: `Procurement base ≥ 11.6 pts: ${procResult.subMinimumMet ? 'Met' : 'Not met'}`,
@@ -175,7 +179,7 @@ export default function Scorecard() {
     {
       key: "supplierDevelopment",
       name: "Supplier Development",
-      ...scorecard.supplierDevelopment,
+      ...(scorecard.supplierDevelopment || EMPTY_PILLAR),
       accentColor: "text-rose-500 dark:text-rose-400",
       barColor: "bg-rose-500",
       subMinLabel: `SD ≥ 4 pts (40% of 10): ${esdResult.sdSubMinimumMet ? 'Met' : 'Not met'}`,
@@ -190,7 +194,7 @@ export default function Scorecard() {
     {
       key: "enterpriseDevelopment",
       name: "Enterprise Development",
-      ...scorecard.enterpriseDevelopment,
+      ...(scorecard.enterpriseDevelopment || EMPTY_PILLAR),
       accentColor: "text-orange-500 dark:text-orange-400",
       barColor: "bg-orange-500",
       subMinLabel: `ED base ≥ 2 pts (40% of 5): ${esdResult.edSubMinimumMet ? 'Met' : 'Not met'}`,
@@ -207,7 +211,7 @@ export default function Scorecard() {
     {
       key: "socioEconomicDevelopment",
       name: "Socio-Economic Development",
-      ...scorecard.socioEconomicDevelopment,
+      ...(scorecard.socioEconomicDevelopment || EMPTY_PILLAR),
       accentColor: "text-sky-500 dark:text-sky-400",
       barColor: "bg-sky-500",
       subMinLabel: "Grass-roots only (health, safety). Education = Skills Development.",
@@ -218,11 +222,11 @@ export default function Scorecard() {
     {
       key: "yesInitiative",
       name: "YES Initiative",
-      ...scorecard.yesInitiative,
+      ...(scorecard.yesInitiative || EMPTY_PILLAR),
       accentColor: "text-purple-500 dark:text-[#d1d1d6]",
       barColor: "bg-purple-500",
       subIndicators: [
-        { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 5, score: scorecard.yesInitiative.score, formula: `Bonus points for YES programme participation` },
+        { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 5, score: (scorecard.yesInitiative || EMPTY_PILLAR).score, formula: `Bonus points for YES programme participation` },
       ],
     },
   ];
@@ -237,14 +241,17 @@ export default function Scorecard() {
 
   const displayLevel = scorecard.isDiscounted ? scorecard.discountedLevel : scorecard.achievedLevel;
   const levelLabel = displayLevel >= 9 ? "Non-Compliant" : `Level ${displayLevel}`;
-  const totalPct = scorecard.total.weighting > 0 ? Math.min(100, (scorecard.total.score / scorecard.total.weighting) * 100) : 0;
+  const totalData = scorecard.total || EMPTY_PILLAR;
+  const totalPct = totalData.weighting > 0 ? Math.min(100, (totalData.score / totalData.weighting) * 100) : 0;
 
+  const ownData = scorecard.ownership || EMPTY_PILLAR;
+  const skillsData = scorecard.skillsDevelopment || EMPTY_PILLAR;
   const subMinimumItems = [
-    { name: "Ownership", threshold: "≥ 10 pts", detail: "40% of 25 (Net Value)", met: scorecard.ownership.subMinimumMet, score: scorecard.ownership.score, target: 25, color: "text-violet-500 dark:text-violet-400" },
-    { name: "Skills Dev", threshold: "≥ 10 pts", detail: "40% of 25", met: scorecard.skillsDevelopment.subMinimumMet, score: scorecard.skillsDevelopment.score, target: 25, color: "text-emerald-500 dark:text-emerald-400" },
-    { name: "Procurement", threshold: "≥ 11.6 pts", detail: "40% of 29", met: scorecard.procurement.subMinimumMet, score: scorecard.procurement.score, target: 29, color: "text-amber-500 dark:text-amber-400" },
-    { name: "Supplier Dev", threshold: "≥ 4 pts", detail: "40% of 10", met: scorecard.supplierDevelopment.subMinimumMet, score: scorecard.supplierDevelopment.score, target: 10, color: "text-rose-500 dark:text-rose-400" },
-    { name: "Enterprise Dev", threshold: "≥ 2 pts", detail: "40% of 5", met: scorecard.enterpriseDevelopment.subMinimumMet, score: scorecard.enterpriseDevelopment.score, target: 7, color: "text-orange-500 dark:text-orange-400" },
+    { name: "Ownership", threshold: "≥ 10 pts", detail: "40% of 25 (Net Value)", met: ownData.subMinimumMet, score: ownData.score, target: 25, color: "text-violet-500 dark:text-violet-400" },
+    { name: "Skills Dev", threshold: "≥ 10 pts", detail: "40% of 25", met: skillsData.subMinimumMet, score: skillsData.score, target: 25, color: "text-emerald-500 dark:text-emerald-400" },
+    { name: "Procurement", threshold: "≥ 11.6 pts", detail: "40% of 29", met: (scorecard.procurement || EMPTY_PILLAR).subMinimumMet, score: (scorecard.procurement || EMPTY_PILLAR).score, target: 29, color: "text-amber-500 dark:text-amber-400" },
+    { name: "Supplier Dev", threshold: "≥ 4 pts", detail: "40% of 10", met: (scorecard.supplierDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.supplierDevelopment || EMPTY_PILLAR).score, target: 10, color: "text-rose-500 dark:text-rose-400" },
+    { name: "Enterprise Dev", threshold: "≥ 2 pts", detail: "40% of 5", met: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).score, target: 7, color: "text-orange-500 dark:text-orange-400" },
   ];
 
   return (

@@ -80,6 +80,10 @@ export interface IStorage {
   getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined>;
   saveCalculatorConfig(clientId: string, config: CalculatorConfig): Promise<CalculatorConfigRow>;
   
+  setPasswordResetToken(userId: string, token: string, expiry: Date): Promise<void>;
+  getPasswordResetToken(userId: string): Promise<{ token: string; expiry: Date } | null>;
+  clearPasswordResetToken(userId: string): Promise<void>;
+
   // Assessment methods
   createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment>;
   getAssessment(assessmentId: string): Promise<Assessment | undefined>;
@@ -285,6 +289,20 @@ export class MemoryStorage implements IStorage {
     return doc;
   }
   
+  private passwordResetTokens: Map<string, { token: string; expiry: Date }> = new Map();
+
+  async setPasswordResetToken(userId: string, token: string, expiry: Date): Promise<void> {
+    this.passwordResetTokens.set(userId, { token, expiry });
+  }
+
+  async getPasswordResetToken(userId: string): Promise<{ token: string; expiry: Date } | null> {
+    return this.passwordResetTokens.get(userId) || null;
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    this.passwordResetTokens.delete(userId);
+  }
+
   // Assessment and Client storage
   private assessments: Map<string, Assessment> = new Map();
   private clients: Map<string, Client> = new Map();
@@ -564,6 +582,26 @@ export class DatabaseStorage implements IStorage {
     };
   }
   
+  async setPasswordResetToken(userId: string, token: string, expiry: Date): Promise<void> {
+    await UserModel.findByIdAndUpdate(userId, {
+      resetToken: token,
+      resetTokenExpiry: expiry,
+    });
+  }
+
+  async getPasswordResetToken(userId: string): Promise<{ token: string; expiry: Date } | null> {
+    const doc = await UserModel.findById(userId);
+    if (!doc || !doc.resetToken || !doc.resetTokenExpiry) return null;
+    return { token: doc.resetToken, expiry: doc.resetTokenExpiry };
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await UserModel.findByIdAndUpdate(userId, {
+      resetToken: null,
+      resetTokenExpiry: null,
+    });
+  }
+
   // Assessment methods - using ProcessorSessionModel as base
   async createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment> {
     const { ProcessorSessionModel } = await import("../shared/schema");

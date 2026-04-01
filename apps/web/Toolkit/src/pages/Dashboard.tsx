@@ -127,11 +127,11 @@ export default function Dashboard() {
   }
 
   const hasData = isLoaded && client.id && (
-    scorecard.total.score > 0 ||
-    scorecard.ownership.score > 0 ||
-    scorecard.managementControl.score > 0 ||
-    scorecard.skillsDevelopment.score > 0 ||
-    scorecard.procurement.score > 0
+    (scorecard.total?.score || 0) > 0 ||
+    (scorecard.ownership?.score || 0) > 0 ||
+    (scorecard.managementControl?.score || 0) > 0 ||
+    (scorecard.skillsDevelopment?.score || 0) > 0 ||
+    (scorecard.procurement?.score || 0) > 0
   );
 
   if (!hasData) {
@@ -209,8 +209,8 @@ export default function Dashboard() {
           <div className="flex-1 grid grid-cols-3 gap-6 md:border-l md:pl-10 border-primary/10">
             <div>
               <div className="text-[11px] text-muted-foreground/60 mb-0.5">Score</div>
-              <div className="text-xl font-heading font-bold tabular-nums">{scorecard.total.score.toFixed(1)}</div>
-              <div className="text-[11px] text-muted-foreground/40">of {scorecard.total.weighting}</div>
+              <div className="text-xl font-heading font-bold tabular-nums">{(scorecard.total?.score || 0).toFixed(1)}</div>
+              <div className="text-[11px] text-muted-foreground/40">of {scorecard.total?.weighting || 0}</div>
             </div>
             <div>
               <div className="text-[11px] text-muted-foreground/60 mb-0.5">Recognition</div>
@@ -344,7 +344,7 @@ export default function Dashboard() {
                   {formatLevel(displayLevel)}
                 </div>
                 <div className="text-right text-[13px] font-semibold tabular-nums">
-                  {scorecard.total.score.toFixed(2)}
+                  {(scorecard.total?.score || 0).toFixed(2)}
                 </div>
               </div>
             </div>
