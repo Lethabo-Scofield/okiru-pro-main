@@ -18,7 +18,7 @@ git clone "$REPO_URL" /home/okiru/okiru-pro-main
 cd /home/okiru/okiru-pro-main
 
 echo "▸ Checking out the right branch..."
-git checkout feat/okiru-integrated
+git checkout main
 
 echo "▸ Creating .env from template..."
 cp deploy/.env.production.template .env

@@ -1,34 +1,41 @@
 #!/bin/bash
 set -e
 
-cd /home/okiru
+PROJECT=/home/okiru/okiru-pro-main
 
-# Clone repo
-if [ ! -d "okiru-pro-main" ]; then
-  git clone https://github.com/Lethabo-Scofield/okiru-pro-main.git
+if [ ! -d "$PROJECT" ]; then
+  echo '=== Cloning repository ==='
+  git clone https://github.com/Lethabo-Scofield/okiru-pro-main.git $PROJECT
 fi
 
-cd okiru-pro-main
+cd $PROJECT
 git fetch origin
-git checkout feat/okiru-integrated
+git checkout main
 
-# Create .env from template
+echo '=== Creating .env from template ==='
 cp deploy/.env.production.template .env
 
-# Generate secrets
 PUBLIC_IP=$(curl -s ifconfig.me)
 SESSION_SECRET=$(openssl rand -hex 32)
 MONGO_PASS=$(openssl rand -hex 16)
 ARANGO_PASS=$(openssl rand -hex 16)
 
-# Apply to .env
 sed -i "s|SESSION_SECRET=CHANGE_ME_random_64_char_string|SESSION_SECRET=${SESSION_SECRET}|" .env
-sed -i "s|CORS_ORIGIN=http://YOUR_VM_IP,https://okiru.yourdomain.com|CORS_ORIGIN=http://${PUBLIC_IP}|" .env
+sed -i "s|CORS_ORIGIN=http://20.164.207.196,https://20.164.207.196|CORS_ORIGIN=http://${PUBLIC_IP},https://${PUBLIC_IP}|" .env
 sed -i "s|MONGO_PASSWORD=CHANGE_ME_strong_password_here|MONGO_PASSWORD=${MONGO_PASS}|" .env
 sed -i "s|ARANGO_PASSWORD=CHANGE_ME_strong_password_here|ARANGO_PASSWORD=${ARANGO_PASS}|" .env
+sed -i "s|DOMAIN=20.164.207.196|DOMAIN=${PUBLIC_IP}|" .env
+sed -i "s|PUBLIC_URL=http://20.164.207.196|PUBLIC_URL=http://${PUBLIC_IP}|" .env
 
-chown -R okiru:okiru /home/okiru/okiru-pro-main
+chown -R okiru:okiru $PROJECT
 
-echo "=== .env contents ==="
-cat .env
-echo "=== ENV_SETUP_DONE ==="
+echo ''
+echo '=== Setup complete ==='
+echo "VM IP: $PUBLIC_IP"
+echo ''
+echo 'IMPORTANT: Review and edit .env before deploying:'
+echo "  nano $PROJECT/.env"
+echo ''
+echo 'Then deploy with:'
+echo "  sudo bash $PROJECT/deploy/vm-deploy-run.sh"
+echo ''

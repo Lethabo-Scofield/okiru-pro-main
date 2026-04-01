@@ -5,7 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate \
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate \
     && pnpm install --no-frozen-lockfile
 
 COPY packages/types/ packages/types/
@@ -17,7 +17,7 @@ RUN pnpm --filter @okiru/types build \
 FROM node:20-alpine
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 
 COPY --from=builder /build/package.json /build/pnpm-lock.yaml /build/pnpm-workspace.yaml ./
 COPY --from=builder /build/packages/types/ packages/types/
