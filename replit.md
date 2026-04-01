@@ -116,7 +116,14 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - `ALLOW_IN_MEMORY_DB=1` is set as an environment variable so the Computation Engine starts without needing a local ArangoDB instance
 - The Computation Engine's `run_server.py` binds to `0.0.0.0` (changed from `127.0.0.1`) so Replit can detect the open port
 
+## Production Nginx Routing
+- All `/api/*` traffic routes to the **web server** (port 5001), which handles auth, templates CRUD, processor sessions, etc.
+- The web server's `apiProxy.ts` forwards specific routes (scorecard, extraction, entity-mappings) to the **API server** (port 5000)
+- `/compute/` routes to the Computation Engine, `/arango/` to ArangoDB admin
+- This matches the development architecture where the web server is the single entry point
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)
 - Without `ARANGO_URL`/ArangoDB, the Computation Engine uses in-memory mode (`ALLOW_IN_MEMORY_DB=1`) — data will not persist
 - Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility
+- Health check available at `GET /api/health` on both web server and API server
