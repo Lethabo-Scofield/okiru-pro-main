@@ -102,7 +102,9 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
   const sed = calcSedSector(parsed.sedContributions, effectiveNpat, sectorCfg);
 
   const pCfg = sectorCfg.pillarConfigs;
-  addLog(`Calculated: Ownership ${r2(own.total)}/${pCfg.ownership.maxPoints} · MC ${r2(mcScore)}/${pCfg.managementControl.maxPoints} · EE ${r2(eeScore)}/${pCfg.employmentEquity.maxPoints} · Skills ${r2(sk.total)}/${pCfg.skillsDevelopment.maxPoints} · Procurement ${r2(pr.total)}/${pCfg.preferentialProcurement.maxPoints} · ESD ${r2(esd.total)}/${pCfg.enterpriseSupplierDevelopment.maxPoints} · SED ${r2(sed.total)}/${pCfg.socioEconomicDevelopment.maxPoints}`, 'success');
+  const eeMaxPts = pCfg.employmentEquity?.maxPoints ?? 0;
+  const esdMaxPts = (pCfg.supplierDevelopment?.maxPoints ?? 0) + (pCfg.enterpriseDevelopment?.maxPoints ?? 0);
+  addLog(`Calculated: Ownership ${r2(own.total)}/${pCfg.ownership.maxPoints} · MC ${r2(mcScore)}/${pCfg.managementControl.maxPoints} · EE ${r2(eeScore)}/${eeMaxPts} · Skills ${r2(sk.total)}/${pCfg.skillsDevelopment.maxPoints} · Procurement ${r2(pr.total)}/${pCfg.preferentialProcurement.maxPoints} · ESD ${r2(esd.total)}/${esdMaxPts} · SED ${r2(sed.total)}/${pCfg.socioEconomicDevelopment.maxPoints}`, 'success');
 
   const pillarScores = {
     ownership: r2(own.total),
@@ -124,7 +126,7 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
     //   (b) The 'managementControl' value exceeds 8 (its solo max),
     //       indicating it's really MC+EE combined (max 19).
     const mcMax = pCfg.managementControl.maxPoints;
-    const eeMax = pCfg.employmentEquity.maxPoints;
+    const eeMax = eeMaxPts;
     const mceeMax = mcMax + eeMax;
     const explicitCombined = sv.managementControlAndEE !== undefined;
     const implicitCombined = sv.managementControl !== undefined && sv.managementControl > mcMax + 0.5 && sv.employmentEquity === undefined;
@@ -157,10 +159,10 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
     };
     override('ownership', 'ownership', pCfg.ownership.maxPoints, 'Ownership');
     override('managementControl', 'managementControl', pCfg.managementControl.maxPoints, 'MC');
-    override('employmentEquity', 'employmentEquity', pCfg.employmentEquity.maxPoints, 'EE');
+    override('employmentEquity', 'employmentEquity', eeMaxPts, 'EE');
     override('skillsDevelopment', 'skillsDevelopment', pCfg.skillsDevelopment.maxPoints, 'Skills');
     override('preferentialProcurement', 'preferentialProcurement', pCfg.preferentialProcurement.maxPoints, 'Procurement');
-    override('enterpriseSupplierDevelopment', 'enterpriseSupplierDevelopment', pCfg.enterpriseSupplierDevelopment.maxPoints, 'ESD');
+    override('enterpriseSupplierDevelopment', 'enterpriseSupplierDevelopment', esdMaxPts, 'ESD');
     override('socioEconomicDevelopment', 'socioEconomicDevelopment', pCfg.socioEconomicDevelopment.maxPoints, 'SED');
     override('yesInitiative', 'yesInitiative', 5, 'YES');
   }

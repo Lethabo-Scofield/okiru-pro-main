@@ -108,8 +108,8 @@ export function calcEESector(employees: ParseResult['employees'], cfg: SectorCon
   const disPct = employees.length > 0 ? disabledCount / employees.length : 0;
   const disPts = Math.min(t.disabledMaxPts, disPct >= t.disabledTarget ? t.disabledMaxPts : (disPct / t.disabledTarget) * t.disabledMaxPts);
 
-  const maxPts = cfg.pillarConfigs.employmentEquity.maxPoints;
-  return r2(Math.min(maxPts, srPts + mdPts + jrPts + disPts));
+  const maxPts = cfg.pillarConfigs.employmentEquity?.maxPoints ?? 0;
+  return r2(Math.min(maxPts || (srPts + mdPts + jrPts + disPts), srPts + mdPts + jrPts + disPts));
 }
 
 export function calcSkillsSector(trainings: ParseResult['trainingPrograms'], leviableAmount: number, cfg: SectorConfig) {
@@ -164,8 +164,8 @@ export function calcEsdSector(contributions: ParseResult['esdContributions'], np
 
   const sdScore = targetSD > 0 ? Math.min(t.sdMaxPts, (sdSpend / targetSD) * t.sdMaxPts) : 0;
   const edScore = targetED > 0 ? Math.min(t.edMaxPts, (edSpend / targetED) * t.edMaxPts) : 0;
-  const maxPts = cfg.pillarConfigs.enterpriseSupplierDevelopment.maxPoints;
-  return { total: r2(Math.min(sdScore + edScore, maxPts)), totalContributions: sdSpend + edSpend };
+  const maxPts = (cfg.pillarConfigs.supplierDevelopment?.maxPoints ?? 0) + (cfg.pillarConfigs.enterpriseDevelopment?.maxPoints ?? 0);
+  return { total: r2(Math.min(sdScore + edScore, maxPts || (sdScore + edScore))), totalContributions: sdSpend + edSpend };
 }
 
 export function calcSedSector(contributions: ParseResult['sedContributions'], npat: number, cfg: SectorConfig) {
