@@ -95,6 +95,15 @@ export async function registerRoutes(
 
   app.use(session(sessionConfig));
 
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: isProduction ? 'production' : 'development',
+    });
+  });
+
   const REGISTERED_ORGANIZATIONS = [
     { id: "okiru", name: "Okiru", subscriptionId: process.env.OKIRU_SUB_ID || "OKR-2026-001", emailDomain: "okiru.co.za" },
     { id: "param-solutions", name: "Param Solutions", subscriptionId: process.env.PARAM_SUB_ID || "PRM-2026-001", emailDomain: "paramsolutions.co.za" },

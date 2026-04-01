@@ -1115,7 +1115,8 @@ export default function DocumentProcessor() {
         fetch('/api/templates'),
         fetch('/api/sector-templates'),
       ]);
-      const userList: StoredTemplate[] = userRes.ok ? await userRes.json() : [];
+      const userRaw = userRes.ok ? await userRes.json() : [];
+      const userList: StoredTemplate[] = Array.isArray(userRaw) ? userRaw : [];
       let toolkitList: StoredTemplate[] = [];
       if (sectorRes.ok) {
         const sectors = await sectorRes.json();

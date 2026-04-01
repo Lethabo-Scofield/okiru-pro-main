@@ -85,8 +85,8 @@ export async function registerRoutes(
 
   app.use('/api/', apiLimiter);
 
-  // Health check and root
   app.use('/', healthRouter);
+  app.use('/api', healthRouter);
 
   // Auth routes
   app.use('/api/auth', authRouter);

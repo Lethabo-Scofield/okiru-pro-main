@@ -107,7 +107,10 @@ export default function EntityBuilder() {
     setLoadingTemplates(true);
     try {
       const res = await fetch("/api/templates");
-      if (res.ok) setStoredTemplates(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setStoredTemplates(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       console.error("Error fetching templates:", err);
       setIsLoadingTemplate(false);
@@ -203,13 +206,12 @@ export default function EntityBuilder() {
   const loadTemplateFromRepo = (template: StoredTemplate) => guardedNew(() => _loadTemplateFromRepo(template));
   const _loadTemplateFromRepo = (template: StoredTemplate) => {
     const isOntology = (template as any).isOntology;
-    const loadedEntities = template.entities.map((e: any) => ({
+    const loadedEntities = (template.entities || []).map((e: any) => ({
       ...createEntity(e.label, e.definition, isOntology ? 80 : 60),
       synonyms: e.synonyms || [], positives: e.positives || [], negatives: e.negatives || [],
       zones: e.zones || ["Email Body", "PDF Header"],
       keywords: e.keywords || { must: [], nice: [], neg: [] },
       pattern: e.pattern || "",
-      // Preserve hierarchical metadata from ontology templates
       ...(e.pillarCode && { pillarCode: e.pillarCode }),
       ...(e.criterionCodes && { criterionCodes: e.criterionCodes }),
       ...(e.fieldType && { fieldType: e.fieldType }),
@@ -266,7 +268,7 @@ export default function EntityBuilder() {
       const manifest = await res.json();
 
       // Convert manifest entities to EntityBuilder format
-      const loadedEntities = manifest.entities.map((e: any) => ({
+      const loadedEntities = (manifest.entities || []).map((e: any) => ({
         ...createEntity(e.name, e.definition || `${e.name} field`, 80),
         synonyms: e.aliases || [],
         positives: [],
@@ -502,7 +504,8 @@ export default function EntityBuilder() {
   };
 
   const resumeDraft = (draft: { id: string; name: string; entities: any[]; savedAt: string }) => {
-    const loaded = draft.entities.map((e: any, i: number) => ({ ...e, id: Date.now() + i }));
+    const draftEntities = draft.entities || [];
+    const loaded = draftEntities.map((e: any, i: number) => ({ ...e, id: Date.now() + i }));
     setEntities(loaded);
     setProjectName(draft.name);
     setEditingTemplateId(null);
@@ -510,7 +513,7 @@ export default function EntityBuilder() {
     setSelectedEntityId(loaded.length > 0 ? loaded[0].id : null);
     setLeftTab('entities');
     deleteDraft(draft.id);
-    toast({ title: "Draft resumed", description: `"${draft.name}" — ${draft.entities.length} ${draft.entities.length === 1 ? 'entity' : 'entities'}` });
+    toast({ title: "Draft resumed", description: `"${draft.name}" — ${draftEntities.length} ${draftEntities.length === 1 ? 'entity' : 'entities'}` });
   };
 
   const relativeTime = (iso: string) => {
@@ -864,8 +867,8 @@ export default function EntityBuilder() {
                           </div>
                           <p className="text-[11px] text-[#636366] mt-0.5">
                             {isOntology && pillarPacks
-                              ? `${pillarPacks.length} pillars · ${pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${template.entities.length} entities`
-                              : `${template.entities.length} entities · v${template.version || '1.0'}`
+                              ? `${pillarPacks.length} pillars · ${pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${(template.entities || []).length} entities`
+                              : `${(template.entities || []).length} entities · v${template.version || '1.0'}`
                             }
                           </p>
                         </div>
@@ -919,9 +922,9 @@ export default function EntityBuilder() {
                       )}
 
                       {/* Flat entity list for non-ontology templates */}
-                      {isExpanded && !isOntology && template.entities.length > 0 && (
+                      {isExpanded && !isOntology && (template.entities || []).length > 0 && (
                         <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap gap-1.5">
-                          {template.entities.map((e: any, i: number) => (
+                          {(template.entities || []).map((e: any, i: number) => (
                             <span key={i} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.06] text-[#b0b0b8]">{e.label}</span>
                           ))}
                         </div>
@@ -1235,7 +1238,7 @@ export default function EntityBuilder() {
                         <div key={draft.id} className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-amber-500/[0.06] hover:bg-amber-500/10 smooth group" style={{ border: '1px solid rgba(245,158,11,0.12)' }}>
                           <div className="flex-1 min-w-0">
                             <p className="text-[11px] font-semibold text-[#d4a827] truncate">{draft.name}</p>
-                            <p className="text-[10px] text-[#636366]">{draft.entities.length} {draft.entities.length === 1 ? 'entity' : 'entities'} · {relativeTime(draft.savedAt)}</p>
+                            <p className="text-[10px] text-[#636366]">{(draft.entities || []).length} {(draft.entities || []).length === 1 ? 'entity' : 'entities'} · {relativeTime(draft.savedAt)}</p>
                           </div>
                           <button onClick={() => resumeDraft(draft)}
                             className="px-2 py-0.5 text-[10px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded-md smooth press-sm shrink-0" data-testid={`button-resume-draft-${draft.id}`}>
@@ -1286,7 +1289,7 @@ export default function EntityBuilder() {
                         <span className="truncate flex-1 text-[12px] text-white">
                           {testTemplateId === 'current'
                             ? `Current build (${entities.length} entities)`
-                            : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${t.entities.length})` : 'Template'; })()}
+                            : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${(t.entities || []).length})` : 'Template'; })()}
                         </span>
                         <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-2 text-[#636366] transition-transform duration-150 ${testTemplateDropOpen ? 'rotate-180' : ''}`} />
                       </button>
@@ -1304,7 +1307,7 @@ export default function EntityBuilder() {
                             <div key={t.id} onClick={() => { setTestTemplateId(t.id); setTestTemplateDropOpen(false); }}
                               className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-white/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
                               <span className="flex-1 truncate">{t.name}</span>
-                              <span className="text-[11px] text-[#636366] shrink-0">({t.entities.length})</span>
+                              <span className="text-[11px] text-[#636366] shrink-0">({(t.entities || []).length})</span>
                               {testTemplateId === t.id && <Check className="w-3 h-3 text-[#d1d1d6] shrink-0" />}
                             </div>
                           ))}
