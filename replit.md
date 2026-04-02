@@ -128,6 +128,15 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - `/compute/` routes to the Computation Engine, `/arango/` to ArangoDB admin
 - This matches the development architecture where the web server is the single entry point
 
+## Landing Page
+- Located at `apps/web/Toolkit/src/pages/LandingPage.tsx`, loaded via `LandingWrapper.tsx`
+- Fully responsive with breakpoints at 480px, 760px, 900px, and 1024px
+- Mobile hamburger menu at 760px with Escape-to-close and auto-close on resize
+- Content reflects actual platform capabilities: toolkit import, formula graph parsing, 5-pillar scoring, document extraction
+- Stats: 6 sector templates, 5 pillars scored, 12k+ formula nodes, 4 sectors covered
+- Sections: Hero, Live Scorecard (animated widget), Features (3-column), Sector Coverage (4 cards), Processing Pipeline, Process Steps (4-step), CTA, Footer
+- Sector cards show RCOGP, ICT, FSC, AGRI with node/edge counts from actual ArangoDB templates
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
 - Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly
