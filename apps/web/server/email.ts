@@ -124,6 +124,10 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
   }
 }
 
+export function isSmtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
 export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
   const t = getTransporter();
   if (!t) {

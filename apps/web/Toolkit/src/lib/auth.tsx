@@ -74,11 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     let res: Response;
     try {
+      const isEmail = email.includes('@');
       res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(isEmail ? { email, password } : { username: email, password }),
       });
     } catch {
       throw new Error('Network error. Please try again.');

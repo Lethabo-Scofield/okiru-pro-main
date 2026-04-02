@@ -5,7 +5,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
-import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
+import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 import mongoose from "mongoose";
 
@@ -206,6 +206,20 @@ export async function registerRoutes(
           organizationId: org.id,
           role: safeRole,
           profilePicture: null,
+        });
+      }
+
+      if (!isSmtpConfigured()) {
+        await storage.updateUser(user.id, { isVerified: true } as any);
+        await storage.setLastLogin(user.id);
+        const updatedUser = await storage.getUserById(user.id);
+        const safeUser = sanitizeUser(updatedUser || user);
+        (req.session as any).userId = user.id;
+        (req.session as any).userData = safeUser;
+        (req.session as any).otpVerified = true;
+        return res.json({
+          user: safeUser,
+          message: "Account created successfully!",
         });
       }
 
