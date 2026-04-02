@@ -38,7 +38,7 @@ pnpm install
 - `MONGODB_URI` - MongoDB connection string (without this, uses in-memory storage)
 - `SESSION_SECRET` - Express session secret (required in production, will crash without it)
 - `GROQ_API_KEY` - For AI/LLM features
-- `ARANGO_URL` - ArangoDB connection URL
+- `ARANGO_URL` - ArangoDB (Macrometa GDN) connection URL
 - `ARANGO_PASSWORD` - ArangoDB password (no hardcoded default — must be set)
 - `ARANGO_DB` - ArangoDB database name (defaults to `bbbee_db`)
 - `CORS_ORIGIN` - API server allowed origins (comma-separated)
@@ -132,6 +132,7 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
 - Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly
 - Without `ARANGO_URL`/ArangoDB, the Computation Engine uses in-memory mode (`ALLOW_IN_MEMORY_DB=1`) — data will not persist
+- **Template architecture**: Two template systems exist — (1) MongoDB extraction templates (18 starter templates defining entities for document processing, used by Dashboard/EntityBuilder/DocumentProcessor), and (2) ArangoDB scorecard toolkits (Excel formula graphs for scoring). When ArangoDB is unavailable, the DocumentProcessor gracefully skips manifest-based sector templates and uses only the MongoDB extraction templates
 - Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility
 - Health check available at `GET /api/health` on web server and API server, and `GET /health` on Computation Engine
 - Processor session routes gracefully return empty/503 when MongoDB is unavailable (no 10s timeout)

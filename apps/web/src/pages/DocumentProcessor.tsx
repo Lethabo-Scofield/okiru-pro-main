@@ -1129,14 +1129,16 @@ export default function DocumentProcessor() {
       if (sectorRes.ok) {
         const sectors = await sectorRes.json();
         if (Array.isArray(sectors) && sectors.length > 0) {
-          toolkitList = await Promise.all(
+          const results = await Promise.allSettled(
             sectors.map(async (s: { code: string; name: string; type: string }, i: number) => {
               const scorecardType = s.type === 'QSE' ? 'QSE' : 'Generic';
               const mr = await fetch(
                 `/api/manifest?sector=${encodeURIComponent(s.code)}&type=${encodeURIComponent(scorecardType)}`,
               );
-              const manifest = mr.ok ? await mr.json() : null;
+              if (!mr.ok) return null;
+              const manifest = await mr.json();
               const entities = manifest ? manifestEntitiesForTemplate(manifest) : [];
+              if (entities.length === 0) return null;
               return {
                 id: TOOLKIT_TEMPLATE_ID_BASE + i,
                 name: `${s.name} (${scorecardType})`,
@@ -1150,6 +1152,10 @@ export default function DocumentProcessor() {
               } satisfies StoredTemplate;
             }),
           );
+          toolkitList = results
+            .filter((r): r is PromiseFulfilledResult<StoredTemplate | null> => r.status === 'fulfilled')
+            .map(r => r.value)
+            .filter((t): t is StoredTemplate => t !== null);
         }
       }
       setTemplates([...toolkitList, ...userList]);
