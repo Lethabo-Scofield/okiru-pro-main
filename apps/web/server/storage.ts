@@ -766,4 +766,28 @@ if (!useDatabase) {
   })();
 } else {
   console.log("Storage: Using MongoDB database storage.");
+  (async () => {
+    try {
+      const existing = await storage.getTemplates();
+      const sharedTemplates = existing.filter(t => t.userId === null);
+      if (sharedTemplates.length === 0) {
+        const { starterTemplates } = await import("../src/data/starterTemplates");
+        const top3 = starterTemplates.slice(0, 3);
+        for (const t of top3) {
+          await storage.createTemplate({
+            name: t.name,
+            description: t.description,
+            version: "1.0",
+            entities: t.entities,
+            userId: null,
+          });
+        }
+        console.log(`Storage: Seeded ${top3.length} default templates into database`);
+      } else {
+        console.log(`Storage: ${sharedTemplates.length} default templates already exist, skipping seed`);
+      }
+    } catch (err) {
+      console.error("Storage: Failed to seed default templates:", err);
+    }
+  })();
 }
