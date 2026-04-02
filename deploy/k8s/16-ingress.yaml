@@ -1,0 +1,126 @@
+# Nginx Ingress Configuration
+# Routes external traffic to services with SSL termination
+
+---
+# Main Ingress Resource
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: okiru-pro-ingress
+  namespace: okiru-pro
+  annotations:
+    # Use the nginx ingress class
+    kubernetes.io/ingress.class: nginx
+    
+    # Cert-manager integration
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+    
+    # Nginx configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru-pro.com, https://www.okiru-pro.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "5"
+    
+    # Proxy settings
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    
+    # Enable compression
+    nginx.ingress.kubernetes.io/server-snippet: |
+      gzip on;
+      gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+    
+    # Rewrite rules for API
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    
+    # Enable permanent redirect for www to non-www (optional)
+    # nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
+    
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - okiru-pro.com
+        - www.okiru-pro.com
+        - api.okiru-pro.com
+      secretName: okiru-pro-tls  # cert-manager will create this
+  rules:
+    # Main website
+    - host: okiru-pro.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+    
+    # WWW redirect
+    - host: www.okiru-pro.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+    
+    # API subdomain
+    - host: api.okiru-pro.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+
+---
+# Internal Ingress for Compute API (optional - restrict access)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: compute-internal-ingress
+  namespace: okiru-pro
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Whitelist specific IPs if needed
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12"
+    # Basic auth for internal endpoints
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: basic-auth-secret
+    # nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - compute.okiru-pro.com
+      secretName: compute-tls
+  rules:
+    - host: compute.okiru-pro.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: compute
+                port:
+                  number: 8000

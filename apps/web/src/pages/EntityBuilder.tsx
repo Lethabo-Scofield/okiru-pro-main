@@ -1155,7 +1155,8 @@ export default function EntityBuilder() {
                       };
 
                       return pillarOrder.map((pillarCode) => {
-                        const pillarEntities = pillarGroups[pillarCode];
+                        const pillarEntities = pillarGroups[pillarCode] || [];
+                        if (!pillarEntities.length) return null;
                         return (
                         <div key={pillarCode} className="mb-2">
                           <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
