@@ -32,13 +32,17 @@ function createEntity(label: string, definition: string, completeness: number = 
 }
 
 interface StoredTemplate {
-  id: number;
+  id: number | string;
   name: string;
   description: string;
   version: string;
   entities: any[];
   createdAt: string;
   updatedAt: string;
+  isOntology?: boolean;
+  sectorCode?: string;
+  scorecardType?: string;
+  pillarPacks?: any[];
 }
 
 function CompletenessRing({ pct }: { pct: number }) {
@@ -71,7 +75,7 @@ export default function EntityBuilder() {
   const [storedTemplates, setStoredTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedRepoTemplate, setSelectedRepoTemplate] = useState<StoredTemplate | null>(null);
-  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
@@ -86,14 +90,14 @@ export default function EntityBuilder() {
   const [testText, setTestText] = useState('');
   const [testResults, setTestResults] = useState<any[]>([]);
   const [isTesting, setIsTesting] = useState(false);
-  const [testTemplateId, setTestTemplateId] = useState<'current' | number>('current');
+  const [testTemplateId, setTestTemplateId] = useState<'current' | number | string>('current');
   const [testTemplateDropOpen, setTestTemplateDropOpen] = useState(false);
   const testTemplateDropRef = useRef<HTMLDivElement>(null);
   const [testFile, setTestFile] = useState<File | null>(null);
   const [testFileLoading, setTestFileLoading] = useState(false);
   const testFileInputRef = useRef<HTMLInputElement>(null);
   const [testDragOver, setTestDragOver] = useState(false);
-  const [expandedRepoId, setExpandedRepoId] = useState<number | null>(null);
+  const [expandedRepoId, setExpandedRepoId] = useState<number | string | null>(null);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return !!params.get('template');
@@ -106,7 +110,7 @@ export default function EntityBuilder() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/templates");
+      const res = await fetch("/api/entity-templates");
       if (res.ok) {
         const data = await res.json();
         setStoredTemplates(Array.isArray(data) ? data : []);
@@ -151,7 +155,7 @@ export default function EntityBuilder() {
     const params = new URLSearchParams(window.location.search);
     const templateId = params.get('template');
     if (templateId && storedTemplates.length > 0 && !editingTemplateId) {
-      const t = storedTemplates.find(st => st.id === Number(templateId));
+      const t = storedTemplates.find(st => String(st.id) === templateId);
       if (t) _loadTemplateFromRepo(t);
       else {
         setIsLoadingTemplate(false);
@@ -205,9 +209,8 @@ export default function EntityBuilder() {
 
   const loadTemplateFromRepo = (template: StoredTemplate) => guardedNew(() => _loadTemplateFromRepo(template));
   const _loadTemplateFromRepo = (template: StoredTemplate) => {
-    const isOntology = (template as any).isOntology;
     const loadedEntities = (template.entities || []).map((e: any) => ({
-      ...createEntity(e.label, e.definition, isOntology ? 80 : 60),
+      ...createEntity(e.label, e.definition, template.isOntology ? 80 : 60),
       synonyms: e.synonyms || [], positives: e.positives || [], negatives: e.negatives || [],
       zones: e.zones || ["Email Body", "PDF Header"],
       keywords: e.keywords || { must: [], nice: [], neg: [] },
@@ -223,11 +226,10 @@ export default function EntityBuilder() {
     setSelectedEntityId(loadedEntities.length > 0 ? loadedEntities[0].id : null);
     setShowTemplatesPanel(false);
     setIsLoadingTemplate(false);
-    const pillarCount = (template as any).pillarPacks?.length;
     toast({
       title: "Template loaded",
-      description: isOntology
-        ? `"${template.name}" — ${loadedEntities.length} entities across ${pillarCount || '?'} pillars`
+      description: template.isOntology
+        ? `"${template.name}" — ${loadedEntities.length} entities across ${template.pillarPacks?.length || '?'} pillars`
         : `"${template.name}" — ${loadedEntities.length} entities`,
     });
   };
@@ -263,13 +265,17 @@ export default function EntityBuilder() {
 
     setIsLoadingTemplate(true);
     try {
-      const res = await fetch(`/api/entity-manifest?sector=${config.sector}&type=${config.type}`);
+      const res = await fetch(`/api/manifest?sector=${config.sector}&type=${config.type}`);
       if (!res.ok) throw new Error('Failed to load sector manifest');
       const manifest = await res.json();
 
-      // Convert manifest entities to EntityBuilder format
-      const loadedEntities = (manifest.entities || []).map((e: any) => ({
-        ...createEntity(e.name, e.definition || `${e.name} field`, 80),
+      const manifestEntities = manifest.entities
+        || (manifest.pillarPacks || []).flatMap((pp: any) =>
+            (pp.entities || []).map((e: any) => ({ ...e, pillarCode: e.pillarCode || pp.pillarCode }))
+          );
+
+      const loadedEntities = manifestEntities.map((e: any) => ({
+        ...createEntity(e.name || e.label, e.definition || `${e.name || e.label} field`, 80),
         synonyms: e.aliases || [],
         positives: [],
         negatives: [],
@@ -341,8 +347,14 @@ export default function EntityBuilder() {
 
   const markDirty = () => setHasUnsavedChanges(true);
 
+  const isEditingOntology = editingTemplateId != null && storedTemplates.find(t => t.id === editingTemplateId)?.isOntology;
+
   const saveChanges = async () => {
     if (!editingTemplateId || !entities.length) return;
+    if (isEditingOntology) {
+      toast({ title: "Read-only template", description: "Ontology toolkit templates cannot be modified. Use 'Publish as New' instead.", variant: "destructive" });
+      return;
+    }
     setIsSaving(true);
     try {
       const templateEntities = entities.map(e => ({
@@ -821,9 +833,12 @@ export default function EntityBuilder() {
               {/* Divider */}
               <div className="h-px bg-white/[0.06] mb-5" />
 
-              {/* Custom Templates Section */}
+              {/* Toolkit Templates Section */}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-wider">Custom Templates</span>
+                <div className="flex items-center gap-2">
+                  <Shapes className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider">Toolkit Templates</span>
+                </div>
                 <span className="text-[10px] text-[#3a3a3c]">{storedTemplates.length}</span>
               </div>
 
@@ -836,15 +851,22 @@ export default function EntityBuilder() {
               )}
               {!loadingTemplates && storedTemplates.length === 0 && (
                 <div className="text-center py-8">
-                  <p className="text-[#636366] text-[12px]">No custom templates yet</p>
-                  <p className="text-[#3a3a3c] text-[11px] mt-1">Create and publish your own</p>
+                  <p className="text-[#636366] text-[12px]">No toolkit templates available</p>
+                  <p className="text-[#3a3a3c] text-[11px] mt-1">ArangoDB connection may be unavailable</p>
                 </div>
               )}
               <div className="space-y-2">
                 {storedTemplates.map(template => {
-                  const isOntology = (template as any).isOntology;
-                  const pillarPacks = (template as any).pillarPacks;
+                  const isOntology = template.isOntology;
+                  const pillarPacks = template.pillarPacks;
                   const isExpanded = expandedRepoId === template.id || selectedRepoTemplate?.id === template.id;
+                  const sectorColors: Record<string, string> = {
+                    RCOGP: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                    ICT: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                    FSC: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                    AGRI: 'bg-green-500/10 text-green-400 border-green-500/20',
+                  };
+                  const sectorColor = sectorColors[template.sectorCode || ''] || 'bg-white/[0.06] text-[#d1d1d6] border-white/[0.06]';
 
                   return (
                     <div key={template.id}
@@ -852,21 +874,23 @@ export default function EntityBuilder() {
                       onClick={() => setSelectedRepoTemplate(selectedRepoTemplate?.id === template.id ? null : template)}
                       data-testid={`template-card-${template.id}`}>
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ring-1 ${isOntology ? 'bg-emerald-500/10 ring-emerald-500/20' : 'bg-white/[0.06] ring-white/[0.06]'}`}>
-                          <Folder className={`w-4.5 h-4.5 ${isOntology ? 'text-emerald-400' : 'text-[#d1d1d6]'}`} />
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border text-[10px] font-bold ${sectorColor}`}>
+                          {(template.sectorCode || '??').substring(0, 4)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[13px] font-semibold text-white truncate">{template.name}</span>
-                            {isOntology && (
-                              <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-semibold shrink-0">Ontology</span>
+                            {template.scorecardType && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${template.scorecardType === 'QSE' ? 'bg-orange-500/10 text-orange-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                {template.scorecardType}
+                              </span>
                             )}
                             {editingTemplateId === template.id && (
                               <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.08] text-[#d1d1d6] rounded font-semibold shrink-0">Active</span>
                             )}
                           </div>
                           <p className="text-[11px] text-[#636366] mt-0.5">
-                            {isOntology && pillarPacks
+                            {pillarPacks
                               ? `${pillarPacks.length} pillars · ${pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${(template.entities || []).length} entities`
                               : `${(template.entities || []).length} entities · v${template.version || '1.0'}`
                             }
@@ -877,12 +901,6 @@ export default function EntityBuilder() {
                             className="px-3 py-1.5 text-[11px] font-semibold text-[#d1d1d6] bg-white/[0.06] hover:bg-white/[0.18]/20 rounded-lg smooth press-sm" data-testid={`button-load-${template.id}`}>
                             Load
                           </button>
-                          {!isOntology && (
-                            <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(template.id as number); }}
-                              className="p-1.5 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-template-${template.id}`}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
                         </div>
                       </div>
 
