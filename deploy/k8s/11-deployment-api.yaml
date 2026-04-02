@@ -1,0 +1,161 @@
+# API Service Deployment (Node.js/Express)
+# Backend service handling business logic
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: okiru-pro
+  labels:
+    app: api
+    component: backend
+    tier: api
+spec:
+  replicas: 2  # Minimum 2 for high availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Add 1 extra pod during update
+      maxUnavailable: 0  # Keep all pods available during update
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        component: backend
+        tier: api
+    spec:
+      imagePullSecrets:
+        - name: acr-pull-secret
+      affinity:
+        # Spread pods across different nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - api
+                topologyKey: kubernetes.io/hostname
+        # Avoid scheduling on nodes with compute-heavy workloads
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: workload-type
+                    operator: NotIn
+                    values:
+                      - compute-heavy
+      initContainers:
+        # Wait for databases to be ready before starting
+        - name: wait-for-mongodb
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mongodb 27017; do
+                echo "Waiting for MongoDB..."
+                sleep 2
+              done
+        - name: wait-for-redis
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z redis 6379; do
+                echo "Waiting for Redis..."
+                sleep 2
+              done
+      containers:
+        - name: api
+          image: okiruproacrde4d539b.azurecr.io/okiru-pro/api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              name: http
+              protocol: TCP
+          env:
+            # ConfigMap values
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: API_PORT
+            # Secret values
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: MONGODB_URI
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: JWT_SECRET
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: SESSION_SECRET
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Health check endpoint - adjust path to your API
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12  # Allow 60 seconds for startup
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL

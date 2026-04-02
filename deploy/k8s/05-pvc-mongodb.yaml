@@ -1,0 +1,19 @@
+# PersistentVolumeClaim for MongoDB
+# 10GB Standard SSD for database storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: okiru-pro
+  labels:
+    app: mongodb
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one node can mount this volume
+  storageClassName: managed-standard-ssd
+  resources:
+    requests:
+      storage: 10Gi
+  # Volume will retain data even if PVC is deleted
+  # Data backup strategy should be implemented separately

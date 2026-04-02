@@ -14,7 +14,8 @@ EXPOSE 8000
 ENV API_HOST=0.0.0.0 \
     API_PORT=8000 \
     API_RELOAD=false \
-    LOG_LEVEL=info
+    LOG_LEVEL=info \
+    PYTHONPATH=/app/backend
 
-CMD ["python", "-m", "uvicorn", "backend.app.main:app", \
+CMD ["python", "-m", "uvicorn", "app.main:app", \
      "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
