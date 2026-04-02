@@ -118,6 +118,66 @@ export async function registerRoutes(
     res.json(REGISTERED_ORGANIZATIONS.map(o => ({ id: o.id, name: o.name, emailDomain: o.emailDomain })));
   });
 
+  const checkRateLimits = new Map<string, { count: number; resetAt: number }>();
+  function rateLimitCheck(ip: string, limit = 30, windowMs = 60000): boolean {
+    const now = Date.now();
+    const entry = checkRateLimits.get(ip);
+    if (!entry || now > entry.resetAt) {
+      checkRateLimits.set(ip, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    entry.count++;
+    return entry.count <= limit;
+  }
+
+  app.post("/api/auth/check-username", async (req, res) => {
+    try {
+      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
+      const { username } = req.body;
+      const trimmed = typeof username === 'string' ? username.trim() : '';
+      if (!trimmed) return res.json({ available: false, message: "Username is required" });
+      if (trimmed.length < 3) return res.json({ available: false, message: "At least 3 characters" });
+      if (trimmed.length > 50) return res.json({ available: false, message: "Must not exceed 50 characters" });
+      if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) return res.json({ available: false, message: "Only letters, numbers, dots, hyphens, underscores" });
+      const existing = await storage.getUserByUsername(trimmed);
+      if (existing && existing.isVerified) return res.json({ available: false, message: "Username is not available" });
+      return res.json({ available: true, message: "Username is available" });
+    } catch {
+      return res.json({ available: false, message: "Unable to check right now" });
+    }
+  });
+
+  app.post("/api/auth/check-email", async (req, res) => {
+    try {
+      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
+      const { email } = req.body;
+      const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!trimmed) return res.json({ available: false, message: "Email is required" });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return res.json({ available: false, message: "Enter a valid email address" });
+      const existing = await storage.getUserByUsernameOrEmail(trimmed);
+      if (existing && existing.isVerified) return res.json({ available: false, message: "This email is not available" });
+      return res.json({ available: true, message: "Email is available" });
+    } catch {
+      return res.json({ available: false, message: "Unable to check right now" });
+    }
+  });
+
+  app.post("/api/auth/check-subscription", async (req, res) => {
+    try {
+      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ valid: false, message: "Too many requests, try again shortly" });
+      const { organizationId, subscriptionId } = req.body;
+      if (!organizationId) return res.json({ valid: false, message: "Select an organization" });
+      const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
+      if (!org) return res.json({ valid: false, message: "Invalid organization" });
+      const trimmedSubId = typeof subscriptionId === 'string' ? subscriptionId.trim().toUpperCase() : '';
+      if (!trimmedSubId) return res.json({ valid: false, message: "Subscription ID is required" });
+      if (trimmedSubId !== org.subscriptionId) return res.json({ valid: false, message: "Invalid subscription ID" });
+      return res.json({ valid: true, message: "Subscription verified" });
+    } catch {
+      return res.json({ valid: false, message: "Unable to verify right now" });
+    }
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
