@@ -33,13 +33,20 @@ interface CompanyRow {
 }
 
 interface StoredTemplate {
-  id: number;
+  id: number | string;
   name: string;
   description: string;
   version: string;
   entities: { label: string; definition: string; synonyms?: string[]; zones?: string[]; keywords?: any; pattern?: string; positives?: string[]; negatives?: string[] }[];
   createdAt: string;
   updatedAt: string;
+  isOntology?: boolean;
+  sectorCode?: string;
+  scorecardType?: string;
+  pillarPacks?: any[];
+  sourceFile?: string;
+  nodeCount?: number;
+  edgeCount?: number;
 }
 
 
@@ -67,9 +74,9 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const [templateSearch, setTemplateSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | string | null>(null);
   const [industryFilter, setIndustryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [storedTemplates, setStoredTemplates] = useState<StoredTemplate[]>([]);
@@ -151,7 +158,7 @@ export default function Dashboard() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch("/api/templates");
+      const res = await fetch("/api/entity-templates");
       if (res.ok) {
         const data = await res.json();
         setStoredTemplates(Array.isArray(data) ? data : []);
@@ -214,7 +221,7 @@ export default function Dashboard() {
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
-  const deleteTemplate = async (id: number) => {
+  const deleteTemplate = async (id: number | string) => {
     const template = storedTemplates.find(t => t.id === id);
     setIsDeleting(true);
     try {
@@ -436,20 +443,51 @@ export default function Dashboard() {
             {filteredStoredTemplates.length > 0 && (
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-4">
-                  <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Your Templates</h2>
+                  <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Toolkit Templates</h2>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-[#d1d1d6] font-semibold">{filteredStoredTemplates.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {filteredStoredTemplates.map((t, idx) => (
+                  {filteredStoredTemplates.map((t, idx) => {
+                    const sectorColors: Record<string, string> = {
+                      RCOGP: 'bg-blue-500/15 text-blue-400',
+                      ICT: 'bg-purple-500/15 text-purple-400',
+                      FSC: 'bg-amber-500/15 text-amber-400',
+                      AGRI: 'bg-green-500/15 text-green-400',
+                    };
+                    const sectorBadge = sectorColors[t.sectorCode || ''] || 'bg-white/[0.08] text-[#d1d1d6]';
+                    return (
                     <div key={t.id} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`stored-template-${t.id}`}>
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
-                          <div className="text-[11px] text-[#98989f] mt-1">{(t.entities || []).length} entities &middot; v{t.version || '1.0'}</div>
+                          <div className="text-[11px] text-[#98989f] mt-1">
+                            {t.pillarPacks
+                              ? `${t.pillarPacks.length} pillars · ${t.pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${(t.entities || []).length} entities`
+                              : `${(t.entities || []).length} entities · v${t.version || '1.0'}`}
+                          </div>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-[#d1d1d6] font-semibold shrink-0">Custom</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {t.sectorCode && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${sectorBadge}`}>{t.sectorCode}</span>
+                          )}
+                          {t.scorecardType && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${t.scorecardType === 'QSE' ? 'bg-orange-500/15 text-orange-400' : 'bg-emerald-500/15 text-emerald-400'}`}>{t.scorecardType}</span>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[13px] text-[#98989f] mt-3 leading-relaxed">{t.description || 'Custom entity template'}</p>
+
+                      {t.sourceFile && (
+                        <div className="mt-3 flex items-center gap-2 text-[11px] text-[#636366]">
+                          <FileText className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{t.sourceFile}</span>
+                        </div>
+                      )}
+                      {(t.nodeCount || t.edgeCount) ? (
+                        <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#636366]">
+                          <span>{(t.nodeCount || 0).toLocaleString()} nodes</span>
+                          <span>{(t.edgeCount || 0).toLocaleString()} edges</span>
+                        </div>
+                      ) : null}
 
                       <div className="mt-4">
                         <div className="flex flex-wrap gap-1.5">
@@ -462,18 +500,20 @@ export default function Dashboard() {
 
                       <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between">
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setDeleteConfirm(t.id)}
-                            className="p-2 text-[#636366] hover:text-red-500 hover:bg-red-500/10 rounded-lg smooth press-sm"
-                            title="Delete template"
-                            data-testid={`button-delete-${t.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {!t.isOntology && (
+                            <button
+                              onClick={() => setDeleteConfirm(t.id as number)}
+                              className="p-2 text-[#636366] hover:text-red-500 hover:bg-red-500/10 rounded-lg smooth press-sm"
+                              title="Delete template"
+                              data-testid={`button-delete-${t.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => { setEditingTemplateId(t.id); navigate(`/builder?template=${t.id}`); }}
                             className="p-2 text-[#636366] hover:text-[#d1d1d6] hover:bg-white/[0.18]/10 rounded-lg smooth press-sm"
-                            title="Edit template"
+                            title={t.isOntology ? "Load in builder" : "Edit template"}
                             data-testid={`button-edit-${t.id}`}
                           >
                             {editingTemplateId === t.id
@@ -490,7 +530,8 @@ export default function Dashboard() {
                         </Link>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
