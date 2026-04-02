@@ -87,3 +87,7 @@ build = ["bash", "-c", "pnpm install --frozen-lockfile && cd apps/web && pnpm ru
 
 [userenv.shared]
 ALLOW_IN_MEMORY_DB = "1"
+ARANGO_URL = "https://051f856d6032.arangodb.cloud:8529"
+ARANGO_DB = "bbbee_db"
+ARANGO_USER = "root"
+ARANGO_VERIFY_SSL = "true"
