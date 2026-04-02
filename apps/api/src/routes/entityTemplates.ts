@@ -2,8 +2,10 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { EntityTemplateModel } from '../../models.js';
 import { getAllManifests } from '../../pipeline/extraction/entityManifest.js';
+import { GraphRepository } from '../../arango/repositories/graphRepository.js';
 
 const router = Router();
+const graphRepo = new GraphRepository();
 
 // GET /api/entity-templates — list all (MongoDB + new ontology)
 router.get('/', async (_req: Request, res: Response) => {
@@ -11,14 +13,35 @@ router.get('/', async (_req: Request, res: Response) => {
     // Get old MongoDB templates
     const oldTemplates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
 
+    let graphMeta: Record<string, { sourceFile: string; nodeCount: number; edgeCount: number; version: string }> = {};
+    try {
+      const graphs = await graphRepo.listFormulaGraphs();
+      for (const g of graphs) {
+        const key = `${g.sectorCode}_${g.scorecardType}`;
+        if (!graphMeta[key] || (g.version || '') > (graphMeta[key].version || '')) {
+          graphMeta[key] = {
+            sourceFile: g.sourceFile || '',
+            nodeCount: g.nodeCount || 0,
+            edgeCount: g.edgeCount || 0,
+            version: g.version || '',
+          };
+        }
+      }
+    } catch { }
+
     // Get new ontology manifests and convert to template format
     const manifests = getAllManifests();
-    const ontologyTemplates = manifests.map(m => ({
+    const ontologyTemplates = manifests.map(m => {
+      const meta = graphMeta[`${m.sectorCode}_${m.scorecardType}`];
+      return {
       id: `ontology-${m.sectorCode}-${m.scorecardType}`,
       userId: null,
       name: `${m.sectorCode} ${m.scorecardType} Scorecard`,
       description: `Ontology-based template for ${m.sectorCode} ${m.scorecardType} with ${m.pillarPacks.reduce((sum: number, p: any) => sum + p.criteria.length, 0)} criteria across ${m.pillarPacks.length} pillars`,
       version: '2.0',
+      sourceFile: meta?.sourceFile || '',
+      nodeCount: meta?.nodeCount || 0,
+      edgeCount: meta?.edgeCount || 0,
       // Flat entity list for backward compatibility
       entities: m.pillarPacks.flatMap(p => p.entities).map(e => ({
         label: e.id,
@@ -69,7 +92,7 @@ router.get('/', async (_req: Request, res: Response) => {
       rootContext: m.rootContext,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }));
+    };});
 
     // Combine both, with ontology templates first
     return res.json([...ontologyTemplates, ...oldTemplates]);

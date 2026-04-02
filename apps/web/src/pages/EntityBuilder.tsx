@@ -43,6 +43,9 @@ interface StoredTemplate {
   sectorCode?: string;
   scorecardType?: string;
   pillarPacks?: any[];
+  sourceFile?: string;
+  nodeCount?: number;
+  edgeCount?: number;
 }
 
 function CompletenessRing({ pct }: { pct: number }) {
@@ -895,6 +898,14 @@ export default function EntityBuilder() {
                               : `${(template.entities || []).length} entities · v${template.version || '1.0'}`
                             }
                           </p>
+                          {template.sourceFile && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-[#48484a] truncate max-w-[140px]" title={template.sourceFile}>{template.sourceFile.replace(/^BBBEE Toolkit \(.*?\)_?/, '').replace(/_/g, ' ')}</span>
+                              {(template.nodeCount || template.edgeCount) ? (
+                                <span className="text-[10px] text-[#48484a]">{(template.nodeCount || 0).toLocaleString()} nodes · {(template.edgeCount || 0).toLocaleString()} edges</span>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(template); }}
