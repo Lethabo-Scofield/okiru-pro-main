@@ -129,7 +129,8 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - This matches the development architecture where the web server is the single entry point
 
 ## Notes
-- Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)
+- Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
+- Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly
 - Without `ARANGO_URL`/ArangoDB, the Computation Engine uses in-memory mode (`ALLOW_IN_MEMORY_DB=1`) — data will not persist
 - Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility
 - Health check available at `GET /api/health` on web server and API server, and `GET /health` on Computation Engine

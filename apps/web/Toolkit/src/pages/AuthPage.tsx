@@ -413,7 +413,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                   </h2>
                   <p className="text-[13px] text-muted-foreground/60 mt-1">
                     {mode === 'login'
-                      ? 'Sign in with your work email'
+                      ? 'Sign in with your username or email'
                       : mode === 'forgot'
                         ? 'Enter your email to receive a reset code'
                         : mode === 'reset'
@@ -513,19 +513,19 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                     ) : mode === 'login' ? (
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <Label htmlFor="login-email" className="text-[12px] font-medium text-muted-foreground/70">Work Email</Label>
+                          <Label htmlFor="login-email" className="text-[12px] font-medium text-muted-foreground/70">Username or Email</Label>
                           <Input
                             id="login-email"
-                            type="email"
+                            type="text"
                             required
                             value={form.loginEmail}
                             onChange={e => {
                               setForm({ ...form, loginEmail: e.target.value });
                               setFieldErrors(prev => ({ ...prev, loginEmail: '' }));
                             }}
-                            placeholder="thabo@okiru.co.za"
+                            placeholder="username or email"
                             className="h-10"
-                            autoComplete="email"
+                            autoComplete="username"
                             data-testid="input-login-email"
                           />
                           {fieldErrors.loginEmail && (
