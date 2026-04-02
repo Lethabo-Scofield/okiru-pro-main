@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAuth } from "@toolkit/lib/auth";
 import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
-import { Loader2, ArrowRight, ArrowLeft, Check, Building2, User, KeyRound, Shield, ChevronDown, Mail, RefreshCw } from "lucide-react";
+import { Loader2, ArrowRight, ArrowLeft, Check, Building2, User, KeyRound, Shield, ChevronDown, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
@@ -30,6 +30,49 @@ interface OrgOption {
   id: string;
   name: string;
   emailDomain: string;
+}
+
+interface AsyncFieldStatus {
+  checking: boolean;
+  available: boolean | null;
+  message: string;
+}
+
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+function FieldStatus({ status }: { status: AsyncFieldStatus }) {
+  if (status.checking) {
+    return (
+      <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-1">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Checking...
+      </p>
+    );
+  }
+  if (status.available === true) {
+    return (
+      <p className="text-[11px] text-emerald-500 flex items-center gap-1 mt-1" data-testid="field-status-ok">
+        <CheckCircle2 className="h-3 w-3" />
+        {status.message}
+      </p>
+    );
+  }
+  if (status.available === false) {
+    return (
+      <p className="text-[11px] text-destructive flex items-center gap-1 mt-1" data-testid="field-status-error">
+        <AlertCircle className="h-3 w-3" />
+        {status.message}
+      </p>
+    );
+  }
+  return null;
 }
 
 function OrgPicker({ organizations, value, onChange, error }: {
@@ -161,16 +204,26 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     password: '',
     confirmPassword: '',
     fullName: '',
-    emailName: '',
-    personalEmail: '',
+    email: '',
     organizationId: '',
     subscriptionId: '',
     role: 'auditor',
   });
 
-  const [emailType, setEmailType] = useState<'company' | 'personal'>('company');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [emailManuallyEdited, setEmailManuallyEdited] = useState(false);
+
+  const defaultStatus: AsyncFieldStatus = { checking: false, available: null, message: '' };
+  const [usernameStatus, setUsernameStatus] = useState<AsyncFieldStatus>(defaultStatus);
+  const [emailStatus, setEmailStatus] = useState<AsyncFieldStatus>(defaultStatus);
+  const [subStatus, setSubStatus] = useState<AsyncFieldStatus>(defaultStatus);
+
+  const debouncedUsername = useDebounce(form.username, 400);
+  const debouncedEmail = useDebounce(form.email, 400);
+  const debouncedSubId = useDebounce(form.subscriptionId, 400);
+
+  const usernameAbort = useRef<AbortController | null>(null);
+  const emailAbort = useRef<AbortController | null>(null);
+  const subAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/organizations`)
@@ -185,31 +238,101 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  const selectedOrg = organizations.find(o => o.id === form.organizationId);
-  const fullEmail = useMemo(() => {
-    if (emailType === 'personal') {
-      return form.personalEmail.trim().toLowerCase();
+  useEffect(() => {
+    usernameAbort.current?.abort();
+    if (!debouncedUsername || debouncedUsername.length < 3) {
+      if (debouncedUsername && debouncedUsername.length < 3) {
+        setUsernameStatus({ checking: false, available: false, message: "At least 3 characters" });
+      } else {
+        setUsernameStatus(defaultStatus);
+      }
+      return;
     }
-    if (!form.emailName.trim() || !selectedOrg) return '';
-    return `${form.emailName.trim().toLowerCase()}@${selectedOrg.emailDomain}`;
-  }, [form.emailName, form.personalEmail, selectedOrg, emailType]);
+    if (!/^[a-zA-Z0-9_.-]+$/.test(debouncedUsername)) {
+      setUsernameStatus({ checking: false, available: false, message: "Only letters, numbers, dots, hyphens, underscores" });
+      return;
+    }
+    const controller = new AbortController();
+    usernameAbort.current = controller;
+    setUsernameStatus({ checking: true, available: null, message: '' });
+    fetch(`${API_BASE}/api/auth/check-username`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: debouncedUsername }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => { if (!controller.signal.aborted) setUsernameStatus({ checking: false, available: data.available, message: data.message }); })
+      .catch(e => { if (e.name !== 'AbortError') setUsernameStatus({ checking: false, available: null, message: '' }); });
+  }, [debouncedUsername]);
+
+  useEffect(() => {
+    emailAbort.current?.abort();
+    if (!debouncedEmail) {
+      setEmailStatus(defaultStatus);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail.trim())) {
+      setEmailStatus({ checking: false, available: false, message: "Enter a valid email address" });
+      return;
+    }
+    const controller = new AbortController();
+    emailAbort.current = controller;
+    setEmailStatus({ checking: true, available: null, message: '' });
+    fetch(`${API_BASE}/api/auth/check-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: debouncedEmail.trim() }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => { if (!controller.signal.aborted) setEmailStatus({ checking: false, available: data.available, message: data.message }); })
+      .catch(e => { if (e.name !== 'AbortError') setEmailStatus({ checking: false, available: null, message: '' }); });
+  }, [debouncedEmail]);
+
+  useEffect(() => {
+    subAbort.current?.abort();
+    if (!form.organizationId || !debouncedSubId) {
+      setSubStatus(defaultStatus);
+      return;
+    }
+    const controller = new AbortController();
+    subAbort.current = controller;
+    setSubStatus({ checking: true, available: null, message: '' });
+    fetch(`${API_BASE}/api/auth/check-subscription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organizationId: form.organizationId, subscriptionId: debouncedSubId.trim() }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => { if (!controller.signal.aborted) setSubStatus({ checking: false, available: data.valid ?? false, message: data.message }); })
+      .catch(e => { if (e.name !== 'AbortError') setSubStatus({ checking: false, available: null, message: '' }); });
+  }, [form.organizationId, debouncedSubId]);
+
+  const selectedOrg = organizations.find(o => o.id === form.organizationId);
 
   const validateStep = (s: number): boolean => {
     const errors: Record<string, string> = {};
     if (s === 1) {
       if (!form.organizationId) errors.organizationId = "Please select your organization";
       if (!form.subscriptionId.trim()) errors.subscriptionId = "Subscription ID is required";
+      else if (subStatus.checking) errors.subscriptionId = "Still verifying...";
+      else if (subStatus.available === false) errors.subscriptionId = subStatus.message;
+      else if (form.subscriptionId.trim() && subStatus.available === null) errors.subscriptionId = "Verification pending, please wait";
     } else if (s === 2) {
       if (!form.fullName.trim()) errors.fullName = "Full name is required";
-      if (emailType === 'company') {
-        if (!form.emailName.trim()) errors.emailName = "Email name is required";
-      } else {
-        if (!form.personalEmail.trim()) errors.personalEmail = "Email is required";
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.personalEmail.trim())) errors.personalEmail = "Enter a valid email address";
-      }
+      if (!form.email.trim()) errors.email = "Email is required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
+      else if (emailStatus.checking) errors.email = "Still checking...";
+      else if (emailStatus.available === false) errors.email = emailStatus.message;
+      else if (form.email.trim() && emailStatus.available === null) errors.email = "Verification pending, please wait";
     } else if (s === 3) {
       if (!form.username.trim()) errors.username = "Username is required";
       else if (form.username.length < 3) errors.username = "At least 3 characters";
+      else if (usernameStatus.checking) errors.username = "Still checking...";
+      else if (usernameStatus.available === false) errors.username = usernameStatus.message;
+      else if (form.username.trim() && usernameStatus.available === null) errors.username = "Verification pending, please wait";
       if (!form.password) errors.password = "Password is required";
       else if (form.password.length < 4) errors.password = "At least 4 characters";
       if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
@@ -284,13 +407,13 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         username: form.username,
         password: form.password,
         fullName: form.fullName,
-        email: fullEmail,
+        email: form.email.trim().toLowerCase(),
         organizationId: form.organizationId,
         subscriptionId: form.subscriptionId,
         role: form.role,
       });
       if (result?.requiresVerification) {
-        setEmailHint(result.emailHint || fullEmail);
+        setEmailHint(result.emailHint || form.email);
         setMode('otp');
         setOtpValue('');
         toast({ title: "Verify Your Email", description: result.message || "Check your email for the code." });
@@ -383,6 +506,22 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   };
 
   const pageTransition = { duration: 0.15, ease: "easeOut" };
+
+  const passwordStrength = useMemo(() => {
+    const pw = form.password;
+    if (!pw) return null;
+    let score = 0;
+    if (pw.length >= 4) score++;
+    if (pw.length >= 8) score++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+    if (/\d/.test(pw)) score++;
+    if (/[^a-zA-Z0-9]/.test(pw)) score++;
+    if (score <= 1) return { label: "Weak", color: "bg-red-500", width: "w-1/5" };
+    if (score === 2) return { label: "Fair", color: "bg-orange-500", width: "w-2/5" };
+    if (score === 3) return { label: "Good", color: "bg-yellow-500", width: "w-3/5" };
+    if (score === 4) return { label: "Strong", color: "bg-emerald-500", width: "w-4/5" };
+    return { label: "Very Strong", color: "bg-emerald-500", width: "w-full" };
+  }, [form.password]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -574,13 +713,13 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                     ) : mode === 'forgot' ? (
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <Label htmlFor="reset-email" className="text-[12px] font-medium text-muted-foreground/70">Work Email</Label>
+                          <Label htmlFor="reset-email" className="text-[12px] font-medium text-muted-foreground/70">Email Address</Label>
                           <Input
                             id="reset-email"
                             type="email"
                             value={resetEmail}
                             onChange={e => { setResetEmail(e.target.value); setFieldErrors(prev => ({ ...prev, resetEmail: '' })); }}
-                            placeholder="thabo@okiru.co.za"
+                            placeholder="you@example.com"
                             className="h-10"
                             autoComplete="email"
                             data-testid="input-reset-email"
@@ -681,6 +820,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               onChange={v => {
                                 setForm({ ...form, organizationId: v });
                                 setFieldErrors(prev => ({ ...prev, organizationId: '' }));
+                                setSubStatus(defaultStatus);
                               }}
                               error={fieldErrors.organizationId}
                             />
@@ -708,8 +848,10 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                 className="h-10 font-mono text-sm tracking-wider"
                                 data-testid="input-subscription-id"
                               />
-                              {fieldErrors.subscriptionId && (
+                              {fieldErrors.subscriptionId ? (
                                 <p className="text-[11px] text-destructive" data-testid="error-subscription">{fieldErrors.subscriptionId}</p>
+                              ) : (
+                                <FieldStatus status={subStatus} />
                               )}
                             </div>
                           </div>
@@ -722,12 +864,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               <Input
                                 value={form.fullName}
                                 onChange={e => {
-                                  const name = e.target.value;
-                                  const updates: Record<string, string> = { fullName: name };
-                                  if (!emailManuallyEdited && emailType === 'company') {
-                                    updates.emailName = name.trim().toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, '');
-                                  }
-                                  setForm(prev => ({ ...prev, ...updates }));
+                                  setForm(prev => ({ ...prev, fullName: e.target.value }));
                                   setFieldErrors(prev => ({ ...prev, fullName: '' }));
                                 }}
                                 placeholder="e.g. Thabo Mokoena"
@@ -741,80 +878,23 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Email</Label>
-                              <div className="flex gap-2 mb-2">
-                                <button
-                                  type="button"
-                                  onClick={() => { setEmailType('company'); setFieldErrors(prev => ({ ...prev, emailName: '', personalEmail: '' })); }}
-                                  className={`flex-1 text-[11px] font-medium py-2 px-3 rounded-lg border transition-colors ${
-                                    emailType === 'company'
-                                      ? 'border-primary bg-primary/10 text-primary'
-                                      : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/30'
-                                  }`}
-                                  data-testid="btn-email-company"
-                                >
-                                  Company Email
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => { setEmailType('personal'); setFieldErrors(prev => ({ ...prev, emailName: '', personalEmail: '' })); }}
-                                  className={`flex-1 text-[11px] font-medium py-2 px-3 rounded-lg border transition-colors ${
-                                    emailType === 'personal'
-                                      ? 'border-primary bg-primary/10 text-primary'
-                                      : 'border-border bg-transparent text-muted-foreground hover:border-muted-foreground/30'
-                                  }`}
-                                  data-testid="btn-email-personal"
-                                >
-                                  Personal Email
-                                </button>
-                              </div>
-
-                              {emailType === 'company' ? (
-                                <>
-                                  <div className="flex items-center gap-0">
-                                    <Input
-                                      value={form.emailName}
-                                      onChange={e => {
-                                        const val = e.target.value.replace(/[^a-zA-Z0-9._-]/g, '');
-                                        setForm(prev => ({ ...prev, emailName: val }));
-                                        setFieldErrors(prev => ({ ...prev, emailName: '' }));
-                                        setEmailManuallyEdited(true);
-                                      }}
-                                      placeholder="thabo.mokoena"
-                                      className="h-10 rounded-r-none border-r-0 flex-1"
-                                      data-testid="input-email-name"
-                                    />
-                                    <div className="h-10 px-3 flex items-center bg-muted/50 border border-l-0 border-border rounded-r-md text-[12px] text-muted-foreground font-mono whitespace-nowrap">
-                                      @{selectedOrg?.emailDomain || 'company.co.za'}
-                                    </div>
-                                  </div>
-                                  {fieldErrors.emailName && (
-                                    <p className="text-[11px] text-destructive" data-testid="error-email">{fieldErrors.emailName}</p>
-                                  )}
-                                </>
+                              <Label className="text-[12px] font-medium text-muted-foreground/70">Email Address</Label>
+                              <Input
+                                type="email"
+                                value={form.email}
+                                onChange={e => {
+                                  setForm(prev => ({ ...prev, email: e.target.value }));
+                                  setFieldErrors(prev => ({ ...prev, email: '' }));
+                                }}
+                                placeholder="you@example.com"
+                                className="h-10"
+                                autoComplete="email"
+                                data-testid="input-email"
+                              />
+                              {fieldErrors.email ? (
+                                <p className="text-[11px] text-destructive" data-testid="error-email">{fieldErrors.email}</p>
                               ) : (
-                                <>
-                                  <Input
-                                    type="email"
-                                    value={form.personalEmail}
-                                    onChange={e => {
-                                      setForm(prev => ({ ...prev, personalEmail: e.target.value }));
-                                      setFieldErrors(prev => ({ ...prev, personalEmail: '' }));
-                                    }}
-                                    placeholder="thabo.mokoena@gmail.com"
-                                    className="h-10"
-                                    autoComplete="email"
-                                    data-testid="input-personal-email"
-                                  />
-                                  {fieldErrors.personalEmail && (
-                                    <p className="text-[11px] text-destructive" data-testid="error-personal-email">{fieldErrors.personalEmail}</p>
-                                  )}
-                                </>
-                              )}
-                              {fullEmail && (
-                                <p className="text-[11px] text-muted-foreground/60 mt-1" data-testid="text-full-email">
-                                  Verification will be sent to: <span className="text-foreground font-medium">{fullEmail}</span>
-                                </p>
+                                <FieldStatus status={emailStatus} />
                               )}
                             </div>
                           </div>
@@ -835,8 +915,10 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                 autoComplete="username"
                                 data-testid="input-username"
                               />
-                              {fieldErrors.username && (
+                              {fieldErrors.username ? (
                                 <p className="text-[11px] text-destructive" data-testid="error-username">{fieldErrors.username}</p>
+                              ) : (
+                                <FieldStatus status={usernameStatus} />
                               )}
                             </div>
                             <div className="space-y-1.5">
@@ -856,6 +938,14 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               {fieldErrors.password && (
                                 <p className="text-[11px] text-destructive" data-testid="error-password">{fieldErrors.password}</p>
                               )}
+                              {passwordStrength && !fieldErrors.password && (
+                                <div className="space-y-1">
+                                  <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                    <div className={`h-full ${passwordStrength.color} ${passwordStrength.width} transition-all duration-300 rounded-full`} />
+                                  </div>
+                                  <p className={`text-[10px] ${passwordStrength.color.replace('bg-', 'text-')}`}>{passwordStrength.label}</p>
+                                </div>
+                              )}
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Confirm Password</Label>
@@ -873,6 +963,12 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               />
                               {fieldErrors.confirmPassword && (
                                 <p className="text-[11px] text-destructive" data-testid="error-confirm-password">{fieldErrors.confirmPassword}</p>
+                              )}
+                              {form.confirmPassword && form.password === form.confirmPassword && !fieldErrors.confirmPassword && (
+                                <p className="text-[11px] text-emerald-500 flex items-center gap-1 mt-1">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Passwords match
+                                </p>
                               )}
                             </div>
                           </div>
@@ -923,7 +1019,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                 <span className="text-muted-foreground/60">Name</span>
                                 <span className="text-foreground font-medium truncate">{form.fullName || '—'}</span>
                                 <span className="text-muted-foreground/60">Email</span>
-                                <span className="text-foreground font-medium truncate">{fullEmail || '—'}</span>
+                                <span className="text-foreground font-medium truncate">{form.email || '—'}</span>
                                 <span className="text-muted-foreground/60">Username</span>
                                 <span className="text-foreground font-medium truncate">{form.username || '—'}</span>
                               </div>
