@@ -752,8 +752,7 @@ if (!useDatabase) {
     console.log("Storage: Seeded dummy user — username: demo, password: demo");
 
     const { starterTemplates } = await import("../src/data/starterTemplates");
-    const top3 = starterTemplates.slice(0, 3);
-    for (const t of top3) {
+    for (const t of starterTemplates) {
       await storage.createTemplate({
         name: t.name,
         description: t.description,
@@ -762,18 +761,19 @@ if (!useDatabase) {
         userId: null,
       });
     }
-    console.log(`Storage: Seeded ${top3.length} predefined templates`);
+    console.log(`Storage: Seeded ${starterTemplates.length} predefined templates`);
   })();
 } else {
   console.log("Storage: Using MongoDB database storage.");
   (async () => {
     try {
+      const { starterTemplates } = await import("../src/data/starterTemplates");
       const existing = await storage.getTemplates();
       const sharedTemplates = existing.filter(t => t.userId === null);
-      if (sharedTemplates.length === 0) {
-        const { starterTemplates } = await import("../src/data/starterTemplates");
-        const top3 = starterTemplates.slice(0, 3);
-        for (const t of top3) {
+      const existingNames = new Set(sharedTemplates.map(t => t.name));
+      const missing = starterTemplates.filter(t => !existingNames.has(t.name));
+      if (missing.length > 0) {
+        for (const t of missing) {
           await storage.createTemplate({
             name: t.name,
             description: t.description,
@@ -782,9 +782,9 @@ if (!useDatabase) {
             userId: null,
           });
         }
-        console.log(`Storage: Seeded ${top3.length} default templates into database`);
+        console.log(`Storage: Seeded ${missing.length} missing default templates into database (total: ${sharedTemplates.length + missing.length})`);
       } else {
-        console.log(`Storage: ${sharedTemplates.length} default templates already exist, skipping seed`);
+        console.log(`Storage: All ${sharedTemplates.length} default templates already exist, skipping seed`);
       }
     } catch (err) {
       console.error("Storage: Failed to seed default templates:", err);
