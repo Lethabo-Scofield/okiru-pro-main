@@ -130,11 +130,17 @@ export async function registerRoutes(
       if (!trimmedUsername || !password) {
         return res.status(400).json({ message: "Username and password are required" });
       }
-      if (trimmedUsername.length < 3) {
-        return res.status(400).json({ message: "Username must be at least 3 characters" });
+      if (trimmedUsername.length < 3 || trimmedUsername.length > 50) {
+        return res.status(400).json({ message: "Username must be between 3 and 50 characters" });
+      }
+      if (!/^[a-zA-Z0-9_.-]+$/.test(trimmedUsername)) {
+        return res.status(400).json({ message: "Username can only contain letters, numbers, dots, hyphens, and underscores" });
       }
       if (password.length < 4) {
         return res.status(400).json({ message: "Password must be at least 4 characters" });
+      }
+      if (password.length > 128) {
+        return res.status(400).json({ message: "Password must not exceed 128 characters" });
       }
       if (!trimmedFullName) {
         return res.status(400).json({ message: "Full name is required" });
@@ -446,6 +452,9 @@ export async function registerRoutes(
       if (typeof newPassword !== "string" || newPassword.length < 4) {
         return res.status(400).json({ message: "Password must be at least 4 characters" });
       }
+      if (newPassword.length > 128) {
+        return res.status(400).json({ message: "Password must not exceed 128 characters" });
+      }
 
       const ip = req.ip || "unknown";
       const attemptKey = `${ip}:${email.trim().toLowerCase()}`;
@@ -515,7 +524,7 @@ export async function registerRoutes(
   app.post("/api/auth/toggle-2fa", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
-      const { enabled } = req.body;
+      const { enabled } = req.body || {};
       if (typeof enabled !== "boolean") {
         return res.status(400).json({ message: "enabled (boolean) is required" });
       }
