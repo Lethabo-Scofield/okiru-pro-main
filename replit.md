@@ -47,6 +47,12 @@ pnpm install
 - `AZURE_OPENAI_ENDPOINT` - Optional, for Azure OpenAI extraction
 - `AZURE_OPENAI_API_KEY` - Optional, for Azure OpenAI extraction
 - `CORS_ORIGINS` - Computation Engine allowed origins (comma-separated)
+- `SMTP_HOST` - SMTP server hostname for email sending (OTP, password reset)
+- `SMTP_PORT` - SMTP port (default: 587)
+- `SMTP_USER` - SMTP authentication username
+- `SMTP_PASS` - SMTP authentication password
+- `SMTP_FROM` - Email "from" address (defaults to SMTP_USER)
+- `APP_URL` - Public URL of the application (used in email links)
 
 ## Production Deployment (Azure VM: 20.164.207.196)
 
@@ -126,4 +132,7 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`)
 - Without `ARANGO_URL`/ArangoDB, the Computation Engine uses in-memory mode (`ALLOW_IN_MEMORY_DB=1`) — data will not persist
 - Vite is configured with `allowedHosts: true` and `host: 0.0.0.0` for Replit proxy compatibility
-- Health check available at `GET /api/health` on both web server and API server
+- Health check available at `GET /api/health` on web server and API server, and `GET /health` on Computation Engine
+- Processor session routes gracefully return empty/503 when MongoDB is unavailable (no 10s timeout)
+- Password reset flow: POST /api/auth/forgot-password + POST /api/auth/reset-password (rate-limited, 5 attempts/15 min)
+- Pillar configs use separated `supplierDevelopment` + `enterpriseDevelopment` keys (not combined `enterpriseSupplierDevelopment`); `employmentEquity` is optional in pillarConfigs

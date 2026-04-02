@@ -87,7 +87,19 @@ describe('calculateEsdScore', () => {
   });
 
   describe('benefit factors', () => {
-    it('should apply higher factor for grants than interest-free loans', () => {
+    it('should apply higher factor for grants than standard loans', () => {
+      const grantResult = calculateEsdScore(makeEsdData({
+        contributions: [makeContribution({ type: 'grant', amount: 100_000 })],
+      }), NPAT);
+
+      const loanResult = calculateEsdScore(makeEsdData({
+        contributions: [makeContribution({ type: 'standard_loan', amount: 100_000 })],
+      }), NPAT);
+
+      expect(grantResult.sdSpend).toBeGreaterThan(loanResult.sdSpend);
+    });
+
+    it('should apply same factor for grants and interest-free loans per B-BBEE codes', () => {
       const grantResult = calculateEsdScore(makeEsdData({
         contributions: [makeContribution({ type: 'grant', amount: 100_000 })],
       }), NPAT);
@@ -96,7 +108,7 @@ describe('calculateEsdScore', () => {
         contributions: [makeContribution({ type: 'interest_free_loan', amount: 100_000 })],
       }), NPAT);
 
-      expect(grantResult.sdSpend).toBeGreaterThan(loanResult.sdSpend);
+      expect(grantResult.sdSpend).toBe(loanResult.sdSpend);
     });
 
     it('should handle config with missing benefitFactors gracefully', () => {

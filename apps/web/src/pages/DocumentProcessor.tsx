@@ -143,9 +143,17 @@ function bbeeRecognition(level: number): string {
 function buildScorecardFromCsvImport(data: ClientSideImportResult): any {
   const BLACK_RACES = ['African', 'Coloured', 'Indian'];
 
-  const totalShares = data.shareholders.reduce((s, sh) => s + (sh.shares || 0), 0);
-  const blackShares = data.shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackOwnership || 0), 0);
-  const blackWomenShares = data.shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackWomenOwnership || 0), 0);
+  const shareholders = Array.isArray(data.shareholders) ? data.shareholders : [];
+  const employees = Array.isArray(data.employees) ? data.employees : [];
+  const trainingPrograms = Array.isArray(data.trainingPrograms) ? data.trainingPrograms : [];
+  const suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
+  const esdContributions = Array.isArray(data.esdContributions) ? data.esdContributions : [];
+  const sedContributions = Array.isArray(data.sedContributions) ? data.sedContributions : [];
+  const financials = data.financials || {} as any;
+
+  const totalShares = shareholders.reduce((s, sh) => s + (sh.shares || 0), 0);
+  const blackShares = shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackOwnership || 0), 0);
+  const blackWomenShares = shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackWomenOwnership || 0), 0);
   const blackOwnerPct = totalShares > 0 ? (blackShares / totalShares) * 100 : 0;
   const blackWomenPct = totalShares > 0 ? (blackWomenShares / totalShares) * 100 : 0;
   const ownershipScore = Math.min(25,
@@ -158,11 +166,11 @@ function buildScorecardFromCsvImport(data: ClientSideImportResult): any {
     Math.min(3, (blackOwnerPct / 25) * 3)
   );
 
-  const board = data.employees.filter(e => e.designation === 'Board');
-  const exec = data.employees.filter(e => e.designation === 'Executive');
-  const senior = data.employees.filter(e => e.designation === 'Senior');
-  const middle = data.employees.filter(e => e.designation === 'Middle');
-  const junior = data.employees.filter(e => e.designation === 'Junior');
+  const board = employees.filter(e => e.designation === 'Board');
+  const exec = employees.filter(e => e.designation === 'Executive');
+  const senior = employees.filter(e => e.designation === 'Senior');
+  const middle = employees.filter(e => e.designation === 'Middle');
+  const junior = employees.filter(e => e.designation === 'Junior');
   const blackBoardPct = board.length > 0 ? (board.filter(e => BLACK_RACES.includes(e.race)).length / board.length) * 100 : 0;
   const blackExecPct = exec.length > 0 ? (exec.filter(e => BLACK_RACES.includes(e.race)).length / exec.length) * 100 : 0;
   const blackSeniorPct = senior.length > 0 ? (senior.filter(e => BLACK_RACES.includes(e.race)).length / senior.length) * 100 : 0;
@@ -178,22 +186,22 @@ function buildScorecardFromCsvImport(data: ClientSideImportResult): any {
     Math.min(2, (blackJuniorPct / 88) * 2)
   );
 
-  const leviable = data.financials.leviableAmount || 0;
-  const blackTrainingSpend = data.trainingPrograms.filter(t => t.isBlack).reduce((s, t) => s + (t.cost || 0), 0);
+  const leviable = financials.leviableAmount || 0;
+  const blackTrainingSpend = trainingPrograms.filter(t => t.isBlack).reduce((s, t) => s + (t.cost || 0), 0);
   const skillsPct = leviable > 0 ? (blackTrainingSpend / leviable) * 100 : 0;
-  const skillsScore = Math.min(25, (skillsPct / 6) * 20 + (data.trainingPrograms.filter(t => t.isBlack && t.isEmployed).length > 0 ? 5 : 0));
+  const skillsScore = Math.min(25, (skillsPct / 6) * 20 + (trainingPrograms.filter(t => t.isBlack && t.isEmployed).length > 0 ? 5 : 0));
 
-  const allSpend = data.suppliers.reduce((s, sup) => s + (sup.spend || 0), 0);
-  const tmps = data.financials.tmps > 0 ? data.financials.tmps : allSpend;
+  const allSpend = suppliers.reduce((s, sup) => s + (sup.spend || 0), 0);
+  const tmps = financials.tmps > 0 ? financials.tmps : allSpend;
   const LEVEL_WEIGHTS: Record<number, number> = { 1: 1, 2: 0.9, 3: 0.8, 4: 0.6, 5: 0.5, 6: 0.4, 7: 0.3, 8: 0.1 };
-  const recognizedSpend = data.suppliers.reduce((s, sup) => s + (sup.spend || 0) * (LEVEL_WEIGHTS[sup.beeLevel] ?? 0), 0);
+  const recognizedSpend = suppliers.reduce((s, sup) => s + (sup.spend || 0) * (LEVEL_WEIGHTS[sup.beeLevel] ?? 0), 0);
   const procPct = tmps > 0 ? (recognizedSpend / tmps) * 100 : 0;
-  const procScore = Math.min(29, (procPct / 80) * 25 + (data.suppliers.filter(s => s.enterpriseType === 'eme').length > 0 ? 2 : 0) + (data.suppliers.filter(s => s.enterpriseType === 'qse').length > 0 ? 2 : 0));
+  const procScore = Math.min(29, (procPct / 80) * 25 + (suppliers.filter(s => s.enterpriseType === 'eme').length > 0 ? 2 : 0) + (suppliers.filter(s => s.enterpriseType === 'qse').length > 0 ? 2 : 0));
 
-  const npat = data.financials.npat || 0;
-  const sdContribs = data.esdContributions.filter(c => c.category === 'supplier_development').reduce((s, c) => s + c.amount, 0);
-  const edContribs = data.esdContributions.filter(c => c.category === 'enterprise_development').reduce((s, c) => s + c.amount, 0);
-  const sedContribs = data.sedContributions.reduce((s, c) => s + c.amount, 0);
+  const npat = financials.npat || 0;
+  const sdContribs = esdContributions.filter(c => c.category === 'supplier_development').reduce((s, c) => s + c.amount, 0);
+  const edContribs = esdContributions.filter(c => c.category === 'enterprise_development').reduce((s, c) => s + c.amount, 0);
+  const sedContribs = sedContributions.reduce((s, c) => s + c.amount, 0);
   const sdTarget = npat * 0.02;
   const edTarget = npat * 0.01;
   const sedTarget = npat * 0.01;
@@ -225,17 +233,17 @@ function buildScorecardFromCsvImport(data: ClientSideImportResult): any {
     recognitionLevel: bbeeRecognition(discountedLevel),
     _source: 'csv_import',
     _entityCounts: {
-      shareholders: data.shareholders.length,
-      employees: data.employees.length,
-      trainingPrograms: data.trainingPrograms.length,
-      suppliers: data.suppliers.length,
-      esdContributions: data.esdContributions.length,
-      sedContributions: data.sedContributions.length,
+      shareholders: shareholders.length,
+      employees: employees.length,
+      trainingPrograms: trainingPrograms.length,
+      suppliers: suppliers.length,
+      esdContributions: esdContributions.length,
+      sedContributions: sedContributions.length,
     },
     _financials: {
-      revenue: data.financials.revenue,
-      npat: data.financials.npat,
-      leviableAmount: data.financials.leviableAmount,
+      revenue: financials.revenue,
+      npat: financials.npat,
+      leviableAmount: financials.leviableAmount,
       tmps,
     },
   };
@@ -395,13 +403,13 @@ async function apiLoadSession(sessionId: string): Promise<ProcessorSession | nul
     const data = await res.json();
     return {
       id: data.sessionId || data.id,
-      companyInfo: data.companyInfo,
+      companyInfo: data.companyInfo || { ...EMPTY_COMPANY_INFO },
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       currentStep: data.currentStep,
-      filesData: data.filesData || [],
+      filesData: Array.isArray(data.filesData) ? data.filesData : [],
       fileClassifications: data.fileClassifications || {},
-      extractionResults: data.extractionResults || [],
+      extractionResults: Array.isArray(data.extractionResults) ? data.extractionResults : [],
       docStatuses: data.docStatuses || {},
       isComplete: data.isComplete || false,
       scorecardResult: data.scorecardResult || null,

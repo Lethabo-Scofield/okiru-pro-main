@@ -139,7 +139,7 @@ function OtpInput({ value, onChange, length = 6 }: { value: string; onChange: (v
 }
 
 export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'login' | 'register' } = {}) {
-  const [mode, setMode] = useState<'login' | 'register' | 'otp'>(defaultMode);
+  const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'reset'>(defaultMode);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
@@ -150,6 +150,10 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const [otpValue, setOtpValue] = useState('');
   const [emailHint, setEmailHint] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
 
   const [form, setForm] = useState({
     loginEmail: '',
@@ -310,6 +314,63 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      setFieldErrors({ resetEmail: "Email is required" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Something went wrong");
+      toast({ title: "Check Your Email", description: data.message });
+      setDirection(1);
+      setMode('reset');
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Something went wrong", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (!resetToken.trim()) errors.resetToken = "Reset code is required";
+    if (!resetNewPassword) errors.resetNewPassword = "New password is required";
+    else if (resetNewPassword.length < 4) errors.resetNewPassword = "At least 4 characters";
+    if (resetNewPassword !== resetConfirmPassword) errors.resetConfirmPassword = "Passwords do not match";
+    if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim(), token: resetToken.trim(), newPassword: resetNewPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      toast({ title: "Password Reset", description: data.message });
+      setMode('login');
+      setFieldErrors({});
+      setResetEmail('');
+      setResetToken('');
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+    } catch (error: any) {
+      toast({ title: "Reset Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const switchToRegister = () => { setMode('register'); setStep(1); setFieldErrors({}); };
   const switchToLogin = () => { setMode('login'); setStep(1); setFieldErrors({}); setOtpValue(''); };
 
@@ -337,7 +398,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
         <AnimatePresence mode="wait" custom={direction} initial={false}>
           <motion.div
-            key={mode === 'login' ? 'login' : mode === 'otp' ? 'otp' : `step-${step}`}
+            key={mode === 'login' ? 'login' : mode === 'otp' ? 'otp' : mode === 'forgot' ? 'forgot' : mode === 'reset' ? 'reset' : `step-${step}`}
             custom={direction}
             variants={pageVariants}
             initial="enter"
@@ -348,11 +409,15 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
               <Card className="border border-border/50 shadow-lg bg-card overflow-hidden">
                 <div className="text-center pt-8 pb-3 px-6">
                   <h2 className="text-lg font-heading font-semibold tracking-tight" data-testid="text-auth-title">
-                    {mode === 'login' ? 'Sign In' : mode === 'otp' ? 'Verify Your Identity' : 'Create Account'}
+                    {mode === 'login' ? 'Sign In' : mode === 'otp' ? 'Verify Your Identity' : mode === 'forgot' ? 'Forgot Password' : mode === 'reset' ? 'Reset Password' : 'Create Account'}
                   </h2>
                   <p className="text-[13px] text-muted-foreground/60 mt-1">
                     {mode === 'login'
                       ? 'Sign in with your work email'
+                      : mode === 'forgot'
+                        ? 'Enter your email to receive a reset code'
+                        : mode === 'reset'
+                          ? 'Enter the code sent to your email'
                       : mode === 'otp'
                         ? (
                           <span className="flex items-center justify-center gap-1.5">
@@ -395,7 +460,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                 )}
 
                 <CardContent className="px-6 pb-7 pt-4">
-                  <form onSubmit={handleSubmit}>
+                  <form onSubmit={mode === 'forgot' ? handleForgotPassword : mode === 'reset' ? handleResetPassword : handleSubmit}>
                     {mode === 'otp' ? (
                       <div className="space-y-5">
                         <div className="flex justify-center">
@@ -495,6 +560,116 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         >
                           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
                         </Button>
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={() => { setDirection(1); setFieldErrors({}); setResetEmail(form.loginEmail); setMode('forgot'); }}
+                            className="text-[12px] text-muted-foreground hover:text-primary transition-colors"
+                            data-testid="btn-forgot-password"
+                          >
+                            Forgot your password?
+                          </button>
+                        </div>
+                      </div>
+                    ) : mode === 'forgot' ? (
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="reset-email" className="text-[12px] font-medium text-muted-foreground/70">Work Email</Label>
+                          <Input
+                            id="reset-email"
+                            type="email"
+                            value={resetEmail}
+                            onChange={e => { setResetEmail(e.target.value); setFieldErrors(prev => ({ ...prev, resetEmail: '' })); }}
+                            placeholder="thabo@okiru.co.za"
+                            className="h-10"
+                            autoComplete="email"
+                            data-testid="input-reset-email"
+                          />
+                          {fieldErrors.resetEmail && (
+                            <p className="text-[11px] text-destructive" data-testid="error-reset-email">{fieldErrors.resetEmail}</p>
+                          )}
+                        </div>
+                        <Button
+                          type="submit"
+                          className="w-full h-10 text-[13px] font-medium rounded-full"
+                          disabled={isLoading}
+                          data-testid="btn-send-reset"
+                        >
+                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Reset Code'}
+                        </Button>
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={switchToLogin}
+                            className="text-[12px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mx-auto"
+                            data-testid="btn-back-to-login-forgot"
+                          >
+                            <ArrowLeft className="h-3 w-3" /> Back to sign in
+                          </button>
+                        </div>
+                      </div>
+                    ) : mode === 'reset' ? (
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">Reset Code</Label>
+                          <Input
+                            value={resetToken}
+                            onChange={e => { setResetToken(e.target.value); setFieldErrors(prev => ({ ...prev, resetToken: '' })); }}
+                            placeholder="Enter 6-digit code"
+                            className="h-10 text-center tracking-widest font-mono"
+                            maxLength={6}
+                            data-testid="input-reset-token"
+                          />
+                          {fieldErrors.resetToken && (
+                            <p className="text-[11px] text-destructive">{fieldErrors.resetToken}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">New Password</Label>
+                          <Input
+                            type="password"
+                            value={resetNewPassword}
+                            onChange={e => { setResetNewPassword(e.target.value); setFieldErrors(prev => ({ ...prev, resetNewPassword: '' })); }}
+                            placeholder="New password"
+                            className="h-10"
+                            data-testid="input-reset-new-password"
+                          />
+                          {fieldErrors.resetNewPassword && (
+                            <p className="text-[11px] text-destructive">{fieldErrors.resetNewPassword}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">Confirm Password</Label>
+                          <Input
+                            type="password"
+                            value={resetConfirmPassword}
+                            onChange={e => { setResetConfirmPassword(e.target.value); setFieldErrors(prev => ({ ...prev, resetConfirmPassword: '' })); }}
+                            placeholder="Confirm new password"
+                            className="h-10"
+                            data-testid="input-reset-confirm-password"
+                          />
+                          {fieldErrors.resetConfirmPassword && (
+                            <p className="text-[11px] text-destructive">{fieldErrors.resetConfirmPassword}</p>
+                          )}
+                        </div>
+                        <Button
+                          type="submit"
+                          className="w-full h-10 text-[13px] font-medium rounded-full"
+                          disabled={isLoading}
+                          data-testid="btn-reset-password"
+                        >
+                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reset Password'}
+                        </Button>
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={switchToLogin}
+                            className="text-[12px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mx-auto"
+                            data-testid="btn-back-to-login-reset"
+                          >
+                            <ArrowLeft className="h-3 w-3" /> Back to sign in
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-4">

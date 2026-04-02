@@ -294,6 +294,10 @@ export function registerExcelExtractRoute(app: Express): void {
      */
     app.post('/api/extract-excel', async (req: Request, res: Response) => {
         try {
+            if (!req.body || typeof req.body !== 'object') {
+                return res.status(400).json({ error: 'Request body is required. Send JSON with fileBase64 and fileName.' });
+            }
+
             const { fileBase64, fileName, sectorCode, scorecardType, entities: customEntities } = req.body as {
                 fileBase64?: string;
                 fileName?: string;

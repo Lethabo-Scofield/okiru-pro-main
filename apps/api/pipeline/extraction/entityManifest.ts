@@ -806,11 +806,11 @@ function buildMCPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildEEPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.employmentEquity;
+  const pc = cfg.pillarConfigs.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
   return {
     pillarCode: 'employmentEquity', pillarName: 'Employment Equity', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
-    criteria: eeCriteria(cfg), entities: [], // EE shares employee register from MC
+    criteria: eeCriteria(cfg), entities: [],
   };
 }
 
@@ -833,10 +833,12 @@ function buildProcurementPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildESDPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.enterpriseSupplierDevelopment;
+  const sd = cfg.pillarConfigs.supplierDevelopment ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
+  const ed = cfg.pillarConfigs.enterpriseDevelopment ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
+  const combinedMax = sd.maxPoints + ed.maxPoints;
   return {
-    pillarCode: 'enterpriseSupplierDevelopment', pillarName: 'Enterprise & Supplier Development', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    pillarCode: 'enterpriseSupplierDevelopment', pillarName: 'Enterprise & Supplier Development', maxPoints: combinedMax,
+    hasSubMinimum: sd.hasSubMinimum || ed.hasSubMinimum, subMinimumThreshold: sd.hasSubMinimum ? sd.maxPoints * (sd.subMinimumPercent / 100) : 0,
     criteria: esdCriteria(cfg), entities: [...ESD_ENTITIES],
   };
 }
