@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "6C2M1oHFFjny16LuFdKuj"
+uri = "file://BUG_REPORT.md"
+type = "text"
+title = "Okiru Pro - Comprehensive Testing & Bug Report"
