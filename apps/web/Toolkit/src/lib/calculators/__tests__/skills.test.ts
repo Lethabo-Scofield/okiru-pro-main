@@ -85,7 +85,7 @@ describe('calculateSkillsScore', () => {
   describe('score calculations', () => {
     it('should calculate learning programmes score proportionally — 50% spend = ~50% score', () => {
       const leviableAmount = 10_000_000;
-      const TARGET_OVERALL = leviableAmount * 0.06;
+      const TARGET_OVERALL = leviableAmount * 0.035;
       const result = calculateSkillsScore(makeSkillsData({
         leviableAmount,
         trainingPrograms: [makeTrainingProgram({ category: 'short_course', cost: TARGET_OVERALL * 0.5 })],
@@ -182,9 +182,9 @@ describe('calculateSkillsScore', () => {
     it('should calculate absorption rate correctly in rawStats', () => {
       const result = calculateSkillsScore(makeSkillsData({
         trainingPrograms: [
-          makeTrainingProgram({ id: '1', isEmployed: true, isBlack: true }),
-          makeTrainingProgram({ id: '2', isEmployed: false, isBlack: true }),
-          makeTrainingProgram({ id: '3', isEmployed: true, isBlack: true }),
+          makeTrainingProgram({ id: '1', isAbsorbed: true, isBlack: true }),
+          makeTrainingProgram({ id: '2', isAbsorbed: false, isBlack: true }),
+          makeTrainingProgram({ id: '3', isAbsorbed: true, isBlack: true }),
         ],
       }));
 
@@ -222,11 +222,11 @@ describe('calculateSkillsScore', () => {
   });
 
   describe('target calculations', () => {
-    it('should set rawStats.targetOverall to 6% of leviable amount', () => {
+    it('should set rawStats.targetOverall to 3.5% of leviable amount', () => {
       const leviableAmount = 5_000_000;
       const result = calculateSkillsScore(makeSkillsData({ leviableAmount }));
 
-      expect(result.rawStats.targetOverall).toBeCloseTo(leviableAmount * 0.06, 0);
+      expect(result.rawStats.targetOverall).toBeCloseTo(leviableAmount * 0.035, 0);
     });
 
     it('should set rawStats.targetBursaries to 2.5% of leviable amount', () => {

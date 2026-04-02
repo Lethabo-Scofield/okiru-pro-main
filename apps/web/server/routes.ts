@@ -5,8 +5,13 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
-import { sendLoginNotification, sendOtpEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
+import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from "./email";
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
+import mongoose from "mongoose";
+
+function isMongoConnected(): boolean {
+  return mongoose.connection.readyState === 1;
+}
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any)?.userId;
@@ -125,11 +130,17 @@ export async function registerRoutes(
       if (!trimmedUsername || !password) {
         return res.status(400).json({ message: "Username and password are required" });
       }
-      if (trimmedUsername.length < 3) {
-        return res.status(400).json({ message: "Username must be at least 3 characters" });
+      if (trimmedUsername.length < 3 || trimmedUsername.length > 50) {
+        return res.status(400).json({ message: "Username must be between 3 and 50 characters" });
+      }
+      if (!/^[a-zA-Z0-9_.-]+$/.test(trimmedUsername)) {
+        return res.status(400).json({ message: "Username can only contain letters, numbers, dots, hyphens, and underscores" });
       }
       if (password.length < 4) {
         return res.status(400).json({ message: "Password must be at least 4 characters" });
+      }
+      if (password.length > 128) {
+        return res.status(400).json({ message: "Password must not exceed 128 characters" });
       }
       if (!trimmedFullName) {
         return res.status(400).json({ message: "Full name is required" });
@@ -408,6 +419,85 @@ export async function registerRoutes(
     });
   });
 
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByUsernameOrEmail(email.trim());
+      res.json({ message: "If an account with that email exists, a reset code has been sent." });
+
+      if (!user || !user.email) return;
+
+      const resetToken = generateOtp(6);
+      const expiry = new Date(Date.now() + 15 * 60 * 1000);
+      await storage.setPasswordResetToken(user.id, resetToken, expiry);
+      await sendPasswordResetEmail(user.email, resetToken, user.fullName);
+    } catch (error: any) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "An error occurred. Please try again." });
+    }
+  });
+
+  const resetAttempts = new Map<string, { count: number; firstAttempt: number }>();
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { email, token, newPassword } = req.body;
+      if (!email || !token || !newPassword) {
+        return res.status(400).json({ message: "Email, reset code, and new password are required" });
+      }
+      if (typeof newPassword !== "string" || newPassword.length < 4) {
+        return res.status(400).json({ message: "Password must be at least 4 characters" });
+      }
+      if (newPassword.length > 128) {
+        return res.status(400).json({ message: "Password must not exceed 128 characters" });
+      }
+
+      const ip = req.ip || "unknown";
+      const attemptKey = `${ip}:${email.trim().toLowerCase()}`;
+      const now = Date.now();
+      const existing = resetAttempts.get(attemptKey);
+      if (existing) {
+        if (now - existing.firstAttempt > 15 * 60 * 1000) {
+          resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
+        } else if (existing.count >= 5) {
+          return res.status(429).json({ message: "Too many attempts. Please wait before trying again." });
+        } else {
+          existing.count++;
+        }
+      } else {
+        resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
+      }
+
+      const user = await storage.getUserByUsernameOrEmail(email.trim());
+      if (!user) {
+        return res.status(400).json({ message: "Invalid reset code or email" });
+      }
+
+      const stored = await storage.getPasswordResetToken(user.id);
+      if (!stored || stored.token !== token.trim()) {
+        return res.status(400).json({ message: "Invalid reset code" });
+      }
+      if (new Date() > stored.expiry) {
+        await storage.clearPasswordResetToken(user.id);
+        return res.status(400).json({ message: "Reset code has expired. Please request a new one." });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(user.id, { password: hashedPassword });
+      await storage.clearPasswordResetToken(user.id);
+      resetAttempts.delete(attemptKey);
+
+      res.json({ message: "Password has been reset successfully. You can now sign in." });
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "An error occurred. Please try again." });
+    }
+  });
+
   app.get("/api/auth/me", async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
@@ -434,7 +524,7 @@ export async function registerRoutes(
   app.post("/api/auth/toggle-2fa", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
-      const { enabled } = req.body;
+      const { enabled } = req.body || {};
       if (typeof enabled !== "boolean") {
         return res.status(400).json({ message: "enabled (boolean) is required" });
       }
@@ -1428,6 +1518,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.get("/api/processor-sessions", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.json([]);
+    }
     try {
       const userId = (req.session as any)?.userId;
       const user = await storage.getUserById(userId);
@@ -1478,6 +1571,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.get("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(404).json({ error: "Session not found (database unavailable)" });
+    }
     try {
       const { sessionId } = req.params;
       const doc = await ProcessorSessionModel.findOne({ sessionId }).lean() as any;
@@ -1490,6 +1586,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.post("/api/processor-sessions", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const userId = (req.session as any)?.userId;
       const user = await storage.getUserById(userId);
@@ -1527,6 +1626,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.patch("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const { sessionId } = req.params;
       const allowedFields = ['currentStep', 'isComplete', 'scorecardResult', 'toolkitClientId'];
@@ -1548,6 +1650,9 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.delete("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
     try {
       const { sessionId } = req.params;
       await ProcessorSessionModel.deleteOne({ sessionId });

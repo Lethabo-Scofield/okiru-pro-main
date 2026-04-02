@@ -201,7 +201,7 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
       learnershipCount: spend.learnershipCount,
       absorbedCount: spend.absorbedCount,
       totalBlackLearners: spend.totalBlackLearners,
-      absorptionRate: round2(absorptionRate),
+      absorptionRate: absorptionRate,
       totalRecognisedSpend: round2(totalRecognised),
       targetOverall: round2(TARGET_OVERALL),
       targetBursaries: round2(TARGET_BURSARIES),

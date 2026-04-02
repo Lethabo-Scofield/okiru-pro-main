@@ -43,10 +43,10 @@ describe('B-BBEE Scoring Engine', () => {
       expect(manifest.scorecardType).toBe('Generic');
     });
 
-    it('RCOGP Generic has 116 max points', () => {
+    it('RCOGP Generic has 120 max points', () => {
       const manifest = buildManifest('RCOGP', 'Generic');
       const totalMax = manifest.pillarPacks.reduce((sum, p) => sum + p.maxPoints, 0);
-      expect(totalMax).toBe(116);
+      expect(totalMax).toBe(120);
     });
 
     it('RCOGP Generic has 33 criteria', () => {
@@ -70,17 +70,17 @@ describe('B-BBEE Scoring Engine', () => {
       });
 
       expect(result.totalPoints).toBeGreaterThan(0);
-      expect(result.totalPoints).toBeLessThanOrEqual(116);
+      expect(result.totalPoints).toBeLessThanOrEqual(120);
       expect(result.beeLevel).toBeGreaterThan(0);
     });
   });
 
   describe('All Sector Variants', () => {
     const sectors = [
-      { code: 'RCOGP', type: 'Generic', maxPoints: 116 },
-      { code: 'ICT', type: 'Generic', maxPoints: 118 },
-      { code: 'FSC', type: 'Generic', maxPoints: 105 },
-      { code: 'AGRI', type: 'Generic', maxPoints: 114 },
+      { code: 'RCOGP', type: 'Generic', maxPoints: 120 },
+      { code: 'ICT', type: 'Generic', maxPoints: 133 },
+      { code: 'FSC', type: 'Generic', maxPoints: 117 },
+      { code: 'AGRI', type: 'Generic', maxPoints: 125 },
       { code: 'RCOGP', type: 'QSE', maxPoints: 124 },
       { code: 'ICT', type: 'QSE', maxPoints: 124 },
     ];

@@ -330,12 +330,12 @@ export default function EntityBuilder() {
 
   const calculateCompleteness = (ent: any) => {
     let score = 0;
-    if (ent.definition.length > 10) score += 20;
-    if (ent.positives.length > 0) score += 20;
-    if (ent.negatives.length > 0) score += 15;
-    if (ent.zones.length > 0) score += 15;
-    if (ent.synonyms.length > 0) score += 15;
-    if (ent.pattern.length > 0) score += 15;
+    if ((ent.definition || '').length > 10) score += 20;
+    if ((ent.positives || []).length > 0) score += 20;
+    if ((ent.negatives || []).length > 0) score += 15;
+    if ((ent.zones || []).length > 0) score += 15;
+    if ((ent.synonyms || []).length > 0) score += 15;
+    if ((ent.pattern || '').length > 0) score += 15;
     return Math.min(score, 100);
   };
 
@@ -405,7 +405,7 @@ export default function EntityBuilder() {
     if (!value) return; markDirty();
     setEntities(prev => prev.map(e => {
       if (e.id !== id) return e;
-      const updated = { ...e, [field]: [...e[field], value] };
+      const updated = { ...e, [field]: [...(Array.isArray(e[field]) ? e[field] : []), value] };
       updated.completeness = calculateCompleteness(updated);
       return updated;
     }));
@@ -414,7 +414,7 @@ export default function EntityBuilder() {
     markDirty();
     setEntities(prev => prev.map(e => {
       if (e.id !== id) return e;
-      const updated = { ...e, [field]: e[field].filter((_: any, i: number) => i !== index) };
+      const updated = { ...e, [field]: (Array.isArray(e[field]) ? e[field] : []).filter((_: any, i: number) => i !== index) };
       updated.completeness = calculateCompleteness(updated);
       return updated;
     }));

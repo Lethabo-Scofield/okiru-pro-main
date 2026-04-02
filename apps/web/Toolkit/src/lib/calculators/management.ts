@@ -84,6 +84,10 @@ function pctOf(emps: Employee[], countFn: (e: Employee[]) => number): number {
   return emps.length > 0 ? countFn(emps) / emps.length : 0;
 }
 
+function pctOfRaw(emps: Employee[], countFn: (e: Employee[]) => number): number {
+  return emps.length > 0 ? countFn(emps) / emps.length : 0;
+}
+
 export function calculateManagementScore(
   data: ManagementData,
   config?: CalculatorConfig,
@@ -188,19 +192,19 @@ export function calculateManagementScore(
     subMinimumMet: true,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
-      boardBlackPct: round2(boardBlackPct),
-      boardBWOPct: round2(boardBWOPct),
-      execBlackPct: round2(execBlackPct),
-      execBWOPct: round2(execBWOPct),
-      otherExecBlackPct: round2(otherExecBlackPct),
-      otherExecBWOPct: round2(otherExecBWOPct),
-      seniorBlackPct: round2(seniorBlackPct),
-      seniorBWOPct: round2(seniorBWOPct),
-      middleBlackPct: round2(middleBlackPct),
-      middleBWOPct: round2(middleBWOPct),
-      juniorBlackPct: round2(juniorBlackPct),
-      juniorBWOPct: round2(juniorBWOPct),
-      disabledBlackPct: round2(blackDisabledPct),
+      boardBlackPct: pctOfRaw(board, countBlack),
+      boardBWOPct: pctOfRaw(board, countBlackWomen),
+      execBlackPct: pctOfRaw(execDirs, countBlack),
+      execBWOPct: pctOfRaw(execDirs, countBlackWomen),
+      otherExecBlackPct: pctOfRaw(otherExec, countBlack),
+      otherExecBWOPct: pctOfRaw(otherExec, countBlackWomen),
+      seniorBlackPct: pctOfRaw(senior, countBlack),
+      seniorBWOPct: pctOfRaw(senior, countBlackWomen),
+      middleBlackPct: pctOfRaw(middle, countBlack),
+      middleBWOPct: pctOfRaw(middle, countBlackWomen),
+      juniorBlackPct: pctOfRaw(junior, countBlack),
+      juniorBWOPct: pctOfRaw(junior, countBlackWomen),
+      disabledBlackPct: employees.length > 0 ? countBlack(disabledEmps) / employees.length : 0,
     },
   };
 }

@@ -1,0 +1,45 @@
+Prompt for Replit – VM-Ready Testing & Bug Fixing
+
+Objective: Test and fix the Okiru app end-to-end to ensure it runs perfectly on the VM.
+
+Tasks:
+
+Deployment Verification:
+Confirm latest Docker images (web, api, compute-engine) are built and running.
+Verify /api/health responds correctly from both web and API servers.
+Ensure Nginx routing correctly sends frontend-handled API requests (/api/*) to web container (5001) and backend-only routes to API container (5000).
+Frontend Testing & Bug Fixes:
+Check all pages (dashboard, entity builder, document processor, templates) render without undefined or Cannot read properties of undefined errors.
+Add validation to handle empty or malformed API responses (Array.isArray(), optional chaining ?., || []).
+Ensure template pages load entities correctly.
+Authentication & User Flow:
+Test login with valid credentials.
+Test “Forgot Password” flow:
+Request password reset using personal email.
+Verify token delivery (simulate email if needed).
+Complete password reset and log in with new password.
+Optional: allow recovery by username.
+API Route Coverage:
+Test CRUD routes for templates, processor sessions, scorecards, admin functions.
+Ensure no 404s for /api/* routes that frontend depends on.
+CORS & Headers:
+Validate that OPTIONS requests respond with correct headers.
+Confirm HTTPS and HTTP headers are correctly set.
+VM Deployment Simulation:
+Run all tests as if on VM (localhost ports: 5000 API, 5001 web, 8000 compute-engine, 80/443 Nginx).
+Confirm frontend works via public VM IP.
+Confirm health endpoint works externally: curl http://<VM_IP>/api/health.
+
+Deliverables:
+
+Report of passing/failing routes and frontend components.
+Fixed Nginx config and Docker compose setup ready for VM.
+Verified login, forgot-password, reset-password, and full app functionality.
+Test scripts or instructions to re-run tests on VM after future deploys.
+
+Constraints:
+
+Must work on current VM architecture.
+Personal emails can be used for auth flows.
+No breaking existing API routes.
+All fixes must survive Docker rebuilds and container restarts.

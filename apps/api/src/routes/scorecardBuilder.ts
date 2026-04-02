@@ -92,12 +92,17 @@ interface CalculateRequest {
 
 router.post('/calculate', async (req, res) => {
   try {
-    const { assessmentId, sectorCode, scorecardType, entityValues, employees, shareholders, suppliers, npat, tmps, leviableAmount, totalEmployees } = req.body as CalculateRequest;
+    const { assessmentId, sectorCode, scorecardType, entityValues, employees, shareholders, suppliers, npat, tmps, leviableAmount, totalEmployees } = (req.body || {}) as CalculateRequest;
 
-    // Convert record to Map
+    if (!sectorCode || !scorecardType) {
+      return res.status(400).json({ error: 'sectorCode and scorecardType are required' });
+    }
+
     const valuesMap = new Map<string, EntityValue>();
-    for (const [key, value] of Object.entries(entityValues)) {
-      valuesMap.set(key, value);
+    if (entityValues && typeof entityValues === 'object') {
+      for (const [key, value] of Object.entries(entityValues)) {
+        valuesMap.set(key, value);
+      }
     }
 
     // Extract cross-pillar values
