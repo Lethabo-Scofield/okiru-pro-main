@@ -3519,6 +3519,9 @@ export default function DocumentProcessor() {
                                   {isRejected && (
                                     <span className="text-[10px] text-red-400 font-medium shrink-0">Rejected</span>
                                   )}
+                                  {entity.status === 'not_found' && (
+                                    <span className="text-[10px] text-[#636366] font-medium shrink-0">Not found</span>
+                                  )}
                                 </div>
 
                                 {/* Action buttons */}
@@ -3551,6 +3554,10 @@ export default function DocumentProcessor() {
                                 >
                                   {entity.value ? (
                                     <p className="text-[14px] text-white leading-snug break-words">{entity.value}</p>
+                                  ) : entity.status === 'not_found' ? (
+                                    <p className="text-[13px] text-[#48484a] italic flex items-center gap-1.5">
+                                      Not found in document — click to add manually
+                                    </p>
                                   ) : (
                                     <p className="text-[13px] text-[#3a3a3c] italic flex items-center gap-1.5">
                                       <Plus className="w-3 h-3" />Add value

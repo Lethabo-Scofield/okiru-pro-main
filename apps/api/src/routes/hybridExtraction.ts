@@ -18,6 +18,67 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+function formatExtractedValue(
+  value: string | number | null,
+  fieldType: string
+): string | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (fieldType === 'currency') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    const isNegative = num < 0;
+    const abs = Math.abs(num);
+    const parts = abs.toFixed(2).split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const formatted = parts[1] === '00' ? intPart : `${intPart}.${parts[1]}`;
+    return `${isNegative ? '-' : ''}R ${formatted}`;
+  }
+
+  if (fieldType === 'percentage') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    const formatted = num % 1 === 0 ? num.toString() : num.toFixed(2);
+    return `${formatted}%`;
+  }
+
+  if (fieldType === 'bee_level') {
+    const s = String(value);
+    if (/^[1-8]$/.test(s)) return `Level ${s}`;
+    if (/^0$/.test(s) || /non/i.test(s)) return 'Non-Compliant';
+    return s;
+  }
+
+  if (fieldType === 'count') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    if (num % 1 === 0) {
+      return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+    return num.toFixed(2);
+  }
+
+  return String(value);
+}
+
 import { DocumentChunker, type TextChunk } from '../../pipeline/extraction/documentChunker.js';
 import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
@@ -429,8 +490,8 @@ router.post(
                 return {
                   name: entity.name,
                   value: null,
-                  confidence: 0.3,
-                  status: 'pending' as const,
+                  confidence: 0,
+                  status: 'not_found' as const,
                    pillar: entity.pillarCode,
                    fieldType: entity.fieldType,
                    definition: entity.extraction.definition,
@@ -454,8 +515,8 @@ router.post(
                 return {
                   name: entity.name,
                   value: null,
-                  confidence: 0.3,
-                  status: 'pending' as const,
+                  confidence: 0,
+                  status: 'not_found' as const,
                   pillar: entity.pillarCode,
                   fieldType: entity.fieldType,
                   definition: entity.extraction.definition,
@@ -487,11 +548,13 @@ router.post(
 
               const validation: ValidationResult | undefined = undefined;
 
+              const formattedValue = formatExtractedValue(llmResult.extractedValue, entity.fieldType);
+
               return {
                 name: entity.name,
-                value: llmResult.extractedValue,
+                value: formattedValue,
                 confidence: confidenceResult.normalizedScore,
-                status: 'pending' as const,
+                status: formattedValue ? 'pending' as const : 'not_found' as const,
                 pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
                 definition: entity.extraction.definition,
@@ -511,14 +574,14 @@ router.post(
                 name: entity.name,
                 value: null,
                 confidence: 0,
-                status: 'pending' as const,
+                status: 'not_found' as const,
                 pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
                 definition: entity.extraction.definition,
                 provenance: {
                   pageId: 'error',
                   chunkId: 'error',
-                  textSnippet: String(error),
+                  textSnippet: 'Could not extract this value from the document',
                   retrievalScore: 0,
                   method: 'llm_fallback' as const,
                 },
