@@ -336,8 +336,15 @@ export class LLMExtractor {
       if (score > 0 && (!bestMatch || score > bestMatch.score)) {
         let value: string | number = candidate.normalizedValue;
         if (req.entityType === 'currency' || req.entityType === 'count') {
-          const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ''));
-          if (!isNaN(parsed)) value = parsed;
+          const origLower = candidate.originalText.toLowerCase();
+          const numStr = value.replace(/[^0-9.\-]/g, '');
+          let parsed = parseFloat(numStr);
+          if (!isNaN(parsed)) {
+            if (/million|m\b/i.test(origLower)) parsed *= 1_000_000;
+            else if (/billion|b\b/i.test(origLower)) parsed *= 1_000_000_000;
+            else if (/thousand|k\b/i.test(origLower)) parsed *= 1_000;
+            value = parsed;
+          }
         } else if (req.entityType === 'percentage') {
           const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ''));
           if (!isNaN(parsed)) value = parsed;
