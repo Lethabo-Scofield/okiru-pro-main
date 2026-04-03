@@ -1,0 +1,49 @@
+# Let's Encrypt ClusterIssuers for TLS certificate provisioning
+# Apply this after installing cert-manager: https://cert-manager.io/docs/installation/
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@okiru-pro.com
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@okiru-pro.com
+    privateKeySecretRef:
+      name: letsencrypt-production
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+# Certificate resource for the main domain
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: okiru-pro-tls
+  namespace: okiru-pro
+spec:
+  secretName: okiru-pro-tls-secret
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - dilm.172.171.47.94.nip.io

@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: okiru-pro-prod
+
+resources:
+  - ../../base
+  - secrets/secrets.yaml
+
+patchesStrategicMerge:
+  - patches/ingress-patch.yaml
+  - patches/resource-limits.yaml
+  - patches/replica-count.yaml
+  - patches/configmap-patch.yaml
+
+images:
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+    newTag: latest
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
+    newTag: latest
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+    newTag: latest
+
+commonLabels:
+  environment: production
+  app.kubernetes.io/instance: okiru-pro-prod
+
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=warn
+      - CORS_ORIGIN=https://dilm.172.171.47.94.nip.io

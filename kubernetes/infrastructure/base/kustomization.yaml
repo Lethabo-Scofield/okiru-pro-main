@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: okiru-pro
+
+resources:
+  # Namespace
+  - namespace.yaml
+
+  # Storage
+  - storage/storage-classes.yaml
+  - storage/pvc-mongodb.yaml
+  - storage/pvc-arangodb.yaml
+  - storage/pvc-redis.yaml
+
+  # ConfigMaps
+  - configmaps/app-config.yaml
+  - configmaps/mongodb-config.yaml
+  - configmaps/arangodb-config.yaml
+  - configmaps/redis-config.yaml
+
+  # Secrets (template - will be patched in overlays)
+  - secrets/secrets-template.yaml
+
+  # Database Deployments
+  - deployments/mongodb.yaml
+  - deployments/arangodb.yaml
+  - deployments/redis.yaml
+
+  # Application Deployments
+  - deployments/api.yaml
+  - deployments/web.yaml
+  - deployments/compute.yaml
+
+  # Services
+  - services/services.yaml
+
+  # Ingress
+  - ingress/ingress.yaml
+
+  # HPA
+  - deployments/hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: okiru-pro
+  app.kubernetes.io/managed-by: kustomize
