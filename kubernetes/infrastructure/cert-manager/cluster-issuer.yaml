@@ -46,4 +46,4 @@ spec:
     name: letsencrypt-production
     kind: ClusterIssuer
   dnsNames:
-    - dilm.172.171.47.94.nip.io
+    - dilm.20.164.101.114.nip.io

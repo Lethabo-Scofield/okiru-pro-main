@@ -1,34 +1,36 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: okiru-pro-ingress
+  name: okiru-ingress
   annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: "letsencrypt-staging"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
 spec:
   rules:
-    - host: staging.dilm.172.171.47.94.nip.io
+    - host: staging.20.164.101.114.nip.io
       http:
         paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api
-            pathType: Prefix
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: api
                 port:
                   number: 5000
-          - path: /compute
-            pathType: Prefix
+          - path: /compute(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: compute
                 port:
                   number: 8000
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001

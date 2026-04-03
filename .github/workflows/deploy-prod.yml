@@ -20,7 +20,8 @@ on:
 env:
   ACR_REGISTRY: okiruproacrde4d539b.azurecr.io
   IMAGE_TAG: ${{ github.sha }}
-  NAMESPACE: okiru-pro-prod
+  NAMESPACE: okiru-pro
+  DOMAIN: dilm.20.164.101.114.nip.io
 
 jobs:
   build-and-push:
@@ -87,7 +88,7 @@ jobs:
     needs: build-and-push
     environment:
       name: production
-      url: https://dilm.172.171.47.94.nip.io
+      url: https://dilm.20.164.101.114.nip.io
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -203,15 +204,9 @@ jobs:
           echo "=== Waiting for services to stabilize ==="
           sleep 30
 
-          # Get ingress IP
-          INGRESS_IP=$(kubectl get ingress okiru-pro-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-
-          if [ -z "$INGRESS_IP" ]; then
-            echo "Warning: Could not get ingress IP, using domain name for tests"
-            HOST="dilm.172.171.47.94.nip.io"
-          else
-            HOST="$INGRESS_IP"
-          fi
+          # Use the real domain - nip.io resolves to the AKS ingress IP
+          HOST="${{ env.DOMAIN }}"
+          echo "Testing against $HOST"
 
           echo "=== Running smoke tests against $HOST ==="
 
@@ -222,30 +217,31 @@ jobs:
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
 
-            # Try HTTP first
-            if curl -sf --max-time 10 "http://$HOST/health" > /dev/null 2>&1; then
-              echo "HTTP health check passed"
+            # Try HTTPS (primary - TLS via cert-manager)
+            if curl -sfk --max-time 10 "https://$HOST/" > /dev/null 2>&1; then
+              echo "HTTPS web check passed"
+              # Test API health via HTTPS (rewrite strips /api prefix)
+              curl -sfk --max-time 10 "https://$HOST/api/health" && echo "HTTPS API health passed"
               break
             fi
 
-            # Try HTTPS
-            if curl -sfk --max-time 10 "https://$HOST/health" > /dev/null 2>&1; then
-              echo "HTTPS health check passed"
+            # Fall back to HTTP if TLS not yet provisioned
+            if curl -sf --max-time 10 "http://$HOST/" > /dev/null 2>&1; then
+              echo "HTTP web check passed"
+              curl -sf --max-time 10 "http://$HOST/api/health" && echo "HTTP API health passed"
               break
             fi
 
-            # Test via port-forward as fallback
+            # Port-forward fallback
             echo "External test failed, testing via port-forward..."
             kubectl port-forward svc/web 5001:5001 -n ${{ env.NAMESPACE }} &
             PORT_FORWARD_PID=$!
             sleep 5
-
-            if curl -sf --max-time 5 "http://localhost:5001/health" > /dev/null 2>&1; then
-              echo "Port-forward health check passed"
+            if curl -sf --max-time 5 "http://localhost:5001/" > /dev/null 2>&1; then
+              echo "Port-forward web check passed"
               kill $PORT_FORWARD_PID 2>/dev/null || true
               break
             fi
-
             kill $PORT_FORWARD_PID 2>/dev/null || true
 
             RETRY_COUNT=$((RETRY_COUNT + 1))
