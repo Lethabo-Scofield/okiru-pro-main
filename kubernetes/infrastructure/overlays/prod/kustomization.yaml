@@ -31,4 +31,4 @@ configMapGenerator:
     literals:
       - NODE_ENV=production
       - LOG_LEVEL=warn
-      - CORS_ORIGIN=https://dilm.20.164.101.114.nip.io
+      - CORS_ORIGIN=https://okiru.20.164.101.114.nip.io

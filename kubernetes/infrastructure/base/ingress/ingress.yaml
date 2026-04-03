@@ -22,10 +22,10 @@ spec:
   # TLS section - secretName created by cert-manager
   tls:
     - hosts:
-        - dilm.20.164.101.114.nip.io
+        - okiru.20.164.101.114.nip.io
       secretName: okiru-pro-tls
   rules:
-    - host: dilm.20.164.101.114.nip.io
+    - host: okiru.20.164.101.114.nip.io
       http:
         paths:
           # API: /api/... -> api service at /...
