@@ -136,7 +136,8 @@ async function parseFileToPages(
 
   // PDF
   if (mimetype === 'application/pdf' || ext === 'pdf') {
-    const pdfDocument = await pdfjs.getDocument({ data: buffer }).promise;
+    const pdfData = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const pdfDocument = await pdfjs.getDocument({ data: pdfData }).promise;
     const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
     for (let i = 1; i <= pdfDocument.numPages; i++) {
