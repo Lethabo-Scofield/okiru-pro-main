@@ -3,9 +3,6 @@ kind: Ingress
 metadata:
   name: okiru-ingress
   annotations:
-    # Regex rewrite strips /api and /compute prefix before forwarding to services
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
@@ -15,11 +12,12 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    # TLS certificate via cert-manager - overridden per overlay
+    # Rewrite compute paths to strip /compute prefix
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: "letsencrypt-production"
 spec:
   ingressClassName: nginx
-  # TLS section - secretName created by cert-manager
   tls:
     - hosts:
         - okiru.20.164.101.114.nip.io
@@ -28,15 +26,23 @@ spec:
     - host: okiru.20.164.101.114.nip.io
       http:
         paths:
-          # API: /api/... -> api service at /...
-          - path: /api(/|$)(.*)
-            pathType: ImplementationSpecific
+          # Web-specific API routes (served by web Express server, not API backend)
+          # These must come BEFORE the general /api prefix route
+          - path: /api/organizations
+            pathType: Exact
             backend:
               service:
-                name: api
+                name: web
                 port:
-                  number: 5000
-          # Compute: /compute/... -> compute service at /...
+                  number: 5001
+          - path: /api/auth/check-username
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Compute routes - strip /compute prefix
           - path: /compute(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -44,9 +50,17 @@ spec:
                 name: compute
                 port:
                   number: 8000
-          # Web: everything else -> web frontend
-          - path: /()(.*)
-            pathType: ImplementationSpecific
+          # API backend routes (all other /api/*)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          # Web frontend (everything else)
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: web
