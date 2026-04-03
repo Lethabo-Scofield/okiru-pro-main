@@ -416,7 +416,7 @@ router.post(
                 searchQuery,
                 10,
                 {
-                  rerank: true,
+                  rerank: llmAvailable,
                   rerankTopK: 5,
                   getChunkText: (pageId) => {
                     const chunk = chunks.find(c => c.chunkId === pageId || c.pageId === pageId);
