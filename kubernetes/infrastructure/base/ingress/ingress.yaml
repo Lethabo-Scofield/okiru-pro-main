@@ -1,63 +1,52 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: okiru-pro-ingress
+  name: okiru-ingress
   annotations:
+    # Regex rewrite strips /api and /compute prefix before forwarding to services
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
-    nginx.ingress.kubernetes.io/limit-rps: "10"
-    nginx.ingress.kubernetes.io/limit-connections: "5"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # TLS certificate via cert-manager - overridden per overlay
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
 spec:
   ingressClassName: nginx
+  # TLS section - secretName created by cert-manager
+  tls:
+    - hosts:
+        - dilm.20.164.101.114.nip.io
+      secretName: okiru-pro-tls
   rules:
-    - host: dilm.172.171.47.94.nip.io
+    - host: dilm.20.164.101.114.nip.io
       http:
         paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api
-            pathType: Prefix
+          # API: /api/... -> api service at /...
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: api
                 port:
                   number: 5000
-          - path: /compute
-            pathType: Prefix
+          # Compute: /compute/... -> compute service at /...
+          - path: /compute(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: compute
                 port:
                   number: 8000
----
-# Fallback HTTP ingress (used when TLS not yet provisioned)
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: okiru-pro-ingress-http
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: dilm.172.171.47.94.nip.io
-      http:
-        paths:
-          - path: /healthz
-            pathType: Exact
+          # Web: everything else -> web frontend
+          - path: /()(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: web

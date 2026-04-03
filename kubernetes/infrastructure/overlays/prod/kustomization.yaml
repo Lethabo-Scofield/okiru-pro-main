@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: okiru-pro-prod
+namespace: okiru-pro
 
 resources:
   - ../../base
@@ -31,4 +31,4 @@ configMapGenerator:
     literals:
       - NODE_ENV=production
       - LOG_LEVEL=warn
-      - CORS_ORIGIN=https://dilm.172.171.47.94.nip.io
+      - CORS_ORIGIN=https://dilm.20.164.101.114.nip.io
