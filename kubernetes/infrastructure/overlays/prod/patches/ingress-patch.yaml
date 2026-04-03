@@ -1,20 +1,13 @@
+# Prod-specific ingress overrides
+# Base paths are defined in base/ingress/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: okiru-ingress
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: "letsencrypt-production"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.20.164.101.114.nip.io"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
-    nginx.ingress.kubernetes.io/limit-rps: "20"
-    nginx.ingress.kubernetes.io/limit-connections: "10"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
@@ -23,28 +16,3 @@ spec:
     - hosts:
         - okiru.20.164.101.114.nip.io
       secretName: okiru-pro-tls
-  rules:
-    - host: okiru.20.164.101.114.nip.io
-      http:
-        paths:
-          - path: /api(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
-          - path: /compute(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: compute
-                port:
-                  number: 8000
-          - path: /()(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
