@@ -34,6 +34,7 @@ import {
   LLMExtractor,
   buildExtractionPrompt,
   structuralVerify,
+  isAvailable as isLLMAvailable,
 } from '../../pipeline/extraction/llmExtractor.js';
 import { computeConfidence } from '../../pipeline/extraction/confidenceScorer.js';
 import { validateAll, type ValidationResult } from '../../pipeline/extraction/validator.js';
@@ -373,18 +374,19 @@ router.post(
         // Continue without embeddings
       }
 
-      // Build hybrid retriever
+      const hasEmbeddings = vectorStore.getStats().totalChunks > 0;
+      const llmAvailable = isLLMAvailable();
       const retriever = new HybridRetriever(bm25Index, entityIndex, vectorStore, {
-        entityWeight: 0.15,
-        bm25Weight: 0.35,
-        semanticWeight: 0.5,
+        entityWeight: hasEmbeddings ? 0.15 : 0.35,
+        bm25Weight: hasEmbeddings ? 0.35 : 0.65,
+        semanticWeight: hasEmbeddings ? 0.5 : 0,
         topK: 10,
-        enableReranking: true,
+        enableReranking: llmAvailable,
         rerankTopK: 5,
       });
 
       indexTime = Date.now() - indexStart;
-      console.log(`[hybridExtraction] Indexes built in ${indexTime}ms`);
+      console.log(`[hybridExtraction] Indexes built in ${indexTime}ms (embeddings: ${hasEmbeddings}, llm: ${llmAvailable})`);
 
       // Step 4: Load entity manifest
       const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
@@ -466,29 +468,28 @@ router.post(
                 };
               }
 
-              // Build LLM extraction request
               const extractionRequest = toExtractionRequest(entity, topChunk.text, topChunk.pageId);
 
-              // Extract using LLM
               const llmResult = await llmExtractor.extract(extractionRequest);
 
-              // Compute confidence
-              const confidenceFactors = {
+              const confidenceResult = computeConfidence({
                 retrievalScore: topResult.score,
-                verificationPassed: llmResult.structuralVerification,
-                validationPassed: llmResult.confidence > 0.7,
-                extractionMethod: llmResult.method,
-              };
-              const confidenceResult = computeConfidence(confidenceFactors);
+                maxRetrievalScore: 1,
+                matchedEntities: retrievalResults[0]?.matchedEntities?.length ?? 0,
+                expectedEntities: Math.max(1, entity.extraction.aliases.length),
+                structurallyVerified: llmResult.structuralVerification,
+                valueIsNull: llmResult.extractedValue === null,
+                foundInExpectedZone: entity.extraction.zones.length === 0 || entity.extraction.zones.some(z => (topChunk.metadata?.sheetName || topChunk.pageId || '').toLowerCase().includes(z.toLowerCase())),
+                llmValue: llmResult.extractedValue,
+                ruleBasedValue: null,
+              });
 
-              // Skip cross-entity validation during extraction - will be done post-processing
-              // validateAll is for grouped data validation, not individual entity values
               const validation: ValidationResult | undefined = undefined;
 
               return {
                 name: entity.name,
                 value: llmResult.extractedValue,
-                confidence: confidenceResult.score,
+                confidence: confidenceResult.normalizedScore,
                 status: 'pending' as const,
                 pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
