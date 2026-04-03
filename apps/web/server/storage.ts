@@ -729,7 +729,7 @@ function toClient(doc: any): Client | undefined {
   };
 }
 
-const useDatabase = !!process.env.MONGODB_URI;
+const useDatabase = !!(process.env.MONGODB_URI || process.env.MONGO_URI);
 export const storage: IStorage = useDatabase
   ? new DatabaseStorage()
   : new MemoryStorage();

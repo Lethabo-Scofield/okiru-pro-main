@@ -5,7 +5,7 @@ let isConnected = false;
 export async function connectDB(): Promise<typeof mongoose> {
   if (isConnected) return mongoose;
 
-  const MONGODB_URI = process.env.MONGODB_URI;
+  const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!MONGODB_URI) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("MONGODB_URI must be set in production.");
