@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { isAzureOpenAIConfigured, chatCompletion } from './azureOpenAIClient.js';
+import { extractPageEntities, normalizeEntityValue, DEFAULT_BBBEE_PATTERNS } from './nerEngine.js';
 
 export interface LLMExtractionRequest {
   entityName: string;
@@ -281,10 +282,135 @@ export class LLMExtractor {
     return { response, provider: 'groq' };
   }
 
+  ruleBasedExtract(req: LLMExtractionRequest): LLMExtractionResult {
+    const fieldTypeToNERType: Record<string, string> = {
+      currency: 'MONEY',
+      percentage: 'PERCENT',
+      count: 'FINANCIAL_NUMBER',
+      date: 'DATE',
+      bee_level: 'BEE_LEVEL',
+      string: 'ORG',
+    };
+
+    const targetNERType = fieldTypeToNERType[req.entityType] || 'FINANCIAL_NUMBER';
+    const nerResult = extractPageEntities(req.sourceText, req.sourcePageId, 'rule', undefined, true);
+    const allKeywords = [
+      req.entityName.toLowerCase(),
+      ...req.aliases.map(a => a.toLowerCase()),
+    ];
+
+    let bestMatch: { value: string | number; snippet: string; score: number } | null = null;
+
+    const candidates = nerResult.entities.filter(e => e.entityType === targetNERType);
+
+    for (const candidate of candidates) {
+      const contextStart = Math.max(0, candidate.spanStart - 200);
+      const contextEnd = Math.min(req.sourceText.length, candidate.spanEnd + 200);
+      const context = req.sourceText.slice(contextStart, contextEnd).toLowerCase();
+
+      let score = 0;
+      for (const kw of allKeywords) {
+        const words = kw.split(/\s+/);
+        for (const w of words) {
+          if (w.length >= 3 && context.includes(w)) {
+            score += 1;
+          }
+        }
+      }
+
+      for (const kw of (req.positiveExamples || [])) {
+        if (context.includes(kw.toLowerCase())) {
+          score += 2;
+        }
+      }
+
+      let isExcluded = false;
+      for (const neg of (req.negativeExamples || [])) {
+        if (candidate.originalText.toLowerCase() === neg.toLowerCase()) {
+          isExcluded = true;
+          break;
+        }
+      }
+      if (isExcluded) continue;
+
+      if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+        let value: string | number = candidate.normalizedValue;
+        if (req.entityType === 'currency' || req.entityType === 'count') {
+          const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ''));
+          if (!isNaN(parsed)) value = parsed;
+        } else if (req.entityType === 'percentage') {
+          const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ''));
+          if (!isNaN(parsed)) value = parsed;
+        }
+
+        bestMatch = {
+          value,
+          snippet: req.sourceText.slice(contextStart, contextEnd).trim().substring(0, 200),
+          score,
+        };
+      }
+    }
+
+    if (req.entityType === 'string' && !bestMatch) {
+      for (const candidate of nerResult.entities) {
+        if (['ORG', 'RACE_GROUP', 'GENDER', 'DESIGNATION'].includes(candidate.entityType)) {
+          const contextStart = Math.max(0, candidate.spanStart - 200);
+          const contextEnd = Math.min(req.sourceText.length, candidate.spanEnd + 200);
+          const context = req.sourceText.slice(contextStart, contextEnd).toLowerCase();
+
+          let score = 0;
+          for (const kw of allKeywords) {
+            const words = kw.split(/\s+/);
+            for (const w of words) {
+              if (w.length >= 3 && context.includes(w)) score += 1;
+            }
+          }
+
+          if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+            bestMatch = {
+              value: candidate.originalText,
+              snippet: req.sourceText.slice(contextStart, contextEnd).trim().substring(0, 200),
+              score,
+            };
+          }
+        }
+      }
+    }
+
+    if (bestMatch) {
+      return {
+        entityName: req.entityName,
+        extractedValue: bestMatch.value,
+        rawLLMResponse: `rule_based: matched "${bestMatch.value}" with score ${bestMatch.score}`,
+        confidence: Math.min(0.7, 0.3 + bestMatch.score * 0.1),
+        sourcePageId: req.sourcePageId,
+        structuralVerification: true,
+        method: 'rule_based',
+        reasoning: `Rule-based extraction matched ${targetNERType} pattern near keywords`,
+      };
+    }
+
+    return {
+      entityName: req.entityName,
+      extractedValue: null,
+      rawLLMResponse: 'rule_based: no match found',
+      confidence: 0.3,
+      sourcePageId: req.sourcePageId,
+      structuralVerification: true,
+      method: 'rule_based',
+      reasoning: 'No matching pattern found in source text via rule-based extraction',
+    };
+  }
+
   /**
    * Extract a single value using LLM (Azure OpenAI GPT-4o-mini preferred, Groq fallback).
+   * Falls back to rule-based extraction if no LLM provider is available.
    */
   async extract(req: LLMExtractionRequest): Promise<LLMExtractionResult> {
+    if (!isAvailable()) {
+      return this.ruleBasedExtract(req);
+    }
+
     const prompt = buildExtractionPrompt(req);
     const { response: rawLLMResponse, provider } = await this.callLLM(prompt);
 
