@@ -12,9 +12,6 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    # Rewrite compute paths to strip /compute prefix
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: "letsencrypt-production"
 spec:
   ingressClassName: nginx
@@ -42,14 +39,6 @@ spec:
                 name: web
                 port:
                   number: 5001
-          # Compute routes - strip /compute prefix
-          - path: /compute(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: compute
-                port:
-                  number: 8000
           # API backend routes (all other /api/*)
           - path: /api
             pathType: Prefix
@@ -58,7 +47,7 @@ spec:
                 name: api
                 port:
                   number: 5000
-          # Web frontend (everything else)
+          # Web frontend (everything else including /assets/*)
           - path: /
             pathType: Prefix
             backend:
@@ -66,3 +55,33 @@ spec:
                 name: web
                 port:
                   number: 5001
+---
+# Separate ingress for compute to isolate the rewrite-target annotation
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: okiru-ingress-compute
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - okiru.20.164.101.114.nip.io
+      secretName: okiru-pro-tls
+  rules:
+    - host: okiru.20.164.101.114.nip.io
+      http:
+        paths:
+          # Compute routes - strip /compute prefix
+          - path: /compute(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: compute
+                port:
+                  number: 8000
