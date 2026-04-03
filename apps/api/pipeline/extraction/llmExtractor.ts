@@ -412,7 +412,16 @@ export class LLMExtractor {
     }
 
     const prompt = buildExtractionPrompt(req);
-    const { response: rawLLMResponse, provider } = await this.callLLM(prompt);
+    let rawLLMResponse: string;
+    let provider: string;
+    try {
+      const result = await this.callLLM(prompt);
+      rawLLMResponse = result.response;
+      provider = result.provider;
+    } catch (llmError: any) {
+      console.warn(`[LLMExtractor] LLM call failed for ${req.entityName}, falling back to rule-based: ${llmError.message}`);
+      return this.ruleBasedExtract(req);
+    }
 
     let parsed: { value?: unknown; reasoning?: string; source_quote?: string };
     try {
