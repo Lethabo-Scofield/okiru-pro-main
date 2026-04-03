@@ -87,6 +87,7 @@ export async function registerRoutes(
 
   app.use('/', healthRouter);
   app.use('/api', healthRouter);
+  app.use('/api/health', healthRouter);
 
   // Auth routes
   app.use('/api/auth', authRouter);
