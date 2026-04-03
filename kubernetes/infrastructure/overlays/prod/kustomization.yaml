@@ -13,13 +13,17 @@ patchesStrategicMerge:
   - patches/replica-count.yaml
   - patches/configmap-patch.yaml
 
+# Images - Using 'latest' tag for flexibility during development
+# For production stability, use specific digests or tags:
+#   newTag: 5dc2624-20260403
+# During deployment, kustomize edit set image is used to update these
 images:
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-    newTag: latest
+    newTag: 5dc2624-20260403
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-    newTag: latest
+    newTag: 5dc2624-20260403
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-    newTag: latest
+    newTag: 5dc2624-20260403
 
 commonLabels:
   environment: production
