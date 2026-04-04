@@ -65,6 +65,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  console.log("[Routes] Starting route registration...");
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -76,6 +77,8 @@ export async function registerRoutes(
     console.error("FATAL: SESSION_SECRET must be set in production.");
     process.exit(1);
   }
+
+  console.log("[Routes] Session configuration starting...");
 
   const sessionConfig: session.SessionOptions = {
     secret: sessionSecret || "okiru-entity-studio-dev-secret",
@@ -2013,5 +2016,6 @@ Respond ONLY with a valid JSON array.`;
     }
   });
 
+  console.log("[Routes] Route registration completed");
   return httpServer;
 }

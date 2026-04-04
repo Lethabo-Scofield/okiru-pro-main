@@ -74,7 +74,14 @@ app.use((req, res, next) => {
 
   registerApiProxy(app);
 
-  await registerRoutes(httpServer, app);
+  console.log("[Server] Starting route registration...");
+  try {
+    await registerRoutes(httpServer, app);
+    console.log("[Server] Route registration completed successfully");
+  } catch (err) {
+    console.error("[Server] Route registration failed:", err);
+    process.exit(1);
+  }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
