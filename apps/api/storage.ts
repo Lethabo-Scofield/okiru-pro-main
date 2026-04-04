@@ -32,6 +32,7 @@ function clean<T>(doc: unknown): T {
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsernameOrEmail(loginId: string): Promise<User | undefined>;
   createUser(user: InsertUser & { organizationId?: string }): Promise<User>;
   updateUser(id: string, data: Partial<{ fullName: string; email: string; profilePicture: string }>): Promise<User | undefined>;
 
@@ -101,6 +102,17 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const doc = await UserModel.findOne({ username }).lean();
+    return doc ? clean<User>(doc) : undefined;
+  }
+
+  async getUserByUsernameOrEmail(loginId: string): Promise<User | undefined> {
+    const lower = loginId.toLowerCase();
+    const doc = await UserModel.findOne({
+      $or: [
+        { username: { $regex: new RegExp(`^${lower}$`, 'i') } },
+        { email: { $regex: new RegExp(`^${lower}$`, 'i') } }
+      ]
+    }).lean();
     return doc ? clean<User>(doc) : undefined;
   }
 

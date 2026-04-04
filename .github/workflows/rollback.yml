@@ -1,0 +1,85 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment:
+        description: 'Deployment to rollback'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - api
+          - web
+          - compute
+      revision:
+        description: 'Revision to rollback to (leave empty for previous)'
+        required: false
+        type: string
+
+env:
+  RESOURCE_GROUP: "okiru-pro-rg"
+  CLUSTER_NAME: "okiru-pro-aks"
+  NAMESPACE: "okiru-pro"
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.CLUSTER_NAME }} \
+            --overwrite-existing
+
+      - name: Show current revisions
+        run: |
+          echo "Current deployment revisions:"
+          kubectl rollout history deployment/api -n ${{ env.NAMESPACE }} | tail -5
+          kubectl rollout history deployment/web -n ${{ env.NAMESPACE }} | tail -5
+          kubectl rollout history deployment/compute -n ${{ env.NAMESPACE }} | tail -5
+
+      - name: Rollback deployment
+        run: |
+          if [ "${{ github.event.inputs.deployment }}" == "all" ]; then
+            echo "Rolling back all deployments..."
+            kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/compute -n ${{ env.NAMESPACE }}
+            
+            kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=180s
+            kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=180s
+            kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=180s
+          else
+            echo "Rolling back ${{ github.event.inputs.deployment }}..."
+            kubectl rollout undo deployment/${{ github.event.inputs.deployment }} -n ${{ env.NAMESPACE }}
+            kubectl rollout status deployment/${{ github.event.inputs.deployment }} -n ${{ env.NAMESPACE }} --timeout=180s
+          fi
+
+      - name: Verify rollback
+        run: |
+          echo "Rollback completed. Current pod status:"
+          kubectl get pods -n ${{ env.NAMESPACE }}
+
+      - name: Test health
+        run: |
+          INGRESS_IP=$(kubectl get ingress okiru-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          sleep 10
+          curl -sf "https://${INGRESS_IP}.nip.io/api/health" && echo " ✓ API is healthy" || echo " ✗ Health check failed"

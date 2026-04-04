@@ -183,10 +183,10 @@ const lakeTradingSedContributions = [
   },
 ];
 
+// Issue 1: Removed employmentEquity (merged with management)
 export const lakeTradingPillars: BuildPillarsData = {
   ownership: lakeTradingOwnership,
   management: lakeTradingManagement,
-  employmentEquity: lakeTradingManagement,
   skills: {
     id: '',
     clientId: '',
@@ -197,11 +197,10 @@ export const lakeTradingPillars: BuildPillarsData = {
   },
   procurement: {
     id: '',
+    // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
     clientId: '',
     tmps: LAKE_TMPS,
     suppliers: lakeTradingSuppliers as any,
-    graduationBonus: false,
-    jobsCreatedBonus: false,
   },
   esd: {
     id: '',
@@ -261,11 +260,8 @@ export function getLakeTradingPillarData(): BuildPillarsData {
       ...lakeTradingOwnership,
       shareholders: lakeTradingOwnership.shareholders.map(s => ({ ...s })),
     },
+    // Issue 1: Removed employmentEquity (merged with management)
     management: {
-      ...lakeTradingManagement,
-      employees: lakeTradingManagement.employees.map(e => ({ ...e })),
-    },
-    employmentEquity: {
       ...lakeTradingManagement,
       employees: lakeTradingManagement.employees.map(e => ({ ...e })),
     },

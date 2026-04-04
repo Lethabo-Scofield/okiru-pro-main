@@ -20,7 +20,15 @@ export type Province =
   | 'Mpumalanga'
   | 'Limpopo';
 
-export type OccupationalLevel = 'Senior' | 'Middle' | 'Junior';
+/**
+ * Occupational Levels for EAP targeting
+ * Note: EE levels mapping for scoring:
+ * - Senior, Middle, Junior: use their respective EAP targets
+ * - Skilled Technical: uses Middle EAP targets
+ * - Semi-skilled: uses Junior EAP targets
+ * - Unskilled: uses Junior EAP targets
+ */
+export type OccupationalLevel = 'Senior' | 'Middle' | 'Junior' | 'Skilled Technical';
 
 export interface EAPValues {
   blackTarget: number;
@@ -32,6 +40,7 @@ const NATIONAL_EAP: Record<OccupationalLevel, EAPValues> = {
   Senior: { blackTarget: 0.731, blackWomenTarget: 0.341 },
   Middle: { blackTarget: 0.786, blackWomenTarget: 0.425 },
   Junior: { blackTarget: 0.845, blackWomenTarget: 0.512 },
+  'Skilled Technical': { blackTarget: 0.786, blackWomenTarget: 0.425 }, // Uses Middle EAP targets
 };
 
 // Provincial EAP tables
@@ -41,46 +50,55 @@ const PROVINCIAL_EAP: Record<Province, Record<OccupationalLevel, EAPValues>> = {
     Senior: { blackTarget: 0.551, blackWomenTarget: 0.311 },
     Middle: { blackTarget: 0.654, blackWomenTarget: 0.422 },
     Junior: { blackTarget: 0.743, blackWomenTarget: 0.526 },
+    'Skilled Technical': { blackTarget: 0.654, blackWomenTarget: 0.422 },
   },
   'Eastern Cape': {
     Senior: { blackTarget: 0.868, blackWomenTarget: 0.454 },
     Middle: { blackTarget: 0.902, blackWomenTarget: 0.501 },
     Junior: { blackTarget: 0.932, blackWomenTarget: 0.558 },
+    'Skilled Technical': { blackTarget: 0.902, blackWomenTarget: 0.501 },
   },
   'Northern Cape': {
     Senior: { blackTarget: 0.611, blackWomenTarget: 0.324 },
     Middle: { blackTarget: 0.705, blackWomenTarget: 0.418 },
     Junior: { blackTarget: 0.798, blackWomenTarget: 0.509 },
+    'Skilled Technical': { blackTarget: 0.705, blackWomenTarget: 0.418 },
   },
   'Free State': {
     Senior: { blackTarget: 0.852, blackWomenTarget: 0.461 },
     Middle: { blackTarget: 0.884, blackWomenTarget: 0.492 },
     Junior: { blackTarget: 0.921, blackWomenTarget: 0.534 },
+    'Skilled Technical': { blackTarget: 0.884, blackWomenTarget: 0.492 },
   },
   'KwaZulu-Natal': {
     Senior: { blackTarget: 0.863, blackWomenTarget: 0.421 },
     Middle: { blackTarget: 0.895, blackWomenTarget: 0.467 },
     Junior: { blackTarget: 0.928, blackWomenTarget: 0.523 },
+    'Skilled Technical': { blackTarget: 0.895, blackWomenTarget: 0.467 },
   },
   'North West': {
     Senior: { blackTarget: 0.881, blackWomenTarget: 0.435 },
     Middle: { blackTarget: 0.908, blackWomenTarget: 0.479 },
     Junior: { blackTarget: 0.936, blackWomenTarget: 0.531 },
+    'Skilled Technical': { blackTarget: 0.908, blackWomenTarget: 0.479 },
   },
   Gauteng: {
     Senior: { blackTarget: 0.733, blackWomenTarget: 0.359 },
     Middle: { blackTarget: 0.794, blackWomenTarget: 0.442 },
     Junior: { blackTarget: 0.861, blackWomenTarget: 0.545 },
+    'Skilled Technical': { blackTarget: 0.794, blackWomenTarget: 0.442 },
   },
   Mpumalanga: {
     Senior: { blackTarget: 0.894, blackWomenTarget: 0.418 },
     Middle: { blackTarget: 0.917, blackWomenTarget: 0.462 },
     Junior: { blackTarget: 0.941, blackWomenTarget: 0.527 },
+    'Skilled Technical': { blackTarget: 0.917, blackWomenTarget: 0.462 },
   },
   Limpopo: {
     Senior: { blackTarget: 0.938, blackWomenTarget: 0.465 },
     Middle: { blackTarget: 0.951, blackWomenTarget: 0.498 },
     Junior: { blackTarget: 0.963, blackWomenTarget: 0.542 },
+    'Skilled Technical': { blackTarget: 0.951, blackWomenTarget: 0.498 },
   },
 };
 

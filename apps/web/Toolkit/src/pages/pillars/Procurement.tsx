@@ -24,6 +24,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { Supplier } from "@toolkit/lib/types";
 
+// Issue 3: Added isForeignSupplier field
 const emptySupplierForm = {
   name: '',
   beeLevel: 4,
@@ -34,6 +35,7 @@ const emptySupplierForm = {
   enterpriseType: 'generic' as 'eme' | 'qse' | 'generic',
   spend: 0,
   certificateExpiryDate: '',
+  isForeignSupplier: false,
 };
 
 // VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
@@ -89,6 +91,7 @@ export default function Procurement() {
 
   const totalRecognisedSpend = suppliers.reduce((acc, sup) => acc + (sup.spend * (getRecognitionPercentage(sup.beeLevel) / 100)), 0);
 
+  // Issue 3: Added isForeignSupplier to addSupplier
   const handleAddSupplier = () => {
     if (!newSup.name || newSup.spend <= 0) {
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
@@ -105,12 +108,14 @@ export default function Procurement() {
       enterpriseType: newSup.enterpriseType,
       spend: Number(newSup.spend),
       certificateExpiryDate: newSup.certificateExpiryDate || undefined,
+      isForeignSupplier: newSup.isForeignSupplier,
     });
     setNewSup({ ...emptySupplierForm });
     setIsSupOpen(false);
     toast({ title: "Supplier Added", description: `${newSup.name} added to procurement.` });
   };
 
+  // Issue 3: Added isForeignSupplier to edit form
   const openEditSupplier = (sup: Supplier) => {
     setEditSupId(sup.id);
     setEditSup({
@@ -123,10 +128,12 @@ export default function Procurement() {
       enterpriseType: sup.enterpriseType,
       spend: sup.spend,
       certificateExpiryDate: sup.certificateExpiryDate || '',
+      isForeignSupplier: sup.isForeignSupplier || false,
     });
     setIsEditSupOpen(true);
   };
 
+  // Issue 3: Added isForeignSupplier to updateSupplier
   const handleEditSupplier = () => {
     if (!editSupId || !editSup.name || editSup.spend <= 0) {
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
@@ -142,6 +149,7 @@ export default function Procurement() {
       enterpriseType: editSup.enterpriseType,
       spend: Number(editSup.spend),
       certificateExpiryDate: editSup.certificateExpiryDate || undefined,
+      isForeignSupplier: editSup.isForeignSupplier,
     });
     setIsEditSupOpen(false);
     setEditSupId(null);
@@ -150,11 +158,25 @@ export default function Procurement() {
 
   const score = calculateProcurementScore(procurement);
 
+  // Issue 3: Added isForeignSupplier to form fields
   const renderSupplierFormFields = (
     data: typeof emptySupplierForm,
     setData: (d: typeof emptySupplierForm) => void,
   ) => (
     <div className="grid gap-4 py-4">
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label className="text-right pt-2">Foreign</Label>
+        <div className="col-span-3 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={data.isForeignSupplier}
+            onChange={e => setData({ ...data, isForeignSupplier: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300"
+            data-testid="input-supplier-foreign"
+          />
+          <span className="text-sm text-muted-foreground">Foreign Supplier (excluded from Empowering Supplier recognition, included in TMPS)</span>
+        </div>
+      </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Name</Label>
         <Input

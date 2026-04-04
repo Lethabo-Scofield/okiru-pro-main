@@ -45,6 +45,8 @@ export interface ManagementResult {
   middleBWO: number;
   juniorBlack: number;
   juniorBWO: number;
+  skilledTechnicalBlack: number;
+  skilledTechnicalBWO: number;
   disabled: number;
   total: number;
   subMinimumMet: boolean;
@@ -101,6 +103,7 @@ export function calculateManagementScore(
   const seniorEAP = getEAPTargets(province, 'Senior');
   const middleEAP = getEAPTargets(province, 'Middle');
   const juniorEAP = getEAPTargets(province, 'Junior');
+  const skilledTechnicalEAP = getEAPTargets(province, 'Skilled Technical'); // Uses Middle EAP targets
 
   const board = grouped['Board'] || [];
   const execDirs = [
@@ -111,6 +114,10 @@ export function calculateManagementScore(
   const senior = grouped['Senior'] || [];
   const middle = grouped['Middle'] || [];
   const junior = grouped['Junior'] || [];
+  // Employment Equity levels: Skilled Technical uses Middle EAP, Semi-skilled and Unskilled use Junior EAP
+  const skilledTechnical = grouped['Skilled Technical'] || [];
+  const semiSkilled = grouped['Semi-skilled'] || [];
+  const unskilled = grouped['Unskilled'] || [];
 
   const boardBlackPct = pctOf(board, countBlack);
   const boardBWOPct = pctOf(board, countBlackWomen);
@@ -124,6 +131,13 @@ export function calculateManagementScore(
   const middleBWOPct = pctOf(middle, countBlackWomen);
   const juniorBlackPct = pctOf(junior, countBlack);
   const juniorBWOPct = pctOf(junior, countBlackWomen);
+  // Employment Equity additional levels percentages
+  const skilledTechnicalBlackPct = pctOf(skilledTechnical, countBlack);
+  const skilledTechnicalBWOPct = pctOf(skilledTechnical, countBlackWomen);
+  const semiSkilledBlackPct = pctOf(semiSkilled, countBlack);
+  const semiSkilledBWOPct = pctOf(semiSkilled, countBlackWomen);
+  const unskilledBlackPct = pctOf(unskilled, countBlack);
+  const unskilledBWOPct = pctOf(unskilled, countBlackWomen);
 
   const disabledEmps = employees.filter(e => e.isDisabled);
   const blackDisabledPct = employees.length > 0
@@ -143,8 +157,18 @@ export function calculateManagementScore(
   const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorEAP.blackWomenTarget, 1), 1);
   const middleBlack = clampScore(safeRatio(middleBlackPct, middleEAP.blackTarget, 2), 2);
   const middleBWO = clampScore(safeRatio(middleBWOPct, middleEAP.blackWomenTarget, 1), 1);
-  const juniorBlackScore = clampScore(safeRatio(juniorBlackPct, juniorEAP.blackTarget, 1), 1);
-  const juniorBWOScore = clampScore(safeRatio(juniorBWOPct, juniorEAP.blackWomenTarget, 1), 1);
+  // Junior level now includes Junior, Semi-skilled, and Unskilled - all use Junior EAP
+  const juniorCombinedBlackPct = junior.length + semiSkilled.length + unskilled.length > 0
+    ? (countBlack(junior) + countBlack(semiSkilled) + countBlack(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
+    : 0;
+  const juniorCombinedBWOPct = junior.length + semiSkilled.length + unskilled.length > 0
+    ? (countBlackWomen(junior) + countBlackWomen(semiSkilled) + countBlackWomen(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
+    : 0;
+  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorEAP.blackTarget, 1), 1);
+  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorEAP.blackWomenTarget, 1), 1);
+  // Employment Equity: Skilled Technical (uses Middle EAP targets)
+  const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, 2), 2);
+  const skilledTechnicalBWOScore = clampScore(safeRatio(skilledTechnicalBWOPct, skilledTechnicalEAP.blackWomenTarget, 1), 1);
   const disabledScore = clampScore(safeRatio(blackDisabledPct, DISABLED_TARGET, 2), 2);
 
   const totalPoints = boardVotingBlack + boardVotingBWO +
@@ -153,6 +177,7 @@ export function calculateManagementScore(
     seniorBlack + seniorBWO +
     middleBlack + middleBWO +
     juniorBlackScore + juniorBWOScore +
+    skilledTechnicalBlackScore + skilledTechnicalBWOScore +
     disabledScore;
 
   const subLines: ManagementSubLine[] = [
@@ -169,8 +194,10 @@ export function calculateManagementScore(
     { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: seniorBWO },
     { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 2, score: middleBlack },
     { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: middleBWO },
-    { name: "Black employees in junior management", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBlackScore },
-    { name: "Black female employees in junior management", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBWOScore },
+    { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBlackScore },
+    { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBWOScore },
+    { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 2, score: skilledTechnicalBlackScore },
+    { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: skilledTechnicalBWOScore },
     { name: "Black employees with disabilities", target: "3%", weighting: 2, score: disabledScore },
   ];
 
@@ -187,6 +214,8 @@ export function calculateManagementScore(
     middleBWO: round2(middleBWO),
     juniorBlack: round2(juniorBlackScore),
     juniorBWO: round2(juniorBWOScore),
+    skilledTechnicalBlack: round2(skilledTechnicalBlackScore),
+    skilledTechnicalBWO: round2(skilledTechnicalBWOScore),
     disabled: round2(disabledScore),
     total: round2(clampScore(totalPoints, MAX_TOTAL)),
     subMinimumMet: true,

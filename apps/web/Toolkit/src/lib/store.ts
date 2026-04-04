@@ -90,7 +90,8 @@ const emptySkills: SkillsData = {
   yesCandidatesCount: 0,
   yesAbsorbedCount: 0,
 };
-const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppliers: [], graduationBonus: false, jobsCreatedBonus: false };
+// Issue 3: Removed graduationBonus and jobsCreatedBonus (ED only bonuses)
+const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppliers: [] };
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
 
@@ -165,7 +166,7 @@ interface BbeeState extends PillarState {
   addSedContribution: (contribution: Contribution) => void;
   removeSedContribution: (id: string) => void;
 
-  updateProcurementBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
+  // Issue 3: Removed updateProcurementBonuses - bonuses are ED only
   updateEsdBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, jobsCreatedCount?: number, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
   
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
@@ -474,10 +475,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
         })),
-        graduationBonus: data.procurement?.graduationBonus || false,
-        graduationEvidence: data.procurement?.graduationEvidence || '',
-        jobsCreatedBonus: data.procurement?.jobsCreatedBonus || false,
-        jobsCreatedEvidence: data.procurement?.jobsCreatedEvidence || '',
+        // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
 
       const esdState: ESDData = {
@@ -849,12 +847,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     api.deleteSedContribution(id).catch(console.error);
   },
 
-  updateProcurementBonuses: (graduationBonus, jobsCreatedBonus, graduationEvidence, jobsCreatedEvidence) => {
-    set((state) => ({
-      procurement: { ...state.procurement, graduationBonus, jobsCreatedBonus, graduationEvidence, jobsCreatedEvidence },
-    }));
-    get()._recalculateAll();
-  },
+  // Issue 3: Removed updateProcurementBonuses - bonuses are ED only
 
   updateEsdBonuses: (graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence) => {
     set((state) => ({
