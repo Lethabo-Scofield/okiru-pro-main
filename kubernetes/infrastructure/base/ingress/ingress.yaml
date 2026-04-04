@@ -23,8 +23,44 @@ spec:
     - host: okiru.20.164.101.114.nip.io
       http:
         paths:
-          # Web-specific API routes (served by web Express server, not API backend)
-          # These must come BEFORE the general /api prefix route
+          # API auth routes (MUST come before web routes)
+          - path: /api/auth/login
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/me
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/logout
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/register
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          # API backend routes (all other /api/*)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          # Web-specific API routes (served by web Express server)
           - path: /api/organizations
             pathType: Exact
             backend:
@@ -39,14 +75,6 @@ spec:
                 name: web
                 port:
                   number: 5001
-          # API backend routes (all other /api/*)
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
           # Web frontend (everything else including /assets/*)
           - path: /
             pathType: Prefix
