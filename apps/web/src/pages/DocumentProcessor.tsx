@@ -349,8 +349,15 @@ const EMPTY_COMPANY_INFO: CompanyInfo = {
   contactPhone: '', currentBBEELevel: '', notes: '',
 };
 
-/** Persists foundation + pillars while in the build flow (refresh / mode switch). */
-const BUILD_FLOW_STORAGE_KEY = 'okiru-processor-build-flow-v1';
+/** Persists foundation + pillars while in the build flow (refresh / mode switch).
+ * FIXED: Now user-specific to prevent session leakage between users.
+ */
+const getBuildFlowStorageKey = (userId: string | undefined) => 
+  userId ? `okiru-processor-build-flow-${userId}` : 'okiru-processor-build-flow-anon';
+
+/** FIXED: User-specific localStorage key for active client */
+const getActiveClientStorageKey = (userId: string | undefined) =>
+  userId ? `okiru-pro-active-client-${userId}` : 'okiru-pro-active-client-anon';
 
 const EMPTY_YES_DATA: YESData = {
   id: '',
@@ -1249,12 +1256,14 @@ export default function DocumentProcessor() {
   }, [location]);
 
   // Auto-restore build flow on hard refresh (Issue A fix)
+  // FIXED: Added user?.id to dependencies to ensure user-specific session restoration
   useEffect(() => {
-    // Only run if flowMode is not yet set (initial mount)
-    if (flowMode !== null) return;
+    // Only run if flowMode is not yet set and user is loaded
+    if (flowMode !== null || !user?.id) return;
     
     try {
-      const raw = sessionStorage.getItem(BUILD_FLOW_STORAGE_KEY);
+      const storageKey = getBuildFlowStorageKey(user.id);
+      const raw = sessionStorage.getItem(storageKey);
       if (!raw) return;
       
       const d = JSON.parse(raw);
@@ -1280,7 +1289,7 @@ export default function DocumentProcessor() {
     } catch {
       // Ignore corrupt session data
     }
-  }, []); // Empty deps = run once on mount
+  }, [flowMode, user?.id]); // FIXED: Added user?.id to ensure user-specific restoration
 
   const persistSession = useCallback(async (step: string, opts?: {
     ci?: CompanyInfo;
@@ -1379,7 +1388,7 @@ export default function DocumentProcessor() {
       setCurrentPage('upload');
     } else {
       try {
-        const raw = sessionStorage.getItem(BUILD_FLOW_STORAGE_KEY);
+      const raw = sessionStorage.getItem(getBuildFlowStorageKey(user?.id));
         if (raw) {
           const d = JSON.parse(raw);
           if (d.foundationData && typeof d.foundationData === 'object') {
@@ -1405,13 +1414,15 @@ export default function DocumentProcessor() {
     }
   }, []);
 
+  // FIXED: Now uses user-specific storage key to prevent session leakage
   useEffect(() => {
     if (flowMode !== 'build') return;
     if (currentPage !== 'build-foundation' && currentPage !== 'build-pillars') return;
+    if (!user?.id) return;
     const t = setTimeout(() => {
       try {
         sessionStorage.setItem(
-          BUILD_FLOW_STORAGE_KEY,
+          getBuildFlowStorageKey(user.id),
           JSON.stringify({ foundationData, pillarData, currentPage }),
         );
       } catch {
@@ -1419,7 +1430,7 @@ export default function DocumentProcessor() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [flowMode, currentPage, foundationData, pillarData]);
+  }, [flowMode, currentPage, foundationData, pillarData, user?.id]);
 
   const handleBuildValueChange = useCallback((entityId: string, value: unknown) => {
     setBuildValues(prev => ({ ...prev, [entityId]: value }));
@@ -1704,7 +1715,7 @@ export default function DocumentProcessor() {
         _source: 'build_mode',
       };
 
-      localStorage.setItem('okiru-pro-active-client', buildClientId);
+      localStorage.setItem(getActiveClientStorageKey(user?.id), buildClientId);
       setScorecardResult(scorecardLegacy);
       setCurrentPage('scorecard');
 
@@ -1750,7 +1761,7 @@ export default function DocumentProcessor() {
             const realClientId = result.assessment.clientId;
             
             // Update localStorage with real UUID
-            localStorage.setItem('okiru-pro-active-client', realClientId);
+            localStorage.setItem(getActiveClientStorageKey(user?.id), realClientId);
             
             // Update Zustand store with real clientId
             useBbeeStore.setState({
@@ -3825,7 +3836,7 @@ export default function DocumentProcessor() {
                   <button
                     onClick={() => {
                       if (toolkitClientId) {
-                        localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                        localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
                         navigate(`/toolkit/${toolkitClientId}/scorecard`);
                       } else {
                         navigate('/toolkit');
@@ -4272,7 +4283,7 @@ export default function DocumentProcessor() {
                           <button
                             onClick={() => {
                               if (toolkitClientId) {
-                                localStorage.setItem('okiru-pro-active-client', toolkitClientId);
+                                localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
                                 navigate(`/toolkit/${toolkitClientId}/scorecard`);
                               } else {
                                 navigate('/toolkit');

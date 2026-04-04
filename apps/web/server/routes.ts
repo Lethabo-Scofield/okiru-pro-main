@@ -1601,9 +1601,10 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const userId = (req.session as any)?.userId;
-      const user = await storage.getUserById(userId);
-      const orgId = user?.organizationId || null;
-      const query = orgId ? { organizationId: orgId } : { createdByUserId: userId };
+      // FIXED: Always filter by userId to ensure session isolation
+      // Users should only see their own sessions, not other users' sessions
+      const query = { createdByUserId: userId };
+      console.log(`[ProcessorSessions] Fetching sessions for user: ${userId}`);
       const sessions = await ProcessorSessionModel.find(query)
         .select({
           sessionId: 1,
@@ -1654,7 +1655,9 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const { sessionId } = req.params;
-      const doc = await ProcessorSessionModel.findOne({ sessionId }).lean() as any;
+      const userId = (req.session as any)?.userId;
+      // FIXED: Also filter by userId to ensure users can only access their own sessions
+      const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean() as any;
       if (!doc) return res.status(404).json({ error: "Session not found" });
       res.json({ ...doc, id: doc.sessionId });
     } catch (error: any) {
@@ -1669,15 +1672,19 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const userId = (req.session as any)?.userId;
-      const user = await storage.getUserById(userId);
-      const orgId = user?.organizationId || null;
       const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult } = req.body;
       if (!sessionId || !companyInfo?.name) {
         return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
       }
+      
+      // FIXED: Check if session exists and belongs to user before updating
+      const existingSession = await ProcessorSessionModel.findOne({ sessionId });
+      if (existingSession && existingSession.createdByUserId !== userId) {
+        return res.status(403).json({ error: "You don't have permission to modify this session" });
+      }
+      
       const updateData: any = {
         sessionId,
-        organizationId: orgId,
         createdByUserId: userId,
         companyInfo,
         currentStep: currentStep || 'upload',
@@ -1692,7 +1699,7 @@ Respond ONLY with a valid JSON array.`;
         updateData.scorecardResult = scorecardResult;
       }
       const doc = await ProcessorSessionModel.findOneAndUpdate(
-        { sessionId },
+        { sessionId, createdByUserId: userId },
         updateData,
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -1709,17 +1716,19 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const { sessionId } = req.params;
+      const userId = (req.session as any)?.userId;
       const allowedFields = ['currentStep', 'isComplete', 'scorecardResult', 'toolkitClientId'];
       const patch: any = { updatedAt: new Date() };
       for (const field of allowedFields) {
         if (req.body[field] !== undefined) patch[field] = req.body[field];
       }
+      // FIXED: Also filter by userId to ensure users can only update their own sessions
       const doc = await ProcessorSessionModel.findOneAndUpdate(
-        { sessionId },
+        { sessionId, createdByUserId: userId },
         { $set: patch },
         { new: true }
       );
-      if (!doc) return res.status(404).json({ error: "Session not found" });
+      if (!doc) return res.status(404).json({ error: "Session not found or you don't have permission" });
       res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
     } catch (error: any) {
       console.error("Error patching processor session:", error);
@@ -1733,7 +1742,12 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const { sessionId } = req.params;
-      await ProcessorSessionModel.deleteOne({ sessionId });
+      const userId = (req.session as any)?.userId;
+      // FIXED: Only delete if the session belongs to the current user
+      const result = await ProcessorSessionModel.deleteOne({ sessionId, createdByUserId: userId });
+      if (result.deletedCount === 0) {
+        return res.status(404).json({ error: "Session not found or you don't have permission" });
+      }
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error deleting processor session:", error);
