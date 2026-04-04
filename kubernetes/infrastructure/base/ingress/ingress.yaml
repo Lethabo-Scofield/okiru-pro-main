@@ -75,6 +75,20 @@ spec:
                 name: web
                 port:
                   number: 5001
+          - path: /api/processor-sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/sector-templates
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # Web frontend (everything else including /assets/*)
           - path: /
             pathType: Prefix
