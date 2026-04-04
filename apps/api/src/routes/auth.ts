@@ -141,33 +141,43 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const { username, email, password } = req.body;
+    console.log(`[AuthRoute] Login attempt: username=${username}, email=${email}, ip=${req.ip}`);
+    
     if ((!username && !email) || !password) {
+      console.log(`[AuthRoute] Login rejected: missing credentials`);
       return res.status(400).json({ message: "Username/email and password are required" });
     }
 
     // Support both username and email login
     const loginIdentifier = username || email;
+    console.log(`[AuthRoute] Looking up user: ${loginIdentifier}`);
+    
     // Use getUserByUsernameOrEmail if available, otherwise fall back to getUserByUsername
     const getUserFn = storage.getUserByUsernameOrEmail || storage.getUserByUsername;
     const user = await getUserFn(loginIdentifier);
     
     if (!user) {
+      console.log(`[AuthRoute] Login failed: user ${loginIdentifier} not found in database`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    console.log(`[AuthRoute] User found: id=${user.id}, checking password...`);
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
+      console.log(`[AuthRoute] Login failed: password mismatch for ${loginIdentifier}`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    console.log(`[AuthRoute] Login successful: userId=${user.id}, setting session...`);
     req.session.userId = user.id;
     req.session.organizationId = user.organizationId || '';
+    console.log(`[AuthRoute] Session set: userId=${req.session.userId}, orgId=${req.session.organizationId}`);
 
     return res.json({
       user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: user.organizationId, profilePicture: user.profilePicture },
     });
   } catch (error: unknown) {
-    console.error('Login error:', error);
+    console.error('[AuthRoute] Login error:', error);
     return res.status(500).json({ message: "Login failed" });
   }
 });
@@ -180,13 +190,17 @@ router.post('/logout', (req: Request, res: Response) => {
 });
 
 router.get('/me', async (req: Request, res: Response) => {
+  console.log(`[AuthRoute] /me called: session.userId=${req.session.userId}, sessionID=${req.sessionID}`);
   if (!req.session.userId) {
+    console.log(`[AuthRoute] /me: No session userId, returning 401`);
     return res.status(401).json({ message: "Not authenticated" });
   }
   const user = await storage.getUser(req.session.userId);
   if (!user) {
+    console.log(`[AuthRoute] /me: User ${req.session.userId} not found in database`);
     return res.status(401).json({ message: "User not found" });
   }
+  console.log(`[AuthRoute] /me: Returning user ${user.id}`);
   return res.json({
     user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: user.organizationId, profilePicture: user.profilePicture },
   });
