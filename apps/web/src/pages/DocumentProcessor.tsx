@@ -1248,6 +1248,40 @@ export default function DocumentProcessor() {
     });
   }, [location]);
 
+  // Auto-restore build flow on hard refresh (Issue A fix)
+  useEffect(() => {
+    // Only run if flowMode is not yet set (initial mount)
+    if (flowMode !== null) return;
+    
+    try {
+      const raw = sessionStorage.getItem(BUILD_FLOW_STORAGE_KEY);
+      if (!raw) return;
+      
+      const d = JSON.parse(raw);
+      if (!d.foundationData || typeof d.foundationData !== 'object') return;
+      
+      // Check if this is a valid build flow restore scenario
+      const savedPage = d.currentPage;
+      if (savedPage !== 'build-foundation' && savedPage !== 'build-pillars') return;
+      
+      // Restore state
+      setFlowMode('build');
+      setFoundationData(d.foundationData);
+      if (d.pillarData && typeof d.pillarData === 'object') {
+        setPillarData((prev) => ({
+          ...prev,
+          ...d.pillarData,
+          employmentEquity:
+            d.pillarData.employmentEquity ?? d.pillarData.management ?? prev.employmentEquity,
+        }));
+      }
+      setCurrentPage(savedPage);
+      toast({ title: 'Build session restored', description: 'Your previous progress has been recovered.' });
+    } catch {
+      // Ignore corrupt session data
+    }
+  }, []); // Empty deps = run once on mount
+
   const persistSession = useCallback(async (step: string, opts?: {
     ci?: CompanyInfo;
     files?: UploadedFile[];
@@ -1563,7 +1597,26 @@ export default function DocumentProcessor() {
         sed: pillarData.sed
           ? { ...pillarData.sed, id: pillarData.sed.id || '', clientId: buildClientId }
           : { id: '', clientId: buildClientId, contributions: [] },
+        calculatorConfig: null, // Will be loaded from ArangoDB below
       });
+
+      // Issue D: Load sector-specific calculator config from ArangoDB (primary) or fallback
+      try {
+        const scorecardType = determineScorecardType(ci.sectorCode || 'RCOGP', ci.annualTurnover || 0);
+        const sectorConfigRes = await fetch(
+          `/api/scorecard/sector-config/${ci.sectorCode || 'RCOGP'}/${scorecardType.scorecardType || 'Generic'}`
+        );
+        if (sectorConfigRes.ok) {
+          const sectorData = await sectorConfigRes.json();
+          if (sectorData.success && sectorData.config) {
+            useBbeeStore.setState({ calculatorConfig: sectorData.config });
+            console.log('Sector config loaded from:', sectorData.source || 'unknown');
+          }
+        }
+      } catch (sectorErr) {
+        console.warn('Failed to load sector config:', sectorErr);
+        // Fallback: calculators will use hardcoded defaults
+      }
 
       useBbeeStore.getState()._recalculateAll();
       const { scorecard, management, skills } = useBbeeStore.getState();
@@ -1654,6 +1707,78 @@ export default function DocumentProcessor() {
       localStorage.setItem('okiru-pro-active-client', buildClientId);
       setScorecardResult(scorecardLegacy);
       setCurrentPage('scorecard');
+
+      // Issue B: Create real DB record and update with real UUID
+      try {
+        const response = await fetch('/api/assessments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionId || `session-${Date.now()}`,
+            clientInfo: {
+              companyName: ci.companyName,
+              registrationNumber: ci.registrationNumber,
+              sectorCode: ci.sectorCode,
+              industry: ci.industry,
+              financialYearEnd: ci.financialYearEnd,
+              physicalAddress: ci.physicalAddress,
+              contactPerson: ci.contactPerson,
+              contactEmail: ci.contactEmail,
+              contactPhone: ci.contactPhone,
+            },
+            financials: {
+              totalRevenue: fin.totalRevenue,
+              npat: fin.npat,
+              leviableAmount: fin.leviableAmount,
+              tmps: fin.tmps,
+            },
+            pillars: {
+              ownership: pillarData.ownership || null,
+              management: pillarData.management || null,
+              skills: skillsMerged || null,
+              procurement: pillarData.procurement || null,
+              esd: pillarData.esd || null,
+              sed: pillarData.sed || null,
+            },
+            scorecardResult: scorecardLegacy,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.assessment?.clientId) {
+            const realClientId = result.assessment.clientId;
+            
+            // Update localStorage with real UUID
+            localStorage.setItem('okiru-pro-active-client', realClientId);
+            
+            // Update Zustand store with real clientId
+            useBbeeStore.setState({
+              activeClientId: realClientId,
+              client: {
+                ...useBbeeStore.getState().client!,
+                id: realClientId,
+              },
+            });
+            
+            // Update all pillar clientIds
+            const currentState = useBbeeStore.getState();
+            useBbeeStore.setState({
+              ownership: { ...currentState.ownership, clientId: realClientId },
+              management: { ...currentState.management, clientId: realClientId },
+              skills: { ...currentState.skills, clientId: realClientId },
+              procurement: { ...currentState.procurement, clientId: realClientId },
+              esd: { ...currentState.esd, clientId: realClientId },
+              sed: { ...currentState.sed, clientId: realClientId },
+            });
+            
+            console.log('Build mode client persisted:', realClientId);
+          }
+        }
+      } catch (persistError) {
+        // Silent fail - scorecard still works with build-xxx ID
+        console.error('Failed to persist build mode client:', persistError);
+      }
 
       toast({
         title: 'Scorecard calculated',
