@@ -111,7 +111,7 @@ export interface Employee {
   idNumber?: string;              // SA ID for EAP validation
   gender: 'Male' | 'Female';
   race: 'African' | 'Coloured' | 'Indian' | 'White';
-  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior';
+  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior' | 'Skilled Technical' | 'Semi-skilled' | 'Unskilled';
   isDisabled: boolean;
   isForeign: boolean;               // Critical: excludes from BEE calcs
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
@@ -286,6 +286,9 @@ export interface Supplier {
   
   // Benefits for bonus points
   jobsCreated?: number;
+  
+  // Foreign supplier indicator (Issue 3)
+  isForeignSupplier?: boolean;
 }
 
 export interface ProcurementData {
@@ -294,10 +297,7 @@ export interface ProcurementData {
   tmps: number;
   tmpsManualOverride?: boolean;
   suppliers: Supplier[];
-  graduationBonus: boolean;
-  graduationEvidence?: string;
-  jobsCreatedBonus: boolean;
-  jobsCreatedEvidence?: string;
+  // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }
 
 // Expanded SED contribution types per toolkit

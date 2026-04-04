@@ -58,12 +58,17 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
 
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required" });
+    const { username, email, password } = req.body;
+    if ((!username && !email) || !password) {
+      return res.status(400).json({ message: "Username/email and password are required" });
     }
 
-    const user = await storage.getUserByUsername(username);
+    // Support both username and email login
+    const loginIdentifier = username || email;
+    // Use getUserByUsernameOrEmail if available, otherwise fall back to getUserByUsername
+    const getUserFn = storage.getUserByUsernameOrEmail || storage.getUserByUsername;
+    const user = await getUserFn(loginIdentifier);
+    
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -106,4 +111,3 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 export default router;
-

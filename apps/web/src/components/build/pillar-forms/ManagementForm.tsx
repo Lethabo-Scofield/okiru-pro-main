@@ -55,13 +55,14 @@ interface ManagementFormProps {
   className?: string;
 }
 
+// Issue 1: Added new designation levels 'Skilled Technical', 'Semi-skilled', 'Unskilled'
 interface EmployeeFormState {
   id?: string;
   name: string;
   idNumber: string;
   gender: 'Male' | 'Female';
   race: 'African' | 'Coloured' | 'Indian' | 'White';
-  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior';
+  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior' | 'Skilled Technical' | 'Semi-skilled' | 'Unskilled';
   isDisabled: boolean;
   isForeign: boolean;
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
@@ -81,6 +82,7 @@ const GENDER_OPTIONS: { value: EmployeeFormState['gender']; label: string }[] = 
   { value: 'Female', label: 'Female' },
 ];
 
+// Issue 1: Added new designation levels
 const DESIGNATION_OPTIONS: { value: EmployeeFormState['designation']; label: string }[] = [
   { value: 'Board', label: 'Board Member' },
   { value: 'Executive', label: 'Executive (Combined)' },
@@ -88,7 +90,10 @@ const DESIGNATION_OPTIONS: { value: EmployeeFormState['designation']; label: str
   { value: 'Other Executive Management', label: 'Other Executive Management' },
   { value: 'Senior', label: 'Senior Management' },
   { value: 'Middle', label: 'Middle Management' },
+  { value: 'Skilled Technical', label: 'Skilled Technical' },
   { value: 'Junior', label: 'Junior Management' },
+  { value: 'Semi-skilled', label: 'Semi-skilled' },
+  { value: 'Unskilled', label: 'Unskilled' },
 ];
 
 const PROVINCE_OPTIONS: EmployeeFormState['province'][] = [
@@ -239,7 +244,7 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
 
   return (
     <div className={cn("space-y-6", className)}>
-      {/* Score Overview */}
+      {/* Score Overview - Issue 1: Updated header name */}
       <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -248,9 +253,9 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
                 <Briefcase className="h-5 w-5" />
               </div>
               <div>
-                <div className="font-semibold">Management Control Score</div>
+                <div className="font-semibold">Management Control & Employment Equity Score</div>
                 <div className="text-sm text-muted-foreground">
-                  Based on Board, Executive, and EAP targets
+                  Based on Board, Executive, EAP targets, and Employment Equity levels
                 </div>
               </div>
             </div>

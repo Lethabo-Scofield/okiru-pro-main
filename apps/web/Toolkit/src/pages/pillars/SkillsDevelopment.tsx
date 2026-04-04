@@ -24,13 +24,14 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { TrainingProgram, TrainingCategoryCode } from "@toolkit/lib/types";
 
+// Issue 6: Updated Category F label
 const CATEGORY_OPTIONS = [
   { value: "A", label: "Cat A — Bursaries (University / TVET)", cap: null, examples: "University degrees, diplomas, certificates" },
   { value: "B", label: "Cat B — Internships & Learnerships", cap: null, examples: "Learnerships, apprenticeships, internships" },
   { value: "C", label: "Cat C — Short Courses (Accredited)", cap: null, examples: "Accredited short courses, workshops" },
   { value: "D", label: "Cat D — Other Accredited Training", cap: null, examples: "Professional certifications, trade tests" },
   { value: "E", label: "Cat E — Non-accredited / Informal", cap: "25%", examples: "Induction, on-the-job training, shadowing" },
-  { value: "F", label: "Cat F — Other Costs", cap: "15%", examples: "Travel, accommodation, catering, venues" },
+  { value: "F", label: "Cat F — External Unaccredited Training", cap: "15%", examples: "External training, conferences, seminars" },
   { value: "G", label: "Cat G — Informal Training (Non-black)", cap: null, examples: "Non-black employee training (no points)" },
 ];
 

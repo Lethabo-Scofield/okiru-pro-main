@@ -48,7 +48,8 @@ interface MappedEmployee {
 
 const VALID_GENDERS = ['Male', 'Female'];
 const VALID_RACES = ['African', 'Coloured', 'Indian', 'White'];
-const VALID_DESIGNATIONS = ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior'];
+// Issue 1: Added new designation levels
+const VALID_DESIGNATIONS = ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior', 'Skilled Technical', 'Semi-skilled', 'Unskilled'];
 const VALID_PROVINCES = ['Gauteng', 'Western Cape', 'KZN', 'Eastern Cape', 'Free State', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'National'];
 
 const GENDER_MAP: Record<string, string> = {
@@ -62,12 +63,16 @@ const RACE_MAP: Record<string, string> = {
   'white': 'White', 'w': 'White',
 };
 
+// Issue 1: Added new designation mappings
 const DESIGNATION_MAP: Record<string, string> = {
   'board': 'Board', 'director': 'Board', 'b': 'Board',
   'executive': 'Executive', 'exec': 'Executive', 'e': 'Executive', 'c-suite': 'Executive',
   'senior': 'Senior', 'senior management': 'Senior', 'sm': 'Senior', 's': 'Senior',
   'middle': 'Middle', 'middle management': 'Middle', 'mm': 'Middle',
   'junior': 'Junior', 'junior management': 'Junior', 'jm': 'Junior', 'j': 'Junior',
+  'skilled technical': 'Skilled Technical', 'skilled': 'Skilled Technical', 'technical': 'Skilled Technical', 'st': 'Skilled Technical',
+  'semi-skilled': 'Semi-skilled', 'semiskilled': 'Semi-skilled', 'ss': 'Semi-skilled',
+  'unskilled': 'Unskilled', 'us': 'Unskilled',
 };
 
 const PROVINCE_MAP: Record<string, string> = {
@@ -156,7 +161,8 @@ interface EmployeeFormState {
   idNumber: string;
   gender: 'Male' | 'Female';
   race: 'African' | 'Coloured' | 'Indian' | 'White';
-  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior';
+  // Issue 1: Added new designation levels
+  designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior' | 'Skilled Technical' | 'Semi-skilled' | 'Unskilled';
   isDisabled: boolean;
   isForeign: boolean;
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
@@ -212,7 +218,8 @@ export default function ManagementControl() {
     }, {} as Record<string, typeof employees>);
   }, [employees, showForeignOnly, showInactive, client.measurementPeriodStart, client.measurementPeriodEnd]);
 
-  const designations = ['Board', 'Executive Director', 'Other Executive Management', 'Executive', 'Senior', 'Middle', 'Junior'];
+  // Issue 1: Added new designation levels
+  const designations = ['Board', 'Executive Director', 'Other Executive Management', 'Executive', 'Senior', 'Middle', 'Skilled Technical', 'Junior', 'Semi-skilled', 'Unskilled'];
 
   const getRaceColor = (race: string) => {
     switch(race) {
@@ -453,6 +460,7 @@ export default function ManagementControl() {
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label className="text-right">Level</Label>
+          // Issue 1: Added new designation options
           <Select value={formState.designation} onValueChange={(v) => setFormState({...formState, designation: v as typeof formState.designation})}>
             <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -462,7 +470,10 @@ export default function ManagementControl() {
               <SelectItem value="Executive">Executive</SelectItem>
               <SelectItem value="Senior">Senior Management</SelectItem>
               <SelectItem value="Middle">Middle Management</SelectItem>
+              <SelectItem value="Skilled Technical">Skilled Technical</SelectItem>
               <SelectItem value="Junior">Junior Management</SelectItem>
+              <SelectItem value="Semi-skilled">Semi-skilled</SelectItem>
+              <SelectItem value="Unskilled">Unskilled</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -586,13 +597,14 @@ export default function ManagementControl() {
     </Tabs>
   );
 
+  // Issue 1: Updated page heading to reflect MC+EE combined pillar
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h1 className="text-3xl font-heading font-bold">Management Control</h1>
+          <h1 className="text-3xl font-heading font-bold">Management Control & Employment Equity</h1>
           <p className="text-muted-foreground mt-1">
-            Track workforce demographics with employment dates and foreign national exclusion.
+            Track workforce demographics with employment dates, foreign national exclusion, and Employment Equity levels.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

@@ -18,6 +18,7 @@ export interface ProcurementSubLine {
   isBonus?: boolean;
 }
 
+// Issue 3: Removed graduationBonus and jobsCreatedBonus from result (ED only bonuses)
 export interface ProcurementResult {
   base: number;
   empoweringSuppliers: number;
@@ -26,8 +27,6 @@ export interface ProcurementResult {
   blackOwned51: number;
   blackFemaleOwned30: number;
   designatedGroup: number;
-  graduationBonus: number;
-  jobsCreatedBonus: number;
   total: number;
   subMinimumMet: boolean;
   recognisedSpend: number;
@@ -42,6 +41,7 @@ export interface ProcurementResult {
     empoweringSpend: number;
     blackOwned51Spend: number;
     blackFemaleOwned30Spend: number;
+    foreignSupplierSpend: number; // Issue 3: Added for TMPS tracking
   };
 }
 
@@ -76,7 +76,17 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   let blackFemaleOwned30Spend = 0;
   let designatedGroupSpend = 0;
 
+  // Issue 3: Added foreign supplier tracking
+  let foreignSupplierSpend = 0;
+
   for (const sup of suppliers) {
+    // Issue 3: Foreign suppliers excluded from Empowering Supplier recognition but included in TMPS
+    if (sup.isForeignSupplier) {
+      foreignSupplierSpend += sup.spend;
+      // Foreign suppliers ARE included in TMPS but NOT for Empowering Supplier recognition
+      continue;
+    }
+
     const recognised = sup.spend * getRecognitionMultiplier(sup.beeLevel);
     recognisedSpend += recognised;
 
@@ -114,13 +124,9 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   // CRITICAL FIX: 2% target (not 12%)
   const designatedGroupScore = clampScore(safeRatio(designatedGroupSpend, TARGET_2_DESIGNATED, 2), 2);
 
-  // CRITICAL FIX: Procurement has NO graduation/jobs bonuses - these are ED only!
-  // The graduationBonus and jobsCreatedBonus fields in ProcurementData should not be used
-  const graduationBonusScore = 0;  // NOT data.graduationBonus
-  const jobsCreatedBonusScore = 0; // NOT data.jobsCreatedBonus
-
+  // Issue 3: Procurement has NO graduation/jobs bonuses - these are ED only!
   const baseTotal = empoweringScore + qseScore + emeScore + blackOwned51Score + blackFemaleOwned30Score + designatedGroupScore;
-  // CRITICAL FIX: Cap at 29 (not 31) - procurement has NO bonus points
+  // Cap at 29 - procurement has NO bonus points
   const totalScore = clampScore(baseTotal, 29);
 
   const subLines: ProcurementSubLine[] = [
@@ -135,6 +141,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     // NOTE: No procurement bonus rows - bonuses are ED only
   ];
 
+  // Issue 3: Removed graduationBonus and jobsCreatedBonus from return
   return {
     base: round2(baseTotal),
     empoweringSuppliers: round2(empoweringScore),
@@ -143,8 +150,6 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     blackOwned51: round2(blackOwned51Score),
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
-    graduationBonus: round2(graduationBonusScore),
-    jobsCreatedBonus: round2(jobsCreatedBonusScore),
     total: round2(totalScore),
     subMinimumMet: baseTotal >= subMinThreshold,
     recognisedSpend: round2(recognisedSpend),
@@ -159,6 +164,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       empoweringSpend: round2(empoweringSpend),
       blackOwned51Spend: round2(blackOwned51Spend),
       blackFemaleOwned30Spend: round2(blackFemaleOwned30Spend),
+      foreignSupplierSpend: round2(foreignSupplierSpend), // Issue 3: Added
     },
   };
 }

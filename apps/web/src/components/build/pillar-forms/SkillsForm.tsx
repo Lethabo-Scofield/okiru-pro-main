@@ -28,16 +28,18 @@ type RaceOption = 'African' | 'Coloured' | 'Indian' | 'White';
 type GenderOption = 'Male' | 'Female';
 type StatusOption = 'Permanent' | 'Fixed-Term' | 'Unemployed';
 
+// Issue 6: Updated Category F description
 const CATEGORY_DESCRIPTIONS: Record<TrainingCategoryCode, string> = {
   A: 'Learnerships / apprenticeships',
   B: 'Skills programs / short courses',
   C: 'Bursaries (employees)',
   D: 'Bursaries (unemployed)',
   E: 'Internships',
-  F: 'YES Initiative',
+  F: 'External Unaccredited Training', // Issue 6: Changed from 'YES Initiative'
   G: 'Informal training',
 };
 
+// Issue 6: Added classification fields and expanded cost capture
 const emptyForm = {
   programName: '',
   categoryCode: 'B' as TrainingCategoryCode,
@@ -50,7 +52,18 @@ const emptyForm = {
   employmentStatus: 'Permanent' as StatusOption,
   isYesEmployee: false,
   isAbsorbed: false,
+  // Issue 6: Added classification fields
+  isAbet: false,
+  isMandatory: false,
+  // Issue 6: Expanded cost capture fields
   courseCost: 0,
+  travelCost: 0,
+  accommodationCost: 0,
+  cateringCost: 0,
+  stationeryCost: 0,
+  facilityCost: 0,
+  salaryCost: 0,
+  otherCosts: 0,
   startDate: '',
   endDate: '',
 };
@@ -68,6 +81,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
     setShowDialog(true);
   };
 
+  // Issue 6: Updated to include all new fields
   const openEdit = (p: TrainingProgram) => {
     setForm({
       programName: p.programName,
@@ -81,7 +95,18 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
       employmentStatus: p.employmentStatus,
       isYesEmployee: p.isYesEmployee,
       isAbsorbed: p.isAbsorbed,
+      // Issue 6: Classification fields
+      isAbet: p.isAbet || false,
+      isMandatory: p.isMandatory || false,
+      // Issue 6: Expanded cost fields
       courseCost: p.courseCost,
+      travelCost: p.travelCost || 0,
+      accommodationCost: p.accommodationCost || 0,
+      cateringCost: p.cateringCost || 0,
+      stationeryCost: p.stationeryCost || 0,
+      facilityCost: p.facilityCost || 0,
+      salaryCost: p.salaryCost || 0,
+      otherCosts: p.otherCosts || 0,
       startDate: p.startDate || '',
       endDate: p.endDate || '',
     });
@@ -89,8 +114,12 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
     setShowDialog(true);
   };
 
+  // Issue 6: Updated handleSave to include all classification fields and costs
   const handleSave = () => {
-    const courseCost = form.courseCost;
+    const totalCost = form.courseCost + form.travelCost + form.accommodationCost + 
+                      form.cateringCost + form.stationeryCost + form.facilityCost + 
+                      form.salaryCost + form.otherCosts;
+    
     const program: TrainingProgram = Object.assign(
       {
         id: editingId || uuidv4(),
@@ -106,23 +135,25 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
         isYesEmployee: form.isYesEmployee,
         isAbsorbed: form.isAbsorbed,
         isCompleted: false,
-        courseCost,
-        travelCost: 0,
-        accommodationCost: 0,
-        cateringCost: 0,
-        stationeryCost: 0,
-        facilityCost: 0,
-        salaryCost: 0,
-        otherCosts: 0,
+        // Issue 6: All cost fields from form
+        courseCost: form.courseCost,
+        travelCost: form.travelCost,
+        accommodationCost: form.accommodationCost,
+        cateringCost: form.cateringCost,
+        stationeryCost: form.stationeryCost,
+        facilityCost: form.facilityCost,
+        salaryCost: form.salaryCost,
+        otherCosts: form.otherCosts,
         transactionDate: form.startDate || new Date().toISOString().split('T')[0],
         startDate: form.startDate || undefined,
         endDate: form.endDate || undefined,
-        isAbet: false,
-        isMandatory: false,
+        // Issue 6: Classification fields from form
+        isAbet: form.isAbet,
+        isMandatory: form.isMandatory,
         isBursary: form.categoryCode === 'C' || form.categoryCode === 'D',
       },
       {
-        get totalCost() { return courseCost; }
+        get totalCost() { return totalCost; }
       }
     ) as TrainingProgram;
 
@@ -138,7 +169,13 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
     onChange({ ...data, trainingPrograms: data.trainingPrograms.filter(p => p.id !== id) });
   };
 
-  const totalTrainingSpend = data.trainingPrograms.reduce((s, p) => s + (p.courseCost + p.travelCost + p.accommodationCost + p.cateringCost + p.stationeryCost + p.facilityCost + p.salaryCost + p.otherCosts), 0);
+  // Issue 6: Updated total spend calculation to include all cost fields
+  const totalTrainingSpend = data.trainingPrograms.reduce((s, p) => {
+    const itemTotal = (p.courseCost || 0) + (p.travelCost || 0) + (p.accommodationCost || 0) + 
+                      (p.cateringCost || 0) + (p.stationeryCost || 0) + (p.facilityCost || 0) + 
+                      (p.salaryCost || 0) + (p.otherCosts || 0);
+    return s + itemTotal;
+  }, 0);
   const scorePercent = (result.total / 25) * 100;
   const targetSpend = data.leviableAmount * 0.035;
 
@@ -340,11 +377,87 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
                 </Select>
               </div>
             </div>
+            {/* Issue 6: Classification checkboxes */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Training Cost (R)</Label>
-                <Input type="number" value={form.courseCost || ''} onChange={e => setForm(p => ({ ...p, courseCost: Number(e.target.value) }))} placeholder="0" />
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isAbet}
+                  onChange={e => setForm(p => ({ ...p, isAbet: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+                <Label className="text-xs">ABET</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isMandatory}
+                  onChange={e => setForm(p => ({ ...p, isMandatory: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+                <Label className="text-xs">Mandatory</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isDisabled}
+                  onChange={e => setForm(p => ({ ...p, isDisabled: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+                <Label className="text-xs">Disabled</Label>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                checked={form.isForeign}
+                onChange={e => setForm(p => ({ ...p, isForeign: e.target.checked }))}
+                className="h-4 w-4"
+              />
+              <Label className="text-xs">Foreign National (excluded from BEE calculations)</Label>
+            </div>
+
+            {/* Issue 6: Expanded cost capture */}
+            <div className="border-t pt-4 mt-2">
+              <Label className="text-xs font-semibold mb-2 block">Cost Breakdown</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Course/Tuition (R)</Label>
+                  <Input type="number" value={form.courseCost || ''} onChange={e => setForm(p => ({ ...p, courseCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Travel (R)</Label>
+                  <Input type="number" value={form.travelCost || ''} onChange={e => setForm(p => ({ ...p, travelCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Accommodation (R)</Label>
+                  <Input type="number" value={form.accommodationCost || ''} onChange={e => setForm(p => ({ ...p, accommodationCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Catering (R)</Label>
+                  <Input type="number" value={form.cateringCost || ''} onChange={e => setForm(p => ({ ...p, cateringCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Stationery (R)</Label>
+                  <Input type="number" value={form.stationeryCost || ''} onChange={e => setForm(p => ({ ...p, stationeryCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Facility/Venue (R)</Label>
+                  <Input type="number" value={form.facilityCost || ''} onChange={e => setForm(p => ({ ...p, facilityCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Salary/Stipend (R)</Label>
+                  <Input type="number" value={form.salaryCost || ''} onChange={e => setForm(p => ({ ...p, salaryCost: Number(e.target.value) }))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Other Costs (R)</Label>
+                  <Input type="number" value={form.otherCosts || ''} onChange={e => setForm(p => ({ ...p, otherCosts: Number(e.target.value) }))} placeholder="0" />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
               <div className="space-y-1.5">
                 <Label className="text-xs">Start Date</Label>
                 <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />

@@ -1552,11 +1552,10 @@ export default function DocumentProcessor() {
             }
           : {
               id: '',
+              // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
               clientId: buildClientId,
               tmps: fin.tmps || 0,
               suppliers: [],
-              graduationBonus: false,
-              jobsCreatedBonus: false,
             },
         esd: pillarData.esd
           ? { ...pillarData.esd, id: pillarData.esd.id || '', clientId: buildClientId }
@@ -2701,15 +2700,13 @@ export default function DocumentProcessor() {
           {currentPage === 'build-pillars' && (
             <div className="max-w-[1600px] mx-auto w-full">
               <BuildPillarsStep
+                // Issue 1: Removed employmentEquity from data (merged with management)
                 data={{
                   ownership: pillarData.ownership || { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0, ownershipScorePoints: 0, ownershipScorePercent: 0, netValuePoints: 0, netValuePercent: 0 },
                   management: pillarData.management || { id: '', clientId: '', employees: [] },
-                  employmentEquity:
-                    pillarData.employmentEquity
-                    ?? pillarData.management
-                    ?? { id: '', clientId: '', employees: [] },
                   skills: pillarData.skills || { id: '', clientId: '', leviableAmount: foundationData.financials.leviableAmount || 0, trainingPrograms: [], yesCandidatesCount: 0, yesAbsorbedCount: 0 },
-                  procurement: pillarData.procurement || { id: '', clientId: '', tmps: foundationData.financials.tmps || 0, suppliers: [], graduationBonus: false, jobsCreatedBonus: false },
+                  // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
+                  procurement: pillarData.procurement || { id: '', clientId: '', tmps: foundationData.financials.tmps || 0, suppliers: [] },
                   esd: pillarData.esd || { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
                   sed: pillarData.sed || { id: '', clientId: '', contributions: [] },
                   yes: pillarData.yes ?? EMPTY_YES_DATA,
@@ -2718,7 +2715,7 @@ export default function DocumentProcessor() {
                   setPillarData({
                     ownership: newData.ownership,
                     management: newData.management,
-                    employmentEquity: newData.employmentEquity,
+                    // Issue 1: employmentEquity removed (merged into management)
                     skills: newData.skills,
                     procurement: newData.procurement,
                     esd: newData.esd,

@@ -47,13 +47,15 @@ export interface SkillsResult {
   };
 }
 
+// Issue 6: Updated Category F label, added Category G
 const CATEGORY_LABELS: Record<TrainingCategoryCode, { label: string; examples: string }> = {
   A: { label: "Bursaries", examples: "Bursaries" },
   B: { label: "Internships & Learnerships", examples: "Internships, Learnerships" },
   C: { label: "Short Courses & Workshops", examples: "Short courses, workshops" },
   D: { label: "Other Accredited Training", examples: "Other accredited training" },
   E: { label: "Non-accredited / Informal", examples: "Non-accredited, informal" },
-  F: { label: "Other (Travel, Venue, etc.)", examples: "Travel, venue, catering" },
+  F: { label: "External Unaccredited Training", examples: "External training, conferences, seminars" },
+  G: { label: "Informal Training (Non-black)", examples: "Non-black employee training (no points)" },
 };
 
 function mapLegacyCategory(cat: TrainingProgram['category']): TrainingCategoryCode {
@@ -81,7 +83,7 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   const acc: SpendAccumulator = {
     total: 0, bursary: 0, disabled: 0, blackPeople: 0,
     learnershipCount: 0, absorbedCount: 0, totalBlackLearners: 0,
-    byCategory: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 },
+    byCategory: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 },
   };
 
   for (const prog of programs) {

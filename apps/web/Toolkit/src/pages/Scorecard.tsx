@@ -121,9 +121,10 @@ export default function Scorecard() {
         formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
       })),
     },
+    // Issue 1: Updated name to reflect MC+EE combined pillar
     {
       key: "managementControl",
-      name: "Management Control",
+      name: "Management Control & Employment Equity",
       ...(scorecard.managementControl || EMPTY_PILLAR),
       accentColor: "text-blue-500 dark:text-blue-400",
       barColor: "bg-blue-500",
@@ -219,6 +220,7 @@ export default function Scorecard() {
         { name: "Annual value of all SED contributions", target: "1% of NPAT", weighting: 5, score: sedResult.total, formula: `SED spend R${sedResult.actualSpend.toLocaleString()} ÷ target R${sedResult.target.toLocaleString()} × 5 pts` },
       ],
     },
+    // Issue 2: Updated weighting from 5 to 3
     {
       key: "yesInitiative",
       name: "YES Initiative",
@@ -226,7 +228,7 @@ export default function Scorecard() {
       accentColor: "text-purple-500 dark:text-[#d1d1d6]",
       barColor: "bg-purple-500",
       subIndicators: [
-        { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 5, score: (scorecard.yesInitiative || EMPTY_PILLAR).score, formula: `Bonus points for YES programme participation` },
+        { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 3, score: (scorecard.yesInitiative || EMPTY_PILLAR).score, formula: `Bonus points for YES programme participation` },
       ],
     },
   ];

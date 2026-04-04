@@ -148,11 +148,12 @@ export function calculateYESScore(data: YESData): YESResult {
   
   // Score is not applicable for YES - it's a bonus mechanism
   // But we return the tier achievement as the "score"
+  // Issue 2: YES Scoring Correction - Tier 1 = 3pts, Tier 2 = 2pts, Tier 3 = 1pt
   const tierScores: Record<typeof tier, number> = {
     'None': 0,
     'Tier 3': 1,
-    'Tier 2': 1,
-    'Tier 1': 2,
+    'Tier 2': 2,
+    'Tier 1': 3,
   };
   
   const score = tierScores[tier];
@@ -164,8 +165,8 @@ export function calculateYESScore(data: YESData): YESResult {
   
   return {
     score: round2(score),
-    target: 5, // Target is 5 points (but bonus)
-    weighting: 5,
+    target: 3, // Issue 2: Changed from 5 to 3
+    weighting: 3, // Issue 2: Changed from 5 to 3
     yesTierAchieved: tier,
     yesBeeLevelIncrease,
     qualifiesForLevelUplift,

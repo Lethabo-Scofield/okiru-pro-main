@@ -24,6 +24,7 @@ interface ProcurementFormProps {
   className?: string;
 }
 
+// Issue 3: Removed graduation bonus, added isForeignSupplier
 const emptySupplier = {
   name: '',
   vatNumber: '',
@@ -36,6 +37,7 @@ const emptySupplier = {
   isEmpoweringSupplier: false,
   isSupplierDevRecipient: false,
   hasThreeYearContract: false,
+  isForeignSupplier: false, // Issue 3: Added
   spend: 0,
 };
 
@@ -68,12 +70,14 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
       isEmpoweringSupplier: s.isEmpoweringSupplier,
       isSupplierDevRecipient: s.isSupplierDevRecipient,
       hasThreeYearContract: s.hasThreeYearContract,
+      isForeignSupplier: s.isForeignSupplier || false, // Issue 3: Added
       spend: s.spend,
     });
     setEditingId(s.id);
     setShowDialog(true);
   };
 
+  // Issue 3: Added isForeignSupplier to saved supplier
   const handleSave = () => {
     const supplier: Supplier = {
       id: editingId || uuidv4(),
@@ -88,6 +92,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
       isEmpoweringSupplier: form.isEmpoweringSupplier,
       isSupplierDevRecipient: form.isSupplierDevRecipient,
       hasThreeYearContract: form.hasThreeYearContract,
+      isForeignSupplier: form.isForeignSupplier, // Issue 3: Added
       spend: form.spend,
     };
     const updated = editingId
@@ -149,22 +154,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <Checkbox
-            checked={data.graduationBonus}
-            onCheckedChange={v => onChange({ ...data, graduationBonus: !!v })}
-          />
-          <span className="text-sm">Graduation bonus (EME/QSE supplier promoted)</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <Checkbox
-            checked={data.jobsCreatedBonus}
-            onCheckedChange={v => onChange({ ...data, jobsCreatedBonus: !!v })}
-          />
-          <span className="text-sm">Jobs created bonus</span>
-        </label>
-      </div>
+      {/* Issue 3: Removed graduation and jobs created bonus checkboxes (ED only bonuses) */}
 
       {/* Suppliers */}
       <div>
@@ -284,6 +274,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
                 <Input type="number" min="0" max="100" value={(form.blackWomenOwnership * 100).toFixed(0)} onChange={e => setForm(p => ({ ...p, blackWomenOwnership: Number(e.target.value) / 100 }))} />
               </div>
             </div>
+            {/* Issue 3: Replaced graduation bonus with foreign supplier checkbox */}
             <div className="flex flex-col gap-2 pt-1">
               <label className="flex items-center gap-2 cursor-pointer text-sm">
                 <Checkbox checked={form.isEmpoweringSupplier} onCheckedChange={v => setForm(p => ({ ...p, isEmpoweringSupplier: !!v }))} />
@@ -294,8 +285,8 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
                 ESD Supplier Development recipient
               </label>
               <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <Checkbox checked={form.hasThreeYearContract} onCheckedChange={v => setForm(p => ({ ...p, hasThreeYearContract: !!v }))} />
-                3-year+ contract (graduation bonus)
+                <Checkbox checked={form.isForeignSupplier} onCheckedChange={v => setForm(p => ({ ...p, isForeignSupplier: !!v }))} />
+                Foreign Supplier (excluded from Empowering Supplier recognition)
               </label>
             </div>
           </div>

@@ -46,26 +46,27 @@ interface PillarConfig {
   includeInGrandTotal: boolean;
 }
 
+// Issue 1: Management Control & Employment Equity combined into one pillar
 const PILLARS: PillarConfig[] = [
   { id: 'ownership',              code: 'OWN',    name: 'Ownership',                    description: 'Voting rights, economic interest, net value',     icon: Building2,     maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 10,  includeInGrandTotal: true },
-  { id: 'management',             code: 'MC',     name: 'Management Control',           description: 'Board, executive, EAP senior/middle/junior',       icon: Briefcase,     maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  { id: 'employmentEquity',       code: 'EE',     name: 'Employment Equity',            description: 'Same roster as MC on Generic scorecard (not double-counted)', icon: Users, maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0, includeInGrandTotal: false },
+  { id: 'management',             code: 'MC+EE',  name: 'Management Control & Employment Equity', description: 'Board, executive, EAP senior/middle/junior, EE levels', icon: Briefcase,     maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
+  // Issue 1: employmentEquity pillar removed (merged with management)
   { id: 'skills',                 code: 'SKILLS', name: 'Skills Development',           description: 'Training spend, bursaries, LAI, absorption',        icon: GraduationCap, maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 10,  includeInGrandTotal: true },
   { id: 'procurement',            code: 'PROC',   name: 'Preferential Procurement',     description: 'TMPS-based BEE procurement',                     icon: ShoppingCart,  maxPoints: 29, hasSubMinimum: true,  subMinimumThreshold: 11.6, includeInGrandTotal: true },
   { id: 'supplierDevelopment',    code: 'SD',     name: 'Supplier Development',         description: 'SD contributions (2% NPAT target, max 10)',       icon: Handshake,     maxPoints: 10, hasSubMinimum: true,  subMinimumThreshold: 4,   includeInGrandTotal: true },
   { id: 'enterpriseDevelopment',  code: 'ED',     name: 'Enterprise Development',       description: 'ED contributions (1% NPAT + bonuses, max 7)',     icon: Handshake,     maxPoints: 7,  hasSubMinimum: true,  subMinimumThreshold: 2,   includeInGrandTotal: true },
   { id: 'sed',                    code: 'SED',    name: 'Socio-Economic Development',   description: 'SED as % of NPAT',                                icon: Heart,         maxPoints: 5,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  { id: 'yes',                    code: 'YES',    name: 'YES Initiative',               description: 'Youth placement tiers (included in scorecard total)', icon: TrendingUp, maxPoints: 5,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
+  { id: 'yes',                    code: 'YES',    name: 'YES Initiative',               description: 'Youth placement tiers (included in scorecard total)', icon: TrendingUp, maxPoints: 3,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
 ];
 
 // ============================================================================
 // Types
 // ============================================================================
 
+// Issue 1: employmentEquity removed from BuildPillarsData (merged with management)
 export interface BuildPillarsData {
   ownership: OwnershipData;
   management: ManagementData;
-  employmentEquity: ManagementData;
   skills: SkillsData;
   yes: YESData;
   procurement: ProcurementData;
@@ -125,7 +126,8 @@ export function BuildPillarsStep({
     [data.skills, leviable],
   );
 
-  const pillarScores = useMemo(() => {
+    // Issue 1: Removed employmentEquity from pillar scores (merged with management)
+    const pillarScores = useMemo(() => {
     const merged = mergeYesIntoSkills(data.skills, data.yes);
     const candidates = (merged.trainingPrograms || [])
       .filter(p => p.isYesEmployee)
@@ -154,7 +156,7 @@ export function BuildPillarsStep({
     return {
       ownership: calculateOwnershipScore(data.ownership).total,
       management: calculateManagementScore(data.management, undefined, eapProvince).total,
-      employmentEquity: calculateManagementScore(data.employmentEquity, undefined, eapProvince).total,
+      // Issue 1: employmentEquity removed (merged with management)
       skills: skillsLive.total,
       procurement: procLive.total,
       supplierDevelopment: esdLive.sdTotal,
@@ -173,7 +175,7 @@ export function BuildPillarsStep({
     switch (id) {
       case 'ownership':               return data.ownership.shareholders.length > 0;
       case 'management':              return data.management.employees.length > 0;
-      case 'employmentEquity':        return data.employmentEquity.employees.length > 0;
+      // Issue 1: employmentEquity case removed (merged with management)
       case 'skills':                  return data.skills.trainingPrograms.length > 0;
       case 'procurement':             return data.procurement.suppliers.length > 0 || data.procurement.tmps > 0;
       case 'supplierDevelopment':     return data.esd.contributions.some(c => c.category === 'supplier_development');
@@ -195,11 +197,12 @@ export function BuildPillarsStep({
   const activePillarConfig = PILLARS.find(p => p.id === activePillar) || PILLARS[0];
 
   // Auto-fill handler - receives optionId to know exactly what was filled
+  // Issue 1: Removed employmentEquity from management autofill (merged pillars)
   const handleAutoFill = (filledData: any, optionId: AutoFillTarget) => {
     switch (optionId) {
       case 'all':          onChange(filledData as BuildPillarsData); break;
       case 'ownership':    onChange({ ...data, ownership: filledData }); break;
-      case 'management':   onChange({ ...data, management: filledData, employmentEquity: filledData }); break;
+      case 'management':   onChange({ ...data, management: filledData }); break;
       case 'skills':       onChange({ ...data, skills: filledData }); break;
       case 'procurement':  onChange({ ...data, procurement: filledData }); break;
       case 'esd':          onChange({ ...data, esd: filledData }); break;
@@ -225,14 +228,7 @@ export function BuildPillarsStep({
             eapProvince={eapProvince}
           />
         );
-      case 'employmentEquity':
-        return (
-          <ManagementForm
-            data={data.employmentEquity}
-            onChange={(d) => onChange({ ...data, employmentEquity: d })}
-            eapProvince={eapProvince}
-          />
-        );
+      // Issue 1: employmentEquity case removed (merged with management)
       case 'skills':
         return (
           <SkillsForm
