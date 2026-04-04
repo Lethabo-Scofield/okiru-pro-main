@@ -18,6 +18,67 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+function formatExtractedValue(
+  value: string | number | null,
+  fieldType: string
+): string | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (fieldType === 'currency') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    const isNegative = num < 0;
+    const abs = Math.abs(num);
+    const parts = abs.toFixed(2).split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const formatted = parts[1] === '00' ? intPart : `${intPart}.${parts[1]}`;
+    return `${isNegative ? '-' : ''}R ${formatted}`;
+  }
+
+  if (fieldType === 'percentage') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    const formatted = num % 1 === 0 ? num.toString() : num.toFixed(2);
+    return `${formatted}%`;
+  }
+
+  if (fieldType === 'bee_level') {
+    const s = String(value);
+    if (/^[1-8]$/.test(s)) return `Level ${s}`;
+    if (/^0$/.test(s) || /non/i.test(s)) return 'Non-Compliant';
+    return s;
+  }
+
+  if (fieldType === 'count') {
+    let num: number;
+    if (typeof value === 'number') {
+      num = value;
+    } else {
+      const cleaned = String(value).replace(/[^0-9.\-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num)) return String(value);
+    }
+    if (num % 1 === 0) {
+      return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+    return num.toFixed(2);
+  }
+
+  return String(value);
+}
+
 import { DocumentChunker, type TextChunk } from '../../pipeline/extraction/documentChunker.js';
 import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
@@ -34,6 +95,7 @@ import {
   LLMExtractor,
   buildExtractionPrompt,
   structuralVerify,
+  isAvailable as isLLMAvailable,
 } from '../../pipeline/extraction/llmExtractor.js';
 import { computeConfidence } from '../../pipeline/extraction/confidenceScorer.js';
 import { validateAll, type ValidationResult } from '../../pipeline/extraction/validator.js';
@@ -135,7 +197,8 @@ async function parseFileToPages(
 
   // PDF
   if (mimetype === 'application/pdf' || ext === 'pdf') {
-    const pdfDocument = await pdfjs.getDocument({ data: buffer }).promise;
+    const pdfData = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const pdfDocument = await pdfjs.getDocument({ data: pdfData }).promise;
     const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
     for (let i = 1; i <= pdfDocument.numPages; i++) {
@@ -373,18 +436,19 @@ router.post(
         // Continue without embeddings
       }
 
-      // Build hybrid retriever
+      const hasEmbeddings = vectorStore.getStats().totalChunks > 0;
+      const llmAvailable = isLLMAvailable();
       const retriever = new HybridRetriever(bm25Index, entityIndex, vectorStore, {
-        entityWeight: 0.15,
-        bm25Weight: 0.35,
-        semanticWeight: 0.5,
+        entityWeight: hasEmbeddings ? 0.15 : 0.35,
+        bm25Weight: hasEmbeddings ? 0.35 : 0.65,
+        semanticWeight: hasEmbeddings ? 0.5 : 0,
         topK: 10,
-        enableReranking: true,
+        enableReranking: llmAvailable,
         rerankTopK: 5,
       });
 
       indexTime = Date.now() - indexStart;
-      console.log(`[hybridExtraction] Indexes built in ${indexTime}ms`);
+      console.log(`[hybridExtraction] Indexes built in ${indexTime}ms (embeddings: ${hasEmbeddings}, llm: ${llmAvailable})`);
 
       // Step 4: Load entity manifest
       const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
@@ -413,7 +477,7 @@ router.post(
                 searchQuery,
                 10,
                 {
-                  rerank: true,
+                  rerank: llmAvailable,
                   rerankTopK: 5,
                   getChunkText: (pageId) => {
                     const chunk = chunks.find(c => c.chunkId === pageId || c.pageId === pageId);
@@ -426,8 +490,8 @@ router.post(
                 return {
                   name: entity.name,
                   value: null,
-                  confidence: 0.3,
-                  status: 'pending' as const,
+                  confidence: 0,
+                  status: 'not_found' as const,
                    pillar: entity.pillarCode,
                    fieldType: entity.fieldType,
                    definition: entity.extraction.definition,
@@ -451,8 +515,8 @@ router.post(
                 return {
                   name: entity.name,
                   value: null,
-                  confidence: 0.3,
-                  status: 'pending' as const,
+                  confidence: 0,
+                  status: 'not_found' as const,
                   pillar: entity.pillarCode,
                   fieldType: entity.fieldType,
                   definition: entity.extraction.definition,
@@ -466,30 +530,31 @@ router.post(
                 };
               }
 
-              // Build LLM extraction request
               const extractionRequest = toExtractionRequest(entity, topChunk.text, topChunk.pageId);
 
-              // Extract using LLM
               const llmResult = await llmExtractor.extract(extractionRequest);
 
-              // Compute confidence
-              const confidenceFactors = {
+              const confidenceResult = computeConfidence({
                 retrievalScore: topResult.score,
-                verificationPassed: llmResult.structuralVerification,
-                validationPassed: llmResult.confidence > 0.7,
-                extractionMethod: llmResult.method,
-              };
-              const confidenceResult = computeConfidence(confidenceFactors);
+                maxRetrievalScore: 1,
+                matchedEntities: retrievalResults[0]?.matchedEntities?.length ?? 0,
+                expectedEntities: Math.max(1, entity.extraction.aliases.length),
+                structurallyVerified: llmResult.structuralVerification,
+                valueIsNull: llmResult.extractedValue === null,
+                foundInExpectedZone: entity.extraction.zones.length === 0 || entity.extraction.zones.some(z => (topChunk.metadata?.sheetName || topChunk.pageId || '').toLowerCase().includes(z.toLowerCase())),
+                llmValue: llmResult.extractedValue,
+                ruleBasedValue: null,
+              });
 
-              // Skip cross-entity validation during extraction - will be done post-processing
-              // validateAll is for grouped data validation, not individual entity values
               const validation: ValidationResult | undefined = undefined;
+
+              const formattedValue = formatExtractedValue(llmResult.extractedValue, entity.fieldType);
 
               return {
                 name: entity.name,
-                value: llmResult.extractedValue,
-                confidence: confidenceResult.score,
-                status: 'pending' as const,
+                value: formattedValue,
+                confidence: confidenceResult.normalizedScore,
+                status: formattedValue ? 'pending' as const : 'not_found' as const,
                 pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
                 definition: entity.extraction.definition,
@@ -509,14 +574,14 @@ router.post(
                 name: entity.name,
                 value: null,
                 confidence: 0,
-                status: 'pending' as const,
+                status: 'not_found' as const,
                 pillar: entity.pillarCode,
                 fieldType: entity.fieldType,
                 definition: entity.extraction.definition,
                 provenance: {
                   pageId: 'error',
                   chunkId: 'error',
-                  textSnippet: String(error),
+                  textSnippet: 'Could not extract this value from the document',
                   retrievalScore: 0,
                   method: 'llm_fallback' as const,
                 },

@@ -88,9 +88,10 @@ export async function registerRoutes(
     },
   };
 
-  if (process.env.MONGODB_URI) {
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (mongoUri) {
     sessionConfig.store = MongoStore.create({
-      mongoUrl: process.env.MONGODB_URI,
+      mongoUrl: mongoUri,
       collectionName: "sessions",
       touchAfter: 24 * 3600,
     });

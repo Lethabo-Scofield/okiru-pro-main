@@ -52,17 +52,19 @@ export function createPatternSet(patterns: Record<string, RegExp[]>): PatternSet
 /** Default B-BBEE audit entity patterns (full set including BEE-specific types) */
 export const DEFAULT_BBBEE_PATTERNS: PatternSet = {
   MONEY: [
-    /R\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?/g,
-    /ZAR\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?/gi,
+    /R\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:M|K|B)?/g,
+    /R\s?\d+(?:\.\d+)?\s*(?:million|billion|thousand|M|K|B)/gi,
+    /ZAR\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:M|K|B)?/gi,
     /\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:rand|zar)/gi,
   ],
   PERCENT: [/\d+(?:\.\d+)?\s*%/g],
   DATE: [
     /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/g,
+    /\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}/gi,
     /(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?\s+\d{4}/gi,
   ],
   FISCAL_YEAR: [/FY\s?\d{4}/gi, /\d{4}\s+financial\s+year/gi],
-  FINANCIAL_NUMBER: [/R?\d{1,3}(?:,\d{3})+(?:\.\d+)?/g],
+  FINANCIAL_NUMBER: [/R?\d{1,3}(?:[, ]\d{3})+(?:\.\d+)?/g],
   BEE_LEVEL: [
     /\b(?:level|lvl)\s*[1-8]\b/gi,
     /\bB-?BBEE\s+level\s+[1-8]\b/gi,
@@ -81,8 +83,9 @@ export const DEFAULT_BBBEE_PATTERNS: PatternSet = {
 /** Financial-only patterns (no B-BBEE-specific types) */
 export const DEFAULT_FINANCIAL_PATTERNS: PatternSet = {
   MONEY: [
-    /R\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?/g,
-    /ZAR\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?/gi,
+    /R\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:M|K|B)?/g,
+    /R\s?\d+(?:\.\d+)?\s*(?:million|billion|thousand|M|K|B)/gi,
+    /ZAR\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:M|K|B)?/gi,
     /\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})?\s*(?:rand|zar)/gi,
   ],
   PERCENT: [/\d+(?:\.\d+)?\s*%/g],
@@ -149,9 +152,9 @@ export function normalizeEntityValue(entityType: string, text: string): string {
   const t = text.trim();
 
   if (entityType === 'MONEY' || entityType === 'FINANCIAL_NUMBER') {
-    const numbers = t.match(/[\d,]+(?:\.\d+)?/);
+    const numbers = t.match(/\d[\d,\s]*\d(?:\.\d+)?|\d+(?:\.\d+)?/);
     if (numbers) {
-      return numbers[0].replace(/,/g, '');
+      return numbers[0].replace(/[,\s]/g, '');
     }
     return t;
   }
