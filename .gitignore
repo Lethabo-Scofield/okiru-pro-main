@@ -21,3 +21,4 @@ __pycache__/
 *.pdf
 bee-execution-plan-extracted.txt
 assets/
+scripts/set-secrets.js
