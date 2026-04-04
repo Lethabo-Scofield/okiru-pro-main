@@ -169,31 +169,31 @@ jobs:
             --from-literal=GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Update image tags in kustomization
-        run: |
-          cd kubernetes/infrastructure/overlays/prod
-          kustomize edit set image \
-            okiruproacrde4d539b.azurecr.io/okiru-pro/api=${{ needs.build-and-push.outputs.api_image }} \
-            okiruproacrde4d539b.azurecr.io/okiru-pro/web=${{ needs.build-and-push.outputs.web_image }} \
-            okiruproacrde4d539b.azurecr.io/okiru-pro/compute=${{ needs.build-and-push.outputs.compute_image }}
-
       - name: Deploy to Kubernetes
         id: deploy
         run: |
           export KUBECONFIG=kubeconfig
 
-          echo "=== Applying Kustomize manifests ==="
-          kustomize build kubernetes/infrastructure/overlays/prod | kubectl apply -f -
+          echo "=== Updating image tags directly ==="
+          kubectl set image deployment/api \
+            api=${{ needs.build-and-push.outputs.api_image }} \
+            -n ${{ env.NAMESPACE }}
+
+          kubectl set image deployment/web \
+            web=${{ needs.build-and-push.outputs.web_image }} \
+            -n ${{ env.NAMESPACE }}
+
+          kubectl set image deployment/compute \
+            compute=${{ needs.build-and-push.outputs.compute_image }} \
+            -n ${{ env.NAMESPACE }}
 
           echo "=== Waiting for deployments to be ready ==="
           kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s
           kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s
           kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/mongodb -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/arangodb -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/redis -n ${{ env.NAMESPACE }} --timeout=300s
 
           echo "=== Deployment completed successfully ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
 
       - name: Run smoke tests
         if: ${{ !inputs.skip_tests }}
