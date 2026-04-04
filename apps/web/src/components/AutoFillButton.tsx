@@ -1,6 +1,6 @@
 /**
- * AutoFill Button - Dev-only floating button for test data.
- * Only renders outside of production.
+ * AutoFill Button - Admin-only floating button for test data.
+ * Only renders for users with admin role.
  */
 
 import React, { useState } from 'react';
@@ -16,6 +16,7 @@ import {
 import { Wand2, ChevronUp } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 import { useToast } from "@toolkit/hooks/use-toast";
+import { useAuth } from "@toolkit/lib/auth";
 import type { FoundationData } from "./build/FoundationStep";
 import type { BuildPillarsData } from "./build/BuildPillarsStep";
 import { getLakeTradingFoundationData, getLakeTradingPillarData } from "@/lib/lakeTradingDemo";
@@ -51,9 +52,11 @@ interface AutoFillButtonProps {
 
 export function AutoFillButton({ target, onFill, className }: AutoFillButtonProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
-  if (process.env.NODE_ENV === 'production') return null;
+  // Only show for admin users
+  if (user?.role !== 'admin') return null;
 
   const handleFill = (optionId: AutoFillTarget) => {
     try {

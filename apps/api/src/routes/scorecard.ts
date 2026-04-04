@@ -20,6 +20,7 @@ import {
   buildEntityCellMapping,
 } from '../../arango/entityCellMapping.js';
 import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
+import { getSectorConfig } from '../../pipeline/sectorConfig.js';
 
 const router = Router();
 const computeClient = getComputeClient();
@@ -357,6 +358,79 @@ router.post('/generate-summary', async (req: Request, res: Response) => {
     console.error('[Scorecard] generate-summary error:', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Summary generation failed',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/scorecard/sector-config/:sectorCode/:scorecardType
+// Returns sector-specific calculator configuration
+// Primary source: ArangoDB sector_rules collection
+// Fallback: Hardcoded sectorConfig.ts
+// ---------------------------------------------------------------------------
+router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
+  try {
+    const { sectorCode, scorecardType } = req.params as { sectorCode: string; scorecardType: string };
+    
+    if (!sectorCode || !scorecardType) {
+      return res.status(400).json({ message: 'sectorCode and scorecardType are required' });
+    }
+
+    const db = getArangoDB();
+    
+    // Primary: Try ArangoDB sector_rules collection
+    try {
+      const cursor = await db.query(aql`
+        FOR sr IN ${db.collection(COLLECTIONS.sectorRules)}
+          FILTER sr.sectorCode == ${sectorCode.toUpperCase()} 
+             AND sr.scorecardType == ${scorecardType}
+          LIMIT 1
+          RETURN sr
+      `);
+      const rules = await cursor.all();
+      
+      if (rules.length > 0 && rules[0]) {
+        const rule = rules[0];
+        // Transform ArangoDB format to calculatorConfig format
+        const config = {
+          source: 'arangodb',
+          sectorCode: rule.sectorCode,
+          scorecardType: rule.scorecardType,
+          pillarConfigs: rule.pillarConfigs || {},
+          targets: rule.targets || {},
+          levelThresholds: rule.levelThresholds || [],
+        };
+        return res.json({ success: true, config });
+      }
+    } catch (arangoErr) {
+      console.warn('[Scorecard] ArangoDB sector_rules query failed:', arangoErr);
+      // Continue to fallback
+    }
+
+    // Fallback: Use hardcoded sectorConfig.ts
+    try {
+      const fallbackConfig = getSectorConfig(sectorCode, scorecardType);
+      const config = {
+        source: 'fallback',
+        sectorCode: fallbackConfig.sectorCode,
+        scorecardType: fallbackConfig.scorecardType,
+        pillarConfigs: fallbackConfig.pillarConfigs,
+        targets: fallbackConfig.targets,
+        levelThresholds: fallbackConfig.levelThresholds,
+      };
+      return res.json({ success: true, config, fallback: true });
+    } catch (fallbackErr) {
+      console.error('[Scorecard] Fallback config failed:', fallbackErr);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to load sector configuration from both ArangoDB and fallback' 
+      });
+    }
+  } catch (error: unknown) {
+    console.error('[Scorecard] sector-config error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to get sector config',
     });
   }
 });
