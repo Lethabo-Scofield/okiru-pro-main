@@ -8,6 +8,9 @@ import { storage } from "./storage";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 import mongoose from "mongoose";
+import { createLogger } from "./logger";
+
+const logger = createLogger("Routes");
 
 function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
@@ -32,7 +35,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
-  console.warn("WARNING: GROQ_API_KEY is not set. AI endpoints will return errors.");
+  logger.warn("GROQ_API_KEY is not set — AI endpoints will return errors");
 }
 const groq = new Groq({ apiKey: groqApiKey || "not-set" });
 
@@ -65,7 +68,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  console.log("[Routes] Starting route registration...");
+  logger.info("Starting route registration...");
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -74,11 +77,11 @@ export async function registerRoutes(
 
   const sessionSecret = process.env.SESSION_SECRET;
   if (isProduction && !sessionSecret) {
-    console.error("FATAL: SESSION_SECRET must be set in production.");
+    logger.error("SESSION_SECRET must be set in production");
     process.exit(1);
   }
 
-  console.log("[Routes] Session configuration starting...");
+  logger.debug("Configuring session middleware...");
 
   const sessionConfig: session.SessionOptions = {
     secret: sessionSecret || "okiru-entity-studio-dev-secret",
@@ -99,7 +102,7 @@ export async function registerRoutes(
       touchAfter: 24 * 3600,
     });
   } else {
-    console.warn("WARNING: Using in-memory session store (MONGODB_URI not set). Sessions will not persist across restarts.");
+    logger.warn("Using in-memory session store (MONGODB_URI not set) — sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -304,7 +307,7 @@ export async function registerRoutes(
         emailHint: trimmedEmail.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
       });
     } catch (error: any) {
-      console.error("Registration error:", error);
+      logger.error("Registration failed", error, { username: req.body?.username });
       res.status(500).json({ message: "Registration failed" });
     }
   });
@@ -374,7 +377,7 @@ export async function registerRoutes(
         user.organizationName || null
       ).catch(() => {});
     } catch (error: any) {
-      console.error("Login error:", error);
+      logger.error("Login failed", error);
       res.status(500).json({ message: "Login failed" });
     }
   });
@@ -443,7 +446,7 @@ export async function registerRoutes(
         user.organizationName || null
       ).catch(() => {});
     } catch (error: any) {
-      console.error("OTP verification error:", error);
+      logger.error("OTP verification failed", error);
       res.status(500).json({ message: "Verification failed" });
     }
   });
@@ -482,7 +485,7 @@ export async function registerRoutes(
       resendCooldowns.set(pendingUserId, Date.now());
       res.json({ message: "New verification code sent to your email." });
     } catch (error: any) {
-      console.error("Resend OTP error:", error);
+      logger.error("Resend OTP failed", error);
       res.status(500).json({ message: "Failed to resend code" });
     }
   });
@@ -514,7 +517,7 @@ export async function registerRoutes(
       await storage.setPasswordResetToken(user.id, resetToken, expiry);
       await sendPasswordResetEmail(user.email, resetToken, user.fullName);
     } catch (error: any) {
-      console.error("Forgot password error:", error);
+      logger.error("Forgot password failed", error);
       res.status(500).json({ message: "An error occurred. Please try again." });
     }
   });
@@ -571,7 +574,7 @@ export async function registerRoutes(
 
       res.json({ message: "Password has been reset successfully. You can now sign in." });
     } catch (error: any) {
-      console.error("Reset password error:", error);
+      logger.error("Reset password failed", error);
       res.status(500).json({ message: "An error occurred. Please try again." });
     }
   });
@@ -594,7 +597,7 @@ export async function registerRoutes(
       (req.session as any).userData = safeUser;
       res.json({ user: safeUser });
     } catch (error: any) {
-      console.error("Auth check error:", error);
+      logger.error("Auth check failed", error);
       res.status(401).json({ message: "Not authenticated" });
     }
   });
@@ -630,7 +633,7 @@ export async function registerRoutes(
         return res.json({ user: safeUser, message: "Two-factor authentication has been disabled." });
       }
     } catch (error: any) {
-      console.error("Toggle 2FA error:", error);
+      logger.error("Toggle 2FA failed", error);
       res.status(500).json({ message: "Failed to update 2FA settings" });
     }
   });
@@ -678,7 +681,7 @@ export async function registerRoutes(
       (req.session as any).userData = safeUser;
       res.json({ user: safeUser, message: "Two-factor authentication is now enabled." });
     } catch (error: any) {
-      console.error("Confirm 2FA error:", error);
+      logger.error("Confirm 2FA failed", error);
       res.status(500).json({ message: "Failed to confirm 2FA" });
     }
   });
@@ -699,7 +702,7 @@ export async function registerRoutes(
       const safeUsers = users.map((u) => sanitizeUser(u));
       res.json(safeUsers);
     } catch (error: any) {
-      console.error("Admin users error:", error);
+      logger.error("Admin users fetch failed", error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
@@ -715,7 +718,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "User not found" });
       res.json({ user: sanitizeUser(updated) });
     } catch (error: any) {
-      console.error("Admin toggle 2FA error:", error);
+      logger.error("Admin toggle 2FA failed", error);
       res.status(500).json({ message: "Failed to update user 2FA" });
     }
   });
@@ -756,7 +759,7 @@ export async function registerRoutes(
       const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
       res.json(clients.map((c: any) => c.toJSON()));
     } catch (error: any) {
-      console.error("Error fetching clients:", error);
+      logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
     }
   });
@@ -782,7 +785,7 @@ export async function registerRoutes(
       });
       res.json(client.toJSON());
     } catch (error: any) {
-      console.error("Error creating client:", error);
+      logger.error("Error creating client", error);
       res.status(500).json({ error: "Failed to create client" });
     }
   });
@@ -875,7 +878,7 @@ export async function registerRoutes(
         scenarios: [],
       });
     } catch (error: any) {
-      console.error("Error fetching client data:", error);
+      logger.error("Error fetching client data", error);
       res.status(500).json({ error: "Failed to fetch client data" });
     }
   });
@@ -918,7 +921,7 @@ export async function registerRoutes(
         },
       });
     } catch (error: any) {
-      console.error("Error bulk-importing client data:", error);
+      logger.error("Error bulk-importing client data", error);
       res.status(500).json({ error: "Failed to import client data" });
     }
   });
@@ -930,7 +933,7 @@ export async function registerRoutes(
 
       res.json(templates);
     } catch (error: any) {
-      console.error("Error fetching templates:", error);
+      logger.error("Error fetching templates", error);
       res.status(500).json({ error: "Failed to fetch templates" });
     }
   });
@@ -943,7 +946,7 @@ export async function registerRoutes(
       if (!template) return res.status(404).json({ error: "Template not found" });
       res.json(template);
     } catch (error: any) {
-      console.error("Error fetching template:", error);
+      logger.error("Error fetching template", error);
       res.status(500).json({ error: "Failed to fetch template" });
     }
   });
@@ -964,7 +967,7 @@ export async function registerRoutes(
       });
       res.json(template);
     } catch (error: any) {
-      console.error("Error creating template:", error);
+      logger.error("Error creating template", error);
       res.status(500).json({ error: "Failed to create template" });
     }
   });
@@ -983,7 +986,7 @@ export async function registerRoutes(
       if (!template) return res.status(404).json({ error: "Template not found" });
       res.json(template);
     } catch (error: any) {
-      console.error("Error updating template:", error);
+      logger.error("Error updating template", error);
       res.status(500).json({ error: "Failed to update template" });
     }
   });
@@ -996,7 +999,7 @@ export async function registerRoutes(
       if (!deleted) return res.status(404).json({ error: "Template not found" });
       res.json({ success: true });
     } catch (error: any) {
-      console.error("Error deleting template:", error);
+      logger.error("Error deleting template", error);
       res.status(500).json({ error: "Failed to delete template" });
     }
   });
@@ -1194,7 +1197,7 @@ User: "the rand amount of their annual turnover" →
 
       res.json({ entities: formattedEntities });
     } catch (error: any) {
-      console.error("Error generating entities:", error);
+      logger.error("Error generating entities", error);
       res.status(500).json({ error: "Failed to generate entities" });
     }
   });
@@ -1267,7 +1270,7 @@ Respond ONLY with a valid JSON array.`;
 
       res.json({ extractions: formattedResults });
     } catch (error: any) {
-      console.error("Error extracting entities:", error);
+      logger.error("Error extracting entities", error);
       res.status(500).json({ error: "Failed to extract entities" });
     }
   });
@@ -1446,7 +1449,7 @@ Respond ONLY with a valid JSON array.`;
       send("complete", { total: documents.length });
       res.end();
     } catch (error: any) {
-      console.error("Error processing documents:", error);
+      logger.error("Error processing documents", error);
       if (!res.headersSent) {
         res.status(500).json({ error: "Failed to process documents" });
       } else {
@@ -1467,7 +1470,7 @@ Respond ONLY with a valid JSON array.`;
         res.json(null);
       }
     } catch (error: any) {
-      console.error("Error fetching calculator config:", error);
+      logger.error("Error fetching calculator config", error);
       res.status(500).json({ error: "Failed to fetch calculator config" });
     }
   });
@@ -1484,7 +1487,7 @@ Respond ONLY with a valid JSON array.`;
       const row = await storage.saveCalculatorConfig(clientId, config);
       res.json(row.config);
     } catch (error: any) {
-      console.error("Error saving calculator config:", error);
+      logger.error("Error saving calculator config", error);
       res.status(500).json({ error: "Failed to save calculator config" });
     }
   });
@@ -1523,7 +1526,7 @@ Respond ONLY with a valid JSON array.`;
 
       res.json({ suggestion });
     } catch (error: any) {
-      console.error("Error generating suggestions:", error);
+      logger.error("Error generating suggestions", error);
       res.status(500).json({ error: "Failed to generate suggestions" });
     }
   });
@@ -1534,7 +1537,7 @@ Respond ONLY with a valid JSON array.`;
       const configs = listSectorConfigs();
       res.json(configs);
     } catch (error: any) {
-      console.error("Error fetching sector templates:", error);
+      logger.error("Error fetching sector templates", error);
       res.status(500).json({ error: "Failed to fetch sector templates" });
     }
   });
@@ -1590,7 +1593,7 @@ Respond ONLY with a valid JSON array.`;
         clientName: clientName || parseResult.client.name,
       });
     } catch (error: any) {
-      console.error("Error in extract-and-score:", error);
+      logger.error("Error in extract-and-score", error);
       res.status(500).json({ error: error.message || "Failed to extract and score" });
     }
   });
@@ -1644,7 +1647,7 @@ Respond ONLY with a valid JSON array.`;
       }));
       res.json(lightweight);
     } catch (error: any) {
-      console.error("Error fetching processor sessions:", error);
+      logger.error("Error fetching processor sessions", error);
       res.status(500).json({ error: "Failed to fetch sessions" });
     }
   });
@@ -1661,7 +1664,7 @@ Respond ONLY with a valid JSON array.`;
       if (!doc) return res.status(404).json({ error: "Session not found" });
       res.json({ ...doc, id: doc.sessionId });
     } catch (error: any) {
-      console.error("Error fetching processor session:", error);
+      logger.error("Error fetching processor session", error);
       res.status(500).json({ error: "Failed to fetch session" });
     }
   });
@@ -1705,7 +1708,7 @@ Respond ONLY with a valid JSON array.`;
       );
       res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
     } catch (error: any) {
-      console.error("Error saving processor session:", error);
+      logger.error("Error saving processor session", error);
       res.status(500).json({ error: "Failed to save session" });
     }
   });
@@ -1731,7 +1734,7 @@ Respond ONLY with a valid JSON array.`;
       if (!doc) return res.status(404).json({ error: "Session not found or you don't have permission" });
       res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
     } catch (error: any) {
-      console.error("Error patching processor session:", error);
+      logger.error("Error patching processor session", error);
       res.status(500).json({ error: "Failed to patch session" });
     }
   });
@@ -1750,7 +1753,7 @@ Respond ONLY with a valid JSON array.`;
       }
       res.json({ success: true });
     } catch (error: any) {
-      console.error("Error deleting processor session:", error);
+      logger.error("Error deleting processor session", error);
       res.status(500).json({ error: "Failed to delete session" });
     }
   });
@@ -1830,7 +1833,7 @@ Respond ONLY with a valid JSON array.`;
         message: 'Foundation data saved successfully',
       });
     } catch (error: any) {
-      console.error("Error saving foundation data:", error);
+      logger.error("Error saving foundation data", error);
       res.status(500).json({ 
         success: false,
         error: "Failed to save foundation data",
@@ -1865,7 +1868,7 @@ Respond ONLY with a valid JSON array.`;
         message: 'Pillar data saved successfully',
       });
     } catch (error: any) {
-      console.error("Error saving pillar data:", error);
+      logger.error("Error saving pillar data", error);
       res.status(500).json({ 
         success: false,
         error: "Failed to save pillar data",
@@ -1906,7 +1909,7 @@ Respond ONLY with a valid JSON array.`;
         scorecard: assessment.scorecardResult,
       });
     } catch (error: any) {
-      console.error("Error loading assessment:", error);
+      logger.error("Error loading assessment", error);
       res.status(500).json({ 
         success: false,
         error: "Failed to load assessment",
@@ -1932,7 +1935,7 @@ Respond ONLY with a valid JSON array.`;
         })),
       });
     } catch (error: any) {
-      console.error("Error listing assessments:", error);
+      logger.error("Error listing assessments", error);
       res.status(500).json({ 
         success: false,
         error: "Failed to list assessments",
@@ -2021,7 +2024,7 @@ Respond ONLY with a valid JSON array.`;
         },
       });
     } catch (error: any) {
-      console.error("Error creating assessment:", error);
+      logger.error("Error creating assessment", error);
       res.status(500).json({
         success: false,
         error: "Failed to create assessment",

@@ -1,13 +1,11 @@
-
-
-import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.engine.addressing import normalize_address
+from app.core.logger import get_logger
 
 import networkx as nx
 
-logger = logging.getLogger(__name__)
+logger = get_logger("ComputeEngine.GraphEvaluator")
 
 
 class ModelArtifact:

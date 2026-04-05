@@ -7,6 +7,9 @@ import { registerApiProxy } from "./apiProxy";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
+import { createLogger } from "./logger";
+
+const logger = createLogger("WebServer");
 
 const app = express();
 const httpServer = createServer(app);
@@ -44,25 +47,21 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+const requestLogger = createLogger("HttpRequest");
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      log(logLine);
+      requestLogger.debug(`${req.method} ${path} ${res.statusCode} in ${duration}ms`, {
+        method: req.method,
+        path,
+        status: res.statusCode,
+        durationMs: duration,
+      });
     }
   });
 
@@ -70,16 +69,21 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await connectDB();
+  logger.info("Initializing web server...");
 
+  logger.debug("Connecting to database...");
+  await connectDB();
+  logger.info("Database connection step completed");
+
+  logger.debug("Registering API proxy...");
   registerApiProxy(app);
 
-  console.log("[Server] Starting route registration...");
+  logger.info("Starting route registration...");
   try {
     await registerRoutes(httpServer, app);
-    console.log("[Server] Route registration completed successfully");
+    logger.info("Route registration completed successfully");
   } catch (err) {
-    console.error("[Server] Route registration failed:", err);
+    logger.error("Route registration failed", err);
     process.exit(1);
   }
 
@@ -87,7 +91,7 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    console.error("Internal Server Error:", err);
+    logger.error("Unhandled request error", err, { status });
 
     if (res.headersSent) {
       return next(err);
@@ -97,13 +101,14 @@ app.use((req, res, next) => {
   });
 
   if (process.env.NODE_ENV === "production") {
+    logger.info("Serving static assets (production mode)");
     serveStatic(app);
   } else {
+    logger.info("Setting up Vite dev server (development mode)");
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
-  // Use environment variable PORT or fallback to 5000
   const port = parseInt(process.env.PORT || "5000", 10);
 
   httpServer.listen(
@@ -112,7 +117,7 @@ app.use((req, res, next) => {
       host: "0.0.0.0",
     },
     () => {
-      log(`serving on port ${port}`);
+      logger.info(`Server listening on port ${port}`, { port, env: process.env.NODE_ENV || "development" });
     },
   );
 })();

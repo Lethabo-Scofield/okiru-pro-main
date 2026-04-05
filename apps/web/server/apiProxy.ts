@@ -8,6 +8,9 @@
 
 import http from "http";
 import type { Express, Request, Response, NextFunction } from "express";
+import { createLogger } from "./logger";
+
+const logger = createLogger("ApiProxy");
 
 const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
 
@@ -72,7 +75,7 @@ function proxyRequest(req: Request, res: Response): void {
   });
 
   proxyReq.on("error", (err) => {
-    console.error(`[ApiProxy] Error forwarding ${req.method} ${req.originalUrl}:`, err.message);
+    logger.error("Proxy request failed", err, { method: req.method, url: req.originalUrl, target: API_BASE });
     if (!res.headersSent) {
       res.status(502).json({
         message: `API server unavailable at ${API_BASE}. Ensure the API server is running.`,
@@ -82,6 +85,7 @@ function proxyRequest(req: Request, res: Response): void {
   });
 
   proxyReq.on("timeout", () => {
+    logger.warn("Proxy request timed out", { method: req.method, url: req.originalUrl });
     proxyReq.destroy();
     if (!res.headersSent) {
       res.status(504).json({ message: "API server timed out" });
@@ -124,11 +128,12 @@ function proxyRequest(req: Request, res: Response): void {
 export function registerApiProxy(app: Express): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (shouldProxy(req.path)) {
+      logger.debug("Proxying request", { method: req.method, path: req.path, target: API_BASE });
       proxyRequest(req, res);
     } else {
       next();
     }
   });
 
-  console.log(`[ApiProxy] Proxying ArangoDB routes to ${API_BASE}`);
+  logger.info("API proxy registered", { target: API_BASE, prefixes: PROXIED_PREFIXES.length });
 }

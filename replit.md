@@ -92,6 +92,42 @@ sudo bash deploy/vm-deploy-run.sh
 ### Firewall / Azure NSG
 Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) must be open in the Azure NSG
 
+## Debug Logging
+
+All three services use a centralized structured logging system for debugging purposes.
+
+### Log Format
+```
+TIMESTAMP [LEVEL] [MODULE] Message {optional_metadata}
+```
+Example: `2026-04-05T16:13:13.567Z [INFO] [ApiServer] Initializing API server...`
+
+### Log Levels
+Controlled via `LOG_LEVEL` environment variable (default: `DEBUG`). Levels: `DEBUG`, `INFO`, `WARN`, `ERROR`.
+
+### Logger Modules
+
+**Web Server (`apps/web/server/logger.ts`)**:
+- `WebServer` — Server initialization, startup, shutdown
+- `WebDB` — MongoDB connection lifecycle
+- `ApiProxy` — Request proxying to API server
+- `Routes` — Authentication, session management, CRUD operations
+- `Email` — SMTP transport, OTP/password reset emails
+- `ExcelExtract` — Excel/CSV extraction pipeline
+
+**API Server (`apps/api/src/logger.ts`)**:
+- `ApiServer` — Server initialization, startup, shutdown, process signals
+- `ApiDB` — MongoDB connection with retry logic
+- `ArangoDB` — ArangoDB connection and database setup
+- `ApiRoutes` — Route registration, session store, error handling
+
+**Computation Engine (`apps/Computation-Engine/backend/app/core/logger.py`)**:
+- `ComputeEngine.Main` — FastAPI startup/shutdown
+- `ComputeEngine.AdminModels` — Model upload, compilation, evaluation endpoints
+- `ComputeEngine.GraphEvaluator` — Formula graph traversal and calculation
+- `ComputeEngine.ModelService` — Model lifecycle (compile, evaluate, persist)
+- `ComputeEngine.ArangoDB` — Database operations, in-memory fallback
+
 ## Security
 - Helmet enabled on both web and API servers
 - Session secret enforced in production (crashes if missing)

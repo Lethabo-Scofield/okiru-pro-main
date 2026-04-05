@@ -6,6 +6,9 @@ import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import { Router } from 'express';
 import { isMongoConnected } from '../../db.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger("ApiRoutes");
 
 // Import route modules
 import healthRouter from './health.js';
@@ -54,7 +57,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   const sessionSecret = process.env.SESSION_SECRET;
   if (isProd && !sessionSecret) {
-    console.error("[SECURITY] SESSION_SECRET environment variable is required in production!");
+    logger.error("SESSION_SECRET environment variable is required in production");
     process.exit(1);
   }
 
@@ -78,8 +81,9 @@ export async function registerRoutes(
       collectionName: "sessions",
       ttl: 7 * 24 * 60 * 60,
     });
+    logger.info("Session store: MongoDB");
   } else {
-    console.warn("[Session] Using in-memory session store (MongoDB unavailable).");
+    logger.warn("Using in-memory session store (MongoDB unavailable)");
   }
 
   app.use(session(sessionConfig));
@@ -170,7 +174,6 @@ export async function registerRoutes(
   app.use('/api/export-log', exportRouter);
   app.use('/api/clients/:clientId/export-logs', exportRouter);
 
-  // Error handling middleware
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     const status =
       (err && typeof err === "object" && "status" in err && typeof (err as { status: number }).status === "number")
@@ -179,10 +182,11 @@ export async function registerRoutes(
           ? (err as { statusCode: number }).statusCode
           : 500;
     const message = isProd ? "Internal Server Error" : (err instanceof Error ? err.message : "Internal Server Error");
-    if (!isProd) console.error("Internal Server Error:", err);
+    if (!isProd) logger.error("Unhandled route error", err as Error, { status });
     if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
 
+  logger.info("All API routes registered successfully");
   return httpServer;
 }
