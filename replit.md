@@ -92,6 +92,20 @@ sudo bash deploy/vm-deploy-run.sh
 ### Firewall / Azure NSG
 Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) must be open in the Azure NSG
 
+### K8s Inter-Service Communication
+Services communicate via K8s service DNS names (not localhost):
+- Web → API: `API_SERVER_URL=http://api:5000` (set in configmap)
+- API → Compute Engine: `COMPUTE_ENGINE_URL=http://compute:8000` (set in configmap)
+- `CORS_ORIGIN` (API) and `CORS_ORIGINS` (Compute Engine) must include production domains
+
+### K8s Deployment Notes
+- All pods use `readOnlyRootFilesystem: true` with emptyDir volumes mounted at `/tmp` for temp file operations
+- Web deployment requires: `SESSION_SECRET`, `MONGODB_URI`, `API_SERVER_URL`, `GROQ_API_KEY` (optional), `SMTP_*` (optional)
+- API deployment requires: `SESSION_SECRET`, `MONGODB_URI`, `ARANGO_URL`, `CORS_ORIGIN`, `COMPUTE_ENGINE_URL`
+- Compute deployment requires: `ARANGO_URL`, `CORS_ORIGINS`, `MONGODB_URI`
+- Ingress is split into separate resources per host (no shared rewrite-target)
+- Session cookies use distinct names: `okiru.web.sid` (web) and `okiru.api.sid` (API), both use `sameSite: lax`
+
 ## Debug Logging
 
 All three services use a centralized structured logging system for debugging purposes.

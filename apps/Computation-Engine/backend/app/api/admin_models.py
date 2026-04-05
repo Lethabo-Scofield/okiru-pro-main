@@ -159,8 +159,8 @@ async def upload_model(
             finally:
                 try:
                     os.remove(path)
-                except Exception:
-                    pass
+                except Exception as cleanup_err:
+                    logger.debug(f"Temp file cleanup skipped: {cleanup_err}")
 
         background_tasks.add_task(
             _background_compile,
@@ -184,22 +184,22 @@ async def upload_model(
         logger.warning(f"Invalid workbook: {e}")
         try:
             os.remove(tmp_path)
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            logger.debug(f"Temp file cleanup skipped: {cleanup_err}")
         raise HTTPException(status_code=400, detail=str(e))
     except (CompilationError, DAGValidationError) as e:
         logger.warning(f"Compilation/validation error: {e}")
         try:
             os.remove(tmp_path)
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            logger.debug(f"Temp file cleanup skipped: {cleanup_err}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error during upload: {e}", exc_info=True)
         try:
             os.remove(tmp_path)
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            logger.debug(f"Temp file cleanup skipped: {cleanup_err}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 

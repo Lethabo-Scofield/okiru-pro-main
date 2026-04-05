@@ -10,12 +10,12 @@ metadata:
     component: backend
     tier: api
 spec:
-  replicas: 2  # Minimum 2 for high availability
+  replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1        # Add 1 extra pod during update
-      maxUnavailable: 0  # Keep all pods available during update
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: api
@@ -29,7 +29,6 @@ spec:
       imagePullSecrets:
         - name: acr-pull-secret
       affinity:
-        # Spread pods across different nodes
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
@@ -41,7 +40,6 @@ spec:
                       values:
                         - api
                 topologyKey: kubernetes.io/hostname
-        # Avoid scheduling on nodes with compute-heavy workloads
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 50
@@ -52,7 +50,6 @@ spec:
                     values:
                       - compute-heavy
       initContainers:
-        # Wait for databases to be ready before starting
         - name: wait-for-mongodb
           image: busybox:1.36
           command:
@@ -82,7 +79,6 @@ spec:
               name: http
               protocol: TCP
           env:
-            # ConfigMap values
             - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
@@ -93,12 +89,31 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: API_PORT
-            # Secret values
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+            - name: CORS_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CORS_ORIGIN
+            - name: COMPUTE_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: COMPUTE_ENGINE_URL
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
                   name: mongodb-credentials
                   key: MONGODB_URI
+            - name: ARANGO_URL
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
@@ -114,6 +129,27 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: SESSION_SECRET
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_ENDPOINT
+                  optional: true
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_KEY
+                  optional: true
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: GROQ_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
           resources:
             requests:
               memory: "256Mi"
@@ -121,7 +157,6 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          # Health check endpoint - adjust path to your API
           livenessProbe:
             httpGet:
               path: /health
@@ -150,7 +185,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 12  # Allow 60 seconds for startup
+            failureThreshold: 12
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -159,3 +194,7 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 200Mi
