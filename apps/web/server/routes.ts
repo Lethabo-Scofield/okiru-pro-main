@@ -87,10 +87,12 @@ export async function registerRoutes(
     secret: sessionSecret || "okiru-entity-studio-dev-secret",
     resave: false,
     saveUninitialized: false,
+    name: 'okiru.web.sid',
     cookie: {
       httpOnly: true,
       secure: isProduction,
       sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   };
 

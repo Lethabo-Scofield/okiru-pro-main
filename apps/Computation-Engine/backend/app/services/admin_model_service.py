@@ -228,8 +228,8 @@ def _compile_xlsx(path: str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, 
         if cleanup_temp and cleaned_path != path:
             try:
                 os.remove(cleaned_path)
-            except Exception:
-                pass
+            except Exception as cleanup_err:
+                logger.debug(f"Temp file cleanup skipped: {cleanup_err}")
 
 
 def _validate_dag(graph: Dict[str, Any]) -> None:

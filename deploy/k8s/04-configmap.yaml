@@ -23,6 +23,10 @@ data:
   WEB_HOST: "0.0.0.0"
   NEXT_PUBLIC_API_URL: "https://api.okiru-pro.com"
   
+  # Inter-service communication (K8s service names)
+  API_SERVER_URL: "http://api:5000"
+  COMPUTE_ENGINE_URL: "http://compute:8000"
+  
   # Computation Engine
   COMPUTE_PORT: "8000"
   COMPUTE_HOST: "0.0.0.0"
@@ -43,6 +47,7 @@ data:
   
   # CORS Settings
   CORS_ORIGIN: "https://okiru-pro.com,https://www.okiru-pro.com"
+  CORS_ORIGINS: "https://okiru-pro.com,https://www.okiru-pro.com,http://api:5000"
   
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "900000"  # 15 minutes

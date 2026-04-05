@@ -31,8 +31,13 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false 
 app.use(compression());
 
 // CORS
-const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Boolean) || (isProd ? [] : ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
+const corsEnv = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Boolean);
+const allowedOrigins = (corsEnv && corsEnv.length > 0)
+  ? corsEnv
+  : (isProd
+    ? ["https://okiru-pro.com", "https://www.okiru-pro.com"]
+    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // Body parser
 app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
@@ -40,20 +45,18 @@ app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 
 // Logging middleware
+const requestLog = createLogger("ApiRequest");
 app.use((req, res, next) => {
   const start = Date.now();
-  let capturedJsonResponse: Record<string, unknown> | undefined;
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
   res.on("finish", () => {
-    if (req.path.startsWith("/api")) {
+    if (req.path.startsWith("/api") || req.path === "/health") {
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${req.path} ${res.statusCode} in ${duration}ms`;
-      if (!isProd && capturedJsonResponse) logLine += ` :: ${JSON.stringify(capturedJsonResponse).slice(0, 200)}`;
-      console.log(logLine);
+      requestLog.debug(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`, {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: duration,
+      });
     }
   });
   next();

@@ -11,7 +11,7 @@ metadata:
     tier: compute
     workload-type: compute-heavy
 spec:
-  replicas: 1  # Start with 1; HPA will scale based on load
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -31,7 +31,6 @@ spec:
       imagePullSecrets:
         - name: acr-pull-secret
       affinity:
-        # Keep compute pods on separate nodes from API/Web
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -92,6 +91,16 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: COMPUTE_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CORS_ORIGINS
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -107,6 +116,11 @@ spec:
                 secretKeyRef:
                   name: redis-credentials
                   key: REDIS_URL
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
+            - name: model-storage
+              mountPath: /app/models
           resources:
             requests:
               memory: "512Mi"
@@ -114,7 +128,6 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "1000m"
-          # FastAPI health endpoint
           livenessProbe:
             httpGet:
               path: /health
@@ -143,7 +156,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 18  # Allow 90 seconds for model loading
+            failureThreshold: 18
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -152,3 +165,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 500Mi
+        - name: model-storage
+          emptyDir:
+            sizeLimit: 1Gi
