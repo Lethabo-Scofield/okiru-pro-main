@@ -1,16 +1,10 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin_models import router as admin_models_router
+from app.core.logger import get_logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = get_logger("ComputeEngine.Main")
 
 app = FastAPI(
     title="Okiru Computation Engine",

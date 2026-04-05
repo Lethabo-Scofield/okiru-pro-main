@@ -37,6 +37,9 @@
 
 import type { Express, Request, Response } from 'express';
 import * as XLSX from 'xlsx';
+import { createLogger } from './logger';
+
+const logger = createLogger("ExcelExtract");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,11 +389,11 @@ export function registerExcelExtractRoute(app: Express): void {
                     const extractor = new LLMExtractor();
                     llmExtractions = await extractor.extractBatch(requests);
                 } catch (llmErr: any) {
-                    console.warn('[extract-excel] LLM extraction failed, using structured only:', llmErr?.message);
+                    logger.warn("LLM extraction failed, using structured only", { error: llmErr?.message });
                     llmExtractions = [];
                 }
             } else if (!process.env.GROQ_API_KEY) {
-                console.warn('[extract-excel] GROQ_API_KEY not set — skipping LLM extraction, using structured only');
+                logger.warn("GROQ_API_KEY not set — skipping LLM extraction, using structured only");
             }
 
             // ── Step 6: Merge structured + LLM results ───────────────────────────
@@ -433,7 +436,7 @@ export function registerExcelExtractRoute(app: Express): void {
                 },
             });
         } catch (error: any) {
-            console.error('[extract-excel] Error:', error);
+            logger.error("Excel extraction failed", error);
             return res.status(500).json({
                 error: error.message || 'Failed to extract from Excel/CSV file',
             });

@@ -14,7 +14,6 @@ The goal is to _compile once_ and then evaluate repeatedly without hitting Excel
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import tempfile
 import uuid
@@ -36,8 +35,9 @@ from app.db.arango import (
 )
 from app.engine.addressing import normalize_address, normalize_inputs
 from app.engine.graph_evaluator import ModelArtifact, evaluate_model as run_evaluation
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("ComputeEngine.ModelService")
 
 
 class CompilationError(Exception):

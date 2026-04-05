@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import { createLogger } from "./logger";
+
+const logger = createLogger("WebDB");
 
 let isConnected = false;
 
@@ -10,14 +13,15 @@ export async function connectDB(): Promise<typeof mongoose> {
     if (process.env.NODE_ENV === "production") {
       throw new Error("MONGODB_URI must be set in production.");
     }
-    console.warn("WARNING: MONGODB_URI is not set. Database features will be unavailable.");
+    logger.warn("MONGODB_URI is not set — database features will be unavailable");
     return mongoose;
   }
 
   try {
+    logger.debug("Connecting to MongoDB...", { uri: MONGODB_URI.replace(/\/\/.*@/, "//***@") });
     await mongoose.connect(MONGODB_URI);
     isConnected = true;
-    console.log("Connected to MongoDB");
+    logger.info("Connected to MongoDB successfully");
 
     try {
       const db = mongoose.connection.db;
@@ -27,27 +31,27 @@ export async function connectDB(): Promise<typeof mongoose> {
         const staleIndex = indexes.find((idx: any) => idx.name === "id_1");
         if (staleIndex) {
           await usersCollection.dropIndex("id_1");
-          console.log("Dropped stale 'id_1' index from users collection");
+          logger.info("Dropped stale 'id_1' index from users collection");
         }
       }
     } catch (indexErr) {
-      console.warn("Index cleanup skipped:", (indexErr as Error).message);
+      logger.warn("Index cleanup skipped", { reason: (indexErr as Error).message });
     }
 
     return mongoose;
   } catch (error) {
-    console.error("MongoDB connection error:", error);
+    logger.error("MongoDB connection failed", error);
     throw error;
   }
 }
 
 mongoose.connection.on("disconnected", () => {
   isConnected = false;
-  console.log("MongoDB disconnected");
+  logger.warn("MongoDB disconnected");
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("MongoDB connection error:", err);
+  logger.error("MongoDB connection error", err);
 });
 
 export { mongoose };

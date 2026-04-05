@@ -1,10 +1,10 @@
-import logging
 import uuid
 from datetime import datetime, timezone
 
 from app.core.config import settings
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("ComputeEngine.ArangoDB")
 
 COLLECTION_NAMES = [
     "scorecard_models",

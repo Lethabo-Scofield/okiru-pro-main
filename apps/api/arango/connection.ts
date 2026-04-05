@@ -10,6 +10,9 @@
  */
 
 import { Database } from 'arangojs';
+import { createLogger } from '../src/logger.js';
+
+const logger = createLogger("ArangoDB");
 
 let _db: Database | null = null;
 let _arangoConnected = false;
@@ -38,7 +41,7 @@ export async function connectArango(): Promise<Database | null> {
   if (_db) return _db;
 
   const cfg = getConfig();
-  console.log(`[ArangoDB] Connecting to ${cfg.url}/${cfg.databaseName}...`);
+  logger.info("Connecting to ArangoDB", { url: cfg.url, database: cfg.databaseName });
 
   try {
     const systemDb = new Database({
@@ -48,17 +51,18 @@ export async function connectArango(): Promise<Database | null> {
 
     const databases = await systemDb.listDatabases();
     if (!databases.includes(cfg.databaseName)) {
-      console.log(`[ArangoDB] Creating database "${cfg.databaseName}"...`);
+      logger.info("Creating database", { database: cfg.databaseName });
       await systemDb.createDatabase(cfg.databaseName);
     }
 
     _db = systemDb.database(cfg.databaseName);
     _arangoConnected = true;
-    console.log(`[ArangoDB] Connected to "${cfg.databaseName}"`);
+    logger.info("Connected to ArangoDB successfully", { database: cfg.databaseName });
     return _db;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[ArangoDB] Failed to connect: ${msg}. Routes requiring ArangoDB will be unavailable.`);
+    logger.warn("Failed to connect to ArangoDB — routes requiring ArangoDB will be unavailable", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }

@@ -4,7 +4,6 @@ Endpoints for uploading, compiling, and evaluating scorecard models.
 """
 
 import json
-import logging
 import os
 import tempfile
 from typing import Any, Dict, List, Optional
@@ -35,8 +34,9 @@ from app.services.admin_model_service import (
     set_active_model,
     summarize_model,
 )
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("ComputeEngine.AdminModels")
 
 router = APIRouter(prefix="/admin/models", tags=["admin-models"])
 

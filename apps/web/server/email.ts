@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
 import { randomInt } from "crypto";
+import { createLogger } from "./logger";
+
+const logger = createLogger("Email");
 
 const ADMIN_EMAIL = "cmyezwa@okiru.co.za";
 
@@ -14,9 +17,11 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
+    logger.debug("SMTP not configured — email transport unavailable", { host: !!host, user: !!user, pass: !!pass });
     return null;
   }
 
+  logger.info("Initializing SMTP transport", { host, port });
   transporter = nodemailer.createTransport({
     host,
     port,
@@ -47,12 +52,13 @@ export function getMaxOtpAttempts(): number {
 export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: string | null) {
   const t = getTransporter();
   if (!t) {
-    console.log(`[email] SMTP not configured — skipping OTP email for ${toEmail}`);
+    logger.warn("SMTP not configured — skipping OTP email", { to: toEmail });
     return false;
   }
 
   const displayName = userName || toEmail;
   const expiryMinutes = getOtpExpiryMinutes();
+  logger.debug("Sending OTP email", { to: toEmail, expiryMinutes });
 
   try {
     await t.sendMail({
@@ -76,10 +82,10 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
         </div>
       `,
     });
-    console.log(`[email] OTP sent to ${toEmail}`);
+    logger.info("OTP email sent successfully", { to: toEmail });
     return true;
   } catch (err: any) {
-    console.error(`[email] Failed to send OTP:`, err.message);
+    logger.error("Failed to send OTP email", err, { to: toEmail });
     return false;
   }
 }
@@ -87,9 +93,10 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
 export async function sendPasswordResetEmail(toEmail: string, resetToken: string, userName?: string | null) {
   const t = getTransporter();
   if (!t) {
-    console.log(`[email] SMTP not configured — skipping password reset email for ${toEmail}`);
+    logger.warn("SMTP not configured — skipping password reset email", { to: toEmail });
     return false;
   }
+  logger.debug("Sending password reset email", { to: toEmail });
 
   const displayName = userName || toEmail;
   const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/auth?mode=reset&token=${resetToken}`;
@@ -116,10 +123,10 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
         </div>
       `,
     });
-    console.log(`[email] Password reset email sent to ${toEmail}`);
+    logger.info("Password reset email sent", { to: toEmail });
     return true;
   } catch (err: any) {
-    console.error(`[email] Failed to send password reset email:`, err.message);
+    logger.error("Failed to send password reset email", err, { to: toEmail });
     return false;
   }
 }
@@ -131,9 +138,10 @@ export function isSmtpConfigured(): boolean {
 export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
   const t = getTransporter();
   if (!t) {
-    console.log(`[email] SMTP not configured — skipping login notification for ${userEmail}`);
+    logger.debug("SMTP not configured — skipping login notification", { user: userEmail });
     return;
   }
+  logger.debug("Sending login notification", { user: userEmail, org: orgName });
 
   const displayName = fullName || userEmail;
   const org = orgName || "Unknown Organization";
@@ -173,8 +181,8 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
         </div>
       `,
     });
-    console.log(`[email] Login notification sent for ${userEmail}`);
+    logger.info("Login notification sent", { user: userEmail });
   } catch (err: any) {
-    console.error(`[email] Failed to send login notification:`, err.message);
+    logger.error("Failed to send login notification", err, { user: userEmail });
   }
 }

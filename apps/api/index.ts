@@ -10,6 +10,9 @@ import { createServer } from "http";
 import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
+import { createLogger } from "./src/logger.js";
+
+const logger = createLogger("ApiServer");
 
 const app = express();
 const httpServer = createServer(app);
@@ -56,36 +59,47 @@ app.use((req, res, next) => {
   next();
 });
 
-// Error handling
-process.on("uncaughtException", (err) => console.error("[FATAL] Uncaught Exception:", err));
-process.on("unhandledRejection", (reason) => console.error("[FATAL] Unhandled Rejection:", reason));
-process.on("SIGTERM", () => { console.log("[SIGNAL] SIGTERM"); process.exit(0); });
-process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); });
+process.on("uncaughtException", (err) => logger.error("Uncaught Exception", err));
+process.on("unhandledRejection", (reason) => logger.error("Unhandled Rejection", reason as Error));
+process.on("SIGTERM", () => { logger.info("Received SIGTERM — shutting down"); process.exit(0); });
+process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); process.exit(0); });
 
 (async () => {
+  logger.info("Initializing API server...");
+
+  logger.debug("Connecting to MongoDB...");
   await connectDB();
+
+  logger.debug("Connecting to ArangoDB...");
   const arangoDB = await connectArango();
   if (arangoDB) {
+    logger.info("ArangoDB connected — ensuring collections...");
     await ensureCollections();
   } else {
-    console.warn("[Startup] Skipping ArangoDB collection setup — not connected.");
+    logger.warn("Skipping ArangoDB collection setup — not connected");
   }
 
   if (arangoDB) {
     seedOntology().then(summary => {
       if (summary.totalCriteria > 0) {
-        console.log(`[Seed] Ontology: ${summary.totalSectors} sectors, ${summary.totalCriteria} criteria, ${summary.totalEntityFields} fields (${summary.durationMs}ms)`);
+        logger.info("Ontology seeded", {
+          sectors: summary.totalSectors,
+          criteria: summary.totalCriteria,
+          fields: summary.totalEntityFields,
+          durationMs: summary.durationMs,
+        });
       }
     }).catch(err => {
-      console.warn('[Seed] Ontology seeding failed (non-fatal):', err instanceof Error ? err.message : err);
+      logger.warn("Ontology seeding failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
   } else {
-    console.warn("[Startup] Skipping ontology seeding — ArangoDB not connected.");
+    logger.warn("Skipping ontology seeding — ArangoDB not connected");
   }
 
+  logger.debug("Registering routes...");
   await registerRoutes(httpServer, app);
+  logger.info("Routes registered");
 
-  // Error middleware
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     const status =
       (err && typeof err === "object" && "status" in err && typeof (err as { status: number }).status === "number")
@@ -94,13 +108,13 @@ process.on("SIGINT", () => { console.log("[SIGNAL] SIGINT"); process.exit(0); })
           ? (err as { statusCode: number }).statusCode
           : 500;
     const message = isProd ? "Internal Server Error" : (err instanceof Error ? err.message : "Internal Server Error");
-    if (!isProd) console.error("Internal Server Error:", err);
+    if (!isProd) logger.error("Unhandled request error", err as Error, { status });
     if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
 
   const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
   httpServer.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${port} [${isProd ? "production" : "development"}]`);
+    logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
   });
 })();
