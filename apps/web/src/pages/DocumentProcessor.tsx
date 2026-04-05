@@ -254,35 +254,41 @@ export interface SectorOption {
   code: string;
   label: string;
   description: string;
-  hasQSE: boolean; // Whether this sector has QSE variant (RCOGP and ICT do)
+  hasQSE: boolean; // Whether this sector has QSE variant
+  availableTypes?: string[];
 }
 
-export const BBEE_SECTORS: SectorOption[] = [
-  {
-    code: 'RCOGP',
-    label: 'Revised Codes of Good Practice (RCOGP)',
-    description: 'Default B-BBEE framework for most enterprises',
-    hasQSE: true,
-  },
-  {
-    code: 'ICT',
-    label: 'ICT Sector Code',
-    description: 'Information & Communications Technology sector',
-    hasQSE: true,
-  },
-  {
-    code: 'FSC',
-    label: 'Financial Sector Code (FSC)',
-    description: 'Banks, insurers, investment firms',
-    hasQSE: false,
-  },
-  {
-    code: 'AGRI',
-    label: 'AgriBEE Sector Code',
-    description: 'Agriculture and farming enterprises',
-    hasQSE: false,
-  },
+// Fallback if API fails - will be overwritten by API response
+export const BBEE_SECTORS_FALLBACK: SectorOption[] = [
+  { code: 'RCOGP', label: 'Revised Codes of Good Practice (RCOGP)', description: 'Default B-BBEE framework', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
+  { code: 'ICT', label: 'ICT Sector Code', description: 'Information & Communications Technology', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
+  { code: 'FSC', label: 'Financial Sector Code (FSC)', description: 'Banks, insurers, investment firms', hasQSE: false, availableTypes: ['Generic'] },
+  { code: 'AGRI', label: 'AgriBEE Sector Code', description: 'Agriculture and farming enterprises', hasQSE: false, availableTypes: ['Generic'] },
 ];
+
+// Global state for sectors (populated from API)
+let cachedBBEESectors: SectorOption[] | null = null;
+
+export async function fetchBBEESectors(): Promise<SectorOption[]> {
+  if (cachedBBEESectors) return cachedBBEESectors;
+  
+  try {
+    const response = await fetch('/api/sectors/options');
+    if (!response.ok) throw new Error('Failed to fetch sectors');
+    const result = await response.json();
+    if (result.success && result.options) {
+      cachedBBEESectors = result.options;
+      return cachedBBEESectors;
+    }
+  } catch (error) {
+    console.error('[DocumentProcessor] Failed to fetch sectors:', error);
+  }
+  
+  return BBEE_SECTORS_FALLBACK;
+}
+
+// Reactive BBEE_SECTORS that can be updated after API fetch
+export let BBEE_SECTORS: SectorOption[] = [...BBEE_SECTORS_FALLBACK];
 
 /**
  * Get the total available points for a sector
@@ -1091,6 +1097,10 @@ export default function DocumentProcessor() {
   const [pillarValidation, setPillarValidation] = useState<Map<string, boolean>>(new Map());
   const [isLoadingManifest, setIsLoadingManifest] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+
+  // Sectors state - fetched from API
+  const [availableSectors, setAvailableSectors] = useState<SectorOption[]>(BBEE_SECTORS_FALLBACK);
+  const [loadingSectors, setLoadingSectors] = useState(true);
   const [expandedPillarCode, setExpandedPillarCode] = useState<string | null>(null);
   
   // Foundation Layer State - matching TOOLKIT_TAB_MAP.md Sheets 1-2
@@ -1174,6 +1184,26 @@ export default function DocumentProcessor() {
   }, []);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
+
+  // Fetch sectors from API on mount
+  useEffect(() => {
+    const fetchSectors = async () => {
+      setLoadingSectors(true);
+      try {
+        const sectors = await fetchBBEESectors();
+        setAvailableSectors(sectors);
+        // Update the global BBEE_SECTORS for functions that use it
+        BBEE_SECTORS.length = 0;
+        BBEE_SECTORS.push(...sectors);
+      } catch (error) {
+        console.error('[DocumentProcessor] Failed to fetch sectors:', error);
+        // Fallback is already set in state
+      } finally {
+        setLoadingSectors(false);
+      }
+    };
+    fetchSectors();
+  }, []);
 
   useEffect(() => {
     if (templates.length === 0 || uploadedFiles.length === 0) return;
@@ -2651,12 +2681,18 @@ export default function DocumentProcessor() {
                             data-testid="input-company-regno" />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Industry Sector <span className="text-red-400">*</span></label>
-                          <select value={companyInfo.sector} onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">
+                            Industry Sector <span className="text-red-400">*</span>
+                            {loadingSectors && <span className="ml-2 text-[#8e8e93]">(Loading...)</span>}
+                          </label>
+                          <select
+                            value={companyInfo.sector}
+                            onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
+                            disabled={loadingSectors}
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none disabled:opacity-50"
                             data-testid="select-company-sector">
-                            <option value="">Select a sector…</option>
-                            {BBEE_SECTORS.map(s => (
+                            <option value="">{loadingSectors ? 'Loading sectors...' : 'Select a sector…'}</option>
+                            {availableSectors.map(s => (
                               <option key={s.code} value={s.code}>
                                 {s.label} {s.hasQSE ? '(Generic/QSE)' : '(Generic only)'}
                               </option>
@@ -2664,7 +2700,7 @@ export default function DocumentProcessor() {
                           </select>
                           {companyInfo.sector && (
                             <p className="mt-1.5 text-[11px] text-[#8e8e93]">
-                              {BBEE_SECTORS.find(s => s.code === companyInfo.sector)?.description}
+                              {availableSectors.find(s => s.code === companyInfo.sector)?.description}
                             </p>
                           )}
                         </div>

@@ -29,6 +29,7 @@ import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
 import entityMappingRouter from './entityMapping.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
+import sectorsRouter from './sectors.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -157,6 +158,9 @@ export async function registerRoutes(
 
   // Scorecard builder: manifest + calculate + save (Phase 4)
   app.use('/api', scorecardBuilderRouter);
+
+  // Sectors: ArangoDB-backed sector configurations
+  app.use('/api/sectors', sectorsRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

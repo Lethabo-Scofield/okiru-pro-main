@@ -1,11 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
-import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase } from "lucide-react";
+import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 import type { Client } from "@toolkit/lib/types";
+
+// Sector option from API
+export interface SectorOption {
+  value: string;
+  label: string;
+  code: string;
+  hasQSE: boolean;
+  availableTypes: string[];
+}
 
 // Extended client interface matching TOOLKIT_TAB_MAP.md Sheet 1
 export interface ClientInformationData {
@@ -25,8 +34,8 @@ export interface ClientInformationData {
   contactEmail: string;
   contactPhone: string;
   
-  // BEE specifics
-  sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | 'TOURISM' | 'CONSTRUCTION' | 'MINING' | 'OTHER';
+  // BEE specifics - now any string (validated against API)
+  sectorCode: string;
   industry: string;
   /** EAP province for Management Control (Senior/Middle/Junior targets). Falls back to parsing physicalAddress. */
   eapProvince?: Client['eapProvince'];
@@ -54,15 +63,12 @@ interface ClientInformationFormProps {
   readOnly?: boolean;
 }
 
-const SECTOR_OPTIONS = [
-  { value: 'RCOGP', label: 'Revised Codes of Good Practice (RCOGP)', description: 'Default framework for most enterprises' },
-  { value: 'ICT', label: 'ICT Sector Code', description: 'Information & Communications Technology' },
-  { value: 'FSC', label: 'Financial Sector Code (FSC)', description: 'Banks, insurers, investment firms' },
-  { value: 'AGRI', label: 'AgriBEE Sector Code', description: 'Agriculture and farming enterprises' },
-  { value: 'TOURISM', label: 'Tourism Sector Code', description: 'Travel and hospitality' },
-  { value: 'CONSTRUCTION', label: 'Construction Sector Code', description: 'Building and infrastructure' },
-  { value: 'MINING', label: 'Mining Sector Code', description: 'Extractive industries' },
-  { value: 'OTHER', label: 'Other / Generic', description: 'Non-specific sector' },
+// Fallback sectors if API fails
+const FALLBACK_SECTOR_OPTIONS: SectorOption[] = [
+  { value: 'RCOGP', label: 'Revised Codes of Good Practice (RCOGP)', code: 'RCOGP', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
+  { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
+  { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
+  { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
 ];
 
 const INDUSTRY_OPTIONS = [
@@ -108,19 +114,65 @@ export function determineCompanySize(turnover: number): 'EME' | 'QSE' | 'Generic
 
 /**
  * Checks if QSE variant is available for this sector
+ * Note: In component, use selectedSector.hasQSE instead for API-backed check
  */
 export function hasQSEVariant(sectorCode: string): boolean {
-  return ['RCOGP', 'ICT'].includes(sectorCode);
+  // Fallback for external usage - should validate against API
+  const sector = FALLBACK_SECTOR_OPTIONS.find(s => s.code === sectorCode);
+  return sector?.hasQSE ?? false;
 }
 
 export function ClientInformationForm({ data, onChange, className, readOnly }: ClientInformationFormProps) {
+  const [sectorOptions, setSectorOptions] = useState<SectorOption[]>(FALLBACK_SECTOR_OPTIONS);
+  const [loadingSectors, setLoadingSectors] = useState(true);
+  const [sectorError, setSectorError] = useState<string | null>(null);
+
+  // Fetch sectors from API on mount
+  useEffect(() => {
+    const fetchSectors = async () => {
+      try {
+        setLoadingSectors(true);
+        const response = await fetch('/api/sectors/options');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch sectors: ${response.statusText}`);
+        }
+        const result = await response.json();
+        if (result.success && result.options && result.options.length > 0) {
+          setSectorOptions(result.options);
+          setSectorError(null);
+        } else {
+          // API returned empty, use fallback but log it
+          console.warn('[ClientInfo] API returned empty sectors, using fallback');
+          setSectorOptions(FALLBACK_SECTOR_OPTIONS);
+        }
+      } catch (error) {
+        console.error('[ClientInfo] Error fetching sectors:', error);
+        setSectorError('Failed to load sectors from server');
+        setSectorOptions(FALLBACK_SECTOR_OPTIONS);
+      } finally {
+        setLoadingSectors(false);
+      }
+    };
+
+    fetchSectors();
+  }, []);
+
   const updateField = <K extends keyof ClientInformationData>(field: K, value: ClientInformationData[K]) => {
     onChange({ ...data, [field]: value });
   };
 
   const companySize = determineCompanySize(data.annualTurnover);
-  const qseAvailable = hasQSEVariant(data.sectorCode);
+  const selectedSector = sectorOptions.find(s => s.code === data.sectorCode);
+  const qseAvailable = selectedSector?.hasQSE ?? false;
   const effectiveSize = (companySize === 'QSE' && !qseAvailable) ? 'Generic' : companySize;
+
+  // Redirect to valid sector if current selection no longer exists
+  useEffect(() => {
+    if (!loadingSectors && sectorOptions.length > 0 && !sectorOptions.find(s => s.code === data.sectorCode)) {
+      // Current sector not in available options, reset to first available
+      updateField('sectorCode', sectorOptions[0].code);
+    }
+  }, [loadingSectors, sectorOptions, data.sectorCode]);
 
   return (
     <div className={cn("space-y-6", className)}>
@@ -309,26 +361,35 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="sectorCode">Sector Code *</Label>
+              <Label htmlFor="sectorCode" className="flex items-center gap-2">
+                Sector Code *
+                {loadingSectors && <Loader2 className="h-3 w-3 animate-spin" />}
+                {sectorError && <span className="text-xs text-amber-500" title={sectorError}>⚠️</span>}
+              </Label>
               <Select
                 value={data.sectorCode}
-                onValueChange={(v) => updateField('sectorCode', v as typeof data.sectorCode)}
-                disabled={readOnly}
+                onValueChange={(v) => updateField('sectorCode', v)}
+                disabled={readOnly || loadingSectors}
               >
                 <SelectTrigger id="sectorCode">
-                  <SelectValue />
+                  <SelectValue placeholder={loadingSectors ? "Loading sectors..." : "Select sector"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {SECTOR_OPTIONS.map((sector) => (
-                    <SelectItem key={sector.value} value={sector.value}>
+                  {sectorOptions.map((sector) => (
+                    <SelectItem key={sector.code} value={sector.code}>
                       <div className="flex flex-col">
                         <span>{sector.label}</span>
-                        <span className="text-xs text-muted-foreground">{sector.description}</span>
+                        {sector.hasQSE && (
+                          <span className="text-xs text-muted-foreground">QSE available ({sector.availableTypes?.join(', ')})</span>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {sectorError && (
+                <p className="text-xs text-amber-500">{sectorError}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="industry">Industry *</Label>
