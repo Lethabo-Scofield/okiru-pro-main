@@ -143,7 +143,7 @@ if (-not $manifests) {
 # Show what will change
 Write-Host ""
 Write-Host "=== Checking Deployment Changes ===" -ForegroundColor Green
-kubectl diff -f - <<< $manifests 2>&1 | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
+$manifests | kubectl diff -f - 2>&1 | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
 
 # Apply manifests
 Write-Host ""

@@ -54,57 +54,75 @@ pnpm install
 - `SMTP_FROM` - Email "from" address (defaults to SMTP_USER)
 - `APP_URL` - Public URL of the application (used in email links)
 
-## Production Deployment (Azure VM: 20.164.207.196)
-
-### Architecture
-- **Nginx** (port 80/443) → reverse proxy for all services
-  - `/` → `web:5001` (frontend + server-side proxy)
-  - `/api/` → `api:5000` (backend API)
-  - `/compute/` → `computation-engine:8000` (Python engine)
-  - `/arango/` → `arangodb:8529` (admin UI)
-- All containers on `okiru_net` Docker bridge network, communicate by service name
-- Databases (MongoDB, ArangoDB, Redis) bound to 127.0.0.1 only
-
-### Docker Compose (`docker-compose.production.yml`)
-Services: mongodb, arangodb, redis, computation-engine, api, web, nginx, certbot
-Network: `okiru_net` (bridge) — containers resolve each other by service name
+## Production Deployment
 
 ### Dockerfiles
 - `apps/api/Dockerfile` — multi-stage Node.js build, outputs `dist/index.cjs`, port 5000
 - `apps/web/Dockerfile` — multi-stage Node.js build (Vite client + Express server), outputs `dist/index.cjs`, port 5001
-- `apps/Computation-Engine/Dockerfile` — Python 3.13-slim, FastAPI/uvicorn, port 8000
+- `apps/Computation-Engine/Dockerfile` — Python 3.13-slim, FastAPI/uvicorn, port 8000 (build context must be `./apps/Computation-Engine`, NOT repo root)
 
-### Deploy Scripts (`deploy/`)
-- `azure-deploy.sh` — Provision Azure VM, install Docker, open ports 22/80/443
-- `remote-setup.sh` — Clone repo, generate .env with random secrets
-- `vm-deploy-run.sh` — Full deploy: pull code, build images, start all services, health checks
-- `vm-restart.sh` — Quick rebuild + restart after code changes
-- `ssl-setup.sh` — Generate self-signed SSL cert for the VM IP
-- `.env.production.template` — Template for production environment variables
+### Azure AKS Deployment (Primary)
 
-### Quick Deploy (on VM)
-```bash
-sudo bash deploy/remote-setup.sh
-nano .env  # review and edit passwords
-sudo bash deploy/vm-deploy-run.sh
-```
+#### Infrastructure
+- **ACR**: `okiruproacrde4d539b.azurecr.io` — images: `okiru-pro/api`, `okiru-pro/web`, `okiru-pro/compute`
+- **AKS Namespace**: `okiru-pro`
+- **Ingress Host**: `okiru.20.164.101.114.nip.io` (NGINX ingress + cert-manager with Let's Encrypt)
+- **Databases**: MongoDB, ArangoDB, Redis deployed as K8s StatefulSets within the cluster
 
-### Firewall / Azure NSG
-Ports 22 (SSH), 80 (HTTP), 443 (HTTPS) must be open in the Azure NSG
+#### Port Layout (Azure K8s)
+- API server: port 5000 (set via ConfigMap `API_PORT`)
+- Web server: port 5001 (set via ConfigMap `WEB_PORT`)
+- Compute Engine: port 8000
+- Development (Replit): API=3000, Web=5000, Compute=8000
 
-### K8s Inter-Service Communication
+#### K8s Manifests (`kubernetes/infrastructure/`)
+- `base/` — deployments, services, configmaps, ingress, storage, network policies
+- `overlays/prod/` — production kustomize overlay
+- Kustomize-based — use `kubectl kustomize` or `kustomize build` to render
+
+#### Build & Deploy Scripts (`scripts/azure-cli/`)
+- `00-full-cleanup-rebuild-deploy.ps1` — Full pipeline: cleanup ACR → rebuild → deploy
+- `01-build-push.ps1` — Build Docker images and push to ACR (uses git SHA + timestamp tags)
+- `02-force-rebuild.ps1` — Force rebuild with unique tags and push
+- `03-deploy-aks.ps1` — Deploy to AKS with rollout status, smoke tests, auto-rollback on failure
+
+#### K8s Inter-Service Communication
 Services communicate via K8s service DNS names (not localhost):
 - Web → API: `API_SERVER_URL=http://api:5000` (set in configmap)
 - API → Compute Engine: `COMPUTE_ENGINE_URL=http://compute:8000` (set in configmap)
 - `CORS_ORIGIN` (API) and `CORS_ORIGINS` (Compute Engine) must include production domains
 
-### K8s Deployment Notes
-- All pods use `readOnlyRootFilesystem: true` with emptyDir volumes mounted at `/tmp` for temp file operations
-- Web deployment requires: `SESSION_SECRET`, `MONGODB_URI`, `API_SERVER_URL`, `GROQ_API_KEY` (optional), `SMTP_*` (optional)
-- API deployment requires: `SESSION_SECRET`, `MONGODB_URI`, `ARANGO_URL`, `CORS_ORIGIN`, `COMPUTE_ENGINE_URL`
-- Compute deployment requires: `ARANGO_URL`, `CORS_ORIGINS`, `MONGODB_URI`
-- Ingress is split into separate resources per host (no shared rewrite-target)
-- Session cookies use distinct names: `okiru.web.sid` (web) and `okiru.api.sid` (API), both use `sameSite: lax`
+#### Ingress Routing (`ingress.yaml`)
+- `/api/auth/login|me|logout|register` (Exact) → api:5000 (API server handles auth sessions)
+- `/api` (Prefix) → api:5000 (all other API routes)
+- `/api/organizations`, `/api/auth/check-username` (Exact) → web:5001 (web-specific routes)
+- `/api/processor-sessions` (Prefix), `/api/sector-templates` (Exact) → web:5001
+- `/` (Prefix) → web:5001 (frontend)
+- `/compute/(.*)` → compute:8000 (separate ingress with rewrite-target to strip `/compute` prefix)
+
+#### K8s Security
+- All pods use `readOnlyRootFilesystem: true` with emptyDir volumes at `/tmp`
+- `runAsNonRoot: true`, `runAsUser: 1000`, all capabilities dropped
+- Pod anti-affinity for HA (spread across nodes)
+- Init containers wait for dependencies (MongoDB, Redis, API) before starting
+
+#### K8s Secrets Required
+- `mongodb-credentials`: `MONGODB_URI`
+- `redis-credentials`: `REDIS_URL`
+- `arangodb-credentials`: `ARANGO_URL`, `ARANGO_PASSWORD`, `ARANGO_DB_NAME`, `ARANGO_USER`, `ARANGO_VERIFY_SSL`
+- `session-secrets`: `JWT_SECRET`, `SESSION_SECRET`, `API_INTERNAL_KEY`
+- `external-api-keys` (optional): `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `GROQ_API_KEY`, `SMTP_HOST/PORT/USER/PASS`
+
+#### Session Cookies
+- Web server: `okiru.web.sid`, `sameSite: lax`, `secure: true` (production)
+- API server: `okiru.api.sid`, `sameSite: lax`, `secure: true` (production)
+- Replit environment auto-detected: uses `sameSite: none` + `secure: true` for iframe proxy
+
+### Azure VM Deployment (Legacy/Alternative)
+- VM IP: `20.164.207.196`
+- Nginx reverse proxy → Docker Compose services
+- Deploy scripts in `deploy/` directory
+- `docker-compose.production.yml` for service orchestration
 
 ## Debug Logging
 

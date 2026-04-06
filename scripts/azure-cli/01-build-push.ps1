@@ -58,9 +58,9 @@ if (-not $SkipBuild) {
     docker build -t "$Registry/okiru-pro/web:$ImageTag" -t "$Registry/okiru-pro/web:latest" -f apps/web/Dockerfile .
     if ($LASTEXITCODE -ne 0) { Write-Error "Web build failed"; exit 1 }
 
-    # Build Compute
+    # Build Compute (context must be apps/Computation-Engine, not repo root)
     Write-Host "Building Compute image..." -ForegroundColor Cyan
-    docker build -t "$Registry/okiru-pro/compute:$ImageTag" -t "$Registry/okiru-pro/compute:latest" -f apps/Computation-Engine/Dockerfile .
+    docker build -t "$Registry/okiru-pro/compute:$ImageTag" -t "$Registry/okiru-pro/compute:latest" -f apps/Computation-Engine/Dockerfile ./apps/Computation-Engine
     if ($LASTEXITCODE -ne 0) { Write-Error "Compute build failed"; exit 1 }
 }
 
