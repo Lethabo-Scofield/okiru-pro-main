@@ -5,7 +5,8 @@ namespace: okiru-pro
 
 resources:
 - ../../base
-- secrets/secrets.yaml
+# secrets are managed directly by the CI workflow via kubectl — NOT via Kustomize
+# to prevent placeholder ${VAR} values from overwriting real cluster secrets on every deploy
 
 patchesStrategicMerge:
 - patches/ingress-patch.yaml
