@@ -1,15 +1,83 @@
+# ArgoCD Application for Staging Environment
+# Tracks the staging overlay and auto-syncs changes
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: okiru-pro-staging
   namespace: argocd
+  finalizers:
+    # Ensure application is not deleted until cascaded resources are deleted
+    - resources-finalizer.argocd.argoproj.io
   annotations:
+    # Sync wave ensures proper ordering (1 = normal priority)
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   source:
-    repoURL: https://github.com/your-org/okiru-pro-main.git
-    targetRevision: develop  # Staging tracks develop branch
+    repoURL: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+    targetRevision: main  # Staging uses main with staging overlay
+    path: kubernetes/infrastructure/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: okiru-pro-staging
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources not in git
+      selfHeal: true     # Reconcile drift automatically
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ReplaceResourceOnImmutableFieldChange=true  # Handle PVC/Deployment immutable fields
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # Ignore replica count changes (controlled by HPA)
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    # Ignore image tag changes (controlled by Image Updater)
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/spec/containers/0/image
+  revisionHistoryLimit: 10
+---
+# ArgoCD Application for Staging Image Updates
+# Automatically updates staging images when new builds are available
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: okiru-pro-staging-images
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: |
+      api=okiruproacrde4d539b.azurecr.io/okiru-pro-api:latest,
+      web=okiruproacrde4d539b.azurecr.io/okiru-pro-web:latest,
+      compute=okiruproacrde4d539b.azurecr.io/okiru-pro-compute:latest
+    # Update strategy for staging: use latest
+    argocd-image-updater.argoproj.io/api.update-strategy: latest
+    argocd-image-updater.argoproj.io/web.update-strategy: latest
+    argocd-image-updater.argoproj.io/compute.update-strategy: latest
+    # Write back to git
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: main
+    # Allow specific tag pattern: <7-char-sha>-<timestamp>
+    argocd-image-updater.argoproj.io/api.helm.image-tag: regexp:^[a-f0-9]{7,}-[0-9]{8,}$
+    argocd-image-updater.argoproj.io/web.helm.image-tag: regexp:^[a-f0-9]{7,}-[0-9]{8,}$
+    argocd-image-updater.argoproj.io/compute.helm.image-tag: regexp:^[a-f0-9]{7,}-[0-9]{8,}$
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+    targetRevision: main
     path: kubernetes/infrastructure/overlays/staging
   destination:
     server: https://kubernetes.default.svc
@@ -18,17 +86,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-      allowEmpty: false
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
-  ignoreDifferences:
-    - group: apps
-      kind: Deployment
-      jsonPointers:
-        - /spec/replicas
