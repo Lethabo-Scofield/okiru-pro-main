@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: okiru-pro-prod
+  namespace: argocd
+  # Prevent manual changes in UI
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/okiru-pro-main.git
+    targetRevision: main
+    path: kubernetes/infrastructure/overlays/prod
+    # Use Kustomize for rendering
+    kustomize:
+      # Enable for strict validation
+      # strict: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: okiru-pro
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources not in git
+      selfHeal: true     # Reconcile drift
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  # Health check for deployment
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # HPA controls replicas
+---
+# Separate Application for image updates (optional)
+# This allows automated image updates via ArgoCD Image Updater
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: okiru-pro-prod-images
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: "api=okiruproacrde4d539b.azurecr.io/okiru-pro/api, web=okiruproacrde4d539b.azurecr.io/okiru-pro/web, compute=okiruproacrde4d539b.azurecr.io/okiru-pro/compute"
+    argocd-image-updater.argoproj.io/api.update-strategy: semver
+    argocd-image-updater.argoproj.io/api.allow-tags: regexp:^[0-9a-f]{7,}-[0-9]{8,}$  # SHA-timestamp format
+    argocd-image-updater.argoproj.io/web.update-strategy: semver
+    argocd-image-updater.argoproj.io/web.allow-tags: regexp:^[0-9a-f]{7,}-[0-9]{8,}$
+    argocd-image-updater.argoproj.io/compute.update-strategy: semver
+    argocd-image-updater.argoproj.io/compute.allow-tags: regexp:^[0-9a-f]{7,}-[0-9]{8,}$
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+    argocd-image-updater.argoproj.io/git-branch: main
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/okiru-pro-main.git
+    targetRevision: main
+    path: kubernetes/infrastructure/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: okiru-pro
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

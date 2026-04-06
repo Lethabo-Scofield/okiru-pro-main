@@ -5,6 +5,7 @@ namespace: okiru-pro-staging
 
 resources:
   - ../../base
+  - secrets/secrets.yaml
 
 patchesStrategicMerge:
   - patches/ingress-patch.yaml
@@ -12,12 +13,17 @@ patchesStrategicMerge:
   - patches/replica-count.yaml
 
 images:
+  # TEMPORARY: Using placeholder images for infrastructure testing
+  # GitHub Actions will update these to actual ACR images on deployment
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-    newTag: staging
+    newName: nginx
+    newTag: alpine
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-    newTag: staging
+    newName: nginx
+    newTag: alpine
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-    newTag: staging
+    newName: busybox
+    newTag: "1.36"
 
 commonLabels:
   environment: staging

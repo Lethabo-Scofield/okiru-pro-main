@@ -15,10 +15,14 @@ data:
   # Web Configuration
   WEB_PORT: "5001"
   WEB_HOST: "0.0.0.0"
+  API_URL: "https://api.okiru-pro.com"
+  NEXT_PUBLIC_API_URL: "https://api.okiru-pro.com"
+  API_SERVER_URL: "http://api:5000"
 
   # Computation Engine
   COMPUTE_PORT: "8000"
   COMPUTE_HOST: "0.0.0.0"
+  COMPUTE_ENGINE_URL: "http://compute:8000"
 
   # Database Configuration (non-sensitive)
   MONGODB_HOST: "mongodb"

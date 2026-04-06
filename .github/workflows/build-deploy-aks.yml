@@ -141,6 +141,11 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
 
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
       - name: Get AKS credentials
         run: |
           az aks get-credentials \
@@ -148,27 +153,28 @@ jobs:
             --name ${{ env.CLUSTER_NAME }} \
             --overwrite-existing
 
-      - name: Update deployments with unique image tags
+      - name: Update Kustomize image tags and deploy
         run: |
           IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
           REGISTRY="${{ env.CONTAINER_REGISTRY_URL }}"
           
           echo "Deploying with image tag: ${IMAGE_TAG}"
           
-          # Update API deployment
-          kubectl set image deployment/api \
-            api="${REGISTRY}/okiru-pro/api:${IMAGE_TAG}" \
-            -n ${{ env.NAMESPACE }}
+          cd kubernetes/infrastructure/overlays/prod
           
-          # Update Web deployment  
-          kubectl set image deployment/web \
-            web="${REGISTRY}/okiru-pro/web:${IMAGE_TAG}" \
-            -n ${{ env.NAMESPACE }}
+          # Update image tags in kustomization.yaml
+          kustomize edit set image \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/api=${REGISTRY}/okiru-pro/api:${IMAGE_TAG} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/web=${REGISTRY}/okiru-pro/web:${IMAGE_TAG} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/compute=${REGISTRY}/okiru-pro/compute:${IMAGE_TAG}
           
-          # Update Compute deployment
-          kubectl set image deployment/compute \
-            compute="${REGISTRY}/okiru-pro/compute:${IMAGE_TAG}" \
-            -n ${{ env.NAMESPACE }}
+          echo "=== Updated kustomization.yaml ==="
+          cat kustomization.yaml
+          
+          cd ..
+          
+          echo "=== Rendering and applying Kustomize manifests ==="
+          kustomize build prod | kubectl apply -f -
 
       - name: Wait for rollouts
         run: |

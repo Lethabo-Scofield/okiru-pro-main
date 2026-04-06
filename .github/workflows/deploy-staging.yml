@@ -109,20 +109,19 @@ jobs:
 
       - name: Configure kubectl
         run: |
-          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
-          export KUBECONFIG=kubeconfig
+          KUBECONFIG_FILE="$GITHUB_WORKSPACE/kubeconfig"
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > "$KUBECONFIG_FILE"
+          export KUBECONFIG="$KUBECONFIG_FILE"
+          echo "KUBECONFIG=$KUBECONFIG_FILE" >> $GITHUB_ENV
           kubectl config current-context
           kubectl get nodes
 
       - name: Create namespace if not exists
         run: |
-          export KUBECONFIG=kubeconfig
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create secrets from GitHub Secrets
         run: |
-          export KUBECONFIG=kubeconfig
-
           # Create mongodb-credentials secret
           kubectl create secret generic mongodb-credentials \
             --namespace=${{ env.NAMESPACE }} \
@@ -175,8 +174,6 @@ jobs:
 
       - name: Label secrets for management tracking
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Labeling secrets for management tracking ==="
 
           kubectl label secret -n ${{ env.NAMESPACE }} mongodb-credentials \
@@ -207,7 +204,6 @@ jobs:
 
       - name: Update Kustomize image tags
         run: |
-          export KUBECONFIG=kubeconfig
           cd kubernetes/infrastructure/overlays/staging
 
           echo "=== Updating image tags in Kustomize overlay ==="
@@ -223,7 +219,6 @@ jobs:
         id: deploy
         timeout-minutes: 15
         run: |
-          export KUBECONFIG=kubeconfig
           cd kubernetes/infrastructure
 
           echo "=== Rendering and applying Kustomize manifests ==="
@@ -241,8 +236,6 @@ jobs:
         if: ${{ !inputs.skip_tests }}
         id: smoke_tests
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Waiting for services to stabilize ==="
           sleep 30
 
@@ -302,8 +295,6 @@ jobs:
       - name: Run service readiness checks
         if: ${{ !inputs.skip_tests }}
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Checking service readiness ==="
 
           kubectl get pods -n ${{ env.NAMESPACE }}
@@ -344,8 +335,6 @@ jobs:
       - name: Rollback on failure
         if: failure() && steps.deploy.outcome == 'success'
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Rolling back deployments ==="
           kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
           kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
@@ -361,4 +350,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f kubeconfig
+          rm -f "$GITHUB_WORKSPACE/kubeconfig"

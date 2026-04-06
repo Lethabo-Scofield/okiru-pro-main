@@ -19,9 +19,6 @@ resources:
   - configmaps/arangodb-config.yaml
   - configmaps/redis-config.yaml
 
-  # Secrets (template - will be patched in overlays)
-  - secrets/secrets-template.yaml
-
   # Database Deployments
   - deployments/mongodb.yaml
   - deployments/arangodb.yaml
@@ -40,6 +37,16 @@ resources:
 
   # HPA
   - deployments/hpa.yaml
+
+  # Pod Disruption Budgets
+  - deployments/poddisruptionbudgets.yaml
+
+  # Backups
+  - backups/mongodb-backup.yaml
+  - backups/arangodb-backup.yaml
+
+  # Network Policies (uncomment to enable)
+  # - network-policies.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: okiru-pro

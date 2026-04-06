@@ -67,11 +67,26 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WEB_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
             - name: API_URL
               valueFrom:
                 configMapKeyRef:
                   name: app-config
                   key: API_URL
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEXT_PUBLIC_API_URL
+            - name: API_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: API_SERVER_URL
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -82,6 +97,39 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: SESSION_SECRET
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: GROQ_API_KEY
+                  optional: true
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_HOST
+                  optional: true
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_PORT
+                  optional: true
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_USER
+                  optional: true
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_PASS
+                  optional: true
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
           resources:
             requests:
               memory: "256Mi"
@@ -126,3 +174,7 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 200Mi
