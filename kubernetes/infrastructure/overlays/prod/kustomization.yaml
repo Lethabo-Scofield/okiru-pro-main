@@ -13,6 +13,7 @@ patchesStrategicMerge:
 - patches/replica-count.yaml
 - patches/configmap-patch.yaml
 - patches/pvc-storage-class.yaml
+- patches/security-context.yaml
 
 # Images - Using 'latest' tag for flexibility during development
 # For production stability, use specific digests or tags:
