@@ -1,10 +1,13 @@
+# Flux Kustomization for Production Environment
+# Automatically syncs and applies kubernetes/infrastructure/overlays/prod
+---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: okiru-pro-prod
   namespace: flux-system
 spec:
-  interval: 5m0s
+  interval: 10m0s  # Longer interval for production (more conservative)
   path: ./kubernetes/infrastructure/overlays/prod
   prune: true
   retryInterval: 2m0s
@@ -12,9 +15,9 @@ spec:
     kind: GitRepository
     name: okiru-pro
   targetNamespace: okiru-pro
-  timeout: 3m0s
+  timeout: 5m0s
   wait: true
-  # Health checks
+  # Health checks for production deployments
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment
@@ -24,18 +27,31 @@ spec:
       kind: Deployment
       name: web
       namespace: okiru-pro
-  # Post-deploy notification
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: compute
+      namespace: okiru-pro
+  # Post-build variable substitution from ConfigMap
   postBuild:
     substituteFrom:
       - kind: ConfigMap
         name: cluster-vars
+        optional: true
+  # Prevent accidental deletion
+  deletionPolicy: Annotate
+  # Suspend for maintenance (can be toggled via CLI)
+  # suspend: false
 ---
-# ImageUpdateAutomation for automated image tag updates
+# ImageUpdateAutomation for production
+# Disabled by default - enable after setting up proper testing pipeline
 apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageUpdateAutomation
 metadata:
   name: okiru-pro-prod
   namespace: flux-system
+  annotations:
+    # Set to "true" to enable automated production deployments
+    fluxcd.io/automated: "false"
 spec:
   interval: 5m0s
   sourceRef:
@@ -49,7 +65,7 @@ spec:
       authorName: Flux Bot
       authorEmail: flux@okiru.local
       messageTemplate: |
-        Automated image update
+        [prod] Automated image update
 
         Images:
         {{ range .Updated.Images -}}
@@ -58,34 +74,6 @@ spec:
     push:
       branch: main
   policy:
-    # Only run if tests pass (optional)
-    # semver:
-    #   range: 1.x.x
----
-# ImagePolicy for API
-apiVersion: image.toolkit.fluxcd.io/v1beta1
-kind: ImagePolicy
-metadata:
-  name: okiru-api
-  namespace: flux-system
-spec:
-  imageRepositoryRef:
-    name: okiru-api
-  filterTags:
-    pattern: '^[a-f0-9]{7,}-(?P<ts>[0-9]{8,})$'
-    extract: '$ts'
-  policy:
-    alphabetical:
-      order: asc
----
-# ImageRepository for API
-apiVersion: image.toolkit.fluxcd.io/v1beta1
-kind: ImageRepository
-metadata:
-  name: okiru-api
-  namespace: flux-system
-spec:
-  image: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  interval: 1m0s
-  secretRef:
-    name: acr-credentials  # ACR pull secret
+    # Only deploy images that pass semver validation
+    semver:
+      range: ">=1.0.0"

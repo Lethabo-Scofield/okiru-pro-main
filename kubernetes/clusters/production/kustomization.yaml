@@ -1,0 +1,35 @@
+# Flux Bootstrap Kustomization
+# This is the entry point for Flux CD to bootstrap the production cluster
+# Reference: https://fluxcd.io/docs/concepts/
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flux-system
+resources:
+  # Flux GitRepository sources
+  - ../../gitops/flux/gitrepository.yaml
+  # Flux Kustomizations (environments)
+  - ../../gitops/flux/kustomization-prod.yaml
+  # Flux Image Automation
+  - ../../gitops/flux/image-automation.yaml
+  # Infrastructure components
+  - ../../infrastructure/base/namespace.yaml
+  - ../../infrastructure/cert-manager/cluster-issuer.yaml
+  # Uncomment to enable external secrets
+  # - ../../external-secrets/secretstore-template.yaml
+  # Uncomment to enable backup automation
+  # - ../../infrastructure/base/backups/mongodb-backup.yaml
+  # - ../../infrastructure/base/backups/arangodb-backup.yaml
+  # Uncomment to enable network policies
+  # - ../../infrastructure/base/network-policies.yaml
+  # Uncomment to enable pod disruption budgets
+  # - ../../infrastructure/base/deployments/poddisruptionbudgets.yaml
+
+# Note: This file is used by `flux bootstrap` command
+# Example:
+#   flux bootstrap github \
+#     --owner=Lethabo-Scofield \
+#     --repository=okiru-pro-main \
+#     --branch=main \
+#     --path=kubernetes/clusters/production \
+#     --personal

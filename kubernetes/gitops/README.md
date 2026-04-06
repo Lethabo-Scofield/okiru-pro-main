@@ -1,115 +1,273 @@
 # GitOps Configuration
 
-This directory contains GitOps configurations for declarative continuous delivery using either **ArgoCD** or **FluxCD**.
+This directory contains GitOps configurations for both **Flux CD** and **ArgoCD**.
+You can choose either tool to manage your cluster state declaratively.
 
 ## Overview
 
-GitOps principles applied to Okiru Pro:
-- **Git as Single Source of Truth**: All cluster state defined in this repository
-- **Automated Synchronization**: Changes to git are automatically applied to the cluster
-- **Drift Detection**: Manual cluster changes are automatically reverted
-- **Declarative Infrastructure**: Infrastructure defined as code (Kustomize manifests)
+GitOps ensures that the state of your cluster matches the configuration in Git.
+Any changes pushed to the repository are automatically applied to the cluster.
 
-## Directory Structure
+## Choose Your GitOps Tool
 
-```
-gitops/
-├── argocd/         # ArgoCD Application manifests
-│   ├── application-prod.yaml
-│   ├── application-staging.yaml
-│   └── README.md
-└── flux/           # Flux GitRepository and Kustomization manifests
-    ├── gitrepository.yaml
-    ├── kustomization-prod.yaml
-    ├── kustomization-staging.yaml
-    └── README.md
-```
+### Option 1: Flux CD (Recommended for AKS)
 
-## Current State: GitHub Actions
+Flux is a CNCF-graduated project that works well with Azure Kubernetes Service.
 
-The repository currently uses GitHub Actions for deployment (see `.github/workflows/`).
+**Advantages:**
+- Native multi-tenancy support
+- Built-in image automation
+- Azure Key Vault integration (for secrets)
+- No persistent UI required (reduces attack surface)
 
-### GitHub Actions Flow
-```
-Code Push → Build Images → Update Kustomize → Apply to Cluster
-```
-
-### To Migrate to GitOps
-
-GitOps moves the "Apply to Cluster" step from CI/CD to a cluster-based controller:
-
-```
-Code Push → Build Images → GitOps Controller Applies to Cluster
-                                    ↑
-Git Repository (manifests) ←───────┘
-```
-
-## Choosing ArgoCD vs Flux
-
-| Factor | Recommendation |
-|--------|---------------|
-| **Team Experience** | Use what your team knows |
-| **UI Preference** | ArgoCD has better web UI |
-| **Simplicity** | Flux is simpler to operate |
-| **Azure Integration** | Both work well with AKS |
-| **Image Automation** | Flux has better native support |
-
-## Migration Path
-
-1. **Phase 1**: Continue using GitHub Actions for deployments (current)
-2. **Phase 2**: Install GitOps tool (ArgoCD or Flux) alongside GitHub Actions
-3. **Phase 3**: Let GitOps manage deployments, use GitHub Actions only for image building
-4. **Phase 4**: Enable automated image updates (optional)
-
-## Quick Start: ArgoCD
+**Installation:**
 
 ```bash
-# Install ArgoCD
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# Install Flux CLI
+choco install flux
 
-# Apply production Application
-kubectl apply -f argocd/application-prod.yaml
-
-# Access UI
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# Login with admin user (get password: kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d)
-```
-
-## Quick Start: Flux
-
-```bash
-# Bootstrap Flux
+# Bootstrap Flux on your cluster
 flux bootstrap github \
-  --owner=your-org \
+  --owner=Lethabo-Scofield \
   --repository=okiru-pro-main \
   --branch=main \
-  --path=./kubernetes/gitops/flux \
-  --personal
-
-# Or apply manifests directly
-kubectl apply -f flux/gitrepository.yaml
-kubectl apply -f flux/kustomization-prod.yaml
+  --path=kubernetes/clusters/production \
+  --personal \
+  --components-extra=image-reflector-controller,image-automation-controller
 ```
 
-## Benefits of GitOps
+**Apply GitOps Configuration:**
 
-1. **Audit Trail**: All changes tracked in git history
-2. **Rollback**: Easy rollback to any previous state via git revert
-3. **No CI Access to Cluster**: Cluster credentials stay in-cluster
-4. **Self-Healing**: Drift is automatically corrected
-5. **Separation of Concerns**: CI builds images, GitOps deploys them
+```bash
+# Apply GitRepository sources
+kubectl apply -f kubernetes/gitops/flux/gitrepository.yaml
+
+# Apply Kustomizations (one per environment)
+kubectl apply -f kubernetes/gitops/flux/kustomization-staging.yaml
+kubectl apply -f kubernetes/gitops/flux/kustomization-prod.yaml
+
+# Apply Image Automation (for automatic image updates)
+kubectl apply -f kubernetes/gitops/flux/image-automation.yaml
+```
+
+**View Status:**
+
+```bash
+# Check GitRepository sync status
+flux get sources git
+
+# Check Kustomization status
+flux get kustomizations
+
+# Check Image Repository (ACR) status
+flux get image repositories
+
+# Check Image Policies
+flux get image policies
+
+# Check all resources
+flux get all
+```
+
+**Trigger Manual Sync:**
+
+```bash
+# Reconcile GitRepository immediately
+flux reconcile source git okiru-pro
+
+# Reconcile Kustomization immediately
+flux reconcile kustomization okiru-pro-prod
+```
+
+### Option 2: ArgoCD
+
+ArgoCD provides a rich web UI and is excellent for visualizing your deployments.
+
+**Advantages:**
+- Rich web UI for visualization
+- SSO integration
+- Application grouping and project management
+- Easy rollback via UI
+
+**Installation:**
+
+```bash
+# Create ArgoCD namespace
+kubectl create namespace argocd
+
+# Install ArgoCD
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# (Optional) Install ArgoCD Image Updater for automatic image updates
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
+```
+
+**Access the UI:**
+
+```bash
+# Port-forward to access UI
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+# Get admin password (initial)
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+```
+
+Then open https://localhost:8080 in your browser.
+
+**Apply Applications:**
+
+```bash
+# Apply staging application
+kubectl apply -f kubernetes/gitops/argocd/application-staging.yaml
+
+# Apply production application
+kubectl apply -f kubernetes/gitops/argocd/application-prod.yaml
+```
+
+**Configure Git Credentials (for private repos):**
+
+```bash
+# Create SSH key pair for ArgoCD
+ssh-keygen -t ed25519 -C "argocd@okiru.local" -f argocd-ssh-key
+
+# Add public key to GitHub deploy keys
+
+# Create secret in ArgoCD namespace
+kubectl create secret generic github-ssh-key \
+  -n argocd \
+  --from-file=ssh-privatekey=argocd-ssh-key \
+  --from-file=ssh-publickey=argocd-ssh-key.pub
+```
+
+## Image Automation
+
+Both tools support automatic image updates:
+
+### Staging (Automatic)
+
+Staging automatically deploys new images as they are built.
+
+- **Flux:** Uses `ImagePolicy` with `alphabetical` ordering (newest SHA tag)
+- **ArgoCD:** Uses Image Updater with `latest` strategy
+
+### Production (Manual/Controlled)
+
+Production requires explicit versioning for controlled rollouts.
+
+- **Flux:** Uses `ImagePolicy` with `semver` constraints (e.g., `>=1.0.0`)
+- **ArgoCD:** Uses Image Updater with `semver` strategy
+
+To enable production automation:
+
+1. Tag releases with semantic versions (e.g., `v1.2.3`)
+2. Enable the ImageUpdateAutomation (Flux) or set `enabled: "true"` (ArgoCD)
+3. Ensure automated tests pass in staging before production deployment
 
 ## Security Considerations
 
-- ArgoCD/Flux use read-only access to git repository
-- Cluster credentials are not in CI/CD
-- Secrets are managed separately (External Secrets Operator)
-- NetworkPolicies restrict GitOps tool access
+### Secrets Management
+
+GitOps tools do NOT handle secrets well. Use these alternatives:
+
+1. **External Secrets Operator** (recommended): Syncs secrets from Azure Key Vault
+2. **Sealed Secrets**: Encrypt secrets for Git storage
+3. **SOPS**: Encrypt secrets with Azure Key Vault
+
+See `kubernetes/external-secrets/` for Azure Key Vault integration.
+
+### RBAC
+
+Restrict GitOps tool permissions:
+
+- Flux: Use `ServiceAccount` with minimal permissions per namespace
+- ArgoCD: Use projects to restrict application deployment scope
+
+### Network Policies
+
+```yaml
+# Restrict GitOps traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gitops
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: okiru-pro
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: flux-system  # or argocd
+```
+
+## Troubleshooting
+
+### Flux
+
+```bash
+# Check events
+flux events
+
+# Check logs
+kubectl logs -n flux-system deployment/kustomize-controller
+kubectl logs -n flux-system deployment/source-controller
+
+# Suspend/Resume automation
+flux suspend kustomization okiru-pro-prod
+flux resume kustomization okiru-pro-prod
+```
+
+### ArgoCD
+
+```bash
+# Check application status
+argocd app get okiru-pro-prod
+
+# Sync application manually
+argocd app sync okiru-pro-prod
+
+# View diff between Git and cluster
+argocd app diff okiru-pro-prod
+```
+
+## Migration Path
+
+To migrate from CI/CD to GitOps:
+
+1. **Phase 1:** Deploy GitOps tooling alongside existing CI/CD
+2. **Phase 2:** Enable GitOps with `prune: false` (no deletion of existing resources)
+3. **Phase 3:** Once stable, enable `prune: true` and reduce CI/CD to build-only
+4. **Phase 4:** Disable CI/CD deployment steps, keep only for builds and tests
+
+## Files Reference
+
+```
+kubernetes/gitops/
+├── README.md                           # This file
+├── flux/
+│   ├── gitrepository.yaml              # GitRepository CRDs (sources)
+│   ├── kustomization-staging.yaml      # Staging Kustomization + ImageUpdateAutomation
+│   ├── kustomization-prod.yaml       # Production Kustomization + ImageUpdateAutomation
+│   └── image-automation.yaml           # ImageRepository + ImagePolicy for all services
+└── argocd/
+    ├── application-staging.yaml        # Staging Application + Image Updater config
+    └── application-prod.yaml           # Production Application + Image Updater config
+```
 
 ## Next Steps
 
-1. Review the setup instructions in `argocd/README.md` or `flux/README.md`
-2. Set up a staging environment first to validate
-3. Migrate production after staging is stable
-4. Consider image automation for fully automated deployments
+1. Choose GitOps tool (Flux or ArgoCD)
+2. Install on cluster
+3. Apply configurations
+4. Verify sync works
+5. (Optional) Enable image automation
+6. (Optional) Set up notifications (Slack, Teams, Discord)
+
+## Resources
+
+- [Flux Documentation](https://fluxcd.io/docs/)
+- [ArgoCD Documentation](https://argo-cd.readthedocs.io/)
+- [GitOps Principles](https://opengitops.dev/)

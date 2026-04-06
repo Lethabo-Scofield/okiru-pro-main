@@ -1,3 +1,6 @@
+# Flux Kustomization for Staging Environment
+# Automatically syncs and applies kubernetes/infrastructure/overlays/staging
+---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -14,6 +17,7 @@ spec:
   targetNamespace: okiru-pro-staging
   timeout: 3m0s
   wait: true
+  # Health checks ensure deployments are ready before marking sync as successful
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment
@@ -23,17 +27,51 @@ spec:
       kind: Deployment
       name: web
       namespace: okiru-pro-staging
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: compute
+      namespace: okiru-pro-staging
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: mongodb
+      namespace: okiru-pro-staging
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: arangodb
+      namespace: okiru-pro-staging
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: redis
+      namespace: okiru-pro-staging
 ---
-# Separate GitRepository for staging (tracks develop branch)
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
+# ImageUpdateAutomation for staging - auto-apply new images
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
 metadata:
   name: okiru-pro-staging
   namespace: flux-system
 spec:
-  interval: 1m0s
-  ref:
-    branch: develop
-  secretRef:
-    name: github-token
-  url: https://github.com/your-org/okiru-pro-main.git
+  interval: 2m0s
+  sourceRef:
+    kind: GitRepository
+    name: okiru-pro-staging
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      authorName: Flux Bot
+      authorEmail: flux@okiru.local
+      messageTemplate: |
+        [staging] Automated image update
+
+        Images:
+        {{ range .Updated.Images -}}
+        - {{.}}
+        {{ end -}}
+    push:
+      branch: main
+  policy:
+    # For staging, use latest images (no semver constraint)
+    semver:
+      range: "*"
