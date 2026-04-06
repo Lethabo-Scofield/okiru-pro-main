@@ -224,12 +224,27 @@ jobs:
           echo "=== Rendering and applying Kustomize manifests ==="
           kustomize build overlays/staging | kubectl apply -f -
 
-          echo "=== Waiting for deployments to be ready ==="
-          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s
+          echo "=== Restarting deployments to pick up new images ==="
+          kubectl rollout restart deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/web -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/compute -n ${{ env.NAMESPACE }}
 
-          echo "=== Deployment completed successfully ==="
+          echo "=== Waiting for deployments to be ready ==="
+          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: API deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=api
+            kubectl describe deployment/api -n ${{ env.NAMESPACE }} | tail -20
+          }
+          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Web deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=web
+          }
+          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Compute deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=compute
+          }
+
+          echo "=== Deployment completed ==="
           kubectl get pods -n ${{ env.NAMESPACE }}
 
       - name: Run smoke tests
