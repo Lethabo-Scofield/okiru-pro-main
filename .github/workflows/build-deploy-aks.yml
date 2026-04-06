@@ -48,21 +48,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: '9.x'
+          version: '10.26.1'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build types
+        run: pnpm --filter @okiru/types build
 
       - name: Build API
         run: pnpm --filter @okiru/api build
 
       - name: Build Web
-        run: pnpm --filter @okiru/web build
+        run: pnpm --filter rest-express build
+        env:
+          VITE_API_URL: https://api.okiru.co.za
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
