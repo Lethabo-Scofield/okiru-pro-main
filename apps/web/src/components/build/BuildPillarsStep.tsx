@@ -28,6 +28,7 @@ import type { ClientInformationData } from "./ClientInformationForm";
 import type { FinancialsData } from "./FinancialsForm";
 import { AutoFillButton, type AutoFillTarget } from "@/components/AutoFillButton";
 import { getLakeTradingPillarData } from "@/lib/lakeTradingDemo";
+import { useBbeeStore } from "@toolkit/lib/store";
 
 // ============================================================================
 // Pillar config
@@ -46,18 +47,39 @@ interface PillarConfig {
   includeInGrandTotal: boolean;
 }
 
-// Issue 1: Management Control & Employment Equity combined into one pillar
-const PILLARS: PillarConfig[] = [
-  { id: 'ownership',              code: 'OWN',    name: 'Ownership',                    description: 'Voting rights, economic interest, net value',     icon: Building2,     maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 10,  includeInGrandTotal: true },
+// Default pillar config (used when calculatorConfig not loaded yet)
+const DEFAULT_PILLARS: PillarConfig[] = [
+  { id: 'ownership',              code: 'OWN',    name: 'Ownership',                    description: 'Voting rights, economic interest, net value',     icon: Building2,     maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
   { id: 'management',             code: 'MC+EE',  name: 'Management Control & Employment Equity', description: 'Board, executive, EAP senior/middle/junior, EE levels', icon: Briefcase,     maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  // Issue 1: employmentEquity pillar removed (merged with management)
-  { id: 'skills',                 code: 'SKILLS', name: 'Skills Development',           description: 'Training spend, bursaries, LAI, absorption',        icon: GraduationCap, maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 10,  includeInGrandTotal: true },
-  { id: 'procurement',            code: 'PROC',   name: 'Preferential Procurement',     description: 'TMPS-based BEE procurement',                     icon: ShoppingCart,  maxPoints: 29, hasSubMinimum: true,  subMinimumThreshold: 11.6, includeInGrandTotal: true },
-  { id: 'supplierDevelopment',    code: 'SD',     name: 'Supplier Development',         description: 'SD contributions (2% NPAT target, max 10)',       icon: Handshake,     maxPoints: 10, hasSubMinimum: true,  subMinimumThreshold: 4,   includeInGrandTotal: true },
-  { id: 'enterpriseDevelopment',  code: 'ED',     name: 'Enterprise Development',       description: 'ED contributions (1% NPAT + bonuses, max 7)',     icon: Handshake,     maxPoints: 7,  hasSubMinimum: true,  subMinimumThreshold: 2,   includeInGrandTotal: true },
+  { id: 'skills',                 code: 'SKILLS', name: 'Skills Development',           description: 'Training spend, bursaries, LAI, absorption',        icon: GraduationCap, maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
+  { id: 'procurement',            code: 'PROC',   name: 'Preferential Procurement',     description: 'TMPS-based BEE procurement',                     icon: ShoppingCart,  maxPoints: 29, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
+  { id: 'supplierDevelopment',    code: 'SD',     name: 'Supplier Development',         description: 'SD contributions (2% NPAT target, max 10)',       icon: Handshake,     maxPoints: 10, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
+  { id: 'enterpriseDevelopment',  code: 'ED',     name: 'Enterprise Development',       description: 'ED contributions (1% NPAT + bonuses, max 7)',     icon: Handshake,     maxPoints: 7,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
   { id: 'sed',                    code: 'SED',    name: 'Socio-Economic Development',   description: 'SED as % of NPAT',                                icon: Heart,         maxPoints: 5,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
   { id: 'yes',                    code: 'YES',    name: 'YES Initiative',               description: 'Youth placement tiers (included in scorecard total)', icon: TrendingUp, maxPoints: 3,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
 ];
+
+// Generate dynamic pillar config from calculatorConfig
+function usePillarConfig(): PillarConfig[] {
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  
+  if (!calculatorConfig?.pillarConfigs) {
+    return DEFAULT_PILLARS;
+  }
+  
+  const pc = calculatorConfig.pillarConfigs;
+  
+  return [
+    { ...DEFAULT_PILLARS[0], maxPoints: pc.ownership?.maxPoints ?? 25, hasSubMinimum: pc.ownership?.hasSubMinimum ?? true, subMinimumThreshold: pc.ownership?.subMinimumPercent ?? 40 },
+    { ...DEFAULT_PILLARS[1], maxPoints: pc.managementControl?.maxPoints ?? 19, hasSubMinimum: pc.managementControl?.hasSubMinimum ?? false, subMinimumThreshold: pc.managementControl?.subMinimumPercent ?? 0 },
+    { ...DEFAULT_PILLARS[2], maxPoints: pc.skillsDevelopment?.maxPoints ?? 25, hasSubMinimum: pc.skillsDevelopment?.hasSubMinimum ?? true, subMinimumThreshold: pc.skillsDevelopment?.subMinimumPercent ?? 40 },
+    { ...DEFAULT_PILLARS[3], maxPoints: pc.preferentialProcurement?.maxPoints ?? 29, hasSubMinimum: pc.preferentialProcurement?.hasSubMinimum ?? true, subMinimumThreshold: pc.preferentialProcurement?.subMinimumPercent ?? 40 },
+    { ...DEFAULT_PILLARS[4], maxPoints: pc.supplierDevelopment?.maxPoints ?? 10, hasSubMinimum: pc.supplierDevelopment?.hasSubMinimum ?? true, subMinimumThreshold: pc.supplierDevelopment?.subMinimumPercent ?? 40 },
+    { ...DEFAULT_PILLARS[5], maxPoints: pc.enterpriseDevelopment?.maxPoints ?? 7, hasSubMinimum: pc.enterpriseDevelopment?.hasSubMinimum ?? false, subMinimumThreshold: pc.enterpriseDevelopment?.subMinimumPercent ?? 0 },
+    { ...DEFAULT_PILLARS[6], maxPoints: pc.socioEconomicDevelopment?.maxPoints ?? 5, hasSubMinimum: pc.socioEconomicDevelopment?.hasSubMinimum ?? false, subMinimumThreshold: pc.socioEconomicDevelopment?.subMinimumPercent ?? 0 },
+    DEFAULT_PILLARS[7], // YES is always 3 points
+  ];
+}
 
 // ============================================================================
 // Types
@@ -100,6 +122,7 @@ export function BuildPillarsStep({
 }: BuildPillarsStepProps) {
   const [activePillar, setActivePillar] = useState<string>('ownership');
   const { syncToStore } = useFoundationSync(sessionId);
+  const PILLARS = usePillarConfig();
 
   useEffect(() => {
     if (clientInfo && financials) {

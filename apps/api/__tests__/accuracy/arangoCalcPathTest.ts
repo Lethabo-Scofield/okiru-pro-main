@@ -289,13 +289,18 @@ function buildSectorConfigFromArango(full: FullScorecard): SectorConfig {
 
   const mc: MCTargets = {
     boardBlackTarget: mcBoardB ? getTarget(mcBoardB!, 'mc_board_black').value : 0.50,
-    boardBlackMaxPts: mcBoardB ? mcBoardB!.maxPoints : 1,
+    boardBlackMaxPts: mcBoardB ? mcBoardB!.maxPoints : 2,
     boardBWTarget: mcBoardBw ? getTarget(mcBoardBw!, 'mc_board_bw').value : 0.25,
     boardBWMaxPts: mcBoardBw ? mcBoardBw!.maxPoints : 1,
-    execBlackTarget: mcExecB ? getTarget(mcExecB!, 'mc_exec_black').value : 0.60,
+    execBlackTarget: mcExecB ? getTarget(mcExecB!, 'mc_exec_black').value : 0.50,
     execBlackMaxPts: mcExecB ? mcExecB!.maxPoints : 2,
     execBWTarget: mcExecBw ? getTarget(mcExecBw!, 'mc_exec_bw').value : 0.30,
     execBWMaxPts: mcExecBw ? mcExecBw!.maxPoints : 2,
+    otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+    otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+    seniorMaxPts: 2, seniorBWMaxPts: 1,
+    middleMaxPts: 2, middleBWMaxPts: 1,
+    juniorMaxPts: 1, juniorBWMaxPts: 1,
   };
 
   // Employment Equity
@@ -317,10 +322,16 @@ function buildSectorConfigFromArango(full: FullScorecard): SectorConfig {
   const sdBursary = findIndicator(pillars, 'skillsDevelopment', 'sd_bursaries');
 
   const skills: SkillsTargets = {
+    learningProgrammesMaxPts: sdSpend ? sdSpend!.maxPoints : 6,
+    bursaryMaxPts: sdBursary ? sdBursary!.maxPoints : 4,
+    disabledLearningMaxPts: 4,
+    learnershipsMaxPts: 6,
+    absorptionMaxPts: 5,
     overallSpendPercent: sdSpend ? getTarget(sdSpend!, 'sd_spend_black').value * 100 : 3.5,
-    overallMaxPts: sdSpend ? sdSpend!.maxPoints : 20,
     bursarySpendPercent: sdBursary ? getTarget(sdBursary!, 'sd_bursaries').value * 100 : 2.5,
-    bursaryMaxPts: sdBursary ? sdBursary!.maxPoints : 5,
+    disabledSpendPercent: 0.3,
+    learnershipTargetPercent: 5.0,
+    absorptionTargetPercent: 2.5,
   };
 
   // Procurement
@@ -339,11 +350,12 @@ function buildSectorConfigFromArango(full: FullScorecard): SectorConfig {
     qseMaxPts: ppQse ? ppQse!.maxPoints : 3,
     emeTarget: ppEme ? getTarget(ppEme!, 'pp_eme').value : 0.15,
     emeMaxPts: ppEme ? ppEme!.maxPoints : 4,
-    bo51Target: pp51 ? getTarget(pp51!, 'pp_51bo').value : 0.40,
-    bo51MaxPts: pp51 ? pp51!.maxPoints : 10,
+    bo51Target: pp51 ? getTarget(pp51!, 'pp_51bo').value : 0.50,
+    bo51MaxPts: pp51 ? pp51!.maxPoints : 11,
     bwo30Target: pp30 ? getTarget(pp30!, 'pp_30bwo').value : 0.12,
-    bwo30MaxPts: pp30 ? pp30!.maxPoints : 5,
-    bonusMaxPts: 2,
+    bwo30MaxPts: pp30 ? pp30!.maxPoints : 4,
+    dgTarget: 0.02,
+    dgMaxPts: 2,
   };
 
   // ESD
@@ -355,6 +367,8 @@ function buildSectorConfigFromArango(full: FullScorecard): SectorConfig {
     sdMaxPts: esdSd ? esdSd!.maxPoints : 10,
     edPercent: esdEd ? getTarget(esdEd!, 'esd_ed').value * 100 : 1.0,
     edMaxPts: esdEd ? esdEd!.maxPoints : 5,
+    edGraduationBonus: 1,
+    edJobsBonus: 1,
   };
 
   // SED
@@ -389,11 +403,16 @@ function buildSectorConfigFromArango(full: FullScorecard): SectorConfig {
       employmentEquity: pc(pillarMap['employmentEquity'] ?? defaultPillar),
       skillsDevelopment: pc(pillarMap['skillsDevelopment'] ?? defaultPillar),
       preferentialProcurement: pc(pillarMap['preferentialProcurement'] ?? defaultPillar),
-      enterpriseSupplierDevelopment: pc(pillarMap['enterpriseSupplierDevelopment'] ?? defaultPillar),
+      supplierDevelopment: pc(pillarMap['supplierDevelopment'] ?? pillarMap['enterpriseSupplierDevelopment'] ?? defaultPillar),
+      enterpriseDevelopment: pc(pillarMap['enterpriseDevelopment'] ?? defaultPillar),
       socioEconomicDevelopment: pc(pillarMap['socioEconomicDevelopment'] ?? defaultPillar),
     },
     targets: { ownership, managementControl: mc, employmentEquity: ee, skills, procurement, esd, sed },
     levelThresholds,
+    recognitionTable: RCOGP_GENERIC.recognitionTable,
+    benefitFactors: RCOGP_GENERIC.benefitFactors,
+    categoryWeightings: RCOGP_GENERIC.categoryWeightings,
+    industryNorms: RCOGP_GENERIC.industryNorms,
   } as SectorConfig;
 }
 

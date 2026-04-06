@@ -1,4 +1,5 @@
 import type { YESData, YESCandidate } from '../types';
+import type { CalculatorConfig } from '../../../../shared/schema';
 import { clampScore, round2 } from './shared';
 
 export interface YESResult {
@@ -41,59 +42,83 @@ export interface YESResult {
 
 /**
  * Calculate YES headcount target based on total employees
- * < 500 employees: 2.5%
- * 500 - 1000 employees: 1.5%
- * > 1000 employees: 1%
+ * Configurable thresholds from sector config
+ * Default: < 500 employees: 2.5%, 500 - 1000 employees: 1.5%, > 1000 employees: 1%
  */
-function calculateHeadcountTarget(totalEmployees: number): number {
+function calculateHeadcountTarget(totalEmployees: number, config?: CalculatorConfig): number {
+  const headcountSmall = config?.yes?.headcountSmall ?? 0.025;
+  const headcountMedium = config?.yes?.headcountMedium ?? 0.015;
+  const headcountLarge = config?.yes?.headcountLarge ?? 0.01;
+  
   if (totalEmployees < 500) {
-    return Math.max(Math.ceil(totalEmployees * 0.025), 1);
+    return Math.max(Math.ceil(totalEmployees * headcountSmall), 1);
   } else if (totalEmployees <= 1000) {
-    return Math.max(Math.ceil(totalEmployees * 0.015), 8); // Minimum 8 for 500+
+    return Math.max(Math.ceil(totalEmployees * headcountMedium), 8); // Minimum 8 for 500+
   } else {
-    return Math.max(Math.ceil(totalEmployees * 0.01), 15); // Minimum 15 for 1000+
+    return Math.max(Math.ceil(totalEmployees * headcountLarge), 15); // Minimum 15 for 1000+
   }
 }
 
 /**
  * Calculate which tier the company has achieved
+ * Uses configurable tier multipliers from sector config
  */
 function calculateTier(
   candidates: YESCandidate[],
-  headcountTarget: number
-): { tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3'; thresholds: { tier1: number; tier2: number; tier3: number } } {
+  headcountTarget: number,
+  config?: CalculatorConfig
+): { 
+  tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3'; 
+  thresholds: { tier1: number; tier2: number; tier3: number };
+  tierPoints: { tier1: number; tier2: number; tier3: number };
+} {
+  // Configurable tier multipliers (default: 1.5x, 1.0x, 0.5x of target)
+  const tier1Multiplier = config?.yes?.tier1Multiplier ?? 1.5;
+  const tier2Multiplier = config?.yes?.tier2Multiplier ?? 1.0;
+  const tier3Multiplier = config?.yes?.tier3Multiplier ?? 0.5;
+  
   const thresholds = {
-    tier1: Math.max(Math.ceil(headcountTarget * 1.5), 1),
-    tier2: Math.max(Math.ceil(headcountTarget * 1.0), 1),
-    tier3: Math.max(Math.ceil(headcountTarget * 0.5), 1),
+    tier1: Math.max(Math.ceil(headcountTarget * tier1Multiplier), 1),
+    tier2: Math.max(Math.ceil(headcountTarget * tier2Multiplier), 1),
+    tier3: Math.max(Math.ceil(headcountTarget * tier3Multiplier), 1),
+  };
+  
+  // Configurable tier points (default: Tier 1 = 3, Tier 2 = 2, Tier 3 = 1)
+  const tierPoints = {
+    tier1: config?.yes?.tier1Points ?? 3,
+    tier2: config?.yes?.tier2Points ?? 2,
+    tier3: config?.yes?.tier3Points ?? 1,
   };
   
   const enrolledCount = candidates.length;
   
   if (enrolledCount >= thresholds.tier1) {
-    return { tier: 'Tier 1', thresholds };
+    return { tier: 'Tier 1', thresholds, tierPoints };
   } else if (enrolledCount >= thresholds.tier2) {
-    return { tier: 'Tier 2', thresholds };
+    return { tier: 'Tier 2', thresholds, tierPoints };
   } else if (enrolledCount >= thresholds.tier3) {
-    return { tier: 'Tier 3', thresholds };
+    return { tier: 'Tier 3', thresholds, tierPoints };
   }
   
-  return { tier: 'None', thresholds };
+  return { tier: 'None', thresholds, tierPoints };
 }
 
 /**
- * Calculate BEE level increase based on tier and 50% black youth requirement
+ * Calculate BEE level increase based on tier and black youth requirement
+ * Configurable black youth percentage threshold (default: 50%)
  */
 function calculateLevelIncrease(
   tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3',
-  blackYouthPercentage: number
+  blackYouthPercentage: number,
+  config?: CalculatorConfig
 ): { increase: number; qualifies: boolean } {
   // Tier 1: 2 levels increase
   // Tier 2: 1 level increase
   // Tier 3: 1 level increase
-  // But only if 50%+ of YES participants are Black Youth
+  // But only if configured % of YES participants are Black Youth (default 50%)
   
-  const qualifies = blackYouthPercentage >= 50;
+  const blackYouthThreshold = config?.yes?.blackYouthThreshold ?? 50;
+  const qualifies = blackYouthPercentage >= blackYouthThreshold;
   
   if (!qualifies) {
     return { increase: 0, qualifies: false };
@@ -110,18 +135,18 @@ function calculateLevelIncrease(
   }
 }
 
-export function calculateYESScore(data: YESData): YESResult {
+export function calculateYESScore(data: YESData, config?: CalculatorConfig): YESResult {
   const { 
     totalEmployees, 
     candidates,
     totalYesCost = 0 
   } = data;
   
-  // Calculate target
-  const yesHeadcountTarget = calculateHeadcountTarget(totalEmployees);
+  // Calculate target using configurable thresholds
+  const yesHeadcountTarget = calculateHeadcountTarget(totalEmployees, config);
   
-  // Calculate tier
-  const { tier, thresholds } = calculateTier(candidates, yesHeadcountTarget);
+  // Calculate tier using configurable points and thresholds
+  const { tier, thresholds, tierPoints } = calculateTier(candidates, yesHeadcountTarget, config);
   
   // Count demographics
   const totalCandidates = candidates.length;
@@ -136,10 +161,11 @@ export function calculateYESScore(data: YESData): YESResult {
     ? (absorbedCount / totalCandidates) * 100 
     : 0;
   
-  // Calculate level increase
+  // Calculate level increase using configurable black youth threshold
   const { increase: yesBeeLevelIncrease, qualifies: qualifiesForLevelUplift } = calculateLevelIncrease(
     tier, 
-    blackYouthPercentage
+    blackYouthPercentage,
+    config
   );
   
   // Cost calculations
@@ -147,13 +173,12 @@ export function calculateYESScore(data: YESData): YESResult {
   const costPerCandidate = totalCandidates > 0 ? totalCost / totalCandidates : 0;
   
   // Score is not applicable for YES - it's a bonus mechanism
-  // But we return the tier achievement as the "score"
-  // Issue 2: YES Scoring Correction - Tier 1 = 3pts, Tier 2 = 2pts, Tier 3 = 1pt
+  // But we return the tier achievement as the "score" using configurable tier points
   const tierScores: Record<typeof tier, number> = {
     'None': 0,
-    'Tier 3': 1,
-    'Tier 2': 2,
-    'Tier 1': 3,
+    'Tier 3': tierPoints.tier3,
+    'Tier 2': tierPoints.tier2,
+    'Tier 1': tierPoints.tier1,
   };
   
   const score = tierScores[tier];

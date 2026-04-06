@@ -98,6 +98,35 @@ export function calculateManagementScore(
   const employees = data.employees || [];
   const grouped = groupByDesignation(employees);
 
+  // Extract config values with fallbacks to hardcoded defaults
+  const cfg = config?.managementControl;
+  const boardBlackTarget = cfg?.boardBlackTarget ?? BOARD_BLACK_TARGET;
+  const boardWomenTarget = cfg?.boardBWTarget ?? BOARD_WOMEN_TARGET;
+  const boardBlackMaxPts = cfg?.boardBlackMaxPts ?? 2;
+  const boardBWMaxPts = cfg?.boardBWMaxPts ?? 1;
+  
+  const execBlackTarget = cfg?.execBlackTarget ?? EXEC_BLACK_TARGET;
+  const execWomenTarget = cfg?.execBWTarget ?? EXEC_WOMEN_TARGET;
+  const execBlackMaxPts = cfg?.execBlackMaxPts ?? 2;
+  const execBWMaxPts = cfg?.execBWMaxPts ?? 1;
+  
+  const otherExecBlackTarget = cfg?.otherExecBlackTarget ?? OTHER_EXEC_BLACK_TARGET;
+  const otherExecWomenTarget = cfg?.otherExecBWTarget ?? OTHER_EXEC_WOMEN_TARGET;
+  const otherExecBlackMaxPts = cfg?.otherExecBlackMaxPts ?? 2;
+  const otherExecBWMaxPts = cfg?.otherExecBWMaxPts ?? 1;
+  
+  const seniorMaxPts = cfg?.seniorMaxPts ?? 2;
+  const seniorBWMaxPts = cfg?.seniorBWMaxPts ?? 1;
+  const middleMaxPts = cfg?.middleMaxPts ?? 2;
+  const middleBWMaxPts = cfg?.middleBWMaxPts ?? 1;
+  const juniorMaxPts = cfg?.juniorMaxPts ?? 1;
+  const juniorBWMaxPts = cfg?.juniorBWMaxPts ?? 1;
+  
+  const disabledTarget = config?.employmentEquity?.disabledTarget ?? DISABLED_TARGET;
+  const disabledMaxPts = config?.employmentEquity?.disabledMaxPts ?? 2;
+  
+  const maxTotal = config?.pillarConfigs?.managementControl?.maxPoints ?? MAX_TOTAL;
+
   // Get EAP targets based on province
   const province = normalizeProvince(eapProvince || 'National') as Province;
   const seniorEAP = getEAPTargets(province, 'Senior');
@@ -144,19 +173,17 @@ export function calculateManagementScore(
     ? countBlack(disabledEmps) / employees.length
     : 0;
 
-  const boardVotingBlack = clampScore(safeRatio(boardBlackPct, BOARD_BLACK_TARGET, 2), 2);
-  const boardVotingBWO = clampScore(safeRatio(boardBWOPct, BOARD_WOMEN_TARGET, 1), 1);
-  // CRITICAL FIX: Executive Directors use 50% target (NOT 60%)
-  const execDirectorsBlack = clampScore(safeRatio(execBlackPct, EXEC_BLACK_TARGET, 2), 2);
-  // CRITICAL FIX: Executive Directors Women use 25% target (NOT 30%)
-  const execDirectorsBWO = clampScore(safeRatio(execBWOPct, EXEC_WOMEN_TARGET, 1), 1);
-  const otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, OTHER_EXEC_BLACK_TARGET, 2), 2);
-  const otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, OTHER_EXEC_WOMEN_TARGET, 1), 1);
-  // EAP-based targets for Senior/Middle/Junior
-  const seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorEAP.blackTarget, 2), 2);
-  const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorEAP.blackWomenTarget, 1), 1);
-  const middleBlack = clampScore(safeRatio(middleBlackPct, middleEAP.blackTarget, 2), 2);
-  const middleBWO = clampScore(safeRatio(middleBWOPct, middleEAP.blackWomenTarget, 1), 1);
+  const boardVotingBlack = clampScore(safeRatio(boardBlackPct, boardBlackTarget, boardBlackMaxPts), boardBlackMaxPts);
+  const boardVotingBWO = clampScore(safeRatio(boardBWOPct, boardWomenTarget, boardBWMaxPts), boardBWMaxPts);
+  const execDirectorsBlack = clampScore(safeRatio(execBlackPct, execBlackTarget, execBlackMaxPts), execBlackMaxPts);
+  const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
+  const otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
+  const otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
+  // EAP-based targets for Senior/Middle/Junior (using config max points if available)
+  const seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorEAP.blackTarget, seniorMaxPts), seniorMaxPts);
+  const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorEAP.blackWomenTarget, seniorBWMaxPts), seniorBWMaxPts);
+  const middleBlack = clampScore(safeRatio(middleBlackPct, middleEAP.blackTarget, middleMaxPts), middleMaxPts);
+  const middleBWO = clampScore(safeRatio(middleBWOPct, middleEAP.blackWomenTarget, middleBWMaxPts), middleBWMaxPts);
   // Junior level now includes Junior, Semi-skilled, and Unskilled - all use Junior EAP
   const juniorCombinedBlackPct = junior.length + semiSkilled.length + unskilled.length > 0
     ? (countBlack(junior) + countBlack(semiSkilled) + countBlack(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
@@ -164,12 +191,12 @@ export function calculateManagementScore(
   const juniorCombinedBWOPct = junior.length + semiSkilled.length + unskilled.length > 0
     ? (countBlackWomen(junior) + countBlackWomen(semiSkilled) + countBlackWomen(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
     : 0;
-  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorEAP.blackTarget, 1), 1);
-  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorEAP.blackWomenTarget, 1), 1);
-  // Employment Equity: Skilled Technical (uses Middle EAP targets)
-  const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, 2), 2);
-  const skilledTechnicalBWOScore = clampScore(safeRatio(skilledTechnicalBWOPct, skilledTechnicalEAP.blackWomenTarget, 1), 1);
-  const disabledScore = clampScore(safeRatio(blackDisabledPct, DISABLED_TARGET, 2), 2);
+  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorEAP.blackTarget, juniorMaxPts), juniorMaxPts);
+  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorEAP.blackWomenTarget, juniorBWMaxPts), juniorBWMaxPts);
+  // Employment Equity: Skilled Technical (uses Middle EAP targets with config max points)
+  const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, seniorMaxPts), seniorMaxPts);
+  const skilledTechnicalBWOScore = clampScore(safeRatio(skilledTechnicalBWOPct, skilledTechnicalEAP.blackWomenTarget, seniorBWMaxPts), seniorBWMaxPts);
+  const disabledScore = clampScore(safeRatio(blackDisabledPct, disabledTarget, disabledMaxPts), disabledMaxPts);
 
   const totalPoints = boardVotingBlack + boardVotingBWO +
     execDirectorsBlack + execDirectorsBWO +
@@ -181,24 +208,22 @@ export function calculateManagementScore(
     disabledScore;
 
   const subLines: ManagementSubLine[] = [
-    { name: "Exercisable voting rights of black board members", target: "50%", weighting: 2, score: boardVotingBlack },
-    { name: "Exercisable voting rights of black female board members", target: "25%", weighting: 1, score: boardVotingBWO },
-    // CRITICAL FIX: Correct target is 50% (not 60%)
-    { name: "Black executive directors", target: "50%", weighting: 2, score: execDirectorsBlack },
-    // CRITICAL FIX: Correct target is 25% (not 30%)
-    { name: "Black female executive directors", target: "25%", weighting: 1, score: execDirectorsBWO },
-    { name: "Black other executive management", target: "60%", weighting: 2, score: otherExecBlackScore },
-    { name: "Black female other executive management", target: "30%", weighting: 1, score: otherExecBWOScore },
+    { name: "Exercisable voting rights of black board members", target: `${(boardBlackTarget * 100).toFixed(0)}%`, weighting: boardBlackMaxPts, score: boardVotingBlack },
+    { name: "Exercisable voting rights of black female board members", target: `${(boardWomenTarget * 100).toFixed(0)}%`, weighting: boardBWMaxPts, score: boardVotingBWO },
+    { name: "Black executive directors", target: `${(execBlackTarget * 100).toFixed(0)}%`, weighting: execBlackMaxPts, score: execDirectorsBlack },
+    { name: "Black female executive directors", target: `${(execWomenTarget * 100).toFixed(0)}%`, weighting: execBWMaxPts, score: execDirectorsBWO },
+    { name: "Black other executive management", target: `${(otherExecBlackTarget * 100).toFixed(0)}%`, weighting: otherExecBlackMaxPts, score: otherExecBlackScore },
+    { name: "Black female other executive management", target: `${(otherExecWomenTarget * 100).toFixed(0)}%`, weighting: otherExecBWMaxPts, score: otherExecBWOScore },
     // EAP-based with actual percentage
-    { name: "Black employees in senior management", target: `${(seniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 2, score: seniorBlack },
-    { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: seniorBWO },
-    { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 2, score: middleBlack },
-    { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: middleBWO },
-    { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBlackScore },
-    { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: juniorBWOScore },
-    { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: 2, score: skilledTechnicalBlackScore },
-    { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: 1, score: skilledTechnicalBWOScore },
-    { name: "Black employees with disabilities", target: "3%", weighting: 2, score: disabledScore },
+    { name: "Black employees in senior management", target: `${(seniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: seniorBlack },
+    { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: seniorBWO },
+    { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: middleMaxPts, score: middleBlack },
+    { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: middleBWMaxPts, score: middleBWO },
+    { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorMaxPts, score: juniorBlackScore },
+    { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
+    { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: skilledTechnicalBlackScore },
+    { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: skilledTechnicalBWOScore },
+    { name: "Black employees with disabilities", target: `${(disabledTarget * 100).toFixed(0)}%`, weighting: disabledMaxPts, score: disabledScore },
   ];
 
   return {
@@ -217,7 +242,7 @@ export function calculateManagementScore(
     skilledTechnicalBlack: round2(skilledTechnicalBlackScore),
     skilledTechnicalBWO: round2(skilledTechnicalBWOScore),
     disabled: round2(disabledScore),
-    total: round2(clampScore(totalPoints, MAX_TOTAL)),
+    total: round2(clampScore(totalPoints, maxTotal)),
     subMinimumMet: true,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {

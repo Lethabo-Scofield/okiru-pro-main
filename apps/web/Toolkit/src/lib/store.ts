@@ -61,7 +61,7 @@ function snapshotPillarState(state: PillarState): PillarState {
 
 const emptyClient: Client = {
   id: '', name: '', financialYear: '', revenue: 0, npat: 0,
-  leviableAmount: 0, industrySector: 'Generic', eapProvince: 'National',
+  leviableAmount: 0, industry: 'Generic', eapProvince: 'National',
   financialHistory: [],
   // New fields with defaults
   registrationNumber: '',
@@ -70,7 +70,6 @@ const emptyClient: Client = {
   contactEmail: '',
   contactPhone: '',
   sectorCode: 'RCOGP',
-  industry: 'Generic',
   companySize: 'Generic',
   annualTurnover: 0,
   numberOfEmployees: 0,
@@ -103,7 +102,7 @@ const emptyScorecard: ScorecardResult = {
   supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
   enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
   socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
-  yesInitiative: { score: 0, target: 5, weighting: 5 },
+  yesInitiative: { score: 0, target: 3, weighting: 3 }, // Issue 2: 3 points = Level 1.5 achieved
   total: { score: 0, target: 120, weighting: 120 },
   achievedLevel: 9, discountedLevel: 9, isDiscounted: false, recognitionLevel: '0%',
 };
@@ -284,7 +283,7 @@ function calculateScorecard(
     candidates: yesCandidates,
     totalYesCost: yesCandidates.reduce((sum, c) => sum + c.cost, 0),
   };
-  const yesScore = calculateYESScore(yesData);
+  const yesScore = calculateYESScore(yesData, cfg);
 
   if (overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0) {
     const ov = overrides;
@@ -311,26 +310,50 @@ function calculateScorecard(
     const sdSubMin = allSubMinMet !== undefined ? allSubMinMet : esdScore.sdSubMinimumMet;
     const edSubMin = allSubMinMet !== undefined ? allSubMinMet : esdScore.edSubMinimumMet;
 
+    // Get dynamic targets from config or use defaults
+    const pConfig = cfg?.pillarConfigs;
+    const ownTarget = pConfig?.ownership?.maxPoints ?? 25;
+    const mcTarget = pConfig?.managementControl?.maxPoints ?? 19;
+    const skillsTarget = pConfig?.skillsDevelopment?.maxPoints ?? 25;
+    const procTarget = pConfig?.preferentialProcurement?.maxPoints ?? 29;
+    const sdTarget = pConfig?.supplierDevelopment?.maxPoints ?? 10;
+    const edTarget = pConfig?.enterpriseDevelopment?.maxPoints ?? 7;
+    const sedTarget = pConfig?.socioEconomicDevelopment?.maxPoints ?? 5;
+    const yesTarget = 3; // YES is always 3 points max (bonus mechanism)
+    const totalTarget = ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget;
+
     // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
     return {
-      ownership: { score: round2(ownPts), target: 25, weighting: 25, subMinimumMet: ownSubMin },
-      managementControl: { score: round2(mcPts), target: 19, weighting: 19 },
-      skillsDevelopment: { score: round2(skPts), target: 25, weighting: 25, subMinimumMet: skSubMin },
-      procurement: { score: round2(prPts), target: 29, weighting: 29, subMinimumMet: prSubMin },
-      supplierDevelopment: { score: round2(sdPts), target: 10, weighting: 10, subMinimumMet: sdSubMin },
-      enterpriseDevelopment: { score: round2(edPts), target: 7, weighting: 7, subMinimumMet: edSubMin },
-      socioEconomicDevelopment: { score: round2(sedPts), target: 5, weighting: 5 },
-      yesInitiative: { score: round2(yesPts), target: 5, weighting: 5 },
-      total: { score: round2(total), target: 120, weighting: 120 },
+      ownership: { score: round2(ownPts), target: ownTarget, weighting: ownTarget, subMinimumMet: ownSubMin },
+      managementControl: { score: round2(mcPts), target: mcTarget, weighting: mcTarget },
+      skillsDevelopment: { score: round2(skPts), target: skillsTarget, weighting: skillsTarget, subMinimumMet: skSubMin },
+      procurement: { score: round2(prPts), target: procTarget, weighting: procTarget, subMinimumMet: prSubMin },
+      supplierDevelopment: { score: round2(sdPts), target: sdTarget, weighting: sdTarget, subMinimumMet: sdSubMin },
+      enterpriseDevelopment: { score: round2(edPts), target: edTarget, weighting: edTarget, subMinimumMet: edSubMin },
+      socioEconomicDevelopment: { score: round2(sedPts), target: sedTarget, weighting: sedTarget },
+      yesInitiative: { score: round2(yesPts), target: yesTarget, weighting: yesTarget },
+      total: { score: round2(total), target: totalTarget, weighting: totalTarget },
       achievedLevel: level, discountedLevel: disc, isDiscounted: isDisc, recognitionLevel: recog,
     };
   }
+
+  // Get dynamic targets from config or use defaults
+  const pConfig = cfg?.pillarConfigs;
+  const ownTarget = pConfig?.ownership?.maxPoints ?? 25;
+  const mcTarget = pConfig?.managementControl?.maxPoints ?? 19;
+  const skillsTarget = pConfig?.skillsDevelopment?.maxPoints ?? 25;
+  const procTarget = pConfig?.preferentialProcurement?.maxPoints ?? 29;
+  const sdTarget = pConfig?.supplierDevelopment?.maxPoints ?? 10;
+  const edTarget = pConfig?.enterpriseDevelopment?.maxPoints ?? 7;
+  const sedTarget = pConfig?.socioEconomicDevelopment?.maxPoints ?? 5;
+  const yesTarget = 3; // YES is always 3 points max (bonus mechanism)
+  const totalTarget = ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget;
 
   // CRITICAL FIX: Include YES in total points calculation
   const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score;
   const level = pointsToLevel(totalPoints);
 
-  const ownSubMinMet = ownScore.total >= 10 || ownScore.subMinimumMet;
+  const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet; // 40% sub-minimum
   const skSubMinMet = skillScore.subMinimumMet;
   const prSubMinMet = procScore.subMinimumMet;
   const sdSubMinMet = esdScore.sdSubMinimumMet;
@@ -341,15 +364,15 @@ function calculateScorecard(
 
   // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
   return {
-    ownership: { score: round2(ownScore.total), target: 25, weighting: 25, subMinimumMet: ownSubMinMet },
-    managementControl: { score: round2(mgtScore.total), target: 19, weighting: 19 },
-    skillsDevelopment: { score: round2(skillScore.total), target: 25, weighting: 25, subMinimumMet: skSubMinMet },
-    procurement: { score: round2(procScore.total), target: 29, weighting: 29, subMinimumMet: prSubMinMet },
-    supplierDevelopment: { score: round2(esdScore.sdTotal), target: 10, weighting: 10, subMinimumMet: sdSubMinMet },
-    enterpriseDevelopment: { score: round2(esdScore.edTotal), target: 7, weighting: 7, subMinimumMet: edSubMinMet },
-    socioEconomicDevelopment: { score: round2(sedScore.total), target: 5, weighting: 5 },
-    yesInitiative: { score: round2(yesScore.score), target: 5, weighting: 5 },
-    total: { score: round2(totalPoints), target: 120, weighting: 120 },
+    ownership: { score: round2(ownScore.total), target: ownTarget, weighting: ownTarget, subMinimumMet: ownSubMinMet },
+    managementControl: { score: round2(mgtScore.total), target: mcTarget, weighting: mcTarget },
+    skillsDevelopment: { score: round2(skillScore.total), target: skillsTarget, weighting: skillsTarget, subMinimumMet: skSubMinMet },
+    procurement: { score: round2(procScore.total), target: procTarget, weighting: procTarget, subMinimumMet: prSubMinMet },
+    supplierDevelopment: { score: round2(esdScore.sdTotal), target: sdTarget, weighting: sdTarget, subMinimumMet: sdSubMinMet },
+    enterpriseDevelopment: { score: round2(esdScore.edTotal), target: edTarget, weighting: edTarget, subMinimumMet: edSubMinMet },
+    socioEconomicDevelopment: { score: round2(sedScore.total), target: sedTarget, weighting: sedTarget },
+    yesInitiative: { score: round2(yesScore.score), target: yesTarget, weighting: yesTarget },
+    total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: level, discountedLevel, isDiscounted, recognitionLevel: levelToRecognition(discountedLevel),
   };
 }
@@ -394,7 +417,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         revenue: data.client.revenue || 0,
         npat: data.client.npat || 0,
         leviableAmount: data.client.leviableAmount || 0,
-        industrySector: data.client.industrySector || 'Generic',
+        industry: data.client.industry || 'Generic',
         eapProvince: data.client.eapProvince || 'National',
         industryNorm: data.client.industryNorm,
         financialHistory: (data.financialYears || []).map((fy: any) => ({
