@@ -1,0 +1,73 @@
+name: Build and deploy API to Azure Web App - okiru
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/api/**'
+      - 'packages/types/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/deploy-api-azure.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.26.1'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build types package
+        run: pnpm --filter @okiru/types build
+
+      - name: Build API
+        run: pnpm --filter @okiru/api build
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy/apps/api
+          mkdir -p deploy/packages/types
+          cp -r apps/api/dist deploy/apps/api/dist
+          cp apps/api/package.json deploy/apps/api/
+          cp -r packages/types deploy/packages/
+          cp package.json deploy/
+          cp pnpm-lock.yaml deploy/
+          cp pnpm-workspace.yaml deploy/
+
+      - name: Install production dependencies for deploy
+        run: |
+          cd deploy
+          pnpm install --no-frozen-lockfile --prod
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_9D97A07605E746E0BCF708AA058BEFF1 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1606CC84CBD94E928EE5A023B20F185E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_654DD542B23D466BAE982AD18B09689D }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'okiru'
+          slot-name: 'Production'
+          package: ./deploy
