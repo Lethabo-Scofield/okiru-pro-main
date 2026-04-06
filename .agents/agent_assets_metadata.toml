@@ -6,3 +6,9 @@ id = "6C2M1oHFFjny16LuFdKuj"
 uri = "file://BUG_REPORT.md"
 type = "text"
 title = "Okiru Pro - Comprehensive Testing & Bug Report"
+
+[[outputs]]
+id = "WfKYkRhg15RR45vdGljBv"
+uri = "file://AZURE-AKS-DEPLOYMENT-GUIDE.md"
+type = "text"
+title = "Azure AKS Deployment Guide"
