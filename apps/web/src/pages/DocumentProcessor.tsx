@@ -18,6 +18,7 @@ import { useBbeeStore } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import { calculateYESScore } from '@toolkit/lib/calculators/yes';
 import type { YESData, Client } from '@toolkit/lib/types';
+import { API_BASE } from '@toolkit/lib/config';
 // Import removed - using hybrid extraction endpoint instead of client-side parsing
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
@@ -86,6 +87,10 @@ interface ProcessorSession {
   docStatuses: Record<number, string>;
   isComplete: boolean;
   scorecardResult?: any;
+  // Build flow data (for manual pillar entry)
+  foundationData?: FoundationData;
+  pillarData?: BuildPillarsData;
+  flowMode?: 'upload' | 'build';
 }
 
 const VALID_SECTOR_CODES = new Set(['RCOGP', 'ICT', 'FSC', 'AGRI']);
@@ -273,7 +278,7 @@ export async function fetchBBEESectors(): Promise<SectorOption[]> {
   if (cachedBBEESectors) return cachedBBEESectors;
   
   try {
-    const response = await fetch('/api/sectors/options');
+    const response = await fetch(`${API_BASE}/api/sectors/options`);
     if (!response.ok) throw new Error('Failed to fetch sectors');
     const result = await response.json();
     if (result.success && result.options) {
@@ -389,7 +394,7 @@ function generateSessionId() {
 
 async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSession | null> {
   try {
-    const res = await fetch('/api/processor-sessions', {
+    const res = await fetch(`${API_BASE}/api/processor-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -402,6 +407,10 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
         docStatuses: session.docStatuses,
         isComplete: session.isComplete,
         scorecardResult: session.scorecardResult,
+        // Include build flow data if present
+        foundationData: session.foundationData,
+        pillarData: session.pillarData,
+        flowMode: session.flowMode,
       }),
     });
     if (!res.ok) return null;
@@ -411,7 +420,7 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
 
 async function apiLoadSession(sessionId: string): Promise<ProcessorSession | null> {
   try {
-    const res = await fetch(`/api/processor-sessions/${sessionId}`);
+    const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`);
     if (!res.ok) return null;
     const data = await res.json();
     return {
@@ -426,6 +435,10 @@ async function apiLoadSession(sessionId: string): Promise<ProcessorSession | nul
       docStatuses: data.docStatuses || {},
       isComplete: data.isComplete || false,
       scorecardResult: data.scorecardResult || null,
+      // Restore build flow data if present
+      foundationData: data.foundationData,
+      pillarData: data.pillarData,
+      flowMode: data.flowMode,
     };
   } catch { return null; }
 }
@@ -1268,12 +1281,30 @@ export default function DocumentProcessor() {
         });
         setUploadedFiles(restored);
       }
-      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard'];
+      // Restore build flow data if present
+      if (sess.foundationData) {
+        setFoundationData(sess.foundationData);
+      }
+      if (sess.pillarData) {
+        setPillarData(prev => ({
+          ...prev,
+          ...sess.pillarData,
+          // Handle employmentEquity merge if needed
+          employmentEquity: sess.pillarData?.employmentEquity ?? sess.pillarData?.management ?? prev.employmentEquity,
+        }));
+      }
+      if (sess.flowMode) {
+        setFlowMode(sess.flowMode);
+      }
+
+      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars'];
       const step = sess.currentStep && validSteps.includes(sess.currentStep)
         ? sess.currentStep
         : sess.scorecardResult ? 'scorecard'
+        : sess.flowMode === 'build' && sess.currentStep?.startsWith('build-') ? sess.currentStep
         : sess.extractionResults && sess.extractionResults.length > 0 ? 'review'
         : sess.filesData && sess.filesData.length > 0 ? 'classify'
+        : sess.flowMode === 'build' ? 'build-foundation'
         : 'upload';
       setCurrentPage(step as any);
       if (sess.scorecardResult) setScorecardResult(sess.scorecardResult);
@@ -1329,6 +1360,10 @@ export default function DocumentProcessor() {
     statuses?: Record<number, string>;
     complete?: boolean;
     scorecardResult?: any;
+    // Build flow data
+    foundationData?: FoundationData;
+    pillarData?: BuildPillarsData;
+    flowMode?: 'upload' | 'build';
   }) => {
     const sid = sessionId || generateSessionId();
     if (!sessionId) setSessionId(sid);
@@ -1361,10 +1396,14 @@ export default function DocumentProcessor() {
       docStatuses: opts?.statuses ?? docStatuses,
       isComplete: opts?.complete ?? false,
       scorecardResult: opts?.scorecardResult ?? undefined,
+      // Include build flow data (prioritize opts if provided, otherwise use current state)
+      foundationData: opts?.foundationData ?? foundationData,
+      pillarData: opts?.pillarData ?? pillarData,
+      flowMode: opts?.flowMode ?? flowMode,
     };
     await apiSaveSession(sess);
     return sid;
-  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses]);
+  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses, foundationData, pillarData, flowMode]);
 
   const lastSavedFilesRef = useRef<string>('');
   useEffect(() => {
@@ -1386,6 +1425,25 @@ export default function DocumentProcessor() {
     const t = setTimeout(() => { persistSession('classify', { classifications: fileClassifications }); }, 800);
     return () => clearTimeout(t);
   }, [fileClassifications, currentPage, sessionId, persistSession]);
+
+  // Auto-save for build flow steps (foundation and pillars)
+  const lastSavedBuildDataRef = useRef<string>('');
+  useEffect(() => {
+    if (!sessionId || (currentPage !== 'build-foundation' && currentPage !== 'build-pillars')) return;
+    if (!user?.id) return;
+    // Debounce the save to avoid excessive API calls
+    const t = setTimeout(() => {
+      const key = JSON.stringify({ foundation: foundationData, pillars: pillarData });
+      if (key === lastSavedBuildDataRef.current) return;
+      lastSavedBuildDataRef.current = key;
+      persistSession(currentPage, {
+        foundationData,
+        pillarData,
+        flowMode: 'build',
+      });
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [foundationData, pillarData, currentPage, sessionId, flowMode, persistSession, user?.id]);
 
   // ============================================================================
   // Build Flow Functions

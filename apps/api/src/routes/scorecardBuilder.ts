@@ -25,7 +25,7 @@ router.get('/manifest', async (req, res) => {
     const sectorCode = String(req.query.sector || 'RCOGP');
     const scorecardType = String(req.query.type || 'Generic');
 
-    const manifest = buildManifest(sectorCode, scorecardType);
+    const manifest = await buildManifest(sectorCode, scorecardType);
     
     res.json(manifest);
   } catch (err) {

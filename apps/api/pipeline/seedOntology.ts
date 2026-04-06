@@ -202,13 +202,13 @@ async function seedSector(
     const config = getSectorConfig(sectorCode, scorecardType);
     let manifest: EntityManifest | null = null;
     try {
-      manifest = buildManifest(sectorCode, scorecardType);
+      manifest = await buildManifest(sectorCode, scorecardType);
     } catch {
       // Manifest build failed — continue with sector rule only
     }
 
     // Get all manifests for pillar config building
-    const allManifests = getAllManifests();
+    const allManifests = await getAllManifests();
 
     // 1. Store sector rule
     const sectorRule = toStoredSectorRule(config, allManifests);

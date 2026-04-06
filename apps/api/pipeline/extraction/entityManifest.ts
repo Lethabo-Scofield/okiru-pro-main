@@ -10,6 +10,7 @@
  */
 
 import { getSectorConfig, type SectorConfig } from '../sectorConfig.js';
+import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 
 // ---------------------------------------------------------------------------
 // Layer 5: Evidence — source of an extracted or entered value
@@ -1583,12 +1584,43 @@ const SCORECARD_TYPES = [
 ] as const;
 
 /**
- * Build a hierarchical entity manifest for any sector/type combination.
- * This is the single entry point — no legacy alternatives.
+ * Resolve sector configuration from ArangoDB (single source of truth).
+ * Falls back to hardcoded config only if ArangoDB is unavailable.
  */
-export function buildManifest(sectorCode: string, scorecardType: string): EntityManifest {
+async function resolveSectorConfig(sectorCode: string, scorecardType: string): Promise<SectorConfig> {
+  const repo = new SectorRuleRepository();
+
+  try {
+    const storedRule = await repo.getSectorRule(sectorCode, scorecardType);
+
+    if (storedRule) {
+      // Convert stored rule to SectorConfig format
+      return {
+        sectorCode: storedRule.sectorCode,
+        sectorName: storedRule.sectorName,
+        scorecardType: storedRule.scorecardType,
+        totalMaxPoints: storedRule.totalMaxPoints,
+        pillarConfigs: storedRule.pillarConfigs || {},
+        targets: storedRule.targets || {},
+        thresholds: storedRule.thresholds || {},
+        referenceData: storedRule.referenceData || {},
+      };
+    }
+  } catch (error) {
+    console.warn(`[EntityManifest] ArangoDB unavailable, using hardcoded config for ${sectorCode} ${scorecardType}:`, error);
+  }
+
+  // Fallback to hardcoded config
+  return getSectorConfig(sectorCode, scorecardType);
+}
+
+/**
+ * Build a hierarchical entity manifest for any sector/type combination.
+ * This is the single entry point — queries ArangoDB first, no hardcoded fallbacks for production.
+ */
+export async function buildManifest(sectorCode: string, scorecardType: string): Promise<EntityManifest> {
   const upper = sectorCode.toUpperCase();
-  const cfg = getSectorConfig(upper, scorecardType);
+  const cfg = await resolveSectorConfig(upper, scorecardType);
 
   const rootContext: RootContext = {
     sector: upper,
@@ -1675,7 +1707,7 @@ export function buildManifest(sectorCode: string, scorecardType: string): Entity
 export const buildManifestForSector = buildManifest;
 
 /** Build RCOGP Generic manifest. */
-export function buildRCOGPGenericManifest(): EntityManifest {
+export async function buildRCOGPGenericManifest(): Promise<EntityManifest> {
   return buildManifest('RCOGP', 'Generic');
 }
 
@@ -1731,6 +1763,9 @@ export function buildCustomManifest(entities: EntityField[], sheetHints?: SheetH
 }
 
 /** Get manifests for all 6 sector types. */
-export function getAllManifests(): EntityManifest[] {
-  return SCORECARD_TYPES.map(({ sectorCode, scorecardType }) => buildManifest(sectorCode, scorecardType));
+export async function getAllManifests(): Promise<EntityManifest[]> {
+  const manifests = await Promise.all(
+    SCORECARD_TYPES.map(({ sectorCode, scorecardType }) => buildManifest(sectorCode, scorecardType))
+  );
+  return manifests;
 }
