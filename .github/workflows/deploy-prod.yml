@@ -227,8 +227,16 @@ jobs:
         run: |
           cd kubernetes/infrastructure
 
+          echo "=== Pre-deleting stateless app deployments to avoid env var conflicts ==="
+          # Delete API and Web deployments first to avoid "value vs valueFrom" conflicts
+          # These are stateless and can be recreated without data loss
+          for app in api web compute; do
+            echo "Deleting $app deployment (will be recreated)..."
+            kubectl delete deployment/$app -n ${{ env.NAMESPACE }} --ignore-not-found=true --wait=false 2>/dev/null || true
+          done
+          sleep 5
+
           echo "=== Rendering and applying Kustomize manifests ==="
-          # Render and apply the full configuration (includes ConfigMaps, Deployments, Services, etc.)
           kustomize build overlays/prod | kubectl apply -f -
 
           echo "=== Restarting deployments to pick up new images ==="
