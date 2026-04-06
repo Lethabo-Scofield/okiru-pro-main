@@ -29,6 +29,16 @@ export interface CalculatorConfig {
     execBlackPoints: number;
     execWomenTarget: number;
     execWomenPoints: number;
+    disabledTarget?: number;
+    execBWTarget?: number;
+    execBWMaxPts?: number;
+  };
+  managementControl?: {
+    maxPoints: number;
+    disabledTarget?: number;
+  };
+  employmentEquity?: {
+    maxPoints: number;
   };
   skills: {
     generalMax: number;
@@ -36,6 +46,11 @@ export interface CalculatorConfig {
     overallTarget: number;
     bursaryTarget: number;
     subMinThreshold: number;
+    categoryECap?: number;
+    categoryFCap?: number;
+    overallSpendPercent?: number;
+    bursarySpendPercent?: number;
+    disabledSpendPercent?: number;
   };
   procurement: {
     baseMax: number;
@@ -43,6 +58,19 @@ export interface CalculatorConfig {
     tmpsTarget: number;
     subMinThreshold: number;
     blackOwnedThreshold: number;
+    blackWomenThreshold?: number;
+    allSuppliersTarget?: number;
+    allSuppliersMaxPts?: number;
+    qseTarget?: number;
+    qseMaxPts?: number;
+    emeTarget?: number;
+    emeMaxPts?: number;
+    bo51Target?: number;
+    bo51MaxPts?: number;
+    bwo30Target?: number;
+    bwo30MaxPts?: number;
+    dgTarget?: number;
+    dgMaxPts?: number;
   };
   esd: {
     supplierDevMax: number;
@@ -54,9 +82,31 @@ export interface CalculatorConfig {
     maxPoints: number;
     npatTarget: number;
   };
+  yes?: {
+    tier1Points: number;
+    tier2Points: number;
+    tier3Points: number;
+    tier1Multiplier: number;
+    tier2Multiplier: number;
+    tier3Multiplier: number;
+    headcountTarget5: number;
+    headcountTarget10: number;
+    headcountTarget15: number;
+    blackYouthPercent: number;
+  };
   discounting: {
     dropLevels: number;
     maxDropLevel: number;
+  };
+  recognitionTable?: { level: number; multiplier: number }[];
+  pillarConfigs?: {
+    managementControl?: { maxPoints: number };
+    employmentEquity?: { maxPoints: number };
+    skillsDevelopment?: { maxPoints: number };
+    preferentialProcurement?: { maxPoints: number };
+    supplierDevelopment?: { maxPoints: number };
+    socioEconomicDevelopment?: { maxPoints: number };
+    yesInitiative?: { maxPoints: number };
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];

@@ -41,6 +41,10 @@ export interface StoredSectorRule {
   pillarConfigs: StoredPillarConfig[];
   targets: Record<string, unknown>;
   levelThresholds: StoredLevelThreshold[];
+  recognitionTable?: Array<{ beeLevel: number; recognitionPercent: number; multiplier: number }>;
+  benefitFactors?: Array<{ contributionType: string; sdFactor: number; edFactor: number }>;
+  categoryWeightings?: Array<{ code: string; name: string; weighting: number; cap?: number }>;
+  industryNorms?: Array<{ industry: string; normPercent: number; quarterThresholdPercent: number }>;
   createdAt: string;
   updatedAt: string;
 }

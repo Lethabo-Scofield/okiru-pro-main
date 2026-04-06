@@ -47,6 +47,8 @@ export interface ParsedSupplier {
   name: string;
   beeLevel: number;
   blackOwnership: number;
+  blackWomenOwnership?: number;
+  enterpriseType?: 'generic' | 'qse' | 'eme';
   spend: number;
 }
 
@@ -57,6 +59,8 @@ export interface ParsedTrainingProgram {
   learnerName?: string;
   isEmployed: boolean;
   isBlack: boolean;
+  isDisabled?: boolean;
+  isAbsorbed?: boolean;
 }
 
 export interface ParsedContribution {

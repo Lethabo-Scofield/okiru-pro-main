@@ -171,6 +171,10 @@ function toStoredSectorRule(
     pillarConfigs,
     targets: config.targets as Record<string, unknown>,
     levelThresholds: config.levelThresholds,
+    recognitionTable: config.recognitionTable,
+    benefitFactors: config.benefitFactors,
+    categoryWeightings: config.categoryWeightings,
+    industryNorms: config.industryNorms,
   };
 }
 

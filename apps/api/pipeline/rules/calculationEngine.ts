@@ -29,6 +29,7 @@ import type {
 } from '../extraction/entityManifest.js';
 import type { SectorConfig } from '../sectorConfig.js';
 import { getSectorConfig } from '../sectorConfig.js';
+import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -585,7 +586,9 @@ export interface CalculationOptions {
 export async function createCalculationEngine(options: CalculationOptions): Promise<CalculationEngine> {
   const { buildManifest } = await import('../extraction/entityManifest.js');
   const manifest = buildManifest(options.sectorCode, options.scorecardType);
-  const sectorConfig = getSectorConfig(options.sectorCode, options.scorecardType);
+  
+  // Query ArangoDB first, fallback to hardcoded
+  const sectorConfig = await resolveSectorConfig(options.sectorCode, options.scorecardType);
 
   const context: CalculationContext = {
     assessmentId: options.assessmentId,
@@ -596,6 +599,107 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
   };
 
   return new CalculationEngine(context);
+}
+
+// ---------------------------------------------------------------------------
+// Sector Config Resolution — ArangoDB first, fallback to hardcoded
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert StoredSectorRule from ArangoDB to SectorConfig interface.
+ */
+function storedRuleToSectorConfig(stored: import('../../arango/repositories/sectorRuleRepository.js').StoredSectorRule): SectorConfig {
+  // Map stored pillar configs to SectorConfig format
+  const pillarConfigs: SectorConfig['pillarConfigs'] = {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+  };
+  
+  // Override with stored pillar configs if available
+  for (const spc of stored.pillarConfigs) {
+    const keyMap: Record<string, keyof SectorConfig['pillarConfigs']> = {
+      'ownership': 'ownership',
+      'managementControl': 'managementControl',
+      'employmentEquity': 'employmentEquity',
+      'skillsDevelopment': 'skillsDevelopment',
+      'preferentialProcurement': 'preferentialProcurement',
+      'supplierDevelopment': 'supplierDevelopment',
+      'enterpriseDevelopment': 'enterpriseDevelopment',
+      'socioEconomicDevelopment': 'socioEconomicDevelopment',
+    };
+    const key = keyMap[spc.code];
+    if (key) {
+      pillarConfigs[key] = {
+        maxPoints: spc.maxPoints,
+        hasSubMinimum: spc.hasSubMinimum,
+        subMinimumPercent: spc.subMinimumThreshold,
+      };
+    }
+  }
+  
+  // Cast stored targets to the correct type
+  const targets = stored.targets as SectorConfig['targets'];
+  
+  return {
+    sectorCode: stored.sectorCode,
+    sectorName: stored.sectorName,
+    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
+    pillarConfigs,
+    targets,
+    levelThresholds: stored.levelThresholds.map(lt => ({
+      level: lt.level,
+      minPoints: lt.minPoints,
+      recognition: lt.recognition,
+    })),
+    recognitionTable: stored.recognitionTable?.map(rt => ({
+      beeLevel: rt.beeLevel,
+      recognitionPercent: rt.recognitionPercent,
+      multiplier: rt.multiplier,
+    })) ?? [],
+    benefitFactors: stored.benefitFactors?.map(bf => ({
+      contributionType: bf.contributionType,
+      sdFactor: bf.sdFactor,
+      edFactor: bf.edFactor,
+    })) ?? [],
+    categoryWeightings: stored.categoryWeightings?.map(cw => ({
+      code: cw.code,
+      name: cw.name,
+      weighting: cw.weighting,
+      cap: cw.cap,
+    })) ?? [],
+    industryNorms: stored.industryNorms?.map(ind => ({
+      industry: ind.industry,
+      normPercent: ind.normPercent,
+      quarterThresholdPercent: ind.quarterThresholdPercent,
+    })) ?? [],
+  };
+}
+
+/**
+ * Resolve sector config from ArangoDB or fallback to hardcoded.
+ */
+async function resolveSectorConfig(sectorCode: string, scorecardType: string): Promise<SectorConfig> {
+  const repo = new SectorRuleRepository();
+  
+  try {
+    const stored = await repo.getSectorRule(sectorCode, scorecardType);
+    if (stored) {
+      // console.log(`[CalculationEngine] Using ArangoDB sector rule for ${sectorCode}/${scorecardType}`);
+      return storedRuleToSectorConfig(stored);
+    }
+  } catch (err) {
+    // console.warn(`[CalculationEngine] ArangoDB query failed, falling back to hardcoded config: ${err}`);
+  }
+  
+  // Fallback to hardcoded config
+  // console.warn(`[CalculationEngine] No sector rule in ArangoDB for ${sectorCode}/${scorecardType}, using hardcoded fallback`);
+  return getSectorConfig(sectorCode, scorecardType);
 }
 
 // ---------------------------------------------------------------------------

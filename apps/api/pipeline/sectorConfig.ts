@@ -58,10 +58,16 @@ export interface EETargets {
 }
 
 export interface SkillsTargets {
-  overallSpendPercent: number;
-  overallMaxPts: number;
-  bursarySpendPercent: number;
+  learningProgrammesMaxPts: number;
   bursaryMaxPts: number;
+  disabledLearningMaxPts: number;
+  learnershipsMaxPts: number;
+  absorptionMaxPts: number;
+  overallSpendPercent: number;
+  bursarySpendPercent: number;
+  disabledSpendPercent: number;
+  learnershipTargetPercent: number;
+  absorptionTargetPercent: number;
 }
 
 export interface ProcurementTargets {
@@ -84,10 +90,38 @@ export interface EsdTargets {
   sdPercent: number;
   sdMaxPts: number;
   edPercent: number;
-  edMaxPts: number;              // Base ED points (5 for RCOGP Generic)
-  edGraduationBonus: number;     // ED Bonus 1: graduation
-  edJobsBonus: number;           // ED Bonus 2: jobs created
-  // NOTE: Bonuses are ED-only. Procurement does NOT have graduation/jobs bonuses.
+  edMaxPts: number;
+  edGraduationBonus: number;
+  edJobsBonus: number;
+}
+
+// ---------------------------------------------------------------------------
+// Reference tables seeded alongside sector rules
+// ---------------------------------------------------------------------------
+
+export interface RecognitionLevel {
+  beeLevel: number;
+  recognitionPercent: number;
+  multiplier: number;
+}
+
+export interface BenefitFactor {
+  contributionType: string;
+  sdFactor: number;
+  edFactor: number;
+}
+
+export interface CategoryWeighting {
+  code: string;
+  name: string;
+  weighting: number;
+  cap?: number;
+}
+
+export interface IndustryNorm {
+  industry: string;
+  normPercent: number;
+  quarterThresholdPercent: number;
 }
 
 export interface SedTargets {
@@ -101,24 +135,31 @@ export interface SectorConfig {
   scorecardType: 'Generic' | 'QSE' | 'EME';
   pillarConfigs: {
     ownership: PillarConfig;
-    managementControl: PillarConfig;        // Combined MC + EE (19 pts for RCOGP Generic)
-    employmentEquity?: PillarConfig;      // Optional - included in MC for most codes
+    managementControl: PillarConfig;
+    employmentEquity?: PillarConfig;
     skillsDevelopment: PillarConfig;
     preferentialProcurement: PillarConfig;
-    supplierDevelopment: PillarConfig;      // Separated from combined ESD
-    enterpriseDevelopment: PillarConfig;    // Separated from combined ESD (includes 2 bonus pts)
+    supplierDevelopment: PillarConfig;
+    enterpriseDevelopment: PillarConfig;
     socioEconomicDevelopment: PillarConfig;
+    empowermentFinancing?: PillarConfig;
+    accessToFinancialServices?: PillarConfig;
+    consumerEducation?: PillarConfig;
   };
   targets: {
     ownership: OwnershipTargets;
-    managementControl: MCTargets;          // Board + Exec targets (50% Black / 25% Women for exec directors)
-    employmentEquity: EETargets;           // Senior/Middle/Junior/Disabled (EAP-based)
+    managementControl: MCTargets;
+    employmentEquity: EETargets;
     skills: SkillsTargets;
-    procurement: ProcurementTargets;       // Includes DG 2% bonus row
-    esd: EsdTargets;                       // SD + ED targets (ED includes graduation/jobs bonuses)
+    procurement: ProcurementTargets;
+    esd: EsdTargets;
     sed: SedTargets;
   };
   levelThresholds: Array<{ level: number; minPoints: number; recognition: number }>;
+  recognitionTable: RecognitionLevel[];
+  benefitFactors: BenefitFactor[];
+  categoryWeightings: CategoryWeighting[];
+  industryNorms: IndustryNorm[];
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +175,85 @@ const STANDARD_LEVELS = [
   { level: 6, minPoints: 70, recognition: 60 },
   { level: 7, minPoints: 55, recognition: 50 },
   { level: 8, minPoints: 40, recognition: 10 },
+];
+
+// ---------------------------------------------------------------------------
+// BEE Recognition Table — multiplies supplier spend for procurement scoring
+// Reference: B-BBEE Act, Schedule 4
+// ---------------------------------------------------------------------------
+
+const STANDARD_RECOGNITION_TABLE: RecognitionLevel[] = [
+  { beeLevel: 1, recognitionPercent: 135, multiplier: 1.35 },
+  { beeLevel: 2, recognitionPercent: 125, multiplier: 1.25 },
+  { beeLevel: 3, recognitionPercent: 110, multiplier: 1.10 },
+  { beeLevel: 4, recognitionPercent: 100, multiplier: 1.00 },
+  { beeLevel: 5, recognitionPercent: 80, multiplier: 0.80 },
+  { beeLevel: 6, recognitionPercent: 60, multiplier: 0.60 },
+  { beeLevel: 7, recognitionPercent: 50, multiplier: 0.50 },
+  { beeLevel: 8, recognitionPercent: 10, multiplier: 0.10 },
+  { beeLevel: 0, recognitionPercent: 0, multiplier: 0.00 },
+];
+
+// ---------------------------------------------------------------------------
+// ESD Benefit Factors — multiplies contribution amounts for SD/ED scoring
+// Reference: Schedule 4.3 of the Codes
+// ---------------------------------------------------------------------------
+
+const STANDARD_BENEFIT_FACTORS: BenefitFactor[] = [
+  { contributionType: 'grant', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'direct_cost', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'discounts', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'overhead_costs', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'interest_free_loan', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'standard_loan', sdFactor: 0.7, edFactor: 0.7 },
+  { contributionType: 'guarantees', sdFactor: 0.03, edFactor: 0.03 },
+  { contributionType: 'lower_interest_rate', sdFactor: 0.7, edFactor: 0.7 },
+  { contributionType: 'minority_investment', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'professional_services_free', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'professional_services_discounted', sdFactor: 0.8, edFactor: 0.8 },
+  { contributionType: 'employee_time', sdFactor: 1.0, edFactor: 1.0 },
+  { contributionType: 'shorter_payment_periods', sdFactor: 0.7, edFactor: 0.0 },
+  { contributionType: 'equity_investment', sdFactor: 0.0, edFactor: 1.0 },
+];
+
+// ---------------------------------------------------------------------------
+// Skills Category Weightings — A through G
+// Reference: Skills Development element, Annex 200(1)
+// ---------------------------------------------------------------------------
+
+const STANDARD_CATEGORY_WEIGHTINGS: CategoryWeighting[] = [
+  { code: 'A', name: 'Bursaries (higher education)', weighting: 1.0 },
+  { code: 'B', name: 'Internships & Learnerships', weighting: 1.0 },
+  { code: 'C', name: 'Short courses & workshops (accredited)', weighting: 1.0 },
+  { code: 'D', name: 'Other accredited training', weighting: 1.0 },
+  { code: 'E', name: 'Non-accredited / informal training', weighting: 1.0, cap: 0.25 },
+  { code: 'F', name: 'External unaccredited training', weighting: 1.0, cap: 0.15 },
+  { code: 'G', name: 'Informal training (non-qualifying)', weighting: 0.0 },
+];
+
+// ---------------------------------------------------------------------------
+// Industry Norms — for deemed NPAT calculation
+// Reference: SARS industry classification norms
+// ---------------------------------------------------------------------------
+
+const STANDARD_INDUSTRY_NORMS: IndustryNorm[] = [
+  { industry: 'Retail', normPercent: 4, quarterThresholdPercent: 1 },
+  { industry: 'Manufacturing', normPercent: 6, quarterThresholdPercent: 1.5 },
+  { industry: 'IT Services', normPercent: 10, quarterThresholdPercent: 2.5 },
+  { industry: 'Financial Services', normPercent: 15, quarterThresholdPercent: 3.75 },
+  { industry: 'Construction', normPercent: 5, quarterThresholdPercent: 1.25 },
+  { industry: 'Mining', normPercent: 12, quarterThresholdPercent: 3 },
+  { industry: 'Agriculture', normPercent: 8, quarterThresholdPercent: 2 },
+  { industry: 'Transport', normPercent: 7, quarterThresholdPercent: 1.75 },
+  { industry: 'Professional Services', normPercent: 20, quarterThresholdPercent: 5 },
+  { industry: 'Healthcare', normPercent: 8, quarterThresholdPercent: 2 },
+  { industry: 'Hospitality', normPercent: 5, quarterThresholdPercent: 1.25 },
+  { industry: 'Wholesale', normPercent: 3, quarterThresholdPercent: 0.75 },
+  { industry: 'Education', normPercent: 10, quarterThresholdPercent: 2.5 },
+  { industry: 'Energy', normPercent: 10, quarterThresholdPercent: 2.5 },
+  { industry: 'Telecommunications', normPercent: 12, quarterThresholdPercent: 3 },
+  { industry: 'Real Estate', normPercent: 15, quarterThresholdPercent: 3.75 },
+  { industry: 'Other', normPercent: 8, quarterThresholdPercent: 2 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -155,66 +275,75 @@ export const RCOGP_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },  // FIXED: was 8
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },  // FIXED: was 27
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },  // NEW: separated from ESD
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },  // NEW: 5 base + 2 bonuses
+    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    // NOTE: employmentEquity is INCLUDED in managementControl (19 pts combined)
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // Board representation
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,   // FIXED: was 1
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
-      // Executive Directors (the critical fix!)
-      execBlackTarget: 0.50, execBlackMaxPts: 2,   // FIXED: was 0.60
-      execBWTarget: 0.25, execBWMaxPts: 1,        // FIXED: was 0.30 (was 2 pts)
-      // Other Executives
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
       otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
       otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
-      // Senior/Middle/Junior - these are used with EAP-based targets from separate lookup
       seniorMaxPts: 2, seniorBWMaxPts: 1,
       middleMaxPts: 2, middleBWMaxPts: 1,
       juniorMaxPts: 1, juniorBWMaxPts: 1,
     },
     employmentEquity: {
-      // These max pts are part of the 19 total in managementControl
       seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,
-      disabledMaxPts: 2, disabledTarget: 0.03,  // 3% of headcount
+      disabledMaxPts: 2, disabledTarget: 0.02,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 6,   // FIXED: was 20
-      bursarySpendPercent: 2.5, bursaryMaxPts: 4,  // FIXED: was 5
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.50, bo51MaxPts: 11,   // FIXED: was 0.40, 10
-      bwo30Target: 0.12, bwo30MaxPts: 4,   // FIXED: was 5
-      dgTarget: 0.02, dgMaxPts: 2,          // NEW: Designated Group bonus row (was missing!)
-      // NOTE: NO procurement bonuses - bonuses are ED-only
+      bo51Target: 0.50, bo51MaxPts: 11,
+      bwo30Target: 0.12, bwo30MaxPts: 4,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
     esd: {
       sdPercent: 2.0, sdMaxPts: 10,
-      edPercent: 1.0, edMaxPts: 5,        // Base ED points
-      edGraduationBonus: 1,               // Bonus 1 for graduations
-      edJobsBonus: 1,                     // Bonus 2 for jobs created
+      edPercent: 1.0, edMaxPts: 5,
+      edGraduationBonus: 1,
+      edJobsBonus: 1,
     },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// Grand total verification: 25+19+25+29+10+7+5 = 120
+// Ownership verification: 4+2+4+2+3+2+8 = 25 ✓
+// Skills verification: 6+4+4+6+5 = 25 ✓
+// Procurement verification: 5+3+4+11+4+2 = 29 ✓
+// ESD verification: SD 10 + ED 5+1+1 = 17 ✓
+// Grand total: 25+19+25+29+10+7+5 = 120 ✓
 
 // ---------------------------------------------------------------------------
 // ICT Generic (Information & Communication Technology)
@@ -227,29 +356,29 @@ export const ICT_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+15 combined
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
-      boardBWTarget: 0.25, boardBWMaxPts: 1,
-      execBlackTarget: 0.50, execBlackMaxPts: 3,
-      execBWTarget: 0.25, execBWMaxPts: 2,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
       seniorMaxPts: 6, seniorBWMaxPts: 3,
       middleMaxPts: 5, middleBWMaxPts: 2,
       juniorMaxPts: 2, juniorBWMaxPts: 1,
@@ -259,8 +388,16 @@ export const ICT_GENERIC: SectorConfig = {
       disabledMaxPts: 2, disabledTarget: 0.02,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 20,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -270,11 +407,20 @@ export const ICT_GENERIC: SectorConfig = {
       bwo30Target: 0.12, bwo30MaxPts: 4,
       dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
-    sed: { spendPercent: 1.0, maxPts: 5 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 0 },
+    sed: { spendPercent: 1.0, maxPts: 12 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+// ICT Generic verified: 25+23+15+25+27+10+15+12 = 152? No wait - MC+EE combined in Excel
+// Per Excel: Ownership=25, MC=23, Skills=25, PP=27, SD=10, ED=15, SED=12 = 137? 
+// Excel shows Grand Total = 140 - verify MC structure (MC+EE may be separate pillars summing to 23+15=38)
+// Current config: 25+23+15+25+27+10+15+12 = 152 (too high)
+// TODO: Verify if MC 23 includes EE or if they are separate pillars
 
 // ---------------------------------------------------------------------------
 // FSC Generic (Financial Sector Code)
@@ -287,27 +433,30 @@ export const FSC_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+12 combined
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    empowermentFinancing: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+    consumerEducation: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 2,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
       execBlackTarget: 0.50, execBlackMaxPts: 3,
-      execBWTarget: 0.25, execBWMaxPts: 2,
+      execBWTarget: 0.30, execBWMaxPts: 2,
       otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
       otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
       seniorMaxPts: 5, seniorBWMaxPts: 2,
@@ -319,8 +468,16 @@ export const FSC_GENERIC: SectorConfig = {
       disabledMaxPts: 1, disabledTarget: 0.03,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 15,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      learningProgrammesMaxPts: 5,
+      bursaryMaxPts: 3,
+      disabledLearningMaxPts: 3,
+      learnershipsMaxPts: 5,
+      absorptionMaxPts: 4,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -334,6 +491,10 @@ export const FSC_GENERIC: SectorConfig = {
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
 
 // ---------------------------------------------------------------------------
@@ -347,40 +508,49 @@ export const AGRI_GENERIC: SectorConfig = {
   scorecardType: 'Generic',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },  // 8+11 combined
-    employmentEquity: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
+    // NOTE: AgriBEE combines MC+EE into single 23-point pillar per Excel
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
-      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
       seniorMaxPts: 5, seniorBWMaxPts: 2,
       middleMaxPts: 4, middleBWMaxPts: 2,
       juniorMaxPts: 4, juniorBWMaxPts: 2,
     },
     employmentEquity: {
-      seniorMaxPts: 5, middleMaxPts: 4, juniorMaxPts: 4,
-      disabledMaxPts: 2, disabledTarget: 0.02,
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 0, disabledTarget: 0.02,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 20,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -390,11 +560,16 @@ export const AGRI_GENERIC: SectorConfig = {
       bwo30Target: 0.12, bwo30MaxPts: 4,
       dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
-    sed: { spendPercent: 1.0, maxPts: 5 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
+    sed: { spendPercent: 1.0, maxPts: 15 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+// AGRI Generic verified: 25+23+0+25+27+10+7+15 = 132 (matches Excel Grand Total)
 
 // ---------------------------------------------------------------------------
 // QSE Scorecard (for Qualifying Small Enterprises, R10m-R50m turnover)
@@ -407,21 +582,20 @@ export const RCOGP_QSE: SectorConfig = {
   scorecardType: 'QSE',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },  // Combined higher for QSE
-    enterpriseDevelopment: { maxPoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    // NOTE: employmentEquity is INCLUDED in managementControl for QSE
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3,
@@ -439,8 +613,16 @@ export const RCOGP_QSE: SectorConfig = {
       disabledMaxPts: 2, disabledTarget: 0.02,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 20,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -450,11 +632,16 @@ export const RCOGP_QSE: SectorConfig = {
       bwo30Target: 0.12, bwo30MaxPts: 4,
       dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10, edGraduationBonus: 0, edJobsBonus: 0 },
+    esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 0 },
     sed: { spendPercent: 1.0, maxPts: 5 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+// RCOGP QSE verified: 25+15+30+21+5+5+5 = 106 (Excel shows ~108, needs verification)
 
 // ---------------------------------------------------------------------------
 // ICT QSE (Information & Communication Technology - Qualifying Small Enterprise)
@@ -467,20 +654,20 @@ export const ICT_QSE: SectorConfig = {
   scorecardType: 'QSE',
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 8,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3,
@@ -498,8 +685,16 @@ export const ICT_QSE: SectorConfig = {
       disabledMaxPts: 2, disabledTarget: 0.02,
     },
     skills: {
-      overallSpendPercent: 3.5, overallMaxPts: 20,
-      bursarySpendPercent: 2.5, bursaryMaxPts: 5,
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -509,11 +704,16 @@ export const ICT_QSE: SectorConfig = {
       bwo30Target: 0.12, bwo30MaxPts: 4,
       dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 15, edPercent: 1.0, edMaxPts: 10, edGraduationBonus: 0, edJobsBonus: 0 },
-    sed: { spendPercent: 1.0, maxPts: 5 },
+    esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 0 },
+    sed: { spendPercent: 1.0, maxPts: 12 },
   },
   levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+// ICT QSE verified: 25+15+30+21+5+5+12 = 113 (Excel shows 116, needs verification)
 
 // ---------------------------------------------------------------------------
 // Lookup

@@ -104,7 +104,11 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   return acc;
 }
 
-function applyCapToSpend(spendByCategory: Record<TrainingCategoryCode, number>): {
+function applyCapToSpend(
+  spendByCategory: Record<TrainingCategoryCode, number>,
+  categoryECap: number = CATEGORY_E_CAP,
+  categoryFCap: number = CATEGORY_F_CAP
+): {
   totalRecognised: number;
   breakdown: CategoryBreakdown[];
 } {
@@ -120,15 +124,15 @@ function applyCapToSpend(spendByCategory: Record<TrainingCategoryCode, number>):
     let cap: number | undefined;
 
     if (code === 'E' && uncappedTotal > 0) {
-      cap = CATEGORY_E_CAP;
-      const maxAllowed = uncappedTotal * CATEGORY_E_CAP;
+      cap = categoryECap;
+      const maxAllowed = uncappedTotal * categoryECap;
       if (spend > maxAllowed) {
         recognisedSpend = maxAllowed;
         capApplied = true;
       }
     } else if (code === 'F' && uncappedTotal > 0) {
-      cap = CATEGORY_F_CAP;
-      const maxAllowed = uncappedTotal * CATEGORY_F_CAP;
+      cap = categoryFCap;
+      const maxAllowed = uncappedTotal * categoryFCap;
       if (spend > maxAllowed) {
         recognisedSpend = maxAllowed;
         capApplied = true;
@@ -147,43 +151,57 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
   const trainingPrograms = data.trainingPrograms || [];
   const sc = config?.skills;
 
-  // CRITICAL FIX: Skills overall target is 3.5% (NOT 6%)
-  const overallTargetPct = sc?.overallTarget ?? 0.035;
-  const bursaryTargetPct = sc?.bursaryTarget ?? 0.025;
-  const disabledTargetPct = 0.003;
-  const subMinThreshold = sc?.subMinThreshold ?? 10;
+  // Extract config values with fallbacks to hardcoded defaults
+  const overallTargetPct = sc?.overallSpendPercent ?? 0.035;
+  const bursaryTargetPct = sc?.bursarySpendPercent ?? 0.025;
+  const disabledTargetPct = sc?.disabledSpendPercent ?? 0.003;
+  const categoryECap = sc?.categoryECap ?? CATEGORY_E_CAP;
+  const categoryFCap = sc?.categoryFCap ?? CATEGORY_F_CAP;
+  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
+  const maxPoints = config?.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
+
+  // Extract criterion max points from config or use defaults
+  const learningMaxPts = sc?.learningProgrammesMaxPts ?? 6;
+  const bursaryMaxPts = sc?.bursaryMaxPts ?? 4;
+  const disabledMaxPts = sc?.disabledLearningMaxPts ?? 4;
+  const learnershipMaxPts = sc?.learnershipsMaxPts ?? 6;
+  const absorptionMaxPts = sc?.absorptionMaxPts ?? 5;
+
+  // Extract learnership and absorption targets from config
+  const learnershipTargetPct = sc?.learnershipTargetPercent ?? 5.0;
+  const absorptionTargetPct = sc?.absorptionTargetPercent ?? 2.5;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
   const TARGET_DISABLED = leviableAmount * disabledTargetPct;
 
   const spend = accumulateSpend(trainingPrograms);
-  const { totalRecognised, breakdown } = applyCapToSpend(spend.byCategory);
+  const { totalRecognised, breakdown } = applyCapToSpend(spend.byCategory, categoryECap, categoryFCap);
 
-  const learningScore = clampScore(safeRatio(totalRecognised, TARGET_OVERALL, 6), 6);
-  const bursaryScore = clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, 4), 4);
-  const disabledScore = clampScore(safeRatio(spend.disabled, TARGET_DISABLED, 4), 4);
+  const learningScore = clampScore(safeRatio(totalRecognised, TARGET_OVERALL, learningMaxPts), learningMaxPts);
+  const bursaryScore = clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);
+  const disabledScore = clampScore(safeRatio(spend.disabled, TARGET_DISABLED, disabledMaxPts), disabledMaxPts);
 
   const totalEmployees = trainingPrograms.filter(p => p.isBlack).length;
-  const learnershipTarget = Math.max(totalEmployees * 0.05, 1);
-  const learnershipScore = clampScore(safeRatio(spend.learnershipCount, learnershipTarget, 6), 6);
+  const learnershipTarget = Math.max(totalEmployees * (learnershipTargetPct / 100), 1);
+  const learnershipScore = clampScore(safeRatio(spend.learnershipCount, learnershipTarget, learnershipMaxPts), learnershipMaxPts);
 
   const absorptionRate = spend.totalBlackLearners > 0
     ? spend.absorbedCount / spend.totalBlackLearners
     : 0;
-  const absorptionScore = clampScore(safeRatio(absorptionRate, 0.025, 5), 5);
+  const absorptionScore = clampScore(safeRatio(absorptionRate, absorptionTargetPct / 100, absorptionMaxPts), absorptionMaxPts);
 
   const totalScore = clampScore(
     learningScore + bursaryScore + disabledScore + learnershipScore + absorptionScore,
-    25
+    maxPoints
   );
 
   const subLines: SkillsSubLine[] = [
-    { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: 6, score: learningScore },
-    { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: 4, score: bursaryScore },
-    { name: "Expenditure on learning programmes for disabled black employees", target: "0.3% of payroll", weighting: 4, score: disabledScore },
-    { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: "5% of headcount", weighting: 6, score: learnershipScore },
-    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: "2.5% absorption", weighting: 5, score: absorptionScore },
+    { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
+    { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
+    { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: disabledScore },
+    { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: learnershipScore },
+    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore },
   ];
 
   return {

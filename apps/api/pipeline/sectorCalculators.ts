@@ -116,38 +116,66 @@ export function calcSkillsSector(trainings: ParseResult['trainingPrograms'], lev
   const t = cfg.targets.skills;
   const targetOverall = leviableAmount * (t.overallSpendPercent / 100);
   const targetBursary = leviableAmount * (t.bursarySpendPercent / 100);
-  let totalBlackSpend = 0, bursarySpend = 0;
+  const targetDisabled = leviableAmount * (t.disabledSpendPercent / 100);
+  let totalBlackSpend = 0, bursarySpend = 0, disabledSpend = 0;
+  let learnershipCount = 0, absorbedCount = 0, totalBlackLearners = 0;
   for (const tr of trainings) {
     if (tr.isBlack) {
       totalBlackSpend += tr.cost;
+      totalBlackLearners++;
       if (tr.category === 'bursary') bursarySpend += tr.cost;
+      if (tr.isDisabled) disabledSpend += tr.cost;
+      if (tr.category === 'learnership' || tr.category === 'internship') learnershipCount++;
+      if (tr.isAbsorbed) absorbedCount++;
     }
   }
 
-  const generalScore = targetOverall > 0 ? Math.min(t.overallMaxPts, (totalBlackSpend / targetOverall) * t.overallMaxPts) : 0;
+  const learningScore = targetOverall > 0 ? Math.min(t.learningProgrammesMaxPts, (totalBlackSpend / targetOverall) * t.learningProgrammesMaxPts) : 0;
   const bursaryScore = targetBursary > 0 ? Math.min(t.bursaryMaxPts, (bursarySpend / targetBursary) * t.bursaryMaxPts) : 0;
+  const disabledScore = targetDisabled > 0 ? Math.min(t.disabledLearningMaxPts, (disabledSpend / targetDisabled) * t.disabledLearningMaxPts) : 0;
+
+  const learnershipTarget = Math.max(totalBlackLearners * (t.learnershipTargetPercent / 100), 1);
+  const learnershipScore = Math.min(t.learnershipsMaxPts, (learnershipCount / learnershipTarget) * t.learnershipsMaxPts);
+
+  const absorptionRate = totalBlackLearners > 0 ? absorbedCount / totalBlackLearners : 0;
+  const absorptionScore = Math.min(t.absorptionMaxPts, (absorptionRate / (t.absorptionTargetPercent / 100)) * t.absorptionMaxPts);
+
   const maxPts = cfg.pillarConfigs.skillsDevelopment.maxPoints;
-  const total = Math.min(generalScore + bursaryScore, maxPts);
+  const total = Math.min(learningScore + bursaryScore + disabledScore + learnershipScore + absorptionScore, maxPts);
   const subMinThreshold = cfg.pillarConfigs.skillsDevelopment.subMinimumPercent / 100;
-  return { total: r2(total), subMinMet: generalScore >= (t.overallMaxPts * subMinThreshold), totalBlackSpend };
+  return { total: r2(total), subMinMet: total >= (maxPts * subMinThreshold), totalBlackSpend };
 }
 
 export function calcProcurementSector(suppliers: ParseResult['suppliers'], tmps: number, cfg: SectorConfig) {
-  const target = tmps * 0.8;
-  let recognisedSpend = 0, bonusPoints = 0;
+  const t = cfg.targets.procurement;
+  let empoweringSpend = 0, qseSpend = 0, emeSpend = 0;
+  let bo51Spend = 0, bwo30Spend = 0, dgSpend = 0;
+  let recognisedSpend = 0;
+
   for (const s of suppliers) {
     const recognition = RECOGNITION_TABLE[s.beeLevel] || 0;
     recognisedSpend += s.spend * recognition;
-    if (s.blackOwnership >= 0.51) bonusPoints += (s.spend / Math.max(tmps, 1)) * 2;
+
+    if (s.beeLevel >= 1 && s.beeLevel <= 4) empoweringSpend += s.spend;
+    if (s.enterpriseType === 'qse') qseSpend += s.spend;
+    if (s.enterpriseType === 'eme') emeSpend += s.spend;
+    if (s.blackOwnership >= 0.51) bo51Spend += s.spend;
+    if ((s.blackWomenOwnership ?? 0) >= 0.30) bwo30Spend += s.spend;
+    if (s.blackOwnership >= 0.51) dgSpend += s.spend;
   }
 
+  const empScore = tmps > 0 ? Math.min(t.allSuppliersMaxPts, (empoweringSpend / (tmps * t.allSuppliersTarget)) * t.allSuppliersMaxPts) : 0;
+  const qseScore = tmps > 0 ? Math.min(t.qseMaxPts, (qseSpend / (tmps * t.qseTarget)) * t.qseMaxPts) : 0;
+  const emeScore = tmps > 0 ? Math.min(t.emeMaxPts, (emeSpend / (tmps * t.emeTarget)) * t.emeMaxPts) : 0;
+  const bo51Score = tmps > 0 ? Math.min(t.bo51MaxPts, (bo51Spend / (tmps * t.bo51Target)) * t.bo51MaxPts) : 0;
+  const bwo30Score = tmps > 0 ? Math.min(t.bwo30MaxPts, (bwo30Spend / (tmps * t.bwo30Target)) * t.bwo30MaxPts) : 0;
+  const dgScore = tmps > 0 ? Math.min(t.dgMaxPts, (dgSpend / (tmps * t.dgTarget)) * t.dgMaxPts) : 0;
+
   const maxPts = cfg.pillarConfigs.preferentialProcurement.maxPoints;
-  const baseMax = maxPts - cfg.targets.procurement.bonusMaxPts;
-  const baseScore = target > 0 ? Math.min(baseMax, (recognisedSpend / target) * baseMax) : 0;
-  const bonus = Math.min(cfg.targets.procurement.bonusMaxPts, bonusPoints);
-  const total = Math.min(baseScore + bonus, maxPts);
+  const baseTotal = empScore + qseScore + emeScore + bo51Score + bwo30Score + dgScore;
+  const total = Math.min(baseTotal, maxPts);
   const subMinThreshold = cfg.pillarConfigs.preferentialProcurement.subMinimumPercent / 100;
-  return { total: r2(total), subMinMet: baseScore >= (baseMax * subMinThreshold), recognisedSpend };
+  return { total: r2(total), subMinMet: baseTotal >= (maxPts * subMinThreshold), recognisedSpend };
 }
 
 export function calcEsdSector(contributions: ParseResult['esdContributions'], npat: number, cfg: SectorConfig) {
