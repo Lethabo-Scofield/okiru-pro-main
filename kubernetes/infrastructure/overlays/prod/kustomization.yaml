@@ -12,6 +12,7 @@ patchesStrategicMerge:
   - patches/resource-limits.yaml
   - patches/replica-count.yaml
   - patches/configmap-patch.yaml
+  - patches/pvc-storage-class.yaml
 
 # Images - Using 'latest' tag for flexibility during development
 # For production stability, use specific digests or tags:
@@ -25,9 +26,13 @@ images:
   - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
     newTag: 5dc2624-20260403
 
-commonLabels:
-  environment: production
-  app.kubernetes.io/instance: okiru-pro-prod
+# Use 'labels' instead of 'commonLabels' to avoid modifying selectors
+# which are immutable after deployment creation
+labels:
+  - includeSelectors: false
+    pairs:
+      environment: production
+      app.kubernetes.io/instance: okiru-pro-prod
 
 configMapGenerator:
   - name: app-config
