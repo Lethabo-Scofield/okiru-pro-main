@@ -124,54 +124,87 @@ jobs:
         run: |
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create secrets from GitHub Secrets
+      - name: Create or update secrets
         run: |
+          NS=${{ env.NAMESPACE }}
 
-          # Create mongodb-credentials secret
-          kubectl create secret generic mongodb-credentials \
-            --namespace=${{ env.NAMESPACE }} \
-            --from-literal=MONGO_INITDB_ROOT_USERNAME="${{ secrets.MONGO_INITDB_ROOT_USERNAME }}" \
-            --from-literal=MONGO_INITDB_ROOT_PASSWORD="${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}" \
-            --from-literal=MONGODB_URI="${{ secrets.MONGODB_URI }}" \
-            --from-literal=MONGODB_DB_NAME="${{ secrets.MONGODB_DB_NAME }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          # Helper: only create/update a secret if it doesn't already exist in the cluster
+          # This prevents CI from overwriting manually-set secrets with empty GitHub Secret values
+          ensure_secret() {
+            local name=$1; shift
+            if kubectl get secret "$name" -n "$NS" >/dev/null 2>&1; then
+              echo "Secret $name already exists — skipping (manage via kubectl directly)"
+            else
+              echo "Creating secret $name..."
+              kubectl create secret generic "$name" -n "$NS" "$@" --dry-run=client -o yaml | kubectl apply -f -
+            fi
+          }
 
-          # Create arangodb-credentials secret
-          kubectl create secret generic arangodb-credentials \
-            --namespace=${{ env.NAMESPACE }} \
-            --from-literal=ARANGO_ROOT_PASSWORD="${{ secrets.ARANGO_ROOT_PASSWORD }}" \
-            --from-literal=ARANGO_URL="${{ secrets.ARANGO_URL }}" \
-            --from-literal=ARANGO_DB_NAME="${{ secrets.ARANGO_DB_NAME }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          # Compute defaults for in-cluster services
+          MONGO_USER="${{ secrets.MONGO_INITDB_ROOT_USERNAME }}"
+          MONGO_PASS="${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}"
+          MONGO_DB="${{ secrets.MONGODB_DB_NAME }}"
+          MONGO_USER="${MONGO_USER:-admin}"
+          MONGO_PASS="${MONGO_PASS:-okiru-mongo-2026}"
+          MONGO_DB="${MONGO_DB:-okiru_pro}"
+          MONGO_URI="${{ secrets.MONGODB_URI }}"
+          MONGO_URI="${MONGO_URI:-mongodb://${MONGO_USER}:${MONGO_PASS}@mongodb:27017/${MONGO_DB}?authSource=admin}"
 
-          # Create redis-credentials secret
-          kubectl create secret generic redis-credentials \
-            --namespace=${{ env.NAMESPACE }} \
-            --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
-            --from-literal=REDIS_URL="${{ secrets.REDIS_URL }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          ARANGO_PASS="${{ secrets.ARANGO_ROOT_PASSWORD }}"
+          ARANGO_URL_VAL="${{ secrets.ARANGO_URL }}"
+          ARANGO_DB_VAL="${{ secrets.ARANGO_DB_NAME }}"
+          ARANGO_URL_VAL="${ARANGO_URL_VAL:-http://arangodb:8529}"
+          ARANGO_DB_VAL="${ARANGO_DB_VAL:-bbbee_db}"
 
-          # Create session-secrets secret
-          kubectl create secret generic session-secrets \
-            --namespace=${{ env.NAMESPACE }} \
-            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-            --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
-            --from-literal=API_INTERNAL_KEY="${{ secrets.API_INTERNAL_KEY }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          REDIS_PASS="${{ secrets.REDIS_PASSWORD }}"
+          REDIS_URL_VAL="${{ secrets.REDIS_URL }}"
+          if [ -n "$REDIS_PASS" ]; then
+            REDIS_URL_VAL="${REDIS_URL_VAL:-redis://:${REDIS_PASS}@redis:6379/0}"
+          else
+            REDIS_URL_VAL="${REDIS_URL_VAL:-redis://redis:6379/0}"
+          fi
 
-          # Create ACR pull secret if credentials provided
+          JWT="${{ secrets.JWT_SECRET }}"
+          SESSION="${{ secrets.SESSION_SECRET }}"
+          API_KEY="${{ secrets.API_INTERNAL_KEY }}"
+          JWT="${JWT:-$(openssl rand -hex 32)}"
+          SESSION="${SESSION:-$(openssl rand -hex 32)}"
+          API_KEY="${API_KEY:-$(openssl rand -hex 32)}"
+
+          ensure_secret mongodb-credentials \
+            --from-literal=MONGO_INITDB_ROOT_USERNAME="${MONGO_USER}" \
+            --from-literal=MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASS}" \
+            --from-literal=MONGODB_URI="${MONGO_URI}" \
+            --from-literal=MONGODB_DB_NAME="${MONGO_DB}"
+
+          ensure_secret arangodb-credentials \
+            --from-literal=ARANGO_ROOT_PASSWORD="${ARANGO_PASS}" \
+            --from-literal=ARANGO_PASSWORD="${ARANGO_PASS}" \
+            --from-literal=ARANGO_URL="${ARANGO_URL_VAL}" \
+            --from-literal=ARANGO_DB_NAME="${ARANGO_DB_VAL}"
+
+          ensure_secret redis-credentials \
+            --from-literal=REDIS_PASSWORD="${REDIS_PASS}" \
+            --from-literal=REDIS_URL="${REDIS_URL_VAL}"
+
+          ensure_secret session-secrets \
+            --from-literal=JWT_SECRET="${JWT}" \
+            --from-literal=SESSION_SECRET="${SESSION}" \
+            --from-literal=API_INTERNAL_KEY="${API_KEY}"
+
+          # ACR pull secret — always update since credentials may rotate
           if [ -n "${{ secrets.ACR_USERNAME }}" ] && [ -n "${{ secrets.ACR_PASSWORD }}" ]; then
             kubectl create secret docker-registry acr-pull-secret \
-              --namespace=${{ env.NAMESPACE }} \
+              --namespace="$NS" \
               --docker-server=${{ env.ACR_REGISTRY }} \
               --docker-username=${{ secrets.ACR_USERNAME }} \
               --docker-password=${{ secrets.ACR_PASSWORD }} \
               --dry-run=client -o yaml | kubectl apply -f -
           fi
 
-          # Create external API keys secret if any are provided
+          # External API keys — always update (optional keys, OK if empty)
           kubectl create secret generic external-api-keys \
-            --namespace=${{ env.NAMESPACE }} \
+            --namespace="$NS" \
             --from-literal=AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
             --from-literal=AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
             --from-literal=GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
