@@ -116,7 +116,7 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     return res.status(status).json({ message });
   });
 
-  const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
+  const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
   });

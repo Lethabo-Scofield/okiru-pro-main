@@ -77,6 +77,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: API_PORT
+            - name: API_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: API_PORT
             - name: LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
@@ -107,6 +112,16 @@ spec:
                 secretKeyRef:
                   name: arangodb-credentials
                   key: ARANGO_URL
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_PASSWORD
+            - name: ARANGO_DB
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_DB_NAME
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
