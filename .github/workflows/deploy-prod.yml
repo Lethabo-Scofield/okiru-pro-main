@@ -128,19 +128,9 @@ jobs:
         run: |
           NS=${{ env.NAMESPACE }}
 
-          # Helper: only create/update a secret if it doesn't already exist in the cluster
-          # This prevents CI from overwriting manually-set secrets with empty GitHub Secret values
-          ensure_secret() {
-            local name=$1; shift
-            if kubectl get secret "$name" -n "$NS" >/dev/null 2>&1; then
-              echo "Secret $name already exists — skipping (manage via kubectl directly)"
-            else
-              echo "Creating secret $name..."
-              kubectl create secret generic "$name" -n "$NS" "$@" --dry-run=client -o yaml | kubectl apply -f -
-            fi
-          }
-
-          # Compute defaults for in-cluster services
+          # Build real values with hardcoded in-cluster defaults.
+          # GitHub Secrets are used when set; otherwise sensible defaults keep the cluster working.
+          # Values are NEVER overwritten with empty strings or unsubstituted ${VAR} placeholders.
           MONGO_USER="${{ secrets.MONGO_INITDB_ROOT_USERNAME }}"
           MONGO_PASS="${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}"
           MONGO_DB="${{ secrets.MONGODB_DB_NAME }}"
@@ -148,51 +138,69 @@ jobs:
           MONGO_PASS="${MONGO_PASS:-okiru-mongo-2026}"
           MONGO_DB="${MONGO_DB:-okiru_pro}"
           MONGO_URI="${{ secrets.MONGODB_URI }}"
-          MONGO_URI="${MONGO_URI:-mongodb://${MONGO_USER}:${MONGO_PASS}@mongodb:27017/${MONGO_DB}?authSource=admin}"
+          # If MONGODB_URI is still a placeholder or empty, build it from components
+          if [ -z "$MONGO_URI" ] || echo "$MONGO_URI" | grep -q '^\${'; then
+            MONGO_URI="mongodb://${MONGO_USER}:${MONGO_PASS}@mongodb:27017/${MONGO_DB}?authSource=admin"
+          fi
 
           ARANGO_PASS="${{ secrets.ARANGO_ROOT_PASSWORD }}"
           ARANGO_URL_VAL="${{ secrets.ARANGO_URL }}"
           ARANGO_DB_VAL="${{ secrets.ARANGO_DB_NAME }}"
-          ARANGO_URL_VAL="${ARANGO_URL_VAL:-http://arangodb:8529}"
-          ARANGO_DB_VAL="${ARANGO_DB_VAL:-bbbee_db}"
+          if [ -z "$ARANGO_URL_VAL" ] || echo "$ARANGO_URL_VAL" | grep -q '^\${'; then
+            ARANGO_URL_VAL="http://arangodb:8529"
+          fi
+          if [ -z "$ARANGO_DB_VAL" ] || echo "$ARANGO_DB_VAL" | grep -q '^\${'; then
+            ARANGO_DB_VAL="bbbee_db"
+          fi
 
           REDIS_PASS="${{ secrets.REDIS_PASSWORD }}"
           REDIS_URL_VAL="${{ secrets.REDIS_URL }}"
-          if [ -n "$REDIS_PASS" ]; then
-            REDIS_URL_VAL="${REDIS_URL_VAL:-redis://:${REDIS_PASS}@redis:6379/0}"
-          else
-            REDIS_URL_VAL="${REDIS_URL_VAL:-redis://redis:6379/0}"
+          if [ -z "$REDIS_URL_VAL" ] || echo "$REDIS_URL_VAL" | grep -q '^\${'; then
+            if [ -n "$REDIS_PASS" ]; then
+              REDIS_URL_VAL="redis://:${REDIS_PASS}@redis:6379/0"
+            else
+              REDIS_URL_VAL="redis://redis:6379/0"
+            fi
           fi
 
           JWT="${{ secrets.JWT_SECRET }}"
           SESSION="${{ secrets.SESSION_SECRET }}"
           API_KEY="${{ secrets.API_INTERNAL_KEY }}"
-          JWT="${JWT:-$(openssl rand -hex 32)}"
-          SESSION="${SESSION:-$(openssl rand -hex 32)}"
-          API_KEY="${API_KEY:-$(openssl rand -hex 32)}"
+          if [ -z "$JWT" ] || echo "$JWT" | grep -q '^\${'; then JWT=$(openssl rand -hex 32); fi
+          if [ -z "$SESSION" ] || echo "$SESSION" | grep -q '^\${'; then SESSION=$(openssl rand -hex 32); fi
+          if [ -z "$API_KEY" ] || echo "$API_KEY" | grep -q '^\${'; then API_KEY=$(openssl rand -hex 32); fi
 
-          ensure_secret mongodb-credentials \
+          # Apply secrets — always write so new keys (e.g. ARANGO_PASSWORD) are added
+          kubectl create secret generic mongodb-credentials \
+            --namespace="$NS" \
             --from-literal=MONGO_INITDB_ROOT_USERNAME="${MONGO_USER}" \
             --from-literal=MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASS}" \
             --from-literal=MONGODB_URI="${MONGO_URI}" \
-            --from-literal=MONGODB_DB_NAME="${MONGO_DB}"
+            --from-literal=MONGODB_DB_NAME="${MONGO_DB}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-          ensure_secret arangodb-credentials \
+          kubectl create secret generic arangodb-credentials \
+            --namespace="$NS" \
             --from-literal=ARANGO_ROOT_PASSWORD="${ARANGO_PASS}" \
             --from-literal=ARANGO_PASSWORD="${ARANGO_PASS}" \
             --from-literal=ARANGO_URL="${ARANGO_URL_VAL}" \
-            --from-literal=ARANGO_DB_NAME="${ARANGO_DB_VAL}"
+            --from-literal=ARANGO_DB_NAME="${ARANGO_DB_VAL}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-          ensure_secret redis-credentials \
+          kubectl create secret generic redis-credentials \
+            --namespace="$NS" \
             --from-literal=REDIS_PASSWORD="${REDIS_PASS}" \
-            --from-literal=REDIS_URL="${REDIS_URL_VAL}"
+            --from-literal=REDIS_URL="${REDIS_URL_VAL}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-          ensure_secret session-secrets \
+          kubectl create secret generic session-secrets \
+            --namespace="$NS" \
             --from-literal=JWT_SECRET="${JWT}" \
             --from-literal=SESSION_SECRET="${SESSION}" \
-            --from-literal=API_INTERNAL_KEY="${API_KEY}"
+            --from-literal=API_INTERNAL_KEY="${API_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-          # ACR pull secret — always update since credentials may rotate
+          # ACR pull secret
           if [ -n "${{ secrets.ACR_USERNAME }}" ] && [ -n "${{ secrets.ACR_PASSWORD }}" ]; then
             kubectl create secret docker-registry acr-pull-secret \
               --namespace="$NS" \
@@ -202,7 +210,7 @@ jobs:
               --dry-run=client -o yaml | kubectl apply -f -
           fi
 
-          # External API keys — always update (optional keys, OK if empty)
+          # External API keys (optional — empty values are fine here)
           kubectl create secret generic external-api-keys \
             --namespace="$NS" \
             --from-literal=AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
