@@ -8,7 +8,7 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-staging"
 spec:
   rules:
-    - host: staging.okiru.20.164.101.114.nip.io
+    - host: okiru-staging.20.164.101.114.nip.io
       http:
         paths:
           - path: /api
@@ -38,7 +38,7 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-staging"
 spec:
   rules:
-    - host: staging.okiru.20.164.101.114.nip.io
+    - host: okiru-staging.20.164.101.114.nip.io
       http:
         paths:
           - path: /compute(/|$)(.*)
