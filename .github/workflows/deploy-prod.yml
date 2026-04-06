@@ -1,5 +1,9 @@
 name: Deploy to Production
 
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
 on:
   push:
     branches:
@@ -22,6 +26,10 @@ env:
   IMAGE_TAG: ${{ github.sha }}
   NAMESPACE: okiru-pro
   DOMAIN: okiru.20.164.101.114.nip.io
+
+permissions:
+  contents: write  # Required to commit kustomization.yaml changes back to git
+  packages: write  # Required to push images to GitHub Container Registry (if used)
 
 jobs:
   build-and-push:
@@ -169,23 +177,63 @@ jobs:
             --from-literal=GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy to Kubernetes
-        id: deploy
+      - name: Label secrets for management tracking
         run: |
           export KUBECONFIG=kubeconfig
 
-          echo "=== Updating image tags directly ==="
-          kubectl set image deployment/api \
-            api=${{ needs.build-and-push.outputs.api_image }} \
-            -n ${{ env.NAMESPACE }}
+          echo "=== Labeling secrets for management tracking ==="
 
-          kubectl set image deployment/web \
-            web=${{ needs.build-and-push.outputs.web_image }} \
-            -n ${{ env.NAMESPACE }}
+          # Label all credentials secrets as managed by GitHub Actions
+          kubectl label secret -n ${{ env.NAMESPACE }} mongodb-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
 
-          kubectl set image deployment/compute \
-            compute=${{ needs.build-and-push.outputs.compute_image }} \
-            -n ${{ env.NAMESPACE }}
+          kubectl label secret -n ${{ env.NAMESPACE }} arangodb-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} redis-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} session-secrets \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} external-api-keys \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} azure-backup-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          echo "=== Secrets labeled successfully ==="
+
+      - name: Update Kustomize image tags
+        run: |
+          export KUBECONFIG=kubeconfig
+          cd kubernetes/infrastructure/overlays/prod
+
+          echo "=== Updating image tags in Kustomize overlay ==="
+          kustomize edit set image \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/api=${{ needs.build-and-push.outputs.api_image }} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/web=${{ needs.build-and-push.outputs.web_image }} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/compute=${{ needs.build-and-push.outputs.compute_image }}
+
+          echo "=== Updated kustomization.yaml ==="
+          cat kustomization.yaml
+
+      - name: Deploy to Kubernetes
+        id: deploy
+        timeout-minutes: 15
+        run: |
+          export KUBECONFIG=kubeconfig
+          cd kubernetes/infrastructure
+
+          echo "=== Rendering and applying Kustomize manifests ==="
+          # Render and apply the full configuration (includes ConfigMaps, Deployments, Services, etc.)
+          kustomize build overlays/prod | kubectl apply -f -
 
           echo "=== Waiting for deployments to be ready ==="
           kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s
@@ -275,6 +323,40 @@ jobs:
           kubectl get hpa -n ${{ env.NAMESPACE }}
 
           echo "=== Service checks completed ==="
+
+      - name: Commit updated kustomization.yaml to git
+        if: success() && steps.deploy.outcome == 'success'
+        run: |
+          echo "=== Committing updated image tags to git ==="
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Navigate to overlay directory
+          cd kubernetes/infrastructure/overlays/prod
+
+          # Check if there are changes to commit
+          if git diff --quiet kustomization.yaml; then
+            echo "No changes to kustomization.yaml - skipping commit"
+            exit 0
+          fi
+
+          # Stage and commit
+          git add kustomization.yaml
+          git commit -m "chore(deploy): update production image tags to ${{ github.sha }}
+
+          Automated deployment from GitHub Actions workflow.
+          - API: ${{ needs.build-and-push.outputs.api_image }}
+          - Web: ${{ needs.build-and-push.outputs.web_image }}
+          - Compute: ${{ needs.build-and-push.outputs.compute_image }}
+
+          Workflow Run: ${{ github.run_id }}"
+
+          # Push to main branch
+          git push origin HEAD:main
+
+          echo "✅ Successfully committed and pushed updated kustomization.yaml"
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outcome == 'success'

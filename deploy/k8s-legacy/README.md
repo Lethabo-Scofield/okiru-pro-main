@@ -1,6 +1,22 @@
-# OKIru Pro - AKS Kubernetes Deployment
+# ⚠️ DEPRECATED: Legacy Kubernetes Manifests
+
+**This folder is deprecated and kept for reference only.**
+
+## New Location
+
+**Active Kubernetes manifests:** `kubernetes/infrastructure/`
+
+The deployment configuration has been migrated to Kustomize for better environment management.
+
+See `kubernetes/README.md` for current documentation.
+
+---
+
+# OKIru Pro - AKS Kubernetes Deployment (LEGACY)
 
 Complete Kubernetes manifests for deploying the OKIru Pro application on Azure Kubernetes Service (AKS).
+
+**DO NOT USE FOR NEW DEPLOYMENTS** - Use `kubectl apply -k kubernetes/infrastructure/overlays/prod` instead.
 
 ## Architecture Overview
 

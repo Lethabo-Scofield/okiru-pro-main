@@ -77,6 +77,21 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: API_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+            - name: CORS_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CORS_ORIGIN
+            - name: COMPUTE_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: COMPUTE_ENGINE_URL
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -107,6 +122,27 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: API_INTERNAL_KEY
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_ENDPOINT
+                  optional: true
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_KEY
+                  optional: true
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: GROQ_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
           resources:
             requests:
               memory: "256Mi"
@@ -151,3 +187,7 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 200Mi

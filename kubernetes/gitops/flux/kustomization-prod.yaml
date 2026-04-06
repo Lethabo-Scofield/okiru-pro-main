@@ -1,0 +1,91 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: okiru-pro-prod
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  path: ./kubernetes/infrastructure/overlays/prod
+  prune: true
+  retryInterval: 2m0s
+  sourceRef:
+    kind: GitRepository
+    name: okiru-pro
+  targetNamespace: okiru-pro
+  timeout: 3m0s
+  wait: true
+  # Health checks
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: api
+      namespace: okiru-pro
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      namespace: okiru-pro
+  # Post-deploy notification
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
+---
+# ImageUpdateAutomation for automated image tag updates
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: okiru-pro-prod
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  sourceRef:
+    kind: GitRepository
+    name: okiru-pro
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      authorName: Flux Bot
+      authorEmail: flux@okiru.local
+      messageTemplate: |
+        Automated image update
+
+        Images:
+        {{ range .Updated.Images -}}
+        - {{.}}
+        {{ end -}}
+    push:
+      branch: main
+  policy:
+    # Only run if tests pass (optional)
+    # semver:
+    #   range: 1.x.x
+---
+# ImagePolicy for API
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImagePolicy
+metadata:
+  name: okiru-api
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-api
+  filterTags:
+    pattern: '^[a-f0-9]{7,}-(?P<ts>[0-9]{8,})$'
+    extract: '$ts'
+  policy:
+    alphabetical:
+      order: asc
+---
+# ImageRepository for API
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageRepository
+metadata:
+  name: okiru-api
+  namespace: flux-system
+spec:
+  image: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+  interval: 1m0s
+  secretRef:
+    name: acr-credentials  # ACR pull secret

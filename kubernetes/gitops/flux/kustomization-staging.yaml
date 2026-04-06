@@ -1,0 +1,39 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: okiru-pro-staging
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  path: ./kubernetes/infrastructure/overlays/staging
+  prune: true
+  retryInterval: 2m0s
+  sourceRef:
+    kind: GitRepository
+    name: okiru-pro-staging
+  targetNamespace: okiru-pro-staging
+  timeout: 3m0s
+  wait: true
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: api
+      namespace: okiru-pro-staging
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      namespace: okiru-pro-staging
+---
+# Separate GitRepository for staging (tracks develop branch)
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: okiru-pro-staging
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: develop
+  secretRef:
+    name: github-token
+  url: https://github.com/your-org/okiru-pro-main.git

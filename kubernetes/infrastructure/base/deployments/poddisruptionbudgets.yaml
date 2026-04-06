@@ -1,0 +1,85 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  labels:
+    app: api
+    component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  labels:
+    app: web
+    component: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+---
+# Compute engine PDB - allows disruption since it's async processing
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: compute-pdb
+  labels:
+    app: compute
+    component: backend
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: compute
+---
+# MongoDB PDB - protects database during node drains
+# Single instance: ensures at least 1 pod available
+# If using replicaset, consider minAvailable based on replica count
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mongodb-pdb
+  labels:
+    app: mongodb
+    component: database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mongodb
+---
+# ArangoDB PDB - protects database during node drains
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: arangodb-pdb
+  labels:
+    app: arangodb
+    component: database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: arangodb
+---
+# Redis PDB - protects cache during node drains
+# Cache can be rebuilt, so minAvailable: 0 is acceptable
+# Change to 1 if cache warming is expensive
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  labels:
+    app: redis
+    component: cache
+spec:
+  minAvailable: 0  # Redis can be evicted; data will be rebuilt
+  selector:
+    matchLabels:
+      app: redis

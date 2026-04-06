@@ -1,0 +1,26 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: okiru-pro
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  secretRef:
+    name: github-token  # Create this secret with Git credentials if private repo
+  url: https://github.com/your-org/okiru-pro-main.git
+---
+# Alternative: Using GitHub App authentication
+# apiVersion: source.toolkit.fluxcd.io/v1
+# kind: GitRepository
+# metadata:
+#   name: okiru-pro
+#   namespace: flux-system
+# spec:
+#   interval: 1m0s
+#   url: https://github.com/your-org/okiru-pro-main.git
+#   ref:
+#     branch: main
+#   secretRef:
+#     name: github-app-token
