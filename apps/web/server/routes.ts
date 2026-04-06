@@ -71,7 +71,8 @@ export async function registerRoutes(
   logger.info("Starting route registration...");
 
   const isProduction = process.env.NODE_ENV === "production";
-  if (isProduction) {
+  const isReplit = !!process.env.REPLIT_DEV_DOMAIN || !!process.env.REPL_SLUG;
+  if (isProduction || isReplit) {
     app.set("trust proxy", 1);
   }
 
@@ -90,8 +91,8 @@ export async function registerRoutes(
     name: 'okiru.web.sid',
     cookie: {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: "lax",
+      secure: isProduction || isReplit,
+      sameSite: isReplit ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   };
