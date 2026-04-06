@@ -99,7 +99,7 @@ configMapGenerator:
     literals:
       - NODE_ENV=staging
       - LOG_LEVEL=debug
-      - CORS_ORIGIN="*"
+      - 'CORS_ORIGIN="*"'
 EOF
           
           cd /tmp/validate-staging
