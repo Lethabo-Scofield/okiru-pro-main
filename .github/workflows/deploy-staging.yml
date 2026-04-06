@@ -21,7 +21,7 @@ env:
   ACR_REGISTRY: okiruproacrde4d539b.azurecr.io
   IMAGE_TAG: ${{ github.sha }}
   NAMESPACE: okiru-pro-staging
-  DOMAIN: staging.okiru.20.164.101.114.nip.io
+  DOMAIN: okiru-staging.20.164.101.114.nip.io
 
 permissions:
   contents: write
