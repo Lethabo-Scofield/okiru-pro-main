@@ -122,6 +122,16 @@ spec:
                 secretKeyRef:
                   name: arangodb-credentials
                   key: ARANGO_DB_NAME
+            - name: ARANGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_USER
+            - name: ARANGO_VERIFY_SSL
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_VERIFY_SSL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
