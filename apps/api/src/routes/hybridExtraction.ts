@@ -451,7 +451,7 @@ router.post(
       console.log(`[hybridExtraction] Indexes built in ${indexTime}ms (embeddings: ${hasEmbeddings}, llm: ${llmAvailable})`);
 
       // Step 4: Load entity manifest
-      const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
+      const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
 
       // Step 5: Extract entities
       const extractStart = Date.now();

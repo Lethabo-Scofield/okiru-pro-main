@@ -30,7 +30,7 @@ router.get('/', async (_req: Request, res: Response) => {
     } catch { }
 
     // Get new ontology manifests and convert to template format
-    const manifests = getAllManifests();
+    const manifests = await getAllManifests();
     const ontologyTemplates = manifests.map(m => {
       const meta = graphMeta[`${m.sectorCode}_${m.scorecardType}`];
       return {

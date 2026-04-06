@@ -209,7 +209,7 @@ router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
     const scorecardType = (req.query.type as string) || 'Generic';
 
     const { buildManifest } = await import('../../pipeline/extraction/entityManifest.js');
-    const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
+    const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
 
     return res.json({
       success: true,

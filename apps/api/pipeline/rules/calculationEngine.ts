@@ -585,7 +585,7 @@ export interface CalculationOptions {
 
 export async function createCalculationEngine(options: CalculationOptions): Promise<CalculationEngine> {
   const { buildManifest } = await import('../extraction/entityManifest.js');
-  const manifest = buildManifest(options.sectorCode, options.scorecardType);
+  const manifest = await buildManifest(options.sectorCode, options.scorecardType);
   
   // Query ArangoDB first, fallback to hardcoded
   const sectorConfig = await resolveSectorConfig(options.sectorCode, options.scorecardType);

@@ -259,7 +259,7 @@ router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
         });
       }
 
-      const manifest = buildManifest(sectorCode.toUpperCase(), scorecardType);
+      const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
       mapping = await buildEntityCellMapping(
         graphKeys[0],
         sectorCode.toUpperCase(),

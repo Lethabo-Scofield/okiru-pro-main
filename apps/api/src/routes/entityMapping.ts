@@ -63,7 +63,7 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
     }
 
     // Get required entities for this sector/type
-    const manifest = buildManifest(sectorCode, scorecardType);
+    const manifest = await buildManifest(sectorCode, scorecardType);
 
     // Build the mapping
     const mapping = await buildEntityCellMapping(
@@ -106,14 +106,14 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
 router.post('/build-all', async (_req: Request, res: Response) => {
   try {
     // Build manifests for all 6 templates
-    const manifests = [
+    const manifests = await Promise.all([
       buildManifest('RCOGP', 'Generic'),
       buildManifest('ICT', 'Generic'),
       buildManifest('ICT', 'QSE'),
       buildManifest('RCOGP', 'QSE'),
       buildManifest('FSC', 'Generic'),
       buildManifest('AGRI', 'Generic'),
-    ];
+    ]);
 
     const results: Array<{
       sectorCode: string;

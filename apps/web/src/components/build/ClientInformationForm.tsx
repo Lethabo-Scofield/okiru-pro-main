@@ -132,7 +132,7 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
     const fetchSectors = async () => {
       try {
         setLoadingSectors(true);
-        const response = await fetch('/api/sectors/options');
+        const response = await fetch(`${API_BASE}/api/sectors/options`);
         if (!response.ok) {
           throw new Error(`Failed to fetch sectors: ${response.statusText}`);
         }

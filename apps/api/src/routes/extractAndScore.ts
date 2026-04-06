@@ -54,7 +54,7 @@ router.post('/extract-and-score', async (req, res) => {
 
   try {
     // 1 — Build sector entity manifest
-    const manifest = buildManifest(
+    const manifest = await buildManifest(
       sectorCode.toUpperCase(),
       scorecardType,
     );
