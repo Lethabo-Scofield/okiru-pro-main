@@ -15,8 +15,10 @@ RUN pnpm install --no-frozen-lockfile \
 COPY packages/types/ packages/types/
 COPY apps/api/src/ apps/api/src/
 COPY apps/api/pipeline/ apps/api/pipeline/
+COPY apps/api/arango/ apps/api/arango/
 COPY apps/api/models.ts apps/api/models.ts
 COPY apps/api/schema.ts apps/api/schema.ts
+COPY apps/api/db.ts apps/api/db.ts
 COPY apps/web/ apps/web/
 
 WORKDIR /app/packages/types

@@ -1,31 +1,19 @@
 name: Deploy Directly to VM
 
+# DISABLED: No VM deployment. Production runs on okiru-rg-group AKS cluster.
+# Deployment is handled by deploy-prod.yml and build-deploy-aks.yml.
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'This workflow is disabled. Use deploy-prod.yml for AKS deployment.'
+        required: false
 
 jobs:
-  deploy:
+  disabled:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: okiru
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/okiru/okiru-pro-main || git clone https://github.com/Lethabo-Scofield/okiru-pro-main.git
-            cd /home/okiru/okiru-pro-main
-            git pull origin main
-
-            docker build -t web-prod:latest -f apps/web/Dockerfile .
-
-            # Stop and remove old container if exists
-            docker rm -f web-prod || true
-
-            # Run on a free port (3000 instead of 80)
-            docker run -d --name web-prod -p 3000:80 web-prod:latest
+      - name: Workflow disabled
+        run: |
+          echo "VM deployment is disabled. Production runs on the okiru-rg-group AKS cluster."
+          echo "Use the 'Deploy to Production' or 'Build and Deploy to AKS' workflows instead."
