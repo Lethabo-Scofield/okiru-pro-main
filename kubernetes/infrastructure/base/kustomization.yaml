@@ -47,6 +47,10 @@ resources:
   # Network Policies (uncomment to enable)
   # - network-policies.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: okiru-pro
-  app.kubernetes.io/managed-by: kustomize
+# Use 'labels' instead of 'commonLabels' to avoid modifying selectors
+# which are immutable after deployment creation
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: okiru-pro
+      app.kubernetes.io/managed-by: kustomize
