@@ -113,19 +113,19 @@ jobs:
 
       - name: Configure kubectl
         run: |
-          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > kubeconfig
-          export KUBECONFIG=kubeconfig
+          KUBECONFIG_FILE="$GITHUB_WORKSPACE/kubeconfig"
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > "$KUBECONFIG_FILE"
+          export KUBECONFIG="$KUBECONFIG_FILE"
+          echo "KUBECONFIG=$KUBECONFIG_FILE" >> $GITHUB_ENV
           kubectl config current-context
           kubectl get nodes
 
       - name: Create namespace if not exists
         run: |
-          export KUBECONFIG=kubeconfig
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create secrets from GitHub Secrets
         run: |
-          export KUBECONFIG=kubeconfig
 
           # Create mongodb-credentials secret
           kubectl create secret generic mongodb-credentials \
@@ -179,8 +179,6 @@ jobs:
 
       - name: Label secrets for management tracking
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Labeling secrets for management tracking ==="
 
           # Label all credentials secrets as managed by GitHub Actions
@@ -212,7 +210,6 @@ jobs:
 
       - name: Update Kustomize image tags
         run: |
-          export KUBECONFIG=kubeconfig
           cd kubernetes/infrastructure/overlays/prod
 
           echo "=== Updating image tags in Kustomize overlay ==="
@@ -228,17 +225,31 @@ jobs:
         id: deploy
         timeout-minutes: 15
         run: |
-          export KUBECONFIG=kubeconfig
           cd kubernetes/infrastructure
 
           echo "=== Rendering and applying Kustomize manifests ==="
           # Render and apply the full configuration (includes ConfigMaps, Deployments, Services, etc.)
           kustomize build overlays/prod | kubectl apply -f -
 
+          echo "=== Restarting deployments to pick up new images ==="
+          kubectl rollout restart deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/web -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/compute -n ${{ env.NAMESPACE }}
+
           echo "=== Waiting for deployments to be ready ==="
-          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: API deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=api
+            kubectl describe deployment/api -n ${{ env.NAMESPACE }} | tail -20
+          }
+          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Web deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=web
+          }
+          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Compute deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=compute
+          }
 
           echo "=== Deployment completed successfully ==="
           kubectl get pods -n ${{ env.NAMESPACE }}
@@ -247,8 +258,6 @@ jobs:
         if: ${{ !inputs.skip_tests }}
         id: smoke_tests
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Waiting for services to stabilize ==="
           sleep 30
 
@@ -309,9 +318,7 @@ jobs:
       - name: Run service readiness checks
         if: ${{ !inputs.skip_tests }}
         run: |
-          export KUBECONFIG=kubeconfig
-
-          echo "=== Checking service readiness ==="
+          echo "=== Checking service readiness ===="
 
           # Check all pods are running
           kubectl get pods -n ${{ env.NAMESPACE }}
@@ -361,8 +368,6 @@ jobs:
       - name: Rollback on failure
         if: failure() && steps.deploy.outcome == 'success'
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Rolling back deployments ==="
           kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
           kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
@@ -378,8 +383,6 @@ jobs:
       - name: Manual rollback
         if: inputs.rollback
         run: |
-          export KUBECONFIG=kubeconfig
-
           echo "=== Performing manual rollback ==="
           kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
           kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
@@ -391,4 +394,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f kubeconfig
+          rm -f "$GITHUB_WORKSPACE/kubeconfig"
