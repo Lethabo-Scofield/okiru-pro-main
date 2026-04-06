@@ -4,40 +4,36 @@ kind: Kustomization
 namespace: okiru-pro
 
 resources:
-  - ../../base
-  - secrets/secrets.yaml
+- ../../base
+- secrets/secrets.yaml
 
 patchesStrategicMerge:
-  - patches/ingress-patch.yaml
-  - patches/resource-limits.yaml
-  - patches/replica-count.yaml
-  - patches/configmap-patch.yaml
-  - patches/pvc-storage-class.yaml
+- patches/ingress-patch.yaml
+- patches/resource-limits.yaml
+- patches/replica-count.yaml
+- patches/configmap-patch.yaml
+- patches/pvc-storage-class.yaml
 
 # Images - Using 'latest' tag for flexibility during development
 # For production stability, use specific digests or tags:
 #   newTag: 5dc2624-20260403
 # During deployment, kustomize edit set image is used to update these
 images:
-  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-    newTag: 5dc2624-20260403
-  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-    newTag: 5dc2624-20260403
-  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-    newTag: 5dc2624-20260403
+- name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+- name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+- name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
 labels:
-  - includeSelectors: false
-    pairs:
-      environment: production
-      app.kubernetes.io/instance: okiru-pro-prod
+- pairs:
+    app.kubernetes.io/instance: okiru-pro-prod
+    environment: production
 
 configMapGenerator:
-  - name: app-config
-    behavior: merge
-    literals:
-      - NODE_ENV=production
-      - LOG_LEVEL=warn
-      - CORS_ORIGIN=https://okiru.20.164.101.114.nip.io
+- behavior: merge
+  literals:
+  - NODE_ENV=production
+  - LOG_LEVEL=warn
+  - CORS_ORIGIN=https://okiru.20.164.101.114.nip.io
+  name: app-config
