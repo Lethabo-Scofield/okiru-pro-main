@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { EntityTemplateModel } from '../../models.js';
 import { getAllManifests } from '../../pipeline/extraction/entityManifest.js';
 import { GraphRepository } from '../../arango/repositories/graphRepository.js';
+import { isMongoConnected } from '../../db.js';
 
 const router = Router();
 const graphRepo = new GraphRepository();
@@ -10,8 +11,10 @@ const graphRepo = new GraphRepository();
 // GET /api/entity-templates — list all (MongoDB + new ontology)
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    // Get old MongoDB templates
-    const oldTemplates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
+    let oldTemplates: any[] = [];
+    if (isMongoConnected()) {
+      oldTemplates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
+    }
 
     let graphMeta: Record<string, { sourceFile: string; nodeCount: number; edgeCount: number; version: string }> = {};
     try {
@@ -105,6 +108,9 @@ router.get('/', async (_req: Request, res: Response) => {
 // POST /api/entity-templates — create
 router.post('/', async (req: Request, res: Response) => {
   try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'Database not available — cannot create templates' });
+    }
     const { name, description, version, entities } = req.body as {
       name: string; description?: string; version?: string; entities?: unknown[];
     };
@@ -123,6 +129,9 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT /api/entity-templates/:id — update
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'Database not available — cannot update templates' });
+    }
     const { name, description, version, entities } = req.body as {
       name?: string; description?: string; version?: string; entities?: unknown[];
     };
@@ -143,6 +152,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE /api/entity-templates/:id — delete
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'Database not available — cannot delete templates' });
+    }
     const deleted = await EntityTemplateModel.findOneAndDelete({ id: req.params.id });
     if (!deleted) return res.status(404).json({ message: 'Template not found' });
     return res.json({ ok: true });

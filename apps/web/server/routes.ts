@@ -1007,6 +1007,94 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/entity-templates", async (_req, res) => {
+    try {
+      let ontologyTemplates: any[] = [];
+      try {
+        const { getAllManifests } = await import('../../api/pipeline/extraction/entityManifest.js');
+        const manifests = await getAllManifests();
+        ontologyTemplates = manifests.map((m: any) => ({
+          id: `ontology-${m.sectorCode}-${m.scorecardType}`,
+          userId: null,
+          name: `${m.sectorCode} ${m.scorecardType} Scorecard`,
+          description: `Ontology-based template for ${m.sectorCode} ${m.scorecardType} with ${m.pillarPacks.reduce((sum: number, p: any) => sum + p.criteria.length, 0)} criteria across ${m.pillarPacks.length} pillars`,
+          version: '2.0',
+          sourceFile: '',
+          nodeCount: 0,
+          edgeCount: 0,
+          entities: m.pillarPacks.flatMap((p: any) => p.entities).map((e: any) => ({
+            label: e.id,
+            definition: e.name,
+            pillarCode: e.pillarCode,
+            criterionCodes: e.criterionCodes,
+            fieldType: e.fieldType,
+            synonyms: e.extraction.aliases,
+            positives: e.extraction.positiveExamples,
+            negatives: e.extraction.negativeExamples,
+            zones: e.extraction.zones,
+            keywords: {
+              must: e.extraction.mustHaveKeywords,
+              nice: e.extraction.niceToHaveKeywords,
+              neg: e.extraction.excludeKeywords,
+            },
+            pattern: '',
+          })),
+          pillarPacks: m.pillarPacks.map((p: any) => ({
+            pillarCode: p.pillarCode,
+            pillarName: p.pillarName,
+            maxPoints: p.maxPoints,
+            hasSubMinimum: p.hasSubMinimum,
+            subMinimumThreshold: p.subMinimumThreshold,
+            criteriaCount: p.criteria.length,
+            entityCount: p.entities.length,
+            criteria: p.criteria.map((c: any) => ({
+              code: c.code,
+              name: c.name,
+              target: c.target,
+              maxPoints: c.maxPoints,
+              formula: c.formula,
+              inputEntities: c.inputEntities,
+            })),
+            entities: p.entities.map((e: any) => ({
+              id: e.id,
+              name: e.name,
+              fieldType: e.fieldType,
+              pillarCode: e.pillarCode,
+              criterionCodes: e.criterionCodes,
+              required: e.required,
+            })),
+          })),
+          isOntology: true,
+          sectorCode: m.sectorCode,
+          scorecardType: m.scorecardType,
+          rootContext: m.rootContext,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      } catch (err) {
+        logger.warn("Could not load ontology manifests for entity-templates", err);
+      }
+
+      const allTemplates = await storage.getTemplates();
+      const storedTemplates = allTemplates.map((t: any) => ({
+        id: t.id,
+        userId: t.userId,
+        name: t.name,
+        description: t.description || '',
+        version: t.version || '1.0',
+        entities: t.entities || [],
+        isOntology: false,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      }));
+
+      res.json([...ontologyTemplates, ...storedTemplates]);
+    } catch (error: any) {
+      logger.error("Error fetching entity templates", error);
+      res.status(500).json({ error: "Failed to fetch entity templates" });
+    }
+  });
+
   app.post("/api/generate-entities", async (req, res) => {
     try {
       const { description } = req.body;
