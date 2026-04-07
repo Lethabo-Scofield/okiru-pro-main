@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ backend/
+COPY backend/ /app/backend/
+COPY run_server.py /app/
 
 EXPOSE 8000
 ENV API_HOST=0.0.0.0 \
@@ -17,5 +18,4 @@ ENV API_HOST=0.0.0.0 \
     LOG_LEVEL=info \
     PYTHONPATH=/app/backend
 
-CMD ["python", "-m", "uvicorn", "app.main:app", \
-     "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+CMD ["python", "run_server.py"]
