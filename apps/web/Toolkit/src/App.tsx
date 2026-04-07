@@ -62,9 +62,8 @@ function DataLoader({ children }: { children: React.ReactNode }) {
   const [retrying, setRetrying] = useState(0);
 
   useEffect(() => {
-    // Build-mode data is pre-hydrated from DocumentProcessor — skip API load
-    const isBuildMode = storeClientId?.startsWith('build-');
-    if (!isBuildMode && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
+    const isPrehydrated = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-');
+    if (!isPrehydrated && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
       setLoadError(null);
       loadClientData(activeClientId).catch((err: any) => {
         const msg: string = err?.message || '';
