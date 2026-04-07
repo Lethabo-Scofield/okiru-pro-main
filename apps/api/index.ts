@@ -35,7 +35,7 @@ const corsEnv = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Bo
 const allowedOrigins = (corsEnv && corsEnv.length > 0)
   ? corsEnv
   : (isProd
-    ? ["https://okiru-pro.com", "https://www.okiru-pro.com"]
+    ? ["https://okiru.20.164.101.114.nip.io", "https://okiru-pro.com", "https://www.okiru-pro.com"]
     : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
