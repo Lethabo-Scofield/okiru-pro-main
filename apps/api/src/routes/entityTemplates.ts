@@ -11,11 +11,6 @@ const graphRepo = new GraphRepository();
 // GET /api/entity-templates — list all (MongoDB + new ontology)
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    let oldTemplates: any[] = [];
-    if (isMongoConnected()) {
-      oldTemplates = await EntityTemplateModel.find({}).sort({ createdAt: -1 }).lean();
-    }
-
     let graphMeta: Record<string, { sourceFile: string; nodeCount: number; edgeCount: number; version: string }> = {};
     try {
       const graphs = await graphRepo.listFormulaGraphs();
@@ -97,8 +92,7 @@ router.get('/', async (_req: Request, res: Response) => {
       updatedAt: new Date().toISOString(),
     };});
 
-    // Combine both, with ontology templates first
-    return res.json([...ontologyTemplates, ...oldTemplates]);
+    return res.json(ontologyTemplates);
   } catch (err) {
     console.error('[EntityTemplates] Error:', err);
     return res.status(500).json({ message: 'Failed to list entity templates' });

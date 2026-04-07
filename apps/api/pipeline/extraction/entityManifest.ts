@@ -1483,7 +1483,7 @@ function yesCriteria(): CriterionEntity[] {
 // ===================================================================
 
 function buildOwnershipPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.ownership;
+  const pc = cfg.pillarConfigs.ownership ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'ownership', pillarName: 'Ownership', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
@@ -1492,7 +1492,7 @@ function buildOwnershipPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildMCPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.managementControl;
+  const pc = cfg.pillarConfigs.managementControl ?? { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'managementControl', pillarName: 'Management Control', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
@@ -1510,7 +1510,7 @@ function buildEEPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildSkillsPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.skillsDevelopment;
+  const pc = cfg.pillarConfigs.skillsDevelopment ?? { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'skillsDevelopment', pillarName: 'Skills Development', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
@@ -1519,7 +1519,7 @@ function buildSkillsPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildProcurementPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.preferentialProcurement;
+  const pc = cfg.pillarConfigs.preferentialProcurement ?? { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'preferentialProcurement', pillarName: 'Preferential Procurement', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
@@ -1539,7 +1539,7 @@ function buildESDPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildSEDPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.socioEconomicDevelopment;
+  const pc = cfg.pillarConfigs.socioEconomicDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
   return {
     pillarCode: 'socioEconomicDevelopment', pillarName: 'Socio-Economic Development', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
@@ -1585,33 +1585,66 @@ const SCORECARD_TYPES = [
 
 /**
  * Resolve sector configuration from ArangoDB (single source of truth).
- * Falls back to hardcoded config only if ArangoDB is unavailable.
+ * Deep-merges ArangoDB data with hardcoded defaults so any missing fields
+ * (pillarConfigs, targets, etc.) are filled from the baseline config.
+ * Falls back to hardcoded config entirely if ArangoDB is unavailable.
  */
 async function resolveSectorConfig(sectorCode: string, scorecardType: string): Promise<SectorConfig> {
+  const baseline = getSectorConfig(sectorCode, scorecardType);
   const repo = new SectorRuleRepository();
 
   try {
     const storedRule = await repo.getSectorRule(sectorCode, scorecardType);
 
     if (storedRule) {
-      // Convert stored rule to SectorConfig format
+      const pillarOverrides: Record<string, any> = {};
+      if (Array.isArray(storedRule.pillarConfigs)) {
+        for (const pc of storedRule.pillarConfigs) {
+          if (pc.code) {
+            pillarOverrides[pc.code] = {
+              maxPoints: pc.maxPoints,
+              hasSubMinimum: pc.hasSubMinimum,
+              subMinimumPercent: pc.subMinimumThreshold != null && pc.maxPoints
+                ? (pc.subMinimumThreshold / pc.maxPoints) * 100
+                : (baseline.pillarConfigs as any)[pc.code]?.subMinimumPercent ?? 0,
+            };
+          }
+        }
+      } else if (storedRule.pillarConfigs && typeof storedRule.pillarConfigs === 'object') {
+        Object.assign(pillarOverrides, storedRule.pillarConfigs);
+      }
+
+      const mergedPillarConfigs: any = { ...baseline.pillarConfigs };
+      for (const key of Object.keys(pillarOverrides)) {
+        mergedPillarConfigs[key] = { ...(mergedPillarConfigs[key] || {}), ...pillarOverrides[key] };
+      }
+
+      const storedTargets = (storedRule.targets || {}) as Record<string, any>;
       return {
-        sectorCode: storedRule.sectorCode,
-        sectorName: storedRule.sectorName,
-        scorecardType: storedRule.scorecardType,
-        totalMaxPoints: storedRule.totalMaxPoints,
-        pillarConfigs: storedRule.pillarConfigs || {},
-        targets: storedRule.targets || {},
-        thresholds: storedRule.thresholds || {},
-        referenceData: storedRule.referenceData || {},
+        ...baseline,
+        sectorCode: storedRule.sectorCode ?? baseline.sectorCode,
+        sectorName: storedRule.sectorName ?? baseline.sectorName,
+        scorecardType: storedRule.scorecardType ?? baseline.scorecardType,
+        totalMaxPoints: storedRule.totalMaxPoints ?? baseline.totalMaxPoints,
+        pillarConfigs: mergedPillarConfigs,
+        targets: {
+          ...baseline.targets,
+          ownership: { ...baseline.targets.ownership, ...(storedTargets.ownership || {}) },
+          managementControl: { ...baseline.targets.managementControl, ...(storedTargets.managementControl || {}) },
+          employmentEquity: { ...baseline.targets.employmentEquity, ...(storedTargets.employmentEquity || {}) },
+          skills: { ...baseline.targets.skills, ...(storedTargets.skills || {}) },
+          procurement: { ...baseline.targets.procurement, ...(storedTargets.procurement || {}) },
+          esd: { ...baseline.targets.esd, ...(storedTargets.esd || {}) },
+          sed: { ...baseline.targets.sed, ...(storedTargets.sed || {}) },
+        },
+        levelThresholds: storedRule.levelThresholds?.length ? storedRule.levelThresholds : baseline.levelThresholds,
       };
     }
   } catch (error) {
     console.warn(`[EntityManifest] ArangoDB unavailable, using hardcoded config for ${sectorCode} ${scorecardType}:`, error);
   }
 
-  // Fallback to hardcoded config
-  return getSectorConfig(sectorCode, scorecardType);
+  return baseline;
 }
 
 /**
