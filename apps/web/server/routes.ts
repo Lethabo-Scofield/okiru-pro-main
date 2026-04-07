@@ -1075,20 +1075,7 @@ export async function registerRoutes(
         logger.warn("Could not load ontology manifests for entity-templates", err);
       }
 
-      const allTemplates = await storage.getTemplates();
-      const storedTemplates = allTemplates.map((t: any) => ({
-        id: t.id,
-        userId: t.userId,
-        name: t.name,
-        description: t.description || '',
-        version: t.version || '1.0',
-        entities: t.entities || [],
-        isOntology: false,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      }));
-
-      res.json([...ontologyTemplates, ...storedTemplates]);
+      res.json(ontologyTemplates);
     } catch (error: any) {
       logger.error("Error fetching entity templates", error);
       res.status(500).json({ error: "Failed to fetch entity templates" });

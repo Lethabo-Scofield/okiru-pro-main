@@ -8,6 +8,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
 import { createLogger } from "./logger";
+import { connectArango } from "../../api/arango/connection.js";
 
 const logger = createLogger("WebServer");
 
@@ -83,6 +84,10 @@ app.use((req, res, next) => {
   logger.debug("Connecting to database...");
   await connectDB();
   logger.info("Database connection step completed");
+
+  logger.debug("Connecting to ArangoDB...");
+  await connectArango();
+  logger.info("ArangoDB connection step completed");
 
   logger.debug("Registering API proxy...");
   registerApiProxy(app);
