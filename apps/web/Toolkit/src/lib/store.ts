@@ -7,10 +7,6 @@ import {
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
-import {
-  demoClient, demoOwnership, demoManagement,
-  demoSkills, demoProcurement, demoESD, demoSED,
-} from './demo-data';
 import type { CalculatorConfig } from '../../../shared/schema';
 
 import { calculateOwnershipScore } from './calculators/ownership';
@@ -556,30 +552,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       get()._recalculateAll();
       get().loadCalculatorConfig(clientId);
     } catch (error) {
-      console.warn('Client not found — loading demo data for preview:', clientId, error);
-      const dummyClient: Client = { ...demoClient, id: clientId, name: demoClient.name + ' (Preview)' };
-      const dummyOwnership: OwnershipData = { ...demoOwnership, clientId };
-      const dummyManagement: ManagementData = { ...demoManagement, clientId };
-      const dummySkills: SkillsData = { ...demoSkills, clientId };
-      const dummyProcurement: ProcurementData = { ...demoProcurement, clientId };
-      const dummyESD: ESDData = { ...demoESD, clientId };
-      const dummySED: SEDData = { ...demoSED, clientId };
-      set({
-        isLoaded: true,
-        activeClientId: clientId,
-        client: dummyClient,
-        ownership: dummyOwnership,
-        management: dummyManagement,
-        skills: dummySkills,
-        procurement: dummyProcurement,
-        esd: dummyESD,
-        sed: dummySED,
-        scenarios: [],
-        isScenarioMode: false,
-        activeScenarioId: null,
-        baseSnapshot: null,
-      });
-      get()._recalculateAll();
+      console.error('Failed to load client data:', clientId, error);
+      throw error;
     }
   },
 

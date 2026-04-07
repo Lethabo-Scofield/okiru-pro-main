@@ -764,7 +764,7 @@ export default function Dashboard() {
                                       </Link>
                                     ) : (
                                       <Link
-                                        href="/toolkit"
+                                        href={`/toolkit?session=${c.sessionId}`}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
                                         data-testid={`button-toolkit-${c.id}`}
                                       >

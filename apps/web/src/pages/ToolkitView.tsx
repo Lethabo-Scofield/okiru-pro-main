@@ -1,4 +1,5 @@
-import { useParams } from "wouter";
+import { useEffect, useState } from "react";
+import { useParams, useSearch } from "wouter";
 import { queryClient } from "@toolkit/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@toolkit/components/ui/toaster";
@@ -6,20 +7,109 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { ClientProvider } from "@toolkit/lib/client-context";
 import { AppRoutes } from "@toolkit/App";
+import { useBbeeStore } from "@toolkit/lib/store";
+import { API_BASE } from "@toolkit/lib/config";
 
-/**
- * ToolkitView - Embedded Toolkit for DocumentProcessor
- *
- * IMPORTANT: This component renders the Toolkit AppRoutes WITHOUT wrapping in AuthProvider.
- * The outer app (DocumentProcessor) already has AuthProvider, so we skip it here to avoid
- * double-wrapping which causes session flicker and logout issues.
- */
+function hydrateStoreFromSession(session: any) {
+  const sessionId = session.sessionId || session.id;
+  const syntheticId = `session-${sessionId}`;
+  const fd = session.foundationData || {};
+  const ci = fd.clientInfo || {};
+  const fin = fd.financials || {};
+  const pd = session.pillarData || {};
+
+  useBbeeStore.setState({
+    isLoaded: true,
+    pipelineOverrides: null,
+    activeClientId: syntheticId,
+    client: {
+      id: syntheticId,
+      name: ci.companyName || session.companyInfo?.name || 'Client',
+      financialYear: ci.financialYearEnd
+        ? String(ci.financialYearEnd).substring(0, 4)
+        : String(new Date().getFullYear()),
+      revenue: fin.totalRevenue ?? 0,
+      npat: fin.npat ?? 0,
+      leviableAmount: fin.leviableAmount ?? 0,
+      industryNorm: ci.industryNorm,
+      eapProvince: ci.eapProvince ?? 'National',
+      registrationNumber: ci.registrationNumber ?? '',
+      physicalAddress: ci.physicalAddress ?? '',
+      contactPerson: ci.contactPerson ?? '',
+      contactEmail: ci.contactEmail ?? '',
+      contactPhone: ci.contactPhone ?? '',
+      sectorCode: ci.sectorCode ?? 'RCOGP',
+      industry: ci.industry ?? 'Generic',
+      companySize: ci.companySize ?? 'Generic',
+      annualTurnover: ci.annualTurnover ?? 0,
+      numberOfEmployees: ci.numberOfEmployees ?? 0,
+      financialHistory: [],
+    },
+    ownership: pd.ownership
+      ? { ...pd.ownership, id: pd.ownership.id || '', clientId: syntheticId }
+      : { id: '', clientId: syntheticId, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
+    management: pd.management
+      ? { ...pd.management, id: pd.management.id || '', clientId: syntheticId }
+      : { id: '', clientId: syntheticId, employees: [] },
+    skills: pd.skills
+      ? { ...pd.skills, id: pd.skills.id || '', clientId: syntheticId, leviableAmount: fin.leviableAmount || pd.skills.leviableAmount || 0 }
+      : { id: '', clientId: syntheticId, leviableAmount: fin.leviableAmount || 0, trainingPrograms: [] },
+    procurement: pd.procurement
+      ? { ...pd.procurement, id: pd.procurement.id || '', clientId: syntheticId, tmps: fin.tmps || pd.procurement.tmps || 0 }
+      : { id: '', clientId: syntheticId, tmps: fin.tmps || 0, suppliers: [] },
+    esd: pd.esd
+      ? { ...pd.esd, id: pd.esd.id || '', clientId: syntheticId }
+      : { id: '', clientId: syntheticId, contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+    sed: pd.sed
+      ? { ...pd.sed, id: pd.sed.id || '', clientId: syntheticId }
+      : { id: '', clientId: syntheticId, contributions: [] },
+    calculatorConfig: null,
+  });
+
+  useBbeeStore.getState()._recalculateAll();
+}
+
 export default function ToolkitView() {
   const params = useParams<{ clientId: string }>();
+  const search = useSearch();
   const clientId = params.clientId || "";
+  const sessionParam = new URLSearchParams(search).get("session");
+  const [sessionLoading, setSessionLoading] = useState(!!sessionParam);
 
   if (clientId) {
     localStorage.setItem("okiru-pro-active-client", clientId);
+  }
+
+  useEffect(() => {
+    if (!sessionParam) return;
+
+    const loadSession = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionParam}`);
+        if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
+        const session = await res.json();
+        const syntheticId = `session-${sessionParam}`;
+        localStorage.setItem("okiru-pro-active-client", syntheticId);
+        hydrateStoreFromSession(session);
+      } catch (err) {
+        console.error("Failed to load session for toolkit:", err);
+      } finally {
+        setSessionLoading(false);
+      }
+    };
+
+    loadSession();
+  }, [sessionParam]);
+
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground text-sm">Loading scorecard data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

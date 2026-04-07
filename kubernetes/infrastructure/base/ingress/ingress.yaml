@@ -75,48 +75,6 @@ spec:
                 name: web
                 port:
                   number: 5001
-          - path: /api/auth/verify-otp
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/auth/resend-otp
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/auth/forgot-password
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/auth/reset-password
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/generate-entities
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/processor-sessions
-            pathType: Prefix
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
           - path: /api/sector-templates
             pathType: Exact
             backend:
