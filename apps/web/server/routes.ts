@@ -1092,7 +1092,7 @@ export async function registerRoutes(
 
       const descLower = description.toLowerCase();
 
-      if (!groqApiKey) {
+      const generateHeuristic = () => {
         const noiseWords = new Set([
           "the", "a", "an", "of", "for", "in", "on", "to", "and", "or", "is", "are", "was", "were",
           "that", "this", "which", "with", "from", "by", "as", "at", "it", "its", "be", "been", "being",
@@ -1169,7 +1169,7 @@ export async function registerRoutes(
           ? definitionTemplates[matchedType]
           : `The ${label.toLowerCase()} value to be extracted from the document.`;
 
-        const fallbackEntity = {
+        return {
           id: Date.now() + Math.random(),
           label,
           definition,
@@ -1183,7 +1183,10 @@ export async function registerRoutes(
           expanded: true,
           activeTab: "definition",
         };
-        return res.json({ entities: [fallbackEntity] });
+      };
+
+      if (!groqApiKey) {
+        return res.json({ entities: [generateHeuristic()] });
       }
 
       const systemPrompt = `You are an expert NLP entity extraction configuration assistant for a B-BBEE compliance document intelligence platform used by South African businesses.
@@ -1229,49 +1232,55 @@ User: "I want to know when the certificate expires" →
 User: "the rand amount of their annual turnover" →
 [{"label":"AnnualTurnover","definition":"The total annual revenue or turnover of the measured entity as reported in their audited financial statements, used to determine the applicable B-BBEE scorecard.","synonyms":["Annual Revenue","Total Turnover","Gross Revenue","Annual Sales"],"positives":["R12,500,000","R 5,000,000.00","R2.3M","R150,000,000"],"negatives":["Monthly Revenue","Net Profit","Operating Expenses","Tax Amount"],"zones":["Tables","PDF Header"],"keywords":{"must":["turnover","revenue"],"nice":["annual","total","gross"],"neg":["monthly","net","profit","expenses"]},"pattern":"R\\s?[\\d,\\s]+(\\s*M|\\s*million|\\.\\d{2})?"}]`;
 
-      const content = await llmGenerate(systemPrompt, `User description: "${description}"\n\nGenerate the entity JSON now:`, { temperature: 0.3, maxTokens: 1200 });
-
-      let entities;
+      let formattedEntities: any[] = [];
       try {
-        let cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (ch) => {
-          if (ch === '\n' || ch === '\r' || ch === '\t') return ch;
-          return '';
-        });
-        entities = JSON.parse(cleaned);
-      } catch (parseErr) {
+        const content = await llmGenerate(systemPrompt, `User description: "${description}"\n\nGenerate the entity JSON now:`, { temperature: 0.3, maxTokens: 1200 });
+
+        let entities;
         try {
-          const arrayMatch = content.match(/\[[\s\S]*\]/);
-          if (arrayMatch) {
-            entities = JSON.parse(arrayMatch[0]);
-          } else {
-            console.error("Failed to parse Groq response:", content);
+          let cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (ch) => {
+            if (ch === '\n' || ch === '\r' || ch === '\t') return ch;
+            return '';
+          });
+          entities = JSON.parse(cleaned);
+        } catch (parseErr) {
+          try {
+            const arrayMatch = content.match(/\[[\s\S]*\]/);
+            if (arrayMatch) {
+              entities = JSON.parse(arrayMatch[0]);
+            } else {
+              entities = [];
+            }
+          } catch {
             entities = [];
           }
-        } catch {
-          console.error("Failed to parse Groq response (retry):", content);
-          entities = [];
         }
+
+        if (!Array.isArray(entities)) entities = [];
+
+        formattedEntities = entities.slice(0, 1).map((e: any) => ({
+          id: Date.now() + Math.random(),
+          label: e.label || "CustomEntity",
+          definition: e.definition || "Auto-generated entity",
+          completeness: 80,
+          synonyms: e.synonyms || [],
+          positives: e.positives || [],
+          negatives: e.negatives || [],
+          zones: e.zones || ["Email Body", "PDF Header"],
+          keywords: e.keywords || { must: [], nice: [], neg: [] },
+          pattern: e.pattern || "",
+          expanded: true,
+          activeTab: "definition",
+        }));
+      } catch (llmErr: any) {
+        logger.warn("LLM entity generation failed, using heuristic fallback", { error: llmErr.message });
+        formattedEntities = [generateHeuristic()];
       }
 
-      if (!Array.isArray(entities)) {
-        entities = [];
+      if (formattedEntities.length === 0) {
+        formattedEntities = [generateHeuristic()];
       }
-
-      const formattedEntities = entities.slice(0, 1).map((e: any) => ({
-        id: Date.now() + Math.random(),
-        label: e.label || "CustomEntity",
-        definition: e.definition || "Auto-generated entity",
-        completeness: 80,
-        synonyms: e.synonyms || [],
-        positives: e.positives || [],
-        negatives: e.negatives || [],
-        zones: e.zones || ["Email Body", "PDF Header"],
-        keywords: e.keywords || { must: [], nice: [], neg: [] },
-        pattern: e.pattern || "",
-        expanded: true,
-        activeTab: "definition",
-      }));
 
       res.json({ entities: formattedEntities });
     } catch (error: any) {
