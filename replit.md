@@ -46,7 +46,7 @@ pnpm install
 - `COMPUTE_ENGINE_URL` - URL of Computation Engine (default: http://127.0.0.1:8000)
 - `AZURE_OPENAI_ENDPOINT` - Optional, for Azure OpenAI extraction
 - `AZURE_OPENAI_API_KEY` - Optional, for Azure OpenAI extraction
-- `CORS_ORIGINS` - Computation Engine allowed origins (comma-separated)
+- `CORS_ORIGINS` - Computation Engine allowed origins (no longer used; origins are hardcoded in main.py)
 - `SMTP_HOST` - SMTP server hostname for email sending (OTP, password reset)
 - `SMTP_PORT` - SMTP port (default: 587)
 - `SMTP_USER` - SMTP authentication username
