@@ -107,6 +107,9 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: API_INTERNAL_KEY
+          envFrom:
+            - secretRef:
+                name: app-secrets
           resources:
             requests:
               memory: "512Mi"

@@ -165,6 +165,9 @@ spec:
                   name: external-api-keys
                   key: GROQ_API_KEY
                   optional: true
+          envFrom:
+            - secretRef:
+                name: app-secrets
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp
