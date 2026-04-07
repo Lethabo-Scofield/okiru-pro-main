@@ -12,13 +12,9 @@ app = FastAPI(
     version="2.0.0",
 )
 
-import os
-
-allowed_origins_env = os.environ.get("CORS_ORIGINS", "")
-if allowed_origins_env:
-    origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
-else:
-    origins = ["*"]
+origins = [
+    "https://okiru.20.164.101.114.nip.io",
+]
 
 app.add_middleware(
     CORSMiddleware,
