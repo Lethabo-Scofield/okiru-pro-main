@@ -5,6 +5,7 @@ import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
+import { API_BASE } from '@toolkit/lib/config';
 
 interface ProcessorSession {
   id: string;
@@ -115,7 +116,7 @@ export default function Dashboard() {
   const handleDeleteSession = useCallback(async (sessionId: string) => {
     setIsDeletingSession(true);
     try {
-      const res = await fetch(`/api/processor-sessions/${sessionId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`, { method: 'DELETE' });
       if (res.ok) {
         setProcessorSessions(prev => prev.filter(s => s.id !== sessionId));
         toast({ title: 'Assessment deleted', description: 'The client assessment has been removed.' });
@@ -133,7 +134,7 @@ export default function Dashboard() {
   const fetchSessions = useCallback(async () => {
     setLoadingSessions(true);
     try {
-      const res = await fetch('/api/processor-sessions');
+      const res = await fetch(`${API_BASE}/api/processor-sessions`);
       if (res.ok) {
         const data = await res.json();
         setProcessorSessions(Array.isArray(data) ? data : []);
@@ -342,7 +343,7 @@ export default function Dashboard() {
 
               <button
                 className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-1"
-                onClick={() => navigate('/processor')}
+                onClick={() => navigate('/processor?new=true')}
                 data-testid="card-upload-docs"
               >
                 <div className="flex items-start justify-between">
@@ -521,7 +522,7 @@ export default function Dashboard() {
                               : <Pencil className="h-3.5 w-3.5" />}
                           </button>
                         </div>
-                        <Link href="/processor"
+                        <Link href="/processor?new=true"
                           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/[0.12] text-white hover:bg-white/[0.18] text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/8"
                           data-testid={`button-use-${t.id}`}
                         >
@@ -563,7 +564,7 @@ export default function Dashboard() {
                 <p className="text-[14px] text-[#98989f] mt-1">Search and filter companies by industry and status.</p>
               </div>
               <Link
-                href="/processor"
+                href="/processor?new=true"
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-8"
                 data-testid="button-new-assessment"
               >
@@ -794,7 +795,7 @@ export default function Dashboard() {
                             <div className="flex flex-col items-center gap-3">
                               <Building2 className="w-8 h-8 text-[#3a3a3c]" />
                               <p className="text-[14px] text-[#636366]">No assessments yet</p>
-                              <Link href="/processor" className="text-[13px] text-[#d1d1d6] hover:text-[#e5e5e7] font-medium smooth">
+                              <Link href="/processor?new=true" className="text-[13px] text-[#d1d1d6] hover:text-[#e5e5e7] font-medium smooth">
                                 Start a new assessment →
                               </Link>
                             </div>

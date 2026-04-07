@@ -1,27 +1,40 @@
 node_modules
+node_modules/**
 **/node_modules
+**/node_modules/**
+**/.git
+.github
+docs
+assets
+**/.env
+**/.next
+**/.cache
 **/dist
-**/__pycache__
-**/*.pyc
 
-.git
-.gitignore
-.replit
-replit.nix
-.config
-.local
-.cache
-.upm
-.pythonlibs
-.vscode
-.cursor
+# Kubernetes and infra
+kubernetes
 
-deploy/ssl
-.env
-.env.*
-
-*.pdf
+# Large binary/media files
+*.tar.gz
+*.tar
 *.pptx
+*.ppt
+*.pdf
+*.xls
+*.xlsx
 
-apps/Computation-Engine/test_models
-apps/Computation-Engine/pytest.ini
+# Root-level scripts and misc
+*.ps1
+*.bat
+*.sh
+*.py
+*.toml
+*.html
+*.replit
+uv.lock
+query
+kubeconfig*.yaml
+*.zip
+*.md
+*.log
+*.txt

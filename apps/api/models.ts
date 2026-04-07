@@ -182,6 +182,50 @@ const entityTemplateSchema = new Schema({
   updatedAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "entityTemplates" });
 
+const processorSessionSchema = new Schema({
+  sessionId: { type: String, required: true, unique: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
+  companyInfo: {
+    name: { type: String, required: true },
+    registrationNumber: { type: String, default: '' },
+    sector: { type: String, default: '' },
+    annualTurnover: { type: String, default: '' },
+    employees: { type: String, default: '' },
+    financialYearEnd: { type: String, default: '' },
+    address: { type: String, default: '' },
+    contactName: { type: String, default: '' },
+    contactEmail: { type: String, default: '' },
+    contactPhone: { type: String, default: '' },
+    currentBBEELevel: { type: String, default: '' },
+    notes: { type: String, default: '' },
+    logo: { type: String, default: '' },
+  },
+  currentStep: { type: String, default: 'company-info' },
+  filesData: { type: Schema.Types.Mixed, default: [] },
+  fileClassifications: { type: Schema.Types.Mixed, default: {} },
+  extractionResults: { type: Schema.Types.Mixed, default: [] },
+  docStatuses: { type: Schema.Types.Mixed, default: {} },
+  isComplete: { type: Boolean, default: false },
+  scorecardResult: { type: Schema.Types.Mixed, default: null },
+  toolkitClientId: { type: String, default: null },
+  foundationData: { type: Schema.Types.Mixed, default: null },
+  pillarData: { type: Schema.Types.Mixed, default: null },
+  flowMode: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "processorSessions" });
+
+processorSessionSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.sessionId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
 export const UserModel = mongoose.model("User", userSchema);
 export const OrganizationModel = mongoose.model("Organization", organizationSchema);
 export const ClientModel = mongoose.model("Client", clientSchema);
@@ -200,3 +244,4 @@ export const ExportLogModel = mongoose.model("ExportLog", exportLogSchema);
 export const Document = mongoose.model("Document", documentSchema);
 export const DocumentChunk = mongoose.model("DocumentChunk", documentChunkSchema);
 export const EntityTemplateModel = mongoose.model("EntityTemplate", entityTemplateSchema);
+export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);

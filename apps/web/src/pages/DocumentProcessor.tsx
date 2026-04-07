@@ -330,10 +330,10 @@ export function getSectorTotal(sectorCode: string, isQSE: boolean = false): numb
  */
 export function determineScorecardType(
   sectorCode: string,
-  annualTurnoverStr: string
+  annualTurnoverStr: string | number
 ): { scorecardType: 'Generic' | 'QSE'; thresholdExceeded: boolean } {
-  // Parse turnover (handles "R 50 000 000" or "50000000")
-  const turnoverValue = parseFloat(annualTurnoverStr.replace(/[^\d.]/g, '')) || 0;
+  const raw = typeof annualTurnoverStr === 'number' ? String(annualTurnoverStr) : (annualTurnoverStr ?? '0');
+  const turnoverValue = parseFloat(raw.replace(/[^\d.]/g, '')) || 0;
   const QSE_THRESHOLD = 50000000; // R50M
 
   // Only RCOGP and ICT have QSE variants
@@ -1154,7 +1154,8 @@ export default function DocumentProcessor() {
         fetch('/api/sector-templates'),
       ]);
       const userRaw = userRes.ok ? await userRes.json() : [];
-      const userList: StoredTemplate[] = Array.isArray(userRaw) ? userRaw : [];
+      const userList: StoredTemplate[] = (Array.isArray(userRaw) ? userRaw : [])
+        .map((t: any) => ({ ...t, entities: Array.isArray(t.entities) ? t.entities : [] }));
       let toolkitList: StoredTemplate[] = [];
       if (sectorRes.ok) {
         const sectors = await sectorRes.json();
@@ -1316,25 +1317,35 @@ export default function DocumentProcessor() {
     });
   }, [location]);
 
-  // Auto-restore build flow on hard refresh (Issue A fix)
-  // FIXED: Added user?.id to dependencies to ensure user-specific session restoration
+  // Auto-restore build flow on hard refresh — skip when ?new=true is in URL
   useEffect(() => {
-    // Only run if flowMode is not yet set and user is loaded
-    if (flowMode !== null || !user?.id) return;
-    
+    const params = new URLSearchParams(window.location.search);
+    const isNew = params.get('new') === 'true';
+
+    // If ?new=true, clear any saved session and start fresh
+    if (isNew && user?.id) {
+      try {
+        sessionStorage.removeItem(getBuildFlowStorageKey(user.id));
+      } catch { /* ignore */ }
+      return;
+    }
+
+    // Only run if flowMode is not yet set, user is loaded, and no ?session= param
+    const sessionParam = params.get('session');
+    if (flowMode !== null || !user?.id || sessionParam) return;
+
     try {
       const storageKey = getBuildFlowStorageKey(user.id);
       const raw = sessionStorage.getItem(storageKey);
       if (!raw) return;
-      
+
       const d = JSON.parse(raw);
       if (!d.foundationData || typeof d.foundationData !== 'object') return;
-      
-      // Check if this is a valid build flow restore scenario
+
+      // Only restore if we were in the build flow
       const savedPage = d.currentPage;
       if (savedPage !== 'build-foundation' && savedPage !== 'build-pillars') return;
-      
-      // Restore state
+
       setFlowMode('build');
       setFoundationData(d.foundationData);
       if (d.pillarData && typeof d.pillarData === 'object') {
@@ -1350,7 +1361,7 @@ export default function DocumentProcessor() {
     } catch {
       // Ignore corrupt session data
     }
-  }, [flowMode, user?.id]); // FIXED: Added user?.id to ensure user-specific restoration
+  }, [flowMode, user?.id]);
 
   const persistSession = useCallback(async (step: string, opts?: {
     ci?: CompanyInfo;
@@ -1367,7 +1378,20 @@ export default function DocumentProcessor() {
   }) => {
     const sid = sessionId || generateSessionId();
     if (!sessionId) setSessionId(sid);
-    const ci = opts?.ci ?? companyInfo;
+    let ci = opts?.ci ?? companyInfo;
+    if (!ci.name && foundationData?.clientInfo?.companyName) {
+      ci = {
+        ...ci,
+        name: foundationData.clientInfo.companyName,
+        sector: foundationData.clientInfo.sectorCode || ci.sector,
+        registrationNumber: foundationData.clientInfo.registrationNumber || ci.registrationNumber,
+        financialYearEnd: foundationData.clientInfo.financialYearEnd || ci.financialYearEnd,
+        address: foundationData.clientInfo.physicalAddress || ci.address,
+        contactName: foundationData.clientInfo.contactPerson || ci.contactName,
+        contactEmail: foundationData.clientInfo.contactEmail || ci.contactEmail,
+        contactPhone: foundationData.clientInfo.contactPhone || ci.contactPhone,
+      };
+    }
     if (!ci.name) return sid;
     const sess: ProcessorSession = {
       id: sid,
@@ -1473,7 +1497,7 @@ export default function DocumentProcessor() {
   const handleModeSelect = useCallback((mode: 'upload' | 'build') => {
     setFlowMode(mode);
     if (mode === 'upload') {
-      setCurrentPage('upload');
+      setCurrentPage('company-info');
     } else {
       try {
       const raw = sessionStorage.getItem(getBuildFlowStorageKey(user?.id));
@@ -1701,7 +1725,7 @@ export default function DocumentProcessor() {
 
       // Issue D: Load sector-specific calculator config from ArangoDB (primary) or fallback
       try {
-        const scorecardType = determineScorecardType(ci.sectorCode || 'RCOGP', ci.annualTurnover || 0);
+        const scorecardType = determineScorecardType(ci.sectorCode || 'RCOGP', String(ci.annualTurnover ?? 0));
         const sectorConfigRes = await fetch(
           `/api/scorecard/sector-config/${ci.sectorCode || 'RCOGP'}/${scorecardType.scorecardType || 'Generic'}`
         );
@@ -1809,7 +1833,7 @@ export default function DocumentProcessor() {
 
       // Issue B: Create real DB record and update with real UUID
       try {
-        const response = await fetch('/api/assessments', {
+        const response = await fetch(`${API_BASE}/api/assessments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1875,9 +1899,16 @@ export default function DocumentProcessor() {
           }
         }
       } catch (persistError) {
-        // Silent fail - scorecard still works with build-xxx ID
         console.error('Failed to persist build mode client:', persistError);
       }
+
+      await persistSession('scorecard', {
+        foundationData,
+        pillarData,
+        flowMode: 'build',
+        scorecardResult: scorecardLegacy,
+        complete: true,
+      });
 
       toast({
         title: 'Scorecard calculated',
@@ -2422,7 +2453,7 @@ export default function DocumentProcessor() {
 
   const allClassified = uploadedFiles.length > 0 && uploadedFiles.every(f => fileClassifications[String(f.id)]);
   const allReady = uploadedFiles.length > 0 && uploadedFiles.every(f => f.status === 'ready');
-  const totalEntities = extractionResults.reduce((a, r) => a + r.entities.length, 0);
+  const totalEntities = extractionResults.reduce((a, r) => a + (r.entities ?? []).length, 0);
   const approvedCount = extractionResults.reduce((a, r) => a + r.entities.filter((e: any) => e.status === 'approved').length, 0);
 
   const [hoveredEntity, setHoveredEntity] = useState<number | null>(null);
@@ -2855,16 +2886,17 @@ export default function DocumentProcessor() {
                       setIsSavingSession(true);
                       const sid = sessionId || generateSessionId();
                       if (!sessionId) { setSessionId(sid); sessionCreatedAt.current = new Date().toISOString(); }
+                      const nextPage = flowMode === 'upload' ? 'upload' : 'choose-mode';
                       await apiSaveSession({
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
                         updatedAt: new Date().toISOString(),
-                        currentStep: 'choose-mode',
+                        currentStep: nextPage,
                         filesData: [], fileClassifications: {},
                         extractionResults: [], docStatuses: {}, isComplete: false,
                       });
                       setIsSavingSession(false);
-                      setCurrentPage('choose-mode');
+                      setCurrentPage(nextPage);
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
                     className="w-full mt-4 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
@@ -3144,7 +3176,7 @@ export default function DocumentProcessor() {
                                   {selectedTemplate ? selectedTemplate.name : 'Select template...'}
                                 </span>
                                 {selectedTemplate && (
-                                  <span className="text-[11px] text-[#636366] shrink-0">{selectedTemplate.entities.length} fields</span>
+                                  <span className="text-[11px] text-[#636366] shrink-0">{(selectedTemplate.entities ?? []).length} fields</span>
                                 )}
                                 <svg className={`w-4 h-4 shrink-0 text-[#48484a] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 16 16" fill="none">
                                   <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -3180,7 +3212,7 @@ export default function DocumentProcessor() {
                                             >
                                               <div className="flex-1 min-w-0">
                                                 <div className={`text-[13px] font-medium truncate ${isSel ? 'text-white' : 'text-[#d1d1d6]'}`}>{t.name}</div>
-                                                <div className="text-[11px] text-[#48484a]">{t.entities.length} field{t.entities.length !== 1 ? 's' : ''} · v{t.version}</div>
+                                                <div className="text-[11px] text-[#48484a]">{(t.entities ?? []).length} field{(t.entities ?? []).length !== 1 ? 's' : ''} · v{t.version}</div>
                                               </div>
                                               {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
                                             </button>
@@ -3217,13 +3249,13 @@ export default function DocumentProcessor() {
                               </button>
                             </div>
 
-                            {selectedTemplate && selectedTemplate.entities.length > 0 && (
+                            {selectedTemplate && (selectedTemplate.entities ?? []).length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
-                                {selectedTemplate.entities.slice(0, 5).map((ent, i) => (
+                                {(selectedTemplate.entities ?? []).slice(0, 5).map((ent, i) => (
                                   <span key={i} className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#636366]" style={{ background: '#1a1a1a' }}>{ent.label}</span>
                                 ))}
-                                {selectedTemplate.entities.length > 5 && (
-                                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#48484a]" style={{ background: '#1a1a1a' }}>+{selectedTemplate.entities.length - 5}</span>
+                                {(selectedTemplate.entities ?? []).length > 5 && (
+                                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#48484a]" style={{ background: '#1a1a1a' }}>+{(selectedTemplate.entities ?? []).length - 5}</span>
                                 )}
                               </div>
                             )}
@@ -3348,7 +3380,7 @@ export default function DocumentProcessor() {
                         return extractionResults[i] || {
                           fileName: file.name, templateId, templateName: template?.name || "Unknown", entities: [],
                         };
-                      }).filter(r => r.entities.length > 0);
+                      }).filter(r => (r.entities ?? []).length > 0);
                       if (results.length > 0) {
                         setExtractionResults(results);
                         setCurrentPage('review');
@@ -4339,7 +4371,7 @@ export default function DocumentProcessor() {
                             onClick={async () => {
                               // Save assessment via API
                               try {
-                                await fetch('/api/assessments', {
+                                await fetch(`${API_BASE}/api/assessments`, {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({

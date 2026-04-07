@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 import type { Client } from "@toolkit/lib/types";
+import { API_BASE } from "@toolkit/lib/config";
 
 // Sector option from API
 export interface SectorOption {

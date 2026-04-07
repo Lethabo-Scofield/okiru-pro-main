@@ -33,6 +33,7 @@ import entityTemplatesRouter from './entityTemplates.js';
 import entityMappingRouter from './entityMapping.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
+import { createProcessorSessionsRouter } from './processorSessions.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -165,6 +166,9 @@ export async function registerRoutes(
 
   // Sectors: ArangoDB-backed sector configurations
   app.use('/api/sectors', sectorsRouter);
+
+  // Processor sessions: document processing workflow persistence
+  app.use('/api/processor-sessions', createProcessorSessionsRouter());
 
   // Import routes
   app.use('/api/import', importRouter);

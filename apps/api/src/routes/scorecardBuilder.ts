@@ -339,53 +339,78 @@ router.post('/calculate', async (req, res) => {
 // POST /api/assessments
 // ============================================================================
 
-interface SaveAssessmentRequest {
-  assessmentId: string;
-  clientId?: string;
-  financialYear?: string;
-  sectorCode: string;
-  scorecardType: string;
-  values: Record<string, unknown>;
-  result?: import('../../pipeline/rules/calculationEngine.js').ScorecardResult;
-}
-
 router.post('/assessments', async (req, res) => {
   try {
-    const { assessmentId, clientId, financialYear, sectorCode, scorecardType, values, result } = req.body as SaveAssessmentRequest;
+    const body = req.body || {};
+    const assessmentId = body.assessmentId || body.sessionId || `assessment-${Date.now()}`;
+    const sectorCode = body.sectorCode || body.clientInfo?.sectorCode || 'RCOGP';
+    const scorecardType = body.scorecardType || 'Generic';
+    const values = body.values || {};
 
-    // Store evidence references for each value
-    const evidenceRepo = new EvidenceRepository();
-    const evidences = [];
-
-    for (const [entityId, value] of Object.entries(values)) {
-      if (value !== undefined && value !== null) {
-        evidences.push({
-          assessmentId,
-          entityFieldId: entityId,
-          sectorCode,
-          scorecardType,
-          documentType: 'manual_input' as const,
-          normalizedValue: value,
-          confidence: 1.0,
-        });
+    if (values && typeof values === 'object' && Object.keys(values).length > 0) {
+      try {
+        const evidenceRepo = new EvidenceRepository();
+        const evidences = [];
+        for (const [entityId, value] of Object.entries(values)) {
+          if (value !== undefined && value !== null) {
+            evidences.push({
+              assessmentId,
+              entityFieldId: entityId,
+              sectorCode,
+              scorecardType,
+              documentType: 'manual_input' as const,
+              normalizedValue: value,
+              confidence: 1.0,
+            });
+          }
+        }
+        if (evidences.length > 0) {
+          await evidenceRepo.storeEvidences(evidences);
+        }
+      } catch (evidenceErr) {
+        console.warn('[Assessments] Evidence storage failed (non-fatal):', evidenceErr instanceof Error ? evidenceErr.message : evidenceErr);
       }
     }
 
-    if (evidences.length > 0) {
-      await evidenceRepo.storeEvidences(evidences);
+    const clientId = body.clientId || null;
+    const clientInfo = body.clientInfo || {};
+    const scorecardResult = body.scorecardResult || body.result || null;
+    const pillars = body.pillars || null;
+    const financials = body.financials || null;
+
+    let savedClient = null;
+    if (clientInfo.companyName) {
+      try {
+        const { ClientModel } = await import('../../models.js');
+        const userId = (req.session as any)?.userId;
+        const existing = clientId ? await ClientModel.findOne({ id: clientId }) : null;
+        if (existing) {
+          savedClient = existing;
+        } else {
+          savedClient = await ClientModel.create({
+            name: clientInfo.companyName,
+            industry: clientInfo.industry || sectorCode,
+            registrationNumber: clientInfo.registrationNumber || '',
+            annualTurnover: financials?.totalRevenue || 0,
+            bbeLevel: scorecardResult?.finalLevel || scorecardResult?.achievedLevel || 0,
+            status: 'complete',
+            createdByUserId: userId || null,
+          });
+        }
+      } catch (clientErr) {
+        console.warn('[Assessments] Client creation failed (non-fatal):', clientErr instanceof Error ? clientErr.message : clientErr);
+      }
     }
 
-    // TODO: Store assessment in main database
-    // This would integrate with your existing assessment storage
-
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       assessmentId,
       savedAt: new Date().toISOString(),
+      assessment: savedClient ? { clientId: savedClient.id || (savedClient as any)._id?.toString() } : null,
     });
   } catch (err) {
-    console.error('Save error:', err);
-    res.status(500).json({ 
+    console.error('[Assessments] Save error:', err);
+    res.status(500).json({
       error: 'Save failed',
       details: err instanceof Error ? err.message : 'Unknown error'
     });

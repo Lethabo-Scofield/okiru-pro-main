@@ -24,6 +24,8 @@ const PROXIED_PREFIXES = [
   "/api/manifest",
   "/api/calculate",
   "/api/assessments",
+  "/api/sectors",
+  "/api/processor-sessions",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
