@@ -57,10 +57,10 @@ function AppRouter() {
       <Route path="/admin/users">
         <ProtectedRoute><AdminUsers /></ProtectedRoute>
       </Route>
-      <Route path="/toolkit" nest>
+      <Route path="/toolkit/:clientId" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
-      <Route path="/toolkit/:clientId" nest>
+      <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
       <Route>

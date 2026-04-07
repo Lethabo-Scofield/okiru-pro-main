@@ -25,6 +25,7 @@ WORKDIR /app/packages/types
 RUN pnpm run build
 
 WORKDIR /app/apps/web
+ENV VITE_API_URL=
 RUN pnpm run build
 
 FROM node:20-alpine

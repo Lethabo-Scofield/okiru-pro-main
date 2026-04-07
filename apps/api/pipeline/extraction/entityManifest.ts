@@ -1398,7 +1398,13 @@ const AGRI_ENTITIES: EntityField[] = [
 // ===================================================================
 
 function ownershipCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.ownership;
+  const t = cfg.targets?.ownership ?? {
+    votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+    womenVotingTarget: 0.10, womenVotingMaxPts: 4,
+    economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+    womenEITarget: 0.10, womenEIMaxPts: 3,
+    newEntrantsMaxPts: 2, netValueMaxPts: 7,
+  };
   return [
     { code: 'OWN-VR-BLACK', name: 'Exercisable voting rights of black people', pillarCode: 'ownership', target: t.votingRightsTarget, maxPoints: t.votingRightsMaxPts, formulaId: 'proportional', inputEntities: ['black_ownership_percent', 'shareholding_percent'], evidenceRequired: ['shareholder register'] },
     { code: 'OWN-VR-BWO', name: 'Exercisable voting rights of black women', pillarCode: 'ownership', target: t.womenVotingTarget, maxPoints: t.womenVotingMaxPts, formulaId: 'proportional', inputEntities: ['black_women_ownership_percent', 'shareholding_percent'], evidenceRequired: ['shareholder register'] },
@@ -1411,7 +1417,12 @@ function ownershipCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function mcCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.managementControl;
+  const t = cfg.targets?.managementControl ?? {
+    boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+    boardBWTarget: 0.20, boardBWMaxPts: 3,
+    execBlackTarget: 0.50, execBlackMaxPts: 4,
+    execBWTarget: 0.20, execBWMaxPts: 3,
+  };
   return [
     { code: 'MC-BOARD-BLACK', name: 'Board participation — black', pillarCode: 'managementControl', target: t.boardBlackTarget, maxPoints: t.boardBlackMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register'] },
     { code: 'MC-BOARD-BWO', name: 'Board participation — black women', pillarCode: 'managementControl', target: t.boardBWTarget, maxPoints: t.boardBWMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register'] },
@@ -1421,7 +1432,10 @@ function mcCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function eeCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.employmentEquity;
+  const t = cfg.targets?.employmentEquity ?? {
+    seniorMaxPts: 3, middleMaxPts: 3, juniorMaxPts: 3,
+    disabledTarget: 0.02, disabledMaxPts: 3,
+  };
   return [
     { code: 'EE-SENIOR', name: 'Senior management — black', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: t.seniorMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] },
     { code: 'EE-MIDDLE', name: 'Middle management — black', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: t.middleMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] },
@@ -1431,7 +1445,13 @@ function eeCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function skillsCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.skills;
+  const t = cfg.targets?.skills ?? {
+    overallSpendPercent: 0.025, learningProgrammesMaxPts: 6,
+    bursarySpendPercent: 0.0025, bursaryMaxPts: 5,
+    disabledSpendPercent: 0.0003, disabledLearningMaxPts: 2,
+    learnershipTargetPercent: 0.025, learnershipsMaxPts: 1,
+    absorptionTargetPercent: 0.50, absorptionMaxPts: 1,
+  };
   return [
     { code: 'SKILLS-LEARNING', name: 'Expenditure on learning programmes for black people', pillarCode: 'skillsDevelopment', target: t.overallSpendPercent, maxPoints: t.learningProgrammesMaxPts, formulaId: 'percent_of_base', inputEntities: ['training_cost', 'leviable_amount', 'learner_race', 'learner_employment_status', 'training_category'], evidenceRequired: ['training records', 'payroll'] },
     { code: 'SKILLS-BURS', name: 'Expenditure on bursaries for black students', pillarCode: 'skillsDevelopment', target: t.bursarySpendPercent, maxPoints: t.bursaryMaxPts, formulaId: 'percent_of_base', inputEntities: ['training_cost', 'leviable_amount', 'training_is_bursary'], evidenceRequired: ['training records', 'payroll'] },
@@ -1442,7 +1462,14 @@ function skillsCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function procurementCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.procurement;
+  const t = cfg.targets?.procurement ?? {
+    allSuppliersTarget: 0.80, allSuppliersMaxPts: 12,
+    qseTarget: 0.15, qseMaxPts: 5,
+    emeTarget: 0.15, emeMaxPts: 4,
+    bo51Target: 0.40, bo51MaxPts: 3,
+    bwo30Target: 0.12, bwo30MaxPts: 1,
+    dgTarget: 0.12, dgMaxPts: 1,
+  };
   return [
     { code: 'PROC-EMP', name: 'B-BBEE procurement from empowering suppliers', pillarCode: 'preferentialProcurement', target: t.allSuppliersTarget, maxPoints: t.allSuppliersMaxPts, formulaId: 'percent_of_base', inputEntities: ['supplier_spend', 'supplier_bee_level', 'tmps'], evidenceRequired: ['supplier register'] },
     { code: 'PROC-QSE', name: 'Spend on QSE empowering suppliers', pillarCode: 'preferentialProcurement', target: t.qseTarget, maxPoints: t.qseMaxPts, formulaId: 'percent_of_base', inputEntities: ['supplier_spend', 'tmps'], evidenceRequired: ['supplier register'] },
@@ -1454,7 +1481,7 @@ function procurementCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function esdCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.esd;
+  const t = cfg.targets?.esd ?? { sdPercent: 0.01, sdMaxPts: 5, edPercent: 0.01, edMaxPts: 5 };
   return [
     { code: 'ESD-SD', name: 'Supplier development contributions', pillarCode: 'enterpriseSupplierDevelopment', target: t.sdPercent, maxPoints: t.sdMaxPts, formulaId: 'percent_of_npat', inputEntities: ['esd_amount', 'esd_category', 'npat'], evidenceRequired: ['ESD register'] },
     { code: 'ESD-ED', name: 'Enterprise development contributions', pillarCode: 'enterpriseSupplierDevelopment', target: t.edPercent, maxPoints: t.edMaxPts, formulaId: 'percent_of_npat', inputEntities: ['esd_amount', 'esd_category', 'npat'], evidenceRequired: ['ESD register'] },
@@ -1464,7 +1491,7 @@ function esdCriteria(cfg: SectorConfig): CriterionEntity[] {
 }
 
 function sedCriteria(cfg: SectorConfig): CriterionEntity[] {
-  const t = cfg.targets.sed;
+  const t = cfg.targets?.sed ?? { spendPercent: 0.01, maxPts: 5 };
   return [
     { code: 'SED-SPEND', name: 'SED contributions', pillarCode: 'socioEconomicDevelopment', target: t.spendPercent, maxPoints: t.maxPts, formulaId: 'percent_of_npat', inputEntities: ['sed_amount', 'npat'], evidenceRequired: ['SED register'] },
   ];
@@ -1483,66 +1510,66 @@ function yesCriteria(): CriterionEntity[] {
 // ===================================================================
 
 function buildOwnershipPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.ownership ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.ownership ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'ownership', pillarName: 'Ownership', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
     criteria: ownershipCriteria(cfg), entities: [...OWNERSHIP_ENTITIES],
   };
 }
 
 function buildMCPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.managementControl ?? { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'managementControl', pillarName: 'Management Control', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
     criteria: mcCriteria(cfg), entities: [...MC_ENTITIES],
   };
 }
 
 function buildEEPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
+  const pc = cfg.pillarConfigs?.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
   return {
     pillarCode: 'employmentEquity', pillarName: 'Employment Equity', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? false, subMinimumThreshold: (pc.maxPoints ?? 0) * ((pc.subMinimumPercent ?? 0) / 100),
     criteria: eeCriteria(cfg), entities: [],
   };
 }
 
 function buildSkillsPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.skillsDevelopment ?? { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.skillsDevelopment ?? { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'skillsDevelopment', pillarName: 'Skills Development', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
     criteria: skillsCriteria(cfg), entities: [...SKILLS_ENTITIES],
   };
 }
 
 function buildProcurementPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.preferentialProcurement ?? { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.preferentialProcurement ?? { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'preferentialProcurement', pillarName: 'Preferential Procurement', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
     criteria: procurementCriteria(cfg), entities: [...PROCUREMENT_ENTITIES],
   };
 }
 
 function buildESDPack(cfg: SectorConfig): PillarPack {
-  const sd = cfg.pillarConfigs.supplierDevelopment ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
-  const ed = cfg.pillarConfigs.enterpriseDevelopment ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
-  const combinedMax = sd.maxPoints + ed.maxPoints;
+  const sd = cfg.pillarConfigs?.supplierDevelopment ?? { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 };
+  const ed = cfg.pillarConfigs?.enterpriseDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
+  const combinedMax = (sd.maxPoints ?? 0) + (ed.maxPoints ?? 0);
   return {
     pillarCode: 'enterpriseSupplierDevelopment', pillarName: 'Enterprise & Supplier Development', maxPoints: combinedMax,
-    hasSubMinimum: sd.hasSubMinimum || ed.hasSubMinimum, subMinimumThreshold: sd.hasSubMinimum ? sd.maxPoints * (sd.subMinimumPercent / 100) : 0,
+    hasSubMinimum: (sd.hasSubMinimum ?? false) || (ed.hasSubMinimum ?? false), subMinimumThreshold: (sd.hasSubMinimum ?? false) ? (sd.maxPoints ?? 0) * ((sd.subMinimumPercent ?? 0) / 100) : 0,
     criteria: esdCriteria(cfg), entities: [...ESD_ENTITIES],
   };
 }
 
 function buildSEDPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs.socioEconomicDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
+  const pc = cfg.pillarConfigs?.socioEconomicDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
   return {
     pillarCode: 'socioEconomicDevelopment', pillarName: 'Socio-Economic Development', maxPoints: pc.maxPoints,
-    hasSubMinimum: pc.hasSubMinimum, subMinimumThreshold: pc.maxPoints * (pc.subMinimumPercent / 100),
+    hasSubMinimum: pc.hasSubMinimum ?? false, subMinimumThreshold: (pc.maxPoints ?? 0) * ((pc.subMinimumPercent ?? 0) / 100),
     criteria: sedCriteria(cfg), entities: [...SED_ENTITIES],
   };
 }
