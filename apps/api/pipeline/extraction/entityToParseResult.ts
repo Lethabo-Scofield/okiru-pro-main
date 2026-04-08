@@ -67,6 +67,9 @@ function parseRace(raw: string | number | null): string {
   if (/coloured/i.test(s)) return 'Coloured';
   if (/indian/i.test(s)) return 'Indian';
   if (/white/i.test(s)) return 'White';
+  // "Black" as a standalone race label means the B-BBEE beneficiary umbrella group
+  // Map to 'Black' so isBlackRace can handle it
+  if (/^black$/i.test(s.trim())) return 'Black';
   return s;
 }
 
@@ -90,7 +93,8 @@ function parseDesignation(raw: string | number | null): string {
 }
 
 function isBlackRace(race: string): boolean {
-  return ['African', 'Coloured', 'Indian'].includes(race);
+  // In B-BBEE, "Black" is the umbrella term for African, Coloured, and Indian
+  return ['African', 'Coloured', 'Indian', 'Black'].includes(race);
 }
 
 // ---------------------------------------------------------------------------

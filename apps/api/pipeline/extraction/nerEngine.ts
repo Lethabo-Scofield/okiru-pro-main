@@ -70,7 +70,10 @@ export const DEFAULT_BBBEE_PATTERNS: PatternSet = {
     /\bB-?BBEE\s+level\s+[1-8]\b/gi,
     /\b(?:non[- ]?compliant|NC)\b/gi,
   ],
-  RACE_GROUP: [/\b(?:African|Coloured|Indian|White|Black)\b/g],
+  RACE_GROUP: [
+    /\b(?:African|Coloured|Indian|White)\b/g,
+    /\bBlack(?!\s+(?:Economic|Empowerment|Owned|Ownership|Business|Enterprise|Management|Consciousness|consciousness|Women(?:\s+(?:Owned|Business|Enterprise))?|Pty|Ltd|People))/g,
+  ],
   GENDER: [/\b(?:Male|Female|M|F)\b/g],
   DESIGNATION: [
     /\b(?:Board|Executive|Senior|Middle|Junior|Director|CEO|CFO|COO|CTO|Managing Director)\b/gi,
