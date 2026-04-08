@@ -159,8 +159,9 @@ function toStoredSectorRule(
         displayOrder: p.displayOrder,
       }));
 
-  // Calculate total max points
-  const totalMaxPoints = pillarConfigs.reduce((sum, p) => sum + p.maxPoints, 0);
+  // Use the verified totalMaxPoints from sectorConfig (source of truth from Excel)
+  // rather than calculating from pillarConfigs which may have rounding errors
+  const totalMaxPoints = config.totalMaxPoints ?? pillarConfigs.reduce((sum, p) => sum + p.maxPoints, 0);
 
   return {
     sectorCode: config.sectorCode.toUpperCase(),

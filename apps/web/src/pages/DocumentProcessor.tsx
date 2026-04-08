@@ -13,7 +13,7 @@ import { FoundationStep, FoundationData } from '@/components/build/FoundationSte
 import { ClientInformationData, EMPTY_CLIENT_INFO, determineCompanySize, hasQSEVariant } from '@/components/build/ClientInformationForm';
 import { FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from '@/components/build/FinancialsForm';
 import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPillarsStep';
-import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills } from '@/lib/foundationApi';
+import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore } from '@/lib/foundationApi';
 import { useBbeeStore } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import { calculateYESScore } from '@toolkit/lib/calculators/yes';
@@ -1219,10 +1219,38 @@ export default function DocumentProcessor() {
     fetchSectors();
   }, []);
 
+  // Template selection: use sessionStorage preference, then auto-match to company sector, then fallback
+  const getPreferredTemplate = useCallback(() => {
+    if (templates.length === 0) return null;
+    
+    // 1. Check sessionStorage for last-selected template
+    const lastTemplateId = sessionStorage.getItem('bbee-last-template-id');
+    if (lastTemplateId) {
+      const lastTemplate = templates.find(t => String(t.id) === lastTemplateId);
+      if (lastTemplate) return lastTemplate;
+    }
+    
+    // 2. Try to auto-match to company sector if available
+    const companySector = companyInfo.sector || foundationData.clientInfo?.sectorCode;
+    if (companySector) {
+      const sectorMatch = templates.find(t => 
+        t.sectorCode === companySector && t.scorecardType === 'Generic'
+      );
+      if (sectorMatch) return sectorMatch;
+    }
+    
+    // 3. Fall back to first template (no hardcoded RCOGP Generic default)
+    return templates[0];
+  }, [templates, companyInfo.sector, foundationData.clientInfo?.sectorCode]);
+
+  // Persist template selection when user explicitly chooses one
+  const persistTemplateSelection = useCallback((templateId: number) => {
+    sessionStorage.setItem('bbee-last-template-id', String(templateId));
+  }, []);
+
   useEffect(() => {
     if (templates.length === 0 || uploadedFiles.length === 0) return;
-    const preferred =
-      templates.find(t => t.sectorCode === 'RCOGP' && t.scorecardType === 'Generic') ?? templates[0];
+    const preferred = getPreferredTemplate();
     if (!preferred) return;
     setFileClassifications(prev => {
       let changed = false;
@@ -1236,7 +1264,7 @@ export default function DocumentProcessor() {
       }
       return changed ? next : prev;
     });
-  }, [templates, uploadedFiles]);
+  }, [templates, uploadedFiles, getPreferredTemplate]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1298,7 +1326,8 @@ export default function DocumentProcessor() {
         setFlowMode(sess.flowMode);
       }
 
-      const validSteps = ['company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars'];
+      // FIXED: Added 'choose-mode' to validSteps so mode selection is preserved on resume
+      const validSteps = ['choose-mode', 'company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars'];
       const step = sess.currentStep && validSteps.includes(sess.currentStep)
         ? sess.currentStep
         : sess.scorecardResult ? 'scorecard'
@@ -1323,23 +1352,48 @@ export default function DocumentProcessor() {
     const isNew = params.get('new') === 'true';
 
     // If ?new=true, clear any saved session and start fresh
-    if (isNew && user?.id) {
+    if (isNew) {
       try {
-        sessionStorage.removeItem(getBuildFlowStorageKey(user.id));
+        // FIXED: Clear both user-specific and session-specific keys
+        if (user?.id) {
+          sessionStorage.removeItem(getBuildFlowStorageKey(user.id));
+        }
+        // Also clear any session-specific keys (for anonymous users)
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key?.startsWith('okiru-processor-build-flow-')) {
+            sessionStorage.removeItem(key);
+          }
+        }
       } catch { /* ignore */ }
       return;
     }
 
-    // Only run if flowMode is not yet set, user is loaded, and no ?session= param
+    // Only run if flowMode is not yet set, and no ?session= param
+    // FIXED: Allow anonymous users (removed !user?.id requirement)
     const sessionParam = params.get('session');
-    if (flowMode !== null || !user?.id || sessionParam) return;
+    if (flowMode !== null || sessionParam) return;
+
+    // FIXED: Try user-specific key first, then check for any build-flow session
+    const userKey = user?.id ? getBuildFlowStorageKey(user.id) : null;
+    const raw = userKey ? sessionStorage.getItem(userKey) : null;
+    // For anonymous users, find the most recent build-flow session (if any)
+    const anonRaw = !raw && !user?.id
+      ? (() => {
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key?.startsWith('okiru-processor-build-flow-') && key !== 'okiru-processor-build-flow-anon') {
+              return sessionStorage.getItem(key);
+            }
+          }
+          return null;
+        })()
+      : null;
+    const finalRaw = raw || anonRaw;
+    if (!finalRaw) return;
 
     try {
-      const storageKey = getBuildFlowStorageKey(user.id);
-      const raw = sessionStorage.getItem(storageKey);
-      if (!raw) return;
-
-      const d = JSON.parse(raw);
+      const d = JSON.parse(finalRaw);
       if (!d.foundationData || typeof d.foundationData !== 'object') return;
 
       // Only restore if we were in the build flow
@@ -1392,7 +1446,10 @@ export default function DocumentProcessor() {
         contactPhone: foundationData.clientInfo.contactPhone || ci.contactPhone,
       };
     }
-    if (!ci.name) return sid;
+    // Allow saving even without company name - use sessionId as identifier
+    if (!ci.name) {
+      ci.name = 'Unnamed Assessment';
+    }
     const sess: ProcessorSession = {
       id: sid,
       companyInfo: ci,
@@ -1451,10 +1508,10 @@ export default function DocumentProcessor() {
   }, [fileClassifications, currentPage, sessionId, persistSession]);
 
   // Auto-save for build flow steps (foundation and pillars)
+  // Works for both authenticated users and anonymous users (using sessionStorage as fallback)
   const lastSavedBuildDataRef = useRef<string>('');
   useEffect(() => {
     if (!sessionId || (currentPage !== 'build-foundation' && currentPage !== 'build-pillars')) return;
-    if (!user?.id) return;
     // Debounce the save to avoid excessive API calls
     const t = setTimeout(() => {
       const key = JSON.stringify({ foundation: foundationData, pillars: pillarData });
@@ -1467,7 +1524,27 @@ export default function DocumentProcessor() {
       });
     }, 1000);
     return () => clearTimeout(t);
-  }, [foundationData, pillarData, currentPage, sessionId, flowMode, persistSession, user?.id]);
+  }, [foundationData, pillarData, currentPage, sessionId, flowMode, persistSession]);
+
+  // Flush debounced saves on page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (lastSavedBuildDataRef.current) {
+        // Synchronously save to sessionStorage as backup
+        const backupKey = `bbee-assessment-backup-${sessionId}`;
+        const backupData = {
+          sessionId,
+          foundationData,
+          pillarData,
+          flowMode,
+          timestamp: Date.now(),
+        };
+        sessionStorage.setItem(backupKey, JSON.stringify(backupData));
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [sessionId, foundationData, pillarData, flowMode]);
 
   // ============================================================================
   // Build Flow Functions
@@ -1499,8 +1576,20 @@ export default function DocumentProcessor() {
     if (mode === 'upload') {
       setCurrentPage('company-info');
     } else {
+      // FIXED: Generate sessionId early for anonymous users so they get isolated sessionStorage
+      const sid = sessionId || generateSessionId();
+      if (!sessionId) {
+        setSessionId(sid);
+        sessionCreatedAt.current = new Date().toISOString();
+      }
+
+      // FIXED: Use session-based storage key for anonymous users (user-based for authenticated)
+      const storageKey = user?.id
+        ? getBuildFlowStorageKey(user.id)
+        : `okiru-processor-build-flow-${sid}`;
+
       try {
-      const raw = sessionStorage.getItem(getBuildFlowStorageKey(user?.id));
+        const raw = sessionStorage.getItem(storageKey);
         if (raw) {
           const d = JSON.parse(raw);
           if (d.foundationData && typeof d.foundationData === 'object') {
@@ -1524,17 +1613,21 @@ export default function DocumentProcessor() {
       }
       setCurrentPage('build-foundation');
     }
-  }, []);
+  }, [sessionId, user?.id]);
 
-  // FIXED: Now uses user-specific storage key to prevent session leakage
+  // FIXED: Now uses user-specific storage key to prevent session leakage.
+  // Also works for anonymous users by using sessionId as the key component.
   useEffect(() => {
     if (flowMode !== 'build') return;
     if (currentPage !== 'build-foundation' && currentPage !== 'build-pillars') return;
-    if (!user?.id) return;
+    // FIXED: Allow anonymous users to use sessionStorage fallback (uses sessionId as key)
+    const storageKey = user?.id
+      ? getBuildFlowStorageKey(user.id)
+      : `okiru-processor-build-flow-${sessionId || 'temp'}`;
     const t = setTimeout(() => {
       try {
         sessionStorage.setItem(
-          getBuildFlowStorageKey(user.id),
+          storageKey,
           JSON.stringify({ foundationData, pillarData, currentPage }),
         );
       } catch {
@@ -1542,7 +1635,7 @@ export default function DocumentProcessor() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [flowMode, currentPage, foundationData, pillarData, user?.id]);
+  }, [flowMode, currentPage, foundationData, pillarData, user?.id, sessionId]);
 
   const handleBuildValueChange = useCallback((entityId: string, value: unknown) => {
     setBuildValues(prev => ({ ...prev, [entityId]: value }));
@@ -1557,59 +1650,34 @@ export default function DocumentProcessor() {
     });
   }, []);
 
-  const calculateViaApi = useCallback(async () => {
-    if (!manifest) return;
-    setIsCalculating(true);
+  // Load sector-specific calculator config when entering the pillars step
+  // so pillar targets update immediately (not only on Calculate click)
+  useEffect(() => {
+    if (currentPage !== 'build-pillars') return;
+    const ci = foundationData.clientInfo;
+    const sectorCode = ci?.sectorCode || 'RCOGP';
+    const { scorecardType } = determineScorecardType(sectorCode, String(ci?.annualTurnover ?? 0));
 
-    try {
-      // Convert values to EntityValue format
-      const entityValues: Record<string, EntityValue> = {};
-      for (const [key, value] of Object.entries(buildValues)) {
-        if (value !== undefined && value !== null) {
-          entityValues[key] = {
-            entityId: key,
-            value,
-            source: 'manual',
-          };
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.success && data.config && !cancelled) {
+          useBbeeStore.setState({ calculatorConfig: data.config });
+          console.log('[BuildPillars] Sector config loaded:', sectorCode, scorecardType, 'from', data.source);
         }
+      } catch (e) {
+        console.warn('[BuildPillars] Failed to load sector config:', e);
       }
+    })();
+    return () => { cancelled = true; };
+  }, [currentPage, foundationData.clientInfo?.sectorCode]);
 
-      const sectorCode = manifest.rootContext.sector || 'RCOGP';
-      const scorecardType = manifest.rootContext.scorecardType || 'Generic';
-
-      const response = await fetch('/api/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assessmentId: sessionId || `assessment-${Date.now()}`,
-          sectorCode,
-          scorecardType,
-          entityValues,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Calculation failed');
-
-      const result: ScorecardResult = await response.json();
-      setScorecardResult(result);
-      setCurrentPage('scorecard');
-
-      toast({
-        title: 'Scorecard calculated',
-        description: `Total: ${result.totalPoints.toFixed(2)} points · Level ${result.beeLevel}`,
-      });
-    } catch (err) {
-      toast({
-        title: 'Calculation failed',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsCalculating(false);
-    }
-  }, [buildValues, manifest, sessionId, toast]);
-
-  // Build mode: single source of truth — hydrate Toolkit store and use store.calculateScorecard
+  // Build mode: unified calculation using populateAndScore (single source of truth)
   const calculateFromPillarData = useCallback(async () => {
     setIsSavingSession(true);
     try {
@@ -1720,7 +1788,7 @@ export default function DocumentProcessor() {
         sed: pillarData.sed
           ? { ...pillarData.sed, id: pillarData.sed.id || '', clientId: buildClientId }
           : { id: '', clientId: buildClientId, contributions: [] },
-        calculatorConfig: null, // Will be loaded from ArangoDB below
+        calculatorConfig: useBbeeStore.getState().calculatorConfig, // Preserve config loaded on step entry
       });
 
       // Issue D: Load sector-specific calculator config from ArangoDB (primary) or fallback
@@ -3206,6 +3274,7 @@ export default function DocumentProcessor() {
                                               type="button"
                                               onClick={() => {
                                                 setFileClassifications(prev => ({ ...prev, [String(file.id)]: t.id }));
+                                                persistTemplateSelection(t.id);
                                                 setOpenTemplateDropdown(null);
                                               }}
                                               className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"

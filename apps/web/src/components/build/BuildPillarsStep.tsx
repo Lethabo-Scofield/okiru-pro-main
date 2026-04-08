@@ -59,26 +59,55 @@ const DEFAULT_PILLARS: PillarConfig[] = [
   { id: 'yes',                    code: 'YES',    name: 'YES Initiative',               description: 'Youth placement tiers (included in scorecard total)', icon: TrendingUp, maxPoints: 3,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
 ];
 
+// Map calculatorConfig pillar codes to UI metadata
+const PILLAR_METADATA: Record<string, { name: string; description: string; icon: typeof Building2 }> = {
+  ownership: { name: 'Ownership', description: 'Voting rights, economic interest, net value', icon: Building2 },
+  managementControl: { name: 'Management Control & Employment Equity', description: 'Board, executive, EAP levels', icon: Briefcase },
+  employmentEquity: { name: 'Employment Equity', description: 'Senior, middle, junior EE targets', icon: Users },
+  skillsDevelopment: { name: 'Skills Development', description: 'Training spend, bursaries, LAI, absorption', icon: GraduationCap },
+  preferentialProcurement: { name: 'Preferential Procurement', description: 'TMPS-based BEE procurement', icon: ShoppingCart },
+  supplierDevelopment: { name: 'Supplier Development', description: 'SD contributions (NPAT % target)', icon: Handshake },
+  enterpriseDevelopment: { name: 'Enterprise Development', description: 'ED contributions (NPAT % + bonuses)', icon: Handshake },
+  socioEconomicDevelopment: { name: 'Socio-Economic Development', description: 'SED as % of NPAT', icon: Heart },
+  yesInitiative: { name: 'YES Initiative', description: 'Youth placement tiers', icon: TrendingUp },
+  empowermentFinancing: { name: 'Empowerment Financing', description: 'FSC-specific financing', icon: Building2 },
+  accessToFinancialServices: { name: 'Access to Financial Services', description: 'FSC-specific access', icon: Users },
+};
+
 // Generate dynamic pillar config from calculatorConfig
 function usePillarConfig(): PillarConfig[] {
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
-  
+
   if (!calculatorConfig?.pillarConfigs) {
     return DEFAULT_PILLARS;
   }
-  
+
   const pc = calculatorConfig.pillarConfigs;
-  
-  return [
-    { ...DEFAULT_PILLARS[0], maxPoints: pc.ownership?.maxPoints ?? 25, hasSubMinimum: pc.ownership?.hasSubMinimum ?? true, subMinimumThreshold: pc.ownership?.subMinimumPercent ?? 40 },
-    { ...DEFAULT_PILLARS[1], maxPoints: pc.managementControl?.maxPoints ?? 19, hasSubMinimum: pc.managementControl?.hasSubMinimum ?? false, subMinimumThreshold: pc.managementControl?.subMinimumPercent ?? 0 },
-    { ...DEFAULT_PILLARS[2], maxPoints: pc.skillsDevelopment?.maxPoints ?? 25, hasSubMinimum: pc.skillsDevelopment?.hasSubMinimum ?? true, subMinimumThreshold: pc.skillsDevelopment?.subMinimumPercent ?? 40 },
-    { ...DEFAULT_PILLARS[3], maxPoints: pc.preferentialProcurement?.maxPoints ?? 29, hasSubMinimum: pc.preferentialProcurement?.hasSubMinimum ?? true, subMinimumThreshold: pc.preferentialProcurement?.subMinimumPercent ?? 40 },
-    { ...DEFAULT_PILLARS[4], maxPoints: pc.supplierDevelopment?.maxPoints ?? 10, hasSubMinimum: pc.supplierDevelopment?.hasSubMinimum ?? true, subMinimumThreshold: pc.supplierDevelopment?.subMinimumPercent ?? 40 },
-    { ...DEFAULT_PILLARS[5], maxPoints: pc.enterpriseDevelopment?.maxPoints ?? 7, hasSubMinimum: pc.enterpriseDevelopment?.hasSubMinimum ?? false, subMinimumThreshold: pc.enterpriseDevelopment?.subMinimumPercent ?? 0 },
-    { ...DEFAULT_PILLARS[6], maxPoints: pc.socioEconomicDevelopment?.maxPoints ?? 5, hasSubMinimum: pc.socioEconomicDevelopment?.hasSubMinimum ?? false, subMinimumThreshold: pc.socioEconomicDevelopment?.subMinimumPercent ?? 0 },
-    DEFAULT_PILLARS[7], // YES is always 3 points
-  ];
+  const pillars: PillarConfig[] = [];
+  let displayOrder = 0;
+
+  // Build pillars dynamically from calculatorConfig.pillarConfigs
+  for (const [key, config] of Object.entries(pc)) {
+    if (!config || config.maxPoints === 0) continue; // Skip empty/zero pillars
+
+    const meta = PILLAR_METADATA[key] || { name: key, description: '', icon: Building2 };
+
+    pillars.push({
+      id: key,
+      code: key.substring(0, 4).toUpperCase(),
+      name: meta.name,
+      description: meta.description,
+      icon: meta.icon,
+      maxPoints: config.maxPoints,
+      hasSubMinimum: config.hasSubMinimum ?? false,
+      subMinimumThreshold: config.subMinimumPercent ?? 0,
+      includeInGrandTotal: true,
+    });
+
+    displayOrder++;
+  }
+
+  return pillars.length > 0 ? pillars : DEFAULT_PILLARS;
 }
 
 // ============================================================================
@@ -214,8 +243,22 @@ export function BuildPillarsStep({
   const completedCount = PILLARS.filter(p => hasData(p.id)).length;
   const completionPct = Math.round((completedCount / PILLARS.length) * 100);
   const totalScore = PILLARS.filter(p => p.includeInGrandTotal).reduce((sum, p) => sum + getPillarScore(p.id), 0);
-  /** Core RCOGP Generic = 120; YES tier points count in numerator only (aligned with scorecard /120). */
-  const totalMax = PILLARS.filter(p => p.includeInGrandTotal && p.id !== 'yes').reduce((s, p) => s + p.maxPoints, 0);
+
+  // Use calculatorConfig.totalMaxPoints (verified Excel value) instead of calculating
+  // This handles sector-specific totals correctly (e.g., RCOGP 120, ICT 140, AGRI 132)
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const totalMax = calculatorConfig?.totalMaxPoints ?? PILLARS.reduce((s, p) => s + p.maxPoints, 0);
+
+  // Sub-minimum enforcement gate
+  const failedSubMinimums = PILLARS.filter(p => {
+    if (!p.hasSubMinimum || !hasData(p.id)) return false;
+    const score = getPillarScore(p.id);
+    // Check against dynamic threshold from calculatorConfig
+    const configThreshold = calculatorConfig?.pillarConfigs?.[p.id as keyof typeof calculatorConfig.pillarConfigs]?.subMinThreshold;
+    const threshold = configThreshold ?? (p.subMinimumThreshold / 100) * p.maxPoints;
+    return score < threshold;
+  }).map(p => p.name);
+  const hasFailedSubMinimums = failedSubMinimums.length > 0;
 
   const activePillarConfig = PILLARS.find(p => p.id === activePillar) || PILLARS[0];
 
@@ -323,10 +366,10 @@ export function BuildPillarsStep({
       </div>
 
       {/* Main layout: sidebar + form */}
-      <div className="grid grid-cols-[220px_1fr] gap-4" style={{ minHeight: 600 }}>
+      <div className="grid grid-cols-[minmax(260px,280px)_1fr] gap-4" style={{ minHeight: 600 }}>
 
         {/* Sidebar */}
-        <div className="border border-border/60 rounded-lg overflow-hidden bg-transparent">
+        <div className="border border-border/60 rounded-lg overflow-hidden bg-transparent min-w-[260px]">
           <ScrollArea className="h-full">
             <div className="p-2 space-y-0.5">
               {PILLARS.map((p) => {
@@ -355,8 +398,8 @@ export function BuildPillarsStep({
                     <div className="flex items-center gap-2.5">
                       <Icon className={cn("h-4 w-4 shrink-0 text-muted-foreground")} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-medium truncate text-foreground">
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-xs font-medium leading-tight text-foreground [overflow-wrap:anywhere]">
                             {p.name}
                           </span>
                           {filled && !active && <CheckCircle2 className="h-3 w-3 text-muted-foreground shrink-0" />}
@@ -430,13 +473,35 @@ export function BuildPillarsStep({
         </div>
       </div>
 
+      {/* Sub-minimum enforcement warning */}
+      {hasFailedSubMinimums && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-red-800">Sub-minimum requirements not met</p>
+              <p className="text-red-700">
+                The following pillars have not met their sub-minimum thresholds:
+                {' '}{failedSubMinimums.join(', ')}.
+                You cannot calculate the scorecard until all sub-minimums are met.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <div className="flex items-center justify-between pt-2 border-t">
         <Button variant="outline" onClick={onBack} className="gap-2">
           <ChevronLeft className="h-4 w-4" />
           Back to Foundation
         </Button>
-        <Button onClick={onNext} disabled={completedCount === 0} className="gap-2">
+        <Button
+          onClick={onNext}
+          disabled={completedCount === 0 || hasFailedSubMinimums}
+          className="gap-2"
+          title={hasFailedSubMinimums ? 'Sub-minimum requirements not met' : ''}
+        >
           Calculate Scorecard
           <ArrowRight className="h-4 w-4" />
         </Button>

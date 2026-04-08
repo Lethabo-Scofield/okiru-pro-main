@@ -70,7 +70,7 @@ export function ScorecardSummary() {
 
   const pillarsArray = [
     { name: "Ownership", key: "ownership" },
-    { name: "Management Control", key: "managementControl" },
+    { name: "Management Control & Employment Equity", key: "managementControl" },
     { name: "Skills Development", key: "skillsDevelopment" },
     { name: "Preferential Procurement", key: "procurement" },
     { name: "Supplier Development", key: "supplierDevelopment" },

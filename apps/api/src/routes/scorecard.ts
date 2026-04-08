@@ -20,7 +20,7 @@ import {
   buildEntityCellMapping,
 } from '../../arango/entityCellMapping.js';
 import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
-import { getSectorConfig } from '../../pipeline/sectorConfig.js';
+import { getSectorConfig, type SectorConfig } from '../../pipeline/sectorConfig.js';
 
 const router = Router();
 const computeClient = getComputeClient();
@@ -363,67 +363,224 @@ router.post('/generate-summary', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Transform SectorConfig/StoredSectorRule → CalculatorConfig (Toolkit shape)
+//
+// Handles BOTH shapes:
+// 1. SectorConfig (hardcoded): targets.ownership.votingRightsMaxPts, pillarConfigs as object
+// 2. StoredSectorRule (ArangoDB): targets flattened, pillarConfigs as array
+//
+// Without this mapping, calculators silently fall back to RCOGP defaults.
+// ---------------------------------------------------------------------------
+function sectorConfigToCalculatorConfig(sc: any) {
+  // Determine if this is StoredSectorRule (array) or SectorConfig (object)
+  const isStoredShape = Array.isArray(sc.pillarConfigs);
+
+  // Normalize targets - both shapes have targets object
+  const t = sc.targets || {};
+  const own = t.ownership || {};
+  const mc = t.managementControl || {};
+  const ee = t.employmentEquity || {};
+  const sk = t.skills || {};
+  const pr = t.procurement || {};
+  const esd = t.esd || {};
+  const sed = t.sed || {};
+
+  // Normalize pillarConfigs based on shape
+  let pc: any = {};
+  if (isStoredShape && Array.isArray(sc.pillarConfigs)) {
+    // StoredSectorRule shape: pillarConfigs is array with { code, maxPoints, ... }
+    for (const p of sc.pillarConfigs) {
+      pc[p.code] = {
+        maxPoints: p.maxPoints ?? 0,
+        hasSubMinimum: p.hasSubMinimum ?? false,
+        subMinimumPercent: p.subMinimumThreshold ? Math.round((p.subMinimumThreshold / p.maxPoints) * 100) : 0,
+      };
+    }
+  } else {
+    // SectorConfig shape: pillarConfigs is already object
+    pc = sc.pillarConfigs || {};
+  }
+
+  const pOwn = pc.ownership || {};
+  const pMc = pc.managementControl || {};
+  const pEe = pc.employmentEquity || { maxPoints: 0 };
+  const pSk = pc.skillsDevelopment || {};
+  const pPp = pc.preferentialProcurement || {};
+  const pSd = pc.supplierDevelopment || pc.enterpriseSupplierDevelopment || {};
+  const pEd = pc.enterpriseDevelopment || {};
+  const pSed = pc.socioEconomicDevelopment || {};
+  const pYes = pc.yesInitiative || { maxPoints: 0 };
+
+  // Calculate sub-minimum thresholds (40% of pillar max for Generic)
+  const ownershipSubMin = pOwn.hasSubMinimum
+    ? ((pOwn.subMinimumPercent || 40) / 100) * (pOwn.maxPoints || 25)
+    : 3.2; // 40% of 8 net value points
+  const skillsSubMin = pSk.hasSubMinimum
+    ? ((pSk.subMinimumPercent || 40) / 100) * (pSk.maxPoints || 25)
+    : 10; // 40% of 25
+  const procSubMin = pPp.hasSubMinimum
+    ? ((pPp.subMinimumPercent || 40) / 100) * (pPp.maxPoints || 29)
+    : 11.6; // 40% of 29
+
+  const procBaseMax = (pr.allSuppliersMaxPts ?? 5)
+    + (pr.qseMaxPts ?? 3) + (pr.emeMaxPts ?? 4)
+    + (pr.bo51MaxPts ?? 11) + (pr.bwo30MaxPts ?? 4);
+
+  // Get totalMaxPoints from source (verified Excel value) or calculate
+  const totalMaxPoints = sc.totalMaxPoints ??
+    Object.values(pc).reduce((sum: number, p: any) => sum + (p.maxPoints || 0), 0);
+
+  return {
+    totalMaxPoints,
+    ownership: {
+      votingRightsMax: own.votingRightsMaxPts ?? 4,
+      womenBonusMax: own.womenVotingMaxPts ?? 2,
+      economicInterestMax: own.economicInterestMaxPts ?? 4,
+      netValueMax: own.netValueMaxPts ?? 8,
+      targetEconomicInterest: own.economicInterestTarget ?? 0.25,
+      subMinNetValue: ownershipSubMin,
+    },
+    management: {
+      boardBlackTarget: mc.boardBlackTarget ?? 0.5,
+      boardBlackPoints: mc.boardBlackMaxPts ?? 2,
+      boardWomenTarget: mc.boardBWTarget ?? 0.25,
+      boardWomenPoints: mc.boardBWMaxPts ?? 1,
+      execBlackTarget: mc.execBlackTarget ?? 0.5,
+      execBlackPoints: mc.execBlackMaxPts ?? 2,
+      execWomenTarget: mc.execBWTarget ?? 0.25,
+      execWomenPoints: mc.execBWMaxPts ?? 1,
+      disabledTarget: ee.disabledTarget ?? 0.02,
+      execBWTarget: mc.execBWTarget ?? 0.25,
+      execBWMaxPts: mc.execBWMaxPts ?? 1,
+    },
+    managementControl: {
+      maxPoints: pMc.maxPoints ?? 19,
+      disabledTarget: ee.disabledTarget ?? 0.02,
+    },
+    employmentEquity: pEe.maxPoints > 0
+      ? { maxPoints: pEe.maxPoints }
+      : undefined,
+    skills: {
+      generalMax: sk.learningProgrammesMaxPts ?? 6,
+      bursaryMax: sk.bursaryMaxPts ?? 4,
+      overallTarget: sk.overallSpendPercent ?? 3.5,
+      bursaryTarget: sk.bursarySpendPercent ?? 2.5,
+      subMinThreshold: skillsSubMin,
+      overallSpendPercent: sk.overallSpendPercent ?? 3.5,
+      bursarySpendPercent: sk.bursarySpendPercent ?? 2.5,
+      disabledSpendPercent: sk.disabledSpendPercent ?? 0.3,
+    },
+    procurement: {
+      baseMax: procBaseMax || 27,
+      bonusMax: pr.dgMaxPts ?? 2,
+      tmpsTarget: 0,
+      subMinThreshold: procSubMin,
+      blackOwnedThreshold: pr.bo51Target ?? 0.5,
+      blackWomenThreshold: pr.bwo30Target ?? 0.12,
+      allSuppliersTarget: pr.allSuppliersTarget ?? 0.8,
+      allSuppliersMaxPts: pr.allSuppliersMaxPts ?? 5,
+      qseTarget: pr.qseTarget ?? 0.15,
+      qseMaxPts: pr.qseMaxPts ?? 3,
+      emeTarget: pr.emeTarget ?? 0.15,
+      emeMaxPts: pr.emeMaxPts ?? 4,
+      bo51Target: pr.bo51Target ?? 0.5,
+      bo51MaxPts: pr.bo51MaxPts ?? 11,
+      bwo30Target: pr.bwo30Target ?? 0.12,
+      bwo30MaxPts: pr.bwo30MaxPts ?? 4,
+      dgTarget: pr.dgTarget ?? 0.02,
+      dgMaxPts: pr.dgMaxPts ?? 2,
+    },
+    esd: {
+      supplierDevMax: esd.sdMaxPts ?? 10,
+      enterpriseDevMax: esd.edMaxPts ?? 5,
+      supplierDevTarget: esd.sdPercent ?? 2,
+      enterpriseDevTarget: esd.edPercent ?? 1,
+    },
+    sed: {
+      maxPoints: sed.maxPts ?? 5,
+      npatTarget: sed.spendPercent ?? 1,
+    },
+    yes: {
+      tier1Points: 1.5, tier2Points: 1, tier3Points: 0.5,
+      tier1Multiplier: 2.5, tier2Multiplier: 1.5, tier3Multiplier: 1,
+      headcountTarget5: 0.025, headcountTarget10: 0.015, headcountTarget15: 0.01,
+      blackYouthPercent: 0.55,
+    },
+    discounting: { dropLevels: 1, maxDropLevel: 4 },
+    recognitionTable: (sc.recognitionTable || []).map((r: any) => ({
+      level: r.beeLevel ?? r.level, multiplier: r.multiplier,
+    })),
+    pillarConfigs: {
+      ownership: { maxPoints: pOwn.maxPoints ?? 25 },
+      managementControl: { maxPoints: pMc.maxPoints ?? 19 },
+      ...(pEe.maxPoints > 0 ? { employmentEquity: { maxPoints: pEe.maxPoints } } : {}),
+      skillsDevelopment: { maxPoints: pSk.maxPoints ?? 25 },
+      preferentialProcurement: { maxPoints: pPp.maxPoints ?? 29 },
+      supplierDevelopment: { maxPoints: pSd.maxPoints ?? 10 },
+      enterpriseDevelopment: { maxPoints: pEd.maxPoints ?? 7 },
+      socioEconomicDevelopment: { maxPoints: pSed.maxPoints ?? 5 },
+      ...(pYes.maxPoints > 0 ? { yesInitiative: { maxPoints: pYes.maxPoints } } : {}),
+      ...(pc.empowermentFinancing ? { empowermentFinancing: { maxPoints: pc.empowermentFinancing.maxPoints } } : {}),
+      ...(pc.accessToFinancialServices ? { accessToFinancialServices: { maxPoints: pc.accessToFinancialServices.maxPoints } } : {}),
+    },
+    levelThresholds: (sc.levelThresholds || []).map((lt: any) => ({
+      level: lt.level, minPoints: lt.minPoints, recognition: lt.recognition,
+    })),
+    benefitFactors: (sc.benefitFactors || []).map((bf: any) => ({
+      type: bf.contributionType ?? bf.type, factor: bf.sdFactor ?? bf.factor,
+    })),
+    industryNorms: (sc.industryNorms || []).map((n: any) => ({
+      name: n.industry ?? n.name, norm: String(n.normPercent ?? n.norm ?? '5.58'),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/scorecard/sector-config/:sectorCode/:scorecardType
-// Returns sector-specific calculator configuration
-// Primary source: ArangoDB sector_rules collection
-// Fallback: Hardcoded sectorConfig.ts
+// Returns sector-specific calculator configuration in CalculatorConfig shape.
+// Primary source: ArangoDB sector_rules (seeded from verified sectorConfig.ts)
+// Fallback: Hardcoded sectorConfig.ts (if ArangoDB unavailable or stale)
 // ---------------------------------------------------------------------------
 router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
     const { sectorCode, scorecardType } = req.params as { sectorCode: string; scorecardType: string };
-    
+
     if (!sectorCode || !scorecardType) {
       return res.status(400).json({ message: 'sectorCode and scorecardType are required' });
     }
 
-    const db = getArangoDB();
-    
-    // Primary: Try ArangoDB sector_rules collection
+    // Primary: Try ArangoDB first (seeded with corrected values from sectorConfig.ts)
     try {
+      const db = getArangoDB();
       const cursor = await db.query(aql`
         FOR sr IN ${db.collection(COLLECTIONS.sectorRules)}
-          FILTER sr.sectorCode == ${sectorCode.toUpperCase()} 
+          FILTER sr.sectorCode == ${sectorCode.toUpperCase()}
              AND sr.scorecardType == ${scorecardType}
+          SORT sr.updatedAt DESC
           LIMIT 1
           RETURN sr
       `);
-      const rules = await cursor.all();
-      
-      if (rules.length > 0 && rules[0]) {
-        const rule = rules[0];
-        // Transform ArangoDB format to calculatorConfig format
-        const config = {
-          source: 'arangodb',
-          sectorCode: rule.sectorCode,
-          scorecardType: rule.scorecardType,
-          pillarConfigs: rule.pillarConfigs || {},
-          targets: rule.targets || {},
-          levelThresholds: rule.levelThresholds || [],
-        };
-        return res.json({ success: true, config });
+      const rows = await cursor.all();
+
+      if (rows.length > 0 && rows[0]) {
+        // Transform ArangoDB shape (StoredSectorRule) to CalculatorConfig
+        const dbConfig = sectorConfigToCalculatorConfig(rows[0]);
+        return res.json({ success: true, config: dbConfig, source: 'arangodb' });
       }
     } catch (arangoErr) {
-      console.warn('[Scorecard] ArangoDB sector_rules query failed:', arangoErr);
-      // Continue to fallback
+      console.warn('[Scorecard] ArangoDB unavailable, falling back to hardcoded:', arangoErr);
     }
 
-    // Fallback: Use hardcoded sectorConfig.ts
+    // Fallback: Use verified hardcoded sectorConfig.ts
     try {
       const fallbackConfig = getSectorConfig(sectorCode, scorecardType);
-      const config = {
-        source: 'fallback',
-        sectorCode: fallbackConfig.sectorCode,
-        scorecardType: fallbackConfig.scorecardType,
-        pillarConfigs: fallbackConfig.pillarConfigs,
-        targets: fallbackConfig.targets,
-        levelThresholds: fallbackConfig.levelThresholds,
-      };
-      return res.json({ success: true, config, fallback: true });
+      const config = sectorConfigToCalculatorConfig(fallbackConfig);
+      return res.json({ success: true, config, source: 'hardcoded' });
     } catch (fallbackErr) {
-      console.error('[Scorecard] Fallback config failed:', fallbackErr);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to load sector configuration from both ArangoDB and fallback' 
+      console.error('[Scorecard] Config failed for', sectorCode, scorecardType, ':', fallbackErr);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to load sector configuration'
       });
     }
   } catch (error: unknown) {

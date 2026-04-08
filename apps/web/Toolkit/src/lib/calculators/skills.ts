@@ -196,6 +196,9 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
     maxPoints
   );
 
+  // FIX: subMinThreshold is a percentage (e.g., 40), not points. Convert to points threshold.
+  const subMinThresholdPoints = (subMinThreshold / 100) * maxPoints;
+
   const subLines: SkillsSubLine[] = [
     { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
     { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
@@ -211,7 +214,7 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: round2(totalScore),
-    subMinimumMet: totalScore >= subMinThreshold,
+    subMinimumMet: totalScore >= subMinThresholdPoints,
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {

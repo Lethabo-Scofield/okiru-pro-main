@@ -55,7 +55,7 @@ export default function ScorecardSummary() {
     },
     {
       key: "managementControl",
-      name: "Management Control",
+      name: "Management Control & Employment Equity",
       score: scorecard.managementControl.score,
       weighting: scorecard.managementControl.weighting,
       target: scorecard.managementControl.target,

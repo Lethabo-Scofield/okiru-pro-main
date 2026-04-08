@@ -1,0 +1,3 @@
+﻿{
+  "logLink": "https://acrtaskprodsan074.blob.core.windows.net/container-e8dda06322c14b2f92b2e93c8ed4f592/logs/df1g/rawtext.log?skoid=54ea2226-b787-4507-912e-75de6df49d1d&sktid=33e01921-4d64-4f8c-a055-5bdaffd5e33d&skt=2026-04-05T15%3A01%3A14Z&ske=2026-04-12T15%3A06%3A14Z&sks=b&skv=2024-11-04&sv=2024-11-04&se=2026-04-08T03%3A05%3A17Z&sr=b&sp=r&sig=UtAryltJYHHJauU%2BQM9HFKwPNmYTAoT4GlETQ0SvhtM%3D"
+}
