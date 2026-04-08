@@ -96,6 +96,9 @@ import {
   buildExtractionPrompt,
   structuralVerify,
   isAvailable as isLLMAvailable,
+  groqVerifyBatch,
+  type GroqVerificationEntry,
+  type GroqVerificationResult,
 } from '../../pipeline/extraction/llmExtractor.js';
 import { computeConfidence } from '../../pipeline/extraction/confidenceScorer.js';
 import { validateAll, type ValidationResult } from '../../pipeline/extraction/validator.js';
@@ -118,7 +121,7 @@ interface ExtractionResult {
   name: string;
   value: string | number | null;
   confidence: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'not_found';
   pillar: string;
   fieldType: string;
   definition: string;
@@ -130,6 +133,11 @@ interface ExtractionResult {
     method: 'llm' | 'llm_fallback' | 'rule_based' | 'dual_agree';
   };
   validation?: ValidationResult;
+  groqVerification?: {
+    valid: boolean;
+    reason: string;
+    correctedValue: string | null;
+  };
 }
 
 interface ExtractionResponse {
@@ -141,15 +149,18 @@ interface ExtractionResponse {
     load: number;
     index: number;
     extract: number;
+    verify: number;
     total: number;
   };
   stats: {
     totalEntities: number;
     extractedCount: number;
     nullCount: number;
+    verifiedCount: number;
+    invalidatedCount: number;
     avgConfidence: number;
   };
-  documentId?: string; // Return the document ID used for extraction
+  documentId?: string;
 }
 
 /**
@@ -290,6 +301,7 @@ router.post(
     let indexTime = 0;
     let extractTime = 0;
     let loadTime = 0;
+    let verifyTime = 0;
 
     try {
       const file = req.file;
@@ -597,14 +609,84 @@ router.post(
       }
 
       extractTime = Date.now() - extractStart;
+
+      // ── Groq Verification Pass ────────────────────────────────────────────
+      // For every entity that produced a non-null value, ask Groq to confirm
+      // the extracted value is actually correct (verification, NOT re-extraction).
+      const groqApiKey = process.env.GROQ_API_KEY ?? '';
+      if (groqApiKey) {
+        const verifyStart = Date.now();
+        const VERIFY_BATCH = 5;
+
+        // Only verify results that have a value
+        const toVerify = extractionResults
+          .map((r, idx) => ({ r, idx }))
+          .filter(({ r }) => r.value !== null && r.value !== '');
+
+        console.log(`[hybridExtraction] Starting Groq verification for ${toVerify.length} non-null entities`);
+
+        for (let vi = 0; vi < toVerify.length; vi += VERIFY_BATCH) {
+          const batch = toVerify.slice(vi, vi + VERIFY_BATCH);
+
+          const entries: GroqVerificationEntry[] = batch.map(({ r }) => ({
+            entityName: r.name,
+            definition: r.definition,
+            extractedValue: String(r.value),
+            sourceSnippet: r.provenance.textSnippet,
+          }));
+
+          const verResults = await groqVerifyBatch(entries, groqApiKey);
+
+          for (let j = 0; j < batch.length; j++) {
+            const { r, idx } = batch[j];
+            const ver = verResults[j];
+            if (!ver) continue;
+
+            // Attach the verification result
+            extractionResults[idx].groqVerification = {
+              valid: ver.valid,
+              reason: ver.reason,
+              correctedValue: ver.correctedValue,
+            };
+
+            if (!ver.valid) {
+              if (ver.correctedValue) {
+                // Groq found the right value in context — use the correction
+                extractionResults[idx].value = ver.correctedValue;
+                extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence, 0.75);
+                console.log(`[GroqVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
+              } else {
+                // Value is wrong and no correction available — nullify
+                extractionResults[idx].value = null;
+                extractionResults[idx].status = 'not_found';
+                extractionResults[idx].confidence = Math.max(extractionResults[idx].confidence * 0.3, 0.1);
+                console.log(`[GroqVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
+              }
+            } else {
+              // Groq confirmed — small confidence boost
+              extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence * 1.05, 0.99);
+            }
+          }
+
+          console.log(`[hybridExtraction] Verified ${Math.min(vi + VERIFY_BATCH, toVerify.length)}/${toVerify.length} entities`);
+        }
+
+        verifyTime = Date.now() - verifyStart;
+        console.log(`[hybridExtraction] Groq verification complete in ${verifyTime}ms`);
+      } else {
+        console.log('[hybridExtraction] Skipping Groq verification — GROQ_API_KEY not set');
+      }
+
       const totalTime = Date.now() - totalStartTime;
 
       // Calculate stats
       const extractedCount = extractionResults.filter(r => r.value !== null).length;
       const nullCount = extractionResults.filter(r => r.value === null).length;
+      const verifiedCount = extractionResults.filter(r => r.groqVerification?.valid === true).length;
+      const invalidatedCount = extractionResults.filter(r => r.groqVerification?.valid === false).length;
       const avgConfidence = extractionResults.reduce((sum, r) => sum + r.confidence, 0) / extractionResults.length;
 
-      console.log(`[hybridExtraction] Complete: ${extractionResults.length} entities, ${totalTime}ms total`);
+      console.log(`[hybridExtraction] Complete: ${extractionResults.length} entities, ${totalTime}ms total (verify: ${verifyTime}ms)`);
 
       const response: ExtractionResponse = {
         success: true,
@@ -615,12 +697,15 @@ router.post(
           load: loadTime,
           index: indexTime,
           extract: extractTime,
+          verify: verifyTime,
           total: totalTime,
         },
         stats: {
           totalEntities: extractionResults.length,
           extractedCount,
           nullCount,
+          verifiedCount,
+          invalidatedCount,
           avgConfidence: Math.round(avgConfidence * 100) / 100,
         },
         documentId: sourceDocumentId || undefined,
