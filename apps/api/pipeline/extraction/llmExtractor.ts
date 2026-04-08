@@ -602,18 +602,98 @@ export interface GroqVerificationEntry {
   entityName: string;
   definition: string;
   extractedValue: string;
-  sourceSnippet: string; // first ~300 chars of the source chunk
+  sourceSnippet: string;
+  fieldType?: string;   // currency | percentage | string | count | date | bee_level
+  pillar?: string;      // Ownership | Management Control | Skills Development | etc.
 }
 
 export interface GroqVerificationResult {
   entityName: string;
   valid: boolean;
   reason: string;
-  correctedValue: string | null; // Groq may suggest a correction
+  correctedValue: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Semantic type hints — tells Groq EXACTLY what kind of value is expected
+// and what values are NEVER valid for this field.
+// ---------------------------------------------------------------------------
+const RACE_WORDS = 'African, Coloured, Indian, White, Black, Zulu, Xhosa';
+const JOB_TITLES = 'Executive, Director, Manager, CEO, CFO, COO, CTO, Board, Senior, Junior, Middle, Managing';
+const BEE_LEVELS = 'Level 1, Level 2, … Level 8, Non-Compliant';
+
+function getSemanticHint(entityName: string, fieldType: string, pillar: string): string {
+  const n = entityName.toLowerCase();
+
+  // ── Company / entity name ─────────────────────────────────────────────
+  if (/company.*(name|reg)|entity.*name|registered.*name|trading.*name|measured.*entity/i.test(n)) {
+    return `EXPECTS: Legal company or organisation name (e.g. "Okiru Trading (Pty) Ltd").
+INVALID if: job title (${JOB_TITLES}), race word (${RACE_WORDS}), ID number, currency, or any single generic word.`;
+  }
+
+  // ── Person names (shareholder, director, employee, learner, beneficiary) ──
+  if (/shareholder.*name|director.*name|employee.*name|learner.*name|person.*name|beneficiary/i.test(n)) {
+    return `EXPECTS: Full person name — first name + surname (e.g. "Sipho Dlamini").
+INVALID if: race category (${RACE_WORDS}), job title/level (${JOB_TITLES}), B-BBEE level (${BEE_LEVELS}), or any single common English word.`;
+  }
+
+  // ── Supplier / vendor names ────────────────────────────────────────────
+  if (/supplier.*name|vendor.*name|esd.*beneficiary|sed.*beneficiary/i.test(n)) {
+    return `EXPECTS: Company or person name (e.g. "ABC Supplies (Pty) Ltd" or "John Mokoena").
+INVALID if: race word (${RACE_WORDS}), job title (${JOB_TITLES}), BEE level (${BEE_LEVELS}), or currency amount.`;
+  }
+
+  // ── Registration / CIPC number ────────────────────────────────────────
+  if (/registration|reg.*num|cipc|ck.*num/i.test(n)) {
+    return `EXPECTS: South African CIPC company registration number in format YYYY/NNNNNN/NN (e.g. "2012/123456/07").
+INVALID if: any word, person name, job title, race word, or number that does NOT match YYYY/NNNNNN/NN.`;
+  }
+
+  // ── VAT number ────────────────────────────────────────────────────────
+  if (/\bvat\b.*num|\bvat\b.*reg/i.test(n)) {
+    return `EXPECTS: 10-digit SARS VAT registration number starting with 4, 5, or 6 (e.g. "4012345678").
+INVALID if: any word, name, job title, or non-matching number.`;
+  }
+
+  // ── Race / ethnicity ──────────────────────────────────────────────────
+  if (/\brace\b|\bethnicity\b/i.test(n)) {
+    return `EXPECTS: Exactly one of: African, Coloured, Indian, White, Black.
+INVALID if: person name, job title, or any other word.`;
+  }
+
+  // ── Gender ────────────────────────────────────────────────────────────
+  if (/\bgender\b|\bsex\b/i.test(n)) {
+    return `EXPECTS: "Male" or "Female".
+INVALID if: race category, person name, job title, or any other word.`;
+  }
+
+  // ── Designation / management level ───────────────────────────────────
+  if (/designation|management.*level|occupational.*level/i.test(n)) {
+    return `EXPECTS: One of: Board, Executive Management, Senior Management, Middle Management, Junior Management, Semi-skilled, Unskilled.
+INVALID if: person name, race word, or currency.`;
+  }
+
+  // ── Currency / monetary fields ────────────────────────────────────────
+  if (fieldType === 'currency') {
+    return `EXPECTS: Monetary amount in South African Rand (e.g. "R 5,400,000" or "R5400000").
+INVALID if: text word, person name, race word, or non-monetary number.`;
+  }
+
+  // ── Percentage fields ─────────────────────────────────────────────────
+  if (fieldType === 'percentage') {
+    return `EXPECTS: Percentage value (e.g. "51%" or "51.00%"). INVALID if: text word, name, or non-percentage value.`;
+  }
+
+  // ── BEE level ─────────────────────────────────────────────────────────
+  if (fieldType === 'bee_level' || /bee.*level|b-?bbee.*level/i.test(n)) {
+    return `EXPECTS: B-BBEE level 1–8 or "Non-Compliant". INVALID if: text word, name, currency, or non-level number.`;
+  }
+
+  return ''; // no specific hint needed
 }
 
 /**
- * Build a compact batch verification prompt.
+ * Build a compact batch verification prompt with semantic type awareness.
  * Each entry asks Groq: "Is this extracted value correct for this field?"
  */
 function buildVerificationPrompt(entries: GroqVerificationEntry[]): string {
@@ -623,20 +703,22 @@ function buildVerificationPrompt(entries: GroqVerificationEntry[]): string {
     'Return ONLY a JSON array with one object per entry (same order):',
     '[{"valid": true/false, "reason": "<one sentence>", "corrected_value": null_or_string}, ...]',
     '',
-    'Rules:',
-    '- "valid": true  → extracted value is present in the context AND is the right type of answer for the field.',
-    '- "valid": false → value is wrong, is a different field\'s value (e.g. a job title where an ID number is expected), or is not in the context.',
-    '- "corrected_value": if the correct answer IS visible in the context, provide it; otherwise null.',
+    'General rules:',
+    '- "valid": true  → extracted value appears in the source context AND is the correct type/format for the field.',
+    '- "valid": false → value is the wrong type (e.g. a job title extracted as a company name, or a race word extracted as a person\'s name), does not appear in the context, or violates the field\'s EXPECTS/INVALID constraints listed below.',
+    '- "corrected_value": if the correct answer IS clearly visible in the context, provide it verbatim; otherwise null.',
     '- Never invent values. If unsure, set valid: false, corrected_value: null.',
     '',
   ];
 
   entries.forEach((e, i) => {
+    const hint = getSemanticHint(e.entityName, e.fieldType ?? '', e.pillar ?? '');
     lines.push(`--- Entry ${i + 1} ---`);
-    lines.push(`Field:     ${e.entityName}`);
+    lines.push(`Field:      ${e.entityName}`);
     lines.push(`Definition: ${e.definition}`);
-    lines.push(`Extracted: "${e.extractedValue}"`);
-    lines.push(`Context:   """${e.sourceSnippet.replace(/\n+/g, ' ').substring(0, 300)}"""`);
+    if (hint) lines.push(`Validation: ${hint}`);
+    lines.push(`Extracted:  "${e.extractedValue}"`);
+    lines.push(`Context:    """${e.sourceSnippet.replace(/\n+/g, ' ').substring(0, 300)}"""`);
     lines.push('');
   });
 
