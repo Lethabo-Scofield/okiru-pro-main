@@ -205,6 +205,29 @@ cd apps/Computation-Engine/backend && python3 -m pytest tests/ -v
 - Sections: Hero, Live Scorecard (animated widget), Features (3-column), Sector Coverage (4 cards), Processing Pipeline, Process Steps (4-step), CTA, Footer
 - Sector cards show RCOGP, ICT, FSC, AGRI with node/edge counts from actual ArangoDB templates
 
+## Extraction Pipeline (TDD Integration)
+
+The extraction pipeline (`apps/api/pipeline/extractionPipeline.ts`) provides a tested integration path from extracted entities (LLM or rule-based) to the B-BBEE scorecard. It mirrors the manual flow in `DocumentProcessor.tsx` exactly.
+
+### Key Functions
+- **`mapExtractedEntitiesToToolkitInput(parseResult)`** — Maps a `ParseResult` to the `ToolkitFoundationData` + `ToolkitPillarData` shape used by the manual/build flow (ownership, management, skills, procurement, ESD, SED, YES).
+- **`validateMinimumFields(mapped)`** — Validates required financial fields (revenue, NPAT, leviable amount, company name). Returns warnings for missing optional data (shareholders, employees, suppliers).
+- **`runExtractionPipeline(entities, opts?)`** — End-to-end: takes `LLMExtractionResult[]`, maps → validates → builds scorecard. Returns `ExtractionPipelineResult` with mapped data, validation, and scorecard.
+- **`runExtractionPipelineFromParseResult(parseResult)`** — Same pipeline but starting from an already-parsed `ParseResult` (useful for Excel-parsed data).
+
+### Test Coverage
+Tests in `apps/api/pipeline/__tests__/extractionPipeline.test.ts` (29 tests):
+1. Valid entities → correct mapping + scorecard generation
+2. Missing fields → validation failure, no scorecard
+3. Parity with manual flow → identical scorecard output
+4. No mock data usage → never falls back to "Thandani Transport"
+5. Store hydration → all pillar records match manual hydration structure
+
+### Constraints
+- Does not modify scoring logic (uses `buildPipelineResult` and `entityResultsToParseResult` as-is)
+- No mock fallbacks — validation fails explicitly on missing data
+- Deterministic outputs — same input always produces same scorecard
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
 - Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly
