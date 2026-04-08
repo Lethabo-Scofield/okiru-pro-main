@@ -164,7 +164,7 @@ export default function ScorecardBuilder() {
       // Convert values to EntityValue format
       const entityValues: Record<string, EntityValue> = {};
       for (const [key, value] of Object.entries(state.values)) {
-        if (value !== undefined && value !== null) {
+        if (value !== undefined && value !== null && !Array.isArray(value) && typeof value !== 'object') {
           entityValues[key] = {
             entityId: key,
             value,
@@ -172,6 +172,24 @@ export default function ScorecardBuilder() {
           };
         }
       }
+
+      // Extract entity arrays from state values (stored under pillar-specific keys)
+      const v = state.values;
+      const employees = Array.isArray(v.employees) ? v.employees : undefined;
+      const shareholders = Array.isArray(v.shareholders) ? v.shareholders : undefined;
+      const suppliers = Array.isArray(v.suppliers) ? v.suppliers : undefined;
+      const contributions = Array.isArray(v.contributions) ? v.contributions : undefined;
+
+      // Extract financials from state values
+      const financials = (typeof v.revenue === 'number' || typeof v.npat === 'number')
+        ? {
+            revenue: Number(v.revenue) || 0,
+            npat: Number(v.npat) || 0,
+            leviableAmount: Number(v.leviable_amount ?? v.leviableAmount) || 0,
+            tmps: Number(v.tmps) || 0,
+            headcount: Number(v.headcount ?? v.total_employees) || 0,
+          }
+        : undefined;
 
       const response = await fetch('/api/calculate', {
         method: 'POST',
@@ -181,6 +199,11 @@ export default function ScorecardBuilder() {
           sectorCode: state.sectorCode,
           scorecardType: state.scorecardType,
           entityValues,
+          employees,
+          shareholders,
+          suppliers,
+          contributions,
+          financials,
         }),
       });
 

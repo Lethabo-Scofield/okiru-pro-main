@@ -42,4 +42,11 @@ export type {
   ScorecardResult,
   CalculationContext,
   CalculationOptions,
+  EmployeeInput,
+  ShareholderInput,
+  SupplierInput,
+  ContributionInput,
+  FinancialsInput,
+  ValidationResult,
+  OntologySnapshot,
 } from './calculationEngine.js';

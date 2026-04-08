@@ -168,14 +168,16 @@ export function BuildPillarsStep({
 
   const leviable = financials?.leviableAmount || data.skills.leviableAmount || 0;
 
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+
   const esdLive = useMemo(
-    () => calculateEsdScore(data.esd, npatForEsd),
-    [data.esd, npatForEsd],
+    () => calculateEsdScore(data.esd, npatForEsd, calculatorConfig!),
+    [data.esd, npatForEsd, calculatorConfig],
   );
-  const procLive = useMemo(() => calculateProcurementScore(data.procurement), [data.procurement]);
+  const procLive = useMemo(() => calculateProcurementScore(data.procurement, calculatorConfig!), [data.procurement, calculatorConfig]);
   const skillsLive = useMemo(
-    () => calculateSkillsScore({ ...data.skills, leviableAmount: leviable }),
-    [data.skills, leviable],
+    () => calculateSkillsScore({ ...data.skills, leviableAmount: leviable }, calculatorConfig!),
+    [data.skills, leviable, calculatorConfig],
   );
 
     // Issue 1: Removed employmentEquity from pillar scores (merged with management)
@@ -203,17 +205,17 @@ export function BuildPillarsStep({
     };
     let yesPts = 0;
     try {
-      yesPts = calculateYESScore(y).score;
+      yesPts = calculateYESScore(y, calculatorConfig).score;
     } catch { /* ignore */ }
     return {
-      ownership: calculateOwnershipScore(data.ownership).total,
-      management: calculateManagementScore(data.management, undefined, eapProvince).total,
+      ownership: calculateOwnershipScore(data.ownership, calculatorConfig!).total,
+      management: calculateManagementScore(data.management, calculatorConfig!, eapProvince).total,
       // Issue 1: employmentEquity removed (merged with management)
       skills: skillsLive.total,
       procurement: procLive.total,
       supplierDevelopment: esdLive.sdTotal,
       enterpriseDevelopment: esdLive.edTotal,
-      sed: calculateSedScore(data.sed, npatForEsd).total,
+      sed: calculateSedScore(data.sed, npatForEsd, calculatorConfig!).total,
       yes: yesPts,
     };
   }, [data, eapProvince, skillsLive, procLive, esdLive, npatForEsd]);
@@ -246,15 +248,18 @@ export function BuildPillarsStep({
 
   // Use calculatorConfig.totalMaxPoints (verified Excel value) instead of calculating
   // This handles sector-specific totals correctly (e.g., RCOGP 120, ICT 140, AGRI 132)
-  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
   const totalMax = calculatorConfig?.totalMaxPoints ?? PILLARS.reduce((s, p) => s + p.maxPoints, 0);
 
   // Sub-minimum enforcement gate
   const failedSubMinimums = PILLARS.filter(p => {
-    if (!p.hasSubMinimum || !hasData(p.id)) return false;
+    const config = calculatorConfig?.pillarConfigs?.[p.id as keyof typeof calculatorConfig.pillarConfigs];
+    const hasSubMin = config && 'subMinimumPercent' in config ? (config.subMinimumPercent ?? 0) > 0 : p.hasSubMinimum;
+    if (!hasSubMin || !hasData(p.id)) return false;
     const score = getPillarScore(p.id);
     // Check against dynamic threshold from calculatorConfig
-    const configThreshold = calculatorConfig?.pillarConfigs?.[p.id as keyof typeof calculatorConfig.pillarConfigs]?.subMinThreshold;
+    const configThreshold = config && 'subMinimumPercent' in config && config.subMinimumPercent !== undefined
+      ? (config.subMinimumPercent / 100) * (config.maxPoints ?? p.maxPoints)
+      : undefined;
     const threshold = configThreshold ?? (p.subMinimumThreshold / 100) * p.maxPoints;
     return score < threshold;
   }).map(p => p.name);

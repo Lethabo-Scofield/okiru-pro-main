@@ -34,10 +34,14 @@ const emptySupplierForm = {
   enterpriseType: 'generic' as 'eme' | 'qse' | 'generic',
   spend: 0,
   certificateExpiryDate: '',
+  isEmpoweringSupplier: false,
+  isSupplierDevRecipient: false,
+  hasThreeYearContract: false,
+  isForeignSupplier: false,
 };
 
 export default function ESD() {
-  const { procurement, esd, client, addSupplier, updateSupplier, removeSupplier, addEsdContribution, removeEsdContribution, updateTMPS } = useBbeeStore();
+  const { procurement, esd, client, addSupplier, updateSupplier, removeSupplier, addEsdContribution, removeEsdContribution, updateTMPS, calculatorConfig } = useBbeeStore();
   const { tmps, suppliers } = procurement;
   const { contributions } = esd;
   const { toast } = useToast();
@@ -155,8 +159,9 @@ export default function ESD() {
     toast({ title: "Contribution Added", description: `Added ESD contribution to ${newEsd.beneficiary}.` });
   };
 
-  const score = calculateProcurementScore(procurement);
-  const esdScore = calculateEsdScore(esd, client.npat);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const score = calculateProcurementScore(procurement, calculatorConfig);
+  const esdScore = calculateEsdScore(esd, client.npat, calculatorConfig);
 
   const renderSupplierFormFields = (
     data: typeof emptySupplierForm,

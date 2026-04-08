@@ -6,7 +6,6 @@ const FULL_OWNERSHIP_THRESHOLD = 0.25;
 const WOMEN_VOTING_TARGET = 0.10;
 const WOMEN_ECONOMIC_TARGET = 0.10;
 const DESIGNATED_GROUP_TARGET = 0.10;
-const MAX_TOTAL = 25;
 
 const GRADUATION_TABLE: Record<number, number> = {
   1: 0.1, 2: 0.2, 3: 0.4, 4: 0.6,
@@ -54,7 +53,7 @@ function getGraduationFactor(years: number): number {
   return factor;
 }
 
-export function calculateOwnershipScore(data: OwnershipData, config?: CalculatorConfig): OwnershipResult {
+export function calculateOwnershipScore(data: OwnershipData, config: CalculatorConfig): OwnershipResult {
   const shareholders = data.shareholders || [];
   const { companyValue, outstandingDebt, yearsHeld } = data;
 
@@ -162,7 +161,7 @@ export function calculateOwnershipScore(data: OwnershipData, config?: Calculator
     designatedGroups: round2(designatedGroups),
     newEntrants: round2(newEntrants),
     netValue: round2(netValuePoints),
-    total: round2(clampScore(totalPoints, MAX_TOTAL)),
+    total: round2(clampScore(totalPoints, config.pillarConfigs?.ownership?.maxPoints ?? 25)),
     subMinimumMet,
     fullOwnershipAwarded,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),

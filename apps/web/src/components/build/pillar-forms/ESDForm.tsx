@@ -15,7 +15,9 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { ESDData, Contribution, ESDContributionType } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
+import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
 interface ESDFormProps {
@@ -65,7 +67,11 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<typeof emptyForm>({ ...emptyForm });
 
-  const result = useMemo(() => calculateEsdScore(data, npat), [data, npat]);
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const result = useMemo(() => {
+    if (!calculatorConfig) return { total: 0, sdTotal: 0, edTotal: 0, supplierDev: 0, enterpriseDev: 0, graduationBonus: 0, jobsCreatedBonus: 0, sdSubMinimumMet: false, edSubMinimumMet: false, subMinimumMet: false, sdSpend: 0, edSpend: 0, sdTarget: 0, edTarget: 0, sdSubLines: [], edSubLines: [], subLines: [] };
+    return calculateEsdScore(data, npat, calculatorConfig);
+  }, [data, npat, calculatorConfig]);
   const totalESD = data.contributions.reduce((s, c) => s + c.amount, 0);
   const esdMaxDisplay = 17; // SD 10 + ED 7 (RCOGP Generic)
   const scorePercent = (result.total / esdMaxDisplay) * 100;

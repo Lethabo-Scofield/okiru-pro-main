@@ -15,6 +15,7 @@ import type { CalculatorConfig } from "../../../shared/schema";
 
 function getDefaults(): CalculatorConfig {
   return {
+    totalMaxPoints: 120,
     ownership: {
       votingRightsMax: 4,
       womenBonusMax: 2,
@@ -540,7 +541,7 @@ export default function Settings() {
   const canEdit = editMode;
 
   const [province, setProvince] = useState(client.eapProvince);
-  const [industry, setIndustry] = useState(client.industrySector);
+  const [industry, setIndustry] = useState(client.industry);
   const [measureStart, setMeasureStart] = useState(client.measurementPeriodStart || '');
   const [measureEnd, setMeasureEnd] = useState(client.measurementPeriodEnd || '');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -660,7 +661,7 @@ export default function Settings() {
       const existing = type === 'benefitFactor' ? params.benefitFactors : params.industryNorms;
       const result = await api.generateCalculatorSuggestions({
         type,
-        industry: client.industrySector,
+        industry: client.industry,
         existing,
       });
       const suggestion = result.suggestion;

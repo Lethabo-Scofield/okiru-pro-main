@@ -65,7 +65,7 @@ export interface SedResult {
   };
 }
 
-function buildBenefitFactors(config?: CalculatorConfig): Record<string, number> {
+function buildBenefitFactors(config: CalculatorConfig): Record<string, number> {
   const factors = { ...DEFAULT_BENEFIT_FACTORS };
   if (config?.benefitFactors && Array.isArray(config.benefitFactors)) {
     for (const bf of config.benefitFactors) {
@@ -93,14 +93,15 @@ function categorizeContributions(
   return { sdSpend, edSpend };
 }
 
-export function calculateEsdScore(data: ESDData, npat: number, config?: CalculatorConfig): EsdResult {
+export function calculateEsdScore(data: ESDData, npat: number, config: CalculatorConfig): EsdResult {
+  if (!config) throw new Error('CalculatorConfig is required for ESD score calculation');
   const contributions = data.contributions || [];
-  const ec = config?.esd;
+  const ec = config.esd;
 
-  const supplierDevMax = ec?.supplierDevMax ?? 10;
-  const enterpriseDevMax = ec?.enterpriseDevMax ?? 5;
-  const supplierDevTargetPct = ec?.supplierDevTarget ?? 0.02;
-  const enterpriseDevTargetPct = ec?.enterpriseDevTarget ?? 0.01;
+  const supplierDevMax = ec.supplierDevMax;
+  const enterpriseDevMax = ec.enterpriseDevMax;
+  const supplierDevTargetPct = ec.supplierDevTarget;
+  const enterpriseDevTargetPct = ec.enterpriseDevTarget;
 
   const sdTarget = npat * supplierDevTargetPct;
   const edTarget = npat * enterpriseDevTargetPct;
@@ -153,12 +154,13 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   };
 }
 
-export function calculateSedScore(data: SEDData, npat: number, config?: CalculatorConfig): SedResult {
+export function calculateSedScore(data: SEDData, npat: number, config: CalculatorConfig): SedResult {
+  if (!config) throw new Error('CalculatorConfig is required for SED score calculation');
   const contributions = data.contributions || [];
-  const sc = config?.sed;
+  const sc = config.sed;
 
-  const maxPoints = sc?.maxPoints ?? 5;
-  const npatTargetPct = sc?.npatTarget ?? 0.01;
+  const maxPoints = sc.maxPoints;
+  const npatTargetPct = sc.npatTarget;
   const target = npat * npatTargetPct;
 
   const totalSpend = contributions.reduce((acc, c) => acc + c.amount, 0);

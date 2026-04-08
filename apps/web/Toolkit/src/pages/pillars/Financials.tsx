@@ -44,9 +44,9 @@ export default function Financials() {
 
   // Industry Norm logic
   const currentIndustryNorm = useMemo(() => {
-    const entry = industryNormsData.find(d => d.industry === client.industrySector) || industryNormsData[0];
+    const entry = industryNormsData.find(d => d.industry === client.industry) || industryNormsData[0];
     return Math.max(0, entry.norm);
-  }, [client.industrySector]);
+  }, [client.industry]);
 
   const currentMargin = (client.npat / client.revenue) * 100;
   const threshold = currentIndustryNorm / 4;

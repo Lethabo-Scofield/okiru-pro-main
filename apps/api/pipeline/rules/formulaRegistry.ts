@@ -157,7 +157,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const points = Math.min(percentage * maxPoints, maxPoints);
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(percentage, 1) * 100),
         targetMet: percentage >= 1,
@@ -190,7 +190,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const points = Math.min(percentage * maxPoints, maxPoints);
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(percentage, 1) * 100),
         targetMet: percentage >= 1,
@@ -243,7 +243,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const subMinimumThreshold = Number(params.subMinimumThreshold) || 3.2;
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(netValueRatio, 1) * 100),
         targetMet: points >= subMinimumThreshold,
@@ -303,7 +303,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const points = Math.min(percentage * maxPoints, maxPoints);
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(percentage, 1) * 100),
         targetMet: percentage >= 1,
@@ -334,7 +334,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const points = Math.min(percentage * maxPoints, maxPoints);
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(percentage, 1) * 100),
         targetMet: percentage >= 1,
@@ -370,7 +370,7 @@ export const FORMULA_REGISTRY: Record<string, FormulaDefinition> = {
       const points = Math.min(percentage * maxPoints, maxPoints);
 
       return {
-        points: r2(points),
+        points,
         maxPoints,
         percentage: r2(Math.min(percentage, 1) * 100),
         targetMet: percentage >= 1,

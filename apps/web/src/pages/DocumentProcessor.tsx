@@ -14,7 +14,7 @@ import { ClientInformationData, EMPTY_CLIENT_INFO, determineCompanySize, hasQSEV
 import { FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from '@/components/build/FinancialsForm';
 import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPillarsStep';
 import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore } from '@/lib/foundationApi';
-import { useBbeeStore } from '@toolkit/lib/store';
+import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import { calculateYESScore } from '@toolkit/lib/calculators/yes';
 import type { YESData, Client } from '@toolkit/lib/types';
@@ -143,6 +143,62 @@ function bbeeLevel(total: number): number {
 function bbeeRecognition(level: number): string {
   const map: Record<number, string> = { 1: '135%', 2: '125%', 3: '110%', 4: '100%', 5: '80%', 6: '60%', 7: '50%', 8: '10%' };
   return map[level] || '0%';
+}
+
+const REC_MAP: Record<number, string> = {
+  1: '135%', 2: '125%', 3: '110%', 4: '100%',
+  5: '80%', 6: '60%', 7: '50%', 8: '10%',
+};
+
+function normalizeUCSResult(
+  apiResult: APIScorecardResult,
+  scorecard: ReturnType<typeof useBbeeStore.getState>['scorecard'],
+  options?: { yesTier?: string; yesLevelIncrease?: number },
+) {
+  const yesIncrease = options?.yesLevelIncrease ?? 0;
+  const finalLevel = Math.max(1, scorecard.discountedLevel - yesIncrease);
+
+  return {
+    ownership: {
+      score: scorecard.ownership.score,
+      target: scorecard.ownership.target,
+      subMinimumMet: scorecard.ownership.subMinimumMet,
+    },
+    managementControl: { score: scorecard.managementControl.score, target: scorecard.managementControl.target },
+    skillsDevelopment: {
+      score: scorecard.skillsDevelopment.score,
+      target: scorecard.skillsDevelopment.target,
+      subMinimumMet: scorecard.skillsDevelopment.subMinimumMet,
+    },
+    procurement: {
+      score: scorecard.procurement.score,
+      target: scorecard.procurement.target,
+      subMinimumMet: scorecard.procurement.subMinimumMet,
+    },
+    supplierDevelopment: { score: scorecard.supplierDevelopment.score, target: scorecard.supplierDevelopment.target },
+    enterpriseDevelopment: {
+      score: scorecard.enterpriseDevelopment.score,
+      target: scorecard.enterpriseDevelopment.target,
+    },
+    socioEconomicDevelopment: {
+      score: scorecard.socioEconomicDevelopment.score,
+      target: scorecard.socioEconomicDevelopment.target,
+    },
+    yesInitiative: {
+      score: scorecard.yesInitiative.score,
+      target: scorecard.yesInitiative.target,
+      tier: options?.yesTier,
+    },
+    total: { score: scorecard.total.score, target: scorecard.total.target },
+    achievedLevel: scorecard.achievedLevel,
+    discountedLevel: scorecard.discountedLevel,
+    finalLevel,
+    isDiscounted: scorecard.isDiscounted,
+    recognitionLevel: REC_MAP[finalLevel] || scorecard.recognitionLevel || '0%',
+    _source: 'ucs_engine',
+    ontologySnapshot: apiResult.ontologySnapshot,
+    validation: apiResult.validation,
+  };
 }
 
 function buildScorecardFromCsvImport(data: ClientSideImportResult): any {
@@ -282,7 +338,7 @@ export async function fetchBBEESectors(): Promise<SectorOption[]> {
     if (!response.ok) throw new Error('Failed to fetch sectors');
     const result = await response.json();
     if (result.success && result.options) {
-      cachedBBEESectors = result.options;
+      cachedBBEESectors = result.options as SectorOption[];
       return cachedBBEESectors;
     }
   } catch (error) {
@@ -366,9 +422,7 @@ const EMPTY_COMPANY_INFO: CompanyInfo = {
 const getBuildFlowStorageKey = (userId: string | undefined) => 
   userId ? `okiru-processor-build-flow-${userId}` : 'okiru-processor-build-flow-anon';
 
-/** FIXED: User-specific localStorage key for active client */
-const getActiveClientStorageKey = (userId: string | undefined) =>
-  userId ? `okiru-pro-active-client-${userId}` : 'okiru-pro-active-client-anon';
+const getActiveClientStorageKey = (_userId: string | undefined) => 'okiru-pro-active-client';
 
 const EMPTY_YES_DATA: YESData = {
   id: '',
@@ -1293,8 +1347,6 @@ export default function DocumentProcessor() {
         setPillarData(prev => ({
           ...prev,
           ...sess.pillarData,
-          // Handle employmentEquity merge if needed
-          employmentEquity: sess.pillarData?.employmentEquity ?? sess.pillarData?.management ?? prev.employmentEquity,
         }));
       }
       if (sess.flowMode) {
@@ -1326,21 +1378,8 @@ export default function DocumentProcessor() {
     const params = new URLSearchParams(window.location.search);
     const isNew = params.get('new') === 'true';
 
-    // If ?new=true, clear any saved session and start fresh
     if (isNew) {
-      try {
-        // FIXED: Clear both user-specific and session-specific keys
-        if (user?.id) {
-          sessionStorage.removeItem(getBuildFlowStorageKey(user.id));
-        }
-        // Also clear any session-specific keys (for anonymous users)
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key?.startsWith('okiru-processor-build-flow-')) {
-            sessionStorage.removeItem(key);
-          }
-        }
-      } catch { /* ignore */ }
+      useBbeeStore.getState().startNewSession();
       return;
     }
 
@@ -1455,7 +1494,7 @@ export default function DocumentProcessor() {
       // Include build flow data (prioritize opts if provided, otherwise use current state)
       foundationData: opts?.foundationData ?? foundationData,
       pillarData: opts?.pillarData ?? pillarData,
-      flowMode: opts?.flowMode ?? flowMode,
+      flowMode: (opts?.flowMode ?? flowMode) || undefined,
     };
     await apiSaveSession(sess);
     return sid;
@@ -1548,6 +1587,8 @@ export default function DocumentProcessor() {
 
   const handleModeSelect = useCallback((mode: 'upload' | 'build') => {
     setFlowMode(mode);
+    // Clear stale Zustand store data when starting either flow mode
+    useBbeeStore.getState().startNewSession();
     if (mode === 'upload') {
       setCurrentPage('company-info');
     } else {
@@ -1630,7 +1671,11 @@ export default function DocumentProcessor() {
   useEffect(() => {
     if (currentPage !== 'build-pillars') return;
     const ci = foundationData.clientInfo;
-    const sectorCode = ci?.sectorCode || 'RCOGP';
+    const sectorCode = ci?.sectorCode;
+    if (!sectorCode) {
+      console.warn('[DocumentProcessor] No sectorCode set — skipping config load');
+      return;
+    }
     const { scorecardType } = determineScorecardType(sectorCode, String(ci?.annualTurnover ?? 0));
 
     let cancelled = false;
@@ -1656,6 +1701,9 @@ export default function DocumentProcessor() {
   const calculateFromPillarData = useCallback(async () => {
     setIsSavingSession(true);
     try {
+      // Clear stale session data before populating new scorecard
+      useBbeeStore.getState().startNewSession();
+
       const ci = foundationData.clientInfo ?? EMPTY_CLIENT_INFO;
       const fin = foundationData.financials ?? EMPTY_FINANCIALS;
       const buildClientId = `build-${sessionId || 'local'}`;
@@ -1766,27 +1814,95 @@ export default function DocumentProcessor() {
         calculatorConfig: useBbeeStore.getState().calculatorConfig, // Preserve config loaded on step entry
       });
 
-      // Issue D: Load sector-specific calculator config from ArangoDB (primary) or fallback
-      try {
-        const scorecardType = determineScorecardType(ci.sectorCode || 'RCOGP', String(ci.annualTurnover ?? 0));
-        const sectorConfigRes = await fetch(
-          `/api/scorecard/sector-config/${ci.sectorCode || 'RCOGP'}/${scorecardType.scorecardType || 'Generic'}`
-        );
-        if (sectorConfigRes.ok) {
-          const sectorData = await sectorConfigRes.json();
-          if (sectorData.success && sectorData.config) {
-            useBbeeStore.setState({ calculatorConfig: sectorData.config });
-            console.log('Sector config loaded from:', sectorData.source || 'unknown');
-          }
-        }
-      } catch (sectorErr) {
-        console.warn('Failed to load sector config:', sectorErr);
-        // Fallback: calculators will use hardcoded defaults
+      // Build entity arrays for UCS API
+      const storeState = useBbeeStore.getState();
+      const employees = (storeState.management?.employees || []).map(e => ({
+        name: e.name,
+        race: e.race,
+        gender: e.gender,
+        designation: e.designation,
+        isDisabled: e.isDisabled,
+        isForeign: e.isForeign,
+      }));
+      const shareholders = (storeState.ownership?.shareholders || []).map(s => ({
+        name: s.name,
+        blackOwnership: s.blackOwnership,
+        blackWomenOwnership: s.blackWomenOwnership,
+        shares: s.shares,
+        shareValue: s.shareValue,
+        yearsHeld: s.yearsHeld,
+        isDesignatedGroup: s.isDesignatedGroup,
+        blackNewEntrant: s.blackNewEntrant,
+      }));
+      const suppliers = (storeState.procurement?.suppliers || []).map(s => ({
+        name: s.name,
+        spend: s.spend,
+        beeLevel: s.beeLevel,
+        blackOwnership: s.blackOwnership,
+        blackWomenOwnership: s.blackWomenOwnership,
+        enterpriseType: s.enterpriseType,
+        isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
+        isBlackOwned51: s.blackOwnership >= 51,
+        isBlackWomanOwned30: s.blackWomenOwnership >= 30,
+        isEME: s.enterpriseType === 'eme',
+        isQSE: s.enterpriseType === 'qse',
+        isForeignSupplier: s.isForeignSupplier,
+      }));
+      const esdCategoryMap: Record<string, 'sd' | 'ed' | 'sed'> = {
+        supplier_development: 'sd',
+        enterprise_development: 'ed',
+        socio_economic: 'sed',
+      };
+      const esdContribs = (storeState.esd?.contributions || []).map(c => ({
+        beneficiary: c.beneficiary,
+        type: c.type,
+        amount: c.amount,
+        category: esdCategoryMap[c.category] || ('ed' as const),
+      }));
+      const sedContribs = (storeState.sed?.contributions || []).map(c => ({
+        beneficiary: c.beneficiary,
+        type: c.type,
+        amount: c.amount,
+        category: 'sed' as const,
+      }));
+      const allContributions = [...esdContribs, ...sedContribs];
+
+      const scorecardTypeResult = determineScorecardType(ci.sectorCode || 'RCOGP', String(ci.annualTurnover ?? 0));
+
+      // POST to UCS for the authoritative scorecard
+      const ucsResponse = await fetch(`${API_BASE}/api/calculate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId: `build-${sessionId || Date.now()}`,
+          sectorCode: ci.sectorCode || 'RCOGP',
+          scorecardType: scorecardTypeResult.scorecardType || 'Generic',
+          entityValues: {},
+          employees,
+          shareholders,
+          suppliers,
+          contributions: allContributions,
+          financials: {
+            revenue: fin.totalRevenue || 0,
+            npat: fin.npat || 0,
+            leviableAmount: fin.leviableAmount || 0,
+            tmps: fin.tmps || storeState.procurement?.tmps || 0,
+            headcount: employees.length,
+          },
+        }),
+      });
+
+      if (!ucsResponse.ok) {
+        const errBody = await ucsResponse.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.details || `UCS returned ${ucsResponse.status}`);
       }
 
-      useBbeeStore.getState()._recalculateAll();
+      const apiResult: APIScorecardResult = await ucsResponse.json();
+      useBbeeStore.getState().setScorecardFromAPI(apiResult);
+
       const { scorecard, management, skills } = useBbeeStore.getState();
 
+      // YES level improvement (still computed locally until UCS handles YES)
       const yesCandidates =
         skills.trainingPrograms
           ?.filter(p => p.isYesEmployee)
@@ -1818,57 +1934,10 @@ export default function DocumentProcessor() {
         totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
       } as YESData);
 
-      const recMap: Record<number, string> = {
-        1: '135%',
-        2: '125%',
-        3: '110%',
-        4: '100%',
-        5: '80%',
-        6: '60%',
-        7: '50%',
-        8: '10%',
-      };
-      const finalLevel = Math.max(1, scorecard.discountedLevel - (yesForLevel.yesBeeLevelIncrease || 0));
-
-      const scorecardLegacy = {
-        ownership: {
-          score: scorecard.ownership.score,
-          target: scorecard.ownership.target,
-          subMinimumMet: scorecard.ownership.subMinimumMet,
-        },
-        managementControl: { score: scorecard.managementControl.score, target: scorecard.managementControl.target },
-        skillsDevelopment: {
-          score: scorecard.skillsDevelopment.score,
-          target: scorecard.skillsDevelopment.target,
-          subMinimumMet: scorecard.skillsDevelopment.subMinimumMet,
-        },
-        procurement: {
-          score: scorecard.procurement.score,
-          target: scorecard.procurement.target,
-          subMinimumMet: scorecard.procurement.subMinimumMet,
-        },
-        supplierDevelopment: { score: scorecard.supplierDevelopment.score, target: scorecard.supplierDevelopment.target },
-        enterpriseDevelopment: {
-          score: scorecard.enterpriseDevelopment.score,
-          target: scorecard.enterpriseDevelopment.target,
-        },
-        socioEconomicDevelopment: {
-          score: scorecard.socioEconomicDevelopment.score,
-          target: scorecard.socioEconomicDevelopment.target,
-        },
-        yesInitiative: {
-          score: scorecard.yesInitiative.score,
-          target: scorecard.yesInitiative.target,
-          tier: yesForLevel.yesTierAchieved,
-        },
-        total: { score: scorecard.total.score, target: scorecard.total.target },
-        achievedLevel: scorecard.achievedLevel,
-        discountedLevel: scorecard.discountedLevel,
-        finalLevel,
-        isDiscounted: scorecard.isDiscounted,
-        recognitionLevel: recMap[finalLevel] || scorecard.recognitionLevel || '0%',
-        _source: 'build_mode',
-      };
+      const scorecardLegacy = normalizeUCSResult(apiResult, scorecard, {
+        yesTier: yesForLevel.yesTierAchieved,
+        yesLevelIncrease: yesForLevel.yesBeeLevelIncrease || 0,
+      });
 
       localStorage.setItem(getActiveClientStorageKey(user?.id), buildClientId);
       setScorecardResult(scorecardLegacy);
@@ -1953,9 +2022,18 @@ export default function DocumentProcessor() {
         complete: true,
       });
 
+      // Show validation warnings from UCS if any
+      if (apiResult.validation && !apiResult.validation.isValid) {
+        toast({
+          title: 'Scorecard calculated with warnings',
+          description: apiResult.validation.warnings?.join('; ') || 'Some data may be missing',
+          variant: 'default',
+        });
+      }
+
       toast({
         title: 'Scorecard calculated',
-        description: `Total: ${scorecard.total.score.toFixed(2)} pts · Level ${finalLevel}`,
+        description: `Total: ${scorecard.total.score.toFixed(2)} pts · Level ${scorecardLegacy.finalLevel} (via UCS engine)`,
       });
     } catch (err) {
       toast({
@@ -3027,7 +3105,6 @@ export default function DocumentProcessor() {
                   setPillarData({
                     ownership: newData.ownership,
                     management: newData.management,
-                    // Issue 1: employmentEquity removed (merged into management)
                     skills: newData.skills,
                     procurement: newData.procurement,
                     esd: newData.esd,
@@ -3477,94 +3554,65 @@ export default function DocumentProcessor() {
                 const sectorCode = companyInfo.sector || 'RCOGP';
                 const { scorecardType } = determineScorecardType(sectorCode, companyInfo.annualTurnover);
 
-                // Collect all approved entities from the review results
-                const entityMap: Record<string, any> = {};
+                // Build entityValues from extraction results for UCS
+                const entityValues: Record<string, { entityId: string; value: any; source: string; confidence: number }> = {};
+                const financialKeys: Record<string, string> = {
+                  total_revenue: 'revenue', revenue: 'revenue',
+                  npat: 'npat', net_profit_after_tax: 'npat',
+                  leviable_amount: 'leviableAmount', leviableAmount: 'leviableAmount',
+                  tmps: 'tmps', total_measured_procurement_spend: 'tmps',
+                  headcount: 'headcount', total_employees: 'headcount',
+                };
+                const financials: Record<string, number> = { revenue: 0, npat: 0, leviableAmount: 0, tmps: 0, headcount: 0 };
+
                 for (const doc of extractionResults) {
                   for (const entity of (doc.entities || [])) {
-                    if (entity.status !== 'rejected' && entity.value != null && entity.value !== '') {
-                      let val: any = entity.value;
-                      if (typeof val === 'string') {
-                        const cleaned = val.replace(/^R\s*/, '').replace(/\s/g, '').replace(/,/g, '');
-                        const parsed = Number(cleaned);
-                        if (!isNaN(parsed) && cleaned !== '') val = parsed;
-                      }
-                      entityMap[entity.name] = val;
+                    if (entity.status === 'rejected' || entity.value == null || entity.value === '') continue;
+                    let val: any = entity.value;
+                    if (typeof val === 'string') {
+                      const cleaned = val.replace(/^R\s*/, '').replace(/\s/g, '').replace(/,/g, '');
+                      const parsed = Number(cleaned);
+                      if (!isNaN(parsed) && cleaned !== '') val = parsed;
                     }
+                    entityValues[entity.name] = {
+                      entityId: entity.name,
+                      value: val,
+                      source: 'extraction',
+                      confidence: entity.confidence ?? 0.8,
+                    };
+                    const finKey = financialKeys[entity.name.toLowerCase()];
+                    if (finKey && typeof val === 'number') financials[finKey] = val;
                   }
                 }
 
-                // Use the combined evaluate-from-entities endpoint
-                const res = await fetch('/api/scorecard/evaluate-from-entities', {
+                const ucsResponse = await fetch(`${API_BASE}/api/calculate`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ sectorCode, scorecardType, entities: entityMap }),
+                  body: JSON.stringify({
+                    assessmentId: `upload-${sessionId || Date.now()}`,
+                    sectorCode,
+                    scorecardType,
+                    entityValues,
+                    financials: {
+                      revenue: financials.revenue,
+                      npat: financials.npat,
+                      leviableAmount: financials.leviableAmount,
+                      tmps: financials.tmps,
+                      headcount: financials.headcount,
+                    },
+                  }),
                 });
 
-                let normalised: any;
-
-                if (res.ok) {
-                  const evalData = await res.json();
-                  const pillarScores = evalData.evaluation?.pillarScores || {};
-                  const totalScore = Object.values(pillarScores).reduce(
-                    (sum: number, p: any) => sum + (p?.score || 0), 0
-                  );
-
-                  normalised = {
-                    ownership: { score: pillarScores.ownership?.score || 0, target: 25, weighting: 25, subMinimumMet: false },
-                    managementControl: { score: pillarScores.managementControl?.score || pillarScores.management_control?.score || 0, target: 19, weighting: 19 },
-                    skillsDevelopment: { score: pillarScores.skillsDevelopment?.score || pillarScores.skills_development?.score || 0, target: 25, weighting: 25, subMinimumMet: false },
-                    procurement: { score: pillarScores.preferentialProcurement?.score || pillarScores.procurement?.score || 0, target: 29, weighting: 29, subMinimumMet: false },
-                    supplierDevelopment: { score: pillarScores.supplierDevelopment?.score || pillarScores.esd?.score || 0, target: 10, weighting: 10, subMinimumMet: false },
-                    enterpriseDevelopment: { score: pillarScores.enterpriseDevelopment?.score || 0, target: 7, weighting: 7, subMinimumMet: false },
-                    socioEconomicDevelopment: { score: pillarScores.socioEconomicDevelopment?.score || pillarScores.sed?.score || 0, target: 5, weighting: 5 },
-                    yesInitiative: { score: 0, target: 5, weighting: 5 },
-                    total: { score: totalScore, target: 120, weighting: 120 },
-                    achievedLevel: bbeeLevel(totalScore),
-                    discountedLevel: bbeeLevel(totalScore),
-                    isDiscounted: false,
-                    recognitionLevel: bbeeRecognition(bbeeLevel(totalScore)),
-                    _source: 'evaluate-from-entities',
-                    _engine: evalData.engine,
-                    _coverage: evalData.coverage,
-                    _overrideCount: evalData.overrideCount,
-                  };
-                } else {
-                  // Fallback: try the legacy extract-and-score endpoint
-                  const documentTexts = uploadedFiles.filter(f => f.textContent).map(f => f.textContent);
-                  const fallbackRes = await fetch('/api/extract-and-score', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ documentTexts, sectorCode, scorecardType, clientName: companyInfo.name }),
-                  });
-
-                  if (!fallbackRes.ok) throw new Error('Both evaluation endpoints failed');
-
-                  const scoreData = await fallbackRes.json();
-                  const pillarsById: Record<string, any> = {};
-                  if (scoreData.scorecard?.pillars) {
-                    for (const p of scoreData.scorecard.pillars) {
-                      const key = p.pillar.toLowerCase().replace(/[^a-z]/g, '');
-                      pillarsById[key] = p;
-                    }
-                  }
-                  const totalScore = scoreData.scorecard?.totalScore || 0;
-                  normalised = {
-                    ownership: { score: pillarsById['ownership']?.weightedScore || 0, target: 25, weighting: 25, subMinimumMet: false },
-                    managementControl: { score: pillarsById['managementcontrol']?.weightedScore || 0, target: 19, weighting: 19 },
-                    skillsDevelopment: { score: pillarsById['skillsdevelopment']?.weightedScore || 0, target: 25, weighting: 25, subMinimumMet: false },
-                    procurement: { score: pillarsById['enterprisesupplierdevelopment']?.subItems?.[0]?.score || 0, target: 29, weighting: 29, subMinimumMet: false },
-                    supplierDevelopment: { score: pillarsById['enterprisesupplierdevelopment']?.subItems?.[1]?.score || 0, target: 10, weighting: 10, subMinimumMet: false },
-                    enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
-                    socioEconomicDevelopment: { score: pillarsById['socioeconomicdevelopment']?.weightedScore || 0, target: 5, weighting: 5 },
-                    yesInitiative: { score: 0, target: 5, weighting: 5 },
-                    total: { score: totalScore, target: 120, weighting: 120 },
-                    achievedLevel: bbeeLevel(totalScore),
-                    discountedLevel: bbeeLevel(totalScore),
-                    isDiscounted: false,
-                    recognitionLevel: bbeeRecognition(bbeeLevel(totalScore)),
-                    _source: 'legacy_extract_and_score',
-                  };
+                if (!ucsResponse.ok) {
+                  const errBody = await ucsResponse.json().catch(() => ({}));
+                  throw new Error(errBody.error || errBody.details || `UCS returned ${ucsResponse.status}`);
                 }
+
+                const apiResult: APIScorecardResult = await ucsResponse.json();
+                useBbeeStore.getState().setScorecardFromAPI(apiResult);
+
+                const { scorecard } = useBbeeStore.getState();
+                const normalised = normalizeUCSResult(apiResult, scorecard);
 
                 setScorecardResult(normalised);
                 await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: normalised });
@@ -3573,38 +3621,12 @@ export default function DocumentProcessor() {
                 toast({ title: "Assessment complete", description: "Scorecard generated successfully!" });
 
               } catch (err: any) {
-                console.error("Scorecard generation error", err);
-                // Build a basic scorecard from whatever extraction results we have
-                const extractedData: Record<string, any> = {};
-                for (const doc of extractionResults) {
-                  for (const entity of (doc.entities || [])) {
-                    if (entity.status !== 'rejected' && entity.value) {
-                      extractedData[entity.name] = entity.value;
-                    }
-                  }
-                }
-                const fallback = {
-                  ownership: { score: 0, target: 25, weighting: 25, subMinimumMet: false },
-                  managementControl: { score: 0, target: 19, weighting: 19 },
-                  skillsDevelopment: { score: 0, target: 25, weighting: 25, subMinimumMet: false },
-                  procurement: { score: 0, target: 29, weighting: 29, subMinimumMet: false },
-                  supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
-                  enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
-                  socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
-                  yesInitiative: { score: 0, target: 5, weighting: 5 },
-                  total: { score: 0, target: 120, weighting: 120 },
-                  achievedLevel: 9,
-                  discountedLevel: 9,
-                  isDiscounted: false,
-                  recognitionLevel: '0%',
-                  _source: 'fallback',
-                  _error: err.message,
-                };
-                setScorecardResult(fallback);
-                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: fallback });
-                setIsSubmitted(true);
-                setCurrentPage('summary');
-                toast({ title: "Partial Scorecard", description: "Scorecard generated from reviewed entities.", variant: "default" });
+                console.error('[DocumentProcessor] UCS scorecard generation failed:', err);
+                toast({
+                  title: "Scorecard generation failed",
+                  description: err.message || 'The calculation service returned an error. Please try again.',
+                  variant: "destructive",
+                });
               } finally {
                 setIsSavingSession(false);
               }
@@ -4150,7 +4172,7 @@ export default function DocumentProcessor() {
 
             // Normalize to a unified shape
             let totalScore = 0;
-            let totalTarget = 120;
+            let totalTarget = 0;
             let level = 9;
             let recognition = '0%';
             let isDiscounted = false;
@@ -4180,34 +4202,32 @@ export default function DocumentProcessor() {
                   criteria: p.criteria || [],
                 }));
             } else if (sc) {
-              // Legacy flat format
-              // CRITICAL FIX: All targets verified against RCOGP Generic Excel toolkit (120 points total)
+              // Legacy flat format — targets read from scorecard data (not hardcoded)
               const LEGACY_PILLARS = [
-                { key: 'ownership', label: 'Ownership', target: 25 },
-                { key: 'managementControl', label: 'Management Control', target: 19 },
-                { key: 'skillsDevelopment', label: 'Skills Development', target: 25 },
-                // CRITICAL FIX: Procurement target is 29 (not 27)
-                { key: 'procurement', label: 'Preferential Procurement', target: 29 },
-                { key: 'supplierDevelopment', label: 'Supplier Development', target: 10 },
-                // CRITICAL FIX: ED target is 7 (5 base + 2 bonus)
-                { key: 'enterpriseDevelopment', label: 'Enterprise Development', target: 7 },
-                { key: 'socioEconomicDevelopment', label: 'Socio-Economic Dev.', target: 5 },
-                { key: 'yesInitiative', label: 'YES Initiative', target: 5 },
+                { key: 'ownership', label: 'Ownership' },
+                { key: 'managementControl', label: 'Management Control' },
+                { key: 'skillsDevelopment', label: 'Skills Development' },
+                { key: 'procurement', label: 'Preferential Procurement' },
+                { key: 'supplierDevelopment', label: 'Supplier Development' },
+                { key: 'enterpriseDevelopment', label: 'Enterprise Development' },
+                { key: 'socioEconomicDevelopment', label: 'Socio-Economic Dev.' },
+                { key: 'yesInitiative', label: 'YES Initiative' },
               ];
               totalScore = sc.total?.score ?? 0;
-              totalTarget = sc.total?.target ?? 120;
+              totalTarget = sc.total?.target ?? 0;
               level = sc.finalLevel ?? sc.discountedLevel ?? sc.achievedLevel ?? 9;
               recognition = sc.recognitionLevel ?? '0%';
               isDiscounted = sc.isDiscounted ?? false;
               source = sc._source;
 
               pillarRows = LEGACY_PILLARS.map(lp => {
-                const p = sc[lp.key] || { score: 0, target: lp.target };
+                const p = sc[lp.key] || { score: 0, target: 0 };
+                const maxPts = p.target ?? p.weighting ?? 0;
                 return {
                   code: lp.key,
                   label: lp.label,
                   score: p.score ?? 0,
-                  maxPoints: lp.target,
+                  maxPoints: maxPts,
                   color: PILLAR_COLORS[lp.key] || '#636366',
                   subMinimumMet: p.subMinimumMet,
                   criteria: [],

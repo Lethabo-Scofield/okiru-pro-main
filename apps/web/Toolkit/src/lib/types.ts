@@ -172,7 +172,7 @@ export interface TrainingProgram {
   otherCosts: number;
 
   // Total cost (computed)
-  get totalCost(): number;
+  totalCost?: number;
 
   // Flags
   isAbet: boolean;

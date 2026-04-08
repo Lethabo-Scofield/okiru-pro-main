@@ -124,6 +124,7 @@ export class ScoreResultRepository {
       beeLevel?: number;
       recognitionLevel?: number;
       subMinimumsMet: Record<string, boolean>;
+      ontologySnapshot?: Record<string, unknown>;
     }
   ): Promise<void> {
     await this.db.collection(COLLECTIONS.calculationRuns).update(runId, {

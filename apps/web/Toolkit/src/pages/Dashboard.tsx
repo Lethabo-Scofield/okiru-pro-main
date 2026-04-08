@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolk
 import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, TrendingUp, DollarSign, Info, Building2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import type { Client, SkillsData, ProcurementData, ESDData, SEDData, ScorecardResult } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "../../../shared/schema";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore, calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
@@ -119,7 +120,7 @@ interface CostPerPointEntry {
 }
 
 export default function Dashboard() {
-  const { scorecard, client, skills, procurement, esd, sed, isLoaded } = useBbeeStore();
+  const { scorecard, client, skills, procurement, esd, sed, isLoaded, calculatorConfig } = useBbeeStore();
   const [, navigate] = useLocation();
 
   if (client.id && !isLoaded) {
@@ -285,7 +286,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <CostPerPointSection
+      {calculatorConfig && <CostPerPointSection
         client={client}
         skills={skills}
         procurement={procurement}
@@ -293,7 +294,8 @@ export default function Dashboard() {
         sed={sed}
         scorecard={scorecard}
         navigate={navigate}
-      />
+        calculatorConfig={calculatorConfig}
+      />}
 
       <div className="grid gap-3 md:grid-cols-2">
         <motion.div variants={item}>
@@ -367,6 +369,7 @@ function CostPerPointSection({
   sed,
   scorecard,
   navigate,
+  calculatorConfig,
 }: {
   client: Client;
   skills: SkillsData;
@@ -375,13 +378,14 @@ function CostPerPointSection({
   sed: SEDData;
   scorecard: ScorecardResult;
   navigate: (path: string) => void;
+  calculatorConfig: CalculatorConfig;
 }) {
-  const skillsResult = calculateSkillsScore(skills);
-  const procResult = calculateProcurementScore(procurement);
-  const esdResult = calculateEsdScore(esd, client.npat);
-  const sedResult = calculateSedScore(sed, client.npat);
+  const skillsResult = calculateSkillsScore(skills, calculatorConfig);
+  const procResult = calculateProcurementScore(procurement, calculatorConfig);
+  const esdResult = calculateEsdScore(esd, client.npat, calculatorConfig);
+  const sedResult = calculateSedScore(sed, client.npat, calculatorConfig);
 
-  const totalSkillsSpend = skillsResult.actualSpend;
+  const totalSkillsSpend = skillsResult.rawStats.totalRecognisedSpend;
   const totalProcSpend = procResult.recognisedSpend;
   const totalEsdSpend = esdResult.sdSpend + esdResult.edSpend;
   const totalSedSpend = sedResult.actualSpend;

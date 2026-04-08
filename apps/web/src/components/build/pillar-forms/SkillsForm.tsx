@@ -14,7 +14,9 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
+import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
 interface SkillsFormProps {
@@ -73,7 +75,11 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
-  const result = useMemo(() => calculateSkillsScore(data), [data]);
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const result = useMemo(() => {
+    if (!calculatorConfig) return { total: 0, subMinimumMet: false, learningProgrammes: 0, bursaries: 0, disabledLearning: 0, learnerships: 0, absorption: 0, categoryBreakdown: [], subLines: [], rawStats: {} as any };
+    return calculateSkillsScore(data, calculatorConfig);
+  }, [data, calculatorConfig]);
 
   const openAdd = () => {
     setForm({ ...emptyForm });

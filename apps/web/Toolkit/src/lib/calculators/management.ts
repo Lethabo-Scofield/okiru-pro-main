@@ -5,25 +5,8 @@ import type { Province } from './eapTargets';
 import { getEAPTargets, normalizeProvince } from './eapTargets';
 
 // VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
-// CRITICAL FIXES: Executive Directors targets changed from 60%/30% to 50%/25%
-
-const BOARD_BLACK_TARGET = 0.50;
-const BOARD_WOMEN_TARGET = 0.25;
-// CRITICAL FIX: Executive Directors Black target is 50% (NOT 60%)
-const EXEC_BLACK_TARGET = 0.50;
-// CRITICAL FIX: Executive Directors Women target is 25% (NOT 30%)
-const EXEC_WOMEN_TARGET = 0.25;
-const OTHER_EXEC_BLACK_TARGET = 0.60;
-const OTHER_EXEC_WOMEN_TARGET = 0.30;
-
-// EAP-based targets for Senior/Middle/Junior (province-specific)
-// These are defaults; actual values come from EAP lookup
-const DEFAULT_SENIOR_TARGET = 0.731;   // National EAP
-const DEFAULT_MIDDLE_TARGET = 0.786; // National EAP
-const DEFAULT_JUNIOR_TARGET = 0.845; // National EAP
-
-const DISABLED_TARGET = 0.03;
-const MAX_TOTAL = 19;
+// Config is REQUIRED — all targets come from CalculatorConfig loaded from the API.
+// No hardcoded RCOGP fallback constants.
 
 export interface ManagementSubLine {
   name: string;
@@ -92,26 +75,26 @@ function pctOfRaw(emps: Employee[], countFn: (e: Employee[]) => number): number 
 
 export function calculateManagementScore(
   data: ManagementData,
-  config?: CalculatorConfig,
+  config: CalculatorConfig,
   eapProvince?: string
 ): ManagementResult {
+  if (!config) throw new Error('CalculatorConfig is required for management score calculation');
   const employees = data.employees || [];
   const grouped = groupByDesignation(employees);
 
-  // Extract config values with fallbacks to hardcoded defaults
-  const cfg = config?.managementControl;
-  const boardBlackTarget = cfg?.boardBlackTarget ?? BOARD_BLACK_TARGET;
-  const boardWomenTarget = cfg?.boardBWTarget ?? BOARD_WOMEN_TARGET;
-  const boardBlackMaxPts = cfg?.boardBlackMaxPts ?? 2;
-  const boardBWMaxPts = cfg?.boardBWMaxPts ?? 1;
+  const cfg = config.managementControl;
+  const boardBlackTarget = cfg?.boardBlackTarget ?? config.management.boardBlackTarget;
+  const boardWomenTarget = cfg?.boardBWTarget ?? config.management.boardWomenTarget;
+  const boardBlackMaxPts = cfg?.boardBlackMaxPts ?? config.management.boardBlackPoints;
+  const boardBWMaxPts = cfg?.boardBWMaxPts ?? config.management.boardWomenPoints;
   
-  const execBlackTarget = cfg?.execBlackTarget ?? EXEC_BLACK_TARGET;
-  const execWomenTarget = cfg?.execBWTarget ?? EXEC_WOMEN_TARGET;
-  const execBlackMaxPts = cfg?.execBlackMaxPts ?? 2;
-  const execBWMaxPts = cfg?.execBWMaxPts ?? 1;
+  const execBlackTarget = cfg?.execBlackTarget ?? config.management.execBlackTarget;
+  const execWomenTarget = cfg?.execBWTarget ?? config.management.execWomenTarget;
+  const execBlackMaxPts = cfg?.execBlackMaxPts ?? config.management.execBlackPoints;
+  const execBWMaxPts = cfg?.execBWMaxPts ?? config.management.execWomenPoints;
   
-  const otherExecBlackTarget = cfg?.otherExecBlackTarget ?? OTHER_EXEC_BLACK_TARGET;
-  const otherExecWomenTarget = cfg?.otherExecBWTarget ?? OTHER_EXEC_WOMEN_TARGET;
+  const otherExecBlackTarget = cfg?.otherExecBlackTarget ?? 0.60;
+  const otherExecWomenTarget = cfg?.otherExecBWTarget ?? 0.30;
   const otherExecBlackMaxPts = cfg?.otherExecBlackMaxPts ?? 2;
   const otherExecBWMaxPts = cfg?.otherExecBWMaxPts ?? 1;
   
@@ -122,11 +105,11 @@ export function calculateManagementScore(
   const juniorMaxPts = cfg?.juniorMaxPts ?? 1;
   const juniorBWMaxPts = cfg?.juniorBWMaxPts ?? 1;
   
-  const disabledTarget = config?.employmentEquity?.disabledTarget ?? DISABLED_TARGET;
-  const disabledMaxPts = config?.employmentEquity?.disabledMaxPts ?? 2;
+  const disabledTarget = config.employmentEquity?.disabledTarget ?? cfg?.disabledTarget ?? config.management.disabledTarget ?? 0.02;
+  const disabledMaxPts = config.employmentEquity?.disabledMaxPts ?? cfg?.disabledMaxPts ?? 2;
   
-  const maxTotal = config?.pillarConfigs?.managementControl?.maxPoints ?? MAX_TOTAL;
-  const subMinPercent = config?.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
+  const maxTotal = config.pillarConfigs?.managementControl?.maxPoints ?? config.managementControl?.maxPoints ?? 19;
+  const subMinPercent = config.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
 
   // Get EAP targets based on province
   const province = normalizeProvince(eapProvince || 'National') as Province;

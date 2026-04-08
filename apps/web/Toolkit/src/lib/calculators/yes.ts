@@ -46,9 +46,9 @@ export interface YESResult {
  * Default: < 500 employees: 2.5%, 500 - 1000 employees: 1.5%, > 1000 employees: 1%
  */
 function calculateHeadcountTarget(totalEmployees: number, config?: CalculatorConfig): number {
-  const headcountSmall = config?.yes?.headcountSmall ?? 0.025;
-  const headcountMedium = config?.yes?.headcountMedium ?? 0.015;
-  const headcountLarge = config?.yes?.headcountLarge ?? 0.01;
+  const headcountSmall = config?.yes?.headcountTarget5 ?? 0.025;
+  const headcountMedium = config?.yes?.headcountTarget10 ?? 0.015;
+  const headcountLarge = config?.yes?.headcountTarget15 ?? 0.01;
   
   if (totalEmployees < 500) {
     return Math.max(Math.ceil(totalEmployees * headcountSmall), 1);
@@ -117,7 +117,7 @@ function calculateLevelIncrease(
   // Tier 3: 1 level increase
   // But only if configured % of YES participants are Black Youth (default 50%)
   
-  const blackYouthThreshold = config?.yes?.blackYouthThreshold ?? 50;
+  const blackYouthThreshold = config?.yes?.blackYouthPercent ?? 50;
   const qualifies = blackYouthPercentage >= blackYouthThreshold;
   
   if (!qualifies) {

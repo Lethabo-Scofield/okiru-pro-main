@@ -32,12 +32,14 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   const defaultEsd = { id: '', clientId: '', contributions: [] };
   const defaultSed = { id: '', clientId: '', contributions: [] };
 
-  const ownCalc = calculateOwnershipScore(state.ownership || defaultOwnership);
-  const mgtCalc = calculateManagementScore(state.management || defaultManagement);
-  const skillCalc = calculateSkillsScore(state.skills || defaultSkills);
-  const procCalc = calculateProcurementScore(state.procurement || defaultProcurement);
-  const esdCalc = calculateEsdScore(state.esd || defaultEsd, state.client?.npat || 0);
-  const sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0);
+  const cfg = state.calculatorConfig;
+  if (!cfg) throw new Error('Cannot export Excel: calculatorConfig not loaded');
+  const ownCalc = calculateOwnershipScore(state.ownership || defaultOwnership, cfg);
+  const mgtCalc = calculateManagementScore(state.management || defaultManagement, cfg);
+  const skillCalc = calculateSkillsScore(state.skills || defaultSkills, cfg);
+  const procCalc = calculateProcurementScore(state.procurement || defaultProcurement, cfg);
+  const esdCalc = calculateEsdScore(state.esd || defaultEsd, state.client?.npat || 0, cfg);
+  const sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg);
 
   const deemedNpat = state.client.industryNorm && state.client.npat < (state.client.revenue * state.client.industryNorm * 0.25)
     ? state.client.revenue * state.client.industryNorm
@@ -400,6 +402,7 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   XLSX.utils.book_append_sheet(wb, wsSkills, "Skills Development");
 
   const suppliers = state.procurement?.suppliers || [];
+  // Standard recognition multipliers per B-BBEE Act (matches STANDARD_RECOGNITION_TABLE in procurement.ts)
   const RECOGNITION_TABLE: Record<number, number> = { 1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00, 5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0 };
 
   const procRows: any[][] = [

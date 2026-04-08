@@ -13,7 +13,9 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { SEDData, Contribution, SEDContributionType } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
+import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
 interface SEDFormProps {
@@ -46,7 +48,11 @@ export function SEDForm({ data, onChange, npat = 0, className }: SEDFormProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
-  const result = useMemo(() => calculateSedScore(data, npat), [data, npat]);
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const result = useMemo(() => {
+    if (!calculatorConfig) return { total: 0, subMinimumMet: false, actualSpend: 0, target: 0, rawStats: { spendSED: 0 } };
+    return calculateSedScore(data, npat, calculatorConfig);
+  }, [data, npat, calculatorConfig]);
   const totalSED = data.contributions.reduce((s, c) => s + c.amount, 0);
   const scorePercent = (result.total / 5) * 100;
   const target = npat * 0.01;

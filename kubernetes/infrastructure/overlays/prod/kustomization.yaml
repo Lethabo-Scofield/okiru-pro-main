@@ -1,10 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 namespace: okiru-pro
 
 resources:
 - ../../base
+
 # secrets are managed directly by the CI workflow via kubectl — NOT via Kustomize
 # to prevent placeholder ${VAR} values from overwriting real cluster secrets on every deploy
 
@@ -16,14 +16,14 @@ patchesStrategicMerge:
 - patches/pvc-storage-class.yaml
 - patches/security-context.yaml
 
-# Images - Using 'latest' tag for flexibility during development
-# For production stability, use specific digests or tags:
-#   newTag: 5dc2624-20260403
-# During deployment, kustomize edit set image is used to update these
+# Images - updated during deployment
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+  newTag: 13bc2aa-20260408-110231
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+  newTag: 13bc2aa-20260408-110231
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
+  newTag: 13bc2aa-20260408-110231
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation

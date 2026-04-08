@@ -138,7 +138,7 @@ function calculateTotalCost(costs: Pick<InterventionFormState,
 }
 
 export default function SkillsDevelopment() {
-  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram } = useBbeeStore();
+  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram, calculatorConfig } = useBbeeStore();
   const { leviableAmount, trainingPrograms, yesCandidatesCount, yesAbsorbedCount } = skills;
   const { toast } = useToast();
 
@@ -228,6 +228,7 @@ export default function SkillsDevelopment() {
       isAbet: formState.isAbet,
       isMandatory: formState.isMandatory,
       isBursary: formState.categoryCode === 'A',
+      totalCost,
       // Legacy fields for compatibility
       name: formState.programName,
       category: formState.categoryCode === 'A' ? 'bursary' : 
@@ -317,6 +318,7 @@ export default function SkillsDevelopment() {
       isAbet: formState.isAbet,
       isMandatory: formState.isMandatory,
       isBursary: formState.categoryCode === 'A',
+      totalCost,
       // Legacy fields
       name: formState.programName,
       cost: totalCost,
@@ -330,7 +332,8 @@ export default function SkillsDevelopment() {
     toast({ title: "Intervention Updated", description: `${formState.programName} for ${formState.learnerName}` });
   };
 
-  const score = calculateSkillsScore(skills);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const score = calculateSkillsScore(skills, calculatorConfig);
 
   const totalYesCount = trainingPrograms.filter(p => p.isYesEmployee).length;
   const completedYesCount = trainingPrograms.filter(p => p.isYesEmployee && p.isCompleted).length;

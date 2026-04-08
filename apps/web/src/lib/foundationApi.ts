@@ -24,7 +24,7 @@ import type {
   YESCandidate,
   ScorecardResult,
 } from '@toolkit/lib/types';
-import { useBbeeStore } from '@toolkit/lib/store';
+import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import type { CalculatorConfig } from '@shared/schema';
 
 // ============================================================================
@@ -161,7 +161,7 @@ export function clientInfoToToolkitClient(
     contactPerson: clientInfo.contactPerson,
     contactEmail: clientInfo.contactEmail,
     contactPhone: clientInfo.contactPhone,
-    sectorCode: clientInfo.sectorCode,
+    sectorCode: clientInfo.sectorCode as Client['sectorCode'],
     industry: clientInfo.industry,
     companySize,
     annualTurnover: clientInfo.annualTurnover,
@@ -547,6 +547,7 @@ export interface PopulateAndScoreResult {
   client?: Client;
   error?: string;
   validationErrors?: string[];
+  apiResult?: APIScorecardResult;
 }
 
 /**
@@ -582,10 +583,9 @@ function validateCriticalEntities(
   // Check at least one ownership entity
   const ownership = pillars.ownership;
   const hasOwnershipData = 
-    (ownership.blackOwnershipPercent || 0) > 0 ||
-    (ownership.blackWomenOwnershipPercent || 0) > 0 ||
-    (ownership.blackYouthOwnershipPercent || 0) > 0 ||
-    ownership.ownershipEntities?.length > 0;
+    (ownership.shareholders?.length ?? 0) > 0 ||
+    (ownership.ownershipScorePoints || 0) > 0 ||
+    (ownership.ownershipScorePercent || 0) > 0;
   
   if (!hasOwnershipData) {
     errors.push('Ownership data is required (at least one ownership entity)');
@@ -599,9 +599,9 @@ function validateCriticalEntities(
  * 
  * This function:
  * 1. Validates critical entities are present
- * 2. Fetches sector-specific calculator config
- * 3. Hydrates the Zustand store with pillar data
- * 4. Triggers unified calculation via calculateScorecard
+ * 2. Hydrates the Zustand store with pillar data (for real-time preview)
+ * 3. POSTs to /api/calculate (UCS) for the authoritative scorecard
+ * 4. Sets the store's scorecard from the UCS result
  * 5. Returns the ScorecardResult
  */
 export async function populateAndScore(
@@ -609,7 +609,6 @@ export async function populateAndScore(
 ): Promise<PopulateAndScoreResult> {
   const { pillars, foundation, sectorCode, scorecardType = 'Generic' } = input;
   
-  // Step 1: Validate critical entities
   const validationErrors = validateCriticalEntities(foundation, pillars);
   if (validationErrors.length > 0) {
     return {
@@ -620,49 +619,28 @@ export async function populateAndScore(
   }
   
   try {
-    // Step 2: Fetch sector config for calculator
-    let calculatorConfig: CalculatorConfig | null = null;
-    try {
-      const response = await fetch(
-        `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.config) {
-          calculatorConfig = data.config;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch sector config, using defaults:', e);
-    }
-    
-    // Step 3: Transform client info to Toolkit format
     const clientData = clientInfoToToolkitClient(
       foundation.clientInfo,
       foundation.financials
     );
     
-    // Step 4: Get current store state to preserve any existing data
-    const currentState = useBbeeStore.getState();
+    useBbeeStore.getState().startNewSession();
     
-    // Step 5: Build pillar data from input, merging YES into skills
     const skillsWithYes = mergeYesIntoSkills(pillars.skills, pillars.yes);
     
-    // Step 6: Update store with all data (individual pillar fields, not a nested object)
     useBbeeStore.setState({
-      client: { ...currentState.client, ...clientData },
-      ownership: pillars.ownership || currentState.ownership,
-      management: pillars.management || currentState.management,
-      skills: skillsWithYes || currentState.skills,
-      procurement: pillars.procurement || currentState.procurement,
-      esd: pillars.esd || currentState.esd,
-      sed: pillars.sed || currentState.sed,
-      calculatorConfig: calculatorConfig || currentState.calculatorConfig,
+      isLoaded: true,
+      client: clientData as any,
+      ownership: pillars.ownership || useBbeeStore.getState().ownership,
+      management: pillars.management || useBbeeStore.getState().management,
+      skills: skillsWithYes || useBbeeStore.getState().skills,
+      procurement: pillars.procurement || useBbeeStore.getState().procurement,
+      esd: pillars.esd || useBbeeStore.getState().esd,
+      sed: pillars.sed || useBbeeStore.getState().sed,
     });
     
-    // Step 7: Update financials in store
     if (clientData.revenue !== undefined || clientData.npat !== undefined) {
-      currentState.updateFinancials(
+      useBbeeStore.getState().updateFinancials(
         clientData.revenue || 0,
         clientData.npat || 0,
         clientData.leviableAmount || 0,
@@ -670,23 +648,111 @@ export async function populateAndScore(
       );
     }
     
-    // Step 8: Trigger unified calculation via the store's built-in recalculate action
-    useBbeeStore.getState()._recalculateAll();
+    // Build entity arrays for the UCS API
+    const fin = foundation.financials;
+    const storeState = useBbeeStore.getState();
     
-    // Step 9: Read the calculated scorecard from the store
-    const result = useBbeeStore.getState().scorecard;
+    const employees = (storeState.management?.employees || []).map(e => ({
+      name: e.name,
+      race: e.race,
+      gender: e.gender,
+      designation: e.designation,
+      isDisabled: e.isDisabled,
+      isForeign: e.isForeign,
+    }));
+    
+    const shareholders = (storeState.ownership?.shareholders || []).map(s => ({
+      name: s.name,
+      blackOwnership: s.blackOwnership,
+      blackWomenOwnership: s.blackWomenOwnership,
+      shares: s.shares,
+      shareValue: s.shareValue,
+      yearsHeld: s.yearsHeld,
+      isDesignatedGroup: s.isDesignatedGroup,
+      blackNewEntrant: s.blackNewEntrant,
+    }));
+    
+    const suppliers = (storeState.procurement?.suppliers || []).map(s => ({
+      name: s.name,
+      spend: s.spend,
+      beeLevel: s.beeLevel,
+      blackOwnership: s.blackOwnership,
+      blackWomenOwnership: s.blackWomenOwnership,
+      enterpriseType: s.enterpriseType,
+      isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
+      isBlackOwned51: s.blackOwnership >= 51,
+      isBlackWomanOwned30: s.blackWomenOwnership >= 30,
+      isEME: s.enterpriseType === 'eme',
+      isQSE: s.enterpriseType === 'qse',
+      isForeignSupplier: s.isForeignSupplier,
+    }));
+    
+    const categoryMap: Record<string, 'sd' | 'ed' | 'sed'> = {
+      supplier_development: 'sd',
+      enterprise_development: 'ed',
+      socio_economic: 'sed',
+    };
+    const esdContributions = (storeState.esd?.contributions || []).map(c => ({
+      beneficiary: c.beneficiary,
+      type: c.type,
+      amount: c.amount,
+      category: categoryMap[c.category] || 'ed' as const,
+    }));
+    const sedContributions = (storeState.sed?.contributions || []).map(c => ({
+      beneficiary: c.beneficiary,
+      type: c.type,
+      amount: c.amount,
+      category: 'sed' as const,
+    }));
+    const contributions = [...esdContributions, ...sedContributions];
+    
+    const financials = {
+      revenue: fin.totalRevenue || clientData.revenue || 0,
+      npat: fin.npat || clientData.npat || 0,
+      leviableAmount: fin.leviableAmount || clientData.leviableAmount || 0,
+      tmps: fin.tmps || storeState.procurement?.tmps || 0,
+      headcount: employees.length,
+    };
+    
+    // POST to UCS for the authoritative scorecard
+    const response = await fetch(`${API_BASE}/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assessmentId: `populate-${Date.now()}`,
+        sectorCode,
+        scorecardType,
+        entityValues: {},
+        employees,
+        shareholders,
+        suppliers,
+        contributions,
+        financials,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({}));
+      throw new Error(errBody.error || `UCS returned ${response.status}`);
+    }
+    
+    const apiResult: APIScorecardResult = await response.json();
+    
+    // Set the store's scorecard from the UCS result
+    useBbeeStore.getState().setScorecardFromAPI(apiResult);
     
     return {
       success: true,
-      scorecard: result,
+      scorecard: useBbeeStore.getState().scorecard,
       client: useBbeeStore.getState().client,
+      apiResult,
     };
     
   } catch (error) {
     console.error('populateAndScore error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown calculation error',
+      error: `UCS calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 }

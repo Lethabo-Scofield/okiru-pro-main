@@ -15,7 +15,9 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { ProcurementData, Supplier } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
+import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
 interface ProcurementFormProps {
@@ -46,7 +48,11 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptySupplier });
 
-  const result = useMemo(() => calculateProcurementScore(data), [data]);
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const result = useMemo(() => {
+    if (!calculatorConfig) return { total: 0, subMinimumMet: false, subLines: [], recognisedSpend: 0, target: 0, base: 0, empoweringSuppliers: 0, qseSuppliers: 0, emeSuppliers: 0, blackOwned51: 0, blackFemaleOwned30: 0, designatedGroup: 0, rawStats: {} as any };
+    return calculateProcurementScore(data, calculatorConfig);
+  }, [data, calculatorConfig]);
 
   const totalSpend = data.suppliers.reduce((s, sup) => s + sup.spend, 0);
   const scorePercent = (result.total / 29) * 100;

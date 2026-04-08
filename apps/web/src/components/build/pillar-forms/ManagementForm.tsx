@@ -41,7 +41,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui
 import { v4 as uuidv4 } from "uuid";
 import { cn } from "@toolkit/lib/utils";
 import type { Employee, ManagementData } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
+import { useBbeeStore } from "@toolkit/lib/store";
 
 // ============================================================================
 // Types & Constants
@@ -161,9 +163,11 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
   }, [data.employees]);
 
   // Calculate score
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
   const scoreResult = useMemo(() => {
-    return calculateManagementScore(data, undefined, eapProvince);
-  }, [data, eapProvince]);
+    if (!calculatorConfig) return { total: 0, subMinimumMet: false, subLines: [], disabled: 0, rawStats: {} as any };
+    return calculateManagementScore(data, calculatorConfig, eapProvince);
+  }, [data, eapProvince, calculatorConfig]);
 
   // Filter employees
   const filteredEmployees = useMemo(() => {

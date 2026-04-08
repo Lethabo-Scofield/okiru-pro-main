@@ -375,7 +375,6 @@ function sectorConfigToCalculatorConfig(sc: any) {
   // Determine if this is StoredSectorRule (array) or SectorConfig (object)
   const isStoredShape = Array.isArray(sc.pillarConfigs);
 
-  // Normalize targets - both shapes have targets object
   const t = sc.targets || {};
   const own = t.ownership || {};
   const mc = t.managementControl || {};
@@ -385,10 +384,8 @@ function sectorConfigToCalculatorConfig(sc: any) {
   const esd = t.esd || {};
   const sed = t.sed || {};
 
-  // Normalize pillarConfigs based on shape
   let pc: any = {};
   if (isStoredShape && Array.isArray(sc.pillarConfigs)) {
-    // StoredSectorRule shape: pillarConfigs is array with { code, maxPoints, ... }
     for (const p of sc.pillarConfigs) {
       pc[p.code] = {
         maxPoints: p.maxPoints ?? 0,
@@ -397,7 +394,6 @@ function sectorConfigToCalculatorConfig(sc: any) {
       };
     }
   } else {
-    // SectorConfig shape: pillarConfigs is already object
     pc = sc.pillarConfigs || {};
   }
 
@@ -411,121 +407,152 @@ function sectorConfigToCalculatorConfig(sc: any) {
   const pSed = pc.socioEconomicDevelopment || {};
   const pYes = pc.yesInitiative || { maxPoints: 0 };
 
-  // Calculate sub-minimum thresholds (40% of pillar max for Generic)
   const ownershipSubMin = pOwn.hasSubMinimum
-    ? ((pOwn.subMinimumPercent || 40) / 100) * (pOwn.maxPoints || 25)
-    : 3.2; // 40% of 8 net value points
+    ? (pOwn.subMinimumPercent / 100) * pOwn.maxPoints
+    : 3.2;
   const skillsSubMin = pSk.hasSubMinimum
-    ? ((pSk.subMinimumPercent || 40) / 100) * (pSk.maxPoints || 25)
-    : 10; // 40% of 25
+    ? (pSk.subMinimumPercent / 100) * pSk.maxPoints
+    : 10;
   const procSubMin = pPp.hasSubMinimum
-    ? ((pPp.subMinimumPercent || 40) / 100) * (pPp.maxPoints || 29)
-    : 11.6; // 40% of 29
+    ? (pPp.subMinimumPercent / 100) * pPp.maxPoints
+    : 11.6;
 
-  const procBaseMax = (pr.allSuppliersMaxPts ?? 5)
-    + (pr.qseMaxPts ?? 3) + (pr.emeMaxPts ?? 4)
-    + (pr.bo51MaxPts ?? 11) + (pr.bwo30MaxPts ?? 4);
+  const procBaseMax = (pr.allSuppliersMaxPts || 0)
+    + (pr.qseMaxPts || 0) + (pr.emeMaxPts || 0)
+    + (pr.bo51MaxPts || 0) + (pr.bwo30MaxPts || 0);
 
-  // Get totalMaxPoints from source (verified Excel value) or calculate
-  const totalMaxPoints = sc.totalMaxPoints ??
+  const totalMaxPoints = sc.totalMaxPoints ||
     Object.values(pc).reduce((sum: number, p: any) => sum + (p.maxPoints || 0), 0);
+
+  // Extract category caps from categoryWeightings if available
+  const cw = sc.categoryWeightings || [];
+  const catE = cw.find((c: any) => c.code === 'E');
+  const catF = cw.find((c: any) => c.code === 'F');
 
   return {
     totalMaxPoints,
     ownership: {
-      votingRightsMax: own.votingRightsMaxPts ?? 4,
-      womenBonusMax: own.womenVotingMaxPts ?? 2,
-      economicInterestMax: own.economicInterestMaxPts ?? 4,
-      netValueMax: own.netValueMaxPts ?? 8,
-      targetEconomicInterest: own.economicInterestTarget ?? 0.25,
+      votingRightsMax: own.votingRightsMaxPts,
+      womenBonusMax: own.womenVotingMaxPts,
+      economicInterestMax: own.economicInterestMaxPts,
+      netValueMax: own.netValueMaxPts,
+      targetEconomicInterest: own.economicInterestTarget,
       subMinNetValue: ownershipSubMin,
     },
     management: {
-      boardBlackTarget: mc.boardBlackTarget ?? 0.5,
-      boardBlackPoints: mc.boardBlackMaxPts ?? 2,
-      boardWomenTarget: mc.boardBWTarget ?? 0.25,
-      boardWomenPoints: mc.boardBWMaxPts ?? 1,
-      execBlackTarget: mc.execBlackTarget ?? 0.5,
-      execBlackPoints: mc.execBlackMaxPts ?? 2,
-      execWomenTarget: mc.execBWTarget ?? 0.25,
-      execWomenPoints: mc.execBWMaxPts ?? 1,
-      disabledTarget: ee.disabledTarget ?? 0.02,
-      execBWTarget: mc.execBWTarget ?? 0.25,
-      execBWMaxPts: mc.execBWMaxPts ?? 1,
+      boardBlackTarget: mc.boardBlackTarget,
+      boardBlackPoints: mc.boardBlackMaxPts,
+      boardWomenTarget: mc.boardBWTarget,
+      boardWomenPoints: mc.boardBWMaxPts,
+      execBlackTarget: mc.execBlackTarget,
+      execBlackPoints: mc.execBlackMaxPts,
+      execWomenTarget: mc.execBWTarget,
+      execWomenPoints: mc.execBWMaxPts,
+      disabledTarget: ee.disabledTarget,
+      execBWTarget: mc.execBWTarget,
+      execBWMaxPts: mc.execBWMaxPts,
     },
     managementControl: {
-      maxPoints: pMc.maxPoints ?? 19,
-      disabledTarget: ee.disabledTarget ?? 0.02,
+      maxPoints: pMc.maxPoints,
+      subMinimumPercent: pMc.subMinimumPercent ?? 0,
+      boardBlackTarget: mc.boardBlackTarget,
+      boardBlackMaxPts: mc.boardBlackMaxPts,
+      boardBWTarget: mc.boardBWTarget,
+      boardBWMaxPts: mc.boardBWMaxPts,
+      execBlackTarget: mc.execBlackTarget,
+      execBlackMaxPts: mc.execBlackMaxPts,
+      execBWTarget: mc.execBWTarget,
+      execBWMaxPts: mc.execBWMaxPts,
+      otherExecBlackTarget: mc.otherExecBlackTarget,
+      otherExecBlackMaxPts: mc.otherExecBlackMaxPts,
+      otherExecBWTarget: mc.otherExecBWTarget,
+      otherExecBWMaxPts: mc.otherExecBWMaxPts,
+      seniorMaxPts: mc.seniorMaxPts,
+      seniorBWMaxPts: mc.seniorBWMaxPts,
+      middleMaxPts: mc.middleMaxPts,
+      middleBWMaxPts: mc.middleBWMaxPts,
+      juniorMaxPts: mc.juniorMaxPts,
+      juniorBWMaxPts: mc.juniorBWMaxPts,
+      disabledTarget: ee.disabledTarget,
+      disabledMaxPts: ee.disabledMaxPts,
     },
     employmentEquity: pEe.maxPoints > 0
-      ? { maxPoints: pEe.maxPoints }
-      : undefined,
+      ? { maxPoints: pEe.maxPoints, disabledTarget: ee.disabledTarget, disabledMaxPts: ee.disabledMaxPts }
+      : { maxPoints: 0, disabledTarget: ee.disabledTarget, disabledMaxPts: ee.disabledMaxPts },
     skills: {
-      generalMax: sk.learningProgrammesMaxPts ?? 6,
-      bursaryMax: sk.bursaryMaxPts ?? 4,
-      overallTarget: sk.overallSpendPercent ?? 3.5,
-      bursaryTarget: sk.bursarySpendPercent ?? 2.5,
+      generalMax: sk.learningProgrammesMaxPts,
+      bursaryMax: sk.bursaryMaxPts,
+      overallTarget: sk.overallSpendPercent,
+      bursaryTarget: sk.bursarySpendPercent,
       subMinThreshold: skillsSubMin,
-      overallSpendPercent: sk.overallSpendPercent ?? 3.5,
-      bursarySpendPercent: sk.bursarySpendPercent ?? 2.5,
-      disabledSpendPercent: sk.disabledSpendPercent ?? 0.3,
+      overallSpendPercent: sk.overallSpendPercent,
+      bursarySpendPercent: sk.bursarySpendPercent,
+      disabledSpendPercent: sk.disabledSpendPercent,
+      categoryECap: catE?.cap,
+      categoryFCap: catF?.cap,
+      learningProgrammesMaxPts: sk.learningProgrammesMaxPts,
+      bursaryMaxPts: sk.bursaryMaxPts,
+      disabledLearningMaxPts: sk.disabledLearningMaxPts,
+      learnershipsMaxPts: sk.learnershipsMaxPts,
+      absorptionMaxPts: sk.absorptionMaxPts,
+      learnershipTargetPercent: sk.learnershipTargetPercent,
+      absorptionTargetPercent: sk.absorptionTargetPercent,
     },
     procurement: {
-      baseMax: procBaseMax || 27,
-      bonusMax: pr.dgMaxPts ?? 2,
+      baseMax: procBaseMax,
+      bonusMax: pr.dgMaxPts,
       tmpsTarget: 0,
       subMinThreshold: procSubMin,
-      blackOwnedThreshold: pr.bo51Target ?? 0.5,
-      blackWomenThreshold: pr.bwo30Target ?? 0.12,
-      allSuppliersTarget: pr.allSuppliersTarget ?? 0.8,
-      allSuppliersMaxPts: pr.allSuppliersMaxPts ?? 5,
-      qseTarget: pr.qseTarget ?? 0.15,
-      qseMaxPts: pr.qseMaxPts ?? 3,
-      emeTarget: pr.emeTarget ?? 0.15,
-      emeMaxPts: pr.emeMaxPts ?? 4,
-      bo51Target: pr.bo51Target ?? 0.5,
-      bo51MaxPts: pr.bo51MaxPts ?? 11,
-      bwo30Target: pr.bwo30Target ?? 0.12,
-      bwo30MaxPts: pr.bwo30MaxPts ?? 4,
-      dgTarget: pr.dgTarget ?? 0.02,
-      dgMaxPts: pr.dgMaxPts ?? 2,
+      blackOwnedThreshold: pr.bo51Target,
+      blackWomenThreshold: pr.bwo30Target,
+      allSuppliersTarget: pr.allSuppliersTarget,
+      allSuppliersMaxPts: pr.allSuppliersMaxPts,
+      qseTarget: pr.qseTarget,
+      qseMaxPts: pr.qseMaxPts,
+      emeTarget: pr.emeTarget,
+      emeMaxPts: pr.emeMaxPts,
+      bo51Target: pr.bo51Target,
+      bo51MaxPts: pr.bo51MaxPts,
+      bwo30Target: pr.bwo30Target,
+      bwo30MaxPts: pr.bwo30MaxPts,
+      dgTarget: pr.dgTarget,
+      dgMaxPts: pr.dgMaxPts,
     },
     esd: {
-      supplierDevMax: esd.sdMaxPts ?? 10,
-      enterpriseDevMax: esd.edMaxPts ?? 5,
-      supplierDevTarget: esd.sdPercent ?? 2,
-      enterpriseDevTarget: esd.edPercent ?? 1,
+      supplierDevMax: esd.sdMaxPts,
+      enterpriseDevMax: esd.edMaxPts,
+      supplierDevTarget: esd.sdPercent,
+      enterpriseDevTarget: esd.edPercent,
     },
     sed: {
-      maxPoints: sed.maxPts ?? 5,
-      npatTarget: sed.spendPercent ?? 1,
+      maxPoints: sed.maxPts,
+      npatTarget: sed.spendPercent,
     },
+    // TODO: Extract YES config from Excel toolkits. These values are sector-independent per B-BBEE Act.
     yes: {
       tier1Points: 1.5, tier2Points: 1, tier3Points: 0.5,
       tier1Multiplier: 2.5, tier2Multiplier: 1.5, tier3Multiplier: 1,
       headcountTarget5: 0.025, headcountTarget10: 0.015, headcountTarget15: 0.01,
       blackYouthPercent: 0.55,
     },
-    discounting: { dropLevels: 1, maxDropLevel: 4 },
+    discounting: { dropLevels: 1, maxDropLevel: 8 },
     recognitionTable: (sc.recognitionTable || []).map((r: any) => ({
       level: r.beeLevel ?? r.level, multiplier: r.multiplier,
     })),
-    pillarConfigs: {
-      ownership: { maxPoints: pOwn.maxPoints ?? 25 },
-      managementControl: { maxPoints: pMc.maxPoints ?? 19 },
-      ...(pEe.maxPoints > 0 ? { employmentEquity: { maxPoints: pEe.maxPoints } } : {}),
-      skillsDevelopment: { maxPoints: pSk.maxPoints ?? 25 },
-      preferentialProcurement: { maxPoints: pPp.maxPoints ?? 29 },
-      supplierDevelopment: { maxPoints: pSd.maxPoints ?? 10 },
-      enterpriseDevelopment: { maxPoints: pEd.maxPoints ?? 7 },
-      socioEconomicDevelopment: { maxPoints: pSed.maxPoints ?? 5 },
-      ...(pYes.maxPoints > 0 ? { yesInitiative: { maxPoints: pYes.maxPoints } } : {}),
-      ...(pc.empowermentFinancing ? { empowermentFinancing: { maxPoints: pc.empowermentFinancing.maxPoints } } : {}),
-      ...(pc.accessToFinancialServices ? { accessToFinancialServices: { maxPoints: pc.accessToFinancialServices.maxPoints } } : {}),
-    },
     levelThresholds: (sc.levelThresholds || []).map((lt: any) => ({
       level: lt.level, minPoints: lt.minPoints, recognition: lt.recognition,
     })),
+    pillarConfigs: {
+      ownership: { maxPoints: pOwn.maxPoints, subMinimumPercent: pOwn.subMinimumPercent },
+      managementControl: { maxPoints: pMc.maxPoints, subMinimumPercent: pMc.subMinimumPercent },
+      ...(pEe.maxPoints > 0 ? { employmentEquity: { maxPoints: pEe.maxPoints } } : {}),
+      skillsDevelopment: { maxPoints: pSk.maxPoints, subMinimumPercent: pSk.subMinimumPercent },
+      preferentialProcurement: { maxPoints: pPp.maxPoints, subMinimumPercent: pPp.subMinimumPercent },
+      supplierDevelopment: { maxPoints: pSd.maxPoints, subMinimumPercent: pSd.subMinimumPercent },
+      enterpriseDevelopment: { maxPoints: pEd.maxPoints, subMinimumPercent: pEd.subMinimumPercent },
+      socioEconomicDevelopment: { maxPoints: pSed.maxPoints },
+      ...(pYes.maxPoints > 0 ? { yesInitiative: { maxPoints: pYes.maxPoints } } : {}),
+    },
     benefitFactors: (sc.benefitFactors || []).map((bf: any) => ({
       type: bf.contributionType ?? bf.type, factor: bf.sdFactor ?? bf.factor,
     })),

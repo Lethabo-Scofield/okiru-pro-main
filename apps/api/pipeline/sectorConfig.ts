@@ -741,7 +741,18 @@ export function getSectorConfig(sectorCode: string, scorecardType: string = 'Gen
     c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
     c.scorecardType.toLowerCase() === scorecardType.toLowerCase()
   );
-  return match || RCOGP_GENERIC;
+  if (!match) {
+    throw new Error(`No sector config found for sectorCode="${sectorCode}", scorecardType="${scorecardType}". Available: ${ALL_CONFIGS.map(c => `${c.sectorCode}/${c.scorecardType}`).join(', ')}`);
+  }
+  return match;
+}
+
+/** Non-throwing version for display-only paths. Returns null if not found. */
+export function getSectorConfigSafe(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig | null {
+  return ALL_CONFIGS.find(c =>
+    c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
+    c.scorecardType.toLowerCase() === scorecardType.toLowerCase()
+  ) || null;
 }
 
 export function detectSectorFromName(nameOrSector: string): SectorConfig {
@@ -753,6 +764,7 @@ export function detectSectorFromName(nameOrSector: string): SectorConfig {
   if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return FSC_GENERIC;
   if (/agri|agriculture|farming|agribee/i.test(lower)) return AGRI_GENERIC;
   if (hasQSE) return RCOGP_QSE;
+  console.warn(`[detectSectorFromName] No sector match for "${nameOrSector}" — defaulting to RCOGP Generic`);
   return RCOGP_GENERIC;
 }
 
