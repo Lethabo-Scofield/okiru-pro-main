@@ -153,6 +153,48 @@ const ENTITY_NAME_TO_KEY: Record<string, string> = {
   'Farmworker Housing':             'farmworkerHousing',
 };
 
+const ENTITY_NAME_TO_PILLAR: Record<string, string> = {
+  'Total Revenue':                  'financials',
+  'NPAT':                           'financials',
+  'Leviable Amount':                'financials',
+  'TMPS':                           'financials',
+  'Financial Year End':             'financials',
+  'Shareholder Name':               'ownership',
+  'Black Ownership Percentage':     'ownership',
+  'Black Women Ownership Percentage': 'ownership',
+  'Shareholding Percentage':        'ownership',
+  'Share Value':                    'ownership',
+  'Employee Name':                  'managementControl',
+  'Employee Gender':                'managementControl',
+  'Employee Race':                  'managementControl',
+  'Employee Designation':           'managementControl',
+  'Employee Disability Status':     'employmentEquity',
+  'Training Programme Name':        'skillsDevelopment',
+  'Training Cost':                  'skillsDevelopment',
+  'Learner Name':                   'skillsDevelopment',
+  'Learner Employment Status':      'skillsDevelopment',
+  'Learner Race Status':            'skillsDevelopment',
+  'Supplier Name':                  'preferentialProcurement',
+  'Supplier BEE Level':             'preferentialProcurement',
+  'Supplier Black Ownership':       'preferentialProcurement',
+  'Supplier Spend':                 'preferentialProcurement',
+  'ESD Beneficiary':                'enterpriseSupplierDevelopment',
+  'ESD Contribution Type':          'enterpriseSupplierDevelopment',
+  'ESD Amount':                     'enterpriseSupplierDevelopment',
+  'ESD Category':                   'enterpriseSupplierDevelopment',
+  'SED Beneficiary':                'socioEconomicDevelopment',
+  'SED Contribution Type':          'socioEconomicDevelopment',
+  'SED Amount':                     'socioEconomicDevelopment',
+  'ICT Black-Owned Spend':          'preferentialProcurement',
+  '3rd Party ICT Spend':            'preferentialProcurement',
+  'Access to Financial Services':   'accessToFinancialServices',
+  'Empowerment Financing Amount':   'empowermentFinancing',
+  'BEE Transaction Financing':      'empowermentFinancing',
+  'Land Ownership Black':           'ownership',
+  'Agricultural Development Contribution': 'enterpriseSupplierDevelopment',
+  'Farmworker Housing':             'socioEconomicDevelopment',
+};
+
 function normaliseEntityName(raw: string): string {
   // 1. Direct lookup in the mapping table
   if (ENTITY_NAME_TO_KEY[raw]) return ENTITY_NAME_TO_KEY[raw];
@@ -439,10 +481,11 @@ export interface PillarConfidence {
 export function buildConfidenceReport(
   results: LLMExtractionResult[],
   requiredRoles: string[],
+  fieldToPillar?: Record<string, string>,
 ): PillarConfidence[] {
   const pillarGroups: Record<string, LLMExtractionResult[]> = {};
   for (const r of results) {
-    const pillar = r.entityName.split('|')[1] ?? 'general';
+    const pillar = fieldToPillar?.[r.entityName] ?? ENTITY_NAME_TO_PILLAR[r.entityName] ?? 'general';
     if (!pillarGroups[pillar]) pillarGroups[pillar] = [];
     pillarGroups[pillar].push(r);
   }
@@ -457,7 +500,10 @@ export function buildConfidenceReport(
       highConfidenceCount: items.filter((i) => i.confidence >= 0.75).length,
       avgConfidence:
         items.reduce((s, i) => s + i.confidence, 0) / items.length,
-      missing: missingRoles.filter((r) => r.startsWith(pillar + '|')),
+      missing: missingRoles.filter((r) => {
+        const rPillar = fieldToPillar?.[r] ?? ENTITY_NAME_TO_PILLAR[r] ?? 'general';
+        return rPillar === pillar;
+      }),
     }),
   );
 

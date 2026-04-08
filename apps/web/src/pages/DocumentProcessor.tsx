@@ -1149,47 +1149,22 @@ export default function DocumentProcessor() {
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const [userRes, sectorRes] = await Promise.all([
-        fetch('/api/templates'),
-        fetch('/api/sector-templates'),
-      ]);
-      const userRaw = userRes.ok ? await userRes.json() : [];
-      const userList: StoredTemplate[] = (Array.isArray(userRaw) ? userRaw : [])
-        .map((t: any) => ({ ...t, entities: Array.isArray(t.entities) ? t.entities : [] }));
-      let toolkitList: StoredTemplate[] = [];
-      if (sectorRes.ok) {
-        const sectors = await sectorRes.json();
-        if (Array.isArray(sectors) && sectors.length > 0) {
-          const results = await Promise.allSettled(
-            sectors.map(async (s: { code: string; name: string; type: string }, i: number) => {
-              const scorecardType = s.type === 'QSE' ? 'QSE' : 'Generic';
-              const mr = await fetch(
-                `/api/manifest?sector=${encodeURIComponent(s.code)}&type=${encodeURIComponent(scorecardType)}`,
-              );
-              if (!mr.ok) return null;
-              const manifest = await mr.json();
-              const entities = manifest ? manifestEntitiesForTemplate(manifest) : [];
-              if (entities.length === 0) return null;
-              return {
-                id: TOOLKIT_TEMPLATE_ID_BASE + i,
-                name: `${s.name} (${scorecardType})`,
-                description: `${s.code} · ${entities.length} manifest entities (same as hybrid extraction)`,
-                version: 'manifest-v1',
-                entities,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                sectorCode: s.code,
-                scorecardType,
-              } satisfies StoredTemplate;
-            }),
-          );
-          toolkitList = results
-            .filter((r): r is PromiseFulfilledResult<StoredTemplate | null> => r.status === 'fulfilled')
-            .map(r => r.value)
-            .filter((t): t is StoredTemplate => t !== null);
-        }
-      }
-      setTemplates([...toolkitList, ...userList]);
+      const res = await fetch('/api/entity-templates');
+      const raw = res.ok ? await res.json() : [];
+      const ontologyList: StoredTemplate[] = (Array.isArray(raw) ? raw : [])
+        .filter((t: any) => t.isOntology)
+        .map((t: any, i: number) => ({
+          id: TOOLKIT_TEMPLATE_ID_BASE + i,
+          name: t.name,
+          description: t.description || '',
+          version: t.version || '2.0',
+          entities: Array.isArray(t.entities) ? t.entities : [],
+          createdAt: t.createdAt || new Date().toISOString(),
+          updatedAt: t.updatedAt || new Date().toISOString(),
+          sectorCode: t.sectorCode,
+          scorecardType: t.scorecardType,
+        }));
+      setTemplates(ontologyList);
     } catch (err) {
       console.error('Error fetching templates:', err);
     } finally {

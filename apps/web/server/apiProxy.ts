@@ -18,7 +18,6 @@ const PROXIED_PREFIXES = [
   "/api/extract-entities-hybrid",
   "/api/entity-mappings",
   "/api/scorecard",
-  "/api/entity-templates",
   "/api/accuracy",
   "/api/documents",
   "/api/extract-and-score",
