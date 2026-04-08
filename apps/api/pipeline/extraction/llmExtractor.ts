@@ -66,6 +66,18 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
     : 'none';
   const zonesStr = req.zones.length ? req.zones.join(', ') : 'any';
 
+  // Build a format-hint line for well-known identifier fields so the LLM
+  // doesn't confuse nearby words (e.g. "Executive") with the actual value.
+  const nameAndAliasesLower = [req.entityName, ...req.aliases].join(' ').toLowerCase();
+  let formatHint = '';
+  if (/\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliasesLower)) {
+    formatHint = 'FORMAT: Must match the South African CIPC pattern YYYY/NNNNNN/NN (e.g. "2012/123456/07"). Job titles, role names, and text words are NEVER valid values.';
+  } else if (/\bvat\b/.test(nameAndAliasesLower)) {
+    formatHint = 'FORMAT: Must be a 10-digit SARS VAT number (e.g. "4012345678"). Text words are NEVER valid values.';
+  } else if (/\b(bee level|b-bbee level)\b/.test(nameAndAliasesLower)) {
+    formatHint = 'FORMAT: Must be a number 1-8 or "Non-Compliant". Text descriptions are not valid.';
+  }
+
   return [
     `## Entity to Extract`,
     `- Name: ${req.entityName}`,
@@ -75,6 +87,7 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
     `- Positive examples: ${positiveStr}`,
     `- Negative examples (DO NOT extract these): ${negativeStr}`,
     `- Relevant zones/sections: ${zonesStr}`,
+    ...(formatHint ? [`- ${formatHint}`] : []),
     ``,
     `## Source Text`,
     `\`\`\``,
@@ -283,13 +296,22 @@ export class LLMExtractor {
   }
 
   ruleBasedExtract(req: LLMExtractionRequest): LLMExtractionResult {
+    // Detect ID-type string fields by examining entity name / aliases
+    const nameAndAliases = [req.entityName, ...req.aliases].join(' ').toLowerCase();
+    const isRegistrationField =
+      /\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliases);
+    const isVatField =
+      /\bvat\b/.test(nameAndAliases);
+    const isPersonField =
+      /\b(employee|learner|director|shareholder|person|name)\b/.test(nameAndAliases);
+
     const fieldTypeToNERType: Record<string, string> = {
       currency: 'MONEY',
       percentage: 'PERCENT',
       count: 'FINANCIAL_NUMBER',
       date: 'DATE',
       bee_level: 'BEE_LEVEL',
-      string: 'ORG',
+      string: isRegistrationField ? 'REGISTRATION_NUMBER' : isVatField ? 'VAT_NUMBER' : 'ORG',
     };
 
     const targetNERType = fieldTypeToNERType[req.entityType] || 'FINANCIAL_NUMBER';
@@ -359,8 +381,15 @@ export class LLMExtractor {
     }
 
     if (req.entityType === 'string' && !bestMatch) {
+      // Choose which NER types are valid fallback candidates for this field.
+      // DESIGNATION / GENDER / RACE_GROUP are person-attributes — never use them
+      // for identifier fields (registration numbers, VAT, sector codes, etc.).
+      const allowedFallbackTypes = isPersonField
+        ? ['ORG', 'RACE_GROUP', 'GENDER', 'DESIGNATION']
+        : ['ORG', 'REGISTRATION_NUMBER', 'VAT_NUMBER'];
+
       for (const candidate of nerResult.entities) {
-        if (['ORG', 'RACE_GROUP', 'GENDER', 'DESIGNATION'].includes(candidate.entityType)) {
+        if (allowedFallbackTypes.includes(candidate.entityType)) {
           const contextStart = Math.max(0, candidate.spanStart - 200);
           const contextEnd = Math.min(req.sourceText.length, candidate.spanEnd + 200);
           const context = req.sourceText.slice(contextStart, contextEnd).toLowerCase();
