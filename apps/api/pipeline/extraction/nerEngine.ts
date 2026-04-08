@@ -17,6 +17,8 @@ const ENTITY_TYPE_ARRAY = [
   'RACE_GROUP',
   'GENDER',
   'DESIGNATION',
+  'REGISTRATION_NUMBER',
+  'VAT_NUMBER',
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPE_ARRAY)[number];
@@ -81,6 +83,16 @@ export const DEFAULT_BBBEE_PATTERNS: PatternSet = {
   ORG: [
     /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Pty|Ltd|Holdings|Group|Inc|CC|Trust|NPC|Limited)\b/g,
   ],
+  // South African CIPC company registration number: YYYY/NNNNNN/NN  (e.g. 2012/123456/07)
+  REGISTRATION_NUMBER: [
+    /\b\d{4}\/\d{4,7}\/\d{2}\b/g,
+    // Also catch "CK" Close-Corporation numbers  (CK2004/012345/23)
+    /\bCK\d{4}\/\d{4,7}\/\d{2}\b/gi,
+  ],
+  // SARS VAT number: 10-digit all-numeric
+  VAT_NUMBER: [
+    /\b[4-6]\d{9}\b/g,
+  ],
 };
 
 /** Financial-only patterns (no B-BBEE-specific types) */
@@ -114,6 +126,8 @@ export const MIN_ENTITY_LENGTH: Record<string, number> = {
   GENDER: 1,
   DESIGNATION: 3,
   FISCAL_YEAR: 4,
+  REGISTRATION_NUMBER: 9,  // minimum: "2000/1234/07" = 12 chars
+  VAT_NUMBER: 10,
 };
 
 /** Noise filter patterns - skip matches unless type is numeric */
@@ -222,6 +236,15 @@ export function normalizeEntityValue(entityType: string, text: string): string {
     return t;
   }
 
+  if (entityType === 'REGISTRATION_NUMBER') {
+    // Normalise to uppercase and strip surrounding whitespace
+    return t.toUpperCase().replace(/\s+/g, '');
+  }
+
+  if (entityType === 'VAT_NUMBER') {
+    return t.replace(/\s+/g, '');
+  }
+
   return t;
 }
 
@@ -254,7 +277,8 @@ export function isAmbiguousEntity(text: string, entityType: string, _context: st
  * Check if text passes noise filter for the given entity type.
  */
 function passesNoiseFilter(text: string, entityType: string): boolean {
-  const numericTypes = ['MONEY', 'PERCENT', 'FINANCIAL_NUMBER'];
+  // These types are always kept even if they look "noisy" (all digits, slashes etc.)
+  const numericTypes = ['MONEY', 'PERCENT', 'FINANCIAL_NUMBER', 'REGISTRATION_NUMBER', 'VAT_NUMBER'];
   if (numericTypes.includes(entityType)) return true;
 
   for (const p of NOISE_PATTERNS) {
