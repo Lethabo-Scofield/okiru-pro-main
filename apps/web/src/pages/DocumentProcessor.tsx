@@ -2493,7 +2493,12 @@ export default function DocumentProcessor() {
   const approveAllForDoc = (docIdx: number) => {
     const r = structuredClone(extractionResults);
     let count = 0;
-    r[docIdx].entities.forEach((e: any) => { if (e.status !== 'rejected' && e.status !== 'edited') { e.status = 'approved'; count++; } });
+    r[docIdx].entities.forEach((e: any) => {
+      if (e.status !== 'rejected' && e.status !== 'edited' && e.status !== 'not_found' && e.value) {
+        e.status = 'approved';
+        count++;
+      }
+    });
     setExtractionResults(r);
     if (count > 0) toast({ title: "All approved", description: `${count} entities approved` });
   };
@@ -3812,6 +3817,7 @@ export default function DocumentProcessor() {
                         const isApproved = entity.status === 'approved';
                         const isRejected = entity.status === 'rejected';
                         const isEdited = entity.status === 'edited';
+                        const isNotFound = entity.status === 'not_found' || (!entity.value && entity.status !== 'approved' && entity.status !== 'edited');
                         const isEditingThis = editingEntity?.docIdx === activeReviewDoc && editingEntity?.entityIdx === realIdx;
 
                         const startEdit = () => setEditingEntity({ docIdx: activeReviewDoc, entityIdx: realIdx, draft: entity.value || '' });
@@ -3829,6 +3835,7 @@ export default function DocumentProcessor() {
                               isEditingThis ? 'border-white/[0.16] shadow-[0_0_0_3px_rgba(168,85,247,0.08)]' :
                               isApproved ? 'border-green-500/25' :
                               isRejected ? 'border-[#2c2c2e] opacity-35' :
+                              isNotFound ? 'border-[#1c1c1e] opacity-40 pointer-events-none' :
                               isHovered ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
                             }`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
@@ -3934,8 +3941,8 @@ export default function DocumentProcessor() {
                                 </div>
                               )}
 
-                              {/* Approve / Reject — always visible bottom action bar */}
-                              {!isEditingThis && (
+                              {/* Approve / Reject — only for entities that actually have a value */}
+                              {!isEditingThis && !isNotFound && (
                                 <div className="flex items-center gap-2 pt-2.5" style={{ borderTop: '1px solid #2c2c2e' }}>
                                   {isApproved ? (
                                     <button
