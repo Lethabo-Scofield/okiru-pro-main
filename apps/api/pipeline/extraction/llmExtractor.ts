@@ -296,13 +296,18 @@ export class LLMExtractor {
   }
 
   ruleBasedExtract(req: LLMExtractionRequest): LLMExtractionResult {
-    // Detect ID-type string fields by examining entity name / aliases
+    // Detect field semantic type from entity name / aliases
     const nameAndAliases = [req.entityName, ...req.aliases].join(' ').toLowerCase();
     const isRegistrationField =
       /\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliases);
     const isVatField =
       /\bvat\b/.test(nameAndAliases);
+    const isGenderField =
+      /\bgender\b|\bsex\b/.test(nameAndAliases);
+    const isRaceField =
+      /\brace\b|\bethnicity\b/.test(nameAndAliases) && !isGenderField;
     const isPersonField =
+      !isGenderField && !isRaceField &&
       /\b(employee|learner|director|shareholder|person|name)\b/.test(nameAndAliases);
 
     const fieldTypeToNERType: Record<string, string> = {
@@ -311,7 +316,11 @@ export class LLMExtractor {
       count: 'FINANCIAL_NUMBER',
       date: 'DATE',
       bee_level: 'BEE_LEVEL',
-      string: isRegistrationField ? 'REGISTRATION_NUMBER' : isVatField ? 'VAT_NUMBER' : 'ORG',
+      string: isRegistrationField ? 'REGISTRATION_NUMBER'
+            : isVatField          ? 'VAT_NUMBER'
+            : isGenderField       ? 'GENDER'
+            : isRaceField         ? 'RACE_GROUP'
+            : 'ORG',
     };
 
     const targetNERType = fieldTypeToNERType[req.entityType] || 'FINANCIAL_NUMBER';
@@ -381,12 +390,12 @@ export class LLMExtractor {
     }
 
     if (req.entityType === 'string' && !bestMatch) {
-      // Choose which NER types are valid fallback candidates for this field.
-      // DESIGNATION / GENDER / RACE_GROUP are person-attributes — never use them
-      // for identifier fields (registration numbers, VAT, sector codes, etc.).
-      const allowedFallbackTypes = isPersonField
-        ? ['ORG', 'RACE_GROUP', 'GENDER', 'DESIGNATION']
-        : ['ORG', 'REGISTRATION_NUMBER', 'VAT_NUMBER'];
+      // Strict semantic-type fallback: each field class uses ONLY its own NER type.
+      // Gender fields NEVER accept race words; race fields NEVER accept gender words.
+      const allowedFallbackTypes = isGenderField    ? ['GENDER']
+                                 : isRaceField       ? ['RACE_GROUP']
+                                 : isPersonField     ? ['ORG', 'DESIGNATION']
+                                 : ['ORG', 'REGISTRATION_NUMBER', 'VAT_NUMBER'];
 
       for (const candidate of nerResult.entities) {
         if (allowedFallbackTypes.includes(candidate.entityType)) {

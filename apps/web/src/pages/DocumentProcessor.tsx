@@ -3820,8 +3820,6 @@ export default function DocumentProcessor() {
                         const isRejected = entity.status === 'rejected';
                         const isEdited = entity.status === 'edited';
                         const isNotFound = entity.status === 'not_found' || (!entity.value && entity.status !== 'approved' && entity.status !== 'edited');
-                        const isGroqVerified = entity.groqVerification?.valid === true;
-                        const isGroqFlagged = entity.groqVerification?.valid === false;
                         const isEditingThis = editingEntity?.docIdx === activeReviewDoc && editingEntity?.entityIdx === realIdx;
 
                         const startEdit = () => setEditingEntity({ docIdx: activeReviewDoc, entityIdx: realIdx, draft: entity.value || '' });
@@ -3867,22 +3865,6 @@ export default function DocumentProcessor() {
                                   )}
                                   {entity.status === 'not_found' && (
                                     <span className="text-[10px] text-red-400 font-medium shrink-0">Not found</span>
-                                  )}
-                                  {isGroqVerified && !isNotFound && (
-                                    <span
-                                      className="inline-flex items-center gap-0.5 text-[9px] font-semibold tracking-wide text-[#30d158] bg-[#30d158]/10 border border-[#30d158]/20 rounded-full px-1.5 py-0.5 shrink-0"
-                                      title={entity.groqVerification?.reason}
-                                    >
-                                      ✓ AI Verified
-                                    </span>
-                                  )}
-                                  {isGroqFlagged && (
-                                    <span
-                                      className="inline-flex items-center gap-0.5 text-[9px] font-semibold tracking-wide text-[#ff453a] bg-[#ff453a]/10 border border-[#ff453a]/20 rounded-full px-1.5 py-0.5 shrink-0"
-                                      title={entity.groqVerification?.reason}
-                                    >
-                                      ⚠ AI Flagged
-                                    </span>
                                   )}
                                 </div>
 
