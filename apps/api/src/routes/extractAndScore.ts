@@ -105,7 +105,11 @@ router.post('/extract-and-score', async (req, res) => {
 
     // 7 — Build confidence report for the UI
     const requiredRoles = allFields.map((f) => f.name);
-    const confidence = buildConfidenceReport(extractionResults, requiredRoles);
+    const fieldToPillar: Record<string, string> = {};
+    for (const f of allFields) {
+      fieldToPillar[f.name] = f.pillarCode;
+    }
+    const confidence = buildConfidenceReport(extractionResults, requiredRoles, fieldToPillar);
 
     return res.json({
       success: true,

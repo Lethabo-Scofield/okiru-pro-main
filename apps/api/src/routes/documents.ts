@@ -54,10 +54,31 @@ async function parseFileToPages(
     return pages;
   }
 
-  // PDF - would need pdfjs, simplified for now
   if (mimetype === 'application/pdf' || ext === 'pdf') {
-    // PDF parsing would go here - for now return placeholder
-    return [{ pageId: 'pdf_1', text: buffer.toString('base64').slice(0, 1000), metadata: { type: 'pdf', needsOcr: true } }];
+    try {
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+      const pdfDoc = await loadingTask.promise;
+      const pages: Array<{ pageId: string; text: string; metadata?: any }> = [];
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const content = await page.getTextContent();
+        const text = content.items
+          .filter((item: any) => 'str' in item)
+          .map((item: any) => item.str)
+          .join(' ');
+        if (text.trim()) {
+          pages.push({ pageId: `pdf_${i}`, text, metadata: { type: 'pdf', pageNumber: i } });
+        }
+      }
+      if (pages.length === 0) {
+        pages.push({ pageId: 'pdf_1', text: '[PDF contained no extractable text - may require OCR]', metadata: { type: 'pdf', needsOcr: true } });
+      }
+      return pages;
+    } catch (pdfError) {
+      console.error('PDF parsing error:', pdfError);
+      return [{ pageId: 'pdf_1', text: '[PDF parsing failed]', metadata: { type: 'pdf', error: true } }];
+    }
   }
 
   // TXT / Text files
