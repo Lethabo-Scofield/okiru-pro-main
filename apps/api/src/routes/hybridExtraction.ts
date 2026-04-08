@@ -633,6 +633,8 @@ router.post(
             definition: r.definition,
             extractedValue: String(r.value),
             sourceSnippet: r.provenance.textSnippet,
+            fieldType: r.fieldType,
+            pillar: r.pillar,
           }));
 
           const verResults = await groqVerifyBatch(entries, groqApiKey);

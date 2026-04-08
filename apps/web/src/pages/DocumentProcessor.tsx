@@ -3888,8 +3888,8 @@ export default function DocumentProcessor() {
 
                                 {/* Action buttons */}
                                 <div className="flex items-center gap-0.5 shrink-0">
-                                  {/* Pen — always dimly visible, brightens on hover */}
-                                  {!isEditingThis && (
+                                  {/* Pen — hidden for not_found (nothing to edit until user types) */}
+                                  {!isEditingThis && !isNotFound && (
                                     <button
                                       onClick={startEdit}
                                       className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-[#2c2c2e]"
