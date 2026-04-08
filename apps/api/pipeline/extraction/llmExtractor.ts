@@ -20,6 +20,10 @@ export interface LLMExtractionRequest {
   positiveExamples: string[];
   negativeExamples: string[];
   zones: string[];
+  mustHave: string[];
+  niceToHave: string[];
+  exclude: string[];
+  pillarCode: string;
   sourceText: string;
   sourcePageId: string;
 }
@@ -53,54 +57,111 @@ const DEFAULT_CONFIG = {
   timeoutMs: 30000,
 };
 
+// ---------------------------------------------------------------------------
+// Pillar code → human-readable name map
+// ---------------------------------------------------------------------------
+const PILLAR_LABELS: Record<string, string> = {
+  clientInfo:        'Client Information',
+  ownership:         'Ownership',
+  managementControl: 'Management Control',
+  skillsDevelopment: 'Skills Development',
+  enterpriseSupplierDevelopment: 'Enterprise & Supplier Development',
+  socioEconomicDevelopment: 'Socio-Economic Development',
+  employmentEquity:  'Employment Equity',
+};
+
+// ---------------------------------------------------------------------------
+// Semantic format hints per field category
+// ---------------------------------------------------------------------------
+function buildFormatHint(entityName: string, aliases: string[]): string {
+  const n = [entityName, ...aliases].join(' ').toLowerCase();
+
+  if (/\b(registration|reg\b|cipc|ck\s*number)\b/.test(n))
+    return 'FORMAT: Must be a South African CIPC registration number — pattern YYYY/NNNNNN/NN (e.g. "2012/123456/07"). Job titles, person names, and text words are NEVER valid.';
+  if (/\bvat\b/.test(n))
+    return 'FORMAT: Must be a 10-digit SARS VAT number starting with 4, 5, or 6 (e.g. "4012345678"). Text words are NEVER valid.';
+  if (/bee\s*level|b-?bbee\s*level/i.test(n))
+    return 'FORMAT: Must be a level number 1–8 or "Non-Compliant". Text descriptions are not valid.';
+
+  // ── Company / organisation name ────────────────────────────────────────
+  if (/company.*(name|reg)|entity.*name|registered.*name|business.*name|trading.*name|measured.*entity/i.test(n))
+    return 'FORMAT: Must be a legal company or organisation name (e.g. "Okiru Trading (Pty) Ltd", "ABC Construction CC"). ' +
+           'NEVER a job title (Executive, Director, Manager, CEO, Board, Senior, Junior), ' +
+           'race category (Black, African, White, Coloured, Indian), BEE level, or currency value. ' +
+           'Look for text ending in (Pty) Ltd, CC, NPC, Inc., SOC Ltd, or similar legal suffixes.';
+
+  // ── Person name ────────────────────────────────────────────────────────
+  if (/shareholder.*name|director.*name|employee.*name|learner.*name|person.*name|participant.*name|contact.*name/i.test(n))
+    return 'FORMAT: Must be a full person name — first name + surname (e.g. "Sipho Dlamini", "Priya Naidoo"). ' +
+           'NEVER a race category (Black, African, White, Coloured, Indian), ' +
+           'job title (Executive, Director, Manager, Board, Senior), or BEE level.';
+
+  // ── Supplier / vendor name ─────────────────────────────────────────────
+  if (/supplier.*name|vendor.*name|esd.*beneficiary|sed.*beneficiary/i.test(n))
+    return 'FORMAT: Must be a company or person name. ' +
+           'NEVER a race word, job title, BEE level, or currency amount.';
+
+  // ── Gender ────────────────────────────────────────────────────────────
+  if (/\bgender\b|\bsex\b/i.test(n))
+    return 'FORMAT: Must be exactly "Male" or "Female". Race categories (Black, African, etc.) are NEVER valid gender values.';
+
+  // ── Race ──────────────────────────────────────────────────────────────
+  if (/\brace\b|\bethnicity\b/i.test(n))
+    return 'FORMAT: Must be one of: African, Coloured, Indian, White, Black. Person names are NEVER valid race values.';
+
+  return '';
+}
+
 /**
- * Build a structured extraction prompt with anti-hallucination controls.
+ * Build a structured extraction prompt with anti-hallucination controls
+ * and full template metadata context.
  */
 export function buildExtractionPrompt(req: LLMExtractionRequest): string {
-  const aliasesStr = req.aliases.length ? req.aliases.join(', ') : 'none';
-  const positiveStr = req.positiveExamples.length > 0
-    ? req.positiveExamples.map((e) => `"${e}"`).join(', ')
-    : 'none';
-  const negativeStr = req.negativeExamples.length > 0
-    ? req.negativeExamples.map((e) => `"${e}"`).join(', ')
-    : 'none';
-  const zonesStr = req.zones.length ? req.zones.join(', ') : 'any';
+  const aliasesStr   = req.aliases.length    ? req.aliases.join(', ')    : 'none';
+  const zonesStr     = req.zones.length      ? req.zones.join(', ')      : 'any';
+  const mustStr      = (req.mustHave   ?? []).length ? (req.mustHave   ?? []).join(', ') : '';
+  const niceStr      = (req.niceToHave ?? []).length ? (req.niceToHave ?? []).join(', ') : '';
+  const excludeStr   = (req.exclude    ?? []).length ? (req.exclude    ?? []).join(', ') : '';
+  const positiveStr  = req.positiveExamples.length > 0 ? req.positiveExamples.map(e => `"${e}"`).join(', ') : 'none';
+  const negativeStr  = req.negativeExamples.length > 0 ? req.negativeExamples.map(e => `"${e}"`).join(', ') : 'none';
+  const pillarLabel  = PILLAR_LABELS[req.pillarCode ?? ''] ?? req.pillarCode ?? 'General';
+  const formatHint   = buildFormatHint(req.entityName, req.aliases);
 
-  // Build a format-hint line for well-known identifier fields so the LLM
-  // doesn't confuse nearby words (e.g. "Executive") with the actual value.
-  const nameAndAliasesLower = [req.entityName, ...req.aliases].join(' ').toLowerCase();
-  let formatHint = '';
-  if (/\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliasesLower)) {
-    formatHint = 'FORMAT: Must match the South African CIPC pattern YYYY/NNNNNN/NN (e.g. "2012/123456/07"). Job titles, role names, and text words are NEVER valid values.';
-  } else if (/\bvat\b/.test(nameAndAliasesLower)) {
-    formatHint = 'FORMAT: Must be a 10-digit SARS VAT number (e.g. "4012345678"). Text words are NEVER valid values.';
-  } else if (/\b(bee level|b-bbee level)\b/.test(nameAndAliasesLower)) {
-    formatHint = 'FORMAT: Must be a number 1-8 or "Non-Compliant". Text descriptions are not valid.';
-  }
-
-  return [
-    `## Entity to Extract`,
-    `- Name: ${req.entityName}`,
+  const lines: string[] = [
+    `## B-BBEE Field: ${req.entityName}`,
+    `- Pillar: ${pillarLabel}`,
     `- Type: ${req.entityType}`,
     `- Definition: ${req.definition}`,
-    `- Aliases (also look for these): ${aliasesStr}`,
-    `- Positive examples: ${positiveStr}`,
-    `- Negative examples (DO NOT extract these): ${negativeStr}`,
-    `- Relevant zones/sections: ${zonesStr}`,
-    ...(formatHint ? [`- ${formatHint}`] : []),
+    `- Also look for these labels in the document: ${aliasesStr}`,
+    `- Relevant document sections: ${zonesStr}`,
+  ];
+
+  if (mustStr)     lines.push(`- MUST appear near these keywords: ${mustStr}`);
+  if (niceStr)     lines.push(`- Likely near these keywords: ${niceStr}`);
+  if (excludeStr)  lines.push(`- IGNORE values near these keywords (wrong field): ${excludeStr}`);
+  if (positiveStr !== 'none') lines.push(`- Example valid values: ${positiveStr}`);
+  if (negativeStr !== 'none') lines.push(`- DO NOT extract these (negative examples): ${negativeStr}`);
+  if (formatHint)  lines.push(`- ${formatHint}`);
+
+  lines.push(
     ``,
     `## Source Text`,
     `\`\`\``,
     req.sourceText,
     `\`\`\``,
     ``,
-    `## Instructions`,
-    `Extract the value for "${req.entityName}" from the source text above.`,
+    `## Task`,
+    `Extract the value for "${req.entityName}" from the Source Text above.`,
     ``,
-    `Return JSON only: {"value": <extracted_value_or_null>, "reasoning": "<brief_explanation>", "source_quote": "<exact_quote_from_text>"}`,
+    `Return JSON only: {"value": <extracted_value_or_null>, "reasoning": "<one sentence>", "source_quote": "<exact text from document>"}`,
     ``,
-    `CRITICAL: The extracted value MUST appear verbatim in the source text. If you cannot find it exactly, return null. Never guess or infer values.`,
-  ].join('\n');
+    `CRITICAL RULES:`,
+    `1. The value MUST appear verbatim in the Source Text — never invent or infer.`,
+    `2. If the value is not clearly present, return null.`,
+    `3. Do not confuse nearby values — each field has a specific type (see FORMAT above).`,
+  );
+
+  return lines.join('\n');
 }
 
 /**
@@ -298,29 +359,34 @@ export class LLMExtractor {
   ruleBasedExtract(req: LLMExtractionRequest): LLMExtractionResult {
     // Detect field semantic type from entity name / aliases
     const nameAndAliases = [req.entityName, ...req.aliases].join(' ').toLowerCase();
-    const isRegistrationField =
-      /\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliases);
-    const isVatField =
-      /\bvat\b/.test(nameAndAliases);
-    const isGenderField =
-      /\bgender\b|\bsex\b/.test(nameAndAliases);
-    const isRaceField =
-      /\brace\b|\bethnicity\b/.test(nameAndAliases) && !isGenderField;
-    const isPersonField =
-      !isGenderField && !isRaceField &&
-      /\b(employee|learner|director|shareholder|person|name)\b/.test(nameAndAliases);
+
+    const isRegistrationField   = /\b(registration|reg\b|cipc|ck\s*number)\b/.test(nameAndAliases);
+    const isVatField            = /\bvat\b/.test(nameAndAliases);
+    const isGenderField         = /\bgender\b|\bsex\b/.test(nameAndAliases);
+    const isRaceField           = /\brace\b|\bethnicity\b/.test(nameAndAliases) && !isGenderField;
+    const isDesignationField    = /\bdesignation\b|\boccupational\s*level\b|\bmanagement\s*level\b/.test(nameAndAliases) && !isGenderField && !isRaceField;
+
+    // Company / org name: matches "company name", "entity name", "registered name", "trading name", etc.
+    // Must be checked BEFORE isPersonField so the word "name" doesn't bleed into it.
+    const isCompanyNameField    = !isRegistrationField && !isVatField && !isGenderField && !isRaceField && !isDesignationField &&
+      /company.*(name|reg)|entity.*name|registered.*name|business.*name|trading.*name|measured.*entity/i.test(nameAndAliases);
+
+    // Person name: shareholder, employee, learner, director, participant, contact — but NOT "company name" or plain "name"
+    const isPersonNameField     = !isGenderField && !isRaceField && !isDesignationField && !isCompanyNameField &&
+      /\b(shareholder|employee|learner|director|participant|person|contact)\b.*\bname\b|\bname\b.*(shareholder|employee|learner|director|participant|person|contact)/.test(nameAndAliases);
 
     const fieldTypeToNERType: Record<string, string> = {
-      currency: 'MONEY',
+      currency:   'MONEY',
       percentage: 'PERCENT',
-      count: 'FINANCIAL_NUMBER',
-      date: 'DATE',
-      bee_level: 'BEE_LEVEL',
+      count:      'FINANCIAL_NUMBER',
+      date:       'DATE',
+      bee_level:  'BEE_LEVEL',
       string: isRegistrationField ? 'REGISTRATION_NUMBER'
             : isVatField          ? 'VAT_NUMBER'
             : isGenderField       ? 'GENDER'
             : isRaceField         ? 'RACE_GROUP'
-            : 'ORG',
+            : isDesignationField  ? 'DESIGNATION'
+            : 'ORG',    // company names and person names both use ORG as primary NER
     };
 
     const targetNERType = fieldTypeToNERType[req.entityType] || 'FINANCIAL_NUMBER';
@@ -390,11 +456,13 @@ export class LLMExtractor {
     }
 
     if (req.entityType === 'string' && !bestMatch) {
-      // Strict semantic-type fallback: each field class uses ONLY its own NER type.
-      // Gender fields NEVER accept race words; race fields NEVER accept gender words.
-      const allowedFallbackTypes = isGenderField    ? ['GENDER']
-                                 : isRaceField       ? ['RACE_GROUP']
-                                 : isPersonField     ? ['ORG', 'DESIGNATION']
+      // Strict semantic-type fallback: each field class uses ONLY its own NER type(s).
+      // DESIGNATION is NEVER valid for company names or person names — only designation fields.
+      const allowedFallbackTypes = isGenderField      ? ['GENDER']
+                                 : isRaceField         ? ['RACE_GROUP']
+                                 : isDesignationField  ? ['DESIGNATION']
+                                 : isCompanyNameField  ? ['ORG']
+                                 : isPersonNameField   ? ['ORG']
                                  : ['ORG', 'REGISTRATION_NUMBER', 'VAT_NUMBER'];
 
       for (const candidate of nerResult.entities) {

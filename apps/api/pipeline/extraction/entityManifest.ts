@@ -159,7 +159,13 @@ export function toExtractionRequest(
   field: EntityField,
   sourceText: string,
   sourcePageId: string,
-): { entityName: string; entityType: string; definition: string; aliases: string[]; positiveExamples: string[]; negativeExamples: string[]; zones: string[]; sourceText: string; sourcePageId: string } {
+): {
+  entityName: string; entityType: string; definition: string;
+  aliases: string[]; positiveExamples: string[]; negativeExamples: string[];
+  zones: string[]; sourceText: string; sourcePageId: string;
+  mustHave: string[]; niceToHave: string[]; exclude: string[];
+  pillarCode: string;
+} {
   return {
     entityName: field.name,
     entityType: field.fieldType,
@@ -168,6 +174,10 @@ export function toExtractionRequest(
     positiveExamples: field.extraction.positiveExamples,
     negativeExamples: field.extraction.negativeExamples,
     zones: field.extraction.zones,
+    mustHave: field.extraction.mustHaveKeywords ?? [],
+    niceToHave: field.extraction.niceToHaveKeywords ?? [],
+    exclude: field.extraction.excludeKeywords ?? [],
+    pillarCode: field.pillarCode,
     sourceText,
     sourcePageId,
   };
