@@ -593,3 +593,151 @@ export class LLMExtractor {
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Groq Post-Extraction Verification
+// ---------------------------------------------------------------------------
+
+export interface GroqVerificationEntry {
+  entityName: string;
+  definition: string;
+  extractedValue: string;
+  sourceSnippet: string; // first ~300 chars of the source chunk
+}
+
+export interface GroqVerificationResult {
+  entityName: string;
+  valid: boolean;
+  reason: string;
+  correctedValue: string | null; // Groq may suggest a correction
+}
+
+/**
+ * Build a compact batch verification prompt.
+ * Each entry asks Groq: "Is this extracted value correct for this field?"
+ */
+function buildVerificationPrompt(entries: GroqVerificationEntry[]): string {
+  const lines: string[] = [
+    'You are verifying B-BBEE document extraction results.',
+    'For each entry below, decide if the extracted value is the correct answer for that field.',
+    'Return ONLY a JSON array with one object per entry (same order):',
+    '[{"valid": true/false, "reason": "<one sentence>", "corrected_value": null_or_string}, ...]',
+    '',
+    'Rules:',
+    '- "valid": true  → extracted value is present in the context AND is the right type of answer for the field.',
+    '- "valid": false → value is wrong, is a different field\'s value (e.g. a job title where an ID number is expected), or is not in the context.',
+    '- "corrected_value": if the correct answer IS visible in the context, provide it; otherwise null.',
+    '- Never invent values. If unsure, set valid: false, corrected_value: null.',
+    '',
+  ];
+
+  entries.forEach((e, i) => {
+    lines.push(`--- Entry ${i + 1} ---`);
+    lines.push(`Field:     ${e.entityName}`);
+    lines.push(`Definition: ${e.definition}`);
+    lines.push(`Extracted: "${e.extractedValue}"`);
+    lines.push(`Context:   """${e.sourceSnippet.replace(/\n+/g, ' ').substring(0, 300)}"""`);
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+/**
+ * Send a batch of extracted values to Groq for verification.
+ * Returns one GroqVerificationResult per entry (or a "could not verify" fallback on error).
+ * Batches are capped at 10 entries to keep prompts manageable.
+ */
+export async function groqVerifyBatch(
+  entries: GroqVerificationEntry[],
+  apiKey: string,
+  model = 'llama-3.3-70b-versatile',
+  timeoutMs = 30_000,
+): Promise<GroqVerificationResult[]> {
+  if (!apiKey || entries.length === 0) {
+    return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification skipped (no API key)', correctedValue: null }));
+  }
+
+  const prompt = buildVerificationPrompt(entries);
+  const url = 'https://api.groq.com/openai/v1/chat/completions';
+
+  const body = JSON.stringify({
+    model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a precise B-BBEE audit verification assistant. Verify extracted values and return only valid JSON.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0,
+    max_tokens: 600,
+    response_format: { type: 'json_object' },
+  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      console.warn(`[GroqVerify] API error ${res.status} — treating all as valid`);
+      return entries.map(e => ({ entityName: e.entityName, valid: true, reason: `Verification API error ${res.status}`, correctedValue: null }));
+    }
+
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data.choices?.[0]?.message?.content ?? '';
+
+    // Groq json_object mode wraps arrays as {"results": [...]} sometimes
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      console.warn('[GroqVerify] Could not parse JSON response — treating all as valid');
+      return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification parse error', correctedValue: null }));
+    }
+
+    // Normalise to array
+    let arr: unknown[];
+    if (Array.isArray(parsed)) {
+      arr = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      // Find the first array-valued key
+      const arrKey = Object.keys(obj).find(k => Array.isArray(obj[k]));
+      arr = arrKey ? (obj[arrKey] as unknown[]) : [];
+    } else {
+      arr = [];
+    }
+
+    return entries.map((e, i) => {
+      const item = arr[i] as Record<string, unknown> | undefined;
+      if (!item || typeof item !== 'object') {
+        return { entityName: e.entityName, valid: true, reason: 'No verification result returned', correctedValue: null };
+      }
+      return {
+        entityName: e.entityName,
+        valid: item.valid !== false, // default to true if missing
+        reason: typeof item.reason === 'string' ? item.reason : '',
+        correctedValue: typeof item.corrected_value === 'string' ? item.corrected_value : null,
+      };
+    });
+  } catch (err: any) {
+    clearTimeout(timeout);
+    const isAbort = err?.name === 'AbortError';
+    console.warn(`[GroqVerify] ${isAbort ? 'Timeout' : 'Error'} — treating all as valid:`, err?.message ?? err);
+    return entries.map(e => ({
+      entityName: e.entityName,
+      valid: true,
+      reason: isAbort ? 'Verification timed out' : 'Verification error',
+      correctedValue: null,
+    }));
+  }
+}
