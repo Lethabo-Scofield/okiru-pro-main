@@ -90,18 +90,32 @@ const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppl
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
 
-const emptyScorecard: ScorecardResult = {
-  ownership: { score: 0, target: 25, weighting: 25, subMinimumMet: false },
-  managementControl: { score: 0, target: 19, weighting: 19 },
-  skillsDevelopment: { score: 0, target: 25, weighting: 25, subMinimumMet: false },
-  procurement: { score: 0, target: 29, weighting: 29, subMinimumMet: false },
-  supplierDevelopment: { score: 0, target: 10, weighting: 10, subMinimumMet: false },
-  enterpriseDevelopment: { score: 0, target: 7, weighting: 7, subMinimumMet: false },
-  socioEconomicDevelopment: { score: 0, target: 5, weighting: 5 },
-  yesInitiative: { score: 0, target: 3, weighting: 3 }, // Issue 2: 3 points = Level 1.5 achieved
-  total: { score: 0, target: 120, weighting: 120 },
-  achievedLevel: 9, discountedLevel: 9, isDiscounted: false, recognitionLevel: '0%',
-};
+/**
+ * Factory function to build an empty scorecard from calculatorConfig.
+ * Falls back to RCOGP Generic defaults if no config provided.
+ */
+function buildEmptyScorecard(config?: CalculatorConfig | null): ScorecardResult {
+  const pc = config?.pillarConfigs;
+  return {
+    ownership: { score: 0, target: pc?.ownership?.maxPoints ?? 25, weighting: pc?.ownership?.maxPoints ?? 25, subMinimumMet: false },
+    managementControl: { score: 0, target: pc?.managementControl?.maxPoints ?? 19, weighting: pc?.managementControl?.maxPoints ?? 19 },
+    skillsDevelopment: { score: 0, target: pc?.skillsDevelopment?.maxPoints ?? 25, weighting: pc?.skillsDevelopment?.maxPoints ?? 25, subMinimumMet: false },
+    procurement: { score: 0, target: pc?.preferentialProcurement?.maxPoints ?? 29, weighting: pc?.preferentialProcurement?.maxPoints ?? 29, subMinimumMet: false },
+    supplierDevelopment: { score: 0, target: pc?.supplierDevelopment?.maxPoints ?? 10, weighting: pc?.supplierDevelopment?.maxPoints ?? 10, subMinimumMet: false },
+    enterpriseDevelopment: { score: 0, target: pc?.enterpriseDevelopment?.maxPoints ?? 7, weighting: pc?.enterpriseDevelopment?.maxPoints ?? 7, subMinimumMet: false },
+    socioEconomicDevelopment: { score: 0, target: pc?.socioEconomicDevelopment?.maxPoints ?? 5, weighting: pc?.socioEconomicDevelopment?.maxPoints ?? 5 },
+    yesInitiative: { score: 0, target: pc?.yesInitiative?.maxPoints ?? 3, weighting: pc?.yesInitiative?.maxPoints ?? 3 },
+    total: {
+      score: 0,
+      target: config?.totalMaxPoints ?? 120,
+      weighting: config?.totalMaxPoints ?? 120,
+    },
+    achievedLevel: 9, discountedLevel: 9, isDiscounted: false, recognitionLevel: '0%',
+  };
+}
+
+/** Legacy export for backward compatibility */
+const emptyScorecard = buildEmptyScorecard();
 
 export interface PipelineOverrides {
   ownership?: number;
@@ -231,20 +245,49 @@ interface BbeeState extends PillarState {
 
 const RECOGNITION_LEVELS = [135, 125, 110, 100, 80, 60, 50, 10] as const;
 
-function pointsToLevel(totalPoints: number): number {
-  if (totalPoints >= 100) return 1;
-  if (totalPoints >= 95) return 2;
-  if (totalPoints >= 90) return 3;
-  if (totalPoints >= 80) return 4;
-  if (totalPoints >= 75) return 5;
-  if (totalPoints >= 70) return 6;
-  if (totalPoints >= 55) return 7;
-  if (totalPoints >= 40) return 8;
+/** Standard B-BBEE level thresholds (RCOGP Generic defaults) */
+const STANDARD_LEVEL_THRESHOLDS = [
+  { level: 1, minPoints: 100 },
+  { level: 2, minPoints: 95 },
+  { level: 3, minPoints: 90 },
+  { level: 4, minPoints: 80 },
+  { level: 5, minPoints: 75 },
+  { level: 6, minPoints: 70 },
+  { level: 7, minPoints: 55 },
+  { level: 8, minPoints: 40 },
+];
+
+/**
+ * Convert total points to BEE level.
+ * Uses calculatorConfig.levelThresholds if available, otherwise standard RCOGP thresholds.
+ */
+function pointsToLevel(totalPoints: number, config?: CalculatorConfig | null): number {
+  const thresholds = config?.levelThresholds || STANDARD_LEVEL_THRESHOLDS;
+  
+  // Sort by minPoints descending to find highest qualifying level
+  const sorted = [...thresholds].sort((a, b) => b.minPoints - a.minPoints);
+  
+  for (const t of sorted) {
+    if (totalPoints >= t.minPoints) {
+      return t.level;
+    }
+  }
+  
+  // Default to level 9 (Non-Compliant) if below all thresholds
   return 9;
 }
 
-function levelToRecognition(level: number): string {
-  return level >= 9 ? '0%' : `${RECOGNITION_LEVELS[level - 1]}%`;
+function levelToRecognition(level: number, config?: CalculatorConfig | null): string {
+  if (level >= 9) return '0%';
+  
+  // Try to get recognition from config, fall back to standard
+  const thresholds = config?.levelThresholds;
+  const threshold = thresholds?.find(t => t.level === level);
+  if (threshold?.recognition) {
+    return `${threshold.recognition}%`;
+  }
+  
+  return `${RECOGNITION_LEVELS[level - 1]}%`;
 }
 
 function calculateScorecard(
@@ -293,10 +336,10 @@ function calculateScorecard(
     const yesPts = ov.yesInitiative ?? yesScore.score;
     const total = ov.totalPoints ?? (ownPts + mcPts + skPts + prPts + sdPts + edPts + sedPts + yesPts);
 
-    const level = ov.achievedLevel ?? pointsToLevel(total);
+    const level = ov.achievedLevel ?? pointsToLevel(total, cfg);
     const disc = ov.discountedLevel ?? level;
     const isDisc = ov.isDiscounted ?? false;
-    const recog = ov.recognitionLevel ?? levelToRecognition(disc);
+    const recog = ov.recognitionLevel ?? levelToRecognition(disc, cfg);
 
     const allSubMinMet = ov.subMinimumsMet;
     const ownSubMin = allSubMinMet !== undefined ? allSubMinMet : (ownPts >= 10 || ownScore.subMinimumMet);
@@ -315,8 +358,9 @@ function calculateScorecard(
     const sdTarget = pConfig?.supplierDevelopment?.maxPoints ?? 10;
     const edTarget = pConfig?.enterpriseDevelopment?.maxPoints ?? 7;
     const sedTarget = pConfig?.socioEconomicDevelopment?.maxPoints ?? 5;
-    const yesTarget = 3; // YES is always 3 points max (bonus mechanism)
-    const totalTarget = ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget;
+    const yesTarget = pConfig?.yesInitiative?.maxPoints ?? 3; // Dynamic YES from config
+    // Use totalMaxPoints from config (verified Excel value) instead of calculating
+    const totalTarget = cfg?.totalMaxPoints ?? (ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget + yesTarget);
 
     // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
     return {
@@ -342,12 +386,13 @@ function calculateScorecard(
   const sdTarget = pConfig?.supplierDevelopment?.maxPoints ?? 10;
   const edTarget = pConfig?.enterpriseDevelopment?.maxPoints ?? 7;
   const sedTarget = pConfig?.socioEconomicDevelopment?.maxPoints ?? 5;
-  const yesTarget = 3; // YES is always 3 points max (bonus mechanism)
-  const totalTarget = ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget;
+  const yesTarget = pConfig?.yesInitiative?.maxPoints ?? 3; // Dynamic YES from config
+  // Use totalMaxPoints from config (verified Excel value) instead of calculating
+  const totalTarget = cfg?.totalMaxPoints ?? (ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget + yesTarget);
 
   // CRITICAL FIX: Include YES in total points calculation
   const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score;
-  const level = pointsToLevel(totalPoints);
+  const level = pointsToLevel(totalPoints, cfg);
 
   const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet; // 40% sub-minimum
   const skSubMinMet = skillScore.subMinimumMet;

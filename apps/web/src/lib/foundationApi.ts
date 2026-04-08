@@ -22,8 +22,10 @@ import type {
   YESData,
   TrainingProgram,
   YESCandidate,
+  ScorecardResult,
 } from '@toolkit/lib/types';
 import { useBbeeStore } from '@toolkit/lib/store';
+import type { CalculatorConfig } from '@shared/schema';
 
 // ============================================================================
 // Types
@@ -510,6 +512,215 @@ export function useFoundationSync(sessionId: string) {
   };
 }
 
+// ============================================================================
+// Unified Scorecard Population and Calculation
+// ============================================================================
+
+/**
+ * Unified function to populate pillars and calculate scorecard.
+ * 
+ * This is the SINGLE entry point for all scorecard calculation paths:
+ * - Upload flow: extracted entities -> pillar data -> populateAndScore
+ * - Build flow: user input forms -> pillar data -> populateAndScore
+ * - Toolkit flow: direct store edits -> _recalculateAll
+ * 
+ * @param input - Either BuildPillarsData from forms or extracted entities
+ * @param foundation - Foundation data (client info + financials)
+ * @param sectorCode - B-BBEE sector code (e.g., 'RCOGP', 'ICT')
+ * @param scorecardType - 'Generic' | 'QSE' | 'EME'
+ * @returns ScorecardResult or error with validation messages
+ */
+export interface PopulateAndScoreInput {
+  /** Pillar data from forms or entity extraction */
+  pillars: BuildPillarsData;
+  /** Foundation data (client info + financials) */
+  foundation: FoundationData;
+  /** B-BBEE sector code */
+  sectorCode: string;
+  /** Scorecard type: Generic, QSE, or EME */
+  scorecardType?: 'Generic' | 'QSE' | 'EME';
+}
+
+export interface PopulateAndScoreResult {
+  success: boolean;
+  scorecard?: ScorecardResult;
+  client?: Client;
+  error?: string;
+  validationErrors?: string[];
+}
+
+/**
+ * Critical entities required for a valid scorecard.
+ * If these are missing/empty, we reject scorecard generation.
+ */
+const CRITICAL_ENTITIES = [
+  'total_revenue',
+  'npat', // or deemed_npat
+];
+
+/**
+ * Validate that minimum required data is present for scorecard generation.
+ */
+function validateCriticalEntities(
+  foundation: FoundationData,
+  pillars: BuildPillarsData
+): string[] {
+  const errors: string[] = [];
+  
+  // Check financials
+  const financials = foundation.financials;
+  const hasRevenue = (financials.totalRevenue || 0) > 0;
+  const hasNpat = (financials.npat || 0) > 0 || (financials.deemedNpat || 0) > 0;
+  
+  if (!hasRevenue) {
+    errors.push('Total Revenue is required for scorecard calculation');
+  }
+  if (!hasNpat) {
+    errors.push('NPAT (or Deemed NPAT) is required for scorecard calculation');
+  }
+  
+  // Check at least one ownership entity
+  const ownership = pillars.ownership;
+  const hasOwnershipData = 
+    (ownership.blackOwnershipPercent || 0) > 0 ||
+    (ownership.blackWomenOwnershipPercent || 0) > 0 ||
+    (ownership.blackYouthOwnershipPercent || 0) > 0 ||
+    ownership.ownershipEntities?.length > 0;
+  
+  if (!hasOwnershipData) {
+    errors.push('Ownership data is required (at least one ownership entity)');
+  }
+  
+  return errors;
+}
+
+/**
+ * Unified entry point for scorecard population and calculation.
+ * 
+ * This function:
+ * 1. Validates critical entities are present
+ * 2. Fetches sector-specific calculator config
+ * 3. Hydrates the Zustand store with pillar data
+ * 4. Triggers unified calculation via calculateScorecard
+ * 5. Returns the ScorecardResult
+ */
+export async function populateAndScore(
+  input: PopulateAndScoreInput
+): Promise<PopulateAndScoreResult> {
+  const { pillars, foundation, sectorCode, scorecardType = 'Generic' } = input;
+  
+  // Step 1: Validate critical entities
+  const validationErrors = validateCriticalEntities(foundation, pillars);
+  if (validationErrors.length > 0) {
+    return {
+      success: false,
+      error: 'Missing required data for scorecard calculation',
+      validationErrors,
+    };
+  }
+  
+  try {
+    // Step 2: Fetch sector config for calculator
+    let calculatorConfig: CalculatorConfig | null = null;
+    try {
+      const response = await fetch(
+        `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.config) {
+          calculatorConfig = data.config;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch sector config, using defaults:', e);
+    }
+    
+    // Step 3: Transform client info to Toolkit format
+    const clientData = clientInfoToToolkitClient(
+      foundation.clientInfo,
+      foundation.financials
+    );
+    
+    // Step 4: Get current store state to preserve any existing data
+    const currentState = useBbeeStore.getState();
+    
+    // Step 5: Build pillar data from input, merging YES into skills
+    const skillsWithYes = mergeYesIntoSkills(pillars.skills, pillars.yes);
+    
+    // Step 6: Update store with all data (individual pillar fields, not a nested object)
+    useBbeeStore.setState({
+      client: { ...currentState.client, ...clientData },
+      ownership: pillars.ownership || currentState.ownership,
+      management: pillars.management || currentState.management,
+      skills: skillsWithYes || currentState.skills,
+      procurement: pillars.procurement || currentState.procurement,
+      esd: pillars.esd || currentState.esd,
+      sed: pillars.sed || currentState.sed,
+      calculatorConfig: calculatorConfig || currentState.calculatorConfig,
+    });
+    
+    // Step 7: Update financials in store
+    if (clientData.revenue !== undefined || clientData.npat !== undefined) {
+      currentState.updateFinancials(
+        clientData.revenue || 0,
+        clientData.npat || 0,
+        clientData.leviableAmount || 0,
+        clientData.industryNorm
+      );
+    }
+    
+    // Step 8: Trigger unified calculation via the store's built-in recalculate action
+    useBbeeStore.getState()._recalculateAll();
+    
+    // Step 9: Read the calculated scorecard from the store
+    const result = useBbeeStore.getState().scorecard;
+    
+    return {
+      success: true,
+      scorecard: result,
+      client: useBbeeStore.getState().client,
+    };
+    
+  } catch (error) {
+    console.error('populateAndScore error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown calculation error',
+    };
+  }
+}
+
+/**
+ * Convenience function for upload flow:
+ * Maps extracted entities to BuildPillarsData, then calls populateAndScore.
+ */
+export async function populateAndScoreFromEntities(
+  entities: Record<string, any>,
+  foundation: FoundationData,
+  sectorCode: string,
+  scorecardType?: 'Generic' | 'QSE' | 'EME'
+): Promise<PopulateAndScoreResult> {
+  // Map entities to BuildPillarsData format
+  // This is a simplified mapping - the full mapping logic should be in entityManifest.ts
+  const pillars: BuildPillarsData = {
+    ownership: entities.ownership || {},
+    management: entities.management || {},
+    skills: entities.skills || {},
+    procurement: entities.procurement || {},
+    esd: entities.esd || {},
+    sed: entities.sed || {},
+    yes: entities.yes || {},
+  };
+  
+  return populateAndScore({
+    pillars,
+    foundation,
+    sectorCode,
+    scorecardType,
+  });
+}
+
 export default {
   syncFoundationToStore,
   syncFoundationFromStore,
@@ -523,4 +734,6 @@ export default {
   toolkitClientToFinancials,
   inferEapProvinceFromAddress,
   mergeYesIntoSkills,
+  populateAndScore,
+  populateAndScoreFromEntities,
 };

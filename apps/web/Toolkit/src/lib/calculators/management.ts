@@ -126,6 +126,7 @@ export function calculateManagementScore(
   const disabledMaxPts = config?.employmentEquity?.disabledMaxPts ?? 2;
   
   const maxTotal = config?.pillarConfigs?.managementControl?.maxPoints ?? MAX_TOTAL;
+  const subMinPercent = config?.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
 
   // Get EAP targets based on province
   const province = normalizeProvince(eapProvince || 'National') as Province;
@@ -243,7 +244,7 @@ export function calculateManagementScore(
     skilledTechnicalBWO: round2(skilledTechnicalBWOScore),
     disabled: round2(disabledScore),
     total: round2(clampScore(totalPoints, maxTotal)),
-    subMinimumMet: true,
+    subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
       boardBlackPct: pctOfRaw(board, countBlack),

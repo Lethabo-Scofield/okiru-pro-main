@@ -12,6 +12,7 @@ export interface TemplateEntity {
 }
 
 export interface CalculatorConfig {
+  totalMaxPoints: number; // Grand total including YES where applicable
   ownership: {
     votingRightsMax: number;
     womenBonusMax: number;

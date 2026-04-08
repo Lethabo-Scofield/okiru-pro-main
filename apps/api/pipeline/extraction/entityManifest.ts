@@ -564,6 +564,64 @@ const MC_ENTITIES: EntityField[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Employment Equity entities (pillarCode: 'employmentEquity')
+// Note: These fields are combined with Management Control in some sectors
+// but defined separately for extraction purposes. They map to EE criteria.
+// ---------------------------------------------------------------------------
+
+const EE_ENTITIES: EntityField[] = [
+  ef('ee_employee_name', 'EE Employee Name', 'employmentEquity', 'string',
+    ['EE-SENIOR', 'EE-MIDDLE', 'EE-JUNIOR'],
+    'Full name of the employee for Employment Equity reporting.', {
+      aliases: ['name', 'employee name', 'staff name'],
+      zones: ['EE report', 'employment equity', 'employee register', 'HR'],
+      positiveExamples: ['Thandi Mkhize'],
+      negativeExamples: ['TBC'],
+      mustHave: ['name', 'employee'], niceToHave: ['first name', 'surname'], exclude: ['supplier'],
+      inputType: 'text', group: 'ee_register',
+    }),
+  ef('ee_employee_gender', 'EE Employee Gender', 'employmentEquity', 'string',
+    ['EE-SENIOR', 'EE-MIDDLE', 'EE-JUNIOR'],
+    'Gender of the employee for EE reporting.', {
+      aliases: ['gender', 'sex', 'M/F'],
+      zones: ['EE report', 'employment equity', 'HR'],
+      positiveExamples: ['Female', 'Male'],
+      enumValues: ['Male', 'Female'],
+      mustHave: ['gender'], niceToHave: ['sex'], exclude: ['race'],
+      inputType: 'select', group: 'ee_register',
+    }),
+  ef('ee_employee_race', 'EE Employee Race', 'employmentEquity', 'string',
+    ['EE-SENIOR', 'EE-MIDDLE', 'EE-JUNIOR', 'EE-DISABLED'],
+    'Race classification per EE Act (African, Coloured, Indian).', {
+      aliases: ['race group', 'population group', 'demographic'],
+      zones: ['EE report', 'employment equity', 'HR'],
+      positiveExamples: ['African', 'Coloured', 'Indian'],
+      enumValues: ['African', 'Coloured', 'Indian', 'White'],
+      mustHave: ['race'], niceToHave: ['population group'], exclude: ['nationality'],
+      inputType: 'select', group: 'ee_register',
+    }),
+  ef('ee_employee_designation', 'EE Employee Designation', 'employmentEquity', 'string',
+    ['EE-SENIOR', 'EE-MIDDLE', 'EE-JUNIOR'],
+    'Occupational level per EE Act schedule.', {
+      aliases: ['level', 'occupational level', 'job grade', 'position'],
+      zones: ['EE report', 'employment equity', 'HR'],
+      positiveExamples: ['Senior Manager', 'Middle Manager', 'Junior Manager', 'Semi-skilled', 'Unskilled'],
+      enumValues: ['Senior Manager', 'Middle Manager', 'Junior Manager', 'Semi-skilled', 'Unskilled', 'Skilled Technical'],
+      mustHave: ['designation', 'level'], niceToHave: ['occupational'], exclude: ['department'],
+      inputType: 'select', group: 'ee_register',
+    }),
+  ef('ee_employee_disabled', 'EE Employee Disability Status', 'employmentEquity', 'boolean',
+    ['EE-DISABLED'],
+    'Whether the employee has a disability per the EE Act definition.', {
+      aliases: ['disabled', 'PWD', 'disability status'],
+      zones: ['EE report', 'employment equity', 'HR'],
+      positiveExamples: ['Yes', 'No'],
+      mustHave: ['disability', 'disabled'], niceToHave: ['PWD'], exclude: ['sick leave'],
+      inputType: 'toggle', group: 'ee_register',
+    }),
+];
+
+// ---------------------------------------------------------------------------
 // Skills Development entities  (pillarCode: 'skillsDevelopment')
 // ---------------------------------------------------------------------------
 
@@ -1302,6 +1360,89 @@ const SED_ENTITIES: EntityField[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// YES Initiative entities (pillarCode: 'yesInitiative')
+// ---------------------------------------------------------------------------
+
+const YES_ENTITIES: EntityField[] = [
+  ef('yes_participant_name', 'YES Participant Name', 'yesInitiative', 'string',
+    ['YES-HEADCOUNT', 'YES-ABSORPTION'],
+    'Full name of the YES initiative participant.', {
+      aliases: ['YES name', 'participant name', 'youth name'],
+      zones: ['YES', 'YES Data', 'youth employment'],
+      positiveExamples: ['Thabo Mokoena'],
+      negativeExamples: ['TBC'],
+      mustHave: ['name', 'participant'], niceToHave: ['YES', 'youth'], exclude: ['employee'],
+      inputType: 'text', group: 'yes_register',
+    }),
+  ef('yes_participant_id', 'YES Participant ID', 'yesInitiative', 'string',
+    ['YES-HEADCOUNT'],
+    'South African ID number of the YES participant.', {
+      aliases: ['YES ID', 'RSA ID', 'ID number'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['9801015009087'],
+      mustHave: ['ID'], niceToHave: ['RSA', 'identity'], exclude: ['passport'],
+      inputType: 'text', group: 'yes_register',
+    }),
+  ef('yes_participant_age', 'YES Participant Age', 'yesInitiative', 'count',
+    ['YES-HEADCOUNT'],
+    'Age of the YES participant (must be 18-35 for YES eligibility).', {
+      aliases: ['age', 'youth age'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['25', '30'],
+      min: 18, max: 35,
+      mustHave: ['age'], niceToHave: ['youth'], exclude: ['experience'],
+      inputType: 'number', group: 'yes_register',
+    }),
+  ef('yes_start_date', 'YES Start Date', 'yesInitiative', 'date',
+    ['YES-HEADCOUNT'],
+    'Start date of the YES placement.', {
+      aliases: ['start date', 'commencement date', 'placement start'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['2024-01-15'],
+      mustHave: ['start', 'date'], niceToHave: ['YES', 'placement'], exclude: ['end'],
+      inputType: 'date', group: 'yes_register',
+    }),
+  ef('yes_end_date', 'YES End Date', 'yesInitiative', 'date',
+    ['YES-HEADCOUNT'],
+    'End/termination date of the YES placement.', {
+      aliases: ['end date', 'completion date', 'termination date'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['2024-12-31'],
+      mustHave: ['end', 'date'], niceToHave: ['completion'], exclude: ['start'],
+      inputType: 'date', group: 'yes_register',
+    }),
+  ef('yes_is_absorbed', 'YES Participant Absorbed', 'yesInitiative', 'boolean',
+    ['YES-ABSORPTION'],
+    'Whether the YES participant was absorbed into permanent employment.', {
+      aliases: ['absorbed', 'permanent employment', 'retained'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['Yes', 'No'],
+      mustHave: ['absorbed', 'employment'], niceToHave: ['permanent', 'retained'], exclude: ['terminated'],
+      inputType: 'toggle', group: 'yes_register',
+    }),
+  ef('yes_months_retained', 'YES Months Retained', 'yesInitiative', 'count',
+    ['YES-ABSORPTION'],
+    'Number of months the participant was retained in the programme.', {
+      aliases: ['months retained', 'retention period', 'duration'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['12', '6'],
+      min: 0, max: 24,
+      mustHave: ['months', 'retained'], niceToHave: ['duration'], exclude: ['salary'],
+      inputType: 'number', group: 'yes_register',
+    }),
+  ef('yes_company_size', 'YES Host Company Size', 'yesInitiative', 'string',
+    ['YES-HEADCOUNT'],
+    'Company size classification of the YES host employer.', {
+      aliases: ['company size', 'host size'],
+      zones: ['YES', 'YES Data'],
+      positiveExamples: ['EME', 'QSE', 'Generic'],
+      enumValues: ['EME', 'QSE', 'Generic'],
+      mustHave: ['size', 'company'], niceToHave: ['host'], exclude: ['type'],
+      inputType: 'select', group: 'yes_register',
+    }),
+];
+
+// ---------------------------------------------------------------------------
 // Sector-specific entities
 // ---------------------------------------------------------------------------
 
@@ -1497,14 +1638,6 @@ function sedCriteria(cfg: SectorConfig): CriterionEntity[] {
   ];
 }
 
-function yesCriteria(): CriterionEntity[] {
-  return [
-    { code: 'YES-HEADCOUNT', name: 'YES youth headcount target', pillarCode: 'yesInitiative', target: 'size_based', maxPoints: 0, formulaId: 'yes_headcount', inputEntities: [], evidenceRequired: ['YES records'] },
-    { code: 'YES-ABSORPTION', name: 'YES absorption rate', pillarCode: 'yesInitiative', target: 0.25, maxPoints: 0, formulaId: 'yes_absorption', inputEntities: [], evidenceRequired: ['YES records'] },
-    { code: 'YES-LEVEL', name: 'YES level increase', pillarCode: 'yesInitiative', target: 'tier_based', maxPoints: 0, formulaId: 'yes_tier', inputEntities: [], evidenceRequired: ['YES records'] },
-  ];
-}
-
 // ===================================================================
 // PILLAR PACK BUILDERS
 // ===================================================================
@@ -1520,10 +1653,16 @@ function buildOwnershipPack(cfg: SectorConfig): PillarPack {
 
 function buildMCPack(cfg: SectorConfig): PillarPack {
   const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 };
+  // For sectors that combine MC+EE, include EE entities in the MC pack
+  const eePc = cfg.pillarConfigs?.employmentEquity;
+  const isMCPlusEECombined = eePc && (eePc.maxPoints === 0 || eePc.maxPoints === undefined);
+  const combinedEntities = isMCPlusEECombined
+    ? [...MC_ENTITIES, ...EE_ENTITIES]
+    : [...MC_ENTITIES];
   return {
     pillarCode: 'managementControl', pillarName: 'Management Control', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
-    criteria: mcCriteria(cfg), entities: [...MC_ENTITIES],
+    criteria: mcCriteria(cfg), entities: combinedEntities,
   };
 }
 
@@ -1532,7 +1671,7 @@ function buildEEPack(cfg: SectorConfig): PillarPack {
   return {
     pillarCode: 'employmentEquity', pillarName: 'Employment Equity', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? false, subMinimumThreshold: (pc.maxPoints ?? 0) * ((pc.subMinimumPercent ?? 0) / 100),
-    criteria: eeCriteria(cfg), entities: [],
+    criteria: eeCriteria(cfg), entities: [...EE_ENTITIES],
   };
 }
 
@@ -1574,11 +1713,23 @@ function buildSEDPack(cfg: SectorConfig): PillarPack {
   };
 }
 
-function buildYESPack(): PillarPack {
+function yesCriteria(cfg: SectorConfig): CriterionEntity[] {
+  const pc = cfg.pillarConfigs?.yesInitiative;
+  const maxPoints = pc?.maxPoints ?? 3; // Default to 3 if not configured
+  return [
+    { code: 'YES-HEADCOUNT', name: 'YES youth headcount target', pillarCode: 'yesInitiative', target: 'size_based', maxPoints: 0, formulaId: 'yes_headcount', inputEntities: ['yes_participant_name', 'yes_participant_id', 'yes_start_date'], evidenceRequired: ['YES records'] },
+    { code: 'YES-ABSORPTION', name: 'YES absorption rate', pillarCode: 'yesInitiative', target: 0.25, maxPoints: 0, formulaId: 'yes_absorption', inputEntities: ['yes_is_absorbed', 'yes_months_retained'], evidenceRequired: ['YES records'] },
+    { code: 'YES-LEVEL', name: 'YES level increase', pillarCode: 'yesInitiative', target: 'tier_based', maxPoints, formulaId: 'yes_tier', inputEntities: ['yes_company_size', 'yes_participants_count'], evidenceRequired: ['YES records'] },
+  ];
+}
+
+function buildYESPack(cfg: SectorConfig): PillarPack {
+  const pc = cfg.pillarConfigs?.yesInitiative;
+  const maxPoints = pc?.maxPoints ?? 3;
   return {
-    pillarCode: 'yesInitiative', pillarName: 'YES Initiative', maxPoints: 0,
+    pillarCode: 'yesInitiative', pillarName: 'YES Initiative', maxPoints,
     hasSubMinimum: false, subMinimumThreshold: 0,
-    criteria: yesCriteria(), entities: [],
+    criteria: yesCriteria(cfg), entities: [...YES_ENTITIES],
   };
 }
 
@@ -1675,7 +1826,7 @@ export async function buildManifest(sectorCode: string, scorecardType: string): 
     buildProcurementPack(cfg),
     buildESDPack(cfg),
     buildSEDPack(cfg),
-    buildYESPack(),
+    buildYESPack(cfg),
   ];
 
   // Add sector-specific entities and pillar packs

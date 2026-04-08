@@ -43,7 +43,7 @@ const PILLAR_ORDER = [
   'financials',
   'ownership',
   'managementControl',
-  'employmentEquity',
+  // NOTE: employmentEquity merged into managementControl per B-BBEE codes
   'skillsDevelopment',
   'preferentialProcurement',
   'enterpriseSupplierDevelopment',
@@ -123,7 +123,7 @@ export function PillarSidebar({
             </div>
             
             <div className="flex-1 min-w-0">
-              <p className={`text-[13px] font-medium truncate ${isActive ? 'text-white' : 'text-[#d1d1d6]'}`}>
+              <p className={`text-[13px] font-medium leading-tight [overflow-wrap:anywhere] ${isActive ? 'text-white' : 'text-[#d1d1d6]'}`}>
                 {pillar.pillarName}
               </p>
               <p className="text-[10px] text-[#636366]">

@@ -139,6 +139,9 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const baseTotal = empoweringScore + qseScore + emeScore + blackOwned51Score + blackFemaleOwned30Score + designatedGroupScore;
   const totalScore = clampScore(baseTotal, maxPoints);
 
+  // FIX: subMinThreshold is a percentage (e.g., 40), not points. Convert to points threshold.
+  const subMinThresholdPoints = (subMinThreshold / 100) * maxPoints;
+
   const subLines: ProcurementSubLine[] = [
     { name: "B-BBEE Procurement Spend from Empowering Suppliers", target: `${(allSuppliersTarget * 100).toFixed(0)}% of TMPS`, weighting: allSuppliersMaxPts, score: empoweringScore, spend: empoweringSpend },
     { name: "Spend on QSE Empowering Suppliers", target: `${(qseTarget * 100).toFixed(0)}% of TMPS`, weighting: qseMaxPts, score: qseScore, spend: qseSpend },
@@ -157,7 +160,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
     total: round2(totalScore),
-    subMinimumMet: baseTotal >= subMinThreshold,
+    subMinimumMet: baseTotal >= subMinThresholdPoints,
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

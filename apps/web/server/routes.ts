@@ -1701,6 +1701,7 @@ Respond ONLY with a valid JSON array.`;
           companyInfo: 1,
           currentStep: 1,
           isComplete: 1,
+          toolkitClientId: 1, // FIXED: Include toolkitClientId for resume flow
           'filesData.id': 1,
           'filesData.name': 1,
           'filesData.size': 1,
