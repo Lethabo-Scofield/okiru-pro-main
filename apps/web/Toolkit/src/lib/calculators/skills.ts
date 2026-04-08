@@ -90,12 +90,13 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     if (!prog.isBlack) continue;
 
     const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
-    acc.byCategory[catCode] += prog.cost;
-    acc.blackPeople += prog.cost;
+    const cost = prog.cost ?? 0;
+    acc.byCategory[catCode] += cost;
+    acc.blackPeople += cost;
     acc.totalBlackLearners++;
 
-    if (prog.category === 'bursary' || catCode === 'A') acc.bursary += prog.cost;
-    if (prog.isDisabled) acc.disabled += prog.cost;
+    if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
+    if (prog.isDisabled) acc.disabled += cost;
     if (prog.category === 'learnership' || prog.category === 'internship' || catCode === 'B') acc.learnershipCount++;
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
     if (prog.isAbsorbed) acc.absorbedCount++;
@@ -146,30 +147,28 @@ function applyCapToSpend(
   return { totalRecognised, breakdown };
 }
 
-export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig): SkillsResult {
+export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig): SkillsResult {
+  if (!config) throw new Error('CalculatorConfig is required for skills score calculation');
   const { leviableAmount } = data;
   const trainingPrograms = data.trainingPrograms || [];
-  const sc = config?.skills;
+  const sc = config.skills;
 
-  // Extract config values with fallbacks to hardcoded defaults
-  const overallTargetPct = sc?.overallSpendPercent ?? 0.035;
-  const bursaryTargetPct = sc?.bursarySpendPercent ?? 0.025;
-  const disabledTargetPct = sc?.disabledSpendPercent ?? 0.003;
-  const categoryECap = sc?.categoryECap ?? CATEGORY_E_CAP;
-  const categoryFCap = sc?.categoryFCap ?? CATEGORY_F_CAP;
-  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
-  const maxPoints = config?.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
+  const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget;
+  const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget;
+  const disabledTargetPct = sc.disabledSpendPercent ?? 0.003;
+  const categoryECap = sc.categoryECap ?? CATEGORY_E_CAP;
+  const categoryFCap = sc.categoryFCap ?? CATEGORY_F_CAP;
+  const subMinThreshold = config.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
+  const maxPoints = config.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
 
-  // Extract criterion max points from config or use defaults
-  const learningMaxPts = sc?.learningProgrammesMaxPts ?? 6;
-  const bursaryMaxPts = sc?.bursaryMaxPts ?? 4;
-  const disabledMaxPts = sc?.disabledLearningMaxPts ?? 4;
-  const learnershipMaxPts = sc?.learnershipsMaxPts ?? 6;
-  const absorptionMaxPts = sc?.absorptionMaxPts ?? 5;
+  const learningMaxPts = sc.learningProgrammesMaxPts ?? sc.generalMax;
+  const bursaryMaxPts = sc.bursaryMaxPts ?? sc.bursaryMax;
+  const disabledMaxPts = sc.disabledLearningMaxPts ?? 4;
+  const learnershipMaxPts = sc.learnershipsMaxPts ?? 6;
+  const absorptionMaxPts = sc.absorptionMaxPts ?? 5;
 
-  // Extract learnership and absorption targets from config
-  const learnershipTargetPct = sc?.learnershipTargetPercent ?? 5.0;
-  const absorptionTargetPct = sc?.absorptionTargetPercent ?? 2.5;
+  const learnershipTargetPct = sc.learnershipTargetPercent ?? 5.0;
+  const absorptionTargetPct = sc.absorptionTargetPercent ?? 2.5;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;

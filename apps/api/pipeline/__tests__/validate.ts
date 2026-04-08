@@ -111,8 +111,8 @@ async function runTests() {
   }
 
   // Test 1: Build Manifest
-  await test('RCOGP Generic manifest builds correctly', () => {
-    const manifest = buildManifest('RCOGP', 'Generic');
+  await test('RCOGP Generic manifest builds correctly', async () => {
+    const manifest = await buildManifest('RCOGP', 'Generic');
     expect(manifest.sectorCode).toBe('RCOGP');
     expect(manifest.scorecardType).toBe('Generic');
   });

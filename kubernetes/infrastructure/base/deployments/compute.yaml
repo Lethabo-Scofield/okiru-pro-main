@@ -107,6 +107,9 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: API_INTERNAL_KEY
+            # Explicitly set API_PORT to prevent Kubernetes from injecting the api service URL
+            - name: API_PORT
+              value: "8000"
           envFrom:
             - secretRef:
                 name: app-secrets

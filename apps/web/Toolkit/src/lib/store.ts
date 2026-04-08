@@ -147,6 +147,7 @@ interface BbeeState extends PillarState {
 
   loadClientData: (clientId: string) => Promise<void>;
   clearData: () => void;
+  startNewSession: () => void;
 
   setPipelineOverrides: (overrides: PipelineOverrides) => void;
 
@@ -241,20 +242,103 @@ interface BbeeState extends PillarState {
   } | null>;
 
   _recalculateAll: () => void;
+
+  setScorecardFromAPI: (apiResult: APIScorecardResult) => void;
 }
 
-const RECOGNITION_LEVELS = [135, 125, 110, 100, 80, 60, 50, 10] as const;
+/**
+ * Shape returned by the UCS engine (POST /api/calculate).
+ * Mapped to the frontend ScorecardResult by setScorecardFromAPI.
+ */
+export interface APIScorecardResult {
+  assessmentId: string;
+  sectorCode: string;
+  scorecardType: string;
+  totalPoints: number;
+  maxPoints: number;
+  overallPercentage: number;
+  beeLevel: number;
+  recognitionLevel: number;
+  pillars: Array<{
+    pillarCode: string;
+    pillarName: string;
+    points: number;
+    maxPoints: number;
+    percentage: number;
+    subMinimumMet: boolean;
+    criteria: unknown[];
+  }>;
+  subMinimums: Record<string, boolean>;
+  calculationErrors: string[];
+  calculatedAt: string;
+  validation?: { errors: string[]; warnings: string[]; isValid: boolean };
+  ontologySnapshot?: unknown;
+}
 
-/** Standard B-BBEE level thresholds (RCOGP Generic defaults) */
+function mapAPIScorecardToFrontend(api: APIScorecardResult): ScorecardResult {
+  const findPillar = (code: string) =>
+    api.pillars.find(p => p.pillarCode === code);
+
+  const makePillarScore = (code: string, fallbackTarget: number) => {
+    const p = findPillar(code);
+    return {
+      score: round2(p?.points ?? 0),
+      target: p?.maxPoints ?? fallbackTarget,
+      weighting: p?.maxPoints ?? fallbackTarget,
+      subMinimumMet: p?.subMinimumMet ?? true,
+    };
+  };
+
+  const own = makePillarScore('ownership', 25);
+  const mc = makePillarScore('managementControl', 19);
+  const sk = makePillarScore('skillsDevelopment', 25);
+  const proc = makePillarScore('preferentialProcurement', 29);
+  const sd = makePillarScore('supplierDevelopment', 10);
+  const ed = makePillarScore('enterpriseDevelopment', 7);
+  const sed = makePillarScore('socioEconomicDevelopment', 5);
+  const yes = makePillarScore('yesInitiative', 3);
+
+  const anySubMinFailed = Object.values(api.subMinimums).some(v => !v);
+  const achievedLevel = api.beeLevel;
+  const isDiscounted = achievedLevel < 9 && anySubMinFailed;
+  const discountedLevel = isDiscounted ? Math.min(achievedLevel + 1, 8) : achievedLevel;
+
+  const recMap: Record<number, string> = {
+    1: '135%', 2: '125%', 3: '110%', 4: '100%',
+    5: '80%', 6: '60%', 7: '50%', 8: '10%',
+  };
+
+  return {
+    ownership: own,
+    managementControl: mc,
+    skillsDevelopment: sk,
+    procurement: proc,
+    supplierDevelopment: sd,
+    enterpriseDevelopment: ed,
+    socioEconomicDevelopment: sed,
+    yesInitiative: yes,
+    total: {
+      score: round2(api.totalPoints),
+      target: api.maxPoints,
+      weighting: api.maxPoints,
+    },
+    achievedLevel,
+    discountedLevel,
+    isDiscounted,
+    recognitionLevel: recMap[discountedLevel] || `${api.recognitionLevel}%`,
+  };
+}
+
+/** Standard B-BBEE level thresholds — used when config.levelThresholds unavailable */
 const STANDARD_LEVEL_THRESHOLDS = [
-  { level: 1, minPoints: 100 },
-  { level: 2, minPoints: 95 },
-  { level: 3, minPoints: 90 },
-  { level: 4, minPoints: 80 },
-  { level: 5, minPoints: 75 },
-  { level: 6, minPoints: 70 },
-  { level: 7, minPoints: 55 },
-  { level: 8, minPoints: 40 },
+  { level: 1, minPoints: 100, recognition: 135 },
+  { level: 2, minPoints: 95, recognition: 125 },
+  { level: 3, minPoints: 90, recognition: 110 },
+  { level: 4, minPoints: 80, recognition: 100 },
+  { level: 5, minPoints: 75, recognition: 80 },
+  { level: 6, minPoints: 70, recognition: 60 },
+  { level: 7, minPoints: 55, recognition: 50 },
+  { level: 8, minPoints: 40, recognition: 10 },
 ];
 
 /**
@@ -280,21 +364,20 @@ function pointsToLevel(totalPoints: number, config?: CalculatorConfig | null): n
 function levelToRecognition(level: number, config?: CalculatorConfig | null): string {
   if (level >= 9) return '0%';
   
-  // Try to get recognition from config, fall back to standard
-  const thresholds = config?.levelThresholds;
-  const threshold = thresholds?.find(t => t.level === level);
+  const thresholds = config?.levelThresholds || STANDARD_LEVEL_THRESHOLDS;
+  const threshold = thresholds.find((t: any) => t.level === level);
   if (threshold?.recognition) {
     return `${threshold.recognition}%`;
   }
   
-  return `${RECOGNITION_LEVELS[level - 1]}%`;
+  return '0%';
 }
 
 function calculateScorecard(
   state: PillarState & { calculatorConfig?: CalculatorConfig | null },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {
-  const cfg = state.calculatorConfig ?? undefined;
+  const cfg = state.calculatorConfig!;
   const ownScore = calculateOwnershipScore(state.ownership, cfg);
   const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
   const skillScore = calculateSkillsScore(state.skills, cfg);
@@ -318,9 +401,18 @@ function calculateScorecard(
     })) || [];
 
   const yesData = {
+    id: state.yes?.id || '',
+    clientId: state.client?.id || '',
     totalEmployees: state.management.employees?.length || 0,
+    yesHeadcountTarget: Math.max(Math.ceil((state.management.employees?.length || 0) * 0.025), 1),
     candidates: yesCandidates,
+    yesYouthEnrolled: yesCandidates.length,
+    yesBlackYouthCount: yesCandidates.filter(c => c.race !== 'White').length,
+    yesBlackYouthPercentage: yesCandidates.length > 0 ? (yesCandidates.filter(c => c.race !== 'White').length / yesCandidates.length) * 100 : 0,
+    yesAbsorbedCount: yesCandidates.filter(c => c.isAbsorbed).length,
+    yesAbsorptionRate: yesCandidates.length > 0 ? (yesCandidates.filter(c => c.isAbsorbed).length / yesCandidates.length) * 100 : 0,
     totalYesCost: yesCandidates.reduce((sum, c) => sum + c.cost, 0),
+    yesCostPerCandidate: yesCandidates.length > 0 ? yesCandidates.reduce((sum, c) => sum + c.cost, 0) / yesCandidates.length : 0,
   };
   const yesScore = calculateYESScore(yesData, cfg);
 
@@ -454,6 +546,17 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const clientData: Client = {
         id: data.client.id,
         name: data.client.name,
+        tradingName: data.client.tradingName || '',
+        registrationNumber: data.client.registrationNumber || '',
+        vatNumber: data.client.vatNumber || '',
+        taxNumber: data.client.taxNumber || '',
+        physicalAddress: data.client.physicalAddress || '',
+        postalAddress: data.client.postalAddress || '',
+        contactPerson: data.client.contactPerson || '',
+        contactEmail: data.client.contactEmail || '',
+        contactPhone: data.client.contactPhone || '',
+        sectorCode: data.client.sectorCode || 'RCOGP',
+        companySize: data.client.companySize || 'Generic',
         financialYear: data.client.financialYear || '',
         revenue: data.client.revenue || 0,
         npat: data.client.npat || 0,
@@ -486,6 +589,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         companyValue: data.ownership?.companyValue || 0,
         outstandingDebt: data.ownership?.outstandingDebt || 0,
         yearsHeld: data.ownership?.yearsHeld || 0,
+        ownershipScorePoints: data.ownership?.ownershipScorePoints || 0,
+        ownershipScorePercent: data.ownership?.ownershipScorePercent || 0,
+        netValuePoints: data.ownership?.netValuePoints || 0,
+        netValuePercent: data.ownership?.netValuePercent || 0,
       };
 
       const managementState: ManagementData = {
@@ -501,6 +608,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         })),
       };
 
+      const yesCandidatesFromSkills = (data.skills?.trainingPrograms || []).filter((tp: any) => tp.isYesEmployee);
       const skillsState: SkillsData = {
         id: '',
         clientId,
@@ -522,6 +630,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           race: tp.race || null,
           isDisabled: tp.isDisabled || false,
         })),
+        yesCandidatesCount: yesCandidatesFromSkills.length,
+        yesAbsorbedCount: yesCandidatesFromSkills.filter((tp: any) => tp.isAbsorbed).length,
       };
 
       const procurementState: ProcurementData = {
@@ -615,11 +725,41 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       sed: emptySED,
       scorecard: emptyScorecard,
       pipelineOverrides: null,
+      calculatorConfig: null,
       isScenarioMode: false,
       activeScenarioId: null,
       scenarios: [],
       baseSnapshot: null,
     });
+  },
+
+  startNewSession: () => {
+    set({
+      isLoaded: false,
+      activeClientId: null,
+      client: emptyClient,
+      ownership: emptyOwnership,
+      management: emptyManagement,
+      skills: emptySkills,
+      procurement: emptyProcurement,
+      esd: emptyESD,
+      sed: emptySED,
+      scorecard: buildEmptyScorecard(),
+      pipelineOverrides: null,
+      calculatorConfig: null,
+      isScenarioMode: false,
+      activeScenarioId: null,
+      scenarios: [],
+      baseSnapshot: null,
+    });
+    try {
+      const keys = Object.keys(sessionStorage);
+      for (const key of keys) {
+        if (key.startsWith('okiru-processor-build-flow')) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    } catch { /* ignore */ }
   },
 
   setPipelineOverrides: (overrides: PipelineOverrides) => {
@@ -714,9 +854,17 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
-  _recalculateAll: () => set((state) => ({
-    scorecard: calculateScorecard(state, state.pipelineOverrides),
-  })),
+  _recalculateAll: () => set((state) => {
+    if (!state.calculatorConfig) {
+      return { scorecard: { ...buildEmptyScorecard(), configMissing: true } };
+    }
+    return { scorecard: calculateScorecard(state, state.pipelineOverrides) };
+  }),
+
+  setScorecardFromAPI: (apiResult: APIScorecardResult) => {
+    const mapped = mapAPIScorecardToFrontend(apiResult);
+    set({ scorecard: mapped });
+  },
 
   addFinancialYear: (year) => {
     set((state) => ({ client: { ...state.client, financialHistory: [...state.client.financialHistory, year] } }));

@@ -184,10 +184,12 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
   const ownSubMinThresh = pCfg.ownership.maxPoints * (pCfg.ownership.subMinimumPercent / 100);
   const skSubMinThresh = pCfg.skillsDevelopment.maxPoints * (pCfg.skillsDevelopment.subMinimumPercent / 100);
   const prSubMinThresh = pCfg.preferentialProcurement.maxPoints * (pCfg.preferentialProcurement.subMinimumPercent / 100);
+  const sdSubMinThresh = pCfg.supplierDevelopment.maxPoints * (pCfg.supplierDevelopment.subMinimumPercent / 100);
   const ownSubMinMet = !pCfg.ownership.hasSubMinimum || pillarScores.ownership >= ownSubMinThresh || own.subMinMet;
   const skSubMinMet = !pCfg.skillsDevelopment.hasSubMinimum || pillarScores.skillsDevelopment >= skSubMinThresh || sk.subMinMet;
   const prSubMinMet = !pCfg.preferentialProcurement.hasSubMinimum || pillarScores.preferentialProcurement >= prSubMinThresh || pr.subMinMet;
-  const allSubMinsMet = ownSubMinMet && skSubMinMet && prSubMinMet;
+  const sdSubMinMet = !pCfg.supplierDevelopment.hasSubMinimum || esd.sdScore >= sdSubMinThresh;
+  const allSubMinsMet = ownSubMinMet && skSubMinMet && prSubMinMet && sdSubMinMet;
   const achieved = determineBeeLevel(pillarScores.totalPoints);
   const isNonCompliant = achieved.level >= 9;
   const discountedLevelNum = (!allSubMinsMet && !isNonCompliant) ? Math.min(achieved.level + 1, 8) : achieved.level;
@@ -198,12 +200,13 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
   addLog(`Total: ${pillarScores.totalPoints} pts → ${achieved.label} (${achieved.recognition}% recognition)`, 'success');
   if (!ownSubMinMet) addLog(`Sub-minimum FAILED: Ownership (net value ${r2(own.total)} < threshold)`, 'error');
   if (!skSubMinMet) addLog(`Sub-minimum FAILED: Skills Development (${r2(sk.total)} < 8 pts)`, 'error');
-  if (!prSubMinMet) addLog(`Sub-minimum FAILED: Procurement (${r2(pr.total)} < 10.8 pts)`, 'error');
+  if (!prSubMinMet) addLog(`Sub-minimum FAILED: Procurement (${r2(pr.total)} < ${r2(prSubMinThresh)} pts)`, 'error');
+  if (!sdSubMinMet) addLog(`Sub-minimum FAILED: Supplier Development (${r2(esd.sdScore)} < ${r2(sdSubMinThresh)} pts)`, 'error');
   if (!allSubMinsMet && !isNonCompliant) {
     addLog(`Discounting applied: ${achieved.label} → ${discounted.label}`, 'warning');
   }
   if (allSubMinsMet) addLog(`All sub-minimums passed`, 'success');
-  const suggestions = generateSuggestions(pillarScores, { ownership: ownSubMinMet, skills: skSubMinMet, procurement: prSubMinMet }, finalLevel.label);
+  const suggestions = generateSuggestions(pillarScores, { ownership: ownSubMinMet, skills: skSubMinMet, procurement: prSubMinMet, supplierDevelopment: sdSubMinMet }, finalLevel.label);
 
   const blackOwnershipPct = own.blackOwnership > 0 ? r2(own.blackOwnership * 100) : 0;
   const blackFemalePct = own.blackWomenOwnership > 0 ? r2(own.blackWomenOwnership * 100) : 0;

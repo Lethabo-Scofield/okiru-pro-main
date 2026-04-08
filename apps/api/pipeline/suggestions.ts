@@ -2,7 +2,7 @@ import type { PipelineResult } from './types.js';
 
 export function generateSuggestions(
   pillars: PipelineResult['scorecard']['pillars'],
-  subMins: { ownership: boolean; skills: boolean; procurement: boolean },
+  subMins: { ownership: boolean; skills: boolean; procurement: boolean; supplierDevelopment?: boolean },
   beeLevel: string
 ): string[] {
   const suggestions: string[] = [];
@@ -23,6 +23,7 @@ export function generateSuggestions(
   else suggestions.push(`Preferential Procurement: ${pillars.preferentialProcurement.toFixed(1)}/27 pts – increase spend with Level 1-2 suppliers.`);
 
   if (pillars.enterpriseSupplierDevelopment === 0) suggestions.push('ESD: 0 pts – recommend grants/loans to black SMEs to hit 2% SD target.');
+  else if (subMins.supplierDevelopment === false) suggestions.push(`ESD: ${pillars.enterpriseSupplierDevelopment.toFixed(1)}/15 pts – Supplier Development below sub-minimum (40%). Increase SD contributions urgently.`);
   else suggestions.push(`ESD: ${pillars.enterpriseSupplierDevelopment.toFixed(1)}/15 pts – continue supporting qualifying beneficiaries.`);
 
   if (pillars.socioEconomicDevelopment >= 5) suggestions.push('SED: maxed, focus on impactful CSI for reporting.');

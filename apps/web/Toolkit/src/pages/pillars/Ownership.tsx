@@ -95,7 +95,7 @@ const emptyForm: ShareholderFormState = {
 };
 
 export default function Ownership() {
-  const { ownership, addShareholder, updateShareholder, removeShareholder, updateCompanyValue } = useBbeeStore();
+  const { ownership, addShareholder, updateShareholder, removeShareholder, updateCompanyValue, calculatorConfig } = useBbeeStore();
   const { toast } = useToast();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -110,7 +110,8 @@ export default function Ownership() {
   const [valuationDate, setValuationDate] = useState(ownership.valuationDate || '');
   const [valuationMethod, setValuationMethod] = useState(ownership.valuationMethod || 'last_financial');
 
-  const score = calculateOwnershipScore(ownership);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const score = calculateOwnershipScore(ownership, calculatorConfig);
 
   const chartData = ownership.shareholders.map(sh => ({
     name: sh.name,

@@ -31,15 +31,16 @@ function pct(value: number): string {
 }
 
 export default function ScorecardSummary() {
-  const { scorecard, ownership, management, skills, procurement, esd, sed, client } = useBbeeStore();
+  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig } = useBbeeStore();
   const { user } = useAuth();
 
-  const ownResult = useMemo(() => calculateOwnershipScore(ownership), [ownership]);
-  const mgtResult = useMemo(() => calculateManagementScore(management), [management]);
-  const skillResult = useMemo(() => calculateSkillsScore(skills), [skills]);
-  const procResult = useMemo(() => calculateProcurementScore(procurement), [procurement]);
-  const esdResult = useMemo(() => calculateEsdScore(esd, client.npat), [esd, client.npat]);
-  const sedResult = useMemo(() => calculateSedScore(sed, client.npat), [sed, client.npat]);
+  const cfg = calculatorConfig!;
+  const ownResult = useMemo(() => calculateOwnershipScore(ownership, cfg), [ownership, cfg]);
+  const mgtResult = useMemo(() => calculateManagementScore(management, cfg), [management, cfg]);
+  const skillResult = useMemo(() => calculateSkillsScore(skills, cfg), [skills, cfg]);
+  const procResult = useMemo(() => calculateProcurementScore(procurement, cfg), [procurement, cfg]);
+  const esdResult = useMemo(() => calculateEsdScore(esd, client.npat, cfg), [esd, client.npat, cfg]);
+  const sedResult = useMemo(() => calculateSedScore(sed, client.npat, cfg), [sed, client.npat, cfg]);
 
   const pillars: PillarSummary[] = [
     {

@@ -125,9 +125,9 @@ function addPageHeader(doc: jsPDF, title: string, theme?: SectionTheme) {
   doc.rect(0, 0, w, 10, 'F');
 
   doc.setFillColor(...accentColor);
-  doc.setGlobalAlpha?.(0.6);
+  (doc as any).setGlobalAlpha?.(0.6);
   doc.rect(0, 10, w, 2, 'F');
-  doc.setGlobalAlpha?.(1);
+  (doc as any).setGlobalAlpha?.(1);
 
   doc.setFontSize(8);
   doc.setTextColor(...WHITE);

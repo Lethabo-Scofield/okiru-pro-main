@@ -60,35 +60,71 @@ export function calcOwnershipSector(
   return { total: r2(total), subMinMet, blackOwnership: totalBO, blackWomenOwnership: totalBWO, economicInterest: totalEI };
 }
 
+// National EAP targets (Economically Active Population)
+const NATIONAL_EAP = {
+  Senior:          { blackTarget: 0.731, blackWomenTarget: 0.341 },
+  Middle:          { blackTarget: 0.786, blackWomenTarget: 0.425 },
+  Junior:          { blackTarget: 0.845, blackWomenTarget: 0.512 },
+  SkilledTechnical:{ blackTarget: 0.786, blackWomenTarget: 0.425 },
+};
+
 export function calcMCSector(employees: ParseResult['employees'], cfg: SectorConfig) {
   const isBlack = (r: string) => ['African', 'Coloured', 'Indian'].includes(r);
   const grouped: Record<string, typeof employees> = {};
   for (const e of employees) { const d = e.designation || 'Junior'; if (!grouped[d]) grouped[d] = []; grouped[d].push(e); }
 
   const board = grouped['Board'] || [];
-  const exec = grouped['Executive'] || [];
+  const exec = [...(grouped['Executive'] || []), ...(grouped['Executive Director'] || [])];
+  const otherExec = grouped['Other Executive Management'] || [];
+  const senior = grouped['Senior'] || [];
+  const middle = grouped['Middle'] || [];
+  const junior = [...(grouped['Junior'] || []), ...(grouped['Semi-skilled'] || []), ...(grouped['Unskilled'] || [])];
+
   const t = cfg.targets.managementControl;
+  const ee = cfg.targets.employmentEquity;
 
   const countBlack = (arr: typeof employees) => arr.filter(e => isBlack(e.race)).length;
   const countBW = (arr: typeof employees) => arr.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const pctBlack = (arr: typeof employees) => arr.length > 0 ? countBlack(arr) / arr.length : 0;
+  const pctBW = (arr: typeof employees) => arr.length > 0 ? countBW(arr) / arr.length : 0;
+  const ratio = (actual: number, target: number, maxPts: number) =>
+    target > 0 ? Math.min(maxPts, (actual / target) * maxPts) : 0;
 
-  let boardBlackPts = 0, boardBWPts = 0;
-  if (board.length > 0) {
-    boardBlackPts = Math.min(t.boardBlackMaxPts, (countBlack(board) / board.length / t.boardBlackTarget) * t.boardBlackMaxPts);
-    boardBWPts = Math.min(t.boardBWMaxPts, (countBW(board) / board.length / t.boardBWTarget) * t.boardBWMaxPts);
-  }
+  const boardBlackPts = ratio(pctBlack(board), t.boardBlackTarget, t.boardBlackMaxPts);
+  const boardBWPts    = ratio(pctBW(board),    t.boardBWTarget,    t.boardBWMaxPts);
+  const execBlackPts  = ratio(pctBlack(exec),  t.execBlackTarget,  t.execBlackMaxPts);
+  const execBWPts     = ratio(pctBW(exec),     t.execBWTarget,     t.execBWMaxPts);
 
-  let execBlackPts = 0, execBWPts = 0;
-  if (exec.length > 0) {
-    execBlackPts = Math.min(t.execBlackMaxPts, (countBlack(exec) / exec.length / t.execBlackTarget) * t.execBlackMaxPts);
-    execBWPts = Math.min(t.execBWMaxPts, (countBW(exec) / exec.length / t.execBWTarget) * t.execBWMaxPts);
-  }
+  const otherExecBlackPts = ratio(pctBlack(otherExec), t.otherExecBlackTarget, t.otherExecBlackMaxPts);
+  const otherExecBWPts    = ratio(pctBW(otherExec),    t.otherExecBWTarget,    t.otherExecBWMaxPts);
+
+  const seniorBlackPts = ratio(pctBlack(senior), NATIONAL_EAP.Senior.blackTarget,      t.seniorMaxPts);
+  const seniorBWPts    = ratio(pctBW(senior),    NATIONAL_EAP.Senior.blackWomenTarget,  t.seniorBWMaxPts);
+  const middleBlackPts = ratio(pctBlack(middle), NATIONAL_EAP.Middle.blackTarget,       t.middleMaxPts);
+  const middleBWPts    = ratio(pctBW(middle),    NATIONAL_EAP.Middle.blackWomenTarget,  t.middleBWMaxPts);
+  const juniorBlackPts = ratio(pctBlack(junior), NATIONAL_EAP.Junior.blackTarget,       t.juniorMaxPts);
+  const juniorBWPts    = ratio(pctBW(junior),    NATIONAL_EAP.Junior.blackWomenTarget,  t.juniorBWMaxPts);
+
+  const disabledCount = employees.filter(e => e.isDisabled).length;
+  const disabledPct = employees.length > 0 ? disabledCount / employees.length : 0;
+  const disabledPts = ratio(disabledPct, ee.disabledTarget, ee.disabledMaxPts);
+
+  const total = boardBlackPts + boardBWPts +
+    execBlackPts + execBWPts +
+    otherExecBlackPts + otherExecBWPts +
+    seniorBlackPts + seniorBWPts +
+    middleBlackPts + middleBWPts +
+    juniorBlackPts + juniorBWPts +
+    disabledPts;
 
   const maxPts = cfg.pillarConfigs.managementControl.maxPoints;
-  return r2(Math.min(maxPts, boardBlackPts + boardBWPts + execBlackPts + execBWPts));
+  return r2(Math.min(maxPts, total));
 }
 
 export function calcEESector(employees: ParseResult['employees'], cfg: SectorConfig) {
+  const maxPts = cfg.pillarConfigs.employmentEquity?.maxPoints ?? 0;
+  if (maxPts === 0) return 0;
+
   const isBlack = (r: string) => ['African', 'Coloured', 'Indian'].includes(r);
   const grouped: Record<string, typeof employees> = {};
   for (const e of employees) { const d = e.designation || 'Junior'; if (!grouped[d]) grouped[d] = []; grouped[d].push(e); }
@@ -108,8 +144,7 @@ export function calcEESector(employees: ParseResult['employees'], cfg: SectorCon
   const disPct = employees.length > 0 ? disabledCount / employees.length : 0;
   const disPts = Math.min(t.disabledMaxPts, disPct >= t.disabledTarget ? t.disabledMaxPts : (disPct / t.disabledTarget) * t.disabledMaxPts);
 
-  const maxPts = cfg.pillarConfigs.employmentEquity?.maxPoints ?? 0;
-  return r2(Math.min(maxPts || (srPts + mdPts + jrPts + disPts), srPts + mdPts + jrPts + disPts));
+  return r2(Math.min(maxPts, srPts + mdPts + jrPts + disPts));
 }
 
 export function calcSkillsSector(trainings: ParseResult['trainingPrograms'], leviableAmount: number, cfg: SectorConfig) {
@@ -188,12 +223,12 @@ export function calcEsdSector(contributions: ParseResult['esdContributions'], np
     if (c.category === 'supplier_development') sdSpend += c.amount;
     else edSpend += c.amount;
   }
-  if (sdSpend + edSpend <= 0) return { total: 0, totalContributions: 0 };
+  if (sdSpend + edSpend <= 0) return { total: 0, sdScore: 0, edScore: 0, totalContributions: 0 };
 
   const sdScore = targetSD > 0 ? Math.min(t.sdMaxPts, (sdSpend / targetSD) * t.sdMaxPts) : 0;
   const edScore = targetED > 0 ? Math.min(t.edMaxPts, (edSpend / targetED) * t.edMaxPts) : 0;
   const maxPts = (cfg.pillarConfigs.supplierDevelopment?.maxPoints ?? 0) + (cfg.pillarConfigs.enterpriseDevelopment?.maxPoints ?? 0);
-  return { total: r2(Math.min(sdScore + edScore, maxPts || (sdScore + edScore))), totalContributions: sdSpend + edSpend };
+  return { total: r2(Math.min(sdScore + edScore, maxPts || (sdScore + edScore))), sdScore: r2(sdScore), edScore: r2(edScore), totalContributions: sdSpend + edSpend };
 }
 
 export function calcSedSector(contributions: ParseResult['sedContributions'], npat: number, cfg: SectorConfig) {

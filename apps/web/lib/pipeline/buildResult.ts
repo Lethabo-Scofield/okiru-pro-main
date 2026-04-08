@@ -107,7 +107,7 @@ function determineLevel(totalScore: number): string {
   if (totalScore >= 90) return 'Level 3';
   if (totalScore >= 80) return 'Level 4';
   if (totalScore >= 75) return 'Level 5';
-  if (totalScore >= 65) return 'Level 6';
+  if (totalScore >= 70) return 'Level 6';
   if (totalScore >= 55) return 'Level 7';
   if (totalScore >= 40) return 'Level 8';
   return 'Non-Compliant';

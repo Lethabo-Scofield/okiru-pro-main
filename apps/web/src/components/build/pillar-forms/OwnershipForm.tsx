@@ -45,7 +45,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui
 import { v4 as uuidv4 } from "uuid";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { Shareholder, OwnershipData } from "@toolkit/lib/types";
+import type { CalculatorConfig } from "@toolkit/shared/schema";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
+import { useBbeeStore } from "@toolkit/lib/store";
 
 // ============================================================================
 // Types
@@ -163,9 +165,11 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
   }, [data.shareholders]);
 
   // Calculate score
+  const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
   const scoreResult = useMemo(() => {
-    return calculateOwnershipScore(data);
-  }, [data]);
+    if (!calculatorConfig) return { total: 0, subMinimumMet: false, subLines: [], rawStats: {} as any };
+    return calculateOwnershipScore(data, calculatorConfig);
+  }, [data, calculatorConfig]);
 
   // Update company value
   const handleCompanyValueChange = useCallback((field: 'companyValue' | 'outstandingDebt', value: number) => {

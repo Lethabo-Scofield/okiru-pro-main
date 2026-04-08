@@ -184,7 +184,7 @@ const defaultFormState: EmployeeFormState = {
 };
 
 export default function ManagementControl() {
-  const { management, client, addEmployee, removeEmployee, addEmployeesBulk, updateEmployee } = useBbeeStore();
+  const { management, client, addEmployee, removeEmployee, addEmployeesBulk, updateEmployee, calculatorConfig } = useBbeeStore();
   const { toast } = useToast();
   const { employees } = management;
 
@@ -425,7 +425,8 @@ export default function ManagementControl() {
   const validCount = previewEmployees.filter(e => e.valid).length;
   const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
-  const mcScore = calculateManagementScore(management);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const mcScore = calculateManagementScore(management, calculatorConfig);
 
   // Foreign employee count (for display)
   const foreignCount = employees.filter(e => e.isForeign).length;

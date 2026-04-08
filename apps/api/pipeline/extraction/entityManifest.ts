@@ -1574,12 +1574,19 @@ function mcCriteria(cfg: SectorConfig): CriterionEntity[] {
     execBlackTarget: 0.50, execBlackMaxPts: 4,
     execBWTarget: 0.20, execBWMaxPts: 3,
   };
-  return [
+  const criteria: CriterionEntity[] = [
     { code: 'MC-BOARD-BLACK', name: 'Board participation — black', pillarCode: 'managementControl', target: t.boardBlackTarget, maxPoints: t.boardBlackMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register'] },
     { code: 'MC-BOARD-BWO', name: 'Board participation — black women', pillarCode: 'managementControl', target: t.boardBWTarget, maxPoints: t.boardBWMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register'] },
     { code: 'MC-EXEC-BLACK', name: 'Executive management — black', pillarCode: 'managementControl', target: t.execBlackTarget, maxPoints: t.execBlackMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register'] },
     { code: 'MC-EXEC-BWO', name: 'Executive management — black women', pillarCode: 'managementControl', target: t.execBWTarget, maxPoints: t.execBWMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register'] },
   ];
+  if (t.otherExecBlackMaxPts) {
+    criteria.push(
+      { code: 'MC-OEXEC-BLACK', name: 'Other executive management — black', pillarCode: 'managementControl', target: t.otherExecBlackTarget, maxPoints: t.otherExecBlackMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register'] },
+      { code: 'MC-OEXEC-BWO', name: 'Other executive management — black women', pillarCode: 'managementControl', target: t.otherExecBWTarget, maxPoints: t.otherExecBWMaxPts, formulaId: 'proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register'] },
+    );
+  }
+  return criteria;
 }
 
 function eeCriteria(cfg: SectorConfig): CriterionEntity[] {
@@ -1587,12 +1594,26 @@ function eeCriteria(cfg: SectorConfig): CriterionEntity[] {
     seniorMaxPts: 3, middleMaxPts: 3, juniorMaxPts: 3,
     disabledTarget: 0.02, disabledMaxPts: 3,
   };
-  return [
+  const mc = cfg.targets?.managementControl;
+  const seniorBWMaxPts = mc?.seniorBWMaxPts ?? 0;
+  const middleBWMaxPts = mc?.middleBWMaxPts ?? 0;
+  const juniorBWMaxPts = mc?.juniorBWMaxPts ?? 0;
+  const criteria: CriterionEntity[] = [
     { code: 'EE-SENIOR', name: 'Senior management — black', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: t.seniorMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] },
     { code: 'EE-MIDDLE', name: 'Middle management — black', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: t.middleMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] },
     { code: 'EE-JUNIOR', name: 'Junior management — black', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: t.juniorMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] },
     { code: 'EE-DISABLED', name: 'Employees with disabilities', pillarCode: 'employmentEquity', target: t.disabledTarget, maxPoints: t.disabledMaxPts, formulaId: 'proportional', inputEntities: ['employee_disabled'], evidenceRequired: ['employee register'] },
   ];
+  if (seniorBWMaxPts > 0) {
+    criteria.push({ code: 'EE-SENIOR-BWO', name: 'Senior management — black women', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: seniorBWMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] });
+  }
+  if (middleBWMaxPts > 0) {
+    criteria.push({ code: 'EE-MIDDLE-BWO', name: 'Middle management — black women', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: middleBWMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] });
+  }
+  if (juniorBWMaxPts > 0) {
+    criteria.push({ code: 'EE-JUNIOR-BWO', name: 'Junior management — black women', pillarCode: 'employmentEquity', target: 'EAP', maxPoints: juniorBWMaxPts, formulaId: 'eap_proportional', inputEntities: ['employee_name', 'employee_race', 'employee_gender', 'employee_designation'], evidenceRequired: ['employee register', 'EAP targets'] });
+  }
+  return criteria;
 }
 
 function skillsCriteria(cfg: SectorConfig): CriterionEntity[] {
@@ -1665,23 +1686,29 @@ function buildMCPack(cfg: SectorConfig): PillarPack {
   const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 };
   // For sectors that combine MC+EE, include EE entities in the MC pack
   const eePc = cfg.pillarConfigs?.employmentEquity;
-  const isMCPlusEECombined = eePc && (eePc.maxPoints === 0 || eePc.maxPoints === undefined);
+  const isMCPlusEECombined = !eePc || eePc.maxPoints === 0 || eePc.maxPoints === undefined;
   const combinedEntities = isMCPlusEECombined
     ? [...MC_ENTITIES, ...EE_ENTITIES]
     : [...MC_ENTITIES];
+  const combinedCriteria = isMCPlusEECombined
+    ? [...mcCriteria(cfg), ...eeCriteria(cfg).map(c => ({ ...c, pillarCode: 'managementControl' as const }))]
+    : mcCriteria(cfg);
   return {
     pillarCode: 'managementControl', pillarName: 'Management Control', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
-    criteria: mcCriteria(cfg), entities: combinedEntities,
+    criteria: combinedCriteria, entities: combinedEntities,
   };
 }
 
 function buildEEPack(cfg: SectorConfig): PillarPack {
   const pc = cfg.pillarConfigs?.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
+  const eePc = cfg.pillarConfigs?.employmentEquity;
+  const isMergedIntoMC = !eePc || eePc.maxPoints === 0 || eePc.maxPoints === undefined;
   return {
     pillarCode: 'employmentEquity', pillarName: 'Employment Equity', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? false, subMinimumThreshold: (pc.maxPoints ?? 0) * ((pc.subMinimumPercent ?? 0) / 100),
-    criteria: eeCriteria(cfg), entities: [...EE_ENTITIES],
+    criteria: isMergedIntoMC ? [] : eeCriteria(cfg),
+    entities: isMergedIntoMC ? [] : [...EE_ENTITIES],
   };
 }
 

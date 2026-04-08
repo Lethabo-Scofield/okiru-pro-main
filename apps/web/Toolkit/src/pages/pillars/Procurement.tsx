@@ -36,6 +36,9 @@ const emptySupplierForm = {
   spend: 0,
   certificateExpiryDate: '',
   isForeignSupplier: false,
+  isEmpoweringSupplier: false,
+  isSupplierDevRecipient: false,
+  hasThreeYearContract: false,
 };
 
 // VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
@@ -48,7 +51,7 @@ const emptySupplierForm = {
 // - Designated Group: 2 pts at 2%
 
 export default function Procurement() {
-  const { procurement, client, addSupplier, updateSupplier, removeSupplier, updateTMPS } = useBbeeStore();
+  const { procurement, client, addSupplier, updateSupplier, removeSupplier, updateTMPS, calculatorConfig } = useBbeeStore();
   const { tmps, suppliers } = procurement;
   const { toast } = useToast();
 
@@ -156,7 +159,8 @@ export default function Procurement() {
     toast({ title: "Supplier Updated", description: `${editSup.name} has been updated.` });
   };
 
-  const score = calculateProcurementScore(procurement);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const score = calculateProcurementScore(procurement, calculatorConfig);
 
   // Issue 3: Added isForeignSupplier to form fields
   const renderSupplierFormFields = (

@@ -22,7 +22,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 
 export default function SED() {
-  const { sed, client, addSedContribution, removeSedContribution } = useBbeeStore();
+  const { sed, client, addSedContribution, removeSedContribution, calculatorConfig } = useBbeeStore();
   const { contributions } = sed;
   const { toast } = useToast();
 
@@ -60,7 +60,8 @@ export default function SED() {
     toast({ title: "Contribution Added", description: `Added to SED ledger.` });
   };
 
-  const score = calculateSedScore(sed, npat);
+  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const score = calculateSedScore(sed, npat, calculatorConfig);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

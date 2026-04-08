@@ -12,7 +12,7 @@ export interface TemplateEntity {
 }
 
 export interface CalculatorConfig {
-  totalMaxPoints: number; // Grand total including YES where applicable
+  totalMaxPoints: number;
   ownership: {
     votingRightsMax: number;
     womenBonusMax: number;
@@ -36,10 +36,32 @@ export interface CalculatorConfig {
   };
   managementControl?: {
     maxPoints: number;
+    subMinimumPercent?: number;
+    boardBlackTarget?: number;
+    boardBlackMaxPts?: number;
+    boardBWTarget?: number;
+    boardBWMaxPts?: number;
+    execBlackTarget?: number;
+    execBlackMaxPts?: number;
+    execBWTarget?: number;
+    execBWMaxPts?: number;
+    otherExecBlackTarget?: number;
+    otherExecBlackMaxPts?: number;
+    otherExecBWTarget?: number;
+    otherExecBWMaxPts?: number;
+    seniorMaxPts?: number;
+    seniorBWMaxPts?: number;
+    middleMaxPts?: number;
+    middleBWMaxPts?: number;
+    juniorMaxPts?: number;
+    juniorBWMaxPts?: number;
     disabledTarget?: number;
+    disabledMaxPts?: number;
   };
   employmentEquity?: {
     maxPoints: number;
+    disabledTarget?: number;
+    disabledMaxPts?: number;
   };
   skills: {
     generalMax: number;
@@ -52,6 +74,13 @@ export interface CalculatorConfig {
     overallSpendPercent?: number;
     bursarySpendPercent?: number;
     disabledSpendPercent?: number;
+    learningProgrammesMaxPts?: number;
+    bursaryMaxPts?: number;
+    disabledLearningMaxPts?: number;
+    learnershipsMaxPts?: number;
+    absorptionMaxPts?: number;
+    learnershipTargetPercent?: number;
+    absorptionTargetPercent?: number;
   };
   procurement: {
     baseMax: number;
@@ -100,12 +129,15 @@ export interface CalculatorConfig {
     maxDropLevel: number;
   };
   recognitionTable?: { level: number; multiplier: number }[];
+  levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;
   pillarConfigs?: {
-    managementControl?: { maxPoints: number };
+    ownership?: { maxPoints: number; subMinimumPercent?: number };
+    managementControl?: { maxPoints: number; subMinimumPercent?: number };
     employmentEquity?: { maxPoints: number };
-    skillsDevelopment?: { maxPoints: number };
-    preferentialProcurement?: { maxPoints: number };
-    supplierDevelopment?: { maxPoints: number };
+    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number };
+    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number };
+    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number };
+    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number };
     socioEconomicDevelopment?: { maxPoints: number };
     yesInitiative?: { maxPoints: number };
   };

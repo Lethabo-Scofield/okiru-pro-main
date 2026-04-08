@@ -2,13 +2,11 @@ import type { ProcurementData, Supplier } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
-// Default recognition table - overridden by config when available
-const DEFAULT_RECOGNITION_TABLE: Readonly<Record<number, number>> = {
+// Standard recognition table per B-BBEE Act — used when config.recognitionTable not available
+const STANDARD_RECOGNITION_TABLE: Readonly<Record<number, number>> = {
   1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00,
   5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0,
 };
-
-const DEFAULT_BLACK_WOMEN_OWNERSHIP_THRESHOLD = 0.30;
 
 export interface ProcurementSubLine {
   name: string;
@@ -46,36 +44,39 @@ export interface ProcurementResult {
   };
 }
 
-function getRecognitionMultiplier(beeLevel: number, config?: CalculatorConfig): number {
-  const table = config?.recognitionTable ?? DEFAULT_RECOGNITION_TABLE;
-  return table[beeLevel] ?? 0;
+function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): number {
+  if (config.recognitionTable && Array.isArray(config.recognitionTable)) {
+    const entry = config.recognitionTable.find(e => e.level === beeLevel);
+    if (entry) return entry.multiplier;
+  }
+  return STANDARD_RECOGNITION_TABLE[beeLevel] ?? 0;
 }
 
 // VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
 // CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, NO procurement bonuses
 
-export function calculateProcurementScore(data: ProcurementData, config?: CalculatorConfig): ProcurementResult {
+export function calculateProcurementScore(data: ProcurementData, config: CalculatorConfig): ProcurementResult {
+  if (!config) throw new Error('CalculatorConfig is required for procurement score calculation');
   const { tmps } = data;
   const suppliers = data.suppliers || [];
-  const pc = config?.procurement;
+  const pc = config.procurement;
 
-  // Extract config values with fallbacks to hardcoded defaults
-  const allSuppliersTarget = pc?.allSuppliersTarget ?? 0.80;
-  const allSuppliersMaxPts = pc?.allSuppliersMaxPts ?? 5;
-  const qseTarget = pc?.qseTarget ?? 0.15;
-  const qseMaxPts = pc?.qseMaxPts ?? 3;
-  const emeTarget = pc?.emeTarget ?? 0.15;
-  const emeMaxPts = pc?.emeMaxPts ?? 4;
-  const bo51Target = pc?.bo51Target ?? 0.50;
-  const bo51MaxPts = pc?.bo51MaxPts ?? 11;
-  const bwo30Target = pc?.bwo30Target ?? 0.12;
-  const bwo30MaxPts = pc?.bwo30MaxPts ?? 4;
-  const dgTarget = pc?.dgTarget ?? 0.02;
-  const dgMaxPts = pc?.dgMaxPts ?? 2;
+  const allSuppliersTarget = pc.allSuppliersTarget ?? 0.80;
+  const allSuppliersMaxPts = pc.allSuppliersMaxPts ?? 5;
+  const qseTarget = pc.qseTarget ?? 0.15;
+  const qseMaxPts = pc.qseMaxPts ?? 3;
+  const emeTarget = pc.emeTarget ?? 0.15;
+  const emeMaxPts = pc.emeMaxPts ?? 4;
+  const bo51Target = pc.bo51Target ?? 0.50;
+  const bo51MaxPts = pc.bo51MaxPts ?? 11;
+  const bwo30Target = pc.bwo30Target ?? 0.12;
+  const bwo30MaxPts = pc.bwo30MaxPts ?? 4;
+  const dgTarget = pc.dgTarget ?? 0.02;
+  const dgMaxPts = pc.dgMaxPts ?? 2;
   
-  const blackWomenThreshold = config?.procurement?.blackWomenThreshold ?? DEFAULT_BLACK_WOMEN_OWNERSHIP_THRESHOLD;
-  const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
-  const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
+  const blackWomenThreshold = config.procurement.blackWomenThreshold ?? 0.30;
+  const subMinThreshold = config.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
+  const maxPoints = config.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 
   const TARGET_ALL = tmps * allSuppliersTarget;
   const TARGET_QSE = tmps * qseTarget;
