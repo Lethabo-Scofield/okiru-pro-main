@@ -13,7 +13,7 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { SEDData, Contribution, SEDContributionType } from "@toolkit/lib/types";
-import type { CalculatorConfig } from "@toolkit/shared/schema";
+import type { CalculatorConfig } from "@shared/schema";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";

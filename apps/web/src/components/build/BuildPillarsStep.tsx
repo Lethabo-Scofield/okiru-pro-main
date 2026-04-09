@@ -74,6 +74,19 @@ const PILLAR_METADATA: Record<string, { name: string; description: string; icon:
   accessToFinancialServices: { name: 'Access to Financial Services', description: 'FSC-specific access', icon: Users },
 };
 
+// Normalize API pillar keys to short IDs used by renderPillarForm/hasData/getPillarScore
+const PILLAR_ID_MAP: Record<string, string> = {
+  managementControl: 'management',
+  skillsDevelopment: 'skills',
+  preferentialProcurement: 'procurement',
+  socioEconomicDevelopment: 'sed',
+  yesInitiative: 'yes',
+  // These already match:
+  ownership: 'ownership',
+  supplierDevelopment: 'supplierDevelopment',
+  enterpriseDevelopment: 'enterpriseDevelopment',
+};
+
 // Generate dynamic pillar config from calculatorConfig
 function usePillarConfig(): PillarConfig[] {
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
@@ -91,9 +104,10 @@ function usePillarConfig(): PillarConfig[] {
     if (!config || config.maxPoints === 0) continue; // Skip empty/zero pillars
 
     const meta = PILLAR_METADATA[key] || { name: key, description: '', icon: Building2 };
+    const shortId = PILLAR_ID_MAP[key] || key;
 
     pillars.push({
-      id: key,
+      id: shortId,
       code: key.substring(0, 4).toUpperCase(),
       name: meta.name,
       description: meta.description,
@@ -170,13 +184,17 @@ export function BuildPillarsStep({
 
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
 
+  const emptyEsd = { total: 0, sdTotal: 0, edTotal: 0, supplierDev: 0, enterpriseDev: 0, graduationBonus: 0, jobsCreatedBonus: 0, sdSubMinimumMet: false, edSubMinimumMet: false, subMinimumMet: false, sdSpend: 0, edSpend: 0, sdTarget: 0, edTarget: 0, sdSubLines: [] as any[], edSubLines: [] as any[], subLines: [] as any[] };
   const esdLive = useMemo(
-    () => calculateEsdScore(data.esd, npatForEsd, calculatorConfig!),
+    () => calculatorConfig ? calculateEsdScore(data.esd, npatForEsd, calculatorConfig) : emptyEsd,
     [data.esd, npatForEsd, calculatorConfig],
   );
-  const procLive = useMemo(() => calculateProcurementScore(data.procurement, calculatorConfig!), [data.procurement, calculatorConfig]);
+  const procLive = useMemo(
+    () => calculatorConfig ? calculateProcurementScore(data.procurement, calculatorConfig) : { total: 0, subMinimumMet: false, subLines: [] as any[], recognisedSpend: 0, target: 0, base: 0, empoweringSuppliers: 0, qseSuppliers: 0, emeSuppliers: 0, blackOwned51: 0, blackFemaleOwned30: 0, designatedGroup: 0, rawStats: {} as any },
+    [data.procurement, calculatorConfig],
+  );
   const skillsLive = useMemo(
-    () => calculateSkillsScore({ ...data.skills, leviableAmount: leviable }, calculatorConfig!),
+    () => calculatorConfig ? calculateSkillsScore({ ...data.skills, leviableAmount: leviable }, calculatorConfig) : { total: 0, subMinimumMet: false, learningProgrammes: 0, bursaries: 0, disabledLearning: 0, learnerships: 0, absorption: 0, categoryBreakdown: [] as any[], subLines: [] as any[], rawStats: {} as any },
     [data.skills, leviable, calculatorConfig],
   );
 
@@ -205,17 +223,19 @@ export function BuildPillarsStep({
     };
     let yesPts = 0;
     try {
-      yesPts = calculateYESScore(y, calculatorConfig).score;
+      if (calculatorConfig) yesPts = calculateYESScore(y, calculatorConfig).score;
     } catch { /* ignore */ }
+    if (!calculatorConfig) {
+      return { ownership: 0, management: 0, skills: 0, procurement: 0, supplierDevelopment: 0, enterpriseDevelopment: 0, sed: 0, yes: 0 };
+    }
     return {
-      ownership: calculateOwnershipScore(data.ownership, calculatorConfig!).total,
-      management: calculateManagementScore(data.management, calculatorConfig!, eapProvince).total,
-      // Issue 1: employmentEquity removed (merged with management)
+      ownership: calculateOwnershipScore(data.ownership, calculatorConfig).total,
+      management: calculateManagementScore(data.management, calculatorConfig, eapProvince).total,
       skills: skillsLive.total,
       procurement: procLive.total,
       supplierDevelopment: esdLive.sdTotal,
       enterpriseDevelopment: esdLive.edTotal,
-      sed: calculateSedScore(data.sed, npatForEsd, calculatorConfig!).total,
+      sed: calculateSedScore(data.sed, npatForEsd, calculatorConfig).total,
       yes: yesPts,
     };
   }, [data, eapProvince, skillsLive, procLive, esdLive, npatForEsd]);

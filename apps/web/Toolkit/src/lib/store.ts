@@ -377,7 +377,8 @@ function calculateScorecard(
   state: PillarState & { calculatorConfig?: CalculatorConfig | null },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {
-  const cfg = state.calculatorConfig!;
+  const cfg = state.calculatorConfig;
+  if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
   const ownScore = calculateOwnershipScore(state.ownership, cfg);
   const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
   const skillScore = calculateSkillsScore(state.skills, cfg);
