@@ -41,7 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui
 import { v4 as uuidv4 } from "uuid";
 import { cn } from "@toolkit/lib/utils";
 import type { Employee, ManagementData } from "@toolkit/lib/types";
-import type { CalculatorConfig } from "@toolkit/shared/schema";
+import type { CalculatorConfig } from "@shared/schema";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import { useBbeeStore } from "@toolkit/lib/store";
 

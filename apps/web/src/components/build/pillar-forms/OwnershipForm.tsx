@@ -45,7 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui
 import { v4 as uuidv4 } from "uuid";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { Shareholder, OwnershipData } from "@toolkit/lib/types";
-import type { CalculatorConfig } from "@toolkit/shared/schema";
+import type { CalculatorConfig } from "@shared/schema";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { useBbeeStore } from "@toolkit/lib/store";
 
