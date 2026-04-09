@@ -228,6 +228,15 @@ Tests in `apps/api/pipeline/__tests__/extractionPipeline.test.ts` (29 tests):
 - No mock fallbacks — validation fails explicitly on missing data
 - Deterministic outputs — same input always produces same scorecard
 
+## Document Processor Progress Tracking
+The Company Scorecards page (Dashboard → Scorecards tab) displays progress tracking for both upload paths:
+- **Upload & Extract**: Steps are Company Info → Mode → Upload → Template → Extract → Processing → Review → Summary → Scorecard
+- **Build Manually**: Steps are Company Info → Mode → Foundation → Pillars → Scorecard
+- Each session shows a flow type badge (Upload/Build), a progress bar with step indicators, current step label, and percentage complete
+- Incomplete sessions show a "Resume" button that navigates to `/processor?session=<id>` and restores the full session state
+- The API returns `flowMode` in the session list response for proper flow type detection
+- Progress calculation handles unknown/legacy step values gracefully with human-readable labels
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
 - Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly
