@@ -3,7 +3,7 @@ import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink } from 'lucide-react';
+import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 import { API_BASE } from '@toolkit/lib/config';
 
@@ -17,6 +17,7 @@ interface ProcessorSession {
   createdAt: string;
   updatedAt: string;
   currentStep: string;
+  flowMode: 'upload' | 'build' | null;
   filesData: { id: number; name: string; size: string; type: string }[];
   extractionResults: { fileName?: string; templateName?: string }[];
   isComplete: boolean;
@@ -31,6 +32,10 @@ interface CompanyRow {
   subtitle?: string;
   isComplete: boolean;
   toolkitClientId?: string | null;
+  flowMode: 'upload' | 'build' | null;
+  currentStep: string;
+  filesCount: number;
+  docsProcessed: number;
 }
 
 interface StoredTemplate {
@@ -52,6 +57,66 @@ interface StoredTemplate {
 
 
 type Page = 'home' | 'templates' | 'scorecards';
+
+const UPLOAD_STEPS = [
+  { key: 'company-info', label: 'Company Info' },
+  { key: 'choose-mode', label: 'Mode' },
+  { key: 'upload', label: 'Upload' },
+  { key: 'classify', label: 'Template' },
+  { key: 'extract', label: 'Extract' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'review', label: 'Review' },
+  { key: 'summary', label: 'Summary' },
+  { key: 'scorecard', label: 'Scorecard' },
+];
+
+const BUILD_STEPS = [
+  { key: 'company-info', label: 'Company Info' },
+  { key: 'choose-mode', label: 'Mode' },
+  { key: 'build-foundation', label: 'Foundation' },
+  { key: 'build-pillars', label: 'Pillars' },
+  { key: 'scorecard', label: 'Scorecard' },
+];
+
+const STEP_LABEL_MAP: Record<string, string> = {
+  'company-info': 'Company Info',
+  'choose-mode': 'Mode Selection',
+  'upload': 'Upload',
+  'classify': 'Template',
+  'extract': 'Extracting',
+  'processing': 'Processing',
+  'review': 'Review',
+  'summary': 'Summary',
+  'scorecard': 'Scorecard',
+  'build-foundation': 'Foundation',
+  'build-pillars': 'Pillars',
+};
+
+function getStepProgress(currentStep: string, flowMode: 'upload' | 'build' | null): {
+  steps: { key: string; label: string }[];
+  currentIndex: number;
+  percentage: number;
+  stepLabel: string;
+} {
+  const isBuild = flowMode === 'build' || currentStep?.startsWith('build-');
+  const steps = isBuild ? BUILD_STEPS : UPLOAD_STEPS;
+  let currentIndex = steps.findIndex(s => s.key === currentStep);
+
+  if (currentIndex < 0) {
+    const humanLabel = STEP_LABEL_MAP[currentStep] || currentStep?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'In Progress';
+    const nearestIdx = steps.reduce((best, s, i) => {
+      if (currentStep?.includes(s.key) || s.key.includes(currentStep || '')) return i;
+      return best;
+    }, -1);
+    currentIndex = nearestIdx >= 0 ? nearestIdx : 0;
+    const percentage = steps.length > 1 ? Math.round((currentIndex / (steps.length - 1)) * 100) : 0;
+    return { steps, currentIndex, percentage, stepLabel: humanLabel };
+  }
+
+  const percentage = steps.length > 1 ? Math.round((currentIndex / (steps.length - 1)) * 100) : 0;
+  const stepLabel = steps[currentIndex]?.label || currentStep || 'Starting';
+  return { steps, currentIndex, percentage, stepLabel };
+}
 
 function statusLabel(status: string) {
   if (status === "complete") return "Complete";
@@ -172,20 +237,40 @@ export default function Dashboard() {
   }, []);
 
   const allCompanies = useMemo<CompanyRow[]>(() => {
-    return processorSessions.map(s => ({
-      name: s.companyInfo?.name || 'Unknown',
-      id: s.id,
-      industry: s.companyInfo?.sector || 'Other',
-      status: s.isComplete ? 'complete' : 'in_progress',
-      sessionId: s.id,
-      isComplete: s.isComplete,
-      toolkitClientId: (s as any).toolkitClientId || null,
-      subtitle: s.isComplete
-        ? `${s.extractionResults?.length || 0} doc${(s.extractionResults?.length || 0) !== 1 ? 's' : ''} processed · Assessment complete`
-        : s.currentStep === 'review'
-        ? 'Extraction complete — awaiting review'
-        : `In progress · ${s.filesData?.length || 0} doc${(s.filesData?.length || 0) !== 1 ? 's' : ''} uploaded`,
-    }));
+    return processorSessions.map(s => {
+      const flowMode = s.flowMode || null;
+      const isBuild = flowMode === 'build' || s.currentStep?.startsWith('build-');
+      const progress = getStepProgress(s.currentStep, flowMode);
+      const filesCount = s.filesData?.length || 0;
+      const docsProcessed = s.extractionResults?.length || 0;
+
+      let subtitle: string;
+      if (s.isComplete) {
+        subtitle = isBuild
+          ? 'Manual build complete'
+          : `${docsProcessed} doc${docsProcessed !== 1 ? 's' : ''} processed · Assessment complete`;
+      } else {
+        subtitle = `Step: ${progress.stepLabel} · ${progress.percentage}% complete`;
+        if (!isBuild && filesCount > 0) {
+          subtitle += ` · ${filesCount} file${filesCount !== 1 ? 's' : ''}`;
+        }
+      }
+
+      return {
+        name: s.companyInfo?.name || 'Unknown',
+        id: s.id,
+        industry: s.companyInfo?.sector || 'Other',
+        status: s.isComplete ? 'complete' as const : 'in_progress' as const,
+        sessionId: s.id,
+        isComplete: s.isComplete,
+        toolkitClientId: (s as any).toolkitClientId || null,
+        flowMode,
+        currentStep: s.currentStep,
+        filesCount,
+        docsProcessed,
+        subtitle,
+      };
+    });
   }, [processorSessions]);
 
   const industries = useMemo(() => Array.from(new Set(allCompanies.map(c => c.industry))).sort(), [allCompanies]);
@@ -665,7 +750,8 @@ export default function Dashboard() {
                     <thead className="bg-white/[0.03]">
                       <tr className="text-left text-[10px] text-[#98989f] uppercase tracking-wider">
                         <th className="px-5 py-2.5 font-semibold">Company</th>
-                        <th className="px-5 py-2.5 font-semibold">Session ID</th>
+                        <th className="px-5 py-2.5 font-semibold">Type</th>
+                        <th className="px-5 py-2.5 font-semibold">Progress</th>
                         <th className="px-5 py-2.5 font-semibold">Industry</th>
                         <th className="px-5 py-2.5 font-semibold">Status</th>
                         <th className="px-5 py-2.5 font-semibold text-right">Action</th>
@@ -676,6 +762,8 @@ export default function Dashboard() {
                         const isHovered = hoveredRow === c.sessionId;
                         const isFirst = idx === 0;
                         const isLast = idx === filteredCompanies.length - 1;
+                        const isBuild = c.flowMode === 'build' || c.currentStep?.startsWith('build-');
+                        const progress = getStepProgress(c.currentStep, c.flowMode);
                         return (
                         <tr key={c.id}
                           className="hover:bg-white/[0.03] smooth group"
@@ -686,16 +774,67 @@ export default function Dashboard() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
                               <div className="font-semibold text-white">{c.name}</div>
-                              {!c.isComplete && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold tracking-wider uppercase">Active</span>
-                              )}
                               {c.isComplete && (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold tracking-wider uppercase">Done</span>
                               )}
                             </div>
                             <div className="text-[10px] text-[#636366] mt-0.5">{c.subtitle}</div>
                           </td>
-                          <td className="px-5 py-3.5 text-[#98989f] font-mono text-[11px]">{c.sessionId.slice(0, 18)}…</td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-1.5">
+                              {isBuild ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold">
+                                  <Wrench className="h-2.5 w-2.5" />
+                                  Build
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#5e9bff]/10 text-[#5e9bff] font-semibold">
+                                  <UploadCloud className="h-2.5 w-2.5" />
+                                  Upload
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {c.isComplete ? (
+                              <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                <span className="text-[11px] text-emerald-400 font-medium">Complete</span>
+                              </div>
+                            ) : (
+                              <div className="min-w-[140px]">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[10px] text-[#8e8e93] font-medium">{progress.stepLabel}</span>
+                                  <span className="text-[10px] text-[#636366] font-mono">{progress.percentage}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${Math.max(5, progress.percentage)}%`,
+                                      background: isBuild
+                                        ? 'linear-gradient(90deg, #34d399, #10b981)'
+                                        : 'linear-gradient(90deg, #60a5fa, #3b82f6)',
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex gap-0.5 mt-1.5">
+                                  {progress.steps.map((step, si) => (
+                                    <div
+                                      key={step.key}
+                                      className="h-1 flex-1 rounded-full transition-colors duration-300"
+                                      style={{
+                                        background: si <= progress.currentIndex
+                                          ? isBuild ? '#34d399' : '#60a5fa'
+                                          : 'rgba(255,255,255,0.06)',
+                                      }}
+                                      title={step.label}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </td>
                           <td className="px-5 py-3.5 text-[#8e8e93]">{c.industry}</td>
                           <td className="px-5 py-3.5">
                             <span className={statusPillClass(c.status)}>{statusLabel(c.status)}</span>
@@ -791,7 +930,7 @@ export default function Dashboard() {
                       })}
                       {filteredCompanies.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-5 py-16 text-center">
+                          <td colSpan={6} className="px-5 py-16 text-center">
                             <div className="flex flex-col items-center gap-3">
                               <Building2 className="w-8 h-8 text-[#3a3a3c]" />
                               <p className="text-[14px] text-[#636366]">No assessments yet</p>
