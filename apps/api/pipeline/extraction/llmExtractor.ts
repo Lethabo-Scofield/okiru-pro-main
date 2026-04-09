@@ -1,6 +1,5 @@
 /**
- * LLM-based value extraction using Azure OpenAI GPT-4o-mini (primary)
- * with Groq llama-3.3-70b-versatile as fallback.
+ * LLM-based value extraction using Azure OpenAI gpt-4o.
  *
  * Anti-hallucination controls: structural verification, JSON schema, temperature 0,
  * explicit null instruction, and dual extraction agreement scoring.
@@ -40,21 +39,15 @@ export interface LLMExtractionResult {
 }
 
 export interface LLMExtractorConfig {
-  apiKey?: string;
-  model?: string;       // default llama-3.3-70b-versatile
+  model?: string;       // default: AZURE_OPENAI_DEPLOYMENT env var or 'gpt-4o'
   temperature?: number; // default 0
   maxTokens?: number;   // default 500
-  timeoutMs?: number;   // default 30000
 }
 
 const DEFAULT_CONFIG = {
-  // Azure OpenAI GPT-4o-mini (preferred)
-  azureDeployment: 'gpt-4o-mini',
-  // Groq fallback
-  groqModel: 'llama-3.3-70b-versatile',
+  azureDeployment: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
   temperature: 0,
   maxTokens: 500,
-  timeoutMs: 30000,
 };
 
 // ---------------------------------------------------------------------------
@@ -208,152 +201,60 @@ export function structuralVerify(
 }
 
 // Log LLM configuration status on module load
-console.log(`[LLMExtractor] Provider status - Azure:${isAzureOpenAIConfigured()}, Groq:${!!process.env.GROQ_API_KEY}`);
+console.log(`[LLMExtractor] Provider: Azure OpenAI — configured:${isAzureOpenAIConfigured()}`);
 
 /**
- * Check if any LLM provider is available (Azure OpenAI preferred, Groq fallback).
+ * Check if the LLM provider (Azure OpenAI) is available.
  */
 export function isAvailable(): boolean {
-  return isAzureOpenAIConfigured() || !!process.env.GROQ_API_KEY;
+  return isAzureOpenAIConfigured();
 }
 
 /**
  * Check which LLM provider is being used.
  */
-export function getPreferredProvider(): 'azure' | 'groq' | 'none' {
-  if (isAzureOpenAIConfigured()) return 'azure';
-  if (!!process.env.GROQ_API_KEY) return 'groq';
-  return 'none';
+export function getPreferredProvider(): 'azure' | 'none' {
+  return isAzureOpenAIConfigured() ? 'azure' : 'none';
 }
 
 export class LLMExtractor {
-  private apiKey: string;
   private model: string;
   private temperature: number;
   private maxTokens: number;
-  private timeoutMs: number;
-  private useAzure: boolean;
 
   constructor(partial?: LLMExtractorConfig) {
-    this.apiKey = partial?.apiKey ?? process.env.GROQ_API_KEY ?? '';
-    // Prefer Azure OpenAI if configured, otherwise use Groq
-    this.useAzure = isAzureOpenAIConfigured();
-    this.model = partial?.model ?? (this.useAzure ? DEFAULT_CONFIG.azureDeployment : DEFAULT_CONFIG.groqModel);
+    this.model = partial?.model ?? DEFAULT_CONFIG.azureDeployment;
     this.temperature = partial?.temperature ?? DEFAULT_CONFIG.temperature;
     this.maxTokens = partial?.maxTokens ?? DEFAULT_CONFIG.maxTokens;
-    this.timeoutMs = partial?.timeoutMs ?? DEFAULT_CONFIG.timeoutMs;
   }
 
   /**
    * Get the provider being used.
    */
-  getProvider(): 'azure' | 'groq' {
-    return this.useAzure ? 'azure' : 'groq';
+  getProvider(): 'azure' | 'none' {
+    return isAzureOpenAIConfigured() ? 'azure' : 'none';
   }
 
   /**
-   * Call Azure OpenAI chat completions API (GPT-4o-mini).
+   * Call Azure OpenAI (gpt-4o) for extraction.
+   * Throws if Azure is not configured.
    */
-  private async callAzure(prompt: string): Promise<string> {
-    try {
-      const response = await chatCompletion(
-        [
-          {
-            role: 'system',
-            content: 'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values. Respond with valid JSON only.',
-          },
-          { role: 'user', content: prompt },
-        ],
-        {
-          temperature: this.temperature,
-          maxTokens: this.maxTokens,
-          responseFormat: { type: 'json_object' },
-        }
-      );
-      return response;
-    } catch (error) {
-      console.error('[LLMExtractor] Azure OpenAI error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Call Groq chat completions API (fallback when Azure is not available).
-   */
-  private async callGroq(prompt: string): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('GROQ_API_KEY is not set');
-    }
-
-    const url = 'https://api.groq.com/openai/v1/chat/completions';
-    const body = JSON.stringify({
-      model: this.model,
-      messages: [
+  private async callLLM(prompt: string): Promise<{ response: string; provider: 'azure' }> {
+    const response = await chatCompletion(
+      [
         {
           role: 'system',
-          content:
-            'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values. Respond with valid JSON only.',
+          content: 'You are a precise B-BBEE data extraction assistant. Extract ONLY the requested value from the provided text. If the value is not clearly present, return null. Never guess or infer values. Respond with valid JSON only.',
         },
         { role: 'user', content: prompt },
       ],
-      temperature: this.temperature,
-      max_tokens: this.maxTokens,
-      response_format: { type: 'json_object' },
-    });
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Groq API error ${res.status}: ${errText}`);
+      {
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        responseFormat: { type: 'json_object' },
       }
-
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const content = data.choices?.[0]?.message?.content;
-      if (content == null) {
-        throw new Error('Groq API returned empty response');
-      }
-      return content;
-    } catch (err) {
-      clearTimeout(timeout);
-      throw err;
-    }
-  }
-
-  /**
-   * Call LLM API (Azure preferred, Groq fallback).
-   */
-  private async callLLM(prompt: string): Promise<{ response: string; provider: 'azure' | 'groq' }> {
-    // Try Azure first if configured
-    if (this.useAzure) {
-      try {
-        const response = await this.callAzure(prompt);
-        return { response, provider: 'azure' };
-      } catch (azureError) {
-        console.warn('[LLMExtractor] Azure failed, falling back to Groq:', azureError);
-        // Fall through to Groq
-      }
-    }
-
-    // Use Groq as fallback
-    const response = await this.callGroq(prompt);
-    return { response, provider: 'groq' };
+    );
+    return { response, provider: 'azure' };
   }
 
   ruleBasedExtract(req: LLMExtractionRequest): LLMExtractionResult {
@@ -803,100 +704,72 @@ function buildVerificationPrompt(entries: GroqVerificationEntry[]): string {
 }
 
 /**
- * Send a batch of extracted values to Groq for verification.
+ * Send a batch of extracted values to Azure OpenAI (gpt-4o) for verification.
  * Returns one GroqVerificationResult per entry (or a "could not verify" fallback on error).
- * Batches are capped at 10 entries to keep prompts manageable.
+ * Fail-safe: any error treats all entries as valid so extraction is never blocked.
  */
 export async function groqVerifyBatch(
   entries: GroqVerificationEntry[],
-  apiKey: string,
-  model = 'llama-3.3-70b-versatile',
-  timeoutMs = 30_000,
+  _unused?: string,   // kept for backward-compat call sites — ignored
 ): Promise<GroqVerificationResult[]> {
-  if (!apiKey || entries.length === 0) {
-    return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification skipped (no API key)', correctedValue: null }));
-  }
-
-  const prompt = buildVerificationPrompt(entries);
-  const url = 'https://api.groq.com/openai/v1/chat/completions';
-
-  const body = JSON.stringify({
-    model,
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a precise B-BBEE audit verification assistant. Verify extracted values and return only valid JSON.',
-      },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0,
-    max_tokens: 600,
-    response_format: { type: 'json_object' },
-  });
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      console.warn(`[GroqVerify] API error ${res.status} — treating all as valid`);
-      return entries.map(e => ({ entityName: e.entityName, valid: true, reason: `Verification API error ${res.status}`, correctedValue: null }));
-    }
-
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content ?? '';
-
-    // Groq json_object mode wraps arrays as {"results": [...]} sometimes
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      console.warn('[GroqVerify] Could not parse JSON response — treating all as valid');
-      return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification parse error', correctedValue: null }));
-    }
-
-    // Normalise to array
-    let arr: unknown[];
-    if (Array.isArray(parsed)) {
-      arr = parsed;
-    } else if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
-      // Find the first array-valued key
-      const arrKey = Object.keys(obj).find(k => Array.isArray(obj[k]));
-      arr = arrKey ? (obj[arrKey] as unknown[]) : [];
-    } else {
-      arr = [];
-    }
-
-    return entries.map((e, i) => {
-      const item = arr[i] as Record<string, unknown> | undefined;
-      if (!item || typeof item !== 'object') {
-        return { entityName: e.entityName, valid: true, reason: 'No verification result returned', correctedValue: null };
-      }
-      return {
-        entityName: e.entityName,
-        valid: item.valid !== false, // default to true if missing
-        reason: typeof item.reason === 'string' ? item.reason : '',
-        correctedValue: typeof item.corrected_value === 'string' ? item.corrected_value : null,
-      };
-    });
-  } catch (err: any) {
-    clearTimeout(timeout);
-    const isAbort = err?.name === 'AbortError';
-    console.warn(`[GroqVerify] ${isAbort ? 'Timeout' : 'Error'} — treating all as valid:`, err?.message ?? err);
+  if (!isAzureOpenAIConfigured() || entries.length === 0) {
     return entries.map(e => ({
       entityName: e.entityName,
       valid: true,
-      reason: isAbort ? 'Verification timed out' : 'Verification error',
+      reason: 'Verification skipped — Azure OpenAI not configured',
       correctedValue: null,
     }));
   }
+
+  const prompt = buildVerificationPrompt(entries);
+
+  let content: string;
+  try {
+    content = await chatCompletion(
+      [
+        {
+          role: 'system',
+          content: 'You are a precise B-BBEE audit verification assistant. Verify extracted values and return only valid JSON.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      { temperature: 0, maxTokens: 800 },
+    );
+  } catch (err: any) {
+    console.warn('[LLMVerify] Azure OpenAI error — treating all as valid:', err?.message ?? err);
+    return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification error', correctedValue: null }));
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    console.warn('[LLMVerify] Could not parse JSON response — treating all as valid');
+    return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification parse error', correctedValue: null }));
+  }
+
+  // Normalise: Azure may wrap array as {"results": [...]} due to json_object mode
+  let arr: unknown[];
+  if (Array.isArray(parsed)) {
+    arr = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>;
+    const arrKey = Object.keys(obj).find(k => Array.isArray(obj[k]));
+    arr = arrKey ? (obj[arrKey] as unknown[]) : [];
+  } else {
+    arr = [];
+  }
+
+  return entries.map((e, i) => {
+    const item = arr[i] as Record<string, unknown> | undefined;
+    if (!item || typeof item !== 'object') {
+      return { entityName: e.entityName, valid: true, reason: 'No verification result returned', correctedValue: null };
+    }
+    return {
+      entityName: e.entityName,
+      valid: item.valid !== false,
+      reason: typeof item.reason === 'string' ? item.reason : '',
+      correctedValue: typeof item.corrected_value === 'string' ? item.corrected_value : null,
+    };
+  });
 }

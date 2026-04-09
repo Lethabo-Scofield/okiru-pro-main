@@ -610,20 +610,18 @@ router.post(
 
       extractTime = Date.now() - extractStart;
 
-      // ── Groq Verification Pass ────────────────────────────────────────────
-      // For every entity that produced a non-null value, ask Groq to confirm
+      // ── LLM Verification Pass (Azure OpenAI gpt-4o) ──────────────────────
+      // For every entity that produced a non-null value, ask Azure to confirm
       // the extracted value is actually correct (verification, NOT re-extraction).
-      const groqApiKey = process.env.GROQ_API_KEY ?? '';
-      if (groqApiKey) {
+      {
         const verifyStart = Date.now();
         const VERIFY_BATCH = 5;
 
-        // Only verify results that have a value
         const toVerify = extractionResults
           .map((r, idx) => ({ r, idx }))
           .filter(({ r }) => r.value !== null && r.value !== '');
 
-        console.log(`[hybridExtraction] Starting Groq verification for ${toVerify.length} non-null entities`);
+        console.log(`[hybridExtraction] Starting LLM verification for ${toVerify.length} non-null entities`);
 
         for (let vi = 0; vi < toVerify.length; vi += VERIFY_BATCH) {
           const batch = toVerify.slice(vi, vi + VERIFY_BATCH);
@@ -637,14 +635,13 @@ router.post(
             pillar: r.pillar,
           }));
 
-          const verResults = await groqVerifyBatch(entries, groqApiKey);
+          const verResults = await groqVerifyBatch(entries);
 
           for (let j = 0; j < batch.length; j++) {
             const { r, idx } = batch[j];
             const ver = verResults[j];
             if (!ver) continue;
 
-            // Attach the verification result
             extractionResults[idx].groqVerification = {
               valid: ver.valid,
               reason: ver.reason,
@@ -653,19 +650,16 @@ router.post(
 
             if (!ver.valid) {
               if (ver.correctedValue) {
-                // Groq found the right value in context — use the correction
                 extractionResults[idx].value = ver.correctedValue;
                 extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence, 0.75);
-                console.log(`[GroqVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
+                console.log(`[LLMVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
               } else {
-                // Value is wrong and no correction available — nullify
                 extractionResults[idx].value = null;
                 extractionResults[idx].status = 'not_found';
                 extractionResults[idx].confidence = Math.max(extractionResults[idx].confidence * 0.3, 0.1);
-                console.log(`[GroqVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
+                console.log(`[LLMVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
               }
             } else {
-              // Groq confirmed — small confidence boost
               extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence * 1.05, 0.99);
             }
           }
@@ -674,9 +668,7 @@ router.post(
         }
 
         verifyTime = Date.now() - verifyStart;
-        console.log(`[hybridExtraction] Groq verification complete in ${verifyTime}ms`);
-      } else {
-        console.log('[hybridExtraction] Skipping Groq verification — GROQ_API_KEY not set');
+        console.log(`[hybridExtraction] LLM verification complete in ${verifyTime}ms`);
       }
 
       const totalTime = Date.now() - totalStartTime;
