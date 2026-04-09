@@ -455,7 +455,10 @@ router.post(
         bm25Weight: hasEmbeddings ? 0.35 : 0.65,
         semanticWeight: hasEmbeddings ? 0.5 : 0,
         topK: 10,
-        enableReranking: llmAvailable,
+        // LLM reranking disabled — embedding+BM25 retrieval already accurate enough.
+        // Enabling it adds 1 Azure call per entity (117+ extra calls) and severely
+        // slows extraction. Reranking reserved for dedicated search endpoints.
+        enableReranking: false,
         rerankTopK: 5,
       });
 
@@ -471,8 +474,9 @@ router.post(
       const provenanceTracker = new ProvenanceTracker();
       const extractionResults: ExtractionResult[] = [];
 
-      // Process entities in batches to avoid overwhelming the LLM
-      const BATCH_SIZE = 5;
+      // Process entities in parallel batches. 15 concurrent Azure calls is safe
+      // for standard Azure OpenAI rate limits and cuts wall-clock time ~3x vs 5.
+      const BATCH_SIZE = 15;
       const entities = getAllEntities(manifest);
 
       for (let i = 0; i < entities.length; i += BATCH_SIZE) {
@@ -484,12 +488,13 @@ router.post(
               // Build search query from entity
               const searchQuery = [entity.name, ...entity.extraction.aliases].join(' ');
 
-              // Hybrid retrieval with embeddings and optional reranking
+              // Hybrid retrieval with embeddings (no per-entity LLM reranking —
+              // embedding+BM25 scoring is sufficient and avoids extra Azure calls)
               const retrievalResults = await retriever.searchWithEmbeddings(
                 searchQuery,
                 10,
                 {
-                  rerank: llmAvailable,
+                  rerank: false,
                   rerankTopK: 5,
                   getChunkText: (pageId) => {
                     const chunk = chunks.find(c => c.chunkId === pageId || c.pageId === pageId);
@@ -615,7 +620,7 @@ router.post(
       // the extracted value is actually correct (verification, NOT re-extraction).
       {
         const verifyStart = Date.now();
-        const VERIFY_BATCH = 5;
+        const VERIFY_BATCH = 10;
 
         const toVerify = extractionResults
           .map((r, idx) => ({ r, idx }))
