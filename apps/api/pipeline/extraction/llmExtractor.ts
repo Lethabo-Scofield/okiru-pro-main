@@ -457,12 +457,19 @@ export class LLMExtractor {
       };
     }
 
-    const extractedValue =
-      parsed.value === undefined || parsed.value === ''
+    // Normalise the LLM's returned value.
+    // Guard: JSON null, undefined, empty string, and common null-sentinel strings
+    // ("null", "Null", "N/A", "none", "not found", etc.) all map to JS null.
+    const NULL_SENTINELS = /^(null|n\/a|none|not\s+found|not\s+available|unknown|-)$/i;
+    const rawVal = parsed.value;
+    const extractedValue: string | number | null =
+      rawVal === null || rawVal === undefined || rawVal === ''
         ? null
-        : (typeof parsed.value === 'number' || typeof parsed.value === 'string'
-            ? parsed.value
-            : String(parsed.value)) as string | number | null;
+        : typeof rawVal === 'number'
+          ? rawVal
+          : NULL_SENTINELS.test(String(rawVal).trim())
+            ? null
+            : String(rawVal);
 
     const verified = structuralVerify(extractedValue, req.sourceText);
 
