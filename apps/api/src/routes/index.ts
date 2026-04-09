@@ -64,10 +64,13 @@ export async function registerRoutes(
 
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
   const sessionConfig: session.SessionOptions = {
-    secret: sessionSecret || 'okiru-dev-secret-local-only',
+    // MUST match the web server's secret and cookie name exactly so the API
+    // can read sessions created by the web server (both share the same
+    // MongoDB "sessions" collection and the same browser cookie).
+    secret: sessionSecret || 'okiru-entity-studio-dev-secret',
     resave: false,
     saveUninitialized: false,
-    name: 'okiru.api.sid',
+    name: 'okiru.web.sid',
     cookie: {
       secure: isProd,
       httpOnly: true,
