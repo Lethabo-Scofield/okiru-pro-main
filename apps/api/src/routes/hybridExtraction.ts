@@ -18,11 +18,16 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+// Strings the LLM sometimes returns meaning "no value found"
+const NULL_VALUE_SENTINELS = /^(null|n\/a|none|not\s+found|not\s+available|unknown|-)$/i;
+
 function formatExtractedValue(
   value: string | number | null,
   fieldType: string
 ): string | null {
   if (value === null || value === undefined || value === '') return null;
+  // Treat null-sentinel strings as not found
+  if (typeof value === 'string' && NULL_VALUE_SENTINELS.test(value.trim())) return null;
 
   if (fieldType === 'currency') {
     let num: number;
