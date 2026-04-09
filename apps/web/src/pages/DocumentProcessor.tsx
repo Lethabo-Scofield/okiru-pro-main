@@ -1379,7 +1379,22 @@ export default function DocumentProcessor() {
     const isNew = params.get('new') === 'true';
 
     if (isNew) {
+      // FIXED: Also clear local component state, not just the store
       useBbeeStore.getState().startNewSession();
+      setFoundationData({ clientInfo: EMPTY_CLIENT_INFO, financials: EMPTY_FINANCIALS });
+      setPillarData({
+        ownership: { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
+        management: { id: '', clientId: '', employees: [] },
+        employmentEquity: { id: '', clientId: '', employees: [] },
+        skills: { id: '', clientId: '', leviableAmount: 0, trainingPrograms: [] },
+        procurement: { id: '', clientId: '', tmps: 0, suppliers: [] },
+        esd: { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+        sed: { id: '', clientId: '', contributions: [] },
+        yes: { id: '', clientId: '', totalEmployees: 0, candidates: [], yesYouthEnrolled: 0, yesBlackYouthCount: 0, yesBlackYouthPercentage: 0, yesAbsorbedCount: 0, yesAbsorptionRate: 0, totalYesCost: 0 },
+      });
+      // Clear session storage for this flow to prevent stale data restoration
+      const storageKey = getBuildFlowStorageKey(sessionId || 'anon');
+      sessionStorage.removeItem(storageKey);
       return;
     }
 
@@ -1589,6 +1604,20 @@ export default function DocumentProcessor() {
     setFlowMode(mode);
     // Clear stale Zustand store data when starting either flow mode
     useBbeeStore.getState().startNewSession();
+
+    // FIXED: Always reset local state when starting a new flow mode to prevent stale data
+    setFoundationData({ clientInfo: EMPTY_CLIENT_INFO, financials: EMPTY_FINANCIALS });
+    setPillarData({
+      ownership: { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
+      management: { id: '', clientId: '', employees: [] },
+      employmentEquity: { id: '', clientId: '', employees: [] },
+      skills: { id: '', clientId: '', leviableAmount: 0, trainingPrograms: [] },
+      procurement: { id: '', clientId: '', tmps: 0, suppliers: [] },
+      esd: { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+      sed: { id: '', clientId: '', contributions: [] },
+      yes: { id: '', clientId: '', totalEmployees: 0, candidates: [], yesYouthEnrolled: 0, yesBlackYouthCount: 0, yesBlackYouthPercentage: 0, yesAbsorbedCount: 0, yesAbsorptionRate: 0, totalYesCost: 0 },
+    });
+
     if (mode === 'upload') {
       setCurrentPage('company-info');
     } else {
@@ -1604,29 +1633,9 @@ export default function DocumentProcessor() {
         ? getBuildFlowStorageKey(user.id)
         : `okiru-processor-build-flow-${sid}`;
 
-      try {
-        const raw = sessionStorage.getItem(storageKey);
-        if (raw) {
-          const d = JSON.parse(raw);
-          if (d.foundationData && typeof d.foundationData === 'object') {
-            setFoundationData(d.foundationData);
-          }
-          if (d.pillarData && typeof d.pillarData === 'object') {
-            setPillarData((prev) => ({
-              ...prev,
-              ...d.pillarData,
-              employmentEquity:
-                d.pillarData.employmentEquity ?? d.pillarData.management ?? prev.employmentEquity,
-            }));
-          }
-          if (d.currentPage === 'build-pillars' || d.currentPage === 'build-foundation') {
-            setCurrentPage(d.currentPage);
-            return;
-          }
-        }
-      } catch {
-        /* ignore corrupt draft */
-      }
+      // FIXED: Clear any existing session data to ensure fresh start
+      sessionStorage.removeItem(storageKey);
+
       setCurrentPage('build-foundation');
     }
   }, [sessionId, user?.id]);
