@@ -1799,6 +1799,67 @@ const SCORECARD_TYPES = [
 ] as const;
 
 /**
+ * Normalise the ArangoDB StoredSectorRule (which stores pillarConfigs as an array)
+ * into the keyed SectorConfig shape that all pack builders expect.
+ * This mirrors storedRuleToSectorConfig in calculationEngine.ts.
+ */
+function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['getSectorRule']>>): SectorConfig {
+  if (!stored) throw new Error('normaliseStoredRule called with null');
+
+  // Start with safe defaults; Arango values will override everything they supply
+  const pillarConfigs: SectorConfig['pillarConfigs'] = {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+  };
+
+  const storedArray = Array.isArray(stored.pillarConfigs) ? stored.pillarConfigs : [];
+  for (const spc of storedArray) {
+    // spc.code matches pillarConfig keys directly
+    const key = spc.code as keyof SectorConfig['pillarConfigs'];
+    if (key && key in pillarConfigs) {
+      pillarConfigs[key] = {
+        maxPoints: spc.maxPoints,
+        hasSubMinimum: spc.hasSubMinimum,
+        subMinimumPercent: spc.subMinimumThreshold ?? spc.subMinimumPercent ?? 0,
+      };
+    }
+  }
+
+  // Use stored totalMaxPoints if available and > 0, otherwise derive from pillar sum
+  const derivedTotal = Object.values(pillarConfigs).reduce((s, p) => s + p.maxPoints, 0);
+  const totalMaxPoints = (stored.totalMaxPoints && stored.totalMaxPoints > 0)
+    ? stored.totalMaxPoints
+    : derivedTotal;
+
+  return {
+    sectorCode: stored.sectorCode,
+    sectorName: stored.sectorName,
+    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
+    totalMaxPoints,
+    pillarConfigs,
+    targets: (stored.targets as SectorConfig['targets']) || {},
+    levelThresholds: (stored.levelThresholds || []).map((lt: any) => ({
+      level: lt.level, minPoints: lt.minPoints, recognition: lt.recognition,
+    })),
+    benefitFactors: (stored.benefitFactors || []).map((bf: any) => ({
+      contributionType: bf.contributionType, sdFactor: bf.sdFactor, edFactor: bf.edFactor,
+    })),
+    categoryWeightings: (stored.categoryWeightings || []).map((cw: any) => ({
+      code: cw.code, name: cw.name, weighting: cw.weighting, cap: cw.cap,
+    })),
+    industryNorms: (stored.industryNorms || []).map((ind: any) => ({
+      industry: ind.industry, normPercent: ind.normPercent, quarterThresholdPercent: ind.quarterThresholdPercent,
+    })),
+  };
+}
+
+/**
  * Resolve sector configuration from ArangoDB (single source of truth).
  * Falls back to hardcoded config only if ArangoDB is unavailable.
  */
@@ -1809,17 +1870,7 @@ async function resolveSectorConfig(sectorCode: string, scorecardType: string): P
     const storedRule = await repo.getSectorRule(sectorCode, scorecardType);
 
     if (storedRule) {
-      // Convert stored rule to SectorConfig format
-      return {
-        sectorCode: storedRule.sectorCode,
-        sectorName: storedRule.sectorName,
-        scorecardType: storedRule.scorecardType,
-        totalMaxPoints: storedRule.totalMaxPoints,
-        pillarConfigs: storedRule.pillarConfigs || {},
-        targets: storedRule.targets || {},
-        thresholds: storedRule.thresholds || {},
-        referenceData: storedRule.referenceData || {},
-      };
+      return normaliseStoredRule(storedRule);
     }
   } catch (error) {
     console.warn(`[EntityManifest] ArangoDB unavailable, using hardcoded config for ${sectorCode} ${scorecardType}:`, error);
