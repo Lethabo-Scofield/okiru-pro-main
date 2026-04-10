@@ -1683,7 +1683,7 @@ function buildOwnershipPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildMCPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 };
   // For sectors that combine MC+EE, include EE entities in the MC pack
   const eePc = cfg.pillarConfigs?.employmentEquity;
   const isMCPlusEECombined = !eePc || eePc.maxPoints === 0 || eePc.maxPoints === undefined;
@@ -1713,7 +1713,7 @@ function buildEEPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildSkillsPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.skillsDevelopment ?? { maxPoints: 15, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.skillsDevelopment ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'skillsDevelopment', pillarName: 'Skills Development', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
@@ -1722,7 +1722,7 @@ function buildSkillsPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildProcurementPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.preferentialProcurement ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.preferentialProcurement ?? { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 };
   return {
     pillarCode: 'preferentialProcurement', pillarName: 'Preferential Procurement', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
@@ -1731,8 +1731,8 @@ function buildProcurementPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildESDPack(cfg: SectorConfig): PillarPack {
-  const sd = cfg.pillarConfigs?.supplierDevelopment ?? { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 };
-  const ed = cfg.pillarConfigs?.enterpriseDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
+  const sd = cfg.pillarConfigs?.supplierDevelopment ?? { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 };
+  const ed = cfg.pillarConfigs?.enterpriseDevelopment ?? { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 };
   const combinedMax = (sd.maxPoints ?? 0) + (ed.maxPoints ?? 0);
   return {
     pillarCode: 'enterpriseSupplierDevelopment', pillarName: 'Enterprise & Supplier Development', maxPoints: combinedMax,

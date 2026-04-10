@@ -1210,6 +1210,8 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
  * Convert StoredSectorRule from ArangoDB to SectorConfig interface.
  */
 function storedRuleToSectorConfig(stored: import('../../arango/repositories/sectorRuleRepository.js').StoredSectorRule): SectorConfig {
+  // Defaults are intentionally empty — every pillar MUST come from ArangoDB.
+  // These only apply for any pillar code not present in stored.pillarConfigs.
   const pillarConfigs: SectorConfig['pillarConfigs'] = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1217,8 +1219,9 @@ function storedRuleToSectorConfig(stored: import('../../arango/repositories/sect
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
   };
   
   for (const spc of stored.pillarConfigs) {
@@ -1231,6 +1234,7 @@ function storedRuleToSectorConfig(stored: import('../../arango/repositories/sect
       'supplierDevelopment': 'supplierDevelopment',
       'enterpriseDevelopment': 'enterpriseDevelopment',
       'socioEconomicDevelopment': 'socioEconomicDevelopment',
+      'yesInitiative': 'yesInitiative',
     };
     const key = keyMap[spc.code];
     if (key) {

@@ -164,7 +164,7 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
     override('preferentialProcurement', 'preferentialProcurement', pCfg.preferentialProcurement.maxPoints, 'Procurement');
     override('enterpriseSupplierDevelopment', 'enterpriseSupplierDevelopment', esdMaxPts, 'ESD');
     override('socioEconomicDevelopment', 'socioEconomicDevelopment', pCfg.socioEconomicDevelopment.maxPoints, 'SED');
-    override('yesInitiative', 'yesInitiative', 5, 'YES');
+    override('yesInitiative', 'yesInitiative', pCfg.yesInitiative?.maxPoints ?? 3, 'YES');
   }
 
   pillarScores.totalPoints = r2(
