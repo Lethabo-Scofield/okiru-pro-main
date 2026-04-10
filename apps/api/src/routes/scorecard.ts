@@ -521,12 +521,12 @@ function sectorConfigToCalculatorConfig(sc: any) {
     esd: {
       supplierDevMax: esd.sdMaxPts,
       enterpriseDevMax: esd.edMaxPts,
-      supplierDevTarget: esd.sdPercent,
-      enterpriseDevTarget: esd.edPercent,
+      supplierDevTarget: (esd.sdPercent ?? 2) / 100,
+      enterpriseDevTarget: (esd.edPercent ?? 1) / 100,
     },
     sed: {
       maxPoints: sed.maxPts,
-      npatTarget: sed.spendPercent,
+      npatTarget: (sed.spendPercent ?? 1) / 100,
     },
     // TODO: Extract YES config from Excel toolkits. These values are sector-independent per B-BBEE Act.
     yes: {

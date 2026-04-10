@@ -97,6 +97,11 @@ spec:
                 secretKeyRef:
                   name: arangodb-credentials
                   key: ARANGO_USER
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arangodb-credentials
+                  key: ARANGO_PASSWORD
             - name: ARANGO_VERIFY_SSL
               valueFrom:
                 secretKeyRef:

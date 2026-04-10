@@ -145,11 +145,15 @@ interface BbeeState extends PillarState {
   scenarios: ScenarioSnapshot[];
   baseSnapshot: ScenarioSnapshot | null;
 
+  /** When true, calculate scorecard without applying sub-minimum discounts */
+  ignoreSubMinimum: boolean;
+
   loadClientData: (clientId: string) => Promise<void>;
   clearData: () => void;
   startNewSession: () => void;
 
   setPipelineOverrides: (overrides: PipelineOverrides) => void;
+  setIgnoreSubMinimum: (value: boolean) => void;
 
   addShareholder: (shareholder: Shareholder) => void;
   updateShareholder: (id: string, data: Partial<Shareholder>) => void;
@@ -275,7 +279,7 @@ export interface APIScorecardResult {
   ontologySnapshot?: unknown;
 }
 
-function mapAPIScorecardToFrontend(api: APIScorecardResult): ScorecardResult {
+function mapAPIScorecardToFrontend(api: APIScorecardResult, ignoreSubMinimum = false): ScorecardResult {
   const findPillar = (code: string) =>
     api.pillars.find(p => p.pillarCode === code);
 
@@ -300,7 +304,8 @@ function mapAPIScorecardToFrontend(api: APIScorecardResult): ScorecardResult {
 
   const anySubMinFailed = Object.values(api.subMinimums).some(v => !v);
   const achievedLevel = api.beeLevel;
-  const isDiscounted = achievedLevel < 9 && anySubMinFailed;
+  // When ignoreSubMinimum is true, don't apply the discount even if sub-minimums failed
+  const isDiscounted = !ignoreSubMinimum && achievedLevel < 9 && anySubMinFailed;
   const discountedLevel = isDiscounted ? Math.min(achievedLevel + 1, 8) : achievedLevel;
 
   const recMap: Record<number, string> = {
@@ -374,7 +379,7 @@ function levelToRecognition(level: number, config?: CalculatorConfig | null): st
 }
 
 function calculateScorecard(
-  state: PillarState & { calculatorConfig?: CalculatorConfig | null },
+  state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
@@ -493,7 +498,8 @@ function calculateScorecard(
   const sdSubMinMet = esdScore.sdSubMinimumMet;
   const edSubMinMet = esdScore.edSubMinimumMet;
   const anySubMinFailed = !ownSubMinMet || !skSubMinMet || !prSubMinMet || !sdSubMinMet || !edSubMinMet;
-  const isDiscounted = level < 9 && anySubMinFailed;
+  // When ignoreSubMinimum is true, don't apply the discount even if sub-minimums failed
+  const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
   const discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
 
   // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
@@ -539,6 +545,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   activeScenarioId: null,
   scenarios: [],
   baseSnapshot: null,
+  ignoreSubMinimum: false,
 
   loadClientData: async (clientId: string) => {
     try {
@@ -772,6 +779,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
+  setIgnoreSubMinimum: (value: boolean) => {
+    set({ ignoreSubMinimum: value });
+    get()._recalculateAll();
+  },
+
   createScenario: (name: string) => {
     const state = get();
     const baseToSave = state.isScenarioMode
@@ -863,7 +875,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   }),
 
   setScorecardFromAPI: (apiResult: APIScorecardResult) => {
-    const mapped = mapAPIScorecardToFrontend(apiResult);
+    const mapped = mapAPIScorecardToFrontend(apiResult, get().ignoreSubMinimum);
     set({ scorecard: mapped });
   },
 

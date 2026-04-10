@@ -4,6 +4,8 @@ import { Button } from "@toolkit/components/ui/button";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Progress } from "@toolkit/components/ui/progress";
 import { ScrollArea } from "@toolkit/components/ui/scroll-area";
+import { Switch } from "@toolkit/components/ui/switch";
+import { Label } from "@toolkit/components/ui/label";
 import {
   Users, Building2, GraduationCap, ShoppingCart, Handshake, Heart,
   TrendingUp, Briefcase, CheckCircle2, AlertCircle, ChevronLeft, ArrowRight,
@@ -183,6 +185,8 @@ export function BuildPillarsStep({
   const leviable = financials?.leviableAmount || data.skills.leviableAmount || 0;
 
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const ignoreSubMinimum = useBbeeStore(state => state.ignoreSubMinimum);
+  const setIgnoreSubMinimum = useBbeeStore(state => state.setIgnoreSubMinimum);
 
   const emptyEsd = { total: 0, sdTotal: 0, edTotal: 0, supplierDev: 0, enterpriseDev: 0, graduationBonus: 0, jobsCreatedBonus: 0, sdSubMinimumMet: false, edSubMinimumMet: false, subMinimumMet: false, sdSpend: 0, edSpend: 0, sdTarget: 0, edTarget: 0, sdSubLines: [] as any[], edSubLines: [] as any[], subLines: [] as any[] };
   const esdLive = useMemo(
@@ -499,7 +503,7 @@ export function BuildPillarsStep({
       </div>
 
       {/* Sub-minimum enforcement warning */}
-      {hasFailedSubMinimums && (
+      {hasFailedSubMinimums && !ignoreSubMinimum && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
@@ -521,15 +525,28 @@ export function BuildPillarsStep({
           <ChevronLeft className="h-4 w-4" />
           Back to Foundation
         </Button>
-        <Button
-          onClick={onNext}
-          disabled={completedCount === 0 || hasFailedSubMinimums}
-          className="gap-2"
-          title={hasFailedSubMinimums ? 'Sub-minimum requirements not met' : ''}
-        >
-          Calculate Scorecard
-          <ArrowRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-4">
+          {/* Toggle to calculate without sub-minimum */}
+          <div className="flex items-center gap-2">
+            <Switch
+              id="ignore-subminimum"
+              checked={ignoreSubMinimum}
+              onCheckedChange={setIgnoreSubMinimum}
+            />
+            <Label htmlFor="ignore-subminimum" className="text-sm text-muted-foreground cursor-pointer">
+              Calculate without sub-minimum
+            </Label>
+          </div>
+          <Button
+            onClick={onNext}
+            disabled={completedCount === 0 || (hasFailedSubMinimums && !ignoreSubMinimum)}
+            className="gap-2"
+            title={hasFailedSubMinimums && !ignoreSubMinimum ? 'Sub-minimum requirements not met' : ''}
+          >
+            Calculate Scorecard
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Auto-fill */}
