@@ -248,3 +248,34 @@ export const Document = mongoose.model("Document", documentSchema);
 export const DocumentChunk = mongoose.model("DocumentChunk", documentChunkSchema);
 export const EntityTemplateModel = mongoose.model("EntityTemplate", entityTemplateSchema);
 export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
+
+// ============================================================================
+// Session Blob Model - Stores large session data fields separately to avoid
+// MongoDB's 16MB document limit. Each blob is one field from a session.
+// ============================================================================
+
+const sessionBlobSchema = new Schema({
+  sessionId: { type: String, required: true, index: true },
+  field: { type: String, required: true }, // e.g., 'scorecardResult', 'foundationData', 'pillarData', 'extractionResults'
+  data: { type: Schema.Types.Mixed, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "sessionBlobs" });
+
+// Compound unique index on sessionId + field
+sessionBlobSchema.index({ sessionId: 1, field: 1 }, { unique: true });
+
+sessionBlobSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+sessionBlobSchema.set("toJSON", {
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const SessionBlobModel = mongoose.models.SessionBlob || mongoose.model("SessionBlob", sessionBlobSchema);
