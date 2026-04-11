@@ -144,16 +144,18 @@ spec:
                   name: external-api-keys
                   key: GROQ_API_KEY
                   optional: true
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=1792"
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "250m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "2Gi"
+              cpu: "1000m"
           livenessProbe:
             httpGet:
               path: /health

@@ -1,68 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../logger.js';
 import { isMongoConnected } from '../../db.js';
-import { ProcessorSessionModel } from '../../models.js';
-import { gzipSync, gunzipSync } from 'zlib';
+import { ProcessorSessionModel, SessionBlobModel } from '../../models.js';
 
 const logger = createLogger("ProcessorSessions");
 
-// MongoDB document size limit is 16MB, we stay well under that
-const MAX_DOC_SIZE_MB = 15;
-const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
-
-/**
- * Compress large data fields to stay under MongoDB's 16MB limit
- */
-function compressIfLarge(data: any): { data: any; compressed: boolean } {
-  if (!data) return { data, compressed: false };
-
-  const jsonStr = JSON.stringify(data);
-  const sizeBytes = Buffer.byteLength(jsonStr, 'utf8');
-
-  if (sizeBytes > 100 * 1024) { // Compress if > 100KB
-    const compressed = gzipSync(Buffer.from(jsonStr, 'utf8'));
-    return {
-      data: compressed.toString('base64'),
-      compressed: true
-    };
-  }
-
-  return { data, compressed: false };
-}
-
-/**
- * Estimate total document size
- */
-function estimateSize(obj: any): number {
-  return Buffer.byteLength(JSON.stringify(obj), 'utf8');
-}
-
-/**
- * Prune large entity arrays to stay under size limit
- */
-function pruneLargeData(data: any): any {
-  if (!data || typeof data !== 'object') return data;
-
-  const pruned: any = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (Array.isArray(value) && value.length > 50) {
-      pruned[key] = {
-        _pruned: true,
-        totalCount: value.length,
-        items: value.slice(0, 50),
-      };
-    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      pruned[key] = pruneLargeData(value);
-    } else {
-      pruned[key] = value;
-    }
-  }
-  return pruned;
-}
-
 /**
  * Strip file content/buffers from filesData to prevent bloating sessions.
- * Only metadata (name, size, type, id) is kept.
+ * Only metadata (name, size, type, id, status) is kept.
  */
 function stripFileBuffers(filesData: any[]): any[] {
   if (!Array.isArray(filesData)) return [];
@@ -72,7 +17,7 @@ function stripFileBuffers(filesData: any[]): any[] {
     size: f.size,
     type: f.type,
     status: f.status,
-    // Explicitly exclude: content, buffer, data, base64, arrayBuffer, etc.
+    // Explicitly exclude: content, buffer, data, base64, arrayBuffer, textContent
   }));
 }
 
@@ -104,10 +49,56 @@ function stripExtractionResults(results: any[]): any[] {
   });
 }
 
+/**
+ * Save a blob field to the separate sessionBlobs collection.
+ * Uses upsert to replace existing blob for this session+field.
+ */
+async function saveBlob(sessionId: string, field: string, data: any): Promise<void> {
+  if (data === undefined || data === null) return;
+  try {
+    await SessionBlobModel.findOneAndUpdate(
+      { sessionId, field },
+      { sessionId, field, data, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    logger.error(`Failed to save blob ${field} for session ${sessionId}`, err);
+    throw err;
+  }
+}
+
+/**
+ * Load all blob fields for a session and merge them into the session object.
+ */
+async function loadBlobs(sessionId: string): Promise<Record<string, any>> {
+  try {
+    const blobs = await SessionBlobModel.find({ sessionId }).lean();
+    const result: Record<string, any> = {};
+    for (const blob of blobs) {
+      result[blob.field] = blob.data;
+    }
+    return result;
+  } catch (err) {
+    logger.error(`Failed to load blobs for session ${sessionId}`, err);
+    return {};
+  }
+}
+
+/**
+ * Delete all blobs for a session.
+ */
+async function deleteBlobs(sessionId: string): Promise<void> {
+  try {
+    await SessionBlobModel.deleteMany({ sessionId });
+  } catch (err) {
+    logger.error(`Failed to delete blobs for session ${sessionId}`, err);
+  }
+}
+
 export function createProcessorSessionsRouter(): Router {
   const router = Router();
 
-  // GET /api/processor-sessions - List all sessions for the user
+  // GET /api/processor-sessions - List all sessions for the user (lightweight, no blobs)
   router.get('/', async (req: Request, res: Response) => {
     const userId = (req.session as any)?.userId;
     if (!userId) {
@@ -133,8 +124,6 @@ export function createProcessorSessionsRouter(): Router {
           'filesData.name': 1,
           'filesData.size': 1,
           'filesData.type': 1,
-          'extractionResults.fileName': 1,
-          'extractionResults.templateName': 1,
           createdAt: 1,
           updatedAt: 1,
         })
@@ -158,7 +147,6 @@ export function createProcessorSessionsRouter(): Router {
         isComplete: s.isComplete,
         flowMode: s.flowMode || null,
         filesData: (s.filesData || []).map((f: any) => ({ id: f.id, name: f.name, size: f.size, type: f.type })),
-        extractionResults: (s.extractionResults || []).map((r: any) => ({ fileName: r.fileName, templateName: r.templateName })),
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       }));
@@ -170,7 +158,7 @@ export function createProcessorSessionsRouter(): Router {
     }
   });
 
-  // GET /api/processor-sessions/:sessionId - Get full session
+  // GET /api/processor-sessions/:sessionId - Get full session (with blobs merged)
   router.get('/:sessionId', async (req: Request, res: Response) => {
     const userId = (req.session as any)?.userId;
     if (!userId) {
@@ -189,29 +177,15 @@ export function createProcessorSessionsRouter(): Router {
         return res.status(404).json({ error: "Session not found" });
       }
 
+      // Load blob data and merge
+      const blobs = await loadBlobs(sessionId);
       const result: any = { ...doc, id: (doc as any).sessionId };
-
-      // Decompress data if needed
-      try {
-        if ((doc as any)._scorecardCompressed && typeof result.scorecardResult === 'string') {
-          const decompressed = gunzipSync(Buffer.from(result.scorecardResult, 'base64'));
-          result.scorecardResult = JSON.parse(decompressed.toString('utf8'));
-          delete result._scorecardCompressed;
-        }
-        if ((doc as any)._foundationCompressed && typeof result.foundationData === 'string') {
-          const decompressed = gunzipSync(Buffer.from(result.foundationData, 'base64'));
-          result.foundationData = JSON.parse(decompressed.toString('utf8'));
-          delete result._foundationCompressed;
-        }
-        if ((doc as any)._pillarCompressed && typeof result.pillarData === 'string') {
-          const decompressed = gunzipSync(Buffer.from(result.pillarData, 'base64'));
-          result.pillarData = JSON.parse(decompressed.toString('utf8'));
-          delete result._pillarCompressed;
-        }
-      } catch (decompressErr) {
-        logger.warn(`Failed to decompress session ${sessionId}`, decompressErr);
-        // Continue with potentially compressed data
-      }
+      
+      // Merge blob fields (they take precedence over any stale data in main doc)
+      if (blobs.scorecardResult !== undefined) result.scorecardResult = blobs.scorecardResult;
+      if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
+      if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
+      if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
 
       res.json(result);
     } catch (error: any) {
@@ -220,7 +194,7 @@ export function createProcessorSessionsRouter(): Router {
     }
   });
 
-  // POST /api/processor-sessions - Save/upsert session
+  // POST /api/processor-sessions - Save/upsert session (split into main doc + blobs)
   router.post('/', async (req: Request, res: Response) => {
     const userId = (req.session as any)?.userId;
     if (!userId) {
@@ -252,11 +226,25 @@ export function createProcessorSessionsRouter(): Router {
       // Strip extraction results to essentials
       const safeExtractionResults = stripExtractionResults(extractionResults);
 
-      // Compress large data fields to stay under MongoDB's 16MB limit
-      const compressedScorecard = scorecardResult !== undefined ? compressIfLarge(scorecardResult) : undefined;
-      const compressedFoundation = foundationData !== undefined ? compressIfLarge(foundationData) : undefined;
-      const compressedPillar = pillarData !== undefined ? compressIfLarge(pruneLargeData(pillarData)) : undefined;
+      // Save large data fields as separate blobs (in parallel)
+      const blobPromises: Promise<void>[] = [];
+      if (scorecardResult !== undefined) {
+        blobPromises.push(saveBlob(sessionId, 'scorecardResult', scorecardResult));
+      }
+      if (foundationData !== undefined) {
+        blobPromises.push(saveBlob(sessionId, 'foundationData', foundationData));
+      }
+      if (pillarData !== undefined) {
+        blobPromises.push(saveBlob(sessionId, 'pillarData', pillarData));
+      }
+      if (extractionResults !== undefined) {
+        blobPromises.push(saveBlob(sessionId, 'extractionResults', safeExtractionResults));
+      }
+      
+      // Wait for all blob saves to complete
+      await Promise.all(blobPromises);
 
+      // Main document only stores metadata and small fields
       const updateData: any = {
         sessionId,
         createdByUserId: userId,
@@ -264,53 +252,12 @@ export function createProcessorSessionsRouter(): Router {
         currentStep: currentStep || 'upload',
         filesData: safeFilesData,
         fileClassifications: fileClassifications || {},
-        extractionResults: safeExtractionResults,
         docStatuses: docStatuses || {},
         isComplete: isComplete || false,
         updatedAt: new Date(),
       };
 
-      if (compressedScorecard) {
-        updateData.scorecardResult = compressedScorecard.data;
-        updateData._scorecardCompressed = compressedScorecard.compressed;
-      }
-      if (compressedFoundation) {
-        updateData.foundationData = compressedFoundation.data;
-        updateData._foundationCompressed = compressedFoundation.compressed;
-      }
-      if (compressedPillar) {
-        updateData.pillarData = compressedPillar.data;
-        updateData._pillarCompressed = compressedPillar.compressed;
-      }
       if (flowMode !== undefined) updateData.flowMode = flowMode;
-
-      // Check estimated size and apply progressive pruning
-      let estimatedSize = estimateSize(updateData);
-      if (estimatedSize > MAX_DOC_SIZE_BYTES) {
-        logger.warn(`Session ${sessionId} exceeds limit after initial pruning (${(estimatedSize / 1024 / 1024).toFixed(2)}MB). Stripping extraction entities.`);
-        // Strip extraction results to bare minimum
-        updateData.extractionResults = (extractionResults || []).map((r: any) => ({
-          fileName: r.fileName,
-          templateName: r.templateName,
-        }));
-        estimatedSize = estimateSize(updateData);
-      }
-
-      if (estimatedSize > MAX_DOC_SIZE_BYTES) {
-        logger.warn(`Session ${sessionId} still exceeds limit (${(estimatedSize / 1024 / 1024).toFixed(2)}MB). Dropping pillarData & foundationData.`);
-        // Last resort: drop the heaviest fields entirely
-        updateData.pillarData = null;
-        updateData._pillarCompressed = false;
-        updateData.foundationData = null;
-        updateData._foundationCompressed = false;
-        estimatedSize = estimateSize(updateData);
-      }
-
-      if (estimatedSize > MAX_DOC_SIZE_BYTES) {
-        logger.warn(`Session ${sessionId} still exceeds limit (${(estimatedSize / 1024 / 1024).toFixed(2)}MB). Dropping scorecardResult.`);
-        updateData.scorecardResult = null;
-        updateData._scorecardCompressed = false;
-      }
 
       const doc = await ProcessorSessionModel.findOneAndUpdate(
         { sessionId, createdByUserId: userId },
@@ -318,7 +265,15 @@ export function createProcessorSessionsRouter(): Router {
         { upsert: true, new: true, setDefaultsOnInsert: true },
       );
 
-      res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
+      // Return merged result
+      const blobs = await loadBlobs(sessionId);
+      const result: any = { ...doc.toJSON(), id: (doc as any).sessionId };
+      if (blobs.scorecardResult !== undefined) result.scorecardResult = blobs.scorecardResult;
+      if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
+      if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
+      if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
+
+      res.json(result);
     } catch (error: any) {
       logger.error("Error saving processor session", error);
       res.status(500).json({ error: "Failed to save session" });
@@ -338,42 +293,53 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const { sessionId } = req.params;
-      const allowedFields = ['currentStep', 'isComplete', 'scorecardResult', 'toolkitClientId',
-        'foundationData', 'pillarData', 'flowMode'];
+      const allowedSmallFields = ['currentStep', 'isComplete', 'toolkitClientId', 'flowMode'];
+      const blobFields = ['scorecardResult', 'foundationData', 'pillarData', 'extractionResults'];
       const patch: any = { updatedAt: new Date() };
+      const blobPromises: Promise<void>[] = [];
 
-      for (const field of allowedFields) {
+      for (const field of allowedSmallFields) {
         if (req.body[field] !== undefined) {
-          // Compress large data fields
-          if (field === 'scorecardResult') {
-            const compressed = compressIfLarge(req.body[field]);
-            patch[field] = compressed.data;
-            patch._scorecardCompressed = compressed.compressed;
-          } else if (field === 'foundationData') {
-            const compressed = compressIfLarge(req.body[field]);
-            patch[field] = compressed.data;
-            patch._foundationCompressed = compressed.compressed;
-          } else if (field === 'pillarData') {
-            const compressed = compressIfLarge(pruneLargeData(req.body[field]));
-            patch[field] = compressed.data;
-            patch._pillarCompressed = compressed.compressed;
-          } else {
-            patch[field] = req.body[field];
-          }
+          patch[field] = req.body[field];
         }
       }
 
-      const doc = await ProcessorSessionModel.findOneAndUpdate(
-        { sessionId, createdByUserId: userId },
-        { $set: patch },
-        { new: true },
-      );
-
-      if (!doc) {
-        return res.status(404).json({ error: "Session not found or you don't have permission" });
+      // Handle blob fields
+      for (const field of blobFields) {
+        if (req.body[field] !== undefined) {
+          let data = req.body[field];
+          // Strip extraction results if needed
+          if (field === 'extractionResults' && Array.isArray(data)) {
+            data = stripExtractionResults(data);
+          }
+          blobPromises.push(saveBlob(sessionId, field, data));
+        }
       }
 
-      res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
+      // Save blobs in parallel with main doc update
+      await Promise.all([
+        ...blobPromises,
+        ProcessorSessionModel.findOneAndUpdate(
+          { sessionId, createdByUserId: userId },
+          { $set: patch },
+          { new: true },
+        )
+      ]);
+
+      // Fetch and return merged result
+      const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean();
+      if (!doc) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      const blobs = await loadBlobs(sessionId);
+      const result: any = { ...doc, id: (doc as any).sessionId };
+      if (blobs.scorecardResult !== undefined) result.scorecardResult = blobs.scorecardResult;
+      if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
+      if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
+      if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
+
+      res.json(result);
     } catch (error: any) {
       logger.error("Error patching processor session", error);
       res.status(500).json({ error: "Failed to patch session" });
@@ -393,7 +359,12 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const { sessionId } = req.params;
-      const result = await ProcessorSessionModel.deleteOne({ sessionId, createdByUserId: userId });
+      
+      // Delete main doc and blobs in parallel
+      const [result] = await Promise.all([
+        ProcessorSessionModel.deleteOne({ sessionId, createdByUserId: userId }),
+        deleteBlobs(sessionId)
+      ]);
 
       if (result.deletedCount === 0) {
         return res.status(404).json({ error: "Session not found or you don't have permission" });

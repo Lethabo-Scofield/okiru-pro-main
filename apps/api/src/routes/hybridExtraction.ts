@@ -89,6 +89,7 @@ import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
 import { HybridRetriever } from '../../pipeline/extraction/hybridRetriever.js';
 import { InMemoryVectorStore, createVectorStore } from '../../pipeline/extraction/embeddingStore.js';
+import { generateEmbeddings } from '../../pipeline/extraction/azureOpenAIClient.js';
 import {
   buildManifest,
   getAllEntities,
@@ -516,34 +517,61 @@ router.post(
       const provenanceTracker = new ProvenanceTracker();
       const extractionResults: ExtractionResult[] = [];
 
-      // Process entities in parallel batches. 15 concurrent Azure calls is safe
-      // for standard Azure OpenAI rate limits and cuts wall-clock time ~3x vs 5.
-      const BATCH_SIZE = 15;
+      // Build chunk lookup map for O(1) access instead of O(n) find()
+      const chunkMap = new Map<string, TextChunk>();
+      for (const chunk of chunks) {
+        chunkMap.set(chunk.chunkId, chunk);
+        chunkMap.set(chunk.pageId, chunk);
+      }
+
       const entities = getAllEntities(manifest);
+
+      // Pre-compute all entity query embeddings in ONE batch API call
+      // This eliminates ~N individual embedding calls (major speedup)
+      console.log(`[hybridExtraction] Pre-computing embeddings for ${entities.length} entity queries...`);
+      const entityQueries = entities.map(e => [e.name, ...e.extraction.aliases].join(' '));
+      let queryEmbeddings: number[][] = [];
+      if (hasEmbeddings) {
+        try {
+          queryEmbeddings = await generateEmbeddings(entityQueries, { batchSize: 100 });
+        } catch (err) {
+          console.warn('[hybridExtraction] Batch embedding generation failed, falling back to per-entity:', err);
+        }
+      }
+
+      // Process entities in parallel batches. 25 concurrent Azure calls is safe
+      // for standard Azure OpenAI rate limits and cuts wall-clock time significantly.
+      const BATCH_SIZE = 25;
 
       for (let i = 0; i < entities.length; i += BATCH_SIZE) {
         const batch = entities.slice(i, i + BATCH_SIZE);
+        const batchEmbeddings = queryEmbeddings.slice(i, i + BATCH_SIZE);
 
         const batchResults = await Promise.all(
-          batch.map(async (entity) => {
+          batch.map(async (entity, batchIdx) => {
             try {
               // Build search query from entity
               const searchQuery = [entity.name, ...entity.extraction.aliases].join(' ');
 
-              // Hybrid retrieval with embeddings (no per-entity LLM reranking —
-              // embedding+BM25 scoring is sufficient and avoids extra Azure calls)
-              const retrievalResults = await retriever.searchWithEmbeddings(
-                searchQuery,
-                10,
-                {
-                  rerank: false,
-                  rerankTopK: 5,
-                  getChunkText: (pageId) => {
-                    const chunk = chunks.find(c => c.chunkId === pageId || c.pageId === pageId);
-                    return chunk?.text;
-                  },
-                }
-              );
+              // Hybrid retrieval: use pre-computed embedding if available
+              let retrievalResults;
+              if (hasEmbeddings && batchEmbeddings[batchIdx]) {
+                // Use pre-computed embedding for semantic search
+                const semanticResults = vectorStore.searchWithEmbedding(batchEmbeddings[batchIdx], 30, 0.5);
+                // Run hybrid fusion with pre-computed semantic results
+                retrievalResults = retriever.searchWithSemantic(searchQuery, semanticResults.map(r => ({ pageId: r.pageId, score: r.score })), 10);
+              } else {
+                // Fallback to regular search (generates embedding on the fly)
+                retrievalResults = await retriever.searchWithEmbeddings(
+                  searchQuery,
+                  10,
+                  {
+                    rerank: false,
+                    rerankTopK: 5,
+                    getChunkText: (pageId) => chunkMap.get(pageId)?.text,
+                  }
+                );
+              }
 
               if (retrievalResults.length === 0) {
                 return {
@@ -564,11 +592,9 @@ router.post(
                 };
               }
 
-              // Get top chunk for extraction
+              // Get top chunk for extraction (O(1) lookup via Map)
               const topResult = retrievalResults[0];
-              const topChunk = chunks.find(
-                c => c.chunkId === topResult.pageId || c.pageId === topResult.pageId
-              );
+              const topChunk = chunkMap.get(topResult.pageId);
 
               if (!topChunk) {
                 return {
@@ -660,62 +686,78 @@ router.post(
       // ── LLM Verification Pass (Azure OpenAI gpt-4o) ──────────────────────
       // For every entity that produced a non-null value, ask Azure to confirm
       // the extracted value is actually correct (verification, NOT re-extraction).
-      {
+      // Can be skipped with ?skipVerify=true for faster extraction when speed matters.
+      const skipVerify = req.query.skipVerify === 'true';
+      if (!skipVerify) {
         const verifyStart = Date.now();
         const VERIFY_BATCH = 10;
+        const MAX_PARALLEL_BATCHES = 3; // Run up to 3 verification batches concurrently
 
         const toVerify = extractionResults
           .map((r, idx) => ({ r, idx }))
           .filter(({ r }) => r.value !== null && r.value !== '');
 
-        console.log(`[hybridExtraction] Starting LLM verification for ${toVerify.length} non-null entities`);
+        console.log(`[hybridExtraction] Starting LLM verification for ${toVerify.length} non-null entities (parallel)`);
 
-        for (let vi = 0; vi < toVerify.length; vi += VERIFY_BATCH) {
-          const batch = toVerify.slice(vi, vi + VERIFY_BATCH);
+        // Process verification batches in parallel groups
+        for (let vi = 0; vi < toVerify.length; vi += VERIFY_BATCH * MAX_PARALLEL_BATCHES) {
+          const parallelBatches: Promise<void>[] = [];
 
-          const entries: GroqVerificationEntry[] = batch.map(({ r }) => ({
-            entityName: r.name,
-            definition: r.definition,
-            extractedValue: String(r.value),
-            sourceSnippet: r.provenance.textSnippet,
-            fieldType: r.fieldType,
-            pillar: r.pillar,
-          }));
+          for (let pb = 0; pb < MAX_PARALLEL_BATCHES; pb++) {
+            const batchStart = vi + (pb * VERIFY_BATCH);
+            if (batchStart >= toVerify.length) break;
 
-          const verResults = await groqVerifyBatch(entries);
+            const batch = toVerify.slice(batchStart, batchStart + VERIFY_BATCH);
 
-          for (let j = 0; j < batch.length; j++) {
-            const { r, idx } = batch[j];
-            const ver = verResults[j];
-            if (!ver) continue;
+            parallelBatches.push((async () => {
+              const entries: GroqVerificationEntry[] = batch.map(({ r }) => ({
+                entityName: r.name,
+                definition: r.definition,
+                extractedValue: String(r.value),
+                sourceSnippet: r.provenance.textSnippet,
+                fieldType: r.fieldType,
+                pillar: r.pillar,
+              }));
 
-            extractionResults[idx].groqVerification = {
-              valid: ver.valid,
-              reason: ver.reason,
-              correctedValue: ver.correctedValue,
-            };
+              const verResults = await groqVerifyBatch(entries);
 
-            if (!ver.valid) {
-              if (ver.correctedValue) {
-                extractionResults[idx].value = ver.correctedValue;
-                extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence, 0.75);
-                console.log(`[LLMVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
-              } else {
-                extractionResults[idx].value = null;
-                extractionResults[idx].status = 'not_found';
-                extractionResults[idx].confidence = Math.max(extractionResults[idx].confidence * 0.3, 0.1);
-                console.log(`[LLMVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
+              for (let j = 0; j < batch.length; j++) {
+                const { r, idx } = batch[j];
+                const ver = verResults[j];
+                if (!ver) continue;
+
+                extractionResults[idx].groqVerification = {
+                  valid: ver.valid,
+                  reason: ver.reason,
+                  correctedValue: ver.correctedValue,
+                };
+
+                if (!ver.valid) {
+                  if (ver.correctedValue) {
+                    extractionResults[idx].value = ver.correctedValue;
+                    extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence, 0.75);
+                    console.log(`[LLMVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
+                  } else {
+                    extractionResults[idx].value = null;
+                    extractionResults[idx].status = 'not_found';
+                    extractionResults[idx].confidence = Math.max(extractionResults[idx].confidence * 0.3, 0.1);
+                    console.log(`[LLMVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
+                  }
+                } else {
+                  extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence * 1.05, 0.99);
+                }
               }
-            } else {
-              extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence * 1.05, 0.99);
-            }
+            })());
           }
 
-          console.log(`[hybridExtraction] Verified ${Math.min(vi + VERIFY_BATCH, toVerify.length)}/${toVerify.length} entities`);
+          await Promise.all(parallelBatches);
+          console.log(`[hybridExtraction] Verified ${Math.min(vi + (VERIFY_BATCH * MAX_PARALLEL_BATCHES), toVerify.length)}/${toVerify.length} entities`);
         }
 
         verifyTime = Date.now() - verifyStart;
         console.log(`[hybridExtraction] LLM verification complete in ${verifyTime}ms`);
+      } else {
+        console.log('[hybridExtraction] Skipping LLM verification (skipVerify=true)');
       }
 
       const totalTime = Date.now() - totalStartTime;

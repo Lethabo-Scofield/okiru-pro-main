@@ -145,6 +145,36 @@ export class InMemoryVectorStore {
   }
 
   /**
+   * Batch search: embed all queries in one API call, then search for each.
+   * Much faster than N individual search() calls (saves N-1 embedding API calls).
+   */
+  async batchSearch(
+    queries: string[],
+    topK: number = 10,
+    minScore: number = 0.5
+  ): Promise<Map<string, VectorSearchResult[]>> {
+    if (!this.isReady) {
+      throw new Error('Vector store not ready - call indexChunks() first');
+    }
+
+    if (this.chunks.size === 0 || queries.length === 0) {
+      return new Map();
+    }
+
+    // Generate all query embeddings in ONE API call
+    const queryEmbeddings = await generateEmbeddings(queries, { batchSize: 100 });
+
+    // Search for each query using the pre-computed embeddings
+    const results = new Map<string, VectorSearchResult[]>();
+    for (let i = 0; i < queries.length; i++) {
+      const queryResults = this.searchWithEmbedding(queryEmbeddings[i], topK, minScore);
+      results.set(queries[i], queryResults);
+    }
+
+    return results;
+  }
+
+  /**
    * Get a chunk by ID
    */
   getChunk(chunkId: string): ChunkEmbedding | undefined {
