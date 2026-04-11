@@ -726,6 +726,45 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/request-role-upgrade", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const { requestedRole } = req.body;
+      const UPGRADE_PATH: Record<string, string> = { auditor: 'analyst', analyst: 'manager' };
+      const allowedNext = UPGRADE_PATH[user.role];
+
+      if (!allowedNext || requestedRole !== allowedNext) {
+        return res.status(400).json({ message: "Invalid upgrade request" });
+      }
+
+      logger.info(`Role upgrade requested: ${user.username} (${user.role} -> ${requestedRole})`);
+      res.json({ message: `Your request to upgrade to ${requestedRole} has been submitted for admin review.` });
+    } catch (error: any) {
+      logger.error("Role upgrade request failed", error);
+      res.status(500).json({ message: "Failed to submit upgrade request" });
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { role } = req.body;
+      const ALLOWED_ROLES = ["auditor", "analyst", "manager", "admin"];
+      if (!role || !ALLOWED_ROLES.includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      const updated = await storage.updateUser(userId, { role } as any);
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      res.json({ user: sanitizeUser(updated), message: `Role updated to ${role}` });
+    } catch (error: any) {
+      logger.error("Admin role update failed", error);
+      res.status(500).json({ message: "Failed to update role" });
+    }
+  });
+
   app.patch("/api/profile", async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
