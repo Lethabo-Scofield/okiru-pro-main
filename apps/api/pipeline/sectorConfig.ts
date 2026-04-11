@@ -179,6 +179,30 @@ const STANDARD_LEVELS = [
   { level: 8, minPoints: 40, recognition: 10 },
 ];
 
+// ICT Sector uses a 140-point scale with different thresholds (from Excel)
+const ICT_LEVELS = [
+  { level: 1, minPoints: 120, recognition: 135 },
+  { level: 2, minPoints: 115, recognition: 125 },
+  { level: 3, minPoints: 110, recognition: 110 },
+  { level: 4, minPoints: 100, recognition: 100 },
+  { level: 5, minPoints: 95, recognition: 80 },
+  { level: 6, minPoints: 90, recognition: 60 },
+  { level: 7, minPoints: 75, recognition: 50 },
+  { level: 8, minPoints: 55, recognition: 10 },
+];
+
+// FSC uses scaled (non-integer) thresholds based on sub-sector total (from Excel)
+const FSC_LEVELS = [
+  { level: 1, minPoints: 95.50, recognition: 135 },
+  { level: 2, minPoints: 90.72, recognition: 125 },
+  { level: 3, minPoints: 85.95, recognition: 110 },
+  { level: 4, minPoints: 76.40, recognition: 100 },
+  { level: 5, minPoints: 71.62, recognition: 80 },
+  { level: 6, minPoints: 66.85, recognition: 60 },
+  { level: 7, minPoints: 52.52, recognition: 50 },
+  { level: 8, minPoints: 38.20, recognition: 10 },
+];
+
 // ---------------------------------------------------------------------------
 // BEE Recognition Table — multiplies supplier spend for procurement scoring
 // Reference: B-BBEE Act, Schedule 4
@@ -286,6 +310,7 @@ export const RCOGP_GENERIC: SectorConfig = {
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -359,7 +384,7 @@ export const ICT_GENERIC: SectorConfig = {
   sectorCode: 'ICT',
   sectorName: 'ICT Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 140, // Verified: 25+23+25+27+10+15+12 = 137, +3 YES bonus = 140
+  totalMaxPoints: 140, // Verified from Excel: 25+23+25+27+10+18+12 = 140 (YES excluded)
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
@@ -367,9 +392,9 @@ export const ICT_GENERIC: SectorConfig = {
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 }, // 2% NPAT
-    enterpriseDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Higher than RCOGP
+    enterpriseDevelopment: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 }, // 15 base + 1 grad + 1 jobs≤10% + 1 jobs>11%
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 }, // ICT-specific
-    yesInitiative: { maxPoints: 3, hasSubMinimum: false, subMinimumPercent: 0 }, // Tier 2 bonus included in total
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -417,14 +442,14 @@ export const ICT_GENERIC: SectorConfig = {
     esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
     sed: { spendPercent: 1.0, maxPts: 12 }, // ICT-specific initiatives
   },
-  levelThresholds: STANDARD_LEVELS,
+  levelThresholds: ICT_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// ICT Generic verified: 25+23+25+27+10+15+12 = 137, +3 YES = 140 (includes YES)
-// MC includes Employment Equity as combined pillar per ICT Sector Code
+// ICT Generic verified from Excel: 25+23+25+27+10+18+12 = 140 (YES excluded)
+// ICT uses different level scale: L1=120, L2=115, L3=110, L4=100, L5=95, L6=90, L7=75, L8=55
 
 // ---------------------------------------------------------------------------
 // FSC Generic (Financial Sector Code)
@@ -437,19 +462,17 @@ export const FSC_GENERIC: SectorConfig = {
   sectorCode: 'FSC',
   sectorName: 'Financial Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 120, // FSC Generic total (needs verification from full Excel)
+  totalMaxPoints: 120, // Verified from Excel: 25+21+23+24+10+9+8 = 120 (Others sub-sector)
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined (Others: 2+1+2+1+10+4+1=21)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // ~20 pts
-    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // ~20 pts
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    // FSC-specific pillars (values approximate pending full Excel verification)
-    empowermentFinancing: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
-    accessToFinancialServices: { maxPoints: 6, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 3 bonus
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // SED 3 + CE 2 + bonus = 8
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -496,17 +519,18 @@ export const FSC_GENERIC: SectorConfig = {
       dgTarget: 0.02, dgMaxPts: 2,
     },
     esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
-    sed: { spendPercent: 1.0, maxPts: 5 },
+    sed: { spendPercent: 1.0, maxPts: 8 }, // SED+CE combined for Others sub-sector
   },
-  levelThresholds: STANDARD_LEVELS,
+  levelThresholds: FSC_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// FSC Generic: 25+21+0+20+20+10+5+5+8+6 = 120 (approximate pending full Excel verification)
-// FSC has sub-variants: Banks (FSC-BANK), Long-Term Insurers (FSC-LTI), Short-Term Insurers (FSC-STI)
-// These have different pillar weightings that need individual verification
+// FSC Generic verified from Excel: 25+21+23+24+10+9+8 = 120 (Others sub-sector)
+// FSC uses scaled level thresholds: L1=95.5, L2=90.7, ... L8=38.2
+// FSC has sub-variants: Banks, Long-Term Insurers, Short-Term Insurers, Others
+// EF is "NOT Applicable" for Others sub-sector
 
 // ---------------------------------------------------------------------------
 // Agri Generic (Agriculture / AgriBEE)
@@ -527,6 +551,7 @@ export const AGRI_GENERIC: SectorConfig = {
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Agriculture-specific CD
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -600,6 +625,7 @@ export const RCOGP_QSE: SectorConfig = {
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 }, // 1% NPAT
     enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 1% NPAT
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -673,6 +699,7 @@ export const ICT_QSE: SectorConfig = {
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 2 jobs
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
@@ -720,13 +747,14 @@ export const ICT_QSE: SectorConfig = {
     esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 2 },
     sed: { spendPercent: 1.0, maxPts: 12 },
   },
-  levelThresholds: STANDARD_LEVELS,
+  levelThresholds: ICT_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// ICT QSE verified: 25+15+30+21+5+8+12 = 116 (exact match Excel)
+// ICT QSE verified from Excel: 25+15+30+21+5+8+12 = 116 (YES excluded)
+// ICT QSE uses same ICT level scale as ICT Generic
 
 // ---------------------------------------------------------------------------
 // Lookup

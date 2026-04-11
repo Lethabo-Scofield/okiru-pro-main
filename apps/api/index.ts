@@ -39,9 +39,9 @@ const allowedOrigins = (corsEnv && corsEnv.length > 0)
     : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
-// Body parser
-app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+// Body parser - increased for large session payloads with full entity arrays
+app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 
 // Logging middleware

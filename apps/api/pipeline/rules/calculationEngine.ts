@@ -213,6 +213,7 @@ export interface CalculationContext {
   shareholders: ShareholderInput[];
   suppliers: SupplierInput[];
   contributions: ContributionInput[];
+  trainingPrograms?: any[];
   province?: string;
 }
 
@@ -274,7 +275,7 @@ function isBlack(race: string): boolean {
  * with computed percentages and totals so criterion extractors can
  * look them up without re-scanning the arrays per criterion.
  */
-function preAggregateEntityArrays(ctx: CalculationContext): void {
+function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: any[]): void {
   const { entityValues, employees, shareholders, suppliers, contributions } = ctx;
 
   const set = (id: string, value: number) => {
@@ -361,12 +362,15 @@ function preAggregateEntityArrays(ctx: CalculationContext): void {
 
     for (const sh of shareholders) {
       const pct = hasShares ? sh.shares / totalShares : 1 / shareholders.length;
-      blackVoting += pct * sh.blackOwnership;
-      blackWomenVoting += pct * sh.blackWomenOwnership;
-      economicInterest += pct * sh.blackOwnership;
-      economicInterestBWO += pct * sh.blackWomenOwnership;
-      if (sh.isDesignatedGroup) designatedGroup += pct * sh.blackOwnership;
-      if (sh.blackNewEntrant) newEntrant += pct * sh.blackOwnership;
+      const normBO = sh.blackOwnership > 1 ? sh.blackOwnership / 100 : sh.blackOwnership;
+      const normBWO = sh.blackWomenOwnership > 1 ? sh.blackWomenOwnership / 100 : sh.blackWomenOwnership;
+      blackVoting += pct * normBO;
+      blackWomenVoting += pct * normBWO;
+      economicInterest += pct * normBO;
+      economicInterestBWO += pct * normBWO;
+      const isDG = sh.isDesignatedGroup || normBO > 0;
+      if (isDG) designatedGroup += pct * normBO;
+      if (sh.blackNewEntrant) newEntrant += pct * normBO;
     }
 
     set('blackVotingPct', blackVoting);
@@ -410,8 +414,10 @@ function preAggregateEntityArrays(ctx: CalculationContext): void {
 
       if (s.isQSE || s.enterpriseType === 'qse') qseSpend += s.spend || 0;
       if (s.isEME || s.enterpriseType === 'eme') emeSpend += s.spend || 0;
-      if (s.isBlackOwned51 || s.blackOwnership >= 51) bo51Spend += s.spend || 0;
-      if (s.isBlackWomanOwned30 || s.blackWomenOwnership >= 30) bwo30Spend += s.spend || 0;
+      const normBO = s.blackOwnership > 1 ? s.blackOwnership / 100 : s.blackOwnership;
+      const normBWO = s.blackWomenOwnership > 1 ? s.blackWomenOwnership / 100 : s.blackWomenOwnership;
+      if (s.isBlackOwned51 || normBO >= 0.51) bo51Spend += s.spend || 0;
+      if (s.isBlackWomanOwned30 || normBWO >= 0.30) bwo30Spend += s.spend || 0;
       if (s.isDesignatedGroup) dgSpend += s.spend || 0;
     }
 
@@ -444,6 +450,43 @@ function preAggregateEntityArrays(ctx: CalculationContext): void {
     set('sdSpend', sdSpend);
     set('edSpend', edSpend);
     set('sedSpend', sedSpend);
+  }
+
+  // ---- Skills Development: Aggregate training programs ----
+  if (trainingPrograms && trainingPrograms.length > 0) {
+    let totalTrainingCost = 0;
+    let bursarySpend = 0;
+    let disabledTrainingCost = 0;
+    let categoryASpend = 0;
+    let categoryBSpend = 0;
+
+    for (const tp of trainingPrograms) {
+      const cost = tp.cost || 0;
+      totalTrainingCost += cost;
+
+      // Check if bursary (category B or is_bursary flag)
+      if (tp.category === 'B' || tp.isBursary || tp.category === 'bursary') {
+        bursarySpend += cost;
+      }
+
+      // Check if disabled
+      if (tp.isDisabled) {
+        disabledTrainingCost += cost;
+      }
+
+      // Track categories
+      if (tp.category === 'A') categoryASpend += cost;
+      if (tp.category === 'B') categoryBSpend += cost;
+    }
+
+    set('training_cost', totalTrainingCost);
+    set('totalTrainingSpend', totalTrainingCost);
+    set('bursary_spend', bursarySpend);
+    set('disabled_training_spend', disabledTrainingCost);
+    set('category_a_spend', categoryASpend);
+    set('category_b_spend', categoryBSpend);
+
+    console.log('[calculationEngine] Training aggregated:', { totalTrainingCost, bursarySpend, disabledTrainingCost, programs: trainingPrograms.length });
   }
 }
 
@@ -609,7 +652,7 @@ export class CalculationEngine {
 
   constructor(context: CalculationContext) {
     this.context = context;
-    preAggregateEntityArrays(context);
+    preAggregateEntityArrays(context, context.trainingPrograms);
     this.extractors = this.buildInputExtractors(context.manifest);
   }
 
@@ -956,8 +999,9 @@ export class CalculationEngine {
       errors.push(`[${m.pillar}] ${m.field}: ${m.reason}`);
     }
 
+    const NON_SCORING_PILLARS = ['financials', 'clientInfo', 'yesInitiative'];
     for (const pack of this.context.manifest.pillarPacks) {
-      if (pack.pillarCode === 'financials') continue;
+      if (NON_SCORING_PILLARS.includes(pack.pillarCode)) continue;
 
       try {
         pillarResults.push(this.calculatePillar(pack));
@@ -967,8 +1011,12 @@ export class CalculationEngine {
     }
 
     const rawTotal = pillarResults.reduce((sum, p) => sum + p.points, 0);
-    const maxPoints = pillarResults.reduce((sum, p) => sum + p.maxPoints, 0);
+    const maxPoints = this.context.sectorConfig.totalMaxPoints || pillarResults.reduce((sum, p) => sum + p.maxPoints, 0);
     const overallPercentage = maxPoints > 0 ? (rawTotal / maxPoints) * 100 : 0;
+
+    // DEBUG: Log pillar scores
+    console.log('[calculationEngine] Pillar scores:', pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`));
+    console.log('[calculationEngine] rawTotal:', rawTotal, 'maxPoints:', maxPoints);
 
     const levelResult = this.determineLevel(rawTotal, pillarResults);
 
@@ -1162,6 +1210,7 @@ export interface CalculationOptions {
   shareholders?: ShareholderInput[];
   suppliers?: SupplierInput[];
   contributions?: ContributionInput[];
+  trainingPrograms?: any[];
   financials?: FinancialsInput;
   province?: string;
 }
@@ -1196,6 +1245,7 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
     shareholders: options.shareholders || [],
     suppliers: options.suppliers || [],
     contributions: options.contributions || [],
+    trainingPrograms: options.trainingPrograms || [],
     province: options.province,
   };
 
@@ -1221,7 +1271,7 @@ function storedRuleToSectorConfig(stored: import('../../arango/repositories/sect
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   };
   
   for (const spc of stored.pillarConfigs) {
@@ -1248,8 +1298,13 @@ function storedRuleToSectorConfig(stored: import('../../arango/repositories/sect
   
   const targets = stored.targets as SectorConfig['targets'];
   
-  // Compute totalMaxPoints from pillar configs
-  const totalMaxPoints = Object.values(pillarConfigs).reduce((sum, pc) => sum + pc.maxPoints, 0);
+  // Use the verified totalMaxPoints from ArangoDB (source of truth from Excel).
+  // YES Initiative is a level boost, not scored points, so we exclude it from the sum.
+  const NON_SCORING_KEYS = ['yesInitiative', 'employmentEquity'];
+  const computedTotal = Object.entries(pillarConfigs)
+    .filter(([key]) => !NON_SCORING_KEYS.includes(key) || (key === 'employmentEquity' && pillarConfigs.employmentEquity?.maxPoints))
+    .reduce((sum, [, pc]) => sum + pc.maxPoints, 0);
+  const totalMaxPoints = stored.totalMaxPoints || computedTotal;
   
   return {
     sectorCode: stored.sectorCode,

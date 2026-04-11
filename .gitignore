@@ -22,3 +22,9 @@ __pycache__/
 bee-execution-plan-extracted.txt
 assets/
 scripts/set-secrets.js
+
+# Kubernetes secrets & credentials (never commit these)
+*-secrets*.yaml
+*-credentials*.yaml
+*-api-keys*.yaml
+temp-secret-patch.json

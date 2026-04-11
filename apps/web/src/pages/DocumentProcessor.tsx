@@ -1486,28 +1486,31 @@ export default function DocumentProcessor() {
       createdAt: sessionCreatedAt.current,
       updatedAt: new Date().toISOString(),
       currentStep: step as ProcessorSession['currentStep'],
-      filesData: await Promise.all((opts?.files ?? uploadedFiles).map(async f => {
-        let fileBase64: string | undefined;
-        if (f.type === 'PDF' && f.file && f.file.size > 0) {
-          try {
-            const buf = await f.file.arrayBuffer();
-            const bytes = new Uint8Array(buf);
-            let binary = '';
-            for (let j = 0; j < bytes.length; j += 8192) {
-              const chunk = Array.from(bytes.subarray(j, j + 8192));
-              binary += String.fromCharCode(...chunk);
-            }
-            fileBase64 = btoa(binary);
-          } catch { /* skip */ }
-        }
-        return { id: f.id, name: f.name, size: f.size, type: f.type, textContent: f.textContent, ...(fileBase64 ? { fileBase64 } : {}) };
+      filesData: (opts?.files ?? uploadedFiles).map(f => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        status: f.status,
       })),
       fileClassifications: opts?.classifications ?? fileClassifications,
-      extractionResults: opts?.results ?? extractionResults,
+      extractionResults: (opts?.results ?? extractionResults).map((r: any) => ({
+        fileName: r.fileName,
+        templateName: r.templateName,
+        sectorCode: r.sectorCode,
+        scorecardType: r.scorecardType,
+        entities: (r.entities ?? []).map((e: any) => ({
+          name: e.name,
+          value: e.value,
+          confidence: e.confidence,
+          status: e.status,
+          pillar: e.pillar,
+          fieldType: e.fieldType,
+        })),
+      })),
       docStatuses: opts?.statuses ?? docStatuses,
       isComplete: opts?.complete ?? false,
       scorecardResult: opts?.scorecardResult ?? undefined,
-      // Include build flow data (prioritize opts if provided, otherwise use current state)
       foundationData: opts?.foundationData ?? foundationData,
       pillarData: opts?.pillarData ?? pillarData,
       flowMode: (opts?.flowMode ?? flowMode) || undefined,
@@ -1707,212 +1710,38 @@ export default function DocumentProcessor() {
     return () => { cancelled = true; };
   }, [currentPage, foundationData.clientInfo?.sectorCode]);
 
-  // Build mode: unified calculation using populateAndScore (single source of truth)
+  // Build mode: delegates to populateAndScore (single source of truth)
   const calculateFromPillarData = useCallback(async () => {
     setIsSavingSession(true);
     try {
-      // Clear stale session data before populating new scorecard
-      useBbeeStore.getState().startNewSession();
-
       const ci = foundationData.clientInfo ?? EMPTY_CLIENT_INFO;
       const fin = foundationData.financials ?? EMPTY_FINANCIALS;
-      const buildClientId = `build-${sessionId || 'local'}`;
-      const clientPartial = clientInfoToToolkitClient(ci, fin);
-
-      const skillsBase = pillarData.skills
-        ? {
-            ...pillarData.skills,
-            id: pillarData.skills.id || '',
-            clientId: buildClientId,
-            leviableAmount: fin.leviableAmount || pillarData.skills.leviableAmount || 0,
-          }
-        : {
-            id: '',
-            clientId: buildClientId,
-            leviableAmount: fin.leviableAmount || 0,
-            trainingPrograms: [],
-            yesCandidatesCount: 0,
-            yesAbsorbedCount: 0,
-          };
-      const skillsMerged = mergeYesIntoSkills(skillsBase, pillarData.yes);
+      const sectorCode = ci.sectorCode || 'RCOGP';
+      const scorecardTypeResult = determineScorecardType(sectorCode, String(ci.annualTurnover ?? 0));
 
       setCompanyInfo(prev => ({
         ...prev,
         name: ci.companyName || prev.name,
-        sector: ci.sectorCode || prev.sector,
+        sector: sectorCode || prev.sector,
       }));
 
-      useBbeeStore.setState({
-        isLoaded: true,
-        pipelineOverrides: null,
-        activeClientId: buildClientId,
-        client: {
-          id: buildClientId,
-          name: clientPartial.name || ci.companyName || 'Client',
-          financialYear:
-            clientPartial.financialYear
-            || (ci.financialYearEnd ? String(ci.financialYearEnd).substring(0, 4) : String(new Date().getFullYear())),
-          revenue: clientPartial.revenue ?? fin.totalRevenue ?? 0,
-          npat: clientPartial.npat ?? fin.npat ?? 0,
-          leviableAmount: clientPartial.leviableAmount ?? fin.leviableAmount ?? 0,
-          industryNorm: clientPartial.industryNorm,
-          eapProvince: clientPartial.eapProvince ?? 'National',
-          registrationNumber: clientPartial.registrationNumber ?? ci.registrationNumber ?? '',
-          tradingName: clientPartial.tradingName,
-          vatNumber: clientPartial.vatNumber,
-          taxNumber: clientPartial.taxNumber,
-          physicalAddress: clientPartial.physicalAddress ?? ci.physicalAddress ?? '',
-          postalAddress: clientPartial.postalAddress,
-          contactPerson: clientPartial.contactPerson ?? ci.contactPerson ?? '',
-          contactEmail: clientPartial.contactEmail ?? ci.contactEmail ?? '',
-          contactPhone: clientPartial.contactPhone ?? ci.contactPhone ?? '',
-          sectorCode: (clientPartial.sectorCode ?? ci.sectorCode ?? 'RCOGP') as Client['sectorCode'],
-          industry: clientPartial.industry ?? ci.industry ?? 'Generic',
-          companySize: clientPartial.companySize ?? 'Generic',
-          annualTurnover: clientPartial.annualTurnover ?? ci.annualTurnover ?? 0,
-          numberOfEmployees: clientPartial.numberOfEmployees ?? ci.numberOfEmployees ?? 0,
-          measurementPeriodStart: clientPartial.measurementPeriodStart,
-          measurementPeriodEnd: clientPartial.measurementPeriodEnd,
-          beeCertificateNumber: clientPartial.beeCertificateNumber,
-          beeCertificateExpiry: clientPartial.beeCertificateExpiry,
-          beeCertificateLevel: clientPartial.beeCertificateLevel,
-          verificationAgency: clientPartial.verificationAgency,
-          financialHistory: [],
-        },
-        ownership: pillarData.ownership
-          ? { ...pillarData.ownership, id: pillarData.ownership.id || '', clientId: buildClientId }
-          : {
-              id: '',
-              clientId: buildClientId,
-              shareholders: [],
-              companyValue: 0,
-              outstandingDebt: 0,
-              yearsHeld: 0,
-              ownershipScorePoints: 0,
-              ownershipScorePercent: 0,
-              netValuePoints: 0,
-              netValuePercent: 0,
-            },
-        management: pillarData.management
-          ? { ...pillarData.management, id: pillarData.management.id || '', clientId: buildClientId }
-          : { id: '', clientId: buildClientId, employees: [] },
-        skills: {
-          ...skillsMerged,
-          id: skillsMerged.id || '',
-          clientId: buildClientId,
-        },
-        procurement: pillarData.procurement
-          ? {
-              ...pillarData.procurement,
-              id: pillarData.procurement.id || '',
-              clientId: buildClientId,
-              tmps: fin.tmps || pillarData.procurement.tmps || 0,
-            }
-          : {
-              id: '',
-              // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
-              clientId: buildClientId,
-              tmps: fin.tmps || 0,
-              suppliers: [],
-            },
-        esd: pillarData.esd
-          ? { ...pillarData.esd, id: pillarData.esd.id || '', clientId: buildClientId }
-          : { id: '', clientId: buildClientId, contributions: [], graduationBonus: false, jobsCreatedBonus: false },
-        sed: pillarData.sed
-          ? { ...pillarData.sed, id: pillarData.sed.id || '', clientId: buildClientId }
-          : { id: '', clientId: buildClientId, contributions: [] },
-        calculatorConfig: useBbeeStore.getState().calculatorConfig, // Preserve config loaded on step entry
+      const result = await populateAndScore({
+        pillars: pillarData,
+        foundation: foundationData,
+        sectorCode,
+        scorecardType: scorecardTypeResult.scorecardType || 'Generic',
       });
 
-      // Build entity arrays for UCS API
-      const storeState = useBbeeStore.getState();
-      const employees = (storeState.management?.employees || []).map(e => ({
-        name: e.name,
-        race: e.race,
-        gender: e.gender,
-        designation: e.designation,
-        isDisabled: e.isDisabled,
-        isForeign: e.isForeign,
-      }));
-      const shareholders = (storeState.ownership?.shareholders || []).map(s => ({
-        name: s.name,
-        blackOwnership: s.blackOwnership,
-        blackWomenOwnership: s.blackWomenOwnership,
-        shares: s.shares,
-        shareValue: s.shareValue,
-        yearsHeld: s.yearsHeld,
-        isDesignatedGroup: s.isDesignatedGroup,
-        blackNewEntrant: s.blackNewEntrant,
-      }));
-      const suppliers = (storeState.procurement?.suppliers || []).map(s => ({
-        name: s.name,
-        spend: s.spend,
-        beeLevel: s.beeLevel,
-        blackOwnership: s.blackOwnership,
-        blackWomenOwnership: s.blackWomenOwnership,
-        enterpriseType: s.enterpriseType,
-        isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
-        isBlackOwned51: s.blackOwnership >= 51,
-        isBlackWomanOwned30: s.blackWomenOwnership >= 30,
-        isEME: s.enterpriseType === 'eme',
-        isQSE: s.enterpriseType === 'qse',
-        isForeignSupplier: s.isForeignSupplier,
-      }));
-      const esdCategoryMap: Record<string, 'sd' | 'ed' | 'sed'> = {
-        supplier_development: 'sd',
-        enterprise_development: 'ed',
-        socio_economic: 'sed',
-      };
-      const esdContribs = (storeState.esd?.contributions || []).map(c => ({
-        beneficiary: c.beneficiary,
-        type: c.type,
-        amount: c.amount,
-        category: esdCategoryMap[c.category] || ('ed' as const),
-      }));
-      const sedContribs = (storeState.sed?.contributions || []).map(c => ({
-        beneficiary: c.beneficiary,
-        type: c.type,
-        amount: c.amount,
-        category: 'sed' as const,
-      }));
-      const allContributions = [...esdContribs, ...sedContribs];
-
-      const scorecardTypeResult = determineScorecardType(ci.sectorCode || 'RCOGP', String(ci.annualTurnover ?? 0));
-
-      // POST to UCS for the authoritative scorecard
-      const ucsResponse = await fetch(`${API_BASE}/api/calculate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assessmentId: `build-${sessionId || Date.now()}`,
-          sectorCode: ci.sectorCode || 'RCOGP',
-          scorecardType: scorecardTypeResult.scorecardType || 'Generic',
-          entityValues: {},
-          employees,
-          shareholders,
-          suppliers,
-          contributions: allContributions,
-          financials: {
-            revenue: fin.totalRevenue || 0,
-            npat: fin.npat || 0,
-            leviableAmount: fin.leviableAmount || 0,
-            tmps: fin.tmps || storeState.procurement?.tmps || 0,
-            headcount: employees.length,
-          },
-        }),
-      });
-
-      if (!ucsResponse.ok) {
-        const errBody = await ucsResponse.json().catch(() => ({}));
-        throw new Error(errBody.error || errBody.details || `UCS returned ${ucsResponse.status}`);
+      if (!result.success) {
+        throw new Error(result.error || 'Calculation failed');
       }
 
-      const apiResult: APIScorecardResult = await ucsResponse.json();
-      useBbeeStore.getState().setScorecardFromAPI(apiResult);
-
-      const { scorecard, management, skills } = useBbeeStore.getState();
+      const { scorecard } = useBbeeStore.getState();
+      const buildClientId = useBbeeStore.getState().activeClientId || `build-${sessionId || 'local'}`;
 
       // YES level improvement (still computed locally until UCS handles YES)
+      const skills = useBbeeStore.getState().skills;
+      const management = useBbeeStore.getState().management;
       const yesCandidates =
         skills.trainingPrograms
           ?.filter(p => p.isYesEmployee)
@@ -1944,7 +1773,7 @@ export default function DocumentProcessor() {
         totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
       } as YESData);
 
-      const scorecardLegacy = normalizeUCSResult(apiResult, scorecard, {
+      const scorecardLegacy = normalizeUCSResult(result.apiResult!, scorecard, {
         yesTier: yesForLevel.yesTierAchieved,
         yesLevelIncrease: yesForLevel.yesBeeLevelIncrease || 0,
       });
@@ -1953,7 +1782,7 @@ export default function DocumentProcessor() {
       setScorecardResult(scorecardLegacy);
       setCurrentPage('scorecard');
 
-      // Issue B: Create real DB record and update with real UUID
+      // Persist assessment to DB
       try {
         const response = await fetch(`${API_BASE}/api/assessments`, {
           method: 'POST',
@@ -1980,7 +1809,7 @@ export default function DocumentProcessor() {
             pillars: {
               ownership: pillarData.ownership || null,
               management: pillarData.management || null,
-              skills: skillsMerged || null,
+              skills: pillarData.skills || null,
               procurement: pillarData.procurement || null,
               esd: pillarData.esd || null,
               sed: pillarData.sed || null,
@@ -1990,23 +1819,14 @@ export default function DocumentProcessor() {
         });
 
         if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.assessment?.clientId) {
-            const realClientId = result.assessment.clientId;
-            
-            // Update localStorage with real UUID
+          const dbResult = await response.json();
+          if (dbResult.success && dbResult.assessment?.clientId) {
+            const realClientId = dbResult.assessment.clientId;
             localStorage.setItem(getActiveClientStorageKey(user?.id), realClientId);
-            
-            // Update Zustand store with real clientId
             useBbeeStore.setState({
               activeClientId: realClientId,
-              client: {
-                ...useBbeeStore.getState().client!,
-                id: realClientId,
-              },
+              client: { ...useBbeeStore.getState().client!, id: realClientId },
             });
-            
-            // Update all pillar clientIds
             const currentState = useBbeeStore.getState();
             useBbeeStore.setState({
               ownership: { ...currentState.ownership, clientId: realClientId },
@@ -2016,8 +1836,6 @@ export default function DocumentProcessor() {
               esd: { ...currentState.esd, clientId: realClientId },
               sed: { ...currentState.sed, clientId: realClientId },
             });
-            
-            console.log('Build mode client persisted:', realClientId);
           }
         }
       } catch (persistError) {
@@ -2031,15 +1849,6 @@ export default function DocumentProcessor() {
         scorecardResult: scorecardLegacy,
         complete: true,
       });
-
-      // Show validation warnings from UCS if any
-      if (apiResult.validation && !apiResult.validation.isValid) {
-        toast({
-          title: 'Scorecard calculated with warnings',
-          description: apiResult.validation.warnings?.join('; ') || 'Some data may be missing',
-          variant: 'default',
-        });
-      }
 
       toast({
         title: 'Scorecard calculated',
@@ -3627,7 +3436,8 @@ export default function DocumentProcessor() {
                   throw new Error(errBody.error || errBody.details || `UCS returned ${ucsResponse.status}`);
                 }
 
-                const apiResult: APIScorecardResult = await ucsResponse.json();
+                const raw = await ucsResponse.json();
+                const apiResult: APIScorecardResult = raw.scorecard ?? raw;
                 useBbeeStore.getState().setScorecardFromAPI(apiResult);
 
                 const { scorecard } = useBbeeStore.getState();
@@ -4555,9 +4365,18 @@ export default function DocumentProcessor() {
                           </button>
                           <button
                             onClick={() => {
-                              // Navigate with build clientId in URL so ClientProvider picks it up
-                              const buildClientId = `build-${sessionId || 'local'}`;
-                              navigate(`/toolkit/${buildClientId}`);
+                              const storeState = useBbeeStore.getState();
+                              const storeClientId = storeState.activeClientId;
+                              const isSyntheticId = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-');
+                              if (storeClientId && !isSyntheticId) {
+                                navigate(`/toolkit/${storeClientId}/scorecard`);
+                              } else if (storeState.isLoaded && storeClientId) {
+                                navigate(`/toolkit/${storeClientId}/scorecard`);
+                              } else if (sessionId) {
+                                navigate(`/toolkit/session?session=${sessionId}`);
+                              } else {
+                                navigate('/toolkit');
+                              }
                             }}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
                           >

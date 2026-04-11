@@ -680,8 +680,8 @@ export async function populateAndScore(
       blackWomenOwnership: s.blackWomenOwnership,
       enterpriseType: s.enterpriseType,
       isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
-      isBlackOwned51: s.blackOwnership >= 51,
-      isBlackWomanOwned30: s.blackWomenOwnership >= 30,
+      isBlackOwned51: s.blackOwnership > 1 ? s.blackOwnership >= 51 : s.blackOwnership >= 0.51,
+      isBlackWomanOwned30: s.blackWomenOwnership > 1 ? s.blackWomenOwnership >= 30 : s.blackWomenOwnership >= 0.30,
       isEME: s.enterpriseType === 'eme',
       isQSE: s.enterpriseType === 'qse',
       isForeignSupplier: s.isForeignSupplier,
@@ -706,6 +706,18 @@ export async function populateAndScore(
     }));
     const contributions = [...esdContributions, ...sedContributions];
     
+    const trainingPrograms = (storeState.skills?.trainingPrograms || []).map(tp => ({
+      id: tp.id,
+      name: tp.name,
+      category: tp.category,
+      cost: tp.cost || 0,
+      isYesEmployee: tp.isYesEmployee || false,
+      isAbsorbed: tp.isAbsorbed || false,
+      race: tp.race,
+      gender: tp.gender,
+      isDisabled: tp.isDisabled || false,
+    }));
+
     const financials = {
       revenue: fin.totalRevenue || clientData.revenue || 0,
       npat: fin.npat || clientData.npat || 0,
@@ -727,6 +739,7 @@ export async function populateAndScore(
         shareholders,
         suppliers,
         contributions,
+        trainingPrograms,
         financials,
       }),
     });
@@ -736,7 +749,8 @@ export async function populateAndScore(
       throw new Error(errBody.error || `UCS returned ${response.status}`);
     }
     
-    const apiResult: APIScorecardResult = await response.json();
+    const raw = await response.json();
+    const apiResult: APIScorecardResult = raw.scorecard ?? raw;
     
     // Set the store's scorecard from the UCS result
     useBbeeStore.getState().setScorecardFromAPI(apiResult);

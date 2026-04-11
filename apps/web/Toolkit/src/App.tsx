@@ -63,7 +63,8 @@ function DataLoader({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const isPrehydrated = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-');
-    if (!isPrehydrated && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
+    const isSyntheticActiveId = activeClientId?.startsWith('build-') || activeClientId?.startsWith('session-');
+    if (!isPrehydrated && !isSyntheticActiveId && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
       setLoadError(null);
       loadClientData(activeClientId).catch((err: any) => {
         const msg: string = err?.message || '';

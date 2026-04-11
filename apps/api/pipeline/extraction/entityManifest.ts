@@ -1752,7 +1752,7 @@ function buildSEDPack(cfg: SectorConfig): PillarPack {
 
 function yesCriteria(cfg: SectorConfig): CriterionEntity[] {
   const pc = cfg.pillarConfigs?.yesInitiative;
-  const maxPoints = pc?.maxPoints ?? 3; // Default to 3 if not configured
+  const maxPoints = pc?.maxPoints ?? 0; // YES is a level boost, not scored points
   return [
     { code: 'YES-HEADCOUNT', name: 'YES youth headcount target', pillarCode: 'yesInitiative', target: 'size_based', maxPoints: 0, formulaId: 'yes_headcount', inputEntities: ['yes_participant_name', 'yes_participant_id', 'yes_start_date'], evidenceRequired: ['YES records'] },
     { code: 'YES-ABSORPTION', name: 'YES absorption rate', pillarCode: 'yesInitiative', target: 0.25, maxPoints: 0, formulaId: 'yes_absorption', inputEntities: ['yes_is_absorbed', 'yes_months_retained'], evidenceRequired: ['YES records'] },
@@ -1762,7 +1762,7 @@ function yesCriteria(cfg: SectorConfig): CriterionEntity[] {
 
 function buildYESPack(cfg: SectorConfig): PillarPack {
   const pc = cfg.pillarConfigs?.yesInitiative;
-  const maxPoints = pc?.maxPoints ?? 3;
+  const maxPoints = pc?.maxPoints ?? 0; // YES is a level boost, not scored points
   return {
     pillarCode: 'yesInitiative', pillarName: 'YES Initiative', maxPoints,
     hasSubMinimum: false, subMinimumThreshold: 0,
