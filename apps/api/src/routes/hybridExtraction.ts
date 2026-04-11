@@ -109,6 +109,11 @@ import { computeConfidence } from '../../pipeline/extraction/confidenceScorer.js
 import { validateAll, type ValidationResult } from '../../pipeline/extraction/validator.js';
 import { ProvenanceTracker } from '../../pipeline/extraction/provenanceTracker.js';
 import { Document, DocumentChunk } from '../../models.js';
+import { 
+  isScannedPdf, 
+  extractFromScannedPdf,
+  type VisionExtractionResult 
+} from '../../pipeline/extraction/visionPdfExtractor.js';
 
 const router = Router();
 
@@ -211,7 +216,7 @@ async function parseFileToPages(
     return pages;
   }
 
-  // PDF
+  // PDF - with scanned PDF detection and vision fallback
   if (mimetype === 'application/pdf' || ext === 'pdf') {
     const pdfData = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     const pdfDocument = await pdfjs.getDocument({ data: pdfData }).promise;
@@ -227,6 +232,38 @@ async function parseFileToPages(
         text,
         metadata: { pageNumber: i, type: 'pdf' },
       });
+    }
+
+    // Check if this is a scanned PDF (very little text extracted)
+    const totalText = pages.map(p => p.text).join(' ');
+    const scannedDetection = isScannedPdf(totalText);
+    
+    console.log(`[hybridExtraction] PDF text extraction: ${totalText.length} chars. Scanned PDF detected: ${scannedDetection}`);
+    
+    if (scannedDetection) {
+      console.log(`[hybridExtraction] Switching to GPT-4o Vision OCR for scanned PDF`);
+      try {
+        // Use vision extraction for scanned PDFs
+        const visionResults = await extractFromScannedPdf(buffer, 'RCOGP', 'Generic', null);
+        
+        if (visionResults && visionResults.length > 0) {
+          // Merge vision results with page structure
+          return visionResults.map((vr, idx) => ({
+            pageId: vr.pageId || `page_${idx + 1}`,
+            text: vr.text || '',
+            metadata: { 
+              pageNumber: vr.metadata.pageNumber || idx + 1, 
+              type: 'pdf_vision',
+              ocrConfidence: vr.metadata.ocrConfidence,
+              visionExtracted: true,
+              entities: vr.entities || []
+            },
+          }));
+        }
+      } catch (visionErr) {
+        console.warn(`[hybridExtraction] Vision extraction failed, falling back to text extraction:`, visionErr);
+        // Fall back to regular text extraction if vision fails
+      }
     }
 
     return pages;

@@ -131,33 +131,28 @@ function toStoredSectorRule(
   import('../arango/repositories/sectorRuleRepository.js').StoredSectorRule,
   '_key' | 'createdAt' | 'updatedAt'
 > {
-  // Find matching manifest for pillar configs
-  const manifest = manifests.find(
-    m =>
-      m.sectorCode.toUpperCase() === config.sectorCode.toUpperCase() &&
-      m.scorecardType === config.scorecardType
-  );
-
-  const pillarConfigs = manifest
-    ? manifest.pillarPacks.map((pack, idx) =>
-        toStoredPillarConfig(pack, idx)
-      )
-    : [
-        { code: 'ownership', name: 'Ownership', ...config.pillarConfigs.ownership, displayOrder: 0 },
-        { code: 'managementControl', name: 'Management Control', ...config.pillarConfigs.managementControl, displayOrder: 1 },
-        { code: 'employmentEquity', name: 'Employment Equity', ...(config.pillarConfigs.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }), displayOrder: 2 },
-        { code: 'skillsDevelopment', name: 'Skills Development', ...config.pillarConfigs.skillsDevelopment, displayOrder: 3 },
-        { code: 'preferentialProcurement', name: 'Preferential Procurement', ...config.pillarConfigs.preferentialProcurement, displayOrder: 4 },
-        { code: 'enterpriseSupplierDevelopment', name: 'Enterprise & Supplier Development', maxPoints: (config.pillarConfigs.supplierDevelopment?.maxPoints ?? 0) + (config.pillarConfigs.enterpriseDevelopment?.maxPoints ?? 0), hasSubMinimum: config.pillarConfigs.supplierDevelopment?.hasSubMinimum ?? false, subMinimumPercent: config.pillarConfigs.supplierDevelopment?.subMinimumPercent ?? 0, displayOrder: 5 },
-        { code: 'socioEconomicDevelopment', name: 'Socio-Economic Development', ...config.pillarConfigs.socioEconomicDevelopment, displayOrder: 6 },
-      ].map(p => ({
-        code: p.code,
-        name: p.name,
-        maxPoints: p.maxPoints,
-        hasSubMinimum: p.hasSubMinimum,
-        subMinimumThreshold: p.maxPoints * (p.subMinimumPercent / 100),
-        displayOrder: p.displayOrder,
-      }));
+  // Always build pillar configs from the hardcoded SectorConfig (source of truth).
+  // Do NOT use manifest.pillarPacks because buildManifest calls resolveSectorConfig
+  // which reads stale ArangoDB values, creating a circular dependency during seeding.
+  const pillarConfigs = [
+    { code: 'clientInfo', name: 'Client Information', maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0, displayOrder: 0 },
+    { code: 'financials', name: 'Financials', maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0, displayOrder: 1 },
+    { code: 'ownership', name: 'Ownership', ...config.pillarConfigs.ownership, displayOrder: 2 },
+    { code: 'managementControl', name: 'Management Control', ...config.pillarConfigs.managementControl, displayOrder: 3 },
+    { code: 'employmentEquity', name: 'Employment Equity', ...(config.pillarConfigs.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }), displayOrder: 4 },
+    { code: 'skillsDevelopment', name: 'Skills Development', ...config.pillarConfigs.skillsDevelopment, displayOrder: 5 },
+    { code: 'preferentialProcurement', name: 'Preferential Procurement', ...config.pillarConfigs.preferentialProcurement, displayOrder: 6 },
+    { code: 'enterpriseSupplierDevelopment', name: 'Enterprise & Supplier Development', maxPoints: (config.pillarConfigs.supplierDevelopment?.maxPoints ?? 0) + (config.pillarConfigs.enterpriseDevelopment?.maxPoints ?? 0), hasSubMinimum: config.pillarConfigs.supplierDevelopment?.hasSubMinimum ?? false, subMinimumPercent: config.pillarConfigs.supplierDevelopment?.subMinimumPercent ?? 0, displayOrder: 7 },
+    { code: 'socioEconomicDevelopment', name: 'Socio-Economic Development', ...config.pillarConfigs.socioEconomicDevelopment, displayOrder: 8 },
+    { code: 'yesInitiative', name: 'YES Initiative', ...(config.pillarConfigs.yesInitiative ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }), displayOrder: 9 },
+  ].map(p => ({
+    code: p.code,
+    name: p.name,
+    maxPoints: p.maxPoints,
+    hasSubMinimum: p.hasSubMinimum,
+    subMinimumThreshold: p.maxPoints * ((p.subMinimumPercent ?? 0) / 100),
+    displayOrder: p.displayOrder,
+  }));
 
   // Use the verified totalMaxPoints from sectorConfig (source of truth from Excel)
   // rather than calculating from pillarConfigs which may have rounding errors

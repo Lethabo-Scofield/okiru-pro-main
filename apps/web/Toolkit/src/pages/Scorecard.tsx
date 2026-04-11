@@ -68,6 +68,7 @@ export default function Scorecard() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  const hasConfig = !!calculatorConfig?.pillarConfigs;
 
   const handleDelete = async () => {
     if (!activeClientId) return;
@@ -94,48 +95,49 @@ export default function Scorecard() {
     });
   };
 
-  const cfg = calculatorConfig!;
-  const ownResult = useMemo(() => calculateOwnershipScore(ownership, cfg), [ownership, cfg]);
-  const mgtResult = useMemo(() => calculateManagementScore(management, cfg), [management, cfg]);
-  const skillResult = useMemo(() => calculateSkillsScore(skills, cfg), [skills, cfg]);
-  const procResult = useMemo(() => calculateProcurementScore(procurement, cfg), [procurement, cfg]);
-  const esdResult = useMemo(() => calculateEsdScore(esd, client.npat, cfg), [esd, client.npat, cfg]);
-  const sedResult = useMemo(() => calculateSedScore(sed, client.npat, cfg), [sed, client.npat, cfg]);
+  const cfg = calculatorConfig;
+  const ownResult = useMemo(() => hasConfig ? calculateOwnershipScore(ownership, cfg!) : null, [ownership, cfg, hasConfig]);
+  const mgtResult = useMemo(() => hasConfig ? calculateManagementScore(management, cfg!) : null, [management, cfg, hasConfig]);
+  const skillResult = useMemo(() => hasConfig ? calculateSkillsScore(skills, cfg!) : null, [skills, cfg, hasConfig]);
+  const procResult = useMemo(() => hasConfig ? calculateProcurementScore(procurement, cfg!) : null, [procurement, cfg, hasConfig]);
+  const esdResult = useMemo(() => hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null, [esd, client.npat, cfg, hasConfig]);
+  const sedResult = useMemo(() => hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null, [sed, client.npat, cfg, hasConfig]);
 
   const tmps = procurement.tmps || 1;
 
-  const elements: ScorecardElement[] = [
+  const elements: ScorecardElement[] = useMemo(() => [
     {
       key: "ownership",
       name: "Ownership",
       ...(scorecard.ownership || EMPTY_PILLAR),
       accentColor: "text-violet-500 dark:text-violet-400",
       barColor: "bg-violet-500",
-      subMinLabel: ownResult.fullOwnershipAwarded
-        ? `Black Voting ${pct(ownResult.rawStats.blackVotingPercentage)} ≥ 25%: Full 25 pts awarded`
-        : `Net Value ≥ 3.2 or Black Voting ≥ 25%: ${ownResult.subMinimumMet ? 'Met' : 'Not met'}`,
-      subIndicators: ownResult.subLines.map(sl => ({
+      subMinLabel: ownResult
+        ? (ownResult.fullOwnershipAwarded
+          ? `Black Voting ${pct(ownResult.rawStats.blackVotingPercentage)} ≥ 25%: Full 25 pts awarded`
+          : `Net Value ≥ 3.2 or Black Voting ≥ 25%: ${ownResult.subMinimumMet ? 'Met' : 'Not met'}`)
+        : undefined,
+      subIndicators: ownResult?.subLines.map(sl => ({
         name: sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
         formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-      })),
+      })) || [],
     },
-    // Issue 1: Updated name to reflect MC+EE combined pillar
     {
       key: "managementControl",
       name: "Management Control & Employment Equity",
       ...(scorecard.managementControl || EMPTY_PILLAR),
       accentColor: "text-blue-500 dark:text-blue-400",
       barColor: "bg-blue-500",
-      subIndicators: mgtResult.subLines.map(sl => ({
+      subIndicators: mgtResult?.subLines.map(sl => ({
         name: sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
         formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-      })),
+      })) || [],
     },
     {
       key: "skillsDevelopment",
@@ -143,8 +145,8 @@ export default function Scorecard() {
       ...(scorecard.skillsDevelopment || EMPTY_PILLAR),
       accentColor: "text-emerald-500 dark:text-emerald-400",
       barColor: "bg-emerald-500",
-      subMinLabel: `Skills total ≥ 10 pts (40% of 25): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}`,
-      subIndicators: [
+      subMinLabel: skillResult ? `Skills total ≥ 10 pts (40% of 25): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subIndicators: skillResult ? [
         ...skillResult.subLines.map(sl => ({
           name: sl.name,
           target: sl.target,
@@ -153,13 +155,13 @@ export default function Scorecard() {
           formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
         })),
         ...skillResult.categoryBreakdown.filter(cb => cb.spend > 0).map(cb => ({
-          name: `  ↳ Cat ${cb.code}: ${cb.label}`,
-          target: cb.cap ? `≤${(cb.cap * 100).toFixed(0)}% cap` : "No cap",
+          name: `  Cat ${cb.code}: ${cb.label}`,
+          target: cb.cap ? `<=${(cb.cap * 100).toFixed(0)}% cap` : "No cap",
           weighting: 0,
           score: 0,
-          formula: `${cb.label} spend R${cb.spend.toLocaleString()}${cb.capApplied ? ` → capped to R${cb.recognisedSpend.toLocaleString()} (${(cb.cap! * 100).toFixed(0)}% limit)` : ` → R${cb.recognisedSpend.toLocaleString()} recognised`}`,
+          formula: `${cb.label} spend R${cb.spend.toLocaleString()}${cb.capApplied ? ` -> capped to R${cb.recognisedSpend.toLocaleString()} (${(cb.cap! * 100).toFixed(0)}% limit)` : ` -> R${cb.recognisedSpend.toLocaleString()} recognised`}`,
         })),
-      ],
+      ] : [],
     },
     {
       key: "procurement",
@@ -167,16 +169,16 @@ export default function Scorecard() {
       ...(scorecard.procurement || EMPTY_PILLAR),
       accentColor: "text-amber-500 dark:text-amber-400",
       barColor: "bg-amber-500",
-      subMinLabel: `Procurement base ≥ 11.6 pts: ${procResult.subMinimumMet ? 'Met' : 'Not met'}`,
-      subIndicators: procResult.subLines.map(sl => ({
-        name: sl.isBonus ? `⭐ ${sl.name}` : sl.name,
+      subMinLabel: procResult ? `Procurement base >= 11.6 pts: ${procResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subIndicators: procResult?.subLines.map(sl => ({
+        name: sl.isBonus ? `* ${sl.name}` : sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
         formula: sl.isBonus
-          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} — tick-box + evidence`
-          : `Spend R${sl.spend.toLocaleString()} ÷ ${sl.target} of TMPS R${tmps.toLocaleString()} × ${sl.weighting} pts`,
-      })),
+          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} - tick-box + evidence`
+          : `Spend R${sl.spend.toLocaleString()} / ${sl.target} of TMPS R${tmps.toLocaleString()} x ${sl.weighting} pts`,
+      })) || [],
     },
     {
       key: "supplierDevelopment",
@@ -184,14 +186,14 @@ export default function Scorecard() {
       ...(scorecard.supplierDevelopment || EMPTY_PILLAR),
       accentColor: "text-rose-500 dark:text-rose-400",
       barColor: "bg-rose-500",
-      subMinLabel: `SD ≥ 4 pts (40% of 10): ${esdResult.sdSubMinimumMet ? 'Met' : 'Not met'}`,
-      subIndicators: esdResult.sdSubLines.map(sl => ({
+      subMinLabel: esdResult ? `SD >= 4 pts (40% of 10): ${esdResult.sdSubMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subIndicators: esdResult?.sdSubLines.map(sl => ({
         name: sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
-        formula: `SD spend R${esdResult.sdSpend.toLocaleString()} ÷ target R${esdResult.sdTarget.toLocaleString()} × ${sl.weighting} pts`,
-      })),
+        formula: `SD spend R${esdResult.sdSpend.toLocaleString()} / target R${esdResult.sdTarget.toLocaleString()} x ${sl.weighting} pts`,
+      })) || [],
     },
     {
       key: "enterpriseDevelopment",
@@ -199,16 +201,16 @@ export default function Scorecard() {
       ...(scorecard.enterpriseDevelopment || EMPTY_PILLAR),
       accentColor: "text-orange-500 dark:text-orange-400",
       barColor: "bg-orange-500",
-      subMinLabel: `ED base ≥ 2 pts (40% of 5): ${esdResult.edSubMinimumMet ? 'Met' : 'Not met'}`,
-      subIndicators: esdResult.edSubLines.map(sl => ({
-        name: sl.isBonus ? `⭐ ${sl.name}` : sl.name,
+      subMinLabel: esdResult ? `ED base >= 2 pts (40% of 5): ${esdResult.edSubMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subIndicators: esdResult?.edSubLines.map(sl => ({
+        name: sl.isBonus ? `* ${sl.name}` : sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
         formula: sl.isBonus
-          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} — tick-box + evidence`
-          : `ED spend R${esdResult.edSpend.toLocaleString()} ÷ target R${esdResult.edTarget.toLocaleString()} × ${sl.weighting} pts`,
-      })),
+          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} - tick-box + evidence`
+          : `ED spend R${esdResult.edSpend.toLocaleString()} / target R${esdResult.edTarget.toLocaleString()} x ${sl.weighting} pts`,
+      })) || [],
     },
     {
       key: "socioEconomicDevelopment",
@@ -217,11 +219,10 @@ export default function Scorecard() {
       accentColor: "text-sky-500 dark:text-sky-400",
       barColor: "bg-sky-500",
       subMinLabel: "Grass-roots only (health, safety). Education = Skills Development.",
-      subIndicators: [
-        { name: "Annual value of all SED contributions", target: "1% of NPAT", weighting: 5, score: sedResult.total, formula: `SED spend R${sedResult.actualSpend.toLocaleString()} ÷ target R${sedResult.target.toLocaleString()} × 5 pts` },
-      ],
+      subIndicators: sedResult ? [
+        { name: "Annual value of all SED contributions", target: "1% of NPAT", weighting: 5, score: sedResult.total, formula: `SED spend R${sedResult.actualSpend.toLocaleString()} / target R${sedResult.target.toLocaleString()} x 5 pts` },
+      ] : [],
     },
-    // Issue 2: Updated weighting from 5 to 3
     {
       key: "yesInitiative",
       name: "YES Initiative",
@@ -232,7 +233,7 @@ export default function Scorecard() {
         { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 3, score: (scorecard.yesInitiative || EMPTY_PILLAR).score, formula: `Bonus points for YES programme participation` },
       ],
     },
-  ];
+  ], [scorecard, ownResult, mgtResult, skillResult, procResult, esdResult, sedResult, tmps]);
 
   const expandAll = () => {
     if (expandedRows.size === elements.length) {

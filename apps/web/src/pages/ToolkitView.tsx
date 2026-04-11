@@ -7,10 +7,10 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { ClientProvider } from "@toolkit/lib/client-context";
 import { AppRoutes } from "@toolkit/App";
-import { useBbeeStore } from "@toolkit/lib/store";
+import { useBbeeStore, type APIScorecardResult } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 
-function hydrateStoreFromSession(session: any) {
+async function hydrateStoreFromSession(session: any) {
   const sessionId = session.sessionId || session.id;
   const syntheticId = `session-${sessionId}`;
   const fd = session.foundationData || {};
@@ -66,7 +66,34 @@ function hydrateStoreFromSession(session: any) {
     calculatorConfig: null,
   });
 
-  useBbeeStore.getState()._recalculateAll();
+  // If session has saved scorecard result, use it directly instead of recalculating
+  if (session.scorecardResult) {
+    const sc = session.scorecardResult;
+    if (sc.pillars && Array.isArray(sc.pillars)) {
+      useBbeeStore.getState().setScorecardFromAPI(sc as APIScorecardResult);
+    } else if (sc.total) {
+      useBbeeStore.setState({ scorecard: sc });
+    }
+  }
+
+  // Load sector config so the toolkit scorecard page can render fully
+  const sectorCode = ci.sectorCode || 'RCOGP';
+  const turnover = ci.annualTurnover ?? fin.totalRevenue ?? 0;
+  const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
+  try {
+    const cfgRes = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
+    if (cfgRes.ok) {
+      const cfgData = await cfgRes.json();
+      if (cfgData.success && cfgData.config) {
+        useBbeeStore.setState({ calculatorConfig: cfgData.config });
+        if (!session.scorecardResult) {
+          useBbeeStore.getState()._recalculateAll();
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[ToolkitView] Failed to load sector config for session:', e);
+  }
 }
 
 export default function ToolkitView() {
@@ -74,32 +101,61 @@ export default function ToolkitView() {
   const search = useSearch();
   const clientId = params.clientId || "";
   const sessionParam = new URLSearchParams(search).get("session");
-  const [sessionLoading, setSessionLoading] = useState(!!sessionParam);
+  const isSyntheticId = clientId.startsWith('build-') || clientId.startsWith('session');
+  const [sessionLoading, setSessionLoading] = useState(!!sessionParam || (isSyntheticId && !useBbeeStore.getState().isLoaded));
 
-  if (clientId) {
+  if (clientId && !isSyntheticId) {
     localStorage.setItem("okiru-pro-active-client", clientId);
   }
 
   useEffect(() => {
-    if (!sessionParam) return;
+    // Case 1: session param in query string -- load session from API
+    if (sessionParam) {
+      const loadSession = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionParam}`);
+          if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
+          const session = await res.json();
+          const syntheticId = `session-${sessionParam}`;
+          localStorage.setItem("okiru-pro-active-client", syntheticId);
+          await hydrateStoreFromSession(session);
+        } catch (err) {
+          console.error("Failed to load session for toolkit:", err);
+        } finally {
+          setSessionLoading(false);
+        }
+      };
+      loadSession();
+      return;
+    }
 
-    const loadSession = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionParam}`);
-        if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
-        const session = await res.json();
-        const syntheticId = `session-${sessionParam}`;
-        localStorage.setItem("okiru-pro-active-client", syntheticId);
-        hydrateStoreFromSession(session);
-      } catch (err) {
-        console.error("Failed to load session for toolkit:", err);
-      } finally {
+    // Case 2: synthetic clientId in URL but store not loaded (page refresh)
+    // Try to load session from the clientId if it contains a session identifier
+    if (isSyntheticId && !useBbeeStore.getState().isLoaded) {
+      const extractedSessionId = clientId.replace(/^(build-|session-)/, '').replace(/^sess-/, '');
+      if (extractedSessionId) {
+        const loadSession = async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/processor-sessions/${extractedSessionId}`);
+            if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
+            const session = await res.json();
+            localStorage.setItem("okiru-pro-active-client", clientId);
+            await hydrateStoreFromSession(session);
+          } catch (err) {
+            console.error("Failed to reload session for synthetic client:", err);
+          } finally {
+            setSessionLoading(false);
+          }
+        };
+        loadSession();
+      } else {
         setSessionLoading(false);
       }
-    };
+      return;
+    }
 
-    loadSession();
-  }, [sessionParam]);
+    setSessionLoading(false);
+  }, [sessionParam, clientId, isSyntheticId]);
 
   if (sessionLoading) {
     return (

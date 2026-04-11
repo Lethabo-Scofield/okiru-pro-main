@@ -221,3 +221,29 @@ Scores should reflect:
       .slice(0, topK);
   }
 }
+
+/**
+ * Azure OpenAI Client Class for advanced use cases (Vision, etc.)
+ * Reuses the same configuration as the function-based API
+ */
+export class AzureOpenAIClient {
+  private client: OpenAI | null;
+
+  constructor() {
+    this.client = getAzureChatClient();
+  }
+
+  get chat() {
+    if (!this.client) {
+      throw new Error('Azure OpenAI client not configured');
+    }
+    return this.client.chat;
+  }
+
+  get completions() {
+    if (!this.client) {
+      throw new Error('Azure OpenAI client not configured');
+    }
+    return this.client.chat.completions;
+  }
+}

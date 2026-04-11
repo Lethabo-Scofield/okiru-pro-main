@@ -267,31 +267,31 @@ function getFallbackSectors() {
       code: 'RCOGP',
       name: 'Revised Codes (QSE)',
       type: 'QSE',
-      totalPoints: 100,
+      totalPoints: 108,
     },
     {
       code: 'ICT',
       name: 'ICT Sector Code (Generic)',
       type: 'Generic',
-      totalPoints: 120,
+      totalPoints: 140,
     },
     {
       code: 'ICT',
       name: 'ICT Sector Code (QSE)',
       type: 'QSE',
-      totalPoints: 100,
+      totalPoints: 116,
     },
     {
       code: 'FSC',
       name: 'Financial Sector Code (Generic)',
       type: 'Generic',
-      totalPoints: 105,
+      totalPoints: 120,
     },
     {
       code: 'AGRI',
       name: 'AgriBEE Sector Code (Generic)',
       type: 'Generic',
-      totalPoints: 100,
+      totalPoints: 132,
     },
   ];
 }

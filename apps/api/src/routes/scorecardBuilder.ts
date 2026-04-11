@@ -41,6 +41,18 @@ router.get('/manifest', async (req, res) => {
 // POST /api/calculate
 // ============================================================================
 
+interface TrainingProgramInput {
+  id?: string;
+  name: string;
+  category?: string;
+  cost: number;
+  isYesEmployee?: boolean;
+  isAbsorbed?: boolean;
+  race?: string;
+  gender?: string;
+  isDisabled?: boolean;
+}
+
 interface CalculateRequest {
   assessmentId: string;
   sectorCode: string;
@@ -50,44 +62,171 @@ interface CalculateRequest {
   shareholders?: ShareholderInput[];
   suppliers?: SupplierInput[];
   contributions?: ContributionInput[];
+  trainingPrograms?: TrainingProgramInput[];
   financials?: { revenue: number; npat: number; leviableAmount: number; tmps: number; headcount: number };
   npat?: number;
   tmps?: number;
   leviableAmount?: number;
   totalEmployees?: number;
+  pillarData?: any;
+  foundationData?: any;
+}
+
+/**
+ * Translate frontend pillarData/foundationData format into
+ * the entity-level inputs the calculation engine expects.
+ */
+function extractFromPillarData(body: CalculateRequest): {
+  employees: EmployeeInput[];
+  shareholders: ShareholderInput[];
+  suppliers: SupplierInput[];
+  contributions: ContributionInput[];
+  financials: { revenue: number; npat: number; leviableAmount: number; tmps: number; headcount: number } | undefined;
+  entityValues: Map<string, EntityValue>;
+  crossPillarValues: Map<string, number>;
+} {
+  const pd = body.pillarData || {};
+  const fd = body.foundationData || {};
+  const clientInfo = fd.clientInfo || {};
+  const fin = fd.financials || {};
+
+  const employees: EmployeeInput[] = (pd.management?.employees || []).map((e: any) => ({
+    name: e.name,
+    race: e.race,
+    gender: e.gender,
+    designation: e.designation,
+    isDisabled: !!e.isDisabled,
+    isForeign: !!e.isForeign,
+  }));
+
+  const shareholders: ShareholderInput[] = (pd.ownership?.shareholders || []).map((s: any) => ({
+    name: s.name || 'Shareholder',
+    blackOwnership: s.blackOwnership || 0,
+    blackWomenOwnership: s.blackWomenOwnership || 0,
+    shares: s.shares || 0,
+    shareValue: s.shareValue || 0,
+    yearsHeld: s.yearsHeld,
+    isDesignatedGroup: !!s.isDesignatedGroup,
+    blackNewEntrant: !!s.blackNewEntrant,
+  }));
+
+  const suppliers: SupplierInput[] = (pd.procurement?.suppliers || []).map((s: any) => ({
+    name: s.name || 'Supplier',
+    spend: s.spend || 0,
+    beeLevel: s.beeLevel || 0,
+    blackOwnership: s.blackOwnership || 0,
+    blackWomenOwnership: s.blackWomenOwnership || 0,
+    enterpriseType: s.enterpriseType || 'generic',
+    isDesignatedGroup: !!s.isDesignatedGroup,
+    isBlackOwned51: !!s.isBlackOwned51 || (s.blackOwnership >= 51),
+    isBlackWomanOwned30: !!s.isBlackWomanOwned30 || (s.blackWomenOwnership >= 30),
+    isEME: !!s.isEME || s.enterpriseType === 'eme',
+    isQSE: !!s.isQSE || s.enterpriseType === 'qse',
+    isForeignSupplier: !!s.isForeignSupplier,
+  }));
+
+  const esdContribs = (pd.esd?.contributions || []).map((c: any) => ({
+    beneficiary: c.beneficiary || 'Beneficiary',
+    type: c.type || 'direct_cost',
+    amount: c.amount || 0,
+    category: (c.category === 'socio_economic' ? 'sed' : c.category === 'enterprise_development' ? 'ed' : 'sd') as 'sd' | 'ed' | 'sed',
+    benefitFactor: c.benefitFactor,
+  }));
+
+  const sedContribs = (pd.sed?.contributions || []).map((c: any) => ({
+    beneficiary: c.beneficiary || 'Beneficiary',
+    type: c.type || 'grant',
+    amount: c.amount || 0,
+    category: 'sed' as const,
+    benefitFactor: c.benefitFactor,
+  }));
+
+  const contributions: ContributionInput[] = [...esdContribs, ...sedContribs];
+
+  const npatVal = fin.npat ?? clientInfo.npat ?? 0;
+  const leviableVal = pd.skills?.leviableAmount ?? fin.leviableAmount ?? clientInfo.leviableAmount ?? 0;
+  const tmpsVal = pd.procurement?.tmps ?? 0;
+  const headcountVal = employees.length || pd.yes?.totalEmployees || clientInfo.numberOfEmployees || 0;
+  const revenueVal = fin.revenue ?? clientInfo.revenue ?? 0;
+
+  const financials = {
+    revenue: revenueVal,
+    npat: npatVal,
+    leviableAmount: leviableVal,
+    tmps: tmpsVal,
+    headcount: headcountVal,
+  };
+
+  const entityValues = new Map<string, EntityValue>();
+  if (pd.ownership) {
+    entityValues.set('companyValue', { entityId: 'companyValue', value: pd.ownership.companyValue || 0, source: 'manual' });
+    entityValues.set('outstandingDebt', { entityId: 'outstandingDebt', value: pd.ownership.outstandingDebt || 0, source: 'manual' });
+  }
+
+  const crossPillarValues = new Map<string, number>();
+  if (npatVal) crossPillarValues.set('npat', npatVal);
+  if (tmpsVal) crossPillarValues.set('tmps', tmpsVal);
+  if (leviableVal) crossPillarValues.set('leviableAmount', leviableVal);
+  if (headcountVal) crossPillarValues.set('totalEmployees', headcountVal);
+  if (revenueVal) crossPillarValues.set('revenue', revenueVal);
+
+  return { employees, shareholders, suppliers, contributions, financials, entityValues, crossPillarValues };
 }
 
 router.post('/calculate', async (req, res) => {
   try {
-    const {
-      assessmentId, sectorCode, scorecardType, entityValues,
-      employees, shareholders, suppliers, contributions, financials,
-      npat, tmps, leviableAmount, totalEmployees,
-    } = (req.body || {}) as CalculateRequest;
+    const body = (req.body || {}) as CalculateRequest;
+    const { sectorCode, scorecardType } = body;
+
+    console.log('[API /calculate] Request:', { sectorCode, scorecardType, employees: body.employees?.length, shareholders: body.shareholders?.length, suppliers: body.suppliers?.length });
 
     if (!sectorCode || !scorecardType) {
-      return res.status(400).json({ error: 'sectorCode and scorecardType are required' });
+      return res.status(400).json({ success: false, error: 'sectorCode and scorecardType are required' });
     }
 
-    const valuesMap = new Map<string, EntityValue>();
-    if (entityValues && typeof entityValues === 'object') {
-      for (const [key, value] of Object.entries(entityValues)) {
-        valuesMap.set(key, value);
+    const hasPillarData = !!body.pillarData;
+    let calcEmployees: EmployeeInput[] | undefined;
+    let calcShareholders: ShareholderInput[] | undefined;
+    let calcSuppliers: SupplierInput[] | undefined;
+    let calcContributions: ContributionInput[] | undefined;
+    let calcFinancials: any;
+    let valuesMap = new Map<string, EntityValue>();
+    let crossPillarValues = new Map<string, number>();
+
+    if (hasPillarData) {
+      const extracted = extractFromPillarData(body);
+      calcEmployees = extracted.employees;
+      calcShareholders = extracted.shareholders;
+      calcSuppliers = extracted.suppliers;
+      calcContributions = extracted.contributions;
+      calcFinancials = extracted.financials;
+      valuesMap = extracted.entityValues;
+      crossPillarValues = extracted.crossPillarValues;
+    } else {
+      const { entityValues, employees, shareholders, suppliers, contributions, financials, npat, tmps, leviableAmount, totalEmployees } = body;
+      if (entityValues && typeof entityValues === 'object') {
+        for (const [key, value] of Object.entries(entityValues)) {
+          valuesMap.set(key, value);
+        }
       }
+      calcEmployees = employees as EmployeeInput[] | undefined;
+      calcShareholders = shareholders as ShareholderInput[] | undefined;
+      calcSuppliers = suppliers as SupplierInput[] | undefined;
+      calcContributions = contributions as ContributionInput[] | undefined;
+      calcFinancials = financials || undefined;
+
+      const npatValue = npat ?? financials?.npat ?? valuesMap.get('npat')?.value;
+      const tmpsValue = tmps ?? financials?.tmps ?? valuesMap.get('tmps')?.value;
+      const leviableValue = leviableAmount ?? financials?.leviableAmount ?? valuesMap.get('leviable_amount')?.value;
+      const totalEmpValue = totalEmployees ?? financials?.headcount ?? valuesMap.get('total_employees')?.value;
+
+      if (typeof npatValue === 'number') crossPillarValues.set('npat', npatValue);
+      if (typeof tmpsValue === 'number') crossPillarValues.set('tmps', tmpsValue);
+      if (typeof leviableValue === 'number') crossPillarValues.set('leviableAmount', leviableValue);
+      if (typeof totalEmpValue === 'number') crossPillarValues.set('totalEmployees', totalEmpValue);
     }
 
-    // Extract cross-pillar values from explicit fields, financials object, or entityValues
-    const crossPillarValues = new Map<string, number>();
-
-    const npatValue = npat ?? financials?.npat ?? valuesMap.get('npat')?.value;
-    const tmpsValue = tmps ?? financials?.tmps ?? valuesMap.get('tmps')?.value;
-    const leviableValue = leviableAmount ?? financials?.leviableAmount ?? valuesMap.get('leviable_amount')?.value;
-    const totalEmpValue = totalEmployees ?? financials?.headcount ?? valuesMap.get('total_employees')?.value;
-
-    if (typeof npatValue === 'number') crossPillarValues.set('npat', npatValue);
-    if (typeof tmpsValue === 'number') crossPillarValues.set('tmps', tmpsValue);
-    if (typeof leviableValue === 'number') crossPillarValues.set('leviableAmount', leviableValue);
-    if (typeof totalEmpValue === 'number') crossPillarValues.set('totalEmployees', totalEmpValue);
+    const assessmentId = body.assessmentId || `calc-${Date.now()}`;
 
     const result = await calculateScorecard({
       assessmentId,
@@ -95,11 +234,12 @@ router.post('/calculate', async (req, res) => {
       scorecardType,
       entityValues: valuesMap,
       crossPillarValues,
-      employees: employees as EmployeeInput[] | undefined,
-      shareholders: shareholders as ShareholderInput[] | undefined,
-      suppliers: suppliers as SupplierInput[] | undefined,
-      contributions: contributions as ContributionInput[] | undefined,
-      financials: financials || undefined,
+      employees: calcEmployees,
+      shareholders: calcShareholders,
+      suppliers: calcSuppliers,
+      contributions: calcContributions,
+      trainingPrograms: body.trainingPrograms,
+      financials: calcFinancials,
     });
 
     try {
@@ -196,10 +336,11 @@ router.post('/calculate', async (req, res) => {
       console.warn('[Calculate] ArangoDB storage failed (non-fatal):', arangoErr instanceof Error ? arangoErr.message : arangoErr);
     }
 
-    res.json(result);
+    res.json({ success: true, scorecard: result });
   } catch (err) {
     console.error('Calculation error:', err);
     res.status(500).json({ 
+      success: false,
       error: 'Calculation failed',
       details: err instanceof Error ? err.message : 'Unknown error'
     });
