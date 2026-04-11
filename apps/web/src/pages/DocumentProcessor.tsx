@@ -1141,7 +1141,8 @@ export default function DocumentProcessor() {
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'edited'>('all');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'by-page'>('all');
+  const [activeReviewPage, setActiveReviewPage] = useState(0);
   const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
   const [savedDocs, setSavedDocs] = useState<Set<number>>(new Set());
   const [docFullView, setDocFullView] = useState(false);
@@ -3488,13 +3489,22 @@ export default function DocumentProcessor() {
                   })}
                 </div>
 
-                {anyProcessing && (
-                  <div className="max-w-md mx-auto mb-8">
-                    <div className="h-1 bg-[#1c1c1e] rounded-full overflow-hidden">
-                      <div className="h-full bg-white transition-all duration-500 rounded-full" style={{ width: `${uploadedFiles.length > 0 ? (Object.values(docStatuses).filter(s => s === 'done').length / uploadedFiles.length) * 100 : 0}%` }}></div>
+                {anyProcessing && (() => {
+                  const doneCount = Object.values(docStatuses).filter(s => s === 'done').length;
+                  const totalCount = uploadedFiles.length;
+                  const pct = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
+                  return (
+                    <div className="max-w-md mx-auto mb-8">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] text-[#636366]">{doneCount} of {totalCount} complete</span>
+                        <span className="text-[11px] text-[#636366] tabular-nums">{Math.round(pct)}%</span>
+                      </div>
+                      <div className="h-1.5 bg-[#1c1c1e] rounded-full overflow-hidden">
+                        <div className="h-full bg-white transition-all duration-500 rounded-full" style={{ width: `${pct}%` }}></div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div className="flex gap-3">
                   <button onClick={() => { if (!anyProcessing) setCurrentPage('classify'); }} disabled={anyProcessing}
@@ -3771,10 +3781,10 @@ export default function DocumentProcessor() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        {(['all', 'edited'] as const).map(f => (
+                        {(['all', 'edited', 'by-page'] as const).map(f => (
                           <button key={f} onClick={() => setReviewFilter(f)}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
-                            {f}
+                            {f === 'by-page' ? 'By Page' : f}
                           </button>
                         ))}
                         <button onClick={() => approveAllForDoc(activeReviewDoc)}
@@ -3801,6 +3811,75 @@ export default function DocumentProcessor() {
                           const bNotFound = b.status === 'not_found' ? 1 : 0;
                           return aNotFound - bNotFound;
                         });
+
+                      if (reviewFilter === 'by-page') {
+                        const pageGroups: Record<string, any[]> = {};
+                        for (const e of entities) {
+                          const pageKey = e.provenance?.pageId || e.provenance?.page_number || 'unknown';
+                          const label = pageKey === 'unknown' ? 'Unassigned' : `Page ${String(pageKey).replace(/\D/g, '') || pageKey}`;
+                          if (!pageGroups[label]) pageGroups[label] = [];
+                          pageGroups[label].push(e);
+                        }
+                        const pageKeys = Object.keys(pageGroups);
+                        if (pageKeys.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center py-16 text-center">
+                              <div className="w-12 h-12 rounded-2xl bg-[#1c1c1e] flex items-center justify-center mb-4">
+                                <FileQuestion className="w-5 h-5 text-[#636366]" />
+                              </div>
+                              <p className="text-[#d1d1d6] text-sm font-medium mb-1">No page data available</p>
+                              <p className="text-[#636366] text-xs">Page-level provenance is not available for this extraction</p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <>
+                            {pageKeys.map((pk) => (
+                              <div key={pk} className="mb-4">
+                                <div className="flex items-center gap-2 mb-2 px-1">
+                                  <span className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider">{pk}</span>
+                                  <span className="text-[10px] text-[#636366] bg-[#1c1c1e] px-2 py-0.5 rounded-md">{pageGroups[pk].length} entities</span>
+                                </div>
+                                <div className="space-y-2">
+                                  {pageGroups[pk].map((entity: any) => {
+                                    const realIdx = entities.indexOf(entity);
+                                    const isNotFound = entity.status === 'not_found' || (!entity.value && entity.status !== 'approved' && entity.status !== 'edited');
+                                    return (
+                                      <div key={realIdx}
+                                        className={`rounded-2xl border transition-all duration-150 ${
+                                          entity.status === 'approved' ? 'border-green-500/25' :
+                                          entity.status === 'rejected' ? 'border-[#2c2c2e] opacity-35' :
+                                          isNotFound ? 'border-[#1c1c1e] opacity-40' :
+                                          hoveredEntity === realIdx ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
+                                        }`}
+                                        onMouseEnter={() => setHoveredEntity(realIdx)}
+                                        onMouseLeave={() => setHoveredEntity(null)}
+                                      >
+                                        <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3">
+                                          <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest truncate">{fmtLabel(entity.name)}</span>
+                                            {entity.status === 'approved' && <span className="text-[10px] text-green-400 font-medium flex items-center gap-0.5"><Check className="w-2.5 h-2.5" />Approved</span>}
+                                            {entity.status === 'rejected' && <span className="text-[10px] text-red-400 font-medium">Rejected</span>}
+                                          </div>
+                                          <p className="text-[13px] text-white break-words">{entity.value || <span className="text-[#48484a] italic">Not found</span>}</p>
+                                          {entity.confidence != null && (
+                                            <div className="mt-1.5 flex items-center gap-1.5">
+                                              <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                                <div className="h-full rounded-full" style={{ width: `${Math.round(entity.confidence * 100)}%`, backgroundColor: entity.confidence >= 0.85 ? '#34d399' : entity.confidence >= 0.6 ? '#f59e0b' : '#f87171' }} />
+                                              </div>
+                                              <span className="text-[10px] text-[#636366] tabular-nums">{Math.round(entity.confidence * 100)}%</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        );
+                      }
 
                       if (filtered.length === 0) {
                         return (

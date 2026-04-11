@@ -102,100 +102,99 @@ router.post('/calculate', async (req, res) => {
       financials: financials || undefined,
     });
 
-    // Store calculation run and results in ArangoDB
-    const scoreRepo = new ScoreResultRepository();
-    
-    const run = await scoreRepo.startCalculationRun({
-      assessmentId,
-      sectorCode,
-      scorecardType,
-      triggeredBy: 'manual_entry',
-      totalPoints: result.totalPoints,
-      maxPoints: result.maxPoints,
-      overallPercentage: result.overallPercentage,
-      beeLevel: result.beeLevel,
-      recognitionLevel: result.recognitionLevel,
-      subMinimumsMet: result.subMinimums,
-    });
-
-    // Store pillar and criterion results
-    const scoreResults = [];
-    
-    for (const pillar of result.pillars) {
-      // Store pillar result
-      scoreResults.push({
+    try {
+      const scoreRepo = new ScoreResultRepository();
+      
+      const run = await scoreRepo.startCalculationRun({
         assessmentId,
-        calculationRunId: run._key!,
         sectorCode,
         scorecardType,
-        type: 'pillar' as const,
-        pillarCode: pillar.pillarCode,
-        actualValue: pillar.points,
-        targetValue: pillar.maxPoints,
-        achievementPercentage: pillar.percentage,
-        pointsAchieved: pillar.points,
-        maxPoints: pillar.maxPoints,
-        weightedScore: pillar.points,
-        subMinimumMet: pillar.subMinimumMet,
-        isBonus: false,
-        formulaUsed: 'aggregate',
-        inputs: {},
+        triggeredBy: 'manual_entry',
+        totalPoints: result.totalPoints,
+        maxPoints: result.maxPoints,
+        overallPercentage: result.overallPercentage,
+        beeLevel: result.beeLevel,
+        recognitionLevel: result.recognitionLevel,
+        subMinimumsMet: result.subMinimums,
       });
 
-      // Store criterion results
-      for (const criterion of pillar.criteria) {
+      const scoreResults = [];
+      
+      for (const pillar of result.pillars) {
         scoreResults.push({
           assessmentId,
           calculationRunId: run._key!,
           sectorCode,
           scorecardType,
-          type: 'criterion' as const,
+          type: 'pillar' as const,
           pillarCode: pillar.pillarCode,
-          criterionCode: criterion.criterionCode,
-          actualValue: criterion.points,
-          targetValue: criterion.maxPoints,
-          achievementPercentage: criterion.percentage,
-          pointsAchieved: criterion.points,
-          maxPoints: criterion.maxPoints,
-          weightedScore: criterion.points,
-          subMinimumMet: criterion.subMinimumMet,
-          isBonus: criterion.formulaId === 'bonus_flag',
-          formulaUsed: criterion.formulaId,
-          inputs: criterion.inputs,
-          intermediateSteps: criterion.intermediateValues,
+          actualValue: pillar.points,
+          targetValue: pillar.maxPoints,
+          achievementPercentage: pillar.percentage,
+          pointsAchieved: pillar.points,
+          maxPoints: pillar.maxPoints,
+          weightedScore: pillar.points,
+          subMinimumMet: pillar.subMinimumMet,
+          isBonus: false,
+          formulaUsed: 'aggregate',
+          inputs: {},
         });
+
+        for (const criterion of pillar.criteria) {
+          scoreResults.push({
+            assessmentId,
+            calculationRunId: run._key!,
+            sectorCode,
+            scorecardType,
+            type: 'criterion' as const,
+            pillarCode: pillar.pillarCode,
+            criterionCode: criterion.criterionCode,
+            actualValue: criterion.points,
+            targetValue: criterion.maxPoints,
+            achievementPercentage: criterion.percentage,
+            pointsAchieved: criterion.points,
+            maxPoints: criterion.maxPoints,
+            weightedScore: criterion.points,
+            subMinimumMet: criterion.subMinimumMet,
+            isBonus: criterion.formulaId === 'bonus_flag',
+            formulaUsed: criterion.formulaId,
+            inputs: criterion.inputs,
+            intermediateSteps: criterion.intermediateValues,
+          });
+        }
       }
+
+      scoreResults.push({
+        assessmentId,
+        calculationRunId: run._key!,
+        sectorCode,
+        scorecardType,
+        type: 'overall' as const,
+        actualValue: result.totalPoints,
+        targetValue: result.maxPoints,
+        achievementPercentage: result.overallPercentage,
+        pointsAchieved: result.totalPoints,
+        maxPoints: result.maxPoints,
+        weightedScore: result.totalPoints,
+        subMinimumMet: Object.values(result.subMinimums).every(Boolean),
+        isBonus: false,
+        formulaUsed: 'aggregate',
+        inputs: {},
+      });
+
+      await scoreRepo.storeScoreResults(scoreResults as Array<Omit<import('../../arango/repositories/scoreResultRepository.js').StoredScoreResult, '_key' | 'calculatedAt'>>);
+      await scoreRepo.completeCalculationRun(run._key!, {
+        totalPoints: result.totalPoints,
+        maxPoints: result.maxPoints,
+        overallPercentage: result.overallPercentage,
+        beeLevel: result.beeLevel,
+        recognitionLevel: result.recognitionLevel,
+        subMinimumsMet: result.subMinimums,
+        ontologySnapshot: result.ontologySnapshot as unknown as Record<string, unknown>,
+      });
+    } catch (arangoErr) {
+      console.warn('[Calculate] ArangoDB storage failed (non-fatal):', arangoErr instanceof Error ? arangoErr.message : arangoErr);
     }
-
-    // Store overall result
-    scoreResults.push({
-      assessmentId,
-      calculationRunId: run._key!,
-      sectorCode,
-      scorecardType,
-      type: 'overall' as const,
-      actualValue: result.totalPoints,
-      targetValue: result.maxPoints,
-      achievementPercentage: result.overallPercentage,
-      pointsAchieved: result.totalPoints,
-      maxPoints: result.maxPoints,
-      weightedScore: result.totalPoints,
-      subMinimumMet: Object.values(result.subMinimums).every(Boolean), // All sub-minimums met
-      isBonus: false,
-      formulaUsed: 'aggregate',
-      inputs: {},
-    });
-
-    await scoreRepo.storeScoreResults(scoreResults as Array<Omit<import('../../arango/repositories/scoreResultRepository.js').StoredScoreResult, '_key' | 'calculatedAt'>>);
-    await scoreRepo.completeCalculationRun(run._key!, {
-      totalPoints: result.totalPoints,
-      maxPoints: result.maxPoints,
-      overallPercentage: result.overallPercentage,
-      beeLevel: result.beeLevel,
-      recognitionLevel: result.recognitionLevel,
-      subMinimumsMet: result.subMinimums,
-      ontologySnapshot: result.ontologySnapshot as unknown as Record<string, unknown>,
-    });
 
     res.json(result);
   } catch (err) {

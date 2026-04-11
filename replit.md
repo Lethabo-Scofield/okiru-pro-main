@@ -237,6 +237,27 @@ The Company Scorecards page (Dashboard → Scorecards tab) displays progress tra
 - The API returns `flowMode` in the session list response for proper flow type detection
 - Progress calculation handles unknown/legacy step values gracefully with human-readable labels
 
+## Recent Changes (Bug Fixes & Features)
+
+### Theme Toggle
+- `apps/web/Toolkit/src/components/theme-provider.tsx` rewritten to support light/dark/system modes with localStorage persistence (was hardcoded to dark mode)
+
+### Settings Page
+- `apps/web/Toolkit/src/pages/Settings.tsx` — New settings page with Account/Profile, Appearance (theme toggle), and Role & Permissions cards
+- Accessible from sidebar navigation
+
+### Role Upgrade System
+- API endpoint at `/api/auth/request-role-upgrade` (POST) for role upgrade requests (auditor → analyst → manager)
+- UI in Settings page for requesting upgrades
+
+### Document Processor Fixes
+- `/api/calculate` endpoint in `apps/api/src/routes/scorecardBuilder.ts` — ArangoDB storage wrapped in try/catch so calculation results return even when ArangoDB is unavailable
+- Per-page review mode: "by-page" filter in review stage groups entities by page provenance with inline entity cards
+- Enhanced extraction progress UI with count and percentage indicators
+
+### Registration Validation
+- Server endpoints `/api/auth/check-username`, `/api/auth/check-email`, `/api/auth/check-subscription` with 400ms debounced inline validation on the registration form
+
 ## Notes
 - Without `MONGODB_URI`, the app runs in in-memory mode with a demo user (username: `demo`, password: `demo`). Default templates are also seeded in database mode if none exist.
 - Without SMTP configured (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`), registration skips OTP verification and logs the user in directly

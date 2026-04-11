@@ -41,29 +41,61 @@ const darkCssVars: Record<string, string> = {
   '--ef-overlay': '#1c1c1e',
 }
 
+const lightCssVars: Record<string, string> = {
+  '--ef-bg': '#ffffff',
+  '--ef-bg-alt': '#f5f5f7',
+  '--ef-card': '#ffffff',
+  '--ef-card-hover': '#f0f0f2',
+  '--ef-surface': '#ffffff',
+  '--ef-surface-hover': '#f0f0f2',
+  '--ef-border': 'rgba(0,0,0,0.08)',
+  '--ef-border-light': 'rgba(0,0,0,0.04)',
+  '--ef-border-med': '#e5e5ea',
+  '--ef-border-heavy': '#d1d1d6',
+  '--ef-text': '#1d1d1f',
+  '--ef-text-secondary': '#3a3a3c',
+  '--ef-text-muted': '#636366',
+  '--ef-text-dim': '#8e8e93',
+  '--ef-text-faint': '#c7c7cc',
+  '--ef-input-bg': '#ffffff',
+  '--ef-input-border': '#d1d1d6',
+  '--ef-overlay': '#ffffff',
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
   storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>("dark")
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+  )
 
   useEffect(() => {
     const root = window.document.documentElement
     root.classList.remove("light", "dark")
-    root.classList.add("dark")
 
-    Object.entries(darkCssVars).forEach(([key, value]) => {
+    let resolvedTheme = theme
+    if (theme === "system") {
+      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+    }
+
+    root.classList.add(resolvedTheme)
+
+    const vars = resolvedTheme === "dark" ? darkCssVars : lightCssVars
+    Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value)
     })
-  }, [])
+  }, [theme])
 
   const value = {
-    theme: "dark" as Theme,
+    theme,
     setTheme: (t: Theme) => {
-      localStorage.setItem(storageKey, "dark")
-      setTheme("dark")
+      localStorage.setItem(storageKey, t)
+      setTheme(t)
     },
   }
 
