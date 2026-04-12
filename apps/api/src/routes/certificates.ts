@@ -23,6 +23,12 @@ function getBlobServiceClient(): BlobServiceClient | null {
   return BlobServiceClient.fromConnectionString(connStr);
 }
 
+async function ensureContainer(blobServiceClient: BlobServiceClient) {
+  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+  await containerClient.createIfNotExists({ access: undefined });
+  return containerClient;
+}
+
 router.get('/download', async (req: Request, res: Response) => {
   try {
     const file = req.query.file as string;
@@ -38,7 +44,7 @@ router.get('/download', async (req: Request, res: Response) => {
     }
 
     const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
-    const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+    const containerClient = await ensureContainer(blobServiceClient);
     const blobClient = containerClient.getBlobClient(file.trim());
 
     const exists = await blobClient.exists();
@@ -90,7 +96,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
       return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
     }
 
-    const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+    const containerClient = await ensureContainer(blobServiceClient);
     const prefix = `${userId.trim()}/`;
     const blobs: Array<{ name: string; fileName: string }> = [];
 
