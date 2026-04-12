@@ -7,3 +7,4 @@ onlyBuiltDependencies:
   - bufferutil
   - esbuild
   - core-js
+  - canvas
