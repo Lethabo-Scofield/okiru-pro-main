@@ -23,10 +23,8 @@ function getBlobServiceClient(): BlobServiceClient | null {
   return BlobServiceClient.fromConnectionString(connStr);
 }
 
-async function ensureContainer(blobServiceClient: BlobServiceClient) {
-  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
-  await containerClient.createIfNotExists({ access: undefined });
-  return containerClient;
+function getContainerClient(blobServiceClient: BlobServiceClient) {
+  return blobServiceClient.getContainerClient(CONTAINER_NAME);
 }
 
 router.get('/download', async (req: Request, res: Response) => {
@@ -44,7 +42,7 @@ router.get('/download', async (req: Request, res: Response) => {
     }
 
     const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
-    const containerClient = await ensureContainer(blobServiceClient);
+    const containerClient = getContainerClient(blobServiceClient);
     const blobClient = containerClient.getBlobClient(file.trim());
 
     const exists = await blobClient.exists();
@@ -83,6 +81,37 @@ router.get('/download', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/list', async (req: Request, res: Response) => {
+  try {
+    const search = (req.query.search as string || '').trim().toLowerCase();
+
+    const blobServiceClient = getBlobServiceClient();
+    if (!blobServiceClient) {
+      logger.error('Azure Storage connection string not configured');
+      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
+    }
+
+    const containerClient = getContainerClient(blobServiceClient);
+    const blobs: Array<{ name: string; fileName: string }> = [];
+
+    for await (const blob of containerClient.listBlobsFlat()) {
+      const fileName = blob.name;
+      if (!search || fileName.toLowerCase().includes(search)) {
+        blobs.push({
+          name: blob.name,
+          fileName,
+        });
+      }
+    }
+
+    logger.info('Listed certificates', { search: search || '(all)', count: blobs.length });
+    return res.json(blobs);
+  } catch (err) {
+    logger.error('Failed to list certificates', err as Error);
+    return res.status(500).json({ message: 'Failed to list certificates' });
+  }
+});
+
 router.get('/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
@@ -96,7 +125,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
       return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
     }
 
-    const containerClient = await ensureContainer(blobServiceClient);
+    const containerClient = getContainerClient(blobServiceClient);
     const prefix = `${userId.trim()}/`;
     const blobs: Array<{ name: string; fileName: string }> = [];
 

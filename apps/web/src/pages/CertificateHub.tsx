@@ -15,25 +15,24 @@ interface CertificateFile {
 export default function CertificateHub() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [userId, setUserId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [certificates, setCertificates] = useState<CertificateFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   const loadCertificates = async () => {
-    const id = userId.trim();
-    if (!id) {
-      toast({ title: 'User ID required', description: 'Please enter a User ID to search for certificates.', variant: 'destructive' });
-      return;
-    }
-
     setLoading(true);
     setSearched(false);
     setCertificates([]);
 
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(id)}`);
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) {
+        params.set('search', searchQuery.trim());
+      }
+      const url = `/api/certificates/list${params.toString() ? `?${params}` : ''}`;
+      const res = await fetch(url);
       if (!res.ok) {
         const body = await res.json().catch(() => ({ message: 'Failed to load certificates' }));
         throw new Error(body.message || `Error ${res.status}`);
@@ -100,15 +99,15 @@ export default function CertificateHub() {
         <section className="mb-10 fade-in stagger-1">
           <div className="rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6">
             <label className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-widest mb-3">
-              User ID
+              Search Certificates
             </label>
             <div className="flex gap-3">
               <input
                 type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') loadCertificates(); }}
-                placeholder="Enter a User ID (e.g. 10231)"
+                placeholder="Search by company name, type, or leave blank for all"
                 className="flex-1 rounded-xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] px-4 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-[#48484a]"
               />
               <button
@@ -138,7 +137,7 @@ export default function CertificateHub() {
             {certificates.length === 0 ? (
               <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-12 text-center">
                 <AlertCircle className="w-8 h-8 text-[#2c2c2e] mx-auto mb-3" />
-                <p className="text-[14px] text-[#636366]">No certificates found for this User ID.</p>
+                <p className="text-[14px] text-[#636366]">No certificates found{searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : ''}.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -153,7 +152,6 @@ export default function CertificateHub() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-[13px] font-medium text-white truncate">{cert.fileName}</p>
-                        <p className="text-[11px] text-[#48484a] truncate">{cert.name}</p>
                       </div>
                     </div>
                     <button

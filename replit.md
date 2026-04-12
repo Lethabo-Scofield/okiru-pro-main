@@ -41,6 +41,8 @@ pnpm install
 - `ARANGO_URL` - ArangoDB (Macrometa GDN) connection URL
 - `ARANGO_PASSWORD` - ArangoDB password (no hardcoded default — must be set)
 - `ARANGO_DB` - ArangoDB database name (defaults to `bbbee_db`)
+- `AZURE_STORAGE_CONNECTION_STRING` - Azure Blob Storage connection string (for B-BBEE Certificate Hub)
+- `AZURE_STORAGE_ACCOUNT_NAME` - Azure Storage account name (for SAS token generation)
 - `CORS_ORIGIN` - API server allowed origins (comma-separated)
 - `API_SERVER_URL` - URL of API server for web proxy (default: http://127.0.0.1:3000)
 - `COMPUTE_ENGINE_URL` - URL of Computation Engine (default: http://127.0.0.1:8000)
