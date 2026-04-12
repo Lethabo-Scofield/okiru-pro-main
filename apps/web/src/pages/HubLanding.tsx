@@ -42,7 +42,7 @@ export default function HubLanding() {
       tag: 'B-BBEE',
       aiBadge: 'AI-Verified',
       icon: <Award className="w-5 h-5" />,
-      action: handleComingSoon,
+      link: '/certificates',
       features: ['AI-powered certificate extraction', 'Expiry alerts & renewal tracking', 'Supplier procurement spend analytics'],
     },
     {
