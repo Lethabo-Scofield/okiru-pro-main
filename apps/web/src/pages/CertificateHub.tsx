@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
-import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
-  ArrowLeft, Award, Download, FileText, Loader2, Search, AlertCircle
+  ArrowLeft, Award, Download, FileText, Loader2, AlertCircle
 } from 'lucide-react';
 
 interface CertificateFile {
@@ -13,39 +12,28 @@ interface CertificateFile {
 }
 
 export default function CertificateHub() {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
   const [certificates, setCertificates] = useState<CertificateFile[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
-  const loadCertificates = async () => {
-    setLoading(true);
-    setSearched(false);
-    setCertificates([]);
-
-    try {
-      const params = new URLSearchParams();
-      if (searchQuery.trim()) {
-        params.set('search', searchQuery.trim());
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/certificates/list');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ message: 'Failed to load certificates' }));
+          throw new Error(body.message || `Error ${res.status}`);
+        }
+        const data: CertificateFile[] = await res.json();
+        setCertificates(data);
+      } catch (err: any) {
+        toast({ title: 'Error', description: err.message || 'Failed to load certificates', variant: 'destructive' });
+      } finally {
+        setLoading(false);
       }
-      const url = `/api/certificates/list${params.toString() ? `?${params}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: 'Failed to load certificates' }));
-        throw new Error(body.message || `Error ${res.status}`);
-      }
-      const data: CertificateFile[] = await res.json();
-      setCertificates(data);
-      setSearched(true);
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to load certificates', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+  }, []);
 
   const downloadCertificate = async (blobName: string) => {
     setDownloadingFile(blobName);
@@ -92,84 +80,57 @@ export default function CertificateHub() {
             Certificate Management
           </h1>
           <p className="text-[14px] text-[#636366] leading-relaxed max-w-md mx-auto font-light">
-            Search, view, and download B-BBEE compliance certificates stored securely in the cloud.
+            View and download B-BBEE compliance certificates stored securely in the cloud.
           </p>
         </section>
 
-        <section className="mb-10 fade-in stagger-1">
-          <div className="rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6">
-            <label className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-widest mb-3">
-              Search Certificates
-            </label>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') loadCertificates(); }}
-                placeholder="Search by company name, type, or leave blank for all"
-                className="flex-1 rounded-xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] px-4 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-[#48484a]"
-              />
-              <button
-                onClick={loadCertificates}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-semibold transition-all duration-200"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
-                Load Certificates
-              </button>
-            </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 fade-in">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-400 mb-4" />
+            <p className="text-[14px] text-[#636366]">Loading certificates...</p>
           </div>
-        </section>
-
-        {searched && (
-          <section className="fade-in stagger-2">
+        ) : certificates.length === 0 ? (
+          <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-12 text-center fade-in">
+            <AlertCircle className="w-8 h-8 text-[#2c2c2e] mx-auto mb-3" />
+            <p className="text-[14px] text-[#636366]">No certificates found.</p>
+          </div>
+        ) : (
+          <section className="fade-in stagger-1">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[12px] font-semibold text-[#48484a] uppercase tracking-widest">
-                Results · <span className="text-[#8e8e93]">{certificates.length}</span>
+                Certificates · <span className="text-[#8e8e93]">{certificates.length}</span>
               </h2>
             </div>
 
-            {certificates.length === 0 ? (
-              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-12 text-center">
-                <AlertCircle className="w-8 h-8 text-[#2c2c2e] mx-auto mb-3" />
-                <p className="text-[14px] text-[#636366]">No certificates found{searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : ''}.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {certificates.map((cert) => (
-                  <div
-                    key={cert.name}
-                    className="rounded-xl bg-white/[0.03] border border-white/[0.07] hover:border-white/[0.12] p-4 flex items-center justify-between transition-all duration-200 group"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4 text-indigo-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-white truncate">{cert.fileName}</p>
-                      </div>
+            <div className="space-y-2">
+              {certificates.map((cert) => (
+                <div
+                  key={cert.name}
+                  className="rounded-xl bg-white/[0.03] border border-white/[0.07] hover:border-white/[0.12] p-4 flex items-center justify-between transition-all duration-200 group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4 text-indigo-400" />
                     </div>
-                    <button
-                      onClick={() => downloadCertificate(cert.name)}
-                      disabled={downloadingFile === cert.name}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-[12px] font-medium text-[#8e8e93] hover:text-white disabled:opacity-50 transition-all duration-200 shrink-0"
-                    >
-                      {downloadingFile === cert.name ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      Download
-                    </button>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-white truncate">{cert.fileName}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <button
+                    onClick={() => downloadCertificate(cert.name)}
+                    disabled={downloadingFile === cert.name}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-[12px] font-medium text-[#8e8e93] hover:text-white disabled:opacity-50 transition-all duration-200 shrink-0"
+                  >
+                    {downloadingFile === cert.name ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
         )}
       </main>
