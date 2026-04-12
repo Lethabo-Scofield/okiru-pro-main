@@ -5,7 +5,7 @@ import { createLogger } from '../logger.js';
 const logger = createLogger("Certificates");
 const router = Router();
 
-const CONTAINER_NAME = 'certificatees';
+const CONTAINER_NAME = 'clients-certs';
 
 function getConnectionString(): string | undefined {
   return process.env.AZURE_STORAGE_CONNECTION_STRING;
