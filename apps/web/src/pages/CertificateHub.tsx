@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import {
-  ArrowLeft, Download, Loader2, AlertCircle, Search, X
+  ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown
 } from 'lucide-react';
 
 interface CertificateFile {
@@ -67,12 +67,90 @@ function extractCertType(fileName: string): string | null {
   return null;
 }
 
+function extractYear(fileName: string): string | null {
+  const match = fileName.match(/^(\d{4})\s/);
+  return match ? match[1] : null;
+}
+
+function extractMonth(fileName: string): string | null {
+  const match = fileName.match(/^\d{4}\s(\d{2})\s/);
+  return match ? match[1] : null;
+}
+
+const MONTH_NAMES: Record<string, string> = {
+  '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr',
+  '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Aug',
+  '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec',
+};
+
+function FilterDropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string; count: number }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = value !== '';
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors ${
+          active
+            ? 'bg-white text-black'
+            : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e]'
+        }`}
+      >
+        {active ? options.find(o => o.value === value)?.label || label : label}
+        {active ? (
+          <X
+            className="h-3 w-3 ml-0.5"
+            onClick={e => { e.stopPropagation(); onChange(''); setOpen(false); }}
+          />
+        ) : (
+          <ChevronDown className="h-3 w-3" />
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 z-40 bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg overflow-hidden min-w-[160px] shadow-xl">
+            {options.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-[13px] flex items-center justify-between transition-colors ${
+                  value === opt.value
+                    ? 'bg-[#2c2c2e] text-white'
+                    : 'text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-white'
+                }`}
+              >
+                <span>{opt.label}</span>
+                <span className="text-[11px] text-[#48484a]">{opt.count}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CertificateHub() {
   const { toast } = useToast();
   const [certificates, setCertificates] = useState<CertificateFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -92,11 +170,60 @@ export default function CertificateHub() {
     })();
   }, []);
 
+  const filterOptions = useMemo(() => {
+    const types: Record<string, number> = {};
+    const years: Record<string, number> = {};
+    const months: Record<string, number> = {};
+
+    certificates.forEach(c => {
+      const t = extractCertType(c.fileName);
+      if (t) types[t] = (types[t] || 0) + 1;
+      const y = extractYear(c.fileName);
+      if (y) years[y] = (years[y] || 0) + 1;
+      const m = extractMonth(c.fileName);
+      if (m) months[m] = (months[m] || 0) + 1;
+    });
+
+    return {
+      types: Object.entries(types)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([v, count]) => ({ value: v, label: v, count })),
+      years: Object.entries(years)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([v, count]) => ({ value: v, label: v, count })),
+      months: Object.entries(months)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([v, count]) => ({ value: v, label: MONTH_NAMES[v] || v, count })),
+    };
+  }, [certificates]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return certificates;
-    const q = search.toLowerCase().trim();
-    return certificates.filter(c => c.fileName.toLowerCase().includes(q));
-  }, [certificates, search]);
+    return certificates.filter(c => {
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        if (!c.fileName.toLowerCase().includes(q)) return false;
+      }
+      if (typeFilter) {
+        if (extractCertType(c.fileName) !== typeFilter) return false;
+      }
+      if (yearFilter) {
+        if (extractYear(c.fileName) !== yearFilter) return false;
+      }
+      if (monthFilter) {
+        if (extractMonth(c.fileName) !== monthFilter) return false;
+      }
+      return true;
+    });
+  }, [certificates, search, typeFilter, yearFilter, monthFilter]);
+
+  const hasActiveFilters = typeFilter || yearFilter || monthFilter;
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setTypeFilter('');
+    setYearFilter('');
+    setMonthFilter('');
+  };
 
   const downloadCertificate = async (blobName: string) => {
     setDownloadingFile(blobName);
@@ -131,20 +258,20 @@ export default function CertificateHub() {
 
       <main className="max-w-[900px] mx-auto px-5 pt-8 pb-20">
 
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-[22px] font-semibold text-white tracking-tight mb-1">B-BBEE Certificates</h1>
           <p className="text-[13px] text-[#636366]">
             {loading ? 'Loading...' : `${certificates.length} certificates · ${filtered.length} shown`}
           </p>
         </div>
 
-        <div className="relative mb-6">
+        <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a]" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Filter certificates..."
+            placeholder="Search by company name..."
             className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
           />
           {search && (
@@ -157,6 +284,39 @@ export default function CertificateHub() {
           )}
         </div>
 
+        {!loading && certificates.length > 0 && (
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            <FilterDropdown
+              label="Type"
+              value={typeFilter}
+              options={filterOptions.types}
+              onChange={setTypeFilter}
+            />
+            {filterOptions.years.length > 1 && (
+              <FilterDropdown
+                label="Year"
+                value={yearFilter}
+                options={filterOptions.years}
+                onChange={setYearFilter}
+              />
+            )}
+            <FilterDropdown
+              label="Month"
+              value={monthFilter}
+              options={filterOptions.months}
+              onChange={setMonthFilter}
+            />
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="text-[12px] text-[#636366] hover:text-white transition-colors ml-1"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -167,11 +327,11 @@ export default function CertificateHub() {
           <div className="py-20 text-center">
             <AlertCircle className="w-6 h-6 text-[#3a3a3c] mx-auto mb-3" />
             <p className="text-[14px] text-[#636366] mb-1">
-              {search ? 'No certificates match your filter' : 'No certificates found'}
+              {search || hasActiveFilters ? 'No certificates match your filters' : 'No certificates found'}
             </p>
-            {search && (
-              <button onClick={() => setSearch('')} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors mt-1">
-                Clear filter
+            {(search || hasActiveFilters) && (
+              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors mt-1">
+                Clear all filters
               </button>
             )}
           </div>
