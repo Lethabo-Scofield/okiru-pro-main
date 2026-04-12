@@ -20,22 +20,33 @@ function getFileExtension(fileName: string): string {
 function FileFormatIcon({ fileName, className }: { fileName: string; className?: string }) {
   const ext = getFileExtension(fileName);
 
-  const config: Record<string, { label: string; bg: string; text: string }> = {
-    pdf: { label: 'PDF', bg: 'bg-red-500/12 border-red-500/20', text: 'text-red-400' },
-    png: { label: 'PNG', bg: 'bg-purple-500/12 border-purple-500/20', text: 'text-purple-400' },
-    jpg: { label: 'JPG', bg: 'bg-amber-500/12 border-amber-500/20', text: 'text-amber-400' },
-    jpeg: { label: 'JPG', bg: 'bg-amber-500/12 border-amber-500/20', text: 'text-amber-400' },
-    doc: { label: 'DOC', bg: 'bg-blue-500/12 border-blue-500/20', text: 'text-blue-400' },
-    docx: { label: 'DOC', bg: 'bg-blue-500/12 border-blue-500/20', text: 'text-blue-400' },
-    xls: { label: 'XLS', bg: 'bg-emerald-500/12 border-emerald-500/20', text: 'text-emerald-400' },
-    xlsx: { label: 'XLS', bg: 'bg-emerald-500/12 border-emerald-500/20', text: 'text-emerald-400' },
+  const colors: Record<string, { page: string; fold: string; badge: string; label: string; text: string }> = {
+    pdf:  { page: '#2a1215', fold: '#4a1c22', badge: '#dc2626', label: 'PDF', text: '#fca5a5' },
+    png:  { page: '#1e1529', fold: '#2e1f42', badge: '#9333ea', label: 'PNG', text: '#d8b4fe' },
+    jpg:  { page: '#1c1508', fold: '#2e2210', badge: '#d97706', label: 'JPG', text: '#fcd34d' },
+    jpeg: { page: '#1c1508', fold: '#2e2210', badge: '#d97706', label: 'JPG', text: '#fcd34d' },
+    doc:  { page: '#0c1929', fold: '#132744', badge: '#2563eb', label: 'DOC', text: '#93c5fd' },
+    docx: { page: '#0c1929', fold: '#132744', badge: '#2563eb', label: 'DOC', text: '#93c5fd' },
+    xls:  { page: '#0a1f15', fold: '#103323', badge: '#059669', label: 'XLS', text: '#6ee7b7' },
+    xlsx: { page: '#0a1f15', fold: '#103323', badge: '#059669', label: 'XLS', text: '#6ee7b7' },
   };
 
-  const c = config[ext] || { label: ext.toUpperCase() || 'FILE', bg: 'bg-white/[0.04] border-white/[0.08]', text: 'text-[#636366]' };
+  const c = colors[ext] || { page: '#1c1c1e', fold: '#2c2c2e', badge: '#636366', label: (ext || 'FILE').toUpperCase(), text: '#a1a1aa' };
 
   return (
-    <div className={`w-10 h-10 rounded-[10px] border flex flex-col items-center justify-center shrink-0 ${c.bg} ${className || ''}`}>
-      <span className={`text-[9px] font-bold tracking-wider leading-none ${c.text}`}>{c.label}</span>
+    <div className={`shrink-0 ${className || ''}`} style={{ width: 36, height: 42 }}>
+      <svg width="36" height="42" viewBox="0 0 36 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 0h20l12 12v26a4 4 0 01-4 4H4a4 4 0 01-4-4V4a4 4 0 014-4z" fill={c.page} />
+        <path d="M24 0l12 12h-8a4 4 0 01-4-4V0z" fill={c.fold} />
+        <rect x="2" y="26" width={Math.min(c.label.length * 8 + 8, 32)} height="14" rx="3" fill={c.badge} />
+        <text x={2 + Math.min(c.label.length * 8 + 8, 32) / 2} y="36" textAnchor="middle" fill={c.text} fontSize="8" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
+          {c.label}
+        </text>
+        <rect x="6" y="8" width="12" height="1.5" rx="0.75" fill={c.fold} opacity="0.6" />
+        <rect x="6" y="12" width="8" height="1.5" rx="0.75" fill={c.fold} opacity="0.4" />
+        <rect x="6" y="16" width="14" height="1.5" rx="0.75" fill={c.fold} opacity="0.3" />
+        <rect x="6" y="20" width="10" height="1.5" rx="0.75" fill={c.fold} opacity="0.2" />
+      </svg>
     </div>
   );
 }
@@ -44,7 +55,7 @@ function SkeletonRow() {
   return (
     <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-[10px] bg-white/[0.04] shimmer" />
+        <div className="w-9 h-[42px] rounded-md bg-white/[0.04] shimmer" />
         <div className="space-y-2">
           <div className="h-3.5 w-56 rounded-full bg-white/[0.04] shimmer" />
           <div className="h-2.5 w-20 rounded-full bg-white/[0.03] shimmer" />
