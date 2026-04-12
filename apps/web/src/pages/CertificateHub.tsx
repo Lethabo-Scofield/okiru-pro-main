@@ -225,7 +225,7 @@ export default function CertificateHub() {
     setMonthFilter('');
   };
 
-  const downloadCertificate = async (blobName: string) => {
+  const downloadCertificate = async (blobName: string, fileName: string) => {
     setDownloadingFile(blobName);
     try {
       const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(blobName)}`);
@@ -234,7 +234,18 @@ export default function CertificateHub() {
         throw new Error(body.message || `Error ${res.status}`);
       }
       const { url } = await res.json();
-      window.open(url, '_blank', 'noopener,noreferrer');
+
+      const fileRes = await fetch(url);
+      if (!fileRes.ok) throw new Error('Failed to fetch file from storage');
+      const blob = await fileRes.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
     } catch (err: any) {
       toast({ title: 'Download failed', description: err.message || 'Could not generate a secure download link.', variant: 'destructive' });
     } finally {
@@ -367,7 +378,7 @@ export default function CertificateHub() {
                     </div>
                   </div>
                   <button
-                    onClick={() => downloadCertificate(cert.name)}
+                    onClick={() => downloadCertificate(cert.name, cert.fileName)}
                     disabled={isDownloading}
                     aria-label={`Download ${cert.fileName}`}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"

@@ -74,6 +74,11 @@ router.get('/download', async (req: Request, res: Response) => {
     const url = `${blobClient.url}?${sasToken}`;
 
     logger.info('Generated SAS download URL', { file: file.trim(), expiresOn: expiresOn.toISOString() });
+
+    const mode = req.query.mode as string;
+    if (mode === 'redirect') {
+      return res.redirect(302, url);
+    }
     return res.json({ url });
   } catch (err) {
     logger.error('Failed to generate download link', err as Error);
