@@ -34,6 +34,7 @@ import entityMappingRouter from './entityMapping.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
+import certificatesRouter from './certificates.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -172,6 +173,9 @@ export async function registerRoutes(
 
   // Processor sessions: document processing workflow persistence
   app.use('/api/processor-sessions', createProcessorSessionsRouter());
+
+  // Certificate routes (Azure Blob Storage)
+  app.use('/api/certificates', certificatesRouter);
 
   // Import routes
   app.use('/api/import', importRouter);
