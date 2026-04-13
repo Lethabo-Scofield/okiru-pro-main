@@ -39,9 +39,10 @@ This is a **pnpm monorepo** with three services:
 The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.
 
 ### How It Works
-1. **Ingestion Script** (`apps/api/scripts/ingestCertificates.ts`) — reads PDFs from Azure Blob Storage, extracts text via pdfjs-dist, chunks text (~1000 chars), and uploads to an Azure AI Search index.
-2. **Search API** (`GET /api/certificates/search?q=<query>&userId=<userId>`) — queries Azure AI Search, returns results grouped by document (not per chunk) with text snippets.
+1. **Ingestion Script** (`apps/api/scripts/ingestCertificates.ts`) — reads PDFs from Azure Blob Storage, extracts text via pdfjs-dist (text PDFs) or Tesseract OCR (scanned/image PDFs), chunks text (~1000 chars), and uploads to an Azure AI Search index.
+2. **Search API** (`GET /api/certificates/search?q=<query>&userId=<userId>`) — combines filename matches from Blob Storage with full-text content matches from Azure AI Search, returns results grouped by document with text snippets.
 3. **Frontend** (`apps/web/src/pages/CertificateHub.tsx`) — debounced search bar queries the new API; falls back to original filename-based browsing when no search query is active.
+4. **OCR Support** — uses `tesseract.js` + `pdftoppm` to extract text from scanned/image PDFs that have no text layer.
 
 ### Running the Ingestion
 ```bash
