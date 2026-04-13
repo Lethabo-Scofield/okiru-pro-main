@@ -1,13 +1,12 @@
 #!/usr/bin/env tsx
 import { BlobServiceClient } from '@azure/storage-blob';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createHash } from 'crypto';
 import { ensureIndex, uploadDocuments, type CertificateSearchDocument } from '../src/services/azureSearch.js';
 
-GlobalWorkerOptions.workerSrc = undefined as any;
-
 const CONTAINER_NAME = 'clients-certs';
 const CHUNK_SIZE = 1000;
+const UPLOAD_BATCH_SIZE = 50;
 
 function chunkText(text: string, chunkSize: number): string[] {
   const chunks: string[] = [];
@@ -94,10 +93,11 @@ async function main() {
   console.log(`   Container: ${CONTAINER_NAME}\n`);
 
   console.log('3. Listing and processing PDFs...');
-  const allDocuments: CertificateSearchDocument[] = [];
+  let pendingDocs: CertificateSearchDocument[] = [];
   let totalBlobs = 0;
   let processedPdfs = 0;
   let skippedNonPdf = 0;
+  let totalChunksUploaded = 0;
 
   for await (const blob of containerClient.listBlobsFlat()) {
     totalBlobs++;
@@ -105,11 +105,8 @@ async function main() {
 
     if (!blobName.toLowerCase().endsWith('.pdf')) {
       skippedNonPdf++;
-      console.log(`   [SKIP] ${blobName} (not a PDF)`);
       continue;
     }
-
-    console.log(`   [PROCESSING] ${blobName}...`);
 
     try {
       const blobClient = containerClient.getBlobClient(blobName);
@@ -124,7 +121,6 @@ async function main() {
 
       const text = await extractTextFromPdf(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
       if (!text.trim()) {
-        console.log(`     -> No text extracted (scanned/image PDF?)`);
         continue;
       }
 
@@ -132,10 +128,8 @@ async function main() {
       const userId = extractUserIdFromPath(blobName);
       const fileName = extractFileName(blobName);
 
-      console.log(`     -> Extracted ${text.length} chars, ${textChunks.length} chunks`);
-
       for (let i = 0; i < textChunks.length; i++) {
-        allDocuments.push({
+        pendingDocs.push({
           id: makeId(blobName, i),
           document_id: blobName,
           user_id: userId,
@@ -146,26 +140,30 @@ async function main() {
       }
 
       processedPdfs++;
+
+      if (pendingDocs.length >= UPLOAD_BATCH_SIZE) {
+        await uploadDocuments(pendingDocs);
+        totalChunksUploaded += pendingDocs.length;
+        console.log(`   Uploaded batch (${totalChunksUploaded} chunks so far, ${processedPdfs} PDFs processed)`);
+        pendingDocs = [];
+      }
     } catch (err) {
-      console.error(`     -> Error processing ${blobName}:`, err);
+      console.error(`   Error processing ${blobName}:`, err);
     }
+  }
+
+  if (pendingDocs.length > 0) {
+    await uploadDocuments(pendingDocs);
+    totalChunksUploaded += pendingDocs.length;
+    console.log(`   Uploaded final batch (${totalChunksUploaded} chunks total)`);
   }
 
   console.log(`\n4. Summary:`);
   console.log(`   Total blobs: ${totalBlobs}`);
-  console.log(`   PDFs processed: ${processedPdfs}`);
+  console.log(`   PDFs with text: ${processedPdfs}`);
   console.log(`   Non-PDFs skipped: ${skippedNonPdf}`);
-  console.log(`   Total chunks: ${allDocuments.length}\n`);
-
-  if (allDocuments.length > 0) {
-    console.log('5. Uploading chunks to Azure AI Search...');
-    await uploadDocuments(allDocuments);
-    console.log('   Upload complete!\n');
-  } else {
-    console.log('5. No documents to upload.\n');
-  }
-
-  console.log('=== Ingestion Complete ===');
+  console.log(`   Total chunks indexed: ${totalChunksUploaded}`);
+  console.log('\n=== Ingestion Complete ===');
 }
 
 main().catch(err => {

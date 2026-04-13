@@ -122,8 +122,19 @@ export async function ensureIndex(): Promise<void> {
   };
 
   try {
-    await indexClient.getIndex(config.indexName);
-    logger.info('Search index already exists', { indexName: config.indexName });
+    const existing = await indexClient.getIndex(config.indexName);
+    const existingFieldNames = existing.fields.map(f => f.name);
+    const requiredFields = indexDefinition.fields.map(f => f.name);
+    const missingFields = requiredFields.filter(f => !existingFieldNames.includes(f));
+
+    if (missingFields.length > 0) {
+      logger.info('Index exists but missing fields — recreating', { indexName: config.indexName, missingFields });
+      await indexClient.deleteIndex(config.indexName);
+      await indexClient.createIndex(indexDefinition);
+      logger.info('Search index recreated with updated schema', { indexName: config.indexName });
+    } else {
+      logger.info('Search index already exists with correct schema', { indexName: config.indexName });
+    }
   } catch {
     logger.info('Creating search index', { indexName: config.indexName });
     await indexClient.createIndex(indexDefinition);
