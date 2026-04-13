@@ -67,6 +67,10 @@ localPort = 3000
 externalPort = 3000
 
 [[ports]]
+localPort = 3100
+externalPort = 3002
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
@@ -80,8 +84,8 @@ externalPort = 3001
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd apps/web && cross-env NODE_ENV=production node dist/index.cjs"]
-build = ["bash", "-c", "pnpm install --frozen-lockfile && cd apps/web && pnpm run build"]
+run = ["bash", "scripts/start-production.sh"]
+build = ["bash", "-c", "pnpm install --frozen-lockfile && cd apps/api && node build.js && cd /home/runner/workspace/apps/web && pnpm run build"]
 
 [userenv]
 
