@@ -1,0 +1,105 @@
+Upgrade the existing B-BBEE Certificate Hub project by improving the current basic search system.
+
+We already have:
+
+Working web app (frontend + backend)
+Azure Blob Storage integration with connection string
+Certificates stored in Blob container: certificates
+Basic search that only works on filenames/metadata
+Goal
+
+Replace/upgrade current search with full document search inside PDFs using:
+
+Azure AI Search
+
+Users must be able to search:
+
+Names (e.g. “Mr Moreki”)
+Keywords inside documents (e.g. “profit”, “Level 1”, “compliance”)
+Any text inside uploaded certificates
+IMPORTANT RULE
+
+Do NOT change existing upload/download system.
+Only improve the search feature.
+
+Architecture (keep existing system)
+Blob Storage → remains source of truth (PDF storage)
+Azure AI Search → new search layer only
+What to Implement
+1. Azure AI Search Integration
+
+Add environment variables:
+
+AZURE_SEARCH_ENDPOINT
+AZURE_SEARCH_API_KEY
+AZURE_SEARCH_INDEX_NAME
+2. Ingestion Script (NEW)
+
+Create a script that:
+
+Steps:
+Read PDFs from Azure Blob Storage (certificates container)
+Extract text from each PDF
+Split text into chunks (~1000 characters)
+Upload chunks into Azure AI Search index
+
+Each record must include:
+
+id
+document_id (blob path)
+user_id
+file_name
+content (chunk text)
+file_url (Blob SAS or blob URL reference)
+3. Search API (MODIFY EXISTING BACKEND)
+
+Replace/upgrade current search endpoint:
+
+GET /api/search?q=<query>&userId=<userId>
+Logic:
+Query Azure AI Search using search = q
+Filter by user_id
+Return grouped results per document (NOT per chunk)
+Response format:
+[
+  {
+    "file_name": "bbbee-level-1.pdf",
+    "file_url": "...",
+    "snippet": "matching text..."
+  }
+]
+4. Frontend Update (ONLY SEARCH SECTION)
+
+Update B-BBEE Certificate tab:
+
+Keep existing UI
+Replace old search logic
+Add full-text search bar
+Show results from new API
+Rules
+Do NOT remove Blob Storage usage
+Do NOT change upload/download logic
+Do NOT expose Blob publicly
+Always use SAS for downloads
+Keep UI unchanged except search upgrade
+Success Criteria
+Searching “Mr Moreki” returns correct PDFs
+Searching “profit” returns matching documents
+Searching “Level 1” returns Level 1 certificates
+Results are grouped per document (not chunks)
+Existing system still works without breaking
+Future Upgrade (DO NOT IMPLEMENT NOW)
+Vector search / embeddings
+RAG system
+AI summarization of certificates
+Summary
+
+We are upgrading ONLY the search layer:
+
+Old:
+
+filename + metadata search
+
+New:
+
+full PDF content search via Azure AI Search
