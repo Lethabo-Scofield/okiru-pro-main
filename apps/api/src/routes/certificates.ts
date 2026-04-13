@@ -1,11 +1,32 @@
 import { Router, type Request, type Response } from 'express';
 import { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential, SASProtocol } from '@azure/storage-blob';
 import { createLogger } from '../logger.js';
+import { searchCertificates, isAzureSearchConfigured } from '../services/azureSearch.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
 
 const CONTAINER_NAME = 'clients-certs';
+
+async function fallbackFilenameSearch(q: string, res: Response) {
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
+    return res.status(500).json({ message: 'Neither Azure AI Search nor Azure Storage is configured.' });
+  }
+  const containerClient = getContainerClient(blobServiceClient);
+  const blobs: Array<{ file_name: string; file_url: string; snippet: string }> = [];
+  const searchLower = q.toLowerCase();
+  for await (const blob of containerClient.listBlobsFlat()) {
+    if (blob.name.toLowerCase().includes(searchLower)) {
+      blobs.push({
+        file_name: blob.name.split('/').pop() || blob.name,
+        file_url: blob.name,
+        snippet: `Filename match: ${blob.name}`,
+      });
+    }
+  }
+  return res.json(blobs);
+}
 
 function getConnectionString(): string | undefined {
   return process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -114,6 +135,34 @@ router.get('/list', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error('Failed to list certificates', err as Error);
     return res.status(500).json({ message: 'Failed to list certificates' });
+  }
+});
+
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    const userId = (req.query.userId as string || '').trim();
+
+    if (!q) {
+      return res.status(400).json({ message: 'q query parameter is required' });
+    }
+
+    if (!isAzureSearchConfigured()) {
+      logger.warn('Azure AI Search not configured — falling back to filename search');
+      return await fallbackFilenameSearch(q, res);
+    }
+
+    try {
+      const results = await searchCertificates(q, userId || undefined);
+      logger.info('Search completed', { query: q, userId: userId || '(all)', resultCount: results.length });
+      return res.json(results);
+    } catch (searchErr) {
+      logger.error('Azure AI Search query failed — falling back to filename search', searchErr as Error);
+      return await fallbackFilenameSearch(q, res);
+    }
+  } catch (err) {
+    logger.error('Search failed', err as Error);
+    return res.status(500).json({ message: 'Search failed' });
   }
 });
 
