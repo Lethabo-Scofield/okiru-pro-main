@@ -147,19 +147,43 @@ router.get('/search', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'q query parameter is required' });
     }
 
-    if (!isAzureSearchConfigured()) {
-      logger.warn('Azure AI Search not configured — falling back to filename search');
-      return await fallbackFilenameSearch(q, res);
+    const merged = new Map<string, { file_name: string; file_url: string; snippet: string }>();
+
+    const blobServiceClient = getBlobServiceClient();
+    if (blobServiceClient) {
+      const containerClient = getContainerClient(blobServiceClient);
+      const searchLower = q.toLowerCase();
+      for await (const blob of containerClient.listBlobsFlat()) {
+        const fileName = blob.name.split('/').pop() || blob.name;
+        if (fileName.toLowerCase().includes(searchLower)) {
+          merged.set(blob.name, {
+            file_name: fileName,
+            file_url: blob.name,
+            snippet: `Filename match`,
+          });
+        }
+      }
     }
 
-    try {
-      const results = await searchCertificates(q, userId || undefined);
-      logger.info('Search completed', { query: q, userId: userId || '(all)', resultCount: results.length });
-      return res.json(results);
-    } catch (searchErr) {
-      logger.error('Azure AI Search query failed — falling back to filename search', searchErr as Error);
-      return await fallbackFilenameSearch(q, res);
+    if (isAzureSearchConfigured()) {
+      try {
+        const aiResults = await searchCertificates(q, userId || undefined);
+        for (const result of aiResults) {
+          const existing = merged.get(result.file_url);
+          if (existing) {
+            existing.snippet = result.snippet;
+          } else {
+            merged.set(result.file_url, result);
+          }
+        }
+      } catch (searchErr) {
+        logger.error('Azure AI Search query failed — using filename matches only', searchErr as Error);
+      }
     }
+
+    const results = Array.from(merged.values());
+    logger.info('Search completed', { query: q, userId: userId || '(all)', resultCount: results.length });
+    return res.json(results);
   } catch (err) {
     logger.error('Search failed', err as Error);
     return res.status(500).json({ message: 'Search failed' });
