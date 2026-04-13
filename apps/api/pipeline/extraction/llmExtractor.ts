@@ -136,6 +136,10 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
   if (negativeStr !== 'none') lines.push(`- DO NOT extract these (negative examples): ${negativeStr}`);
   if (formatHint)  lines.push(`- ${formatHint}`);
 
+  // Detect if this is a row-level entity (multiple values expected across spreadsheet rows)
+  const isRowLevel = /shareholder|employee|learner|director|participant|supplier|vendor|beneficiary|training|skill/i
+    .test([req.entityName, ...req.aliases].join(' '));
+
   lines.push(
     ``,
     `## Source Text`,
@@ -146,12 +150,26 @@ export function buildExtractionPrompt(req: LLMExtractionRequest): string {
     `## Task`,
     `Extract the value for "${req.entityName}" from the Source Text above.`,
     ``,
+  );
+
+  if (isRowLevel) {
+    lines.push(
+      `The source data comes from spreadsheet rows. Look for the FIRST valid, non-empty value that matches this field.`,
+      `Spreadsheet rows are formatted as "Row N: Column: Value, Column: Value, ...".`,
+      `Key-value data is formatted as "Label: Value".`,
+      ``,
+    );
+  }
+
+  lines.push(
     `Return JSON only: {"value": <extracted_value_or_null>, "reasoning": "<one sentence>", "source_quote": "<exact text from document>"}`,
     ``,
     `CRITICAL RULES:`,
     `1. The value MUST appear verbatim in the Source Text — never invent or infer.`,
     `2. If the value is not clearly present, return null.`,
     `3. Do not confuse nearby values — each field has a specific type (see FORMAT above).`,
+    `4. Data may be from spreadsheet cells: look for "Label: Value" patterns and column headers.`,
+    `5. For numeric fields, extract the raw number (without currency symbols or formatting) if possible.`,
   );
 
   return lines.join('\n');

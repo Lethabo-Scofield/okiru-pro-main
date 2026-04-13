@@ -625,6 +625,21 @@ export async function populateAndScore(
     );
     
     useBbeeStore.getState().startNewSession();
+
+    // Load calculatorConfig from sector-config API BEFORE any state
+    // mutations that trigger _recalculateAll (e.g. updateFinancials).
+    const configRes = await fetch(
+      `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
+    );
+    if (configRes.ok) {
+      const configData = await configRes.json();
+      if (configData.success && configData.config) {
+        useBbeeStore.setState({ calculatorConfig: configData.config });
+      }
+    }
+
+    // Set a synthetic activeClientId so _recalculateAll can proceed.
+    useBbeeStore.setState({ activeClientId: `build-${Date.now()}` });
     
     const skillsWithYes = mergeYesIntoSkills(pillars.skills, pillars.yes);
     
@@ -752,8 +767,8 @@ export async function populateAndScore(
     const raw = await response.json();
     const apiResult: APIScorecardResult = raw.scorecard ?? raw;
     
-    // Set the store's scorecard from the UCS result
-    useBbeeStore.getState().setScorecardFromAPI(apiResult);
+    // Recalculate locally for consistency with frontend calculators
+    useBbeeStore.getState()._recalculateAll();
     
     return {
       success: true,

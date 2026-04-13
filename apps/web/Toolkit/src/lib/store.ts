@@ -867,109 +867,20 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
-  _recalculateAll: async () => {
+  _recalculateAll: () => {
     const state = get();
 
-    // Fail loudly if no calculator config - per RESTRUCTURING_PLAN
     if (!state.calculatorConfig) {
       console.error('[store] Cannot calculate: calculatorConfig not loaded');
-      set({ scorecard: { ...buildEmptyScorecard(), configMissing: true } });
-      return;
-    }
-
-    // Fail loudly if no active client - need client context for calculation
-    if (!state.activeClientId) {
-      console.error('[store] Cannot calculate: no activeClientId');
       return;
     }
 
     try {
-      // Build the calculation request from current state
-      const requestBody = {
-        assessmentId: state.activeClientId,
-        sectorCode: state.client.sectorCode || 'RCOGP',
-        scorecardType: state.client.companySize === 'QSE' ? 'qse' : 'generic',
-        entityValues: {},
-        employees: state.management.employees.map(e => ({
-          id: e.id,
-          name: e.name,
-          gender: e.gender,
-          race: e.race,
-          designation: e.designation,
-          isDisabled: e.isDisabled || false,
-        })),
-        shareholders: state.ownership.shareholders.map(s => ({
-          id: s.id,
-          name: s.name,
-          ownershipType: s.ownershipType || 'shareholder',
-          blackOwnership: s.blackOwnership || 0,
-          blackWomenOwnership: s.blackWomenOwnership || 0,
-          shares: s.shares || 0,
-          shareValue: s.shareValue || 0,
-        })),
-        suppliers: state.procurement.suppliers.map(s => ({
-          id: s.id,
-          name: s.name,
-          beeLevel: s.beeLevel || 4,
-          blackOwnership: s.blackOwnership || 0,
-          blackWomenOwnership: s.blackWomenOwnership || 0,
-          youthOwnership: s.youthOwnership || 0,
-          disabledOwnership: s.disabledOwnership || 0,
-          enterpriseType: s.enterpriseType || 'generic',
-          spend: s.spend || 0,
-        })),
-        contributions: [
-          ...state.esd.contributions.map(c => ({ ...c, type: 'esd' })),
-          ...state.sed.contributions.map(c => ({ ...c, type: 'sed' })),
-        ],
-        financials: {
-          revenue: state.client.revenue || 0,
-          npat: state.client.npat || 0,
-          leviableAmount: state.client.leviableAmount || 0,
-          tmps: state.procurement.tmps || 0,
-          headcount: state.management.employees.length,
-          companyValue: state.ownership.companyValue || 0,
-          outstandingDebt: state.ownership.outstandingDebt || 0,
-          yearsHeld: state.ownership.yearsHeld || 0,
-        },
-        trainingPrograms: state.skills.trainingPrograms.map(tp => ({
-          id: tp.id,
-          name: tp.name,
-          category: tp.category,
-          cost: tp.cost || 0,
-          isYesEmployee: tp.isYesEmployee || false,
-          isAbsorbed: tp.isAbsorbed || false,
-          race: tp.race,
-          gender: tp.gender,
-          isDisabled: tp.isDisabled || false,
-        })),
-      };
-
-      const response = await fetch('/api/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[store] Calculation API error:', response.status, errorText);
-        // Keep existing scorecard on error - don't overwrite with empty
-        return;
-      }
-
-      const apiResult: APIScorecardResult = await response.json();
-
-      // Use setScorecardFromAPI to map and set the result
-      const mapped = mapAPIScorecardToFrontend(apiResult, state.ignoreSubMinimum);
-      set({ scorecard: mapped });
-
-      console.log('[store] Scorecard calculated via UCS API:', apiResult.totalPoints, 'points');
-      console.log('[store] Mapped scorecard total:', mapped.total.score, 'points');
-      console.log('[store] API pillars:', apiResult.pillars?.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`));
+      const result = calculateScorecard(state, state.pipelineOverrides);
+      set({ scorecard: result });
+      console.log('[store] Scorecard recalculated:', result.total.score, 'points, Level', result.achievedLevel);
     } catch (error) {
       console.error('[store] Calculation failed:', error);
-      // Don't overwrite scorecard on error - prevents UI flashing to 0
     }
   },
 

@@ -27,7 +27,7 @@ import {
   Circle, Zap, ListChecks, CheckCheck, CheckCircle2, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
   Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send,
-  ExternalLink
+  ExternalLink, Users, Briefcase, BookOpen, ShoppingCart, Heart, Wand2
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -1118,12 +1118,31 @@ function PopulatingScreen({
   );
 }
 
+function ExtractionTimer() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const msgs = ['Parsing document...', 'Building search index...', 'Extracting entities...', 'Classifying data...', 'Almost done...'];
+  const msgIdx = Math.min(Math.floor(elapsed / 20), msgs.length - 1);
+  return (
+    <span className="text-[#8e8e93]">
+      {msgs[msgIdx]} {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
+    </span>
+  );
+}
+
 export default function DocumentProcessor() {
   const { isDark } = useTheme();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
+  const storeScorecard = useBbeeStore(state => state.scorecard);
   const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -1142,8 +1161,11 @@ export default function DocumentProcessor() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'by-page'>('all');
+  const [reviewTab, setReviewTab] = useState<'structured' | 'raw'>('structured');
+  // All pillars always expanded — no collapse
   const [activeReviewPage, setActiveReviewPage] = useState(0);
   const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
+  const [editingField, setEditingField] = useState<{ pillar: string; field: string; rowIndex?: number } | null>(null);
   const [savedDocs, setSavedDocs] = useState<Set<number>>(new Set());
   const [docFullView, setDocFullView] = useState(false);
   const [docStatuses, setDocStatuses] = useState<Record<number, 'waiting' | 'processing' | 'done' | 'error'>>({});
@@ -1380,7 +1402,6 @@ export default function DocumentProcessor() {
     const isNew = params.get('new') === 'true';
 
     if (isNew) {
-      // FIXED: Also clear local component state, not just the store
       useBbeeStore.getState().startNewSession();
       setFoundationData({ clientInfo: EMPTY_CLIENT_INFO, financials: EMPTY_FINANCIALS });
       setPillarData({
@@ -1393,9 +1414,14 @@ export default function DocumentProcessor() {
         sed: { id: '', clientId: '', contributions: [] },
         yes: { id: '', clientId: '', totalEmployees: 0, candidates: [], yesYouthEnrolled: 0, yesBlackYouthCount: 0, yesBlackYouthPercentage: 0, yesAbsorbedCount: 0, yesAbsorptionRate: 0, totalYesCost: 0 },
       });
-      // Clear session storage for this flow to prevent stale data restoration
       const storageKey = getBuildFlowStorageKey(sessionId || 'anon');
       sessionStorage.removeItem(storageKey);
+
+      // If a template ID was passed from Dashboard, persist it for auto-selection
+      const templateParam = params.get('template');
+      if (templateParam) {
+        sessionStorage.setItem('bbee-last-template-id', templateParam);
+      }
       return;
     }
 
@@ -1932,17 +1958,28 @@ export default function DocumentProcessor() {
   };
 
   const extractXlsxText = async (file: File): Promise<string> => {
+    // Skip preview for files > 10MB — parsing them on the main thread freezes the browser
+    if (file.size > 10 * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      return `[Excel file: ${file.name} (${sizeMB} MB) — preview skipped for large files. Full data will be extracted server-side.]`;
+    }
     try {
       const XLSX = await import('xlsx');
       const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      // Limit to 100 rows per sheet for preview — prevents main thread freeze
+      const workbook = XLSX.read(arrayBuffer, { type: 'array', sheetRows: 100 });
       const sheets: string[] = [];
-      for (const sheetName of workbook.SheetNames) {
+      const maxSheets = 6;
+      for (let si = 0; si < Math.min(workbook.SheetNames.length, maxSheets); si++) {
+        const sheetName = workbook.SheetNames[si];
         const sheet = workbook.Sheets[sheetName];
         const csv = XLSX.utils.sheet_to_csv(sheet);
         if (csv.trim()) {
           sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`);
         }
+      }
+      if (workbook.SheetNames.length > maxSheets) {
+        sheets.push(`... and ${workbook.SheetNames.length - maxSheets} more sheets`);
       }
       return sheets.join('\n\n') || `[No text content in Excel file: ${file.name}]`;
     } catch (err) {
@@ -2163,6 +2200,7 @@ export default function DocumentProcessor() {
               name: e.name || e.entity || '',
               confidence: e.confidence ?? e.conf ?? 0,
             })),
+            tables: data.tables || {},
           };
           setCompletedCount(prev => { const next = prev + 1; if (next >= documents.length) finalizeResults(); return next; });
           break;
@@ -2206,7 +2244,7 @@ export default function DocumentProcessor() {
         formData.append('sectorCode', sectorCode);
         formData.append('scorecardType', scorecardType);
 
-        const response = await fetch('/api/extract-entities-hybrid', {
+        const response = await fetch('/api/extract-entities-hybrid?skipVerify=true', {
           method: 'POST',
           body: formData,
           signal: controller.signal,
@@ -2248,6 +2286,7 @@ export default function DocumentProcessor() {
           templateId,
           templateName: tmpl?.name || 'Toolkit extraction',
           entities,
+          tables: data.tables || {},
           timing: data.timing,
           stats: data.stats,
         });
@@ -2285,7 +2324,7 @@ export default function DocumentProcessor() {
       formData.append('sectorCode', sectorCode);
       formData.append('scorecardType', scorecardType);
 
-      const response = await fetch('/api/extract-entities-hybrid', {
+      const response = await fetch('/api/extract-entities-hybrid?skipVerify=true', {
         method: 'POST',
         body: formData,
       });
@@ -2323,6 +2362,7 @@ export default function DocumentProcessor() {
           validation: e.validation,
           groqVerification: e.groqVerification,
         })),
+        tables: data.tables || {},
       };
 
       if (result) {
@@ -2375,6 +2415,233 @@ export default function DocumentProcessor() {
     });
     setExtractionResults(r);
     if (count > 0) toast({ title: "All approved", description: `${count} entities approved` });
+  };
+
+  const ENTITY_KEYWORDS: Record<string, string[]> = {
+    revenue: ['revenue', 'turnover', 'annual revenue'],
+    npat: ['npat', 'net profit', 'profit after tax'],
+    leviable: ['leviable', 'payroll', 'leviable amount'],
+    headcount: ['headcount', 'total employees', 'number of employees'],
+    tmps: ['tmps', 'total measured procurement', 'procurement spend'],
+  };
+
+  const updateStructuredField = (fieldKey: string, newValue: string) => {
+    const r = structuredClone(extractionResults);
+    const doc = r[activeReviewDoc];
+    if (!doc) return;
+    if (!doc.entities) doc.entities = [];
+
+    const keywords = ENTITY_KEYWORDS[fieldKey] || [fieldKey];
+    let found = false;
+    for (const entity of doc.entities) {
+      for (const kw of keywords) {
+        if (entity.name?.toLowerCase().includes(kw.toLowerCase())) {
+          entity.value = newValue;
+          entity.status = 'edited';
+          entity.confidence = 1.0;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+
+    if (!found) {
+      doc.entities.push({
+        name: fieldKey === 'tmps' ? 'Total Measured Procurement Spend' :
+              fieldKey === 'npat' ? 'Net Profit After Tax (NPAT)' :
+              fieldKey === 'leviable' ? 'Leviable Amount' :
+              fieldKey === 'headcount' ? 'Total Employees (Headcount)' :
+              fieldKey === 'revenue' ? 'Total Revenue' : fieldKey,
+        value: newValue,
+        confidence: 1.0,
+        status: 'edited',
+        pillar: 'financials',
+        fieldType: 'currency',
+      });
+    }
+
+    setExtractionResults(r);
+    setEditingField(null);
+  };
+
+  const updateTableField = (tableName: string, rowIndex: number, fieldName: string, newValue: any) => {
+    const r = structuredClone(extractionResults);
+    const doc = r[activeReviewDoc];
+    if (!doc) return;
+    if (!doc.tables) doc.tables = {};
+    if (!doc.tables[tableName]) doc.tables[tableName] = [];
+    if (!doc.tables[tableName][rowIndex]) return;
+    doc.tables[tableName][rowIndex][fieldName] = newValue;
+    setExtractionResults(r);
+    setEditingField(null);
+  };
+
+  const ROW_TEMPLATES: Record<string, any> = {
+    shareholders: { name: '', blackOwnership: null, blackWomenOwnership: null, shares: null, shareValue: null, yearsHeld: null, isDesignatedGroup: false, blackNewEntrant: false },
+    employees: { name: '', race: '', gender: '', designation: '', isDisabled: false, isForeign: false },
+    trainingPrograms: { name: '', cost: null, race: '', gender: '', category: '', isDisabled: false, isBursary: false },
+    suppliers: { name: '', spend: null, beeLevel: null, blackOwnership: null, blackWomenOwnership: null, enterpriseType: '', isForeignSupplier: false },
+    contributions: { beneficiary: '', amount: null, type: '', category: '' },
+  };
+
+  const addTableRow = (tableName: string) => {
+    const r = structuredClone(extractionResults);
+    const doc = r[activeReviewDoc];
+    if (!doc) return;
+    if (!doc.tables) doc.tables = {};
+    if (!doc.tables[tableName]) doc.tables[tableName] = [];
+    doc.tables[tableName].push({ ...ROW_TEMPLATES[tableName] });
+    setExtractionResults(r);
+  };
+
+  const deleteTableRow = (tableName: string, rowIndex: number) => {
+    const r = structuredClone(extractionResults);
+    const doc = r[activeReviewDoc];
+    if (!doc?.tables?.[tableName]) return;
+    doc.tables[tableName].splice(rowIndex, 1);
+    setExtractionResults(r);
+    setEditingField(null);
+  };
+
+  const [autoFillLoading, setAutoFillLoading] = useState<string | null>(null);
+
+  const autoFillFinancials = () => {
+    const r = structuredClone(extractionResults);
+    const doc = r[activeReviewDoc];
+    if (!doc?.entities?.length) return;
+
+    const FINANCIAL_KEYWORDS: Record<string, { keywords: string[]; entityName: string }> = {
+      revenue: { keywords: ['revenue', 'turnover', 'annual revenue', 'total revenue'], entityName: 'Total Revenue' },
+      npat: { keywords: ['npat', 'net profit', 'profit after tax'], entityName: 'Net Profit After Tax (NPAT)' },
+      leviable: { keywords: ['leviable', 'payroll', 'leviable amount'], entityName: 'Leviable Amount' },
+      headcount: { keywords: ['headcount', 'total employees', 'number of employees', 'employee count'], entityName: 'Total Employees (Headcount)' },
+      tmps: { keywords: ['tmps', 'total measured procurement', 'procurement spend'], entityName: 'Total Measured Procurement Spend' },
+    };
+
+    let filled = 0;
+    for (const [, config] of Object.entries(FINANCIAL_KEYWORDS)) {
+      const existing = doc.entities.find((e: any) =>
+        e.status !== 'rejected' && e.value != null &&
+        config.keywords.some(kw => e.name.toLowerCase().includes(kw.toLowerCase()))
+      );
+      if (!existing) {
+        for (const entity of doc.entities) {
+          if (entity.status === 'rejected' || entity.value == null) continue;
+          if (config.keywords.some(kw => entity.name.toLowerCase().includes(kw.toLowerCase()))) {
+            entity.status = 'approved';
+            filled++;
+            break;
+          }
+        }
+      }
+    }
+
+    setExtractionResults(r);
+    if (filled > 0) toast({ title: 'Autofill', description: `Filled ${filled} financial field(s) from extracted data` });
+  };
+
+  const autoFillPillar = async (pillar: string) => {
+    const doc = extractionResults[activeReviewDoc];
+    if (!doc?.entities?.length) {
+      toast({ title: 'No data', description: 'No extracted entities to autofill from', variant: 'destructive' });
+      return;
+    }
+
+    setAutoFillLoading(pillar);
+    try {
+      const resp = await fetch('/api/infer-tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entities: doc.entities }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(err.message || 'Autofill request failed');
+      }
+
+      const { tables } = await resp.json();
+      const r = structuredClone(extractionResults);
+      const d = r[activeReviewDoc];
+      if (!d) return;
+      if (!d.tables) d.tables = {};
+
+      const TABLE_MAP: Record<string, string> = {
+        ownership: 'shareholders', management: 'employees',
+        skills: 'trainingPrograms', procurement: 'suppliers', 'esd-sed': 'contributions',
+      };
+      const tableName = TABLE_MAP[pillar];
+      if (!tableName) return;
+
+      const inferred = tables[tableName];
+      if (!inferred?.length) {
+        toast({ title: 'No data found', description: `AI could not infer any ${tableName} from extracted entities` });
+        return;
+      }
+
+      const existing = d.tables[tableName] || [];
+      d.tables[tableName] = [...existing, ...inferred];
+
+      setExtractionResults(r);
+      toast({ title: 'Autofill complete', description: `Added ${inferred.length} ${tableName} record(s) from AI inference` });
+    } catch (err: any) {
+      console.error('[autoFillPillar] Error:', err);
+      toast({ title: 'Autofill failed', description: err.message || 'Could not infer data', variant: 'destructive' });
+    } finally {
+      setAutoFillLoading(null);
+    }
+  };
+
+  const autoFillAll = async () => {
+    autoFillFinancials();
+    const pillars = ['ownership', 'management', 'skills', 'procurement', 'esd-sed'];
+    setAutoFillLoading('all');
+    try {
+      const doc = extractionResults[activeReviewDoc];
+      if (!doc?.entities?.length) return;
+
+      const resp = await fetch('/api/infer-tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entities: doc.entities }),
+      });
+      if (!resp.ok) throw new Error('Autofill request failed');
+
+      const { tables } = await resp.json();
+      const r = structuredClone(extractionResults);
+      const d = r[activeReviewDoc];
+      if (!d) return;
+      if (!d.tables) d.tables = {};
+
+      let totalAdded = 0;
+      const TABLE_MAP: Record<string, string> = {
+        ownership: 'shareholders', management: 'employees',
+        skills: 'trainingPrograms', procurement: 'suppliers', 'esd-sed': 'contributions',
+      };
+
+      for (const p of pillars) {
+        const tableName = TABLE_MAP[p];
+        const inferred = tables[tableName];
+        if (!inferred?.length) continue;
+        const existing = d.tables[tableName] || [];
+        if (existing.length > 0) continue;
+        d.tables[tableName] = inferred;
+        totalAdded += inferred.length;
+      }
+
+      setExtractionResults(r);
+      if (totalAdded > 0) {
+        toast({ title: 'Autofill complete', description: `Added ${totalAdded} record(s) across pillars from AI inference` });
+      } else {
+        toast({ title: 'No new data', description: 'AI did not find any additional records to add' });
+      }
+    } catch (err: any) {
+      console.error('[autoFillAll] Error:', err);
+      toast({ title: 'Autofill failed', description: err.message || 'Could not infer data', variant: 'destructive' });
+    } finally {
+      setAutoFillLoading(null);
+    }
   };
 
   const exportResults = () => {
@@ -3289,7 +3556,7 @@ export default function DocumentProcessor() {
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-medium text-white truncate">{file.name}</div>
                           <div className="text-[11px] text-[#48484a] mt-0.5">
-                            {status === 'processing' ? 'Extracting...' : status === 'done' ? 'Complete' : status === 'error' ? 'Failed' : tmpl ? tmpl.name : ''}
+                            {status === 'processing' ? <ExtractionTimer /> : status === 'done' ? 'Complete' : status === 'error' ? 'Failed' : tmpl ? tmpl.name : ''}
                           </div>
                         </div>
                         {status === 'done' && <Check className="w-3.5 h-3.5 text-[#636366] shrink-0" />}
@@ -3382,52 +3649,42 @@ export default function DocumentProcessor() {
                 const sectorCode = companyInfo.sector || 'RCOGP';
                 const { scorecardType } = determineScorecardType(sectorCode, companyInfo.annualTurnover);
 
-                // Build entityValues from extraction results for UCS
-                const entityValues: Record<string, { entityId: string; value: any; source: string; confidence: number }> = {};
-                const financialKeys: Record<string, string> = {
-                  total_revenue: 'revenue', revenue: 'revenue',
-                  npat: 'npat', net_profit_after_tax: 'npat',
-                  leviable_amount: 'leviableAmount', leviableAmount: 'leviableAmount',
-                  tmps: 'tmps', total_measured_procurement_spend: 'tmps',
-                  headcount: 'headcount', total_employees: 'headcount',
-                };
-                const financials: Record<string, number> = { revenue: 0, npat: 0, leviableAmount: 0, tmps: 0, headcount: 0 };
-
+                // Collect all entities and tables from extraction results
+                const allEntities: any[] = [];
+                const allTables: any = {};
                 for (const doc of extractionResults) {
                   for (const entity of (doc.entities || [])) {
-                    if (entity.status === 'rejected' || entity.value == null || entity.value === '') continue;
-                    let val: any = entity.value;
-                    if (typeof val === 'string') {
-                      const cleaned = val.replace(/^R\s*/, '').replace(/\s/g, '').replace(/,/g, '');
-                      const parsed = Number(cleaned);
-                      if (!isNaN(parsed) && cleaned !== '') val = parsed;
+                    if (entity.status !== 'rejected') {
+                      allEntities.push(entity);
                     }
-                    entityValues[entity.name] = {
-                      entityId: entity.name,
-                      value: val,
-                      source: 'extraction',
-                      confidence: entity.confidence ?? 0.8,
-                    };
-                    const finKey = financialKeys[entity.name.toLowerCase()];
-                    if (finKey && typeof val === 'number') financials[finKey] = val;
+                  }
+                  const t = (doc as any).tables || {};
+                  for (const key of ['shareholders', 'employees', 'suppliers', 'contributions', 'trainingPrograms', 'ownershipFinancials']) {
+                    if (t[key]?.length) {
+                      if (!allTables[key]) allTables[key] = [];
+                      allTables[key].push(...t[key]);
+                    }
                   }
                 }
 
-                const ucsResponse = await fetch(`${API_BASE}/api/calculate`, {
+                console.log('[DocumentProcessor] Sending to AI mapper:', {
+                  entities: allEntities.length,
+                  tables: Object.fromEntries(
+                    Object.entries(allTables).map(([k, v]: [string, any]) => [k, v?.length || 0])
+                  ),
+                });
+
+                // Use the new AI-powered endpoint that handles all mapping, normalization,
+                // financial derivation, and scoring in one server-side call
+                const ucsResponse = await fetch(`${API_BASE}/api/calculate-from-extraction`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    assessmentId: `upload-${sessionId || Date.now()}`,
+                    sessionId: sessionId || Date.now().toString(),
                     sectorCode,
                     scorecardType,
-                    entityValues,
-                    financials: {
-                      revenue: financials.revenue,
-                      npat: financials.npat,
-                      leviableAmount: financials.leviableAmount,
-                      tmps: financials.tmps,
-                      headcount: financials.headcount,
-                    },
+                    entities: allEntities,
+                    tables: allTables,
                   }),
                 });
 
@@ -3438,16 +3695,173 @@ export default function DocumentProcessor() {
 
                 const raw = await ucsResponse.json();
                 const apiResult: APIScorecardResult = raw.scorecard ?? raw;
-                useBbeeStore.getState().setScorecardFromAPI(apiResult);
+                const dataQuality = raw.dataQuality;
+
+                // Load calculatorConfig for the sector before hydrating store
+                try {
+                  const cfgRes = await fetch(
+                    `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
+                  );
+                  if (cfgRes.ok) {
+                    const cfgData = await cfgRes.json();
+                    if (cfgData.success && cfgData.config) {
+                      useBbeeStore.setState({ calculatorConfig: cfgData.config });
+                    }
+                  }
+                } catch (cfgErr) {
+                  console.error('[DocumentProcessor] Failed to load calculatorConfig:', cfgErr);
+                }
+
+                // Set activeClientId for the upload session
+                useBbeeStore.setState({ activeClientId: `upload-${sessionId || Date.now()}` });
+
+                // Hydrate store with pillar data so Pillar page and Scorecard sub-indicators work
+                if (raw.pillarData) {
+                  const pd = raw.pillarData;
+                  const fin = pd.financials || {};
+                  useBbeeStore.setState({
+                    isLoaded: true,
+                    client: {
+                      ...useBbeeStore.getState().client,
+                      revenue: fin.revenue || 0,
+                      npat: fin.npat || 0,
+                      leviableAmount: fin.leviableAmount || 0,
+                    },
+                    ownership: {
+                      ...useBbeeStore.getState().ownership,
+                      shareholders: (pd.shareholders || []).map((s: any, i: number) => ({
+                        id: s.id || `sh-${i}`,
+                        name: s.name || `Shareholder ${i + 1}`,
+                        ownershipType: 'shareholder' as const,
+                        blackOwnership: s.blackOwnership || 0,
+                        blackWomenOwnership: s.blackWomenOwnership || 0,
+                        votingRightsPercent: s.votingRightsPercent || s.blackOwnership || 0,
+                        economicInterestPercent: s.economicInterestPercent || s.blackOwnership || 0,
+                        isDesignatedGroup: s.isDesignatedGroup || false,
+                        designatedGroupType: undefined,
+                        blackNewEntrant: s.blackNewEntrant || false,
+                        yearsHeld: s.yearsHeld || 0,
+                        graduationFactor: undefined,
+                        shares: s.shares || 0,
+                        shareValue: s.shareValue || 0,
+                      })),
+                      companyValue: fin.companyValue || 0,
+                      outstandingDebt: fin.outstandingDebt || 0,
+                      yearsHeld: fin.yearsHeld || 0,
+                    },
+                    management: {
+                      ...useBbeeStore.getState().management,
+                      employees: (pd.employees || []).map((e: any, i: number) => ({
+                        id: e.id || `emp-${i}`,
+                        name: e.name || `Employee ${i + 1}`,
+                        gender: e.gender || 'Male',
+                        race: e.race || 'African',
+                        designation: e.designation || 'Junior',
+                        isDisabled: e.isDisabled || false,
+                        isForeign: e.isForeign || false,
+                      })),
+                    },
+                    skills: {
+                      ...useBbeeStore.getState().skills,
+                      leviableAmount: fin.leviableAmount || 0,
+                      trainingPrograms: (pd.trainingPrograms || []).map((tp: any, i: number) => ({
+                        id: tp.id || `tp-${i}`,
+                        programName: tp.name || tp.programName || `Program ${i + 1}`,
+                        name: tp.name || tp.programName || `Program ${i + 1}`,
+                        learnerName: tp.learnerName || tp.name || '',
+                        categoryCode: tp.categoryCode || 'A',
+                        category: tp.category || 'other',
+                        gender: tp.gender || 'Male',
+                        race: tp.race || 'African',
+                        isDisabled: tp.isDisabled || false,
+                        isForeign: false,
+                        employmentStatus: 'Permanent' as const,
+                        isYesEmployee: tp.isYesEmployee || false,
+                        isCompleted: false,
+                        isAbsorbed: tp.isAbsorbed || false,
+                        transactionDate: '',
+                        courseCost: tp.cost || tp.courseCost || 0,
+                        travelCost: 0, accommodationCost: 0, cateringCost: 0,
+                        stationeryCost: 0, facilityCost: 0, salaryCost: 0, otherCosts: 0,
+                        totalCost: tp.cost || tp.courseCost || 0,
+                        cost: tp.cost || tp.courseCost || 0,
+                        isAbet: false, isMandatory: false,
+                        isBursary: tp.isBursary || tp.category === 'bursary' || false,
+                      })),
+                    },
+                    procurement: {
+                      ...useBbeeStore.getState().procurement,
+                      tmps: fin.tmps || 0,
+                      suppliers: (pd.suppliers || []).map((s: any, i: number) => ({
+                        id: s.id || `sup-${i}`,
+                        name: s.name || `Supplier ${i + 1}`,
+                        beeLevel: s.beeLevel || 0,
+                        blackOwnership: s.blackOwnership || 0,
+                        blackWomenOwnership: s.blackWomenOwnership || 0,
+                        youthOwnership: 0,
+                        disabledOwnership: 0,
+                        enterpriseType: s.enterpriseType || 'generic',
+                        isEmpoweringSupplier: true,
+                        isSupplierDevRecipient: false,
+                        hasThreeYearContract: false,
+                        spend: s.spend || 0,
+                        isForeignSupplier: s.isForeignSupplier || false,
+                      })),
+                    },
+                    esd: {
+                      ...useBbeeStore.getState().esd,
+                      contributions: (pd.contributions || [])
+                        .filter((c: any) => c.category === 'sd' || c.category === 'ed')
+                        .map((c: any, i: number) => ({
+                          id: c.id || `esd-${i}`,
+                          beneficiary: c.beneficiary || `Beneficiary ${i + 1}`,
+                          type: c.type || 'direct_cost',
+                          amount: c.amount || 0,
+                          category: c.category === 'sd' ? 'supplier_development' as const : 'enterprise_development' as const,
+                        })),
+                    },
+                    sed: {
+                      ...useBbeeStore.getState().sed,
+                      contributions: (pd.contributions || [])
+                        .filter((c: any) => c.category === 'sed')
+                        .map((c: any, i: number) => ({
+                          id: c.id || `sed-${i}`,
+                          beneficiary: c.beneficiary || `Beneficiary ${i + 1}`,
+                          type: c.type || 'grant',
+                          amount: c.amount || 0,
+                          category: 'socio_economic' as const,
+                        })),
+                    },
+                  });
+                }
+
+                useBbeeStore.getState()._recalculateAll();
 
                 const { scorecard } = useBbeeStore.getState();
                 const normalised = normalizeUCSResult(apiResult, scorecard);
 
+                // Log data quality warnings
+                if (dataQuality) {
+                  console.log('[DocumentProcessor] Data quality:', dataQuality.overall);
+                  if (dataQuality.missingCritical?.length > 0) {
+                    console.warn('[DocumentProcessor] Missing critical:', dataQuality.missingCritical);
+                  }
+                  if (dataQuality.derivedValues?.length > 0) {
+                    console.log('[DocumentProcessor] Derived values:', dataQuality.derivedValues);
+                  }
+                }
+
                 setScorecardResult(normalised);
-                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: normalised });
+                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: normalised, dataQuality });
                 setIsSubmitted(true);
                 setCurrentPage('summary');
-                toast({ title: "Assessment complete", description: "Scorecard generated successfully!" });
+
+                const qualityMsg = dataQuality?.overall === 'good'
+                  ? 'All pillars scored successfully.'
+                  : dataQuality?.overall === 'partial'
+                  ? `Scored with ${dataQuality.pillarsWithData?.length || 0} pillars. ${dataQuality.missingCritical?.length || 0} critical values were estimated.`
+                  : 'Some data was missing. Review the scorecard for accuracy.';
+                toast({ title: "Assessment complete", description: qualityMsg });
 
               } catch (err: any) {
                 console.error('[DocumentProcessor] UCS scorecard generation failed:', err);
@@ -3502,6 +3916,28 @@ export default function DocumentProcessor() {
                     data-testid="button-next-doc">
                     Next <ChevronRight className="w-3.5 h-3.5" />
                   </button>
+
+                  {/* Extraction summary — show what data was found */}
+                  {allSaved && !isSubmitted && (() => {
+                    const tbl: Record<string, number> = {};
+                    for (const doc of extractionResults) {
+                      const t = (doc as any).tables || {};
+                      for (const k of ['employees', 'shareholders', 'suppliers', 'contributions', 'trainingPrograms']) {
+                        if (t[k]?.length) tbl[k] = (tbl[k] || 0) + t[k].length;
+                      }
+                    }
+                    const entityCount = extractionResults.reduce((s, d) => s + (d.entities?.filter((e: any) => e.value != null)?.length || 0), 0);
+                    const labels: Record<string, string> = { employees: 'Employees', shareholders: 'Shareholders', suppliers: 'Suppliers', contributions: 'ESD/SED', trainingPrograms: 'Training' };
+                    const parts = Object.entries(tbl).map(([k, v]) => `${v} ${labels[k] || k}`);
+                    return (
+                      <div className="px-2 py-1.5 bg-[#1c1c1e] rounded-lg text-[10px] text-[#8e8e93] flex items-center gap-1.5 max-w-[260px] truncate" title={`${entityCount} entities, ${parts.join(', ')}`}>
+                        <span className="text-emerald-400 font-mono">{entityCount}</span>
+                        <span>entities</span>
+                        {parts.length > 0 && <span className="text-[#48484a]">|</span>}
+                        {parts.map((p, i) => <span key={i}>{p}</span>).reduce((a: any, b: any, i: number) => i === 0 ? [b] : [...a, <span key={`sep-${i}`} className="text-[#48484a]">,</span>, b], [] as any)}
+                      </div>
+                    );
+                  })()}
 
                   {/* Submit button — only enabled once all docs are saved */}
                   <button onClick={handleSubmit} disabled={!allSaved || isSubmitted || isSavingSession}
@@ -3581,29 +4017,497 @@ export default function DocumentProcessor() {
                 </div>
 
                 <div className={`${docFullView ? 'hidden' : 'w-1/2'} overflow-y-auto bg-black`}>
-                  <div className="px-5 py-4 sticky top-0 bg-black z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
+                  <div className="px-5 py-3 sticky top-0 bg-black z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ListChecks className="w-4 h-4 text-[#636366]" />
-                        <span className="text-sm font-medium text-[#d1d1d6]">Extracted Entities</span>
-                        <span className="text-[11px] text-[#636366] bg-[#1c1c1e] px-2 py-0.5 rounded-md">
-                          {extractionResults[activeReviewDoc]?.entities?.length ?? 0}
-                        </span>
-                      </div>
                       <div className="flex items-center gap-1.5">
-                        {(['all', 'edited', 'by-page'] as const).map(f => (
-                          <button key={f} onClick={() => setReviewFilter(f)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
-                            {f === 'by-page' ? 'By Page' : f}
+                        {(['structured', 'raw'] as const).map(tab => (
+                          <button key={tab} onClick={() => setReviewTab(tab)}
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold smooth press-sm transition-colors capitalize ${
+                              reviewTab === tab ? 'bg-[#1c1c1e] text-white' : 'text-[#636366] hover:text-[#8e8e93]'
+                            }`}>
+                            {tab === 'structured' ? 'Structured View' : 'Raw Entities'}
                           </button>
                         ))}
-                        <button onClick={() => approveAllForDoc(activeReviewDoc)}
-                          className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
-                          <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
-                        </button>
                       </div>
+                      {reviewTab === 'raw' && (
+                        <div className="flex items-center gap-1.5">
+                          {(['all', 'edited', 'by-page'] as const).map(f => (
+                            <button key={f} onClick={() => setReviewFilter(f)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
+                              {f === 'by-page' ? 'By Page' : f}
+                            </button>
+                          ))}
+                          <button onClick={() => approveAllForDoc(activeReviewDoc)}
+                            className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
+                            <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* ──── STRUCTURED VIEW TAB ──── */}
+                  {reviewTab === 'structured' && (
+                    <div className="p-4 space-y-3">
+                      {(() => {
+                        const doc = extractionResults[activeReviewDoc];
+                        const entities = doc?.entities || [];
+                        const tbl = (doc as any)?.tables || {};
+                        const docIdx = activeReviewDoc;
+
+                        const findEntity = (keywords: string[]) => {
+                          for (const kw of keywords) {
+                            const match = entities.find((e: any) =>
+                              e.status !== 'rejected' && e.value != null &&
+                              e.name.toLowerCase().includes(kw.toLowerCase())
+                            );
+                            if (match) return match;
+                          }
+                          return null;
+                        };
+
+                        const ConfidenceBar = ({ confidence }: { confidence?: number }) => {
+                          if (confidence == null) return null;
+                          const pct = Math.round(confidence * 100);
+                          const color = confidence >= 0.85 ? '#34d399' : confidence >= 0.6 ? '#f59e0b' : '#f87171';
+                          return (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[60px]">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                              </div>
+                              <span className="text-[9px] text-[#636366] tabular-nums">{pct}%</span>
+                            </div>
+                          );
+                        };
+
+                        const FIELD_OPTIONS: Record<string, string[]> = {
+                          race: ['African', 'Coloured', 'Indian', 'White'],
+                          gender: ['Male', 'Female'],
+                          designation: ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior', 'Skilled Technical', 'Semi-skilled', 'Unskilled'],
+                          enterpriseType: ['large', 'qse', 'eme'],
+                        };
+                        const PILLAR_FIELD_OPTIONS: Record<string, Record<string, string[]>> = {
+                          'esd-sed': { category: ['sd', 'ed', 'sed'] },
+                          skills: { category: ['bursary', 'learnership', 'internship', 'short_course'] },
+                        };
+                        const BOOLEAN_FIELDS = ['isDisabled', 'isForeign', 'isBursary', 'isForeignSupplier', 'isDesignatedGroup', 'blackNewEntrant'];
+                        const NUMBER_FIELDS = ['revenue', 'npat', 'leviable', 'headcount', 'tmps', 'spend', 'cost', 'amount', 'shares', 'shareValue', 'blackOwnership', 'blackWomenOwnership', 'beeLevel', 'yearsHeld', 'votingRightsPercent', 'economicInterestPercent'];
+
+                        const EditableFieldCell = ({ label, value, confidence, required, fieldKey, pillar, rowIndex, tableName, onSave }: {
+                          label: string; value: any; confidence?: number; required?: boolean;
+                          fieldKey: string; pillar: string; rowIndex?: number; tableName?: string;
+                          onSave?: (val: any) => void;
+                        }) => {
+                          const isEditing = editingField?.pillar === pillar && editingField?.field === fieldKey && editingField?.rowIndex === rowIndex;
+                          const isBool = BOOLEAN_FIELDS.includes(fieldKey);
+                          const selectOptions = PILLAR_FIELD_OPTIONS[pillar]?.[fieldKey] || FIELD_OPTIONS[fieldKey];
+                          const isSelect = !!selectOptions;
+                          const isNum = NUMBER_FIELDS.includes(fieldKey);
+                          const hasValue = value != null && value !== '';
+
+                          const handleSave = (raw: string) => {
+                            let parsed: any = raw;
+                            if (isBool) parsed = raw === 'Yes' || raw === 'true';
+                            else if (isNum && raw !== '') parsed = Number(raw);
+                            if (onSave) onSave(parsed);
+                            else if (tableName != null && rowIndex != null) updateTableField(tableName, rowIndex, fieldKey, parsed);
+                            else updateStructuredField(fieldKey, raw);
+                          };
+
+                          if (isEditing) {
+                            const displayVal = isBool ? (value ? 'Yes' : value === false ? 'No' : '') : (value ?? '');
+                            return (
+                              <div className="min-w-0">
+                                <span className="text-[9px] text-[#636366] uppercase tracking-wider block truncate">{label}</span>
+                                {isBool || isSelect ? (
+                                  <select
+                                    autoFocus
+                                    defaultValue={isBool ? (value ? 'Yes' : value === false ? 'No' : '') : (value ?? '')}
+                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-white outline-none"
+                                    onChange={(e) => handleSave(e.target.value)}
+                                    onBlur={() => setEditingField(null)}
+                                  >
+                                    <option value="">Select...</option>
+                                    {isBool
+                                      ? ['Yes', 'No'].map(o => <option key={o} value={o}>{o}</option>)
+                                      : (selectOptions || []).map(o => <option key={o} value={o}>{o}</option>)
+                                    }
+                                  </select>
+                                ) : (
+                                  <input
+                                    autoFocus
+                                    type={isNum ? 'number' : 'text'}
+                                    step={isNum ? 'any' : undefined}
+                                    defaultValue={String(displayVal)}
+                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-white outline-none"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') { handleSave((e.target as HTMLInputElement).value); }
+                                      if (e.key === 'Escape') setEditingField(null);
+                                    }}
+                                    onBlur={(e) => { handleSave(e.target.value); }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              className="min-w-0 group/field cursor-pointer rounded px-1 -mx-1 hover:bg-[#2c2c2e]/60 transition-colors"
+                              onClick={() => setEditingField({ pillar, field: fieldKey, rowIndex })}
+                            >
+                              <span className="text-[9px] text-[#636366] uppercase tracking-wider block truncate">
+                                {label}
+                                <Pencil className="w-2.5 h-2.5 inline-block ml-1 opacity-0 group-hover/field:opacity-60 transition-opacity" />
+                              </span>
+                              {hasValue ? (
+                                <>
+                                  <span className="text-[12px] text-white block truncate">{isBool ? (value ? 'Yes' : 'No') : String(value)}</span>
+                                  <ConfidenceBar confidence={confidence} />
+                                </>
+                              ) : required ? (
+                                <span className="text-[11px] text-amber-400/80 italic block">Click to add</span>
+                              ) : (
+                                <span className="text-[11px] text-[#48484a] italic block group-hover/field:text-[#636366]">Click to add</span>
+                              )}
+                            </div>
+                          );
+                        };
+
+
+                        const CompletenessChip = ({ filled, total, hasData }: { filled: number; total: number; hasData: boolean }) => {
+                          if (!hasData) return <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 font-medium">No data</span>;
+                          if (filled === total) return <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-medium">{filled}/{total} complete</span>;
+                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 font-medium">{filled}/{total} complete</span>;
+                        };
+
+                        const revenueE = findEntity(['revenue', 'turnover', 'annual revenue']);
+                        const npatE = findEntity(['npat', 'net profit', 'profit after tax']);
+                        const leviableE = findEntity(['leviable', 'payroll', 'leviable amount']);
+                        const headcountE = findEntity(['headcount', 'total employees', 'number of employees']);
+                        const tmpsE = findEntity(['tmps', 'total measured procurement', 'procurement spend']);
+
+                        const shareholders = tbl.shareholders || [];
+                        const employees = tbl.employees || [];
+                        const suppliers = tbl.suppliers || [];
+                        const contributions = tbl.contributions || [];
+                        const trainingPrograms = tbl.trainingPrograms || [];
+
+                        const shReqFields = ['blackOwnership', 'blackWomenOwnership', 'shares', 'shareValue'];
+                        const shFilled = shareholders.filter((s: any) => shReqFields.every(f => s[f] != null && s[f] !== '')).length;
+
+                        const empReqFields = ['race', 'gender', 'designation'];
+                        const empFilled = employees.filter((e: any) => empReqFields.every(f => e[f] != null && e[f] !== '')).length;
+
+                        const supReqFields = ['spend', 'beeLevel', 'blackOwnership', 'enterpriseType'];
+                        const supFilled = suppliers.filter((s: any) => supReqFields.every(f => s[f] != null && s[f] !== '')).length;
+
+                        const contReqFields = ['amount', 'category'];
+                        const contFilled = contributions.filter((c: any) => contReqFields.every(f => c[f] != null && c[f] !== '')).length;
+
+                        const tpReqFields = ['cost', 'race', 'gender'];
+                        const tpFilled = trainingPrograms.filter((t: any) => tpReqFields.every(f => t[f] != null && t[f] !== '')).length;
+
+                        const AutoFillButton = ({ pillar, label, color }: { pillar: string; label: string; color: string }) => (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); pillar === 'financials' ? autoFillFinancials() : autoFillPillar(pillar); }}
+                            disabled={autoFillLoading != null}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-all hover:scale-105 disabled:opacity-40"
+                            style={{ backgroundColor: `${color}15`, color, border: `1px solid ${color}30` }}
+                            title={`AI autofill ${label} from extracted entities`}
+                          >
+                            {autoFillLoading === pillar ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Wand2 className="w-2.5 h-2.5" />}
+                            Autofill
+                          </button>
+                        );
+
+                        return (
+                          <>
+                            {/* Global Autofill All button — Admin only */}
+                            {isAdmin && (
+                            <div className="flex items-center justify-end mb-1">
+                              <button
+                                onClick={autoFillAll}
+                                disabled={autoFillLoading != null}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[#a78bfa] bg-[#a78bfa]/10 border border-[#a78bfa]/20 hover:bg-[#a78bfa]/20 transition-all hover:scale-[1.02] disabled:opacity-40"
+                              >
+                                {autoFillLoading === 'all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                                AI Autofill All Missing
+                              </button>
+                            </div>
+                            )}
+
+                            {/* Financials bar */}
+                            <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3 border border-[#2c2c2e]">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Briefcase className="w-3.5 h-3.5 text-[#8e8e93]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Financials</span>
+                                {isAdmin && <AutoFillButton pillar="financials" label="financials" color="#8e8e93" />}
+                              </div>
+                              <div className="grid grid-cols-3 gap-3">
+                                <EditableFieldCell label="Revenue" value={revenueE?.value} confidence={revenueE?.confidence} required fieldKey="revenue" pillar="financials" />
+                                <EditableFieldCell label="NPAT" value={npatE?.value} confidence={npatE?.confidence} required fieldKey="npat" pillar="financials" />
+                                <EditableFieldCell label="Leviable Amount" value={leviableE?.value} confidence={leviableE?.confidence} fieldKey="leviable" pillar="financials" />
+                                <EditableFieldCell label="Headcount" value={headcountE?.value} confidence={headcountE?.confidence} fieldKey="headcount" pillar="financials" />
+                                <EditableFieldCell label="TMPS" value={tmpsE?.value} confidence={tmpsE?.confidence} fieldKey="tmps" pillar="financials" />
+                              </div>
+                            </div>
+
+                            {/* Ownership */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <Users className="w-3.5 h-3.5 text-[#5e9bff]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Ownership</span>
+                                <CompletenessChip filled={shFilled} total={shareholders.length} hasData={shareholders.length > 0} />
+                                {isAdmin && <AutoFillButton pillar="ownership" label="shareholders" color="#5e9bff" />}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                  {shareholders.length === 0 ? (
+                                    <div className="py-4 text-center space-y-2">
+                                      <p className="text-[11px] text-[#48484a] italic">No shareholders extracted</p>
+                                      <div className="flex items-center justify-center gap-2">
+                                        {isAdmin && (
+                                        <button onClick={() => autoFillPillar('ownership')} disabled={autoFillLoading != null}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#5e9bff]/10 border border-[#5e9bff]/30 rounded-lg text-[11px] text-[#5e9bff] hover:bg-[#5e9bff]/20 transition-colors font-medium disabled:opacity-40">
+                                          {autoFillLoading === 'ownership' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
+                                        </button>
+                                        )}
+                                        <button onClick={() => addTableRow('shareholders')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#5e9bff]/40 transition-colors">
+                                          <Plus className="w-3 h-3" /> Add Manually
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : shareholders.sort((a: any, b: any) => {
+                                    const aComplete = shReqFields.every(f => a[f] != null && a[f] !== '') ? 0 : 1;
+                                    const bComplete = shReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
+                                    return aComplete - bComplete;
+                                  }).map((sh: any, i: number) => (
+                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <EditableFieldCell label="Name" value={sh.name} fieldKey="name" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <button onClick={() => deleteTableRow('shareholders', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <EditableFieldCell label="Black Ownership %" value={sh.blackOwnership} required fieldKey="blackOwnership" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Black Women %" value={sh.blackWomenOwnership} required fieldKey="blackWomenOwnership" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Voting Rights %" value={sh.votingRightsPercent} fieldKey="votingRightsPercent" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Economic Interest %" value={sh.economicInterestPercent} fieldKey="economicInterestPercent" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Shares" value={sh.shares} required fieldKey="shares" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Share Value" value={sh.shareValue} required fieldKey="shareValue" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Years Held" value={sh.yearsHeld} fieldKey="yearsHeld" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="Designated Group" value={sh.isDesignatedGroup} fieldKey="isDesignatedGroup" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                        <EditableFieldCell label="New Entrant" value={sh.blackNewEntrant} fieldKey="blackNewEntrant" pillar="ownership" rowIndex={i} tableName="shareholders" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => addTableRow('shareholders')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#5e9bff]/40 transition-colors flex items-center justify-center gap-1.5">
+                                    <Plus className="w-3 h-3" /> Add Shareholder
+                                  </button>
+                                </div>
+                            </div>
+
+                            {/* Management Control */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <Building2 className="w-3.5 h-3.5 text-[#34d399]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Management Control</span>
+                                <CompletenessChip filled={empFilled} total={employees.length} hasData={employees.length > 0} />
+                                {isAdmin && <AutoFillButton pillar="management" label="employees" color="#34d399" />}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                  {employees.length === 0 ? (
+                                    <div className="py-4 text-center space-y-2">
+                                      <p className="text-[11px] text-[#48484a] italic">No employees extracted</p>
+                                      <div className="flex items-center justify-center gap-2">
+                                        {isAdmin && (
+                                        <button onClick={() => autoFillPillar('management')} disabled={autoFillLoading != null}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#34d399]/10 border border-[#34d399]/30 rounded-lg text-[11px] text-[#34d399] hover:bg-[#34d399]/20 transition-colors font-medium disabled:opacity-40">
+                                          {autoFillLoading === 'management' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
+                                        </button>
+                                        )}
+                                        <button onClick={() => addTableRow('employees')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#34d399]/40 transition-colors">
+                                          <Plus className="w-3 h-3" /> Add Manually
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : employees.sort((a: any, b: any) => {
+                                    const aComplete = empReqFields.every(f => a[f] != null && a[f] !== '') ? 0 : 1;
+                                    const bComplete = empReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
+                                    return aComplete - bComplete;
+                                  }).map((emp: any, i: number) => (
+                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <EditableFieldCell label="Name" value={emp.name} fieldKey="name" pillar="management" rowIndex={i} tableName="employees" />
+                                        <button onClick={() => deleteTableRow('employees', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <EditableFieldCell label="Race" value={emp.race} required fieldKey="race" pillar="management" rowIndex={i} tableName="employees" />
+                                        <EditableFieldCell label="Gender" value={emp.gender} required fieldKey="gender" pillar="management" rowIndex={i} tableName="employees" />
+                                        <EditableFieldCell label="Designation" value={emp.designation} required fieldKey="designation" pillar="management" rowIndex={i} tableName="employees" />
+                                        <EditableFieldCell label="Disabled" value={emp.isDisabled} required fieldKey="isDisabled" pillar="management" rowIndex={i} tableName="employees" />
+                                        <EditableFieldCell label="Foreign" value={emp.isForeign} fieldKey="isForeign" pillar="management" rowIndex={i} tableName="employees" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => addTableRow('employees')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#34d399]/40 transition-colors flex items-center justify-center gap-1.5">
+                                    <Plus className="w-3 h-3" /> Add Employee
+                                  </button>
+                                </div>
+                            </div>
+
+                            {/* Skills Development */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <BookOpen className="w-3.5 h-3.5 text-[#f59e0b]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Skills Development</span>
+                                <CompletenessChip filled={tpFilled} total={trainingPrograms.length} hasData={trainingPrograms.length > 0} />
+                                {isAdmin && <AutoFillButton pillar="skills" label="training" color="#f59e0b" />}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                  {trainingPrograms.length === 0 ? (
+                                    <div className="py-4 text-center space-y-2">
+                                      <p className="text-[11px] text-[#48484a] italic">No training programs extracted</p>
+                                      <div className="flex items-center justify-center gap-2">
+                                        {isAdmin && (
+                                        <button onClick={() => autoFillPillar('skills')} disabled={autoFillLoading != null}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f59e0b]/10 border border-[#f59e0b]/30 rounded-lg text-[11px] text-[#f59e0b] hover:bg-[#f59e0b]/20 transition-colors font-medium disabled:opacity-40">
+                                          {autoFillLoading === 'skills' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
+                                        </button>
+                                        )}
+                                        <button onClick={() => addTableRow('trainingPrograms')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f59e0b]/40 transition-colors">
+                                          <Plus className="w-3 h-3" /> Add Manually
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : trainingPrograms.sort((a: any, b: any) => {
+                                    const aComplete = tpReqFields.every(f => a[f] != null && a[f] !== '') ? 0 : 1;
+                                    const bComplete = tpReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
+                                    return aComplete - bComplete;
+                                  }).map((tp: any, i: number) => (
+                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <EditableFieldCell label="Learner Name" value={tp.name || tp.learnerName} fieldKey="name" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                        <button onClick={() => deleteTableRow('trainingPrograms', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <EditableFieldCell label="Cost" value={tp.cost} required fieldKey="cost" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                        <EditableFieldCell label="Race" value={tp.race} required fieldKey="race" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                        <EditableFieldCell label="Gender" value={tp.gender} required fieldKey="gender" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                        <EditableFieldCell label="Disabled" value={tp.isDisabled} fieldKey="isDisabled" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                        <EditableFieldCell label="Bursary" value={tp.isBursary} fieldKey="isBursary" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => addTableRow('trainingPrograms')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f59e0b]/40 transition-colors flex items-center justify-center gap-1.5">
+                                    <Plus className="w-3 h-3" /> Add Training Program
+                                  </button>
+                                </div>
+                            </div>
+
+                            {/* Procurement */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <ShoppingCart className="w-3.5 h-3.5 text-[#a78bfa]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Procurement</span>
+                                <CompletenessChip filled={supFilled} total={suppliers.length} hasData={suppliers.length > 0} />
+                                {isAdmin && <AutoFillButton pillar="procurement" label="suppliers" color="#a78bfa" />}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                  {suppliers.length === 0 ? (
+                                    <div className="py-4 text-center space-y-2">
+                                      <p className="text-[11px] text-[#48484a] italic">No suppliers extracted</p>
+                                      <div className="flex items-center justify-center gap-2">
+                                        {isAdmin && (
+                                        <button onClick={() => autoFillPillar('procurement')} disabled={autoFillLoading != null}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#a78bfa]/10 border border-[#a78bfa]/30 rounded-lg text-[11px] text-[#a78bfa] hover:bg-[#a78bfa]/20 transition-colors font-medium disabled:opacity-40">
+                                          {autoFillLoading === 'procurement' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
+                                        </button>
+                                        )}
+                                        <button onClick={() => addTableRow('suppliers')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#a78bfa]/40 transition-colors">
+                                          <Plus className="w-3 h-3" /> Add Manually
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : suppliers.sort((a: any, b: any) => {
+                                    const aComplete = supReqFields.every(f => a[f] != null && a[f] !== '') ? 0 : 1;
+                                    const bComplete = supReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
+                                    return aComplete - bComplete;
+                                  }).map((sup: any, i: number) => (
+                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <EditableFieldCell label="Name" value={sup.name} fieldKey="name" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <button onClick={() => deleteTableRow('suppliers', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <EditableFieldCell label="Spend" value={sup.spend} required fieldKey="spend" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <EditableFieldCell label="BEE Level" value={sup.beeLevel} required fieldKey="beeLevel" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <EditableFieldCell label="Black Ownership %" value={sup.blackOwnership} required fieldKey="blackOwnership" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <EditableFieldCell label="Black Women %" value={sup.blackWomenOwnership} fieldKey="blackWomenOwnership" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <EditableFieldCell label="Enterprise Type" value={sup.enterpriseType} required fieldKey="enterpriseType" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                        <EditableFieldCell label="Foreign" value={sup.isForeignSupplier} fieldKey="isForeignSupplier" pillar="procurement" rowIndex={i} tableName="suppliers" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => addTableRow('suppliers')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#a78bfa]/40 transition-colors flex items-center justify-center gap-1.5">
+                                    <Plus className="w-3 h-3" /> Add Supplier
+                                  </button>
+                                </div>
+                            </div>
+
+                            {/* ESD / SED */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <Heart className="w-3.5 h-3.5 text-[#f472b6]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">ESD / SED</span>
+                                <CompletenessChip filled={contFilled} total={contributions.length} hasData={contributions.length > 0} />
+                                {isAdmin && <AutoFillButton pillar="esd-sed" label="contributions" color="#f472b6" />}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                  {contributions.length === 0 ? (
+                                    <div className="py-4 text-center space-y-2">
+                                      <p className="text-[11px] text-[#48484a] italic">No contributions extracted</p>
+                                      <div className="flex items-center justify-center gap-2">
+                                        {isAdmin && (
+                                        <button onClick={() => autoFillPillar('esd-sed')} disabled={autoFillLoading != null}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f472b6]/10 border border-[#f472b6]/30 rounded-lg text-[11px] text-[#f472b6] hover:bg-[#f472b6]/20 transition-colors font-medium disabled:opacity-40">
+                                          {autoFillLoading === 'esd-sed' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
+                                        </button>
+                                        )}
+                                        <button onClick={() => addTableRow('contributions')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f472b6]/40 transition-colors">
+                                          <Plus className="w-3 h-3" /> Add Manually
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : contributions.sort((a: any, b: any) => {
+                                    const aComplete = contReqFields.every(f => a[f] != null && a[f] !== '') ? 0 : 1;
+                                    const bComplete = contReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
+                                    return aComplete - bComplete;
+                                  }).map((cont: any, i: number) => (
+                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <EditableFieldCell label="Beneficiary" value={cont.beneficiary} fieldKey="beneficiary" pillar="esd-sed" rowIndex={i} tableName="contributions" />
+                                        <button onClick={() => deleteTableRow('contributions', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <EditableFieldCell label="Amount" value={cont.amount} required fieldKey="amount" pillar="esd-sed" rowIndex={i} tableName="contributions" />
+                                        <EditableFieldCell label="Type" value={cont.type} fieldKey="type" pillar="esd-sed" rowIndex={i} tableName="contributions" />
+                                        <EditableFieldCell label="Category" value={cont.category} required fieldKey="category" pillar="esd-sed" rowIndex={i} tableName="contributions" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => addTableRow('contributions')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f472b6]/40 transition-colors flex items-center justify-center gap-1.5">
+                                    <Plus className="w-3 h-3" /> Add Contribution
+                                  </button>
+                                </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* ──── RAW ENTITIES TAB (preserved) ──── */}
+                  {reviewTab === 'raw' && (
                   <div className="p-4 space-y-2">
                     {(() => {
                       const entities = extractionResults[activeReviewDoc]?.entities || [];
@@ -3732,7 +4636,7 @@ export default function DocumentProcessor() {
                               isEditingThis ? 'border-white/[0.16] shadow-[0_0_0_3px_rgba(168,85,247,0.08)]' :
                               isApproved ? 'border-green-500/25' :
                               isRejected ? 'border-[#2c2c2e] opacity-35' :
-                              isNotFound ? 'border-[#1c1c1e] opacity-40 pointer-events-none' :
+                              isNotFound ? 'border-[#1c1c1e] opacity-60' :
                               isHovered ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
                             }`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
@@ -3741,7 +4645,6 @@ export default function DocumentProcessor() {
                           >
                             <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
 
-                              {/* Header row */}
                               <div className="flex items-center justify-between mb-2.5">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest truncate">
@@ -3763,14 +4666,12 @@ export default function DocumentProcessor() {
                                   )}
                                 </div>
 
-                                {/* Action buttons */}
                                 <div className="flex items-center gap-0.5 shrink-0">
-                                  {/* Pen — hidden for not_found (nothing to edit until user types) */}
-                                  {!isEditingThis && !isNotFound && (
+                                  {!isEditingThis && (
                                     <button
                                       onClick={startEdit}
                                       className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-[#2c2c2e]"
-                                      title="Edit value"
+                                      title={isNotFound ? "Add value" : "Edit value"}
                                       data-testid={`button-edit-${realIdx}`}
                                     >
                                       <Pencil className="w-3 h-3" />
@@ -3779,16 +4680,14 @@ export default function DocumentProcessor() {
                                 </div>
                               </div>
 
-                              {/* Definition */}
                               {def && !isEditingThis && (
                                 <p className="text-[10px] text-[#48484a] leading-relaxed mb-2 line-clamp-2">{def}</p>
                               )}
 
-                              {/* Value — read mode */}
                               {!isEditingThis && (
                                 <div
                                   onClick={startEdit}
-                                  className="cursor-text rounded-xl px-3 py-2 mb-3 transition-colors hover:bg-[#2c2c2e]/60"
+                                  className="cursor-text rounded-xl px-3 py-2 mb-2 transition-colors hover:bg-[#2c2c2e]/60"
                                   title="Click to edit"
                                 >
                                   {entity.value ? (
@@ -3805,7 +4704,15 @@ export default function DocumentProcessor() {
                                 </div>
                               )}
 
-                              {/* Value — edit mode */}
+                              {!isEditingThis && entity.confidence != null && (
+                                <div className="mb-3 flex items-center gap-1.5 px-3">
+                                  <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(entity.confidence * 100)}%`, backgroundColor: entity.confidence >= 0.85 ? '#34d399' : entity.confidence >= 0.6 ? '#f59e0b' : '#f87171' }} />
+                                  </div>
+                                  <span className="text-[10px] text-[#636366] tabular-nums">{Math.round(entity.confidence * 100)}%</span>
+                                </div>
+                              )}
+
                               {isEditingThis && (
                                 <div className="space-y-2 mb-3">
                                   {def && (
@@ -3838,8 +4745,7 @@ export default function DocumentProcessor() {
                                 </div>
                               )}
 
-                              {/* Approve / Reject — only for entities that actually have a value */}
-                              {!isEditingThis && !isNotFound && (
+                              {!isEditingThis && (entity.value || !isNotFound) && (
                                 <div className="flex items-center gap-2 pt-2.5" style={{ borderTop: '1px solid #2c2c2e' }}>
                                   {isApproved ? (
                                     <button
@@ -3884,6 +4790,7 @@ export default function DocumentProcessor() {
                       });
                     })()}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -3933,14 +4840,7 @@ export default function DocumentProcessor() {
                     </p>
                   </div>
                   <button
-                    onClick={() => {
-                      if (toolkitClientId) {
-                        localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
-                        navigate(`/toolkit/${toolkitClientId}/scorecard`);
-                      } else {
-                        navigate('/toolkit');
-                      }
-                    }}
+                    onClick={() => setCurrentPage('scorecard')}
                     className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
                   >
                     <ScanLine className="w-4 h-4" />
@@ -4053,7 +4953,7 @@ export default function DocumentProcessor() {
           })()}
 
           {currentPage === 'scorecard' && (() => {
-            const sc = scorecardResult;
+            const sc = (storeScorecard?.total?.score > 0) ? storeScorecard : scorecardResult;
             // Detect format: new hierarchical (from calculation engine) vs legacy flat
             const isHierarchical = sc?.pillars && Array.isArray(sc.pillars);
 
@@ -4391,8 +5291,10 @@ export default function DocumentProcessor() {
                               if (toolkitClientId) {
                                 localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
                                 navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                              } else if (sessionId) {
+                                navigate(`/toolkit/session?session=${sessionId}`);
                               } else {
-                                navigate('/toolkit');
+                                setCurrentPage('summary');
                               }
                             }}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"

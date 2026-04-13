@@ -607,7 +607,7 @@ export default function Dashboard() {
                               : <Pencil className="h-3.5 w-3.5" />}
                           </button>
                         </div>
-                        <Link href="/processor?new=true"
+                        <Link href={`/processor?new=true&template=${t.id}`}
                           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/[0.12] text-white hover:bg-white/[0.18] text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/8"
                           data-testid={`button-use-${t.id}`}
                         >
