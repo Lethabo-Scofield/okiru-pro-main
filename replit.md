@@ -69,6 +69,11 @@ The app gracefully degrades when external services are unavailable:
 - Computation Engine uses **in-memory DB mode** when ArangoDB is unavailable
 - AI endpoints return errors when API keys are not set
 
+## Production Deployment
+- **Replit**: Build command builds both `apps/api` and `apps/web`; `scripts/start-production.sh` starts both servers
+- **Docker/K8s**: Separate Dockerfiles for each service (`apps/api/Dockerfile`, `apps/web/Dockerfile`, `apps/Computation-Engine/Dockerfile`)
+- The web server proxies `/api/certificates` (and other API routes) to the API server — both must be running
+
 ## Development
 ```bash
 # Install all packages
