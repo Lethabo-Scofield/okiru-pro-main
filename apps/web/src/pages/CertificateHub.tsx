@@ -1,13 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import {
-  ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown
+  ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown, FileSearch
 } from 'lucide-react';
 
 interface CertificateFile {
   name: string;
   fileName: string;
+}
+
+interface SearchResultItem {
+  file_name: string;
+  file_url: string;
+  snippet: string;
 }
 
 function getFileExtension(fileName: string): string {
@@ -151,6 +157,9 @@ export default function CertificateHub() {
   const [typeFilter, setTypeFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -169,6 +178,46 @@ export default function CertificateHub() {
       }
     })();
   }, []);
+
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/certificates/search?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ message: 'Search failed' }));
+        throw new Error(body.message || `Error ${res.status}`);
+      }
+      const data: SearchResultItem[] = await res.json();
+      setSearchResults(data);
+    } catch (err: any) {
+      toast({ title: 'Search error', description: err.message || 'Search failed', variant: 'destructive' });
+      setSearchResults(null);
+    } finally {
+      setSearching(false);
+    }
+  }, [toast]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    if (!value.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimerRef.current = setTimeout(() => {
+      performSearch(value);
+    }, 400);
+  }, [performSearch]);
 
   const filterOptions = useMemo(() => {
     const types: Record<string, number> = {};
@@ -220,6 +269,9 @@ export default function CertificateHub() {
 
   const clearAllFilters = () => {
     setSearch('');
+    setSearchResults(null);
+    setSearching(false);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setTypeFilter('');
     setYearFilter('');
     setMonthFilter('');
@@ -272,7 +324,9 @@ export default function CertificateHub() {
         <div className="mb-6">
           <h1 className="text-[22px] font-semibold text-white tracking-tight mb-1">B-BBEE Certificates</h1>
           <p className="text-[13px] text-[#636366]">
-            {loading ? 'Loading...' : `${certificates.length} certificates · ${filtered.length} shown`}
+            {loading ? 'Loading...' : searchResults !== null && search.trim()
+              ? `Searching across document content`
+              : `${certificates.length} certificates · ${filtered.length} shown`}
           </p>
         </div>
 
@@ -281,13 +335,16 @@ export default function CertificateHub() {
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by company name..."
+            onChange={e => handleSearchChange(e.target.value)}
+            placeholder="Search certificates by name or content..."
             className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
           />
+          {searching && (
+            <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a] animate-spin" />
+          )}
           {search && (
             <button
-              onClick={() => setSearch('')}
+              onClick={() => { handleSearchChange(''); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
             >
               <X className="h-4 w-4" />
@@ -328,7 +385,86 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {loading ? (
+        {searchResults !== null && search.trim() ? (
+          searching ? (
+            <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonRow key={i} />
+              ))}
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="py-20 text-center">
+              <FileSearch className="w-6 h-6 text-[#3a3a3c] mx-auto mb-3" />
+              <p className="text-[14px] text-[#636366] mb-1">
+                No documents match "{search}"
+              </p>
+              <p className="text-[12px] text-[#48484a] mb-3">
+                Try searching for names, keywords, or phrases inside certificates
+              </p>
+              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors">
+                Clear search
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-[12px] text-[#636366] mb-3">
+                {searchResults.length} document{searchResults.length !== 1 ? 's' : ''} found matching "{search}"
+              </p>
+              <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+                {searchResults.map((result, idx) => {
+                  const certType = extractCertType(result.file_name);
+                  const isDownloading = downloadingFile === result.file_url;
+
+                  return (
+                    <div
+                      key={result.file_url + idx}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-[#1c1c1e] transition-colors group"
+                      style={{ borderBottom: idx < searchResults.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <FileFormatIcon fileName={result.file_name} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
+                            {result.file_name.replace(/\.[^/.]+$/, '')}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] text-[#3a3a3c] tracking-wide">
+                              {getFileExtension(result.file_name).toUpperCase()}
+                            </span>
+                            {certType && (
+                              <>
+                                <span className="text-[#2c2c2e]">·</span>
+                                <span className="text-[11px] text-[#636366]">{certType}</span>
+                              </>
+                            )}
+                          </div>
+                          {result.snippet && (
+                            <p className="text-[11px] text-[#48484a] mt-1 line-clamp-2 leading-relaxed">
+                              ...{result.snippet}...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => downloadCertificate(result.file_url, result.file_name)}
+                        disabled={isDownloading}
+                        aria-label={`Download ${result.file_name}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
+                      >
+                        {isDownloading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                        <span className="hidden sm:inline">Download</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )
+        ) : loading ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonRow key={i} />

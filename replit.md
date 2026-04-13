@@ -35,9 +35,29 @@ This is a **pnpm monorepo** with three services:
 4. **Reporting** — PDF and PPTX scorecard export
 5. **What-If Modeling** — scenario planning for scorecard optimization
 
+## Certificate Hub — Full-Text Search (Azure AI Search)
+The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.
+
+### How It Works
+1. **Ingestion Script** (`apps/api/scripts/ingestCertificates.ts`) — reads PDFs from Azure Blob Storage, extracts text via pdfjs-dist, chunks text (~1000 chars), and uploads to an Azure AI Search index.
+2. **Search API** (`GET /api/certificates/search?q=<query>&userId=<userId>`) — queries Azure AI Search, returns results grouped by document (not per chunk) with text snippets.
+3. **Frontend** (`apps/web/src/pages/CertificateHub.tsx`) — debounced search bar queries the new API; falls back to original filename-based browsing when no search query is active.
+
+### Running the Ingestion
+```bash
+cd apps/api && pnpm ingest:certificates
+```
+
+### Key Files
+- `apps/api/src/services/azureSearch.ts` — Azure AI Search client, index management, search logic
+- `apps/api/scripts/ingestCertificates.ts` — One-time ingestion script
+- `apps/api/src/routes/certificates.ts` — Search endpoint (with fallback to filename search)
+
 ## External Dependencies (require configuration)
 - **MongoDB** — set `MONGODB_URI` environment variable
 - **ArangoDB** — set `ARANGO_URL`, `ARANGO_USER`, `ARANGO_PASSWORD`, `ARANGO_DB`
+- **Azure AI Search** — set `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`
+- **Azure Blob Storage** — set `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME`
 - **OpenAI/Azure OpenAI** — set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT`
 - **Groq** — set `GROQ_API_KEY`
 - **Redis** — set `REDIS_URL`

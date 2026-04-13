@@ -15,9 +15,11 @@
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ingest:certificates": "tsx scripts/ingestCertificates.ts"
   },
   "dependencies": {
+    "@azure/search-documents": "^12.2.0",
     "@azure/storage-blob": "^12.31.0",
     "@okiru/types": "workspace:*",
     "@types/bcrypt": "^6.0.0",
