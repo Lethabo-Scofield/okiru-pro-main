@@ -96,12 +96,24 @@ export default function Scorecard() {
   };
 
   const cfg = calculatorConfig;
-  const ownResult = useMemo(() => hasConfig ? calculateOwnershipScore(ownership, cfg!) : null, [ownership, cfg, hasConfig]);
-  const mgtResult = useMemo(() => hasConfig ? calculateManagementScore(management, cfg!) : null, [management, cfg, hasConfig]);
-  const skillResult = useMemo(() => hasConfig ? calculateSkillsScore(skills, cfg!) : null, [skills, cfg, hasConfig]);
-  const procResult = useMemo(() => hasConfig ? calculateProcurementScore(procurement, cfg!) : null, [procurement, cfg, hasConfig]);
-  const esdResult = useMemo(() => hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null, [esd, client.npat, cfg, hasConfig]);
-  const sedResult = useMemo(() => hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null, [sed, client.npat, cfg, hasConfig]);
+  const ownResult = useMemo(() => {
+    try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
+  }, [ownership, cfg, hasConfig]);
+  const mgtResult = useMemo(() => {
+    try { return hasConfig ? calculateManagementScore(management, cfg!) : null; } catch { return null; }
+  }, [management, cfg, hasConfig]);
+  const skillResult = useMemo(() => {
+    try { return hasConfig ? calculateSkillsScore(skills, cfg!) : null; } catch { return null; }
+  }, [skills, cfg, hasConfig]);
+  const procResult = useMemo(() => {
+    try { return hasConfig ? calculateProcurementScore(procurement, cfg!) : null; } catch { return null; }
+  }, [procurement, cfg, hasConfig]);
+  const esdResult = useMemo(() => {
+    try { return hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null; } catch { return null; }
+  }, [esd, client.npat, cfg, hasConfig]);
+  const sedResult = useMemo(() => {
+    try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
+  }, [sed, client.npat, cfg, hasConfig]);
 
   const tmps = procurement.tmps || 1;
 

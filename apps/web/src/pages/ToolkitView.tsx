@@ -7,7 +7,7 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { ClientProvider } from "@toolkit/lib/client-context";
 import { AppRoutes } from "@toolkit/App";
-import { useBbeeStore, type APIScorecardResult } from "@toolkit/lib/store";
+import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 
 async function hydrateStoreFromSession(session: any) {
@@ -66,17 +66,7 @@ async function hydrateStoreFromSession(session: any) {
     calculatorConfig: null,
   });
 
-  // If session has saved scorecard result, use it directly instead of recalculating
-  if (session.scorecardResult) {
-    const sc = session.scorecardResult;
-    if (sc.pillars && Array.isArray(sc.pillars)) {
-      useBbeeStore.getState().setScorecardFromAPI(sc as APIScorecardResult);
-    } else if (sc.total) {
-      useBbeeStore.setState({ scorecard: sc });
-    }
-  }
-
-  // Load sector config so the toolkit scorecard page can render fully
+  // Always load config and recalculate — never use stale saved results
   const sectorCode = ci.sectorCode || 'RCOGP';
   const turnover = ci.annualTurnover ?? fin.totalRevenue ?? 0;
   const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
@@ -86,9 +76,7 @@ async function hydrateStoreFromSession(session: any) {
       const cfgData = await cfgRes.json();
       if (cfgData.success && cfgData.config) {
         useBbeeStore.setState({ calculatorConfig: cfgData.config });
-        if (!session.scorecardResult) {
-          useBbeeStore.getState()._recalculateAll();
-        }
+        useBbeeStore.getState()._recalculateAll();
       }
     }
   } catch (e) {

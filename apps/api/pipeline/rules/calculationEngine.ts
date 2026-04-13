@@ -32,6 +32,12 @@ import type {
 import type { SectorConfig } from '../sectorConfig.js';
 import { getSectorConfig } from '../sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
+import {
+  calculateAllPillars,
+  type PillarScore,
+  type AllPillarScores,
+  type TrainingProgramInput as PillarTrainingInput,
+} from './pillarCalculators.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,6 +152,9 @@ export interface FinancialsInput {
   leviableAmount: number;
   tmps: number;
   headcount: number;
+  companyValue?: number;
+  outstandingDebt?: number;
+  yearsHeld?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -464,8 +473,7 @@ function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: an
       const cost = tp.cost || 0;
       totalTrainingCost += cost;
 
-      // Check if bursary (category B or is_bursary flag)
-      if (tp.category === 'B' || tp.isBursary || tp.category === 'bursary') {
+      if (tp.category === 'A' || tp.category === 'B' || tp.isBursary || tp.category === 'bursary') {
         bursarySpend += cost;
       }
 
@@ -872,6 +880,15 @@ export class CalculationEngine {
     if (criterion.pillarCode === 'skillsDevelopment') {
       const leviable = this.context.crossPillarValues.get('leviableAmount') || 0;
       computed.baseValue = leviable;
+
+      const code = criterion.code.toUpperCase();
+      if (code === 'SKILLS-BURS') {
+        computed.spend = get('bursary_spend');
+      } else if (code === 'SKILLS-DISABLED') {
+        computed.spend = get('disabled_training_spend');
+      } else if (code === 'SKILLS-LEARNING') {
+        computed.spend = get('totalTrainingSpend');
+      }
     }
 
     return computed;
@@ -1166,9 +1183,11 @@ export class CalculationEngine {
     const failedSubMins = pillarResults.filter(p => !p.subMinimumMet);
     if (failedSubMins.length > 0) {
       const baseLevel = this.findLevelInTable(totalPoints, levelThresholds);
+      const discountedLevel = Math.min(8, baseLevel.level + 1);
+      const discountedConfig = levelThresholds.find(t => t.level === discountedLevel);
       return {
-        level: Math.min(8, baseLevel.level + 1),
-        recognition: 0,
+        level: discountedLevel,
+        recognition: discountedConfig?.recognition ?? 0,
       };
     }
 
@@ -1232,6 +1251,10 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
     if (!crossPillarValues.has('leviableAmount') && f.leviableAmount) crossPillarValues.set('leviableAmount', f.leviableAmount);
     if (!crossPillarValues.has('totalEmployees') && f.headcount) crossPillarValues.set('totalEmployees', f.headcount);
     if (!crossPillarValues.has('revenue') && f.revenue) crossPillarValues.set('revenue', f.revenue);
+    // Ownership net value fields
+    if (!crossPillarValues.has('companyValue') && f.companyValue) crossPillarValues.set('companyValue', f.companyValue);
+    if (!crossPillarValues.has('outstandingDebt') && f.outstandingDebt) crossPillarValues.set('outstandingDebt', f.outstandingDebt);
+    if (!crossPillarValues.has('yearsHeld') && f.yearsHeld) crossPillarValues.set('yearsHeld', f.yearsHeld);
   }
 
   const context: CalculationContext = {
@@ -1365,12 +1388,140 @@ async function resolveSectorConfig(
 }
 
 // ---------------------------------------------------------------------------
-// Simplified API
+// Simplified API — Uses the ported frontend calculators for parity
 // ---------------------------------------------------------------------------
+
+const BLACK_RACES_SET = new Set(['African', 'Coloured', 'Indian']);
+
+function toPillarResult(code: string, name: string, score: PillarScore): PillarResult {
+  return {
+    pillarCode: code,
+    pillarName: name,
+    points: score.score,
+    maxPoints: score.maxPoints,
+    percentage: score.maxPoints > 0 ? r2((score.score / score.maxPoints) * 100) : 0,
+    subMinimumMet: score.subMinimumMet,
+    criteria: [{
+      criterionCode: `${code}-total`,
+      pillarCode: code,
+      name: `${name} Total`,
+      formulaId: 'pillar_aggregate',
+      points: score.score,
+      maxPoints: score.maxPoints,
+      percentage: score.maxPoints > 0 ? r2((score.score / score.maxPoints) * 100) : 0,
+      targetMet: score.score >= score.maxPoints,
+      subMinimumMet: score.subMinimumMet,
+      inputs: {},
+      errors: [],
+    }],
+  };
+}
 
 export async function calculateScorecard(
   options: CalculationOptions
 ): Promise<ScorecardResult> {
-  const engine = await createCalculationEngine(options);
-  return engine.calculateScorecard();
+  const { config: sectorConfig, source: configSource } = await resolveSectorConfig(
+    options.sectorCode, options.scorecardType
+  );
+
+  const cpv = options.crossPillarValues || new Map<string, number>();
+
+  const financials = {
+    revenue: options.financials?.revenue ?? cpv.get('revenue') ?? 0,
+    npat: options.financials?.npat ?? cpv.get('npat') ?? 0,
+    leviableAmount: options.financials?.leviableAmount ?? cpv.get('leviableAmount') ?? 0,
+    tmps: options.financials?.tmps ?? cpv.get('tmps') ?? 0,
+    headcount: options.financials?.headcount ?? cpv.get('totalEmployees') ?? (options.employees?.length || 0),
+    companyValue: options.financials?.companyValue ?? cpv.get('companyValue') ?? getEntityNumber(options.entityValues, 'companyValue'),
+    outstandingDebt: options.financials?.outstandingDebt ?? cpv.get('outstandingDebt') ?? getEntityNumber(options.entityValues, 'outstandingDebt'),
+    yearsHeld: options.financials?.yearsHeld ?? cpv.get('yearsHeld') ?? getEntityNumber(options.entityValues, 'yearsHeld'),
+  };
+
+  const trainingPrograms: PillarTrainingInput[] = (options.trainingPrograms || []).map((tp: any) => ({
+    id: tp.id,
+    name: tp.name,
+    category: tp.category,
+    categoryCode: tp.categoryCode,
+    cost: tp.cost || 0,
+    isBlack: tp.isBlack ?? (tp.race ? BLACK_RACES_SET.has(tp.race) : false),
+    isDisabled: !!tp.isDisabled,
+    isAbsorbed: !!tp.isAbsorbed,
+    isYesEmployee: !!tp.isYesEmployee,
+    race: tp.race,
+    gender: tp.gender,
+  }));
+
+  const shareholders = (options.shareholders || []).map(sh => ({
+    ...sh,
+    youthOwnership: 0,
+    disabledOwnership: 0,
+  }));
+
+  const suppliers = (options.suppliers || []).map(s => ({
+    ...s,
+    youthOwnership: (s as any).youthOwnership ?? 0,
+    disabledOwnership: (s as any).disabledOwnership ?? 0,
+  }));
+
+  const esdContribs = (options.contributions || []).filter(c => c.category === 'sd' || c.category === 'ed');
+  const hasGradBonus = esdContribs.some(c => (c as any).graduationBonus);
+  const hasJobsBonus = esdContribs.some(c => (c as any).jobsCreatedBonus);
+
+  console.log('[calculationEngine] Using pillar calculators (frontend parity)');
+  console.log('[calculationEngine] Financials:', financials);
+  console.log('[calculationEngine] Arrays:', {
+    employees: (options.employees || []).length,
+    shareholders: shareholders.length,
+    suppliers: suppliers.length,
+    contributions: (options.contributions || []).length,
+    trainingPrograms: trainingPrograms.length,
+  });
+
+  const result = calculateAllPillars(sectorConfig, {
+    employees: options.employees || [],
+    shareholders,
+    suppliers,
+    contributions: options.contributions || [],
+    trainingPrograms,
+    financials,
+    graduationBonus: hasGradBonus,
+    jobsCreatedBonus: hasJobsBonus,
+    province: options.province,
+  });
+
+  const pillarResults: PillarResult[] = [
+    toPillarResult('ownership', 'Ownership', result.ownership),
+    toPillarResult('managementControl', 'Management Control', result.managementControl),
+    toPillarResult('skillsDevelopment', 'Skills Development', result.skillsDevelopment),
+    toPillarResult('preferentialProcurement', 'Preferential Procurement', result.procurement),
+    toPillarResult('supplierDevelopment', 'Supplier Development', result.supplierDevelopment),
+    toPillarResult('enterpriseDevelopment', 'Enterprise Development', result.enterpriseDevelopment),
+    toPillarResult('socioEconomicDevelopment', 'Socio-Economic Development', result.socioEconomicDevelopment),
+  ];
+
+  const subMinimums: Record<string, boolean> = {};
+  for (const p of pillarResults) subMinimums[p.pillarCode] = p.subMinimumMet;
+
+  console.log('[calculationEngine] Pillar scores:', pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`));
+  console.log('[calculationEngine] Total:', result.totalPoints, 'Level:', result.beeLevel);
+
+  return {
+    assessmentId: options.assessmentId,
+    sectorCode: options.sectorCode,
+    scorecardType: options.scorecardType,
+    totalPoints: result.totalPoints,
+    maxPoints: result.maxPoints,
+    overallPercentage: r2(result.maxPoints > 0 ? (result.totalPoints / result.maxPoints) * 100 : 0),
+    beeLevel: result.beeLevel,
+    recognitionLevel: result.recognitionLevel,
+    pillars: pillarResults,
+    subMinimums,
+    calculationErrors: [],
+    calculatedAt: new Date().toISOString(),
+  };
+}
+
+function getEntityNumber(values: Map<string, EntityValue>, key: string): number {
+  const ev = values.get(key);
+  return typeof ev?.value === 'number' ? ev.value : 0;
 }

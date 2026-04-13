@@ -13,6 +13,7 @@ import { calculateScorecard } from '../../pipeline/rules/calculationEngine.js';
 import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, ContributionInput } from '../../pipeline/rules/calculationEngine.js';
 import { ScoreResultRepository } from '../../arango/repositories/scoreResultRepository.js';
 import { EvidenceRepository } from '../../arango/repositories/evidenceRepository.js';
+import { mapToUCSPayload } from '../../pipeline/extraction/aiEntityMapper.js';
 
 const router = Router();
 
@@ -217,13 +218,31 @@ router.post('/calculate', async (req, res) => {
 
       const npatValue = npat ?? financials?.npat ?? valuesMap.get('npat')?.value;
       const tmpsValue = tmps ?? financials?.tmps ?? valuesMap.get('tmps')?.value;
-      const leviableValue = leviableAmount ?? financials?.leviableAmount ?? valuesMap.get('leviable_amount')?.value;
-      const totalEmpValue = totalEmployees ?? financials?.headcount ?? valuesMap.get('total_employees')?.value;
+      const leviableValue = leviableAmount ?? financials?.leviableAmount ?? valuesMap.get('leviable_amount')?.value ?? valuesMap.get('leviableAmount')?.value;
+      const totalEmpValue = totalEmployees ?? financials?.headcount ?? valuesMap.get('total_employees')?.value ?? valuesMap.get('totalEmployees')?.value ?? valuesMap.get('headcount')?.value;
 
       if (typeof npatValue === 'number') crossPillarValues.set('npat', npatValue);
       if (typeof tmpsValue === 'number') crossPillarValues.set('tmps', tmpsValue);
       if (typeof leviableValue === 'number') crossPillarValues.set('leviableAmount', leviableValue);
       if (typeof totalEmpValue === 'number') crossPillarValues.set('totalEmployees', totalEmpValue);
+
+      // Handle ownership financials for OWN-NV calculation
+      const companyValue = financials?.companyValue ?? valuesMap.get('companyValue')?.value ?? valuesMap.get('company_value')?.value ?? 0;
+      const outstandingDebt = financials?.outstandingDebt ?? valuesMap.get('outstandingDebt')?.value ?? valuesMap.get('outstanding_debt')?.value ?? 0;
+      const yearsHeld = financials?.yearsHeld ?? valuesMap.get('yearsHeld')?.value ?? valuesMap.get('years_held')?.value ?? 0;
+
+      if (typeof companyValue === 'number' && companyValue > 0) {
+        valuesMap.set('companyValue', { entityId: 'companyValue', value: companyValue, source: 'financials' });
+        crossPillarValues.set('companyValue', companyValue);
+      }
+      if (typeof outstandingDebt === 'number' && outstandingDebt > 0) {
+        valuesMap.set('outstandingDebt', { entityId: 'outstandingDebt', value: outstandingDebt, source: 'financials' });
+        crossPillarValues.set('outstandingDebt', outstandingDebt);
+      }
+      if (typeof yearsHeld === 'number' && yearsHeld > 0) {
+        valuesMap.set('yearsHeld', { entityId: 'yearsHeld', value: yearsHeld, source: 'financials' });
+        crossPillarValues.set('yearsHeld', yearsHeld);
+      }
     }
 
     const assessmentId = body.assessmentId || `calc-${Date.now()}`;
@@ -343,6 +362,94 @@ router.post('/calculate', async (req, res) => {
       success: false,
       error: 'Calculation failed',
       details: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// POST /api/calculate-from-extraction
+// Combines AI entity mapping + UCS calculation in one call.
+// Frontend sends raw extraction output, backend handles all normalization.
+// ============================================================================
+
+router.post('/calculate-from-extraction', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const { sectorCode, scorecardType, sessionId, entities, tables } = body;
+
+    if (!sectorCode || !scorecardType) {
+      return res.status(400).json({ success: false, error: 'sectorCode and scorecardType are required' });
+    }
+
+    console.log('[API /calculate-from-extraction] Mapping extraction to UCS format...');
+
+    const payload = await mapToUCSPayload({ entities: entities || [], tables: tables || {} });
+
+    console.log('[API /calculate-from-extraction] Data quality:', payload.dataQuality);
+    console.log('[API /calculate-from-extraction] Arrays:', {
+      employees: payload.employees.length,
+      shareholders: payload.shareholders.length,
+      suppliers: payload.suppliers.length,
+      contributions: payload.contributions.length,
+      trainingPrograms: payload.trainingPrograms.length,
+    });
+    console.log('[API /calculate-from-extraction] Financials:', payload.financials);
+    console.log('[API /calculate-from-extraction] CrossPillarValues:', Object.fromEntries(payload.crossPillarValues));
+
+    const assessmentId = `upload-${sessionId || Date.now()}`;
+
+    const result = await calculateScorecard({
+      assessmentId,
+      sectorCode,
+      scorecardType,
+      entityValues: new Map(Object.entries(payload.entityValues).map(([k, v]) => [k, v as EntityValue])),
+      crossPillarValues: payload.crossPillarValues,
+      employees: payload.employees,
+      shareholders: payload.shareholders,
+      suppliers: payload.suppliers,
+      contributions: payload.contributions,
+      trainingPrograms: payload.trainingPrograms,
+      financials: payload.financials,
+    });
+
+    // Store in ArangoDB (non-fatal)
+    try {
+      const scoreRepo = new ScoreResultRepository();
+      await scoreRepo.startCalculationRun({
+        assessmentId,
+        sectorCode,
+        scorecardType,
+        triggeredBy: 'upload_extraction',
+        totalPoints: result.totalPoints,
+        maxPoints: result.maxPoints,
+        overallPercentage: result.overallPercentage,
+        beeLevel: result.beeLevel,
+        recognitionLevel: result.recognitionLevel,
+        subMinimumsMet: result.subMinimums,
+      });
+    } catch (arangoErr) {
+      console.warn('[calculate-from-extraction] ArangoDB storage failed (non-fatal):', arangoErr instanceof Error ? arangoErr.message : arangoErr);
+    }
+
+    res.json({
+      success: true,
+      scorecard: result,
+      dataQuality: payload.dataQuality,
+      pillarData: {
+        employees: payload.employees,
+        shareholders: payload.shareholders,
+        suppliers: payload.suppliers,
+        contributions: payload.contributions,
+        trainingPrograms: payload.trainingPrograms,
+        financials: payload.financials,
+      },
+    });
+  } catch (err) {
+    console.error('[calculate-from-extraction] Error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Calculation from extraction failed',
+      details: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 });

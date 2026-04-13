@@ -88,9 +88,15 @@ export async function generateEmbeddings(
   const batchSize = options?.batchSize || 100;
   const embeddings: number[][] = [];
 
+  // text-embedding-3-small has 8192 token limit (~4 chars/token on average).
+  // Truncate any text that would exceed that to avoid 400 errors.
+  const MAX_EMBED_CHARS = 7500;
+  const safeBatch = (batch: string[]) =>
+    batch.map(t => t.length > MAX_EMBED_CHARS ? t.slice(0, MAX_EMBED_CHARS) : t);
+
   // Process in batches
   for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize);
+    const batch = safeBatch(texts.slice(i, i + batchSize));
 
     try {
       const response = await client.embeddings.create({

@@ -17,6 +17,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { inferTablesFromEntities } from '../../pipeline/extraction/aiEntityMapper.js';
 
 // Strings the LLM sometimes returns meaning "no value found"
 const NULL_VALUE_SENTINELS = /^(null|n\/a|none|not\s+found|not\s+available|unknown|-)$/i;
@@ -89,7 +90,7 @@ import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
 import { HybridRetriever } from '../../pipeline/extraction/hybridRetriever.js';
 import { InMemoryVectorStore, createVectorStore } from '../../pipeline/extraction/embeddingStore.js';
-import { generateEmbeddings } from '../../pipeline/extraction/azureOpenAIClient.js';
+import { generateEmbeddings, chatCompletion } from '../../pipeline/extraction/azureOpenAIClient.js';
 import {
   buildManifest,
   getAllEntities,
@@ -109,6 +110,7 @@ import {
 import { computeConfidence } from '../../pipeline/extraction/confidenceScorer.js';
 import { validateAll, type ValidationResult } from '../../pipeline/extraction/validator.js';
 import { ProvenanceTracker } from '../../pipeline/extraction/provenanceTracker.js';
+import { smartExtractTables } from '../../pipeline/extraction/aiTableClassifier.js';
 import { Document, DocumentChunk } from '../../models.js';
 import { 
   isScannedPdf, 
@@ -151,9 +153,19 @@ interface ExtractionResult {
   };
 }
 
+interface ExtractedTables {
+  shareholders?: Array<{ name: string; blackOwnership: number; blackWomenOwnership: number; shares: number; shareValue: number; isDesignatedGroup: boolean; blackNewEntrant: boolean; yearsHeld?: number }>;
+  employees?: Array<{ name: string; race: string; gender: string; designation: string; isDisabled: boolean; isForeign: boolean }>;
+  suppliers?: Array<{ name: string; spend: number; beeLevel: number; blackOwnership: number; blackWomenOwnership: number; enterpriseType: string; isDesignatedGroup: boolean; isBlackOwned51: boolean; isBlackWomanOwned30: boolean; isEME: boolean; isQSE: boolean }>;
+  contributions?: Array<{ beneficiary: string; type: string; amount: number; category: 'sd' | 'ed' | 'sed' }>;
+  trainingPrograms?: Array<{ name: string; category: string; cost: number; race?: string; gender?: string; isDisabled?: boolean }>;
+  ownershipFinancials?: Array<{ companyValue: number; outstandingDebt: number; yearsHeld?: number }>;
+}
+
 interface ExtractionResponse {
   success: boolean;
   entities: ExtractionResult[];
+  tables: ExtractedTables;
   timing: {
     parse: number;
     chunk: number;
@@ -174,6 +186,189 @@ interface ExtractionResponse {
   documentId?: string;
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// Smart Spreadsheet Chunker
+// Inspired by sim/apps/sim/lib/chunkers/structured-data-chunker.ts
+// Dynamically handles any sheet format — tabular or key-value
+// ────────────────────────────────────────────────────────────────────────
+
+const SHEET_CONFIG = {
+  TARGET_CHUNK_SIZE: 2500,
+  MIN_ROWS_PER_CHUNK: 20,
+  MAX_ROWS_PER_CHUNK: 80,
+};
+
+/**
+ * Forward-fill merged cells: Excel merged cells export a value in the
+ * first cell and empty strings below. Carry the last non-empty value
+ * forward so rows under a merge retain their context.
+ */
+function forwardFillMergedCells(rows: any[][]): any[][] {
+  if (rows.length < 2) return rows;
+  const lastSeen: Record<number, any> = {};
+  return rows.map((row, rowIdx) => {
+    if (rowIdx === 0) return row;
+    return row.map((cell: any, colIdx: number) => {
+      const isEmpty = cell === '' || cell === null || cell === undefined;
+      if (!isEmpty) {
+        lastSeen[colIdx] = cell;
+        return cell;
+      }
+      return lastSeen[colIdx] ?? '';
+    });
+  });
+}
+
+/** Trim footer/total/note rows from the bottom of the data */
+const FOOTER_PATTERNS = [
+  /^(total|subtotal|grand\s+total)/i,
+  /^source\s*:/i, /^note\s*:/i,
+  /^(prepared|generated|exported)\s+(by|on|at)/i,
+  /^disclaimer/i, /^-{3,}$/, /^={3,}$/,
+];
+
+function trimFooterRows(rows: any[][], colCount: number): any[][] {
+  const minPopulated = Math.max(1, Math.ceil(colCount * 0.3));
+  let end = rows.length;
+  while (end > 0) {
+    const row = rows[end - 1];
+    const populated = row.filter((v: any) => v !== undefined && v !== null && String(v).trim() !== '').length;
+    const firstCell = String(row[0] ?? '').trim();
+    if (populated < minPopulated || FOOTER_PATTERNS.some(re => re.test(firstCell))) {
+      end--;
+    } else break;
+  }
+  return rows.slice(0, end);
+}
+
+/**
+ * Detect if first row is a proper header row (tabular data).
+ * Headers have 3+ short non-empty cells that look like column names.
+ */
+function isTabularSheet(rows: any[][]): boolean {
+  if (rows.length < 2) return false;
+  const firstRow = rows[0];
+  const nonEmpty = firstRow.filter((c: any) => c !== undefined && c !== null && String(c).trim() !== '');
+  if (nonEmpty.length < 3) return false;
+  const shortCount = nonEmpty.filter((c: any) => String(c).length < 50).length;
+  return shortCount / nonEmpty.length >= 0.7;
+}
+
+/** Convert a single row to "Header: Value, Header: Value" natural language */
+function rowToNL(headers: string[], values: any[]): string {
+  return headers
+    .map((h, i) => {
+      const v = values[i];
+      if (v === undefined || v === null || String(v).trim() === '') return null;
+      return `${h}: ${v}`;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+/**
+ * Build a chunk from a slice of rows — works for both tabular and key-value.
+ * Tabular: "Row N: Col1: Val1, Col2: Val2, ..."
+ * Key-value: pairs adjacent non-empty cells as "Label: Value"
+ */
+function buildChunkText(
+  sheetName: string,
+  rows: any[][],
+  rowStart: number,
+  headers: string[] | null,
+): string {
+  const parts: string[] = [`Sheet: ${sheetName}`];
+
+  if (headers) {
+    parts.push(`Columns: ${headers.join(', ')}`);
+    parts.push(`Rows ${rowStart + 2}-${rowStart + rows.length + 1}`);
+    parts.push('');
+    for (let i = 0; i < rows.length; i++) {
+      const nl = rowToNL(headers, rows[i]);
+      if (nl) parts.push(`Row ${rowStart + i + 2}: ${nl}`);
+    }
+  } else {
+    parts.push('');
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const cells = row.map((c: any) => String(c ?? '').trim()).filter(Boolean);
+      if (cells.length === 0) continue;
+
+      if (cells.length === 2) {
+        parts.push(`${cells[0]}: ${cells[1]}`);
+      } else if (cells.length === 1) {
+        parts.push(cells[0]);
+      } else {
+        // Scan for label-value pairs in multi-cell rows
+        const pairs: string[] = [];
+        for (let c = 0; c < cells.length; c++) {
+          const label = cells[c];
+          const value = cells[c + 1];
+          if (value && isNaN(Number(label)) && label.length < 60) {
+            pairs.push(`${label}: ${value}`);
+            c++;
+          } else {
+            pairs.push(label);
+          }
+        }
+        parts.push(pairs.join(', '));
+      }
+    }
+  }
+
+  return parts.join('\n');
+}
+
+/**
+ * Parse any sheet into searchable natural language chunks.
+ * Auto-detects tabular vs key-value format. No hardcoded filters.
+ */
+function parseSheetToChunks(
+  sheetName: string,
+  rawData: any[][]
+): Array<{ pageId: string; text: string; metadata: Record<string, any> }> {
+  if (rawData.length === 0) return [];
+
+  const tabular = isTabularSheet(rawData);
+  let headers: string[] | null = null;
+  let dataRows: any[][];
+
+  if (tabular) {
+    headers = rawData[0].map((h: any) => String(h || '').trim());
+    dataRows = forwardFillMergedCells(rawData).slice(1);
+    dataRows = trimFooterRows(dataRows, headers.length);
+  } else {
+    dataRows = rawData;
+  }
+
+  // Adaptive chunk sizing based on column count
+  const colCount = headers ? headers.length : Math.max(...dataRows.slice(0, 5).map(r => r?.length ?? 0), 1);
+  const tokensPerRow = Math.max(1, colCount * 8);
+  const rowsPerChunk = Math.min(
+    Math.max(SHEET_CONFIG.MIN_ROWS_PER_CHUNK, Math.floor(SHEET_CONFIG.TARGET_CHUNK_SIZE / tokensPerRow)),
+    SHEET_CONFIG.MAX_ROWS_PER_CHUNK,
+  );
+
+  const pages: Array<{ pageId: string; text: string; metadata: Record<string, any> }> = [];
+
+  for (let start = 0; start < dataRows.length; start += rowsPerChunk) {
+    const end = Math.min(start + rowsPerChunk, dataRows.length);
+    const slice = dataRows.slice(start, end);
+
+    const text = buildChunkText(sheetName, slice, start, headers);
+    if (text.split('\n').length <= 2) continue; // skip empty chunks
+
+    pages.push({
+      pageId: `sheet_${sheetName}_${start}-${end}`,
+      text,
+      metadata: { sheetName, rowStart: start, rowEnd: end, type: 'spreadsheet' }
+    });
+  }
+
+  return pages;
+}
+
 /**
  * Parse uploaded file to text pages based on file type.
  */
@@ -184,34 +379,31 @@ async function parseFileToPages(
 ): Promise<Array<{ pageId: string; text: string; metadata?: Record<string, any> }>> {
   const ext = originalname.toLowerCase().split('.').pop() || '';
 
-  // CSV / Excel
+  // CSV / Excel - Convert to natural language chunks
   if (mimetype === 'text/csv' || ext === 'csv' || mimetype.includes('excel') || ext === 'xlsx' || ext === 'xls') {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    // Limit to 5000 rows per sheet at the parser level to avoid OOM on sheets with 1M+ rows
+    const workbook = XLSX.read(buffer, { type: 'buffer', sheetRows: 5000 });
     const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-      const MAX_XLSX_ROWS = 3000;
-      const rowLimit = Math.min(jsonData.length, MAX_XLSX_ROWS);
+      const jsonData = (XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: '',
+        blankrows: false,
+      }) as any[][])
+        .filter(row => row && row.length > 0 && row.some((c: any) => c !== undefined && c !== null && String(c).trim() !== ''));
 
-      // Convert sheet to text format (row-based); cap rows so huge toolkits don't OOM or time out
-      let text = `Sheet: ${sheetName}\n\n`;
-      if (jsonData.length > MAX_XLSX_ROWS) {
-        text += `[Note: first ${MAX_XLSX_ROWS} of ${jsonData.length} rows included for extraction]\n\n`;
-      }
-      for (let i = 0; i < rowLimit; i++) {
-        const row = jsonData[i];
-        if (row && row.length > 0) {
-          text += `Row ${i + 1}: ${row.map(cell => String(cell || '')).join(' | ')}\n`;
-        }
+      if (jsonData.length < 2) {
+        console.log(`[hybridExtraction] Skipping sheet "${sheetName}" (${jsonData.length} rows — no data)`);
+        continue;
       }
 
-      pages.push({
-        pageId: `sheet_${sheetName}`,
-        text,
-        metadata: { sheetName, rowCount: jsonData.length, type: 'spreadsheet', rowsIncluded: rowLimit },
-      });
+      const tabular = isTabularSheet(jsonData);
+      const sheetChunks = parseSheetToChunks(sheetName, jsonData);
+      pages.push(...sheetChunks);
+
+      console.log(`[hybridExtraction] Sheet "${sheetName}": ${jsonData.length} rows → ${sheetChunks.length} chunks (${tabular ? 'tabular' : 'key-value'})`);
     }
 
     return pages;
@@ -388,6 +580,7 @@ router.post(
 
       let chunks: TextChunk[] = [];
       let sourceDocumentId: string = '';
+      let parsedPages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
       // Option 1: Use pre-chunked document from database
       if (documentId) {
@@ -431,9 +624,10 @@ router.post(
 
         // Step 1: Parse file to pages
         const parseStart = Date.now();
-        const pages = await parseFileToPages(file.buffer, file.mimetype, file.originalname);
+        parsedPages = await parseFileToPages(file.buffer, file.mimetype, file.originalname);
         parseTime = Date.now() - parseStart;
-        console.log(`[hybridExtraction] Parsed ${pages.length} pages in ${parseTime}ms`);
+        console.log(`[hybridExtraction] Parsed ${parsedPages.length} pages in ${parseTime}ms`);
+        const pages = parsedPages;
 
         if (pages.length === 0 || pages.every(p => !p.text.trim())) {
           return res.status(400).json({ error: 'No text content extracted from file' });
@@ -446,6 +640,11 @@ router.post(
         chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), sourceDocumentId);
         chunkTime = Date.now() - chunkStart;
         console.log(`[hybridExtraction] Created ${chunks.length} chunks in ${chunkTime}ms`);
+
+        // Log sample chunks for debugging
+        for (let ci = 0; ci < Math.min(3, chunks.length); ci++) {
+          console.log(`[hybridExtraction] Sample chunk ${ci}: pageId=${chunks[ci].pageId} len=${chunks[ci].text.length} preview="${chunks[ci].text.substring(0, 150).replace(/\n/g, '\\n')}..."`);
+        }
       }
 
       if (chunks.length === 0) {
@@ -511,7 +710,8 @@ router.post(
       // Step 4: Load entity manifest
       const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
 
-      // Step 5: Extract entities
+      // Step 5: Extract ALL entities via unified extraction
+      // Natural language chunks are indexed and searched for all entity types
       const extractStart = Date.now();
       const llmExtractor = new LLMExtractor();
       const provenanceTracker = new ProvenanceTracker();
@@ -524,7 +724,10 @@ router.post(
         chunkMap.set(chunk.pageId, chunk);
       }
 
-      const entities = getAllEntities(manifest);
+      // Extract ALL entities using natural language search
+      const allEntities = getAllEntities(manifest);
+      const entities = allEntities;
+      console.log(`[hybridExtraction] Extracting all ${entities.length} entities via natural language search`);
 
       // Pre-compute all entity query embeddings in ONE batch API call
       // This eliminates ~N individual embedding calls (major speedup)
@@ -539,9 +742,18 @@ router.post(
         }
       }
 
+      // ── Zone-boosted retrieval helper ──
+      // Checks if a chunk's pageId or sheet metadata matches any of the entity's zones
+      function chunkMatchesZone(chunk: TextChunk, zones: string[]): boolean {
+        if (zones.length === 0) return true;
+        const id = (chunk.metadata?.sheetName || chunk.pageId || '').toLowerCase();
+        return zones.some(z => id.includes(z.toLowerCase()));
+      }
+
       // Process entities in parallel batches. 25 concurrent Azure calls is safe
       // for standard Azure OpenAI rate limits and cuts wall-clock time significantly.
       const BATCH_SIZE = 25;
+      const TOP_K_CONTEXT = 5;
 
       for (let i = 0; i < entities.length; i += BATCH_SIZE) {
         const batch = entities.slice(i, i + BATCH_SIZE);
@@ -550,21 +762,18 @@ router.post(
         const batchResults = await Promise.all(
           batch.map(async (entity, batchIdx) => {
             try {
-              // Build search query from entity
               const searchQuery = [entity.name, ...entity.extraction.aliases].join(' ');
 
-              // Hybrid retrieval: use pre-computed embedding if available
+              // Hybrid retrieval with lower semantic threshold (0.3) for spreadsheet data
               let retrievalResults;
               if (hasEmbeddings && batchEmbeddings[batchIdx]) {
-                // Use pre-computed embedding for semantic search
-                const semanticResults = vectorStore.searchWithEmbedding(batchEmbeddings[batchIdx], 30, 0.5);
-                // Run hybrid fusion with pre-computed semantic results
-                retrievalResults = retriever.searchWithSemantic(searchQuery, semanticResults.map(r => ({ pageId: r.pageId, score: r.score })), 10);
+                const semanticResults = vectorStore.searchWithEmbedding(batchEmbeddings[batchIdx], 40, 0.3);
+                // Use chunkId (not pageId) to align with BM25 which indexes by chunkId
+                retrievalResults = retriever.searchWithSemantic(searchQuery, semanticResults.map(r => ({ pageId: r.chunkId, score: r.score })), 15);
               } else {
-                // Fallback to regular search (generates embedding on the fly)
                 retrievalResults = await retriever.searchWithEmbeddings(
                   searchQuery,
-                  10,
+                  15,
                   {
                     rerank: false,
                     rerankTopK: 5,
@@ -579,24 +788,42 @@ router.post(
                   value: null,
                   confidence: 0,
                   status: 'not_found' as const,
-                   pillar: entity.pillarCode,
-                   fieldType: entity.fieldType,
-                   definition: entity.extraction.definition,
-                   provenance: {
-                     pageId: 'none',
-                     chunkId: 'none',
-                     textSnippet: 'No relevant passages found',
-                     retrievalScore: 0,
-                     method: 'llm_fallback' as const,
-                   },
+                  pillar: entity.pillarCode,
+                  fieldType: entity.fieldType,
+                  definition: entity.extraction.definition,
+                  provenance: {
+                    pageId: 'none',
+                    chunkId: 'none',
+                    textSnippet: 'No relevant passages found',
+                    retrievalScore: 0,
+                    method: 'llm_fallback' as const,
+                  },
                 };
               }
 
-              // Get top chunk for extraction (O(1) lookup via Map)
-              const topResult = retrievalResults[0];
-              const topChunk = chunkMap.get(topResult.pageId);
+              // Zone-boosted ranking: re-sort so chunks from the entity's expected
+              // zone appear first, then fall back to retrieval score order.
+              const entityZones = entity.extraction.zones;
+              if (entityZones.length > 0) {
+                retrievalResults.sort((a, b) => {
+                  const aChunk = chunkMap.get(a.pageId);
+                  const bChunk = chunkMap.get(b.pageId);
+                  const aMatch = aChunk ? chunkMatchesZone(aChunk, entityZones) : false;
+                  const bMatch = bChunk ? chunkMatchesZone(bChunk, entityZones) : false;
+                  if (aMatch && !bMatch) return -1;
+                  if (!aMatch && bMatch) return 1;
+                  return b.score - a.score;
+                });
+              }
 
-              if (!topChunk) {
+              const topResult = retrievalResults[0];
+              const contextChunks: TextChunk[] = [];
+              for (let ci = 0; ci < Math.min(TOP_K_CONTEXT, retrievalResults.length); ci++) {
+                const chunk = chunkMap.get(retrievalResults[ci].pageId);
+                if (chunk) contextChunks.push(chunk);
+              }
+
+              if (contextChunks.length === 0) {
                 return {
                   name: entity.name,
                   value: null,
@@ -606,19 +833,21 @@ router.post(
                   fieldType: entity.fieldType,
                   definition: entity.extraction.definition,
                   provenance: {
-                     pageId: topResult.pageId,
-                     chunkId: topResult.pageId,
-                     textSnippet: 'Chunk not found',
-                     retrievalScore: topResult.score,
-                     method: 'llm_fallback' as const,
-                   },
+                    pageId: topResult.pageId,
+                    chunkId: topResult.pageId,
+                    textSnippet: 'Chunk not found',
+                    retrievalScore: topResult.score,
+                    method: 'llm_fallback' as const,
+                  },
                 };
               }
 
-              const extractionRequest = toExtractionRequest(entity, topChunk.text, topChunk.pageId);
+              const combinedText = contextChunks.map(c => c.text).join('\n\n---\n\n');
+              const extractionRequest = toExtractionRequest(entity, combinedText, contextChunks[0].pageId);
 
               const llmResult = await llmExtractor.extract(extractionRequest);
 
+              const topChunk = contextChunks[0];
               const confidenceResult = computeConfidence({
                 retrievalScore: topResult.score,
                 maxRetrievalScore: 1,
@@ -626,7 +855,7 @@ router.post(
                 expectedEntities: Math.max(1, entity.extraction.aliases.length),
                 structurallyVerified: llmResult.structuralVerification,
                 valueIsNull: llmResult.extractedValue === null,
-                foundInExpectedZone: entity.extraction.zones.length === 0 || entity.extraction.zones.some(z => (topChunk.metadata?.sheetName || topChunk.pageId || '').toLowerCase().includes(z.toLowerCase())),
+                foundInExpectedZone: entityZones.length === 0 || chunkMatchesZone(topChunk, entityZones),
                 llmValue: llmResult.extractedValue,
                 ruleBasedValue: null,
               });
@@ -634,6 +863,12 @@ router.post(
               const validation: ValidationResult | undefined = undefined;
 
               const formattedValue = formatExtractedValue(llmResult.extractedValue, entity.fieldType);
+
+              // Log extraction details for debugging
+              if (!formattedValue) {
+                const zoneMatch = entityZones.length === 0 || chunkMatchesZone(topChunk, entityZones);
+                console.log(`[extract:MISS] ${entity.name} | zones=${entityZones.join(',')} | topChunk=${topChunk.pageId} | zoneMatch=${zoneMatch} | score=${topResult.score.toFixed(3)} | llm=${llmResult.extractedValue}`);
+              }
 
               return {
                 name: entity.name,
@@ -677,8 +912,9 @@ router.post(
 
         extractionResults.push(...batchResults);
 
-        // Progress logging
-        console.log(`[hybridExtraction] Processed ${Math.min(i + BATCH_SIZE, entities.length)}/${entities.length} entities`);
+        // Progress logging with extraction success rate
+        const batchFound = batchResults.filter(r => r.value !== null).length;
+        console.log(`[hybridExtraction] Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchFound}/${batchResults.length} extracted | Total: ${Math.min(i + BATCH_SIZE, entities.length)}/${entities.length} entities`);
       }
 
       extractTime = Date.now() - extractStart;
@@ -760,6 +996,38 @@ router.post(
         console.log('[hybridExtraction] Skipping LLM verification (skipVerify=true)');
       }
 
+      // ── AI-Powered Table Extraction ─────────────────────────────────────
+      // Uses the AI Table Classifier to:
+      //   1. Classify every sheet by B-BBEE pillar (no hardcoded sheet names)
+      //   2. Extract structured tables from correctly classified sheets
+      //   3. Handle any sheet naming convention
+      const tableStart = Date.now();
+      let extractedTables: ExtractedTables = {};
+
+      // Group chunks by sheet name for table extraction
+      const sheetChunks = new Map<string, string[]>();
+      for (const chunk of chunks) {
+        const sheetMatch = chunk.pageId.match(/sheet_(.+?)_/);
+        if (sheetMatch) {
+          const sheet = sheetMatch[1];
+          if (!sheetChunks.has(sheet)) sheetChunks.set(sheet, []);
+          sheetChunks.get(sheet)!.push(chunk.text);
+        }
+      }
+
+      if (sheetChunks.size > 0) {
+        const { tables: aiTables, classifications } = await smartExtractTables(sheetChunks);
+        extractedTables = aiTables;
+
+        console.log(`[hybridExtraction] AI classified ${classifications.length} sheets:`);
+        for (const c of classifications) {
+          console.log(`  ${c.sheetName} → ${c.pillarType} (${(c.confidence * 100).toFixed(0)}%)`);
+        }
+      }
+
+      const tableTime = Date.now() - tableStart;
+      console.log(`[hybridExtraction] AI table extraction complete in ${tableTime}ms: employees=${extractedTables.employees?.length || 0}, shareholders=${extractedTables.shareholders?.length || 0}, suppliers=${extractedTables.suppliers?.length || 0}, contributions=${extractedTables.contributions?.length || 0}, training=${extractedTables.trainingPrograms?.length || 0}`);
+
       const totalTime = Date.now() - totalStartTime;
 
       // Calculate stats
@@ -769,11 +1037,56 @@ router.post(
       const invalidatedCount = extractionResults.filter(r => r.groqVerification?.valid === false).length;
       const avgConfidence = extractionResults.reduce((sum, r) => sum + r.confidence, 0) / extractionResults.length;
 
+      // ── Detailed extraction diagnostics ──────────────────────────────────
+      const foundEntities = extractionResults.filter(r => r.value !== null);
+      const missedEntities = extractionResults.filter(r => r.value === null);
+
+      const byPillar: Record<string, { found: string[]; missed: string[] }> = {};
+      for (const r of extractionResults) {
+        const p = r.pillar || 'unknown';
+        if (!byPillar[p]) byPillar[p] = { found: [], missed: [] };
+        if (r.value !== null) byPillar[p].found.push(r.name);
+        else byPillar[p].missed.push(r.name);
+      }
+
+      console.log(`\n${'═'.repeat(70)}`);
+      console.log(`[hybridExtraction] EXTRACTION REPORT`);
+      console.log(`${'═'.repeat(70)}`);
+      console.log(`  Total entities:  ${extractionResults.length}`);
+      console.log(`  Extracted:       ${extractedCount} (${Math.round(extractedCount / extractionResults.length * 100)}%)`);
+      console.log(`  Missing:         ${nullCount}`);
+      console.log(`  Verified:        ${verifiedCount}`);
+      console.log(`  Invalidated:     ${invalidatedCount}`);
+      console.log(`  Avg confidence:  ${(avgConfidence * 100).toFixed(1)}%`);
+      console.log(`  Timing:          parse=${parseTime}ms chunk=${chunkTime}ms index=${indexTime}ms extract=${extractTime}ms verify=${verifyTime}ms total=${totalTime}ms`);
+      console.log(`  Chunks indexed:  ${chunks.length}`);
+      console.log(`${'─'.repeat(70)}`);
+
+      for (const [pillar, data] of Object.entries(byPillar)) {
+        console.log(`  [${pillar}]  found=${data.found.length}  missed=${data.missed.length}`);
+        if (data.found.length > 0) console.log(`    ✓ ${data.found.join(', ')}`);
+        if (data.missed.length > 0) console.log(`    ✗ ${data.missed.join(', ')}`);
+      }
+
+      if (missedEntities.length > 0) {
+        console.log(`${'─'.repeat(70)}`);
+        console.log(`  MISSED ENTITIES (${missedEntities.length}):`);
+        for (const m of missedEntities) {
+          const reason = m.provenance.textSnippet === 'No relevant passages found' ? 'no_retrieval_match'
+            : m.provenance.textSnippet === 'Chunk not found' ? 'chunk_not_found'
+            : m.provenance.method === 'llm_fallback' ? 'llm_returned_null'
+            : 'extraction_null';
+          console.log(`    ✗ ${m.name} [${m.pillar}] reason=${reason} retrieval_score=${m.provenance.retrievalScore.toFixed(3)}`);
+        }
+      }
+      console.log(`${'═'.repeat(70)}\n`);
+
       console.log(`[hybridExtraction] Complete: ${extractionResults.length} entities, ${totalTime}ms total (verify: ${verifyTime}ms)`);
 
       const response: ExtractionResponse = {
         success: true,
         entities: extractionResults,
+        tables: extractedTables,
         timing: {
           parse: parseTime,
           chunk: chunkTime,
@@ -804,5 +1117,30 @@ router.post(
     }
   }
 );
+
+router.post('/infer-tables', async (req, res) => {
+  try {
+    const { entities } = req.body;
+    if (!Array.isArray(entities) || entities.length === 0) {
+      return res.status(400).json({ error: 'entities array is required' });
+    }
+
+    console.log(`[infer-tables] Inferring tables from ${entities.length} flat entities`);
+    const tables = await inferTablesFromEntities(entities);
+
+    console.log('[infer-tables] Inferred tables:', {
+      shareholders: tables.shareholders?.length ?? 0,
+      employees: tables.employees?.length ?? 0,
+      suppliers: tables.suppliers?.length ?? 0,
+      contributions: tables.contributions?.length ?? 0,
+      trainingPrograms: tables.trainingPrograms?.length ?? 0,
+    });
+
+    res.json({ tables });
+  } catch (error: any) {
+    console.error('[infer-tables] Error:', error);
+    res.status(500).json({ error: 'Table inference failed', message: error.message || String(error) });
+  }
+});
 
 export default router;
