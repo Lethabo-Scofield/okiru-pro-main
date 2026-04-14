@@ -1,9 +1,19 @@
+/**
+ * @domain-rule pillar:skills_development, slides:84-94
+ * @see docs/domain/pillars/03_skills_development.md
+ */
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
-const CATEGORY_E_CAP = 0.25;
-const CATEGORY_F_CAP = 0.15;
+/**
+ * @domain-rule pillar:skills_development, slide:86
+ * @see docs/domain/pillars/03_skills_development.md#certification-rules
+ * Categories F & G (informal/uncertified) capped at 15% of total SD target each.
+ * SDF/training manager admin costs capped at 15% of total skills spend.
+ */
+const CATEGORY_FG_CAP = 0.15;
+const ADMIN_COST_CAP = 0.15;
 
 export interface SkillsSubLine {
   name: string;
@@ -47,24 +57,28 @@ export interface SkillsResult {
   };
 }
 
-// Issue 6: Updated Category F label, added Category G
+/**
+ * Learning Program Categories per RCOGP slide 87
+ * @domain-rule pillar:skills_development, slide:87
+ * @see docs/domain/pillars/03_skills_development.md#learning-program-categories
+ */
 const CATEGORY_LABELS: Record<TrainingCategoryCode, { label: string; examples: string }> = {
-  A: { label: "Bursaries", examples: "Bursaries" },
-  B: { label: "Internships & Learnerships", examples: "Internships, Learnerships" },
-  C: { label: "Short Courses & Workshops", examples: "Short courses, workshops" },
-  D: { label: "Other Accredited Training", examples: "Other accredited training" },
-  E: { label: "Non-accredited / Informal", examples: "Non-accredited, informal" },
-  F: { label: "External Unaccredited Training", examples: "External training, conferences, seminars" },
-  G: { label: "Informal Training (Non-black)", examples: "Non-black employee training (no points)" },
+  A: { label: "Learning Institution (Degree/Diploma)", examples: "University degree with no workplace involvement" },
+  B: { label: "Workplace + Learning Institution", examples: "Internship as part of qualification" },
+  C: { label: "Apprenticeship (SAQA aligned)", examples: "Workplace accredited apprenticeship" },
+  D: { label: "Learnership (SETA/QCTO)", examples: "Workplace experience assessed by SETA/QCTO" },
+  E: { label: "Certified External Training (SETA/QCTO)", examples: "SETA/QCTO registered skills programs" },
+  F: { label: "Certified Internal / Uncertified External", examples: "Workplace accredited or external unaccredited" },
+  G: { label: "Uncertified Internal Training", examples: "On-the-job training (no points for non-black)" },
 };
 
 function mapLegacyCategory(cat: TrainingProgram['category']): TrainingCategoryCode {
   switch (cat) {
     case 'bursary': return 'A';
-    case 'learnership':
     case 'internship': return 'B';
-    case 'short_course': return 'C';
-    default: return 'D';
+    case 'learnership': return 'D';
+    case 'short_course': return 'E';
+    default: return 'F';
   }
 }
 
@@ -107,8 +121,8 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
 
 function applyCapToSpend(
   spendByCategory: Record<TrainingCategoryCode, number>,
-  categoryECap: number = CATEGORY_E_CAP,
-  categoryFCap: number = CATEGORY_F_CAP
+  fgCap: number = CATEGORY_FG_CAP,
+  adminCap: number = ADMIN_COST_CAP
 ): {
   totalRecognised: number;
   breakdown: CategoryBreakdown[];
@@ -117,23 +131,16 @@ function applyCapToSpend(
   const breakdown: CategoryBreakdown[] = [];
   let totalRecognised = 0;
 
-  for (const code of ['A', 'B', 'C', 'D', 'E', 'F'] as TrainingCategoryCode[]) {
+  for (const code of ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as TrainingCategoryCode[]) {
     const spend = spendByCategory[code];
     const meta = CATEGORY_LABELS[code];
     let recognisedSpend = spend;
     let capApplied = false;
     let cap: number | undefined;
 
-    if (code === 'E' && uncappedTotal > 0) {
-      cap = categoryECap;
-      const maxAllowed = uncappedTotal * categoryECap;
-      if (spend > maxAllowed) {
-        recognisedSpend = maxAllowed;
-        capApplied = true;
-      }
-    } else if (code === 'F' && uncappedTotal > 0) {
-      cap = categoryFCap;
-      const maxAllowed = uncappedTotal * categoryFCap;
+    if ((code === 'F' || code === 'G') && uncappedTotal > 0) {
+      cap = fgCap;
+      const maxAllowed = uncappedTotal * fgCap;
       if (spend > maxAllowed) {
         recognisedSpend = maxAllowed;
         capApplied = true;
@@ -156,8 +163,8 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
   const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget;
   const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget;
   const disabledTargetPct = sc.disabledSpendPercent ?? 0.003;
-  const categoryECap = sc.categoryECap ?? CATEGORY_E_CAP;
-  const categoryFCap = sc.categoryFCap ?? CATEGORY_F_CAP;
+  const fgCap = sc.categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
+  const adminCap = sc.adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
   const subMinThreshold = config.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
   const maxPoints = config.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
 
@@ -175,7 +182,7 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
   const TARGET_DISABLED = leviableAmount * disabledTargetPct;
 
   const spend = accumulateSpend(trainingPrograms);
-  const { totalRecognised, breakdown } = applyCapToSpend(spend.byCategory, categoryECap, categoryFCap);
+  const { totalRecognised, breakdown } = applyCapToSpend(spend.byCategory, fgCap, adminCap);
 
   const learningScore = clampScore(safeRatio(totalRecognised, TARGET_OVERALL, learningMaxPts), learningMaxPts);
   const bursaryScore = clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);

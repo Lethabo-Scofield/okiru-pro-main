@@ -2,7 +2,11 @@ import type { ProcurementData, Supplier } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
-// Standard recognition table per B-BBEE Act — used when config.recognitionTable not available
+/**
+ * @domain-rule pillar:procurement, slides:56,57
+ * @see docs/domain/pillars/04_preferential_procurement.md#procurement-recognition-levels
+ * @see docs/domain/calculations/scoring_tables.md#b-bbee-recognition-levels
+ */
 const STANDARD_RECOGNITION_TABLE: Readonly<Record<number, number>> = {
   1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00,
   5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0,
@@ -52,9 +56,13 @@ function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): n
   return STANDARD_RECOGNITION_TABLE[beeLevel] ?? 0;
 }
 
-// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
-// CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, NO procurement bonuses
-
+/**
+ * @domain-rule pillar:procurement, slides:58,61,62
+ * @see docs/domain/pillars/04_preferential_procurement.md#scorecard
+ * @see docs/domain/calculations/tmps_calculation.md
+ * VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
+ * CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, NO procurement bonuses
+ */
 export function calculateProcurementScore(data: ProcurementData, config: CalculatorConfig): ProcurementResult {
   if (!config) throw new Error('CalculatorConfig is required for procurement score calculation');
   const { tmps } = data;
@@ -95,7 +103,6 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   let foreignSupplierSpend = 0;
 
   for (const sup of suppliers) {
-    // Foreign suppliers excluded from Empowering Supplier recognition but included in TMPS
     if (sup.isForeignSupplier) {
       foreignSupplierSpend += sup.spend;
       continue;
@@ -104,28 +111,29 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     const recognised = sup.spend * getRecognitionMultiplier(sup.beeLevel, config);
     recognisedSpend += recognised;
 
-    if (sup.beeLevel >= 1 && sup.beeLevel <= 4) {
-      empoweringSpend += sup.spend;
+    // Use isEmpoweringSupplier flag when available, fall back to level 1-4
+    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 4)) {
+      empoweringSpend += recognised;
     }
 
     if (sup.enterpriseType === 'qse') {
-      qseSpend += sup.spend;
+      qseSpend += recognised;
     }
     if (sup.enterpriseType === 'eme') {
-      emeSpend += sup.spend;
+      emeSpend += recognised;
     }
 
     if (sup.blackOwnership >= 0.51) {
-      blackOwned51Spend += sup.spend;
+      blackOwned51Spend += recognised;
     }
 
     if (sup.blackWomenOwnership >= blackWomenThreshold) {
-      blackFemaleOwned30Spend += sup.spend;
+      blackFemaleOwned30Spend += recognised;
     }
 
     const isDesignatedGroup = sup.blackOwnership >= 0.51 && (sup.youthOwnership > 0 || sup.disabledOwnership > 0);
     if (isDesignatedGroup) {
-      designatedGroupSpend += sup.spend;
+      designatedGroupSpend += recognised;
     }
   }
 

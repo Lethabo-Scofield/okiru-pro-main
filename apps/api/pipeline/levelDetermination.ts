@@ -1,3 +1,13 @@
+/**
+ * @deprecated Use pillarCalculators.ts findLevel() with sector-config levelThresholds instead.
+ * This file uses hardcoded RCOGP thresholds only. It is still imported by buildResult.ts
+ * for the extraction pipeline path, but the canonical scoring path uses
+ * pillarCalculators.calculateAllPillars() which has its own sector-aware level determination.
+ *
+ * @domain-rule pillar:scoring, slides:23,56
+ * @see docs/domain/calculations/scoring_tables.md#b-bbee-recognition-levels
+ * @see docs/domain/_index.md#b-bbee-recognition-levels
+ */
 export function determineBeeLevel(totalPoints: number): { level: number; label: string; recognition: number } {
   if (totalPoints >= 100) return { level: 1, label: 'LEVEL 1', recognition: 135 };
   if (totalPoints >= 95) return { level: 2, label: 'LEVEL 2', recognition: 125 };

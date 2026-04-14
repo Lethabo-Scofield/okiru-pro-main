@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /build
 
-RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev jpeg-dev giflib-dev
+RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
@@ -22,14 +22,17 @@ RUN pnpm install --no-frozen-lockfile --prod
 FROM node:20-alpine
 WORKDIR /app
 
-RUN apk add --no-cache cairo pango libjpeg-turbo giflib pixman
+RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
+    && corepack enable && corepack prepare pnpm@10.26.1 --activate
 
 COPY --from=builder /build/package.json /build/pnpm-lock.yaml /build/pnpm-workspace.yaml ./
 COPY --from=builder /build/packages/types/ packages/types/
 COPY --from=builder /build/apps/api/dist/ apps/api/dist/
 COPY --from=builder /build/apps/api/package.json apps/api/
-COPY --from=builder /build/node_modules/ node_modules/
-COPY --from=builder /build/apps/api/node_modules/ apps/api/node_modules/
+
+RUN pnpm install --no-frozen-lockfile --prod \
+    && apk del python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
+    && apk add --no-cache pixman cairo pango libjpeg-turbo giflib
 
 EXPOSE 5000
 ENV NODE_ENV=production PORT=5000

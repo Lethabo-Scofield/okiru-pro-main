@@ -1,35 +1,31 @@
 /**
- * Azure OpenAI Client
+ * Azure OpenAI Client — Two-Tier Model Strategy
  *
- * Provides Azure OpenAI integration for:
- * - Chat completions (GPT-4o-mini for entity extraction)
- * - Embeddings (text-embedding-3-small for semantic search)
+ * Premium tier (GPT-4o): classification, table extraction, vision, inference
+ * Fast tier (GPT-4o-mini): entity extraction, verification, reranking
+ * Embeddings: text-embedding-3-small for semantic search
  */
 
 import { OpenAI } from 'openai';
 import dotenv from 'dotenv';
 
-// Ensure environment is loaded (in case module is imported before main entry)
 dotenv.config();
 
 // Azure OpenAI configuration from environment
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT || '';
 const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY || '';
 const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o';
+const AZURE_OPENAI_FAST_DEPLOYMENT = process.env.AZURE_OPENAI_FAST_DEPLOYMENT || AZURE_OPENAI_DEPLOYMENT;
 const AZURE_OPENAI_EMBEDDING_DEPLOYMENT = process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || 'text-embedding-3-small';
 const AZURE_OPENAI_API_VERSION = process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview';
 
-// Log configuration status on module load
-const hasEndpoint = !!AZURE_OPENAI_ENDPOINT;
-const hasKey = !!AZURE_OPENAI_API_KEY;
-const hasDeployment = !!AZURE_OPENAI_DEPLOYMENT;
-console.log(`[AzureOpenAI] Config status - endpoint:${hasEndpoint}, key:${hasKey}, deployment:${hasDeployment} (${AZURE_OPENAI_DEPLOYMENT})`);
+console.log(`[AzureOpenAI] Config — premium:${AZURE_OPENAI_DEPLOYMENT}, fast:${AZURE_OPENAI_FAST_DEPLOYMENT}, embeddings:${AZURE_OPENAI_EMBEDDING_DEPLOYMENT}`);
 
 // Embedding dimensions for text-embedding-3-small
 export const EMBEDDING_DIMENSIONS = 1536;
 
 /**
- * Get Azure OpenAI chat client for GPT-4o-mini
+ * Premium chat client (GPT-4o) — classification, table extraction, vision, inference
  */
 export function getAzureChatClient(): OpenAI | null {
   if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY) {
@@ -40,6 +36,23 @@ export function getAzureChatClient(): OpenAI | null {
   return new OpenAI({
     apiKey: AZURE_OPENAI_API_KEY,
     baseURL: `${AZURE_OPENAI_ENDPOINT}/openai/deployments/${AZURE_OPENAI_DEPLOYMENT}`,
+    defaultQuery: { 'api-version': AZURE_OPENAI_API_VERSION },
+    defaultHeaders: { 'api-key': AZURE_OPENAI_API_KEY },
+  });
+}
+
+/**
+ * Fast chat client (GPT-4o-mini) — entity extraction, verification, reranking
+ * Falls back to premium deployment if AZURE_OPENAI_FAST_DEPLOYMENT is not set.
+ */
+export function getAzureFastChatClient(): OpenAI | null {
+  if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY) {
+    return null;
+  }
+
+  return new OpenAI({
+    apiKey: AZURE_OPENAI_API_KEY,
+    baseURL: `${AZURE_OPENAI_ENDPOINT}/openai/deployments/${AZURE_OPENAI_FAST_DEPLOYMENT}`,
     defaultQuery: { 'api-version': AZURE_OPENAI_API_VERSION },
     defaultHeaders: { 'api-key': AZURE_OPENAI_API_KEY },
   });
@@ -129,7 +142,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Chat completion with GPT-4o-mini
+ * Premium chat completion (GPT-4o) — for classification, table extraction, inference
  */
 export async function chatCompletion(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
@@ -155,14 +168,45 @@ export async function chatCompletion(
 
     return response.choices[0]?.message?.content || '';
   } catch (error) {
-    console.error('[AzureOpenAI] Chat completion error:', error);
+    console.error('[AzureOpenAI] Premium chat completion error:', error);
     throw error;
   }
 }
 
 /**
- * Rerank candidates using GPT-4o-mini
- * Returns reranked array with scores
+ * Fast chat completion (GPT-4o-mini) — for entity extraction, verification, reranking
+ */
+export async function fastChatCompletion(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    responseFormat?: { type: 'json_object' };
+  }
+): Promise<string> {
+  const client = getAzureFastChatClient();
+  if (!client) {
+    throw new Error('Azure OpenAI fast chat client not configured');
+  }
+
+  try {
+    const response = await client.chat.completions.create({
+      model: AZURE_OPENAI_FAST_DEPLOYMENT,
+      messages: messages as any,
+      temperature: options?.temperature ?? 0,
+      max_tokens: options?.maxTokens ?? 1000,
+      response_format: options?.responseFormat as any,
+    });
+
+    return response.choices[0]?.message?.content || '';
+  } catch (error) {
+    console.error('[AzureOpenAI] Fast chat completion error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Rerank candidates using fast tier (GPT-4o-mini)
  */
 export async function rerankWithLLM(
   query: string,
@@ -196,7 +240,7 @@ Scores should reflect:
 - 0-4: Weak or no match`;
 
   try {
-    const response = await chatCompletion(
+    const response = await fastChatCompletion(
       [
         { role: 'system', content: 'You are a precise relevance ranking system. Return only valid JSON.' },
         { role: 'user', content: prompt },
@@ -207,7 +251,6 @@ Scores should reflect:
     const parsed = JSON.parse(response);
     const rankings: Array<{ id: string; score: number }> = parsed.rankings || [];
 
-    // Merge with original candidates
     const reranked = rankings
       .map(r => {
         const candidate = limitedCandidates.find(c => c.id === r.id);
@@ -220,7 +263,6 @@ Scores should reflect:
     return reranked;
   } catch (error) {
     console.error('[AzureOpenAI] Reranking error:', error);
-    // Fallback to initial scores
     return limitedCandidates
       .map(c => ({ ...c, llmScore: c.initialScore * 10 }))
       .sort((a, b) => b.llmScore - a.llmScore)
@@ -230,7 +272,7 @@ Scores should reflect:
 
 /**
  * Azure OpenAI Client Class for advanced use cases (Vision, etc.)
- * Reuses the same configuration as the function-based API
+ * Always uses premium tier (GPT-4o) since vision requires it.
  */
 export class AzureOpenAIClient {
   private client: OpenAI | null;
@@ -251,5 +293,9 @@ export class AzureOpenAIClient {
       throw new Error('Azure OpenAI client not configured');
     }
     return this.client.chat.completions;
+  }
+
+  get deploymentName(): string {
+    return AZURE_OPENAI_DEPLOYMENT;
   }
 }

@@ -1,4 +1,9 @@
 /**
+ * @deprecated Use pillarCalculators.ts via calculationEngine.ts instead.
+ * This file is sector-aware but incomplete (no province EAP, no benefit factors).
+ * The canonical calculation path is calculationEngine.calculateScorecard() →
+ * pillarCalculators.calculateAllPillars().
+ *
  * Sector-Aware B-BBEE Calculators
  *
  * Parameterized versions of the scorecard calculators that accept a

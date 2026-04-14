@@ -1,199 +1,187 @@
+/**
+ * @domain-rule pillar:yes, slides:121-129
+ * @see docs/domain/pillars/07_yes_programme.md
+ */
 import type { YESData, YESCandidate } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { clampScore, round2 } from './shared';
 
 export interface YESResult {
-  // Scores
   score: number;
   target: number;
   weighting: number;
-  
-  // Tier achievement
   yesTierAchieved: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3';
-  
-  // BEE level impact
   yesBeeLevelIncrease: number;
+  yesBonusPoints: number;
   qualifiesForLevelUplift: boolean;
-  
-  // Targets
   yesHeadcountTarget: number;
-  
-  // Counts
   totalCandidates: number;
   blackYouthCount: number;
   blackYouthPercentage: number;
   absorbedCount: number;
   absorptionRate: number;
-  
-  // Cost
   totalCost: number;
   costPerCandidate: number;
-  
-  // Tier thresholds
   tier1Threshold: number;
   tier2Threshold: number;
   tier3Threshold: number;
-  
-  // Progress to each tier
   progressToTier1: number;
   progressToTier2: number;
   progressToTier3: number;
+  targetBreakdown: {
+    headcountBased: number;
+    npatBased: number;
+    revenueBased: number;
+    applied: number;
+  };
 }
 
 /**
- * Calculate YES headcount target based on total employees
- * Configurable thresholds from sector config
- * Default: < 500 employees: 2.5%, 500 - 1000 employees: 1.5%, > 1000 employees: 1%
+ * Revenue-based YES headcount table per RCOGP slide 124
+ * @domain-rule pillar:yes, slide:124
  */
-function calculateHeadcountTarget(totalEmployees: number, config?: CalculatorConfig): number {
-  const headcountSmall = config?.yes?.headcountTarget5 ?? 0.025;
-  const headcountMedium = config?.yes?.headcountTarget10 ?? 0.015;
-  const headcountLarge = config?.yes?.headcountTarget15 ?? 0.01;
-  
-  if (totalEmployees < 500) {
-    return Math.max(Math.ceil(totalEmployees * headcountSmall), 1);
-  } else if (totalEmployees <= 1000) {
-    return Math.max(Math.ceil(totalEmployees * headcountMedium), 8); // Minimum 8 for 500+
-  } else {
-    return Math.max(Math.ceil(totalEmployees * headcountLarge), 15); // Minimum 15 for 1000+
+const REVENUE_HEADCOUNT_TABLE: Array<{ minRevenue: number; maxRevenue: number; target: number }> = [
+  { minRevenue: 50_000_000, maxRevenue: 75_000_000, target: 6 },
+  { minRevenue: 75_000_000, maxRevenue: 99_000_000, target: 7 },
+  { minRevenue: 99_000_000, maxRevenue: 149_000_000, target: 8 },
+  { minRevenue: 149_000_000, maxRevenue: 199_000_000, target: 9 },
+  { minRevenue: 199_000_000, maxRevenue: 249_000_000, target: 10 },
+  { minRevenue: 249_000_000, maxRevenue: 299_000_000, target: 11 },
+  { minRevenue: 299_000_000, maxRevenue: 349_000_000, target: 12 },
+  { minRevenue: 349_000_000, maxRevenue: 399_000_000, target: 13 },
+  { minRevenue: 399_000_000, maxRevenue: 449_000_000, target: 14 },
+  { minRevenue: 449_000_000, maxRevenue: Infinity, target: 15 },
+];
+
+function getRevenueBasedTarget(revenue: number): number {
+  if (revenue < 50_000_000) return 0;
+  for (const band of REVENUE_HEADCOUNT_TABLE) {
+    if (revenue >= band.minRevenue && revenue < band.maxRevenue) return band.target;
   }
+  return 15;
 }
 
 /**
- * Calculate which tier the company has achieved
- * Uses configurable tier multipliers from sector config
+ * YES target = highest of three formulas (slide 123)
+ * @domain-rule pillar:yes, slide:123
  */
-function calculateTier(
-  candidates: YESCandidate[],
+function calculateHeadcountTarget(
+  totalEmployees: number,
+  revenue: number,
+  averageNpat3yr: number,
+  config?: CalculatorConfig
+): { applied: number; headcountBased: number; npatBased: number; revenueBased: number } {
+  const pct = config?.yes?.headcountPercent ?? 0.015;
+  const stipend = config?.yes?.annualStipend ?? 55_000;
+
+  const headcountBased = Math.max(Math.ceil(totalEmployees * pct), 1);
+  const npatBased = stipend > 0
+    ? Math.max(Math.ceil((pct * averageNpat3yr) / stipend), 1)
+    : 1;
+  const revenueBased = getRevenueBasedTarget(revenue);
+
+  const applied = Math.max(headcountBased, npatBased, revenueBased);
+  return { applied, headcountBased, npatBased, revenueBased };
+}
+
+/**
+ * Tier determination based on headcount AND absorption rate (slide 123)
+ * @domain-rule pillar:yes, slide:123
+ *
+ * | Achievement                                | Result                      |
+ * | Achieve 2x target + 5% absorption          | +2 levels                   |
+ * | Achieve 1.5x target + 5% absorption        | +1 level + 3 bonus points   |
+ * | Achieve 1x target + 2.5% absorption         | +1 level                    |
+ */
+function calculateTierAndUplift(
+  enrolledCount: number,
   headcountTarget: number,
+  absorptionRate: number,
   config?: CalculatorConfig
-): { 
-  tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3'; 
+): {
+  tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3';
+  levelIncrease: number;
+  bonusPoints: number;
   thresholds: { tier1: number; tier2: number; tier3: number };
-  tierPoints: { tier1: number; tier2: number; tier3: number };
 } {
-  // Configurable tier multipliers (default: 1.5x, 1.0x, 0.5x of target)
-  const tier1Multiplier = config?.yes?.tier1Multiplier ?? 1.5;
-  const tier2Multiplier = config?.yes?.tier2Multiplier ?? 1.0;
-  const tier3Multiplier = config?.yes?.tier3Multiplier ?? 0.5;
-  
+  const t1Mult = config?.yes?.tier1Multiplier ?? 2.0;
+  const t2Mult = config?.yes?.tier2Multiplier ?? 1.5;
+  const t3Mult = config?.yes?.tier3Multiplier ?? 1.0;
+
   const thresholds = {
-    tier1: Math.max(Math.ceil(headcountTarget * tier1Multiplier), 1),
-    tier2: Math.max(Math.ceil(headcountTarget * tier2Multiplier), 1),
-    tier3: Math.max(Math.ceil(headcountTarget * tier3Multiplier), 1),
+    tier1: Math.max(Math.ceil(headcountTarget * t1Mult), 1),
+    tier2: Math.max(Math.ceil(headcountTarget * t2Mult), 1),
+    tier3: Math.max(Math.ceil(headcountTarget * t3Mult), 1),
   };
-  
-  // Configurable tier points (default: Tier 1 = 3, Tier 2 = 2, Tier 3 = 1)
-  const tierPoints = {
-    tier1: config?.yes?.tier1Points ?? 3,
-    tier2: config?.yes?.tier2Points ?? 2,
-    tier3: config?.yes?.tier3Points ?? 1,
-  };
-  
-  const enrolledCount = candidates.length;
-  
-  if (enrolledCount >= thresholds.tier1) {
-    return { tier: 'Tier 1', thresholds, tierPoints };
-  } else if (enrolledCount >= thresholds.tier2) {
-    return { tier: 'Tier 2', thresholds, tierPoints };
-  } else if (enrolledCount >= thresholds.tier3) {
-    return { tier: 'Tier 3', thresholds, tierPoints };
+
+  // Tier 1: 2x target + 5% absorption → +2 levels
+  if (enrolledCount >= thresholds.tier1 && absorptionRate >= 5) {
+    return { tier: 'Tier 1', levelIncrease: 2, bonusPoints: 0, thresholds };
   }
-  
-  return { tier: 'None', thresholds, tierPoints };
+  // Tier 2: 1.5x target + 5% absorption → +1 level + 3 bonus points
+  if (enrolledCount >= thresholds.tier2 && absorptionRate >= 5) {
+    return { tier: 'Tier 2', levelIncrease: 1, bonusPoints: 3, thresholds };
+  }
+  // Tier 3: 1x target + 2.5% absorption → +1 level
+  if (enrolledCount >= thresholds.tier3 && absorptionRate >= 2.5) {
+    return { tier: 'Tier 3', levelIncrease: 1, bonusPoints: 0, thresholds };
+  }
+
+  return { tier: 'None', levelIncrease: 0, bonusPoints: 0, thresholds };
 }
 
-/**
- * Calculate BEE level increase based on tier and black youth requirement
- * Configurable black youth percentage threshold (default: 50%)
- */
-function calculateLevelIncrease(
-  tier: 'None' | 'Tier 1' | 'Tier 2' | 'Tier 3',
-  blackYouthPercentage: number,
-  config?: CalculatorConfig
-): { increase: number; qualifies: boolean } {
-  // Tier 1: 2 levels increase
-  // Tier 2: 1 level increase
-  // Tier 3: 1 level increase
-  // But only if configured % of YES participants are Black Youth (default 50%)
-  
-  const blackYouthThreshold = config?.yes?.blackYouthPercent ?? 50;
-  const qualifies = blackYouthPercentage >= blackYouthThreshold;
-  
-  if (!qualifies) {
-    return { increase: 0, qualifies: false };
-  }
-  
-  switch (tier) {
-    case 'Tier 1':
-      return { increase: 2, qualifies: true };
-    case 'Tier 2':
-    case 'Tier 3':
-      return { increase: 1, qualifies: true };
-    default:
-      return { increase: 0, qualifies: true }; // Qualifies but no tier achieved
-  }
-}
+export function calculateYESScore(data: YESData, config?: CalculatorConfig, revenue = 0, averageNpat3yr = 0): YESResult {
+  const { totalEmployees, candidates, totalYesCost = 0 } = data;
 
-export function calculateYESScore(data: YESData, config?: CalculatorConfig): YESResult {
-  const { 
-    totalEmployees, 
-    candidates,
-    totalYesCost = 0 
-  } = data;
-  
-  // Calculate target using configurable thresholds
-  const yesHeadcountTarget = calculateHeadcountTarget(totalEmployees, config);
-  
-  // Calculate tier using configurable points and thresholds
-  const { tier, thresholds, tierPoints } = calculateTier(candidates, yesHeadcountTarget, config);
-  
-  // Count demographics
+  const targetResult = calculateHeadcountTarget(totalEmployees, revenue, averageNpat3yr, config);
+  const yesHeadcountTarget = targetResult.applied;
+
   const totalCandidates = candidates.length;
   const blackYouthCount = candidates.filter(c => c.isBlack).length;
-  const blackYouthPercentage = totalCandidates > 0 
-    ? (blackYouthCount / totalCandidates) * 100 
+  const blackYouthPercentage = totalCandidates > 0
+    ? (blackYouthCount / totalCandidates) * 100
     : 0;
-  
-  // Absorption tracking
+
   const absorbedCount = candidates.filter(c => c.isAbsorbed).length;
-  const absorptionRate = totalCandidates > 0 
-    ? (absorbedCount / totalCandidates) * 100 
+  const absorptionRate = totalCandidates > 0
+    ? (absorbedCount / totalCandidates) * 100
     : 0;
-  
-  // Calculate level increase using configurable black youth threshold
-  const { increase: yesBeeLevelIncrease, qualifies: qualifiesForLevelUplift } = calculateLevelIncrease(
-    tier, 
-    blackYouthPercentage,
+
+  const { tier, levelIncrease, bonusPoints, thresholds } = calculateTierAndUplift(
+    totalCandidates,
+    yesHeadcountTarget,
+    absorptionRate,
     config
   );
-  
-  // Cost calculations
+
+  // Black youth threshold gate (default 50%) — no uplift if not met
+  const blackYouthThreshold = config?.yes?.blackYouthPercent ?? 50;
+  const qualifiesForLevelUplift = blackYouthPercentage >= blackYouthThreshold;
+  const yesBeeLevelIncrease = qualifiesForLevelUplift ? levelIncrease : 0;
+  const yesBonusPoints = qualifiesForLevelUplift ? bonusPoints : 0;
+
   const totalCost = totalYesCost || candidates.reduce((sum, c) => sum + c.cost, 0);
   const costPerCandidate = totalCandidates > 0 ? totalCost / totalCandidates : 0;
-  
-  // Score is not applicable for YES - it's a bonus mechanism
-  // But we return the tier achievement as the "score" using configurable tier points
+
   const tierScores: Record<typeof tier, number> = {
     'None': 0,
-    'Tier 3': tierPoints.tier3,
-    'Tier 2': tierPoints.tier2,
-    'Tier 1': tierPoints.tier1,
+    'Tier 3': config?.yes?.tier3Points ?? 1,
+    'Tier 2': config?.yes?.tier2Points ?? 2,
+    'Tier 1': config?.yes?.tier1Points ?? 3,
   };
-  
   const score = tierScores[tier];
-  
-  // Progress calculations
-  const progressToTier1 = Math.min(100, (totalCandidates / thresholds.tier1) * 100);
-  const progressToTier2 = Math.min(100, (totalCandidates / thresholds.tier2) * 100);
-  const progressToTier3 = Math.min(100, (totalCandidates / thresholds.tier3) * 100);
-  
+
+  const progressToTier1 = thresholds.tier1 > 0 ? Math.min(100, (totalCandidates / thresholds.tier1) * 100) : 0;
+  const progressToTier2 = thresholds.tier2 > 0 ? Math.min(100, (totalCandidates / thresholds.tier2) * 100) : 0;
+  const progressToTier3 = thresholds.tier3 > 0 ? Math.min(100, (totalCandidates / thresholds.tier3) * 100) : 0;
+
   return {
     score: round2(score),
-    target: 3, // Issue 2: Changed from 5 to 3
-    weighting: 3, // Issue 2: Changed from 5 to 3
+    target: 3,
+    weighting: 3,
     yesTierAchieved: tier,
     yesBeeLevelIncrease,
+    yesBonusPoints,
     qualifiesForLevelUplift,
     yesHeadcountTarget,
     totalCandidates,
@@ -209,30 +197,32 @@ export function calculateYESScore(data: YESData, config?: CalculatorConfig): YES
     progressToTier1: round2(progressToTier1),
     progressToTier2: round2(progressToTier2),
     progressToTier3: round2(progressToTier3),
+    targetBreakdown: {
+      headcountBased: targetResult.headcountBased,
+      npatBased: targetResult.npatBased,
+      revenueBased: targetResult.revenueBased,
+      applied: targetResult.applied,
+    },
   };
 }
 
-/**
- * Calculate recommended number of YES candidates to achieve a specific tier
- */
 export function calculateRecommendedCandidates(
   totalEmployees: number,
-  targetTier: 'Tier 1' | 'Tier 2' | 'Tier 3'
+  targetTier: 'Tier 1' | 'Tier 2' | 'Tier 3',
+  revenue = 0,
+  averageNpat3yr = 0
 ): number {
-  const baseTarget = calculateHeadcountTarget(totalEmployees);
-  
+  const { applied } = calculateHeadcountTarget(totalEmployees, revenue, averageNpat3yr);
+
   const multipliers: Record<typeof targetTier, number> = {
-    'Tier 1': 1.5,
-    'Tier 2': 1.0,
-    'Tier 3': 0.5,
+    'Tier 1': 2.0,
+    'Tier 2': 1.5,
+    'Tier 3': 1.0,
   };
-  
-  return Math.ceil(baseTarget * multipliers[targetTier]);
+
+  return Math.ceil(applied * multipliers[targetTier]);
 }
 
-/**
- * Check if company meets 50% black youth requirement
- */
 export function meetsBlackYouthRequirement(candidates: YESCandidate[]): boolean {
   if (candidates.length === 0) return false;
   const blackYouthCount = candidates.filter(c => c.isBlack).length;

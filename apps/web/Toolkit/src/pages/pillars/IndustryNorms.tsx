@@ -332,7 +332,21 @@ export default function IndustryNorms() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="icon" title="Download CSV">
+              <Button variant="outline" size="icon" title="Download CSV" onClick={() => {
+                const header = 'Publication Date,Quarter,Industry,Norm Margin (%)';
+                const rows = filteredHistory.map(r =>
+                  `${new Date(r.date).toISOString().slice(0, 10)},${r.quarter},"${r.industry}",${r.norm.toFixed(2)}`
+                );
+                const csv = [header, ...rows].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'industry-norms.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+                toast({ title: 'CSV Downloaded', description: `${rows.length} records exported.` });
+              }}>
                 <Download className="h-4 w-4" />
               </Button>
             </div>

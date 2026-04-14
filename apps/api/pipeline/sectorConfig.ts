@@ -5,6 +5,11 @@
  * pillar weightings, compliance targets, sub-minimum thresholds,
  * and level determination tables.
  *
+ * @domain-rule slides:22,23,25
+ * @see docs/domain/_index.md - Master scoring framework
+ * @see docs/domain/calculations/scoring_tables.md - Recognition levels and thresholds
+ * @see docs/domain/definitions.md - Enterprise classifications (EME/QSE/Large)
+ *
  * Reference: B-BBEE Act 53 of 2003, Amended Codes of Good Practice,
  * and Sector-Specific Codes (ICT, FSC, AgriBEE, etc.)
  */

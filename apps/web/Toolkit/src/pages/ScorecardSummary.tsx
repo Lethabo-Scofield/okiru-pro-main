@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Award, Trophy, TrendingUp, CheckCircle2, XCircle, Shield, ArrowLeft, Download } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Award, Trophy, TrendingUp, CheckCircle2, XCircle, Shield, ArrowLeft, Download, Loader2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { useAuth } from "@toolkit/lib/auth";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -9,6 +9,8 @@ import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement"
 import { calculateEsdScore, calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
 import { cn } from "@toolkit/lib/utils";
 import { Button } from "@toolkit/components/ui/button";
+import { exportCertificatePdf } from "@toolkit/lib/exportPdf";
+import { useToast } from "@toolkit/hooks/use-toast";
 
 interface PillarSummary {
   key: string;
@@ -31,8 +33,11 @@ function pct(value: number): string {
 }
 
 export default function ScorecardSummary() {
-  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig } = useBbeeStore();
+  const state = useBbeeStore();
+  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig } = state;
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
 
   const cfg = calculatorConfig!;
   const ownResult = useMemo(() => calculateOwnershipScore(ownership, cfg), [ownership, cfg]);
@@ -142,9 +147,17 @@ export default function ScorecardSummary() {
     { name: "Enterprise Dev", threshold: "≥ 2 pts", met: scorecard.enterpriseDevelopment.subMinimumMet, score: scorecard.enterpriseDevelopment.score, target: 7 },
   ];
 
-  const handleExport = () => {
-    // Export functionality would go here
-    console.log("Export scorecard");
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      exportCertificatePdf(state, { analystName: user?.fullName });
+      toast({ title: "Export complete", description: "PDF certificate has been downloaded." });
+    } catch (err) {
+      console.error('Export failed:', err);
+      toast({ title: "Export failed", description: "Could not generate PDF. Please try again.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleBack = () => {
@@ -166,8 +179,8 @@ export default function ScorecardSummary() {
               {client.name ? `${client.name} — ` : ''}B-BBEE Verification Complete
             </p>
           </div>
-          <Button onClick={handleExport} variant="outline" className="shrink-0">
-            <Download className="h-4 w-4 mr-2" />
+          <Button onClick={handleExport} variant="outline" className="shrink-0" disabled={isExporting}>
+            {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
             Export Report
           </Button>
         </div>
@@ -349,8 +362,8 @@ export default function ScorecardSummary() {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <Button size="lg" onClick={handleExport} className="w-full sm:w-auto">
-            <Download className="h-5 w-5 mr-2" />
+          <Button size="lg" onClick={handleExport} className="w-full sm:w-auto" disabled={isExporting}>
+            {isExporting ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Download className="h-5 w-5 mr-2" />}
             Download Full Report
           </Button>
           <Button size="lg" variant="outline" onClick={() => window.location.href = '/dashboard'} className="w-full sm:w-auto">

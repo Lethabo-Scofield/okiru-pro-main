@@ -90,7 +90,7 @@ import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
 import { HybridRetriever } from '../../pipeline/extraction/hybridRetriever.js';
 import { InMemoryVectorStore, createVectorStore } from '../../pipeline/extraction/embeddingStore.js';
-import { generateEmbeddings, chatCompletion } from '../../pipeline/extraction/azureOpenAIClient.js';
+import { generateEmbeddings } from '../../pipeline/extraction/azureOpenAIClient.js';
 import {
   buildManifest,
   getAllEntities,
@@ -115,7 +115,9 @@ import { Document, DocumentChunk } from '../../models.js';
 import { 
   isScannedPdf, 
   extractFromScannedPdf,
-  type VisionExtractionResult 
+  extractTablesFromDigitalPdf,
+  type VisionExtractionResult,
+  type VisionTableResult,
 } from '../../pipeline/extraction/visionPdfExtractor.js';
 
 const router = Router();
@@ -154,12 +156,13 @@ interface ExtractionResult {
 }
 
 interface ExtractedTables {
-  shareholders?: Array<{ name: string; blackOwnership: number; blackWomenOwnership: number; shares: number; shareValue: number; isDesignatedGroup: boolean; blackNewEntrant: boolean; yearsHeld?: number }>;
+  shareholders?: Array<{ name: string; blackOwnership: number; blackWomenOwnership: number; shares: number; shareValue: number; isDesignatedGroup: boolean; blackNewEntrant: boolean; yearsHeld?: number; votingRightsPercent?: number; economicInterestPercent?: number }>;
   employees?: Array<{ name: string; race: string; gender: string; designation: string; isDisabled: boolean; isForeign: boolean }>;
   suppliers?: Array<{ name: string; spend: number; beeLevel: number; blackOwnership: number; blackWomenOwnership: number; enterpriseType: string; isDesignatedGroup: boolean; isBlackOwned51: boolean; isBlackWomanOwned30: boolean; isEME: boolean; isQSE: boolean }>;
   contributions?: Array<{ beneficiary: string; type: string; amount: number; category: 'sd' | 'ed' | 'sed' }>;
   trainingPrograms?: Array<{ name: string; category: string; cost: number; race?: string; gender?: string; isDisabled?: boolean }>;
   ownershipFinancials?: Array<{ companyValue: number; outstandingDebt: number; yearsHeld?: number }>;
+  financials?: Array<Record<string, any>>;
 }
 
 interface ExtractionResponse {
@@ -427,7 +430,6 @@ async function parseFileToPages(
       });
     }
 
-    // Check if this is a scanned PDF (very little text extracted)
     const totalText = pages.map(p => p.text).join(' ');
     const scannedDetection = isScannedPdf(totalText);
     
@@ -436,17 +438,15 @@ async function parseFileToPages(
     if (scannedDetection) {
       console.log(`[hybridExtraction] Switching to GPT-4o Vision OCR for scanned PDF`);
       try {
-        // Use vision extraction for scanned PDFs
         const visionResults = await extractFromScannedPdf(buffer, 'RCOGP', 'Generic', null);
         
         if (visionResults && visionResults.length > 0) {
-          // Merge vision results with page structure
           return visionResults.map((vr, idx) => ({
             pageId: vr.pageId || `page_${idx + 1}`,
             text: vr.text || '',
             metadata: { 
               pageNumber: vr.metadata.pageNumber || idx + 1, 
-              type: 'pdf_vision',
+              type: 'pdf_vision' as const,
               ocrConfidence: vr.metadata.ocrConfidence,
               visionExtracted: true,
               entities: vr.entities || []
@@ -454,8 +454,46 @@ async function parseFileToPages(
           }));
         }
       } catch (visionErr) {
-        console.warn(`[hybridExtraction] Vision extraction failed, falling back to text extraction:`, visionErr);
-        // Fall back to regular text extraction if vision fails
+        console.warn(`[hybridExtraction] Vision OCR failed, falling back to text extraction:`, visionErr);
+      }
+    } else {
+      // Digital PDF with text — run vision on table-heavy pages for layout-aware extraction
+      try {
+        console.log(`[hybridExtraction] Running vision table extraction on digital PDF`);
+        const visionTables = await extractTablesFromDigitalPdf(buffer, pages);
+        
+        if (visionTables.length > 0) {
+          const totalVisionTables = visionTables.reduce((s, v) => s + v.tables.length, 0);
+          console.log(`[hybridExtraction] Vision extracted ${totalVisionTables} tables from ${visionTables.length} pages`);
+          
+          // Enhance pages with vision-extracted table data
+          for (const vt of visionTables) {
+            const pageIdx = vt.pageNumber - 1;
+            if (pageIdx >= 0 && pageIdx < pages.length) {
+              const existing = pages[pageIdx];
+              // Append structured table text to the page for downstream extraction
+              const tableText = vt.tables.map(t => {
+                const headerLine = t.headers.join(' | ');
+                const rowLines = t.rows.map((r: Record<string, any>) => 
+                  t.headers.map((h: string) => r[h] ?? '').join(' | ')
+                ).join('\n');
+                return `\n[TABLE: ${t.title}]\n${headerLine}\n${rowLines}`;
+              }).join('\n');
+
+              pages[pageIdx] = {
+                ...existing,
+                text: existing.text + tableText,
+                metadata: {
+                  ...existing.metadata,
+                  type: 'pdf_vision_enhanced',
+                  visionTables: vt.tables,
+                },
+              };
+            }
+          }
+        }
+      } catch (visionErr) {
+        console.warn(`[hybridExtraction] Vision table extraction failed (non-fatal):`, visionErr);
       }
     }
 
@@ -494,25 +532,70 @@ async function parseFileToPages(
     return chunks.map(c => ({ ...c, metadata: { type: 'text' } }));
   }
 
-  // DOCX (basic support - extract text from XML)
-  if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || ext === 'docx') {
+  // DOCX / DOC — mammoth preserves tables, lists, headings
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimetype === 'application/msword' ||
+    ext === 'docx' || ext === 'doc'
+  ) {
     try {
-      // Simple DOCX text extraction using unzip + XML parsing
-      const JSZip = await import('jszip');
-      const zip = await JSZip.default.loadAsync(buffer);
-      const documentXml = await zip.file('word/document.xml')?.async('text');
+      const mammoth = await import('mammoth');
+      const result = await mammoth.default.convertToHtml({ buffer });
+      const html = result.value;
 
-      if (documentXml) {
-        // Extract text between <w:t> tags
-        const textMatches = documentXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
-        const text = textMatches
-          .map(match => match.replace(/<w:t[^>]*>|<\/w:t>/g, ''))
-          .join(' ');
+      // Convert HTML tables to pipe-delimited text for downstream extraction
+      let text = html
+        .replace(/<table[^>]*>/gi, '\n[TABLE]\n')
+        .replace(/<\/table>/gi, '\n[/TABLE]\n')
+        .replace(/<tr[^>]*>/gi, '')
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<t[hd][^>]*>/gi, ' | ')
+        .replace(/<\/t[hd]>/gi, '')
+        .replace(/<li[^>]*>/gi, '- ')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<h[1-6][^>]*>/gi, '\n## ')
+        .replace(/<\/h[1-6]>/gi, '\n')
+        .replace(/<p[^>]*>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 
-        return [{ pageId: 'docx_1', text, metadata: { type: 'docx' } }];
+      if (result.messages?.length) {
+        console.warn(`[hybridExtraction] DOCX warnings:`, result.messages.map((m: any) => m.message).join('; '));
       }
+
+      // Split into manageable chunks (one per ~5000 chars)
+      const maxChunk = 5000;
+      const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
+      if (text.length <= maxChunk) {
+        pages.push({ pageId: 'docx_1', text, metadata: { type: 'docx' } });
+      } else {
+        const paragraphs = text.split('\n\n');
+        let chunk = '';
+        let chunkNum = 1;
+        for (const para of paragraphs) {
+          if (chunk.length + para.length > maxChunk && chunk.length > 0) {
+            pages.push({ pageId: `docx_${chunkNum}`, text: chunk.trim(), metadata: { type: 'docx', chunkNum } });
+            chunkNum++;
+            chunk = '';
+          }
+          chunk += para + '\n\n';
+        }
+        if (chunk.trim()) {
+          pages.push({ pageId: `docx_${chunkNum}`, text: chunk.trim(), metadata: { type: 'docx', chunkNum } });
+        }
+      }
+
+      console.log(`[hybridExtraction] DOCX extracted: ${text.length} chars → ${pages.length} chunks`);
+      return pages;
     } catch (error) {
-      console.warn('[hybridExtraction] DOCX parsing failed:', error);
+      console.warn('[hybridExtraction] DOCX/DOC parsing failed:', error);
     }
 
     return [{ pageId: 'docx_1', text: '', metadata: { type: 'docx', error: 'Failed to parse' } }];
@@ -1007,7 +1090,7 @@ router.post(
       // Group chunks by sheet name for table extraction
       const sheetChunks = new Map<string, string[]>();
       for (const chunk of chunks) {
-        const sheetMatch = chunk.pageId.match(/sheet_(.+?)_/);
+        const sheetMatch = chunk.pageId.match(/^sheet_(.+)_\d+-\d+$/);
         if (sheetMatch) {
           const sheet = sheetMatch[1];
           if (!sheetChunks.has(sheet)) sheetChunks.set(sheet, []);
@@ -1026,7 +1109,7 @@ router.post(
       }
 
       const tableTime = Date.now() - tableStart;
-      console.log(`[hybridExtraction] AI table extraction complete in ${tableTime}ms: employees=${extractedTables.employees?.length || 0}, shareholders=${extractedTables.shareholders?.length || 0}, suppliers=${extractedTables.suppliers?.length || 0}, contributions=${extractedTables.contributions?.length || 0}, training=${extractedTables.trainingPrograms?.length || 0}`);
+      console.log(`[hybridExtraction] AI table extraction complete in ${tableTime}ms: employees=${extractedTables.employees?.length || 0}, shareholders=${extractedTables.shareholders?.length || 0}, suppliers=${extractedTables.suppliers?.length || 0}, contributions=${extractedTables.contributions?.length || 0}, training=${extractedTables.trainingPrograms?.length || 0}, financials=${(extractedTables as any).financials?.length || 0}`);
 
       const totalTime = Date.now() - totalStartTime;
 

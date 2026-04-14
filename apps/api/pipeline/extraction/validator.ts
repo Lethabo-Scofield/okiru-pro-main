@@ -140,7 +140,10 @@ export function validateEmployees(
 
   const validRaces = ['African', 'Coloured', 'Indian', 'White'];
   const validGenders = ['Male', 'Female'];
-  const validDesignations = ['Board', 'Executive', 'Senior', 'Middle', 'Junior'];
+  const validDesignations = [
+    'Board', 'Executive', 'Executive Director', 'Other Executive Management',
+    'Senior', 'Middle', 'Junior', 'Semi-skilled', 'Unskilled', 'Skilled Technical',
+  ];
 
   let unknownRace = 0, unknownGender = 0, unknownDesig = 0;
   for (const e of employees) {

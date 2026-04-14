@@ -32,7 +32,7 @@ const item = {
 
 const pillarMeta = [
   { key: "ownership", name: "Ownership", icon: Users, color: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15", iconColor: "text-violet-400", barColor: "bg-violet-500", route: "/pillars/ownership" },
-  { key: "managementControl", name: "Management Control", icon: UserCog, color: "from-blue-500 to-cyan-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/management" },
+  { key: "managementControl", name: "Management Control & Employment Equity", icon: UserCog, color: "from-blue-500 to-cyan-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/management" },
   { key: "skillsDevelopment", name: "Skills Development", icon: BookOpen, color: "from-emerald-400 to-green-500", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", barColor: "bg-emerald-500", route: "/pillars/skills" },
   { key: "procurement", name: "Procurement", icon: ShoppingCart, color: "from-amber-400 to-orange-500", iconBg: "bg-amber-500/15", iconColor: "text-amber-400", barColor: "bg-amber-500", route: "/pillars/procurement" },
   { key: "supplierDevelopment", name: "Supplier Development", icon: Handshake, color: "from-rose-400 to-pink-500", iconBg: "bg-rose-500/15", iconColor: "text-rose-400", barColor: "bg-rose-500", route: "/pillars/esd" },
@@ -127,13 +127,8 @@ export default function Dashboard() {
     return <DashboardSkeleton />;
   }
 
-  const hasData = isLoaded && client.id && (
-    (scorecard.total?.score || 0) > 0 ||
-    (scorecard.ownership?.score || 0) > 0 ||
-    (scorecard.managementControl?.score || 0) > 0 ||
-    (scorecard.skillsDevelopment?.score || 0) > 0 ||
-    (scorecard.procurement?.score || 0) > 0
-  );
+  // Show dashboard if we have loaded data (either from extraction or session)
+  const hasData = isLoaded;
 
   if (!hasData) {
     return (

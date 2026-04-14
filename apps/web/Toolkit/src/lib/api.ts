@@ -109,7 +109,7 @@ export const api = {
     apiRequest(`/api/financial-years/${id}`, { method: "DELETE" }),
 
   // --- Export Logs ---
-  logExport: (data: any) => apiRequest("/api/export-log", { method: "POST", body: JSON.stringify(data) }),
+  logExport: (data: any) => apiRequest("/api/export-log/log", { method: "POST", body: JSON.stringify(data) }),
   getExportLogs: (clientId: string) => apiRequest(`/api/clients/${clientId}/export-logs`),
 
   // --- Calculator Config ---

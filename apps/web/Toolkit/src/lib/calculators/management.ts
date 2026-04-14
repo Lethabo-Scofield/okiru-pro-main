@@ -1,12 +1,15 @@
+/**
+ * @domain-rule pillar:management_control, slides:96-106
+ * @see docs/domain/pillars/02_management_control.md
+ * @see docs/domain/calculations/management_control_calc.md
+ * VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
+ * Config is REQUIRED - all targets come from CalculatorConfig loaded from the API.
+ */
 import type { ManagementData, Employee } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { isBlackRace, safeRatio, clampScore, round2 } from './shared';
 import type { Province } from './eapTargets';
 import { getEAPTargets, normalizeProvince } from './eapTargets';
-
-// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
-// Config is REQUIRED — all targets come from CalculatorConfig loaded from the API.
-// No hardcoded RCOGP fallback constants.
 
 export interface ManagementSubLine {
   name: string;
@@ -51,6 +54,48 @@ export interface ManagementResult {
   };
 }
 
+type DemoGroup = 'AM' | 'CM' | 'IM' | 'AF' | 'CF' | 'IF';
+
+/**
+ * National EAP proportions per demographic group (slide 100)
+ * @domain-rule pillar:management_control, slide:100
+ * @see docs/domain/calculations/management_control_calc.md
+ */
+const NATIONAL_EAP_DEMOGRAPHICS: Record<DemoGroup, number> = {
+  AM: 0.435, CM: 0.046, IM: 0.017,
+  AF: 0.375, CF: 0.042, IF: 0.010,
+};
+
+function classifyDemographic(emp: Employee): DemoGroup | null {
+  if (!isBlackRace(emp.race)) return null;
+  const racePrefix = emp.race === 'African' ? 'A' : emp.race === 'Coloured' ? 'C' : 'I';
+  const genderSuffix = emp.gender === 'Female' ? 'F' : 'M';
+  return `${racePrefix}${genderSuffix}` as DemoGroup;
+}
+
+/**
+ * Per-demographic EAP scoring per RCOGP slide 100.
+ * Each group gets its own effective target, effective weight, and score.
+ * Achievement is capped at the EAP proportion to prevent gaming.
+ */
+function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): number {
+  if (employees.length === 0) return 0;
+  let totalScore = 0;
+  for (const group of Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]) {
+    const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
+    const effectiveTarget = eapProp * categoryTarget;
+    const effectiveWeight = eapProp * maxPoints;
+    if (effectiveTarget <= 0) continue;
+
+    const count = employees.filter(e => classifyDemographic(e) === group).length;
+    const ratio = count / employees.length;
+    const cappedRatio = Math.min(ratio, eapProp);
+    const achievement = cappedRatio / effectiveTarget;
+    totalScore += Math.min(achievement, 1) * effectiveWeight;
+  }
+  return totalScore;
+}
+
 const countBlack = (emps: Employee[]): number =>
   emps.filter(e => isBlackRace(e.race)).length;
 
@@ -66,10 +111,6 @@ function groupByDesignation(employees: Employee[]): Record<string, Employee[]> {
 }
 
 function pctOf(emps: Employee[], countFn: (e: Employee[]) => number): number {
-  return emps.length > 0 ? countFn(emps) / emps.length : 0;
-}
-
-function pctOfRaw(emps: Employee[], countFn: (e: Employee[]) => number): number {
   return emps.length > 0 ? countFn(emps) / emps.length : 0;
 }
 
@@ -163,32 +204,37 @@ export function calculateManagementScore(
   const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
   const otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
   const otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
-  // EAP-based targets for Senior/Middle/Junior (using config max points if available)
-  const seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorEAP.blackTarget, seniorMaxPts), seniorMaxPts);
-  const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorEAP.blackWomenTarget, seniorBWMaxPts), seniorBWMaxPts);
-  const middleBlack = clampScore(safeRatio(middleBlackPct, middleEAP.blackTarget, middleMaxPts), middleMaxPts);
-  const middleBWO = clampScore(safeRatio(middleBWOPct, middleEAP.blackWomenTarget, middleBWMaxPts), middleBWMaxPts);
-  // Junior level now includes Junior, Semi-skilled, and Unskilled - all use Junior EAP
-  const juniorCombinedBlackPct = junior.length + semiSkilled.length + unskilled.length > 0
-    ? (countBlack(junior) + countBlack(semiSkilled) + countBlack(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
-    : 0;
-  const juniorCombinedBWOPct = junior.length + semiSkilled.length + unskilled.length > 0
-    ? (countBlackWomen(junior) + countBlackWomen(semiSkilled) + countBlackWomen(unskilled)) / (junior.length + semiSkilled.length + unskilled.length)
-    : 0;
-  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorEAP.blackTarget, juniorMaxPts), juniorMaxPts);
-  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorEAP.blackWomenTarget, juniorBWMaxPts), juniorBWMaxPts);
-  // Employment Equity: Skilled Technical (uses Middle EAP targets with config max points)
+  // Per-demographic EAP scoring (slide 100) for Senior/Middle/Junior
+  const seniorTarget = cfg?.seniorBlackTarget ?? seniorEAP.blackTarget;
+  const middleTarget = cfg?.middleBlackTarget ?? middleEAP.blackTarget;
+  const juniorTarget = cfg?.juniorBlackTarget ?? juniorEAP.blackTarget;
+
+  const seniorScore = clampScore(calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts), seniorMaxPts + seniorBWMaxPts);
+  const middleScore = clampScore(calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts), middleMaxPts + middleBWMaxPts);
+
+  const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
+  const juniorScore = clampScore(calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts), juniorMaxPts + juniorBWMaxPts);
+
+  // Split combined EAP score into Black/BWO proportions for display
+  const seniorBlack = clampScore(seniorScore * (seniorMaxPts / (seniorMaxPts + seniorBWMaxPts)), seniorMaxPts);
+  const seniorBWO = clampScore(seniorScore - seniorBlack, seniorBWMaxPts);
+  const middleBlack = clampScore(middleScore * (middleMaxPts / (middleMaxPts + middleBWMaxPts)), middleMaxPts);
+  const middleBWO = clampScore(middleScore - middleBlack, middleBWMaxPts);
+  const juniorBlackScore = clampScore(juniorScore * (juniorMaxPts / (juniorMaxPts + juniorBWMaxPts)), juniorMaxPts);
+  const juniorBWOScore = clampScore(juniorScore - juniorBlackScore, juniorBWMaxPts);
+
+  // Skilled Technical is informational only (not part of RCOGP 19-point total)
   const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, seniorMaxPts), seniorMaxPts);
   const skilledTechnicalBWOScore = clampScore(safeRatio(skilledTechnicalBWOPct, skilledTechnicalEAP.blackWomenTarget, seniorBWMaxPts), seniorBWMaxPts);
   const disabledScore = clampScore(safeRatio(blackDisabledPct, disabledTarget, disabledMaxPts), disabledMaxPts);
 
+  // RCOGP total: Board + Exec + Other Exec + Senior + Middle + Junior + Disabled = 19
   const totalPoints = boardVotingBlack + boardVotingBWO +
     execDirectorsBlack + execDirectorsBWO +
     otherExecBlackScore + otherExecBWOScore +
     seniorBlack + seniorBWO +
     middleBlack + middleBWO +
     juniorBlackScore + juniorBWOScore +
-    skilledTechnicalBlackScore + skilledTechnicalBWOScore +
     disabledScore;
 
   const subLines: ManagementSubLine[] = [
@@ -230,18 +276,18 @@ export function calculateManagementScore(
     subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
-      boardBlackPct: pctOfRaw(board, countBlack),
-      boardBWOPct: pctOfRaw(board, countBlackWomen),
-      execBlackPct: pctOfRaw(execDirs, countBlack),
-      execBWOPct: pctOfRaw(execDirs, countBlackWomen),
-      otherExecBlackPct: pctOfRaw(otherExec, countBlack),
-      otherExecBWOPct: pctOfRaw(otherExec, countBlackWomen),
-      seniorBlackPct: pctOfRaw(senior, countBlack),
-      seniorBWOPct: pctOfRaw(senior, countBlackWomen),
-      middleBlackPct: pctOfRaw(middle, countBlack),
-      middleBWOPct: pctOfRaw(middle, countBlackWomen),
-      juniorBlackPct: pctOfRaw(junior, countBlack),
-      juniorBWOPct: pctOfRaw(junior, countBlackWomen),
+      boardBlackPct: pctOf(board, countBlack),
+      boardBWOPct: pctOf(board, countBlackWomen),
+      execBlackPct: pctOf(execDirs, countBlack),
+      execBWOPct: pctOf(execDirs, countBlackWomen),
+      otherExecBlackPct: pctOf(otherExec, countBlack),
+      otherExecBWOPct: pctOf(otherExec, countBlackWomen),
+      seniorBlackPct: pctOf(senior, countBlack),
+      seniorBWOPct: pctOf(senior, countBlackWomen),
+      middleBlackPct: pctOf(middle, countBlack),
+      middleBWOPct: pctOf(middle, countBlackWomen),
+      juniorBlackPct: pctOf(junior, countBlack),
+      juniorBWOPct: pctOf(junior, countBlackWomen),
       disabledBlackPct: employees.length > 0 ? countBlack(disabledEmps) / employees.length : 0,
     },
   };

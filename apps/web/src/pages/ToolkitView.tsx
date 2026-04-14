@@ -89,7 +89,7 @@ export default function ToolkitView() {
   const search = useSearch();
   const clientId = params.clientId || "";
   const sessionParam = new URLSearchParams(search).get("session");
-  const isSyntheticId = clientId.startsWith('build-') || clientId.startsWith('session');
+  const isSyntheticId = clientId.startsWith('build-') || clientId.startsWith('session') || clientId.startsWith('upload-');
   const [sessionLoading, setSessionLoading] = useState(!!sessionParam || (isSyntheticId && !useBbeeStore.getState().isLoaded));
 
   if (clientId && !isSyntheticId) {
@@ -99,13 +99,25 @@ export default function ToolkitView() {
   useEffect(() => {
     // Case 1: session param in query string -- load session from API
     if (sessionParam) {
+      const storeState = useBbeeStore.getState();
+      const uploadId = `upload-${sessionParam}`;
+      const sessionId = `session-${sessionParam}`;
+      const alreadyHydrated = storeState.isLoaded &&
+        (storeState.activeClientId === uploadId || storeState.activeClientId === sessionId);
+
+      if (alreadyHydrated) {
+        // Store already has valid data from DocumentProcessor — don't overwrite
+        localStorage.setItem("okiru-pro-active-client", storeState.activeClientId!);
+        setSessionLoading(false);
+        return;
+      }
+
       const loadSession = async () => {
         try {
           const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionParam}`);
           if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
           const session = await res.json();
-          const syntheticId = `session-${sessionParam}`;
-          localStorage.setItem("okiru-pro-active-client", syntheticId);
+          localStorage.setItem("okiru-pro-active-client", sessionId);
           await hydrateStoreFromSession(session);
         } catch (err) {
           console.error("Failed to load session for toolkit:", err);
@@ -120,7 +132,7 @@ export default function ToolkitView() {
     // Case 2: synthetic clientId in URL but store not loaded (page refresh)
     // Try to load session from the clientId if it contains a session identifier
     if (isSyntheticId && !useBbeeStore.getState().isLoaded) {
-      const extractedSessionId = clientId.replace(/^(build-|session-)/, '').replace(/^sess-/, '');
+      const extractedSessionId = clientId.replace(/^(build-|session-|upload-)/, '').replace(/^sess-/, '');
       if (extractedSessionId) {
         const loadSession = async () => {
           try {
