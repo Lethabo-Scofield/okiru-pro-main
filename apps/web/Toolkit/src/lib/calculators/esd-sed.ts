@@ -1,30 +1,56 @@
+/**
+ * @domain-rule pillar:esd, slides:73-82
+ * @domain-rule pillar:sed, slides:48-53
+ * @see docs/domain/pillars/05_enterprise_supplier_dev.md
+ * @see docs/domain/pillars/06_socioeconomic_dev.md
+ * @see docs/domain/diagrams/sed_calculation.md
+ */
 import type { ESDData, SEDData, Contribution } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
-// VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
-// Complete table of 14 contribution types and their benefit factors
-const DEFAULT_BENEFIT_FACTORS: Record<string, number> = {
-  // Category 1: Direct monetary contributions (1.0 factor)
+/**
+ * ESD benefit factors per RCOGP slides 79-80
+ * @domain-rule pillar:esd, slides:79,80
+ * @see docs/domain/pillars/05_enterprise_supplier_dev.md#qualifying-contributions
+ */
+const ESD_BENEFIT_FACTORS: Record<string, number> = {
   grant: 1.0,
   direct_cost: 1.0,
   cost_covering: 1.0,
   discounts: 1.0,
-  overhead_costs: 1.0,
-  // CRITICAL FIX: Interest-free loan factor is 1.0 (not 0.7)
-  interest_free_loan: 1.0,
-  // Category 2: Partial benefits
-  standard_loan: 0.7,  // Interest-bearing loan
-  guarantees: 0.03,    // 3% of guarantee value
-  lower_interest_loan: 0.7,  // Differential benefit (simplified)
-  // Category 3: Special investment types (1.0 factor)
-  minority_investment: 1.0,  // In EME/QSE
-  professional_services_free: 1.0,
-  professional_services_discount: 0.8,  // Discount percentage
-  employee_time: 1.0,  // Secondment
-  // Category 4: Procurement-specific (SD only)
-  shorter_payment_terms: 0.7,  // Differential benefit (simplified)
-  equity_investment: 1.0,  // ED only, special formula
+  overhead_costs: 0.70,
+  interest_free_loan: 0.70,
+  standard_loan: 0.50,
+  guarantees: 0.03,
+  lower_interest_loan: 0.70,
+  minority_investment: 0.70,
+  professional_services_free: 0.60,
+  professional_services_discount: 0.60,
+  employee_time: 0.60,
+  shorter_payment_terms: 0.15,
+  equity_investment: 1.0,
+};
+
+/**
+ * SED benefit factors per RCOGP slide 52 (higher recognition than ESD)
+ * @domain-rule pillar:sed, slide:52
+ * @see docs/domain/pillars/06_socioeconomic_dev.md#qualifying-contributions
+ */
+const SED_BENEFIT_FACTORS: Record<string, number> = {
+  grant: 1.0,
+  direct_cost: 1.0,
+  cost_covering: 1.0,
+  discounts: 1.0,
+  overhead_costs: 0.80,
+  interest_free_loan: 0.70,
+  standard_loan: 0.50,
+  guarantees: 0.03,
+  lower_interest_loan: 0.70,
+  minority_investment: 0.70,
+  professional_services_free: 0.80,
+  professional_services_discount: 0.80,
+  employee_time: 0.80,
 };
 
 export interface EsdSubLine {
@@ -65,8 +91,11 @@ export interface SedResult {
   };
 }
 
-function buildBenefitFactors(config: CalculatorConfig): Record<string, number> {
-  const factors = { ...DEFAULT_BENEFIT_FACTORS };
+function buildBenefitFactors(
+  pillar: 'esd' | 'sed',
+  config: CalculatorConfig
+): Record<string, number> {
+  const factors = { ...(pillar === 'sed' ? SED_BENEFIT_FACTORS : ESD_BENEFIT_FACTORS) };
   if (config?.benefitFactors && Array.isArray(config.benefitFactors)) {
     for (const bf of config.benefitFactors) {
       factors[bf.type] = bf.factor;
@@ -106,8 +135,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
   const sdTarget = npat * supplierDevTargetPct;
   const edTarget = npat * enterpriseDevTargetPct;
 
-  const benefitFactors = buildBenefitFactors(config);
-  const { sdSpend, edSpend } = categorizeContributions(contributions, benefitFactors);
+  const esdFactors = buildBenefitFactors('esd', config);
+  const { sdSpend, edSpend } = categorizeContributions(contributions, esdFactors);
 
   const sdScore = safeRatio(sdSpend, sdTarget, supplierDevMax);
   const edScore = safeRatio(edSpend, edTarget, enterpriseDevMax);
@@ -118,8 +147,10 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
   const sdTotal = clampScore(sdScore, supplierDevMax);
   const edTotal = clampScore(edScore + graduationBonusScore + jobsCreatedBonusScore, enterpriseDevMax + 2);
 
-  const sdSubMinimumMet = sdTotal >= (supplierDevMax * 0.4);
-  const edSubMinimumMet = edScore >= (enterpriseDevMax * 0.4);
+  const sdSubMinPct = config.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
+  const edSubMinPct = config.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
+  const sdSubMinimumMet = sdTotal >= (supplierDevMax * sdSubMinPct / 100);
+  const edSubMinimumMet = edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
     { name: "Annual value of all Supplier Development contributions", target: "2% of NPAT", weighting: 10, score: sdScore },
@@ -163,7 +194,11 @@ export function calculateSedScore(data: SEDData, npat: number, config: Calculato
   const npatTargetPct = sc.npatTarget;
   const target = npat * npatTargetPct;
 
-  const totalSpend = contributions.reduce((acc, c) => acc + c.amount, 0);
+  const sedFactors = buildBenefitFactors('sed', config);
+  const totalSpend = contributions.reduce((acc, c) => {
+    const factor = sedFactors[c.type] ?? 1.0;
+    return acc + c.amount * factor;
+  }, 0);
   const score = safeRatio(totalSpend, target, maxPoints);
 
   return {

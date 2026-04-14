@@ -23,6 +23,16 @@ bee-execution-plan-extracted.txt
 assets/
 scripts/set-secrets.js
 
+# Domain extraction artifacts (large/generated)
+docs/domain/
+docs/slides/
+docs/speaker_notes.json
+docs/slide_extraction_raw.json
+docs/export_slides_images.ps1
+docs/extract_pptx.py
+docs/TRAINING_PACK_EXTRACTED.md
+acr_logs.txt
+
 # Kubernetes secrets & credentials (never commit these)
 *-secrets*.yaml
 *-credentials*.yaml

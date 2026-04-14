@@ -121,6 +121,12 @@ export interface PillarScore {
   subMinimumMet: boolean;
 }
 
+export interface YesResult {
+  levelBoost: number;
+  bonusPoints: number;
+  tier: string;
+}
+
 export interface AllPillarScores {
   ownership: PillarScore;
   managementControl: PillarScore;
@@ -129,7 +135,7 @@ export interface AllPillarScores {
   supplierDevelopment: PillarScore;
   enterpriseDevelopment: PillarScore;
   socioEconomicDevelopment: PillarScore;
-  yesInitiative: PillarScore;
+  yesInitiative: PillarScore & { levelBoost: number; bonusPoints: number; tier: string };
   totalPoints: number;
   maxPoints: number;
   beeLevel: number;
@@ -219,13 +225,34 @@ function getEAP(province: string, level: string): EAPValues {
 // Benefit factors for ESD/SED
 // ---------------------------------------------------------------------------
 
-const DEFAULT_BENEFIT_FACTORS: Record<string, number> = {
+const DEFAULT_BENEFIT_FACTORS_SD: Record<string, number> = {
   grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
   overhead_costs: 1.0, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_loan: 0.7,
+  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
   minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discount: 0.8, employee_time: 1.0,
-  shorter_payment_terms: 0.7, equity_investment: 1.0,
+  professional_services_discounted: 0.8, professional_services_discount: 0.8,
+  employee_time: 1.0, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
+  equity_investment: 0.0,
+};
+
+const DEFAULT_BENEFIT_FACTORS_ED: Record<string, number> = {
+  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
+  overhead_costs: 1.0, interest_free_loan: 1.0,
+  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
+  minority_investment: 1.0, professional_services_free: 1.0,
+  professional_services_discounted: 0.8, professional_services_discount: 0.8,
+  employee_time: 1.0, shorter_payment_periods: 0.0, shorter_payment_terms: 0.0,
+  equity_investment: 1.0,
+};
+
+const DEFAULT_BENEFIT_FACTORS_SED: Record<string, number> = {
+  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
+  overhead_costs: 0.8, interest_free_loan: 1.0,
+  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
+  minority_investment: 1.0, professional_services_free: 1.0,
+  professional_services_discounted: 0.8, professional_services_discount: 0.8,
+  employee_time: 0.8, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
+  equity_investment: 1.0,
 };
 
 // ---------------------------------------------------------------------------
@@ -281,7 +308,7 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
     totalBlackWomenVoting += pct * sh.blackWomenOwnership;
     totalEI += pct * sh.blackOwnership;
     totalEIBWO += pct * sh.blackWomenOwnership;
-    if (sh.isDesignatedGroup) totalDG += pct * sh.blackOwnership;
+    if (sh.isDesignatedGroup && sh.blackOwnership > 0) totalDG += pct * sh.blackOwnership;
     if (sh.blackNewEntrant) hasNewEntrant = true;
 
     if (sh.shareValue > 0 && sh.blackOwnership > 0) {
@@ -330,7 +357,8 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
   }
 
   const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dg + ne + nv, maxTotal);
-  const subMinimumMet = fullOwnership || nv >= 3.2;
+  const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
+  const subMinimumMet = fullOwnership || nv >= netValueSubMinThreshold;
 
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }
@@ -410,7 +438,7 @@ function calcManagement(employees: EmployeeInput[], cfg: SectorConfig, province?
 // SKILLS DEVELOPMENT (ported from frontend skills.ts)
 // ===========================================================================================
 
-function calcSkills(programs: TrainingProgramInput[], leviableAmount: number, cfg: SectorConfig): PillarScore {
+function calcSkills(programs: TrainingProgramInput[], leviableAmount: number, headcount: number, cfg: SectorConfig): PillarScore {
   const sk = cfg.targets.skills;
   const maxPoints = cfg.pillarConfigs.skillsDevelopment.maxPoints;
   const subMinPct = cfg.pillarConfigs.skillsDevelopment.subMinimumPercent;
@@ -449,7 +477,7 @@ function calcSkills(programs: TrainingProgramInput[], leviableAmount: number, cf
   const bursaryScore = clampScore(safeRatio(bursarySpend, bursaryTarget, sk.bursaryMaxPts), sk.bursaryMaxPts);
   const disabledScore = clampScore(safeRatio(disabledSpend, disabledTarget, sk.disabledLearningMaxPts), sk.disabledLearningMaxPts);
 
-  const learnershipTarget = Math.max(totalBlackLearners * (sk.learnershipTargetPercent / 100), 1);
+  const learnershipTarget = Math.max(headcount * (sk.learnershipTargetPercent / 100), 1);
   const learnershipScore = clampScore(safeRatio(learnershipCount, learnershipTarget, sk.learnershipsMaxPts), sk.learnershipsMaxPts);
 
   const absorptionRate = totalBlackLearners > 0 ? absorbedCount / totalBlackLearners : 0;
@@ -493,12 +521,14 @@ function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorCo
   for (const sup of suppliers) {
     if (sup.isForeignSupplier) continue;
 
-    if (sup.beeLevel >= 1 && sup.beeLevel <= 4) empoweringSpend += sup.spend || 0;
+    if (sup.beeLevel >= 1 && sup.beeLevel <= 8) empoweringSpend += sup.spend || 0;
     if (sup.enterpriseType === 'qse') qseSpend += sup.spend || 0;
     if (sup.enterpriseType === 'eme') emeSpend += sup.spend || 0;
     if (sup.blackOwnership >= 0.51) bo51Spend += sup.spend || 0;
     if (sup.blackWomenOwnership >= bwoThreshold) bwo30Spend += sup.spend || 0;
-    const isDG = sup.blackOwnership >= 0.51 && ((sup.youthOwnership ?? 0) > 0 || (sup.disabledOwnership ?? 0) > 0);
+    const isDG = sup.isDesignatedGroup || (
+      sup.blackOwnership >= 0.51 && ((sup.youthOwnership ?? 0) > 0 || (sup.disabledOwnership ?? 0) > 0)
+    );
     if (isDG) dgSpend += sup.spend || 0;
   }
 
@@ -520,6 +550,18 @@ function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorCo
 // ESD — Supplier Development + Enterprise Development (ported from frontend esd-sed.ts)
 // ===========================================================================================
 
+function buildBenefitLookup(cfg: SectorConfig): { sd: Record<string, number>; ed: Record<string, number> } {
+  const sd: Record<string, number> = { ...DEFAULT_BENEFIT_FACTORS_SD };
+  const ed: Record<string, number> = { ...DEFAULT_BENEFIT_FACTORS_ED };
+  if (cfg.benefitFactors?.length) {
+    for (const bf of cfg.benefitFactors) {
+      sd[bf.contributionType] = bf.sdFactor;
+      ed[bf.contributionType] = bf.edFactor;
+    }
+  }
+  return { sd, ed };
+}
+
 function calcEsd(
   contributions: ContributionInput[],
   npat: number,
@@ -531,16 +573,22 @@ function calcEsd(
   const sdMaxPts = cfg.pillarConfigs.supplierDevelopment.maxPoints;
   const edMaxPts = cfg.pillarConfigs.enterpriseDevelopment.maxPoints;
   const sdSubMinPct = cfg.pillarConfigs.supplierDevelopment.subMinimumPercent;
+  const edSubMinPct = cfg.pillarConfigs.enterpriseDevelopment.subMinimumPercent;
 
-  const sdTarget = npat * (et.sdPercent / 100);
-  const edTarget = npat * (et.edPercent / 100);
+  const effectiveNpat = Math.max(npat, 0);
+  const sdTarget = effectiveNpat * (et.sdPercent / 100);
+  const edTarget = effectiveNpat * (et.edPercent / 100);
 
+  const factors = buildBenefitLookup(cfg);
   let sdSpend = 0, edSpend = 0;
   for (const c of contributions) {
-    const factor = DEFAULT_BENEFIT_FACTORS[c.type] ?? c.benefitFactor ?? 1.0;
-    const recognised = c.amount * factor;
-    if (c.category === 'sd') sdSpend += recognised;
-    else if (c.category === 'ed') edSpend += recognised;
+    if (c.category === 'sd') {
+      const factor = factors.sd[c.type] ?? c.benefitFactor ?? 1.0;
+      sdSpend += c.amount * factor;
+    } else if (c.category === 'ed') {
+      const factor = factors.ed[c.type] ?? c.benefitFactor ?? 1.0;
+      edSpend += c.amount * factor;
+    }
   }
 
   const sdScore = safeRatio(sdSpend, sdTarget, et.sdMaxPts);
@@ -553,7 +601,7 @@ function calcEsd(
 
   return {
     sd: { score: r2(sdTotal), maxPoints: sdMaxPts, subMinimumMet: sdTotal >= (sdSubMinPct / 100) * sdMaxPts },
-    ed: { score: r2(edTotal), maxPoints: edMaxPts, subMinimumMet: edScore >= (et.edMaxPts * 0.4) },
+    ed: { score: r2(edTotal), maxPoints: edMaxPts, subMinimumMet: edSubMinPct > 0 ? edTotal >= (edSubMinPct / 100) * edMaxPts : true },
   };
 }
 
@@ -563,8 +611,16 @@ function calcEsd(
 
 function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorConfig): PillarScore {
   const maxPoints = cfg.pillarConfigs.socioEconomicDevelopment.maxPoints;
-  const target = npat * (cfg.targets.sed.spendPercent / 100);
-  const totalSpend = contributions.filter(c => c.category === 'sed').reduce((sum, c) => sum + c.amount, 0);
+  const effectiveNpat = Math.max(npat, 0);
+  const target = effectiveNpat * (cfg.targets.sed.spendPercent / 100);
+
+  let totalSpend = 0;
+  for (const c of contributions) {
+    if (c.category !== 'sed') continue;
+    const factor = DEFAULT_BENEFIT_FACTORS_SED[c.type] ?? c.benefitFactor ?? 1.0;
+    totalSpend += c.amount * factor;
+  }
+
   const score = safeRatio(totalSpend, target, maxPoints);
   return { score: r2(score), maxPoints, subMinimumMet: true };
 }
@@ -573,25 +629,56 @@ function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorCo
 // YES Initiative (ported from frontend yes.ts)
 // ===========================================================================================
 
-function calcYes(programs: TrainingProgramInput[], totalEmployees: number): PillarScore {
+function calcYes(
+  programs: TrainingProgramInput[],
+  totalEmployees: number,
+): PillarScore & YesResult {
   const candidates = programs.filter(p => p.isYesEmployee);
+  const absorbed = candidates.filter(p => p.isAbsorbed);
+  const absorptionRate = candidates.length > 0 ? absorbed.length / candidates.length : 0;
   const headcountTarget = totalEmployees < 500
     ? Math.max(Math.ceil(totalEmployees * 0.025), 1)
     : totalEmployees <= 1000
       ? Math.max(Math.ceil(totalEmployees * 0.015), 8)
       : Math.max(Math.ceil(totalEmployees * 0.01), 15);
 
-  const tier1 = Math.max(Math.ceil(headcountTarget * 1.5), 1);
-  const tier2 = Math.max(Math.ceil(headcountTarget * 1.0), 1);
-  const tier3 = Math.max(Math.ceil(headcountTarget * 0.5), 1);
+  let levelBoost = 0;
+  let bonusPoints = 0;
+  let tier = 'None';
 
-  let tier: string = 'None';
-  if (candidates.length >= tier1) tier = 'Tier 1';
-  else if (candidates.length >= tier2) tier = 'Tier 2';
-  else if (candidates.length >= tier3) tier = 'Tier 3';
+  if (candidates.length >= headcountTarget * 2 && absorptionRate >= 0.05) {
+    tier = 'Tier 1';
+    levelBoost = 2;
+  } else if (candidates.length >= headcountTarget * 1.5 && absorptionRate >= 0.05) {
+    tier = 'Tier 2';
+    levelBoost = 1;
+    bonusPoints = 3;
+  } else if (candidates.length >= headcountTarget && absorptionRate >= 0.025) {
+    tier = 'Tier 3';
+    levelBoost = 1;
+  }
 
-  const scores: Record<string, number> = { 'None': 0, 'Tier 3': 1, 'Tier 2': 2, 'Tier 1': 3 };
-  return { score: r2(scores[tier] || 0), maxPoints: 0, subMinimumMet: true };
+  return {
+    score: 0,
+    maxPoints: 0,
+    subMinimumMet: true,
+    levelBoost,
+    bonusPoints,
+    tier,
+  };
+}
+
+// ===========================================================================================
+// Deemed NPAT — for loss-making entities
+// ===========================================================================================
+
+function resolveDeemedNpat(revenue: number, cfg: SectorConfig): number {
+  if (revenue <= 0) return 0;
+  const norms = cfg.industryNorms;
+  if (!norms?.length) return revenue * 0.0558;
+  const allIndustry = norms.find(n => n.industry.toLowerCase() === 'all industries');
+  const normPercent = allIndustry?.normPercent ?? 5.58;
+  return revenue * (normPercent / 100);
 }
 
 // ===========================================================================================
@@ -614,16 +701,20 @@ export function calculateAllPillars(
 ): AllPillarScores {
   const { employees, shareholders, suppliers, contributions, trainingPrograms, financials } = inputs;
 
+  const effectiveNpat = financials.npat > 0
+    ? financials.npat
+    : resolveDeemedNpat(financials.revenue, config);
+
   const ownership = calcOwnership(shareholders, financials, config);
   const management = calcManagement(employees, config, inputs.province);
-  const skills = calcSkills(trainingPrograms, financials.leviableAmount, config);
+  const skills = calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config);
   const procurement = calcProcurement(suppliers, financials.tmps, config);
-  const { sd, ed } = calcEsd(contributions, financials.npat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, config);
-  const sed = calcSed(contributions, financials.npat, config);
+  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, config);
+  const sed = calcSed(contributions, effectiveNpat, config);
   const yes = calcYes(trainingPrograms, employees.length);
 
   const totalPoints = ownership.score + management.score + skills.score + procurement.score +
-    sd.score + ed.score + sed.score + yes.score;
+    sd.score + ed.score + sed.score + yes.bonusPoints;
 
   const maxPoints = config.totalMaxPoints;
 
@@ -632,9 +723,14 @@ export function calculateAllPillars(
 
   const baseLevel = findLevel(totalPoints, config.levelThresholds);
   const isDiscounted = baseLevel.level < 9 && anySubMinFailed;
-  const discountedLevel = isDiscounted ? Math.min(baseLevel.level + 1, 8) : baseLevel.level;
+  let discountedLevel = isDiscounted ? Math.min(baseLevel.level + 1, 8) : baseLevel.level;
+
+  if (yes.levelBoost > 0 && discountedLevel <= 8) {
+    discountedLevel = Math.max(discountedLevel - yes.levelBoost, 1);
+  }
+
   const discountedLevelConfig = config.levelThresholds.find(t => t.level === discountedLevel);
-  const finalRecognition = isDiscounted
+  const finalRecognition = (isDiscounted || yes.levelBoost > 0)
     ? (discountedLevelConfig?.recognition ?? 0)
     : baseLevel.recognition;
 

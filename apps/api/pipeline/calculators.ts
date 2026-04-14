@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pillarCalculators.ts via calculationEngine.ts instead.
+ * This file contains hardcoded RCOGP-only values with binary MC scoring.
+ * Only r2() and RECOGNITION_TABLE are still imported by buildResult.ts.
+ */
 import type { ParseResult } from './excelParser.js';
 
 export function r2(n: number): number {

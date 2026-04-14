@@ -2,6 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
+
 RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -31,6 +33,8 @@ RUN pnpm run build
 FROM node:20-alpine
 WORKDIR /app
 
+RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
+
 RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
@@ -39,6 +43,8 @@ COPY --from=builder /app/apps/web/package.json apps/web/
 COPY --from=builder /app/apps/api/package.json apps/api/
 
 RUN pnpm install --no-frozen-lockfile --prod
+
+RUN apk del python3 make g++ pkgconfig
 
 COPY --from=builder /app/apps/web/dist/ apps/web/dist/
 

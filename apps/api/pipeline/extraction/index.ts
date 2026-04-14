@@ -78,11 +78,13 @@ export type { PageEntity, PageEntitiesResult, EntityType, PatternSet } from './n
 // Azure OpenAI integration
 export {
   getAzureChatClient,
+  getAzureFastChatClient,
   getAzureEmbeddingClient,
   isAzureOpenAIConfigured,
   generateEmbeddings,
   generateEmbedding,
   chatCompletion,
+  fastChatCompletion,
   rerankWithLLM,
   EMBEDDING_DIMENSIONS,
 } from './azureOpenAIClient.js';

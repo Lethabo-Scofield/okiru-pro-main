@@ -1,3 +1,8 @@
+/**
+ * @domain-rule pillar:ownership, slides:108-114
+ * @see docs/domain/pillars/01_ownership.md
+ * @see docs/domain/calculations/net_value.md
+ */
 import type { OwnershipData } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
@@ -5,11 +10,17 @@ import { safeRatio, clampScore, round2 } from './shared';
 const FULL_OWNERSHIP_THRESHOLD = 0.25;
 const WOMEN_VOTING_TARGET = 0.10;
 const WOMEN_ECONOMIC_TARGET = 0.10;
-const DESIGNATED_GROUP_TARGET = 0.10;
+const DESIGNATED_GROUP_TARGET = 0.03; // Per RCOGP slide 109: 3% target
 
+/**
+ * Time-Based Graduation Factor per RCOGP slide 114
+ * @domain-rule pillar:ownership, slide:114
+ * @see docs/domain/calculations/net_value.md#time-based-graduation-factor
+ * Years 3-4 = 40%, 5-6 = 60%, 7-8 = 80%, 9-10 = 100%
+ */
 const GRADUATION_TABLE: Record<number, number> = {
-  1: 0.1, 2: 0.2, 3: 0.4, 4: 0.6,
-  5: 0.8, 6: 1.0, 7: 1.0, 8: 1.0,
+  1: 0.1, 2: 0.2, 3: 0.4, 4: 0.4,
+  5: 0.6, 6: 0.6, 7: 0.8, 8: 0.8,
   9: 1.0, 10: 1.0,
 };
 
@@ -119,12 +130,16 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     votingRightsBlack = clampScore(safeRatio(totalBlackVoting, FULL_OWNERSHIP_THRESHOLD, 4), 4);
     votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, WOMEN_VOTING_TARGET, 2), 2);
 
+    // Net Value = Lower of Formula A and Formula B (slide 113)
     const gradFactor = getGraduationFactor(yearsHeld);
     const formulaA = gradFactor > 0
       ? totalEconomicInterest * (1 / (TARGET_ECONOMIC_INTEREST * gradFactor)) * 4
       : 0;
     const formulaB = (totalEconomicInterest / TARGET_ECONOMIC_INTEREST) * 4;
-    economicInterestBlack = clampScore(Math.max(formulaA, formulaB), 4);
+    economicInterestBlack = clampScore(
+      gradFactor > 0 ? Math.min(formulaA, formulaB) : formulaB,
+      4
+    );
 
     economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, WOMEN_ECONOMIC_TARGET, 2), 2);
     designatedGroups = clampScore(safeRatio(totalDesignatedGroup, DESIGNATED_GROUP_TARGET, 3), 3);

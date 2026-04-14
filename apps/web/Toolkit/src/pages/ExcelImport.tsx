@@ -71,7 +71,7 @@ export default function ExcelImport() {
 
   const loadRecentImports = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/import-logs`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/api/import-logs/logs`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setRecentImports(data.slice(0, 5));

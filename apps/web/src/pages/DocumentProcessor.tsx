@@ -16,6 +16,10 @@ import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPill
 import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore } from '@/lib/foundationApi';
 import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
+import {
+  lakeTradingOwnership, lakeTradingManagement,
+  lakeTradingPillars, LAKE_REVENUE, LAKE_NPAT, LAKE_LEVIABLE, LAKE_HEADCOUNT, LAKE_TMPS,
+} from '@/lib/lakeTradingDemo';
 import { calculateYESScore } from '@toolkit/lib/calculators/yes';
 import type { YESData, Client } from '@toolkit/lib/types';
 import { API_BASE } from '@toolkit/lib/config';
@@ -1140,7 +1144,6 @@ export default function DocumentProcessor() {
   const { toast } = useToast();
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
   const storeScorecard = useBbeeStore(state => state.scorecard);
   const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
@@ -1958,8 +1961,8 @@ export default function DocumentProcessor() {
   };
 
   const extractXlsxText = async (file: File): Promise<string> => {
-    // Skip preview for files > 10MB — parsing them on the main thread freezes the browser
-    if (file.size > 10 * 1024 * 1024) {
+    // Skip preview for files > 50MB — parsing very large files on the main thread freezes the browser
+    if (file.size > 50 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       return `[Excel file: ${file.name} (${sizeMB} MB) — preview skipped for large files. Full data will be extracted server-side.]`;
     }
@@ -2483,6 +2486,7 @@ export default function DocumentProcessor() {
     trainingPrograms: { name: '', cost: null, race: '', gender: '', category: '', isDisabled: false, isBursary: false },
     suppliers: { name: '', spend: null, beeLevel: null, blackOwnership: null, blackWomenOwnership: null, enterpriseType: '', isForeignSupplier: false },
     contributions: { beneficiary: '', amount: null, type: '', category: '' },
+    yesCandidates: { name: '', race: '', gender: '', isDisabled: false, isBlack: true, startDate: '', isAbsorbed: false, cost: 0 },
   };
 
   const addTableRow = (tableName: string) => {
@@ -2504,144 +2508,38 @@ export default function DocumentProcessor() {
     setEditingField(null);
   };
 
-  const [autoFillLoading, setAutoFillLoading] = useState<string | null>(null);
-
-  const autoFillFinancials = () => {
+  const fillLakeTradingTestData = () => {
     const r = structuredClone(extractionResults);
     const doc = r[activeReviewDoc];
-    if (!doc?.entities?.length) return;
+    if (!doc) return;
+    if (!doc.tables) doc.tables = {};
 
-    const FINANCIAL_KEYWORDS: Record<string, { keywords: string[]; entityName: string }> = {
-      revenue: { keywords: ['revenue', 'turnover', 'annual revenue', 'total revenue'], entityName: 'Total Revenue' },
-      npat: { keywords: ['npat', 'net profit', 'profit after tax'], entityName: 'Net Profit After Tax (NPAT)' },
-      leviable: { keywords: ['leviable', 'payroll', 'leviable amount'], entityName: 'Leviable Amount' },
-      headcount: { keywords: ['headcount', 'total employees', 'number of employees', 'employee count'], entityName: 'Total Employees (Headcount)' },
-      tmps: { keywords: ['tmps', 'total measured procurement', 'procurement spend'], entityName: 'Total Measured Procurement Spend' },
-    };
+    doc.tables.shareholders = lakeTradingOwnership.shareholders.map(s => ({ ...s }));
+    doc.tables.employees = lakeTradingManagement.employees.map(e => ({ ...e }));
+    doc.tables.trainingPrograms = [];
+    doc.tables.suppliers = (lakeTradingPillars.procurement.suppliers as any[]).map(s => ({ ...s }));
+    doc.tables.contributions = [
+      ...(lakeTradingPillars.esd.contributions as any[]).map(c => ({ ...c })),
+      ...(lakeTradingPillars.sed.contributions as any[]).map(c => ({ ...c })),
+    ];
+    doc.tables.yesCandidates = [];
 
-    let filled = 0;
-    for (const [, config] of Object.entries(FINANCIAL_KEYWORDS)) {
-      const existing = doc.entities.find((e: any) =>
-        e.status !== 'rejected' && e.value != null &&
-        config.keywords.some(kw => e.name.toLowerCase().includes(kw.toLowerCase()))
-      );
-      if (!existing) {
-        for (const entity of doc.entities) {
-          if (entity.status === 'rejected' || entity.value == null) continue;
-          if (config.keywords.some(kw => entity.name.toLowerCase().includes(kw.toLowerCase()))) {
-            entity.status = 'approved';
-            filled++;
-            break;
-          }
-        }
-      }
-    }
+    const financialEntities = [
+      { name: 'Total Revenue', value: String(LAKE_REVENUE), confidence: 1, status: 'approved', pillar: 'financials' },
+      { name: 'Net Profit After Tax (NPAT)', value: String(LAKE_NPAT), confidence: 1, status: 'approved', pillar: 'financials' },
+      { name: 'Leviable Amount', value: String(LAKE_LEVIABLE), confidence: 1, status: 'approved', pillar: 'financials' },
+      { name: 'Total Employees (Headcount)', value: String(LAKE_HEADCOUNT), confidence: 1, status: 'approved', pillar: 'financials' },
+      { name: 'Total Measured Procurement Spend', value: String(LAKE_TMPS), confidence: 1, status: 'approved', pillar: 'financials' },
+    ];
+
+    const FINANCIAL_KEYS = ['revenue', 'npat', 'leviable', 'headcount', 'tmps', 'procurement spend'];
+    doc.entities = (doc.entities || []).filter((e: any) =>
+      !FINANCIAL_KEYS.some(kw => e.name?.toLowerCase().includes(kw))
+    );
+    doc.entities.push(...financialEntities);
 
     setExtractionResults(r);
-    if (filled > 0) toast({ title: 'Autofill', description: `Filled ${filled} financial field(s) from extracted data` });
-  };
-
-  const autoFillPillar = async (pillar: string) => {
-    const doc = extractionResults[activeReviewDoc];
-    if (!doc?.entities?.length) {
-      toast({ title: 'No data', description: 'No extracted entities to autofill from', variant: 'destructive' });
-      return;
-    }
-
-    setAutoFillLoading(pillar);
-    try {
-      const resp = await fetch('/api/infer-tables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entities: doc.entities }),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(err.message || 'Autofill request failed');
-      }
-
-      const { tables } = await resp.json();
-      const r = structuredClone(extractionResults);
-      const d = r[activeReviewDoc];
-      if (!d) return;
-      if (!d.tables) d.tables = {};
-
-      const TABLE_MAP: Record<string, string> = {
-        ownership: 'shareholders', management: 'employees',
-        skills: 'trainingPrograms', procurement: 'suppliers', 'esd-sed': 'contributions',
-      };
-      const tableName = TABLE_MAP[pillar];
-      if (!tableName) return;
-
-      const inferred = tables[tableName];
-      if (!inferred?.length) {
-        toast({ title: 'No data found', description: `AI could not infer any ${tableName} from extracted entities` });
-        return;
-      }
-
-      const existing = d.tables[tableName] || [];
-      d.tables[tableName] = [...existing, ...inferred];
-
-      setExtractionResults(r);
-      toast({ title: 'Autofill complete', description: `Added ${inferred.length} ${tableName} record(s) from AI inference` });
-    } catch (err: any) {
-      console.error('[autoFillPillar] Error:', err);
-      toast({ title: 'Autofill failed', description: err.message || 'Could not infer data', variant: 'destructive' });
-    } finally {
-      setAutoFillLoading(null);
-    }
-  };
-
-  const autoFillAll = async () => {
-    autoFillFinancials();
-    const pillars = ['ownership', 'management', 'skills', 'procurement', 'esd-sed'];
-    setAutoFillLoading('all');
-    try {
-      const doc = extractionResults[activeReviewDoc];
-      if (!doc?.entities?.length) return;
-
-      const resp = await fetch('/api/infer-tables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entities: doc.entities }),
-      });
-      if (!resp.ok) throw new Error('Autofill request failed');
-
-      const { tables } = await resp.json();
-      const r = structuredClone(extractionResults);
-      const d = r[activeReviewDoc];
-      if (!d) return;
-      if (!d.tables) d.tables = {};
-
-      let totalAdded = 0;
-      const TABLE_MAP: Record<string, string> = {
-        ownership: 'shareholders', management: 'employees',
-        skills: 'trainingPrograms', procurement: 'suppliers', 'esd-sed': 'contributions',
-      };
-
-      for (const p of pillars) {
-        const tableName = TABLE_MAP[p];
-        const inferred = tables[tableName];
-        if (!inferred?.length) continue;
-        const existing = d.tables[tableName] || [];
-        if (existing.length > 0) continue;
-        d.tables[tableName] = inferred;
-        totalAdded += inferred.length;
-      }
-
-      setExtractionResults(r);
-      if (totalAdded > 0) {
-        toast({ title: 'Autofill complete', description: `Added ${totalAdded} record(s) across pillars from AI inference` });
-      } else {
-        toast({ title: 'No new data', description: 'AI did not find any additional records to add' });
-      }
-    } catch (err: any) {
-      console.error('[autoFillAll] Error:', err);
-      toast({ title: 'Autofill failed', description: err.message || 'Could not infer data', variant: 'destructive' });
-    } finally {
-      setAutoFillLoading(null);
-    }
+    toast({ title: 'Lake Trading Test Data Loaded', description: '1 shareholder · 12 employees · 2 suppliers · 3 contributions · financials set' });
   };
 
   const exportResults = () => {
@@ -2713,12 +2611,17 @@ export default function DocumentProcessor() {
       await new Promise<void>(r => setTimeout(r, 250));
       retries++;
     }
+    // Snapshot Zustand pillar data so session persistence captures actual extraction
+    const ss = useBbeeStore.getState();
+    const sessionPillarData = {
+      ownership: ss.ownership, management: ss.management, skills: ss.skills,
+      procurement: ss.procurement, esd: ss.esd, sed: ss.sed,
+    } as any;
     if (populatingClientIdRef.current) {
-      await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult });
+      await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult, pillarData: sessionPillarData });
       navigate(`/toolkit/${populatingClientIdRef.current}/scorecard`);
     } else {
-      // API failed — fall back to local scorecard display
-      await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult });
+      await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult, pillarData: sessionPillarData });
       setCurrentPage('scorecard');
     }
   };
@@ -3659,7 +3562,7 @@ export default function DocumentProcessor() {
                     }
                   }
                   const t = (doc as any).tables || {};
-                  for (const key of ['shareholders', 'employees', 'suppliers', 'contributions', 'trainingPrograms', 'ownershipFinancials']) {
+                  for (const key of ['shareholders', 'employees', 'suppliers', 'contributions', 'trainingPrograms', 'ownershipFinancials', 'financials']) {
                     if (t[key]?.length) {
                       if (!allTables[key]) allTables[key] = [];
                       allTables[key].push(...t[key]);
@@ -3719,10 +3622,14 @@ export default function DocumentProcessor() {
                 if (raw.pillarData) {
                   const pd = raw.pillarData;
                   const fin = pd.financials || {};
+                  const ci = foundationData?.clientInfo;
                   useBbeeStore.setState({
                     isLoaded: true,
                     client: {
                       ...useBbeeStore.getState().client,
+                      name: ci?.companyName || companyInfo.name || useBbeeStore.getState().client.name,
+                      sectorCode: ci?.sectorCode || companyInfo.sector || useBbeeStore.getState().client.sectorCode,
+                      registrationNumber: ci?.registrationNumber || companyInfo.registrationNumber || '',
                       revenue: fin.revenue || 0,
                       npat: fin.npat || 0,
                       leviableAmount: fin.leviableAmount || 0,
@@ -3852,7 +3759,22 @@ export default function DocumentProcessor() {
                 }
 
                 setScorecardResult(normalised);
-                await persistSession('summary', { results: extractionResults, complete: true, scorecardResult: normalised, dataQuality });
+                // Snapshot Zustand pillar data so session persistence captures the actual extraction results
+                const storeSnapshot = useBbeeStore.getState();
+                await persistSession('summary', {
+                  results: extractionResults,
+                  complete: true,
+                  scorecardResult: normalised,
+                  dataQuality,
+                  pillarData: {
+                    ownership: storeSnapshot.ownership,
+                    management: storeSnapshot.management,
+                    skills: storeSnapshot.skills,
+                    procurement: storeSnapshot.procurement,
+                    esd: storeSnapshot.esd,
+                    sed: storeSnapshot.sed,
+                  } as any,
+                });
                 setIsSubmitted(true);
                 setCurrentPage('summary');
 
@@ -4002,7 +3924,14 @@ export default function DocumentProcessor() {
                         onHoverEntity={() => {}}
                       />
                     ) : (activeFileType === 'csv' || activeFileType === 'excel') && activeDocText ? (
-                      <CSVTableViewer text={activeDocText} isExcel={activeFileType === 'excel'} />
+                      activeDocText.startsWith('[Excel file:') || activeDocText.startsWith('[No text content') || activeDocText.startsWith('[Could not extract') ? (
+                        <div className="flex flex-col items-center justify-center py-16 gap-3">
+                          <FileSpreadsheet className="w-10 h-10 text-green-400/40" />
+                          <p className="text-gray-400 text-sm text-center px-6">{activeDocText.replace(/^\[|\]$/g, '')}</p>
+                        </div>
+                      ) : (
+                        <CSVTableViewer text={activeDocText} isExcel={activeFileType === 'excel'} />
+                      )
                     ) : activeDocText ? (
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
                         <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{activeDocText}</p>
@@ -4208,41 +4137,13 @@ export default function DocumentProcessor() {
                         const tpReqFields = ['cost', 'race', 'gender'];
                         const tpFilled = trainingPrograms.filter((t: any) => tpReqFields.every(f => t[f] != null && t[f] !== '')).length;
 
-                        const AutoFillButton = ({ pillar, label, color }: { pillar: string; label: string; color: string }) => (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); pillar === 'financials' ? autoFillFinancials() : autoFillPillar(pillar); }}
-                            disabled={autoFillLoading != null}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-all hover:scale-105 disabled:opacity-40"
-                            style={{ backgroundColor: `${color}15`, color, border: `1px solid ${color}30` }}
-                            title={`AI autofill ${label} from extracted entities`}
-                          >
-                            {autoFillLoading === pillar ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Wand2 className="w-2.5 h-2.5" />}
-                            Autofill
-                          </button>
-                        );
-
                         return (
                           <>
-                            {/* Global Autofill All button — Admin only */}
-                            {isAdmin && (
-                            <div className="flex items-center justify-end mb-1">
-                              <button
-                                onClick={autoFillAll}
-                                disabled={autoFillLoading != null}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[#a78bfa] bg-[#a78bfa]/10 border border-[#a78bfa]/20 hover:bg-[#a78bfa]/20 transition-all hover:scale-[1.02] disabled:opacity-40"
-                              >
-                                {autoFillLoading === 'all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                                AI Autofill All Missing
-                              </button>
-                            </div>
-                            )}
-
                             {/* Financials bar */}
                             <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3 border border-[#2c2c2e]">
                               <div className="flex items-center gap-2 mb-3">
                                 <Briefcase className="w-3.5 h-3.5 text-[#8e8e93]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Financials</span>
-                                {isAdmin && <AutoFillButton pillar="financials" label="financials" color="#8e8e93" />}
                               </div>
                               <div className="grid grid-cols-3 gap-3">
                                 <EditableFieldCell label="Revenue" value={revenueE?.value} confidence={revenueE?.confidence} required fieldKey="revenue" pillar="financials" />
@@ -4259,19 +4160,12 @@ export default function DocumentProcessor() {
                                 <Users className="w-3.5 h-3.5 text-[#5e9bff]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Ownership</span>
                                 <CompletenessChip filled={shFilled} total={shareholders.length} hasData={shareholders.length > 0} />
-                                {isAdmin && <AutoFillButton pillar="ownership" label="shareholders" color="#5e9bff" />}
                               </div>
                               <div className="px-4 pb-3 space-y-2">
                                   {shareholders.length === 0 ? (
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No shareholders extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        {isAdmin && (
-                                        <button onClick={() => autoFillPillar('ownership')} disabled={autoFillLoading != null}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#5e9bff]/10 border border-[#5e9bff]/30 rounded-lg text-[11px] text-[#5e9bff] hover:bg-[#5e9bff]/20 transition-colors font-medium disabled:opacity-40">
-                                          {autoFillLoading === 'ownership' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
-                                        </button>
-                                        )}
                                         <button onClick={() => addTableRow('shareholders')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#5e9bff]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
@@ -4312,19 +4206,12 @@ export default function DocumentProcessor() {
                                 <Building2 className="w-3.5 h-3.5 text-[#34d399]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Management Control</span>
                                 <CompletenessChip filled={empFilled} total={employees.length} hasData={employees.length > 0} />
-                                {isAdmin && <AutoFillButton pillar="management" label="employees" color="#34d399" />}
                               </div>
                               <div className="px-4 pb-3 space-y-2">
                                   {employees.length === 0 ? (
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No employees extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        {isAdmin && (
-                                        <button onClick={() => autoFillPillar('management')} disabled={autoFillLoading != null}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#34d399]/10 border border-[#34d399]/30 rounded-lg text-[11px] text-[#34d399] hover:bg-[#34d399]/20 transition-colors font-medium disabled:opacity-40">
-                                          {autoFillLoading === 'management' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
-                                        </button>
-                                        )}
                                         <button onClick={() => addTableRow('employees')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#34d399]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
@@ -4361,19 +4248,12 @@ export default function DocumentProcessor() {
                                 <BookOpen className="w-3.5 h-3.5 text-[#f59e0b]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Skills Development</span>
                                 <CompletenessChip filled={tpFilled} total={trainingPrograms.length} hasData={trainingPrograms.length > 0} />
-                                {isAdmin && <AutoFillButton pillar="skills" label="training" color="#f59e0b" />}
                               </div>
                               <div className="px-4 pb-3 space-y-2">
                                   {trainingPrograms.length === 0 ? (
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No training programs extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        {isAdmin && (
-                                        <button onClick={() => autoFillPillar('skills')} disabled={autoFillLoading != null}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f59e0b]/10 border border-[#f59e0b]/30 rounded-lg text-[11px] text-[#f59e0b] hover:bg-[#f59e0b]/20 transition-colors font-medium disabled:opacity-40">
-                                          {autoFillLoading === 'skills' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
-                                        </button>
-                                        )}
                                         <button onClick={() => addTableRow('trainingPrograms')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f59e0b]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
@@ -4410,19 +4290,12 @@ export default function DocumentProcessor() {
                                 <ShoppingCart className="w-3.5 h-3.5 text-[#a78bfa]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Procurement</span>
                                 <CompletenessChip filled={supFilled} total={suppliers.length} hasData={suppliers.length > 0} />
-                                {isAdmin && <AutoFillButton pillar="procurement" label="suppliers" color="#a78bfa" />}
                               </div>
                               <div className="px-4 pb-3 space-y-2">
                                   {suppliers.length === 0 ? (
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No suppliers extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        {isAdmin && (
-                                        <button onClick={() => autoFillPillar('procurement')} disabled={autoFillLoading != null}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#a78bfa]/10 border border-[#a78bfa]/30 rounded-lg text-[11px] text-[#a78bfa] hover:bg-[#a78bfa]/20 transition-colors font-medium disabled:opacity-40">
-                                          {autoFillLoading === 'procurement' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
-                                        </button>
-                                        )}
                                         <button onClick={() => addTableRow('suppliers')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#a78bfa]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
@@ -4460,19 +4333,12 @@ export default function DocumentProcessor() {
                                 <Heart className="w-3.5 h-3.5 text-[#f472b6]" />
                                 <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">ESD / SED</span>
                                 <CompletenessChip filled={contFilled} total={contributions.length} hasData={contributions.length > 0} />
-                                {isAdmin && <AutoFillButton pillar="esd-sed" label="contributions" color="#f472b6" />}
                               </div>
                               <div className="px-4 pb-3 space-y-2">
                                   {contributions.length === 0 ? (
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No contributions extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        {isAdmin && (
-                                        <button onClick={() => autoFillPillar('esd-sed')} disabled={autoFillLoading != null}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f472b6]/10 border border-[#f472b6]/30 rounded-lg text-[11px] text-[#f472b6] hover:bg-[#f472b6]/20 transition-colors font-medium disabled:opacity-40">
-                                          {autoFillLoading === 'esd-sed' || autoFillLoading === 'all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI Autofill
-                                        </button>
-                                        )}
                                         <button onClick={() => addTableRow('contributions')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f472b6]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
@@ -4499,6 +4365,52 @@ export default function DocumentProcessor() {
                                     <Plus className="w-3 h-3" /> Add Contribution
                                   </button>
                                 </div>
+                            </div>
+
+                            {/* YES Initiative */}
+                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-3">
+                                <Zap className="w-3.5 h-3.5 text-[#22d3ee]" />
+                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">YES Initiative</span>
+                                {(tbl.yesCandidates?.length > 0) && (
+                                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20">
+                                    {tbl.yesCandidates.length} candidate{tbl.yesCandidates.length !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="px-4 pb-3 space-y-2">
+                                {(!tbl.yesCandidates || tbl.yesCandidates.length === 0) ? (
+                                  <div className="py-4 text-center space-y-2">
+                                    <p className="text-[11px] text-[#48484a] italic">No YES candidates extracted</p>
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button onClick={() => addTableRow('yesCandidates')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#22d3ee]/40 transition-colors">
+                                        <Plus className="w-3 h-3" /> Add Manually
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (tbl.yesCandidates || []).map((yc: any, i: number) => (
+                                  <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-[11px] font-medium text-[#d1d1d6]">{yc.name || `Candidate ${i + 1}`}</span>
+                                      <button onClick={() => deleteTableRow('yesCandidates', i)} className="text-[#636366] hover:text-red-400 transition-colors">
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <EditableFieldCell label="Name" value={yc.name} required fieldKey="name" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Race" value={yc.race} required fieldKey="race" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Gender" value={yc.gender} required fieldKey="gender" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Disabled" value={yc.isDisabled} fieldKey="isDisabled" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Start Date" value={yc.startDate} fieldKey="startDate" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Absorbed" value={yc.isAbsorbed} fieldKey="isAbsorbed" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                      <EditableFieldCell label="Cost" value={yc.cost} fieldKey="cost" pillar="yes" rowIndex={i} tableName="yesCandidates" />
+                                    </div>
+                                  </div>
+                                ))}
+                                <button onClick={() => addTableRow('yesCandidates')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#22d3ee]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <Plus className="w-3 h-3" /> Add YES Candidate
+                                </button>
+                              </div>
                             </div>
                           </>
                         );
@@ -5291,10 +5203,16 @@ export default function DocumentProcessor() {
                               if (toolkitClientId) {
                                 localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
                                 navigate(`/toolkit/${toolkitClientId}/scorecard`);
-                              } else if (sessionId) {
-                                navigate(`/toolkit/session?session=${sessionId}`);
                               } else {
-                                setCurrentPage('summary');
+                                // Prefer Zustand's activeClientId (upload-*) which already has hydrated data
+                                const storeId = useBbeeStore.getState().activeClientId;
+                                if (storeId && useBbeeStore.getState().isLoaded) {
+                                  navigate(`/toolkit/session?session=${sessionId || storeId}`);
+                                } else if (sessionId) {
+                                  navigate(`/toolkit/session?session=${sessionId}`);
+                                } else {
+                                  setCurrentPage('summary');
+                                }
                               }
                             }}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
@@ -5338,6 +5256,19 @@ export default function DocumentProcessor() {
 
       {/* Development Mode Indicator */}
       <DevModeBadge />
+
+      {/* Admin: Lake Trading test data floating button — review page only */}
+      {user?.role === 'admin' && currentPage === 'review' && extractionResults.length > 0 && (
+        <div className="fixed z-50 bottom-6 right-6">
+          <button
+            onClick={fillLakeTradingTestData}
+            className="h-10 gap-2 px-4 inline-flex items-center rounded-xl bg-[#1c1c1e] border border-[#3a3a3c] text-[#a78bfa] shadow-lg hover:bg-[#2c2c2e] hover:scale-[1.02] transition-all text-xs font-semibold"
+          >
+            <Wand2 className="w-4 h-4" />
+            Fill Lake Trading Data
+          </button>
+        </div>
+      )}
     </div>
   );
 }

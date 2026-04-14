@@ -62,8 +62,8 @@ function DataLoader({ children }: { children: React.ReactNode }) {
   const [retrying, setRetrying] = useState(0);
 
   useEffect(() => {
-    const isPrehydrated = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-');
-    const isSyntheticActiveId = activeClientId?.startsWith('build-') || activeClientId?.startsWith('session-');
+    const isPrehydrated = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-') || storeClientId?.startsWith('upload-');
+    const isSyntheticActiveId = activeClientId?.startsWith('build-') || activeClientId?.startsWith('session-') || activeClientId?.startsWith('upload-');
     if (!isPrehydrated && !isSyntheticActiveId && activeClientId && (activeClientId !== storeClientId || retrying > 0)) {
       setLoadError(null);
       loadClientData(activeClientId).catch((err: any) => {

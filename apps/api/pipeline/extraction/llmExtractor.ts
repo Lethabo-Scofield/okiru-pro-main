@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { isAzureOpenAIConfigured, chatCompletion } from './azureOpenAIClient.js';
+import { isAzureOpenAIConfigured, fastChatCompletion } from './azureOpenAIClient.js';
 import { extractPageEntities, normalizeEntityValue, DEFAULT_BBBEE_PATTERNS } from './nerEngine.js';
 
 export interface LLMExtractionRequest {
@@ -254,11 +254,10 @@ export class LLMExtractor {
   }
 
   /**
-   * Call Azure OpenAI (gpt-4o) for extraction.
-   * Throws if Azure is not configured.
+   * Call Azure OpenAI fast tier (GPT-4o-mini) for per-entity extraction.
    */
   private async callLLM(prompt: string): Promise<{ response: string; provider: 'azure' }> {
-    const response = await chatCompletion(
+    const response = await fastChatCompletion(
       [
         {
           role: 'system',
@@ -729,13 +728,13 @@ function buildVerificationPrompt(entries: GroqVerificationEntry[]): string {
 }
 
 /**
- * Send a batch of extracted values to Azure OpenAI (gpt-4o) for verification.
+ * Send a batch of extracted values to Azure OpenAI fast tier (GPT-4o-mini) for verification.
  * Returns one GroqVerificationResult per entry (or a "could not verify" fallback on error).
  * Fail-safe: any error treats all entries as valid so extraction is never blocked.
  */
 export async function groqVerifyBatch(
   entries: GroqVerificationEntry[],
-  _unused?: string,   // kept for backward-compat call sites — ignored
+  _unused?: string,
 ): Promise<GroqVerificationResult[]> {
   if (!isAzureOpenAIConfigured() || entries.length === 0) {
     return entries.map(e => ({
@@ -750,7 +749,7 @@ export async function groqVerifyBatch(
 
   let content: string;
   try {
-    content = await chatCompletion(
+    content = await fastChatCompletion(
       [
         {
           role: 'system',

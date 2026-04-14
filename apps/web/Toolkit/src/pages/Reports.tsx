@@ -1,11 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
-import { FileText, FileSpreadsheet, Presentation } from "lucide-react";
-import { useBbeeStore } from "@toolkit/lib/store";
+import { Download } from "lucide-react";
 import ExportResults from "@toolkit/components/ExportResults";
 
 export default function Reports() {
-  const state = useBbeeStore();
-
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl">
       <div>
@@ -23,42 +20,14 @@ export default function Reports() {
           <CardDescription>History of generated reports for this client.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-xl border bg-card/50 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-4 p-4 font-semibold text-xs uppercase tracking-wider text-muted-foreground border-b bg-muted/50">
-              <div className="col-span-2">Report Name</div>
-              <div>Type</div>
-              <div className="text-right">Date</div>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="rounded-full bg-muted/50 p-4 mb-4">
+              <Download className="h-8 w-8 text-muted-foreground" />
             </div>
-            <div className="grid grid-cols-4 p-4 items-center text-sm border-b hover:bg-muted/30 transition-colors cursor-pointer">
-              <div className="col-span-2 font-medium flex items-center gap-3">
-                <div className="bg-red-50 dark:bg-red-900/30 p-1.5 rounded-lg border border-red-100 dark:border-red-900 text-red-600 dark:text-red-400">
-                  <FileText className="h-4 w-4" />
-                </div>
-                Final_BEE_Report_{state.client.name.replace(/\s+/g, '_')}.pdf
-              </div>
-              <div className="text-muted-foreground">Certificate PDF</div>
-              <div className="text-right text-muted-foreground font-mono text-xs">Today, 10:24 AM</div>
-            </div>
-            <div className="grid grid-cols-4 p-4 items-center text-sm border-b hover:bg-muted/30 transition-colors cursor-pointer">
-              <div className="col-span-2 font-medium flex items-center gap-3">
-                <div className="bg-emerald-50 dark:bg-emerald-900/30 p-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400">
-                  <FileSpreadsheet className="h-4 w-4" />
-                </div>
-                Auditor_Pack_{state.client.name.replace(/\s+/g, '_')}.xlsx
-              </div>
-              <div className="text-muted-foreground">Auditor Excel</div>
-              <div className="text-right text-muted-foreground font-mono text-xs">Yesterday</div>
-            </div>
-            <div className="grid grid-cols-4 p-4 items-center text-sm hover:bg-muted/30 transition-colors cursor-pointer">
-              <div className="col-span-2 font-medium flex items-center gap-3">
-                <div className="bg-orange-50 dark:bg-orange-900/30 p-1.5 rounded-lg border border-orange-100 dark:border-orange-900 text-orange-600 dark:text-orange-400">
-                  <Presentation className="h-4 w-4" />
-                </div>
-                Strategy_Pack_{state.client.name.replace(/\s+/g, '_')}.pptx
-              </div>
-              <div className="text-muted-foreground">Strategy Pack</div>
-              <div className="text-right text-muted-foreground font-mono text-xs">Last Week</div>
-            </div>
+            <p className="text-sm font-medium text-muted-foreground">No exports yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
+              Use the export options above to generate your first report. Downloads will appear here.
+            </p>
           </div>
         </CardContent>
       </Card>

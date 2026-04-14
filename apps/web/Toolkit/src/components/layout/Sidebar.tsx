@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   LayoutDashboard,
   Users,
   UserCog,
-  Scale,
   BookOpen,
   ShoppingCart,
   HeartHandshake,
@@ -37,17 +36,17 @@ const dataInputItems = [
 
 const pillarItems = [
   { name: "Ownership", href: "/pillars/ownership", icon: Users, scoreKey: "ownership", target: 25, color: "text-violet-400", barFill: "bg-violet-400/60", dot: "bg-violet-400" },
-  { name: "Management Control", href: "/pillars/management", icon: UserCog, scoreKey: "managementControl", target: 27, color: "text-blue-400", barFill: "bg-blue-400/60", dot: "bg-blue-400" },
-  { name: "Employment Equity", href: "/pillars/employment-equity", icon: Scale, scoreKey: "managementControl", target: 27, color: "text-indigo-400", barFill: "bg-indigo-400/60", dot: "bg-indigo-400" },
+  { name: "Management Control & EE", href: "/pillars/management", icon: UserCog, scoreKey: "managementControl", target: 27, color: "text-blue-400", barFill: "bg-blue-400/60", dot: "bg-blue-400" },
   { name: "Skills Development", href: "/pillars/skills", icon: BookOpen, scoreKey: "skillsDevelopment", target: 25, color: "text-emerald-400", barFill: "bg-emerald-400/60", dot: "bg-emerald-400" },
   { name: "Enterprise & Supplier", href: "/pillars/esd", icon: Handshake, scoreKey: "enterpriseDevelopment", target: 42, color: "text-amber-400", barFill: "bg-amber-400/60", dot: "bg-amber-400" },
   { name: "Socio-Economic Dev", href: "/pillars/sed", icon: HeartHandshake, scoreKey: "socioEconomicDevelopment", target: 5, color: "text-sky-400", barFill: "bg-sky-400/60", dot: "bg-sky-400" },
 ];
 
-function NavItem({ item, isActive }: { item: { name: string; href: string; icon: any }; isActive: boolean }) {
+function NavItem({ item, isActive, searchParams }: { item: { name: string; href: string; icon: any }; isActive: boolean; searchParams?: string }) {
+  const hrefWithParams = searchParams ? `${item.href}?${searchParams}` : item.href;
   return (
     <Link
-      href={item.href}
+      href={hrefWithParams}
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium relative transition-all duration-150",
         isActive
@@ -70,10 +69,11 @@ function NavItem({ item, isActive }: { item: { name: string; href: string; icon:
   );
 }
 
-function PillarNavItem({ item, isActive }: { item: typeof pillarItems[0]; isActive: boolean }) {
+function PillarNavItem({ item, isActive, searchParams }: { item: typeof pillarItems[0]; isActive: boolean; searchParams?: string }) {
+  const hrefWithParams = searchParams ? `${item.href}?${searchParams}` : item.href;
   return (
     <Link
-      href={item.href}
+      href={hrefWithParams}
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium relative transition-all duration-150",
         isActive
@@ -171,11 +171,16 @@ function ScoreRing({ score, total }: { score: number; total: number }) {
 
 export function Sidebar() {
   const [location] = useLocation();
+  const search = useSearch();
   const scorecard = useBbeeStore(s => s.scorecard);
   const isLoaded = useBbeeStore(s => s.isLoaded);
   const totalScore = isLoaded && scorecard ? scorecard.total?.score || 0 : 0;
   const level = isLoaded && scorecard ? scorecard.discountedLevel : 9;
   const levelLabel = level >= 9 ? "N/C" : `L${level}`;
+
+  // Preserve session parameter in navigation links to maintain context
+  const sessionParam = new URLSearchParams(search).get('session');
+  const searchParams = sessionParam ? `session=${encodeURIComponent(sessionParam)}` : undefined;
 
   return (
     <div className="flex h-screen w-[220px] flex-col bg-sidebar border-r border-white/8 z-10">
@@ -200,19 +205,19 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto px-2 pt-1 pb-2 space-y-1 scrollbar-thin">
         <CollapsibleSection label="Platform">
           {mainNavItems.map((navItem) => (
-            <NavItem key={navItem.name} item={navItem} isActive={location === navItem.href} />
+            <NavItem key={navItem.name} item={navItem} isActive={location === navItem.href} searchParams={searchParams} />
           ))}
         </CollapsibleSection>
 
         <CollapsibleSection label="Base Data">
           {dataInputItems.map((navItem) => (
-            <NavItem key={navItem.name} item={navItem} isActive={location === navItem.href} />
+            <NavItem key={navItem.name} item={navItem} isActive={location === navItem.href} searchParams={searchParams} />
           ))}
         </CollapsibleSection>
 
         <CollapsibleSection label="Pillars">
           {pillarItems.map((pillarItem) => (
-            <PillarNavItem key={pillarItem.name} item={pillarItem} isActive={location === pillarItem.href} />
+            <PillarNavItem key={pillarItem.name} item={pillarItem} isActive={location === pillarItem.href} searchParams={searchParams} />
           ))}
         </CollapsibleSection>
       </div>
@@ -241,6 +246,7 @@ export function Sidebar() {
         <NavItem
           item={{ name: "Settings", href: "/settings", icon: Settings }}
           isActive={location === "/settings"}
+          searchParams={searchParams}
         />
       </div>
     </div>

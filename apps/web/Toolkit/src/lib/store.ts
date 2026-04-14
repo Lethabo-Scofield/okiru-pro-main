@@ -7,6 +7,7 @@ import {
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
+import { API_BASE } from './config';
 import type { CalculatorConfig } from '../../../shared/schema';
 
 import { calculateOwnershipScore } from './calculators/ownership';
@@ -420,7 +421,14 @@ function calculateScorecard(
     totalYesCost: yesCandidates.reduce((sum, c) => sum + c.cost, 0),
     yesCostPerCandidate: yesCandidates.length > 0 ? yesCandidates.reduce((sum, c) => sum + c.cost, 0) / yesCandidates.length : 0,
   };
-  const yesScore = calculateYESScore(yesData, cfg);
+  const avgNpat3yr = (() => {
+    const history = state.client.financialHistory || [];
+    const npatValues = history.map(fy => fy.npat ?? 0).filter(n => n > 0);
+    if (npatValues.length === 0) return state.client.npat || 0;
+    const recent = npatValues.slice(-3);
+    return recent.reduce((a, b) => a + b, 0) / recent.length;
+  })();
+  const yesScore = calculateYESScore(yesData, cfg, state.client.revenue || 0, avgNpat3yr);
 
   if (overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0) {
     const ov = overrides;
@@ -488,21 +496,25 @@ function calculateScorecard(
   // Use totalMaxPoints from config (verified Excel value) instead of calculating
   const totalTarget = cfg?.totalMaxPoints ?? (ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget + yesTarget);
 
-  // CRITICAL FIX: Include YES in total points calculation
-  const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score;
+  // YES bonus points (Tier 2 = +3 bonus points) are added to total scorecard
+  const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total
+    + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score + yesScore.yesBonusPoints;
   const level = pointsToLevel(totalPoints, cfg);
 
-  const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet; // 40% sub-minimum
+  const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet;
   const skSubMinMet = skillScore.subMinimumMet;
   const prSubMinMet = procScore.subMinimumMet;
   const sdSubMinMet = esdScore.sdSubMinimumMet;
   const edSubMinMet = esdScore.edSubMinimumMet;
   const anySubMinFailed = !ownSubMinMet || !skSubMinMet || !prSubMinMet || !sdSubMinMet || !edSubMinMet;
-  // When ignoreSubMinimum is true, don't apply the discount even if sub-minimums failed
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
-  const discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
+  let discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
 
-  // CRITICAL FIX: Apply round2 to all scores for consistent 2 decimal display
+  // YES level uplift applied AFTER discounting (slide 123)
+  if (yesScore.yesBeeLevelIncrease > 0 && discountedLevel > 1) {
+    discountedLevel = Math.max(1, discountedLevel - yesScore.yesBeeLevelIncrease);
+  }
+
   return {
     ownership: { score: round2(ownScore.total), target: ownTarget, weighting: ownTarget, subMinimumMet: ownSubMinMet },
     managementControl: { score: round2(mgtScore.total), target: mcTarget, weighting: mcTarget },
@@ -511,7 +523,7 @@ function calculateScorecard(
     supplierDevelopment: { score: round2(esdScore.sdTotal), target: sdTarget, weighting: sdTarget, subMinimumMet: sdSubMinMet },
     enterpriseDevelopment: { score: round2(esdScore.edTotal), target: edTarget, weighting: edTarget, subMinimumMet: edSubMinMet },
     socioEconomicDevelopment: { score: round2(sedScore.total), target: sedTarget, weighting: sedTarget },
-    yesInitiative: { score: round2(yesScore.score), target: yesTarget, weighting: yesTarget },
+    yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: yesTarget, weighting: yesTarget },
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: level, discountedLevel, isDiscounted, recognitionLevel: levelToRecognition(discountedLevel),
   };
@@ -713,7 +725,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       });
 
       get()._recalculateAll();
-      get().loadCalculatorConfig(clientId);
+      await get().loadCalculatorConfig(clientId);
     } catch (error) {
       console.error('Failed to load client data:', clientId, error);
       throw error;
@@ -844,13 +856,32 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
 
   loadCalculatorConfig: async (clientId: string) => {
     try {
-      const config = await api.getCalculatorConfig(clientId);
+      const config = await api.getCalculatorConfig(clientId).catch(() => null);
       if (config) {
         set({ calculatorConfig: config });
         get()._recalculateAll();
+        return;
+      }
+    } catch {
+      // Client-specific config not available, fall through to sector config
+    }
+
+    // Fallback: load from sector config (needed for synthetic upload-*/build-*/session-* IDs)
+    try {
+      const { client } = get();
+      const sectorCode = client.sectorCode || 'RCOGP';
+      const turnover = client.annualTurnover || client.revenue || 0;
+      const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
+      const res = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.config) {
+          set({ calculatorConfig: data.config });
+          get()._recalculateAll();
+        }
       }
     } catch (error) {
-      console.error('Failed to load calculator config:', error);
+      console.error('Failed to load calculator config (sector fallback):', error);
     }
   },
 

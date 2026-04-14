@@ -46,23 +46,32 @@ export interface ExtractedTables {
   contributions?: Array<Record<string, any>>;
   trainingPrograms?: Array<Record<string, any>>;
   ownershipFinancials?: Array<Record<string, any>>;
+  financials?: Array<Record<string, any>>;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Step 1: Classify all sheets using AI
 // ────────────────────────────────────────────────────────────────────────────
 
-const CLASSIFICATION_PROMPT = `You are a B-BBEE (Broad-Based Black Economic Empowerment) data analyst.
+const CLASSIFICATION_PROMPT = `You are a B-BBEE (Broad-Based Black Economic Empowerment) data analyst specializing in BBBEE toolkits.
 Given sample content from spreadsheet sheets, classify each sheet into ONE of these categories:
 
-- "employees" — Contains employee/staff data (names, race, gender, job level/designation, disability status). Used for Management Control & Employment Equity scoring.
-- "shareholders" — Contains shareholder/ownership data (names, ownership %, share values, voting rights). Used for Ownership scoring.
-- "suppliers" — Contains supplier/vendor/procurement data (names, spend amounts, BEE levels, enterprise types). Used for Preferential Procurement scoring.
-- "contributions" — Contains ESD (Enterprise & Supplier Development) or SED (Socio-Economic Development) contribution data (beneficiaries, amounts, types).
-- "trainingPrograms" — Contains skills/training/learning programme data (learner names, costs, categories, qualifications).
-- "ownershipFinancials" — Contains company valuation, outstanding debt, years held — specifically for ownership Net Value calculation.
-- "financials" — Contains income statement, revenue, NPAT, payroll, TMPS figures.
-- "irrelevant" — Cover pages, instructions, disclaimers, summary dashboards, or data not useful for B-BBEE scoring.
+- "employees" — Contains employee/staff data: individual names with race, gender, job level/designation, disability status. Common sheet names: "MC Scorecard", "MC Data", "Employee Data", "EE Report", "Management Control". Look for columns like Name, Race, Gender, Designation, Disabled.
+- "shareholders" — Contains shareholder/ownership data: names with ownership percentages, share values, voting rights, economic interest. Common sheet names: "Ownership Data", "Ownership Calcs", "Empower - Ownership", "Share Register".
+- "suppliers" — Contains supplier/vendor/procurement data: supplier names with spend amounts, BEE levels, enterprise types (EME/QSE). Common sheet names: "PP Scorecard", "Procurement", "Supplier Data", "Vendor List".
+- "contributions" — Contains ESD/SED contribution data: beneficiaries with amounts, contribution types, categories (SD/ED/SED). Common sheet names: "ESD Scorecard", "SED Report", "SD Scorecard", "ED Scorecard", "Enterprise Development", "Supplier Development", "Socio-Economic Development".
+- "trainingPrograms" — Contains skills/training data: learner names with programme details, costs, categories, qualifications, absorption status. Common sheet names: "Skills Scorecard", "Training Data", "Empower Skills", "Employees Training".
+- "ownershipFinancials" — Contains company valuation, outstanding debt, years held for ownership Net Value calculation. Often found in "Ownership Calcs", "Ownership Data", or "Empower - Ownership" sheets.
+- "financials" — Contains financial figures: revenue/turnover, NPAT, payroll/leviable amount, TMPS, headcount, industry norms. Common sheet names: "Client Information", "Financials", "General Info", "Summary Scorecard", "Industry Norms". IMPORTANT: "Client Information" sheets typically contain the core financial data needed for scoring.
+- "irrelevant" — Cover pages, instructions, disclaimers, scenario planning (unless it contains actual data), strategy action items, ROI analysis, or chart-only dashboards.
+
+IMPORTANT RULES:
+1. A sheet named "Client Information" or "General Info" is almost always "financials" — it contains revenue, NPAT, headcount, payroll, and industry norm data.
+2. A "Summary Scorecard" sheet may contain Actual scores — classify it as "financials" if it has NPAT, revenue, or headcount values.
+3. "MC Scorecard" sheets contain individual employee data — classify as "employees".
+4. If a sheet contains BOTH ownership data AND financial valuation data, prefer "shareholders" (the ownershipFinancials can be extracted from entities).
+5. Sheets with "Empower" prefix may contain various types — read the content carefully.
+6. "Ownership Calcs" or "Ownership Data" typically contain shareholder details → "shareholders".
 
 Return valid JSON only: { "classifications": [ { "sheetName": "...", "pillarType": "...", "confidence": 0.0-1.0, "reason": "..." } ] }`;
 
@@ -79,7 +88,7 @@ export async function classifySheets(
   }
 
   const sheetDescriptions = sheetSamples.map((s, i) =>
-    `### Sheet ${i + 1}: "${s.sheetName}"\n\`\`\`\n${s.sampleText.substring(0, 3000)}\n\`\`\``
+    `### Sheet ${i + 1}: "${s.sheetName}"\n\`\`\`\n${s.sampleText.substring(0, 4000)}\n\`\`\``
   ).join('\n\n');
 
   try {
@@ -88,7 +97,7 @@ export async function classifySheets(
         { role: 'system', content: CLASSIFICATION_PROMPT },
         { role: 'user', content: `Classify these ${sheetSamples.length} sheets:\n\n${sheetDescriptions}` },
       ],
-      { temperature: 0, maxTokens: 2000, responseFormat: { type: 'json_object' } }
+      { temperature: 0, maxTokens: 4000, responseFormat: { type: 'json_object' } }
     );
 
     const parsed = JSON.parse(response);
@@ -128,34 +137,34 @@ function fallbackClassify(sheetName: string, sampleText: string): PillarTableTyp
 
   const patterns: Array<{ type: PillarTableType; namePatterns: RegExp[]; textPatterns: RegExp[] }> = [
     {
+      type: 'financials',
+      namePatterns: [/^client\s*info/i, /^general\s*info/i, /^financ/i, /^income/i, /^balance/i, /^revenue/i, /^profit/i, /industry\s*norm/i],
+      textPatterns: [/total\s*revenue|npat|net\s*profit|leviable|payroll|turnover|tmps|total\s*measured\s*procurement|applicable\s*employee\s*headcount/i],
+    },
+    {
       type: 'employees',
-      namePatterns: [/employee/i, /staff/i, /mc\s*data/i, /management/i, /ee\s*report/i, /personnel/i, /hr\s*data/i, /workforce/i, /headcount/i],
+      namePatterns: [/employee/i, /staff/i, /mc\s*scorecard/i, /mc\s*data/i, /management\s*control/i, /ee\s*report/i, /personnel/i, /hr\s*data/i, /workforce/i, /headcount/i],
       textPatterns: [/designation|job\s*level|race|gender|disabled|african|coloured|indian|white|board|executive|senior|middle|junior/i],
     },
     {
       type: 'shareholders',
-      namePatterns: [/owner/i, /sharehold/i, /equity/i, /voting/i],
+      namePatterns: [/owner.*data/i, /owner.*calc/i, /sharehold/i, /equity/i, /voting/i, /empower.*owner/i, /share\s*register/i],
       textPatterns: [/black\s*own|voting\s*right|economic\s*interest|shareholder|share\s*value|designated\s*group|new\s*entrant/i],
     },
     {
       type: 'suppliers',
-      namePatterns: [/procure/i, /supplier/i, /vendor/i, /spend/i],
+      namePatterns: [/procure/i, /^pp\s/i, /pp\s*scorecard/i, /supplier/i, /vendor/i],
       textPatterns: [/bee\s*level|supplier\s*spend|eme|qse|black\s*owned|procurement|recognition|empowering/i],
     },
     {
       type: 'contributions',
-      namePatterns: [/esd/i, /sed/i, /enterprise/i, /socio/i, /development/i, /contrib/i],
+      namePatterns: [/esd/i, /^sed\b/i, /sed\s*report/i, /^sd\s/i, /^ed\s/i, /enterprise\s*dev/i, /supplier\s*dev/i, /socio/i, /contrib/i],
       textPatterns: [/enterprise\s*development|supplier\s*development|socio.*economic|contribution|beneficiary|benefit\s*factor/i],
     },
     {
       type: 'trainingPrograms',
-      namePatterns: [/skill/i, /train/i, /learn/i, /bursary/i, /education/i],
+      namePatterns: [/skill/i, /train/i, /learn/i, /bursary/i, /education/i, /empower.*skill/i],
       textPatterns: [/training\s*(cost|spend|programme)|learner|bursary|skills\s*development|leviable|absorb/i],
-    },
-    {
-      type: 'financials',
-      namePatterns: [/financ/i, /income/i, /balance/i, /revenue/i, /profit/i, /general\s*info/i],
-      textPatterns: [/total\s*revenue|npat|net\s*profit|leviable|payroll|turnover|tmps/i],
     },
     {
       type: 'ownershipFinancials',
@@ -181,32 +190,104 @@ function fallbackClassify(sheetName: string, sampleText: string): PillarTableTyp
 const EXTRACTION_PROMPTS: Record<string, string> = {
   employees: `Extract ALL employees/staff members from this B-BBEE spreadsheet data. Return a JSON array.
 Each object MUST have: { "name": string, "race": string (one of: African, Coloured, Indian, White), "gender": string (Male or Female), "designation": string (one of: Board, Executive, Executive Director, Other Executive Management, Senior, Middle, Junior, Semi-skilled, Unskilled, Skilled Technical), "isDisabled": boolean, "isForeign": boolean }
-Map job levels: Directors/Board of Directors → "Board", CEO/MD/CFO/COO/CIO → "Executive", Executive Director → "Executive Director", GM/Executive Management → "Other Executive Management", Senior Manager → "Senior", Manager/Professional → "Middle", Supervisor/Foreman → "Junior", Operator/Clerk → "Semi-skilled", Labourer/Cleaner → "Unskilled", Engineer/Technician/IT → "Skilled Technical"
+
+DESIGNATION MAPPING (use exactly these values):
+- Directors/Board of Directors/Non-Exec Director/Chairperson → "Board"
+- CEO/MD/CFO/COO/CIO/Managing Director → "Executive"
+- Executive Director → "Executive Director"
+- GM/General Manager/Executive Management → "Other Executive Management"
+- Senior Manager/Head of Department/HOD → "Senior"
+- Manager/Professional/Specialist/Professionally Qualified → "Middle"
+- Supervisor/Foreman/Team Leader/Junior Management → "Junior"
+- Operator/Clerk/Admin/Secretary → "Semi-skilled"
+- Labourer/Cleaner/General Worker → "Unskilled"
+- Engineer/Technician/IT/Artisan → "Skilled Technical"
+
+RACE MAPPING: Black/Black African → "African", Coloured → "Coloured", Indian/Asian → "Indian", White/Caucasian → "White"
+
+IMPORTANT RULES:
+1. Extract EVERY individual employee row — each person must be a separate object.
+2. If data shows headcount by designation/race/gender (matrix format), expand each cell into individual employee records. E.g., "Board: 1 African Female" → create one employee object.
+3. In MC Scorecards, look for "Manual Input" sections, Quarter data, or "Input" rows with employee details.
+4. In EE Reports, expand headcount matrices into individual records.
+5. Do NOT skip any employee — even if partial data, create an entry with best available info.
 Return ONLY valid JSON: {"employees": [...]}`,
 
-  shareholders: `Extract ALL shareholders/owners from this B-BBEE spreadsheet data. Return a JSON array.
-Each object MUST have: { "name": string, "blackOwnership": number (percentage 0-100), "blackWomenOwnership": number (percentage 0-100), "shares": number, "shareValue": number (in Rands), "yearsHeld": number, "isDesignatedGroup": boolean, "blackNewEntrant": boolean }
-If a percentage is shown as 0.25 (decimal), multiply by 100 to get 25%.
+  shareholders: `Extract ALL shareholders/owners from this B-BBEE ownership data. Return a JSON array.
+Each object MUST have: { "name": string, "blackOwnership": number (0-1 as decimal or 0-100 as percentage — normalize to 0-1 decimal), "blackWomenOwnership": number (0-1 decimal), "shares": number, "shareValue": number (in Rands), "yearsHeld": number, "isDesignatedGroup": boolean, "blackNewEntrant": boolean, "votingRightsPercent": number (0-1 decimal), "economicInterestPercent": number (0-1 decimal) }
+
+IMPORTANT RULES:
+1. If percentages shown as whole numbers (e.g. "100%", "50"), normalize to decimals (1.0, 0.5).
+2. "isDesignatedGroup" = true ONLY if specifically identified as: black youth (under 35), black disabled person, black military veteran, or black person in rural/underdeveloped area. Regular black shareholders are NOT designated group.
+3. "blackNewEntrant" = true if identified as a first-time black equity participant or new entrant.
+4. Look for: ownership schedules, share registers, ESOP data, trust structures, flowthrough structures.
+5. Extract voting rights and economic interest percentages separately — they may differ from ownership %.
+6. For trusts (e.g. "Lake Family Trust"), extract the trust as a single shareholder entity.
+7. If "Company Value" or "Outstanding Debt" appears, include it but the main focus is individual shareholder records.
 Return ONLY valid JSON: {"shareholders": [...]}`,
 
   suppliers: `Extract ALL suppliers/vendors from this B-BBEE procurement data. Return a JSON array.
-Each object MUST have: { "name": string, "spend": number (annual spend in Rands), "beeLevel": number (1-8, 0 for non-compliant), "blackOwnership": number (0-100), "blackWomenOwnership": number (0-100), "enterpriseType": string (generic/eme/qse), "isDesignatedGroup": boolean, "isBlackOwned51": boolean, "isBlackWomanOwned30": boolean, "isEME": boolean, "isQSE": boolean, "isForeignSupplier": boolean }
-Derive: isBlackOwned51 = blackOwnership >= 51, isBlackWomanOwned30 = blackWomenOwnership >= 30, isEME = turnover < R10M, isQSE = turnover R10M-R50M.
+Each object MUST have: { "name": string, "spend": number (annual spend in Rands), "beeLevel": number (1-8, 0 for non-compliant), "blackOwnership": number (0-100 percentage), "blackWomenOwnership": number (0-100 percentage), "enterpriseType": string (generic/eme/qse), "isDesignatedGroup": boolean, "isBlackOwned51": boolean, "isBlackWomanOwned30": boolean, "isEME": boolean, "isQSE": boolean, "isForeignSupplier": boolean }
+
+IMPORTANT RULES:
+1. Derive: isBlackOwned51 = blackOwnership >= 51, isBlackWomanOwned30 = blackWomenOwnership >= 30.
+2. EME = Exempted Micro Enterprise (turnover < R10M). QSE = Qualifying Small Enterprise (R10M-R50M).
+3. If "Recognition Level" column exists, that IS the beeLevel (Level 1 = 1, etc.).
+4. In PP Scorecards, supplier data may be in summary format — extract each supplier row.
+5. "Imports" or "Foreign suppliers" should have isForeignSupplier = true.
+6. If a spend amount appears negative or as a credit, still include it with the actual value.
 Return ONLY valid JSON: {"suppliers": [...]}`,
 
-  contributions: `Extract ALL ESD/SED contributions from this B-BBEE spreadsheet data. Return a JSON array.
-Each object MUST have: { "beneficiary": string, "type": string (grant/loan/guarantee/direct_cost/mentorship/incubation), "amount": number (in Rands), "category": string (sd/ed/sed), "benefitFactor": number (default 1.0) }
-Categories: "sd" = Supplier Development, "ed" = Enterprise Development, "sed" = Socio-Economic Development.
+  contributions: `Extract ALL ESD (Enterprise & Supplier Development) and SED (Socio-Economic Development) contributions from this B-BBEE spreadsheet data. Return a JSON array.
+Each object MUST have: { "beneficiary": string, "type": string, "amount": number (in Rands), "category": string (sd/ed/sed), "benefitFactor": number (default 1.0) }
+
+CATEGORY MAPPING:
+- "sd" = Supplier Development (contributions to develop existing suppliers)
+- "ed" = Enterprise Development (contributions to develop small/new enterprises)
+- "sed" = Socio-Economic Development (donations, CSI, community projects)
+
+TYPE VALUES: grant, direct_cost, loan, interest_free_loan, standard_loan, guarantee, mentorship, incubation, professional_services_free, employee_time, equity_investment
+
+IMPORTANT RULES:
+1. SD and ED contributions use NPAT-based targets. SED contributions are separate.
+2. If the sheet covers multiple categories, classify each contribution correctly.
+3. In combined ESD/SED sheets, look for section headers to determine category.
+4. Monthly amounts should be annualized (sum all months).
+5. "Value Short" or negative values indicate shortfalls — still extract the actual amounts.
 Return ONLY valid JSON: {"contributions": [...]}`,
 
-  trainingPrograms: `Extract ALL training/skills programmes from this B-BBEE spreadsheet data. Return a JSON array.
-Each object MUST have: { "name": string (programme name), "category": string (A/B/C/D/E — A=Bursaries/Scholarships, B=Internships, C=Learnerships, D=Work-Integrated Learning, E=Other), "cost": number (total cost in Rands), "race": string (African/Coloured/Indian/White), "gender": string (Male/Female), "isDisabled": boolean, "isBursary": boolean }
-If category is "A" or text mentions bursary/scholarship, set isBursary=true.
+  trainingPrograms: `Extract ALL training/skills development programmes from this B-BBEE spreadsheet data. Return a JSON array.
+Each object MUST have: { "name": string (learner or programme name), "learnerName": string, "category": string (A/B/C/D/E/F), "cost": number (total cost in Rands), "race": string (African/Coloured/Indian/White), "gender": string (Male/Female), "isDisabled": boolean, "isBlack": boolean, "isBursary": boolean, "isAbsorbed": boolean }
+
+CATEGORY CODES: A=Bursaries/Scholarships, B=Internships/Learnerships, C=Short Courses/Workshops, D=Other Accredited Training, E=Non-accredited/Informal, F=External Unaccredited
+
+IMPORTANT RULES:
+1. Each learner should be a separate record.
+2. isBlack = true if race is African, Coloured, or Indian.
+3. isBursary = true if category is "A" or text mentions bursary/scholarship.
+4. isAbsorbed = true if the learner was subsequently employed.
+5. Include monthly stipend and course cost in the total cost.
+6. In Skills Scorecards, look for "Actual" values and individual learner rows.
 Return ONLY valid JSON: {"trainingPrograms": [...]}`,
 
   ownershipFinancials: `Extract ownership valuation data from this B-BBEE spreadsheet. Return a JSON object.
-Must have: { "companyValue": number (total company/enterprise value in Rands), "outstandingDebt": number (attributable to black shareholders in Rands), "yearsHeld": number (years black ownership has been held) }
+Must have: { "companyValue": number (total company/enterprise value in Rands), "outstandingDebt": number (BEE-attributable debt in Rands), "yearsHeld": number (years black ownership has been held) }
+Look for: "Company Value to use", "Outstanding Debts", "Years Held", "Transaction Age", "Ownership Calcs" sections.
 Return ONLY valid JSON: {"ownershipFinancials": {...}}`,
+
+  financials: `Extract financial data from this B-BBEE spreadsheet. Return a JSON object with all available fields.
+Must have: { "revenue": number (total annual revenue/turnover in Rands), "npat": number (Net Profit After Tax in Rands), "leviableAmount": number (total payroll/leviable amount in Rands), "tmps": number (Total Measured Procurement Spend in Rands), "headcount": number (total employee headcount), "deemedNpat": number (deemed NPAT if applicable, 0 if not), "industryNormPercent": number (industry norm percentage if shown, 0 if not), "companyValue": number (company value if shown, 0 if not), "outstandingDebt": number (outstanding BEE debt if shown, 0 if not), "yearsHeld": number (ownership years held if shown, 0 if not) }
+
+IMPORTANT RULES:
+1. Revenue is often labeled "Total Revenue", "Turnover", "Annual Turnover", or "Sales Revenue".
+2. NPAT is "Net Profit After Tax" — NOT "NPAT Margin" (which is a percentage). Extract the Rand amount.
+3. Leviable Amount may be labeled "Total Payroll", "Leviable Payroll", "Total Remuneration", or "Staff Costs".
+4. TMPS is "Total Measured Procurement Spend" or "TMPS Inclusions".
+5. Headcount is "Total Employees", "Applicable Employee Headcount", or "Number of Employees".
+6. In "Client Information" sheets, these values are typically in key-value pair format (label: value).
+7. If "Deemed NPAT" appears, extract it separately from regular NPAT.
+8. Set fields to 0 if not found — do NOT guess or invent values.
+Return ONLY valid JSON: {"financials": {...}}`,
 };
 
 /**
@@ -215,7 +296,7 @@ Return ONLY valid JSON: {"ownershipFinancials": {...}}`,
  */
 export async function extractTablesFromClassifiedSheets(
   classifiedSheets: ClassifiedSheet[],
-  maxChunksPerTable: number = 15
+  maxChunksPerTable: number = 25
 ): Promise<ExtractedTables> {
   const tables: ExtractedTables = {};
 
@@ -227,7 +308,7 @@ export async function extractTablesFromClassifiedSheets(
   // Group sheets by pillar type, prioritizing data-rich sheets (more chunks = more rows)
   const sheetsByType = new Map<PillarTableType, ClassifiedSheet[]>();
   for (const sheet of classifiedSheets) {
-    if (sheet.pillarType === 'irrelevant' || sheet.pillarType === 'financials') continue;
+    if (sheet.pillarType === 'irrelevant') continue;
     const existing = sheetsByType.get(sheet.pillarType) || [];
     existing.push(sheet);
     sheetsByType.set(sheet.pillarType, existing);
@@ -310,12 +391,14 @@ export async function smartExtractTables(
 ): Promise<{ tables: ExtractedTables; classifications: SheetClassification[] }> {
   console.log(`[aiTableClassifier] Starting smart classification for ${sheetChunks.size} sheets`);
 
-  // Build samples for classification (first 3 chunks per sheet for better context)
   const sheetSamples: Array<{ sheetName: string; sampleText: string }> = [];
   for (const [sheetName, texts] of sheetChunks.entries()) {
+    const first3 = texts.slice(0, 3);
+    const mid = texts.length > 6 ? [texts[Math.floor(texts.length / 2)]] : [];
+    const sampleChunks = [...first3, ...mid];
     sheetSamples.push({
       sheetName,
-      sampleText: texts.slice(0, 3).join('\n\n'),
+      sampleText: sampleChunks.join('\n\n'),
     });
   }
 

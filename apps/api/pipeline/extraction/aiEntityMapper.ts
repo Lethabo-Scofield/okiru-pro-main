@@ -12,7 +12,7 @@
  * "what the calculation engine needs."
  */
 
-import { chatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
+import { chatCompletion, fastChatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
 import type { EmployeeInput, ShareholderInput, SupplierInput, ContributionInput, FinancialsInput } from '../rules/calculationEngine.js';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -28,6 +28,7 @@ export interface ExtractionOutput {
     contributions?: any[];
     trainingPrograms?: any[];
     ownershipFinancials?: any[];
+    financials?: any[];
   };
 }
 
@@ -159,6 +160,8 @@ function normalizeShareholders(raw: any[]): ShareholderInput[] {
   return raw.map(s => {
     const bo = normalizePercent(s.blackOwnership || s.black_ownership || 0);
     const bwo = normalizePercent(s.blackWomenOwnership || s.black_women_ownership || s.blackFemaleOwnership || 0);
+    const vr = normalizePercent(s.votingRightsPercent || s.voting_rights || s.votingRights || bo);
+    const ei = normalizePercent(s.economicInterestPercent || s.economic_interest || s.economicInterest || bo);
     return {
       name: s.name || 'Shareholder',
       blackOwnership: bo,
@@ -166,8 +169,10 @@ function normalizeShareholders(raw: any[]): ShareholderInput[] {
       shares: normalizeNumber(s.shares || s.numberOfShares || 0),
       shareValue: normalizeNumber(s.shareValue || s.share_value || s.value || 0),
       yearsHeld: normalizeNumber(s.yearsHeld || s.years_held || 0),
-      isDesignatedGroup: !!s.isDesignatedGroup || bo > 0,
+      isDesignatedGroup: !!s.isDesignatedGroup,
       blackNewEntrant: !!s.blackNewEntrant || !!s.isNewEntrant || !!s.newEntrant,
+      votingRightsPercent: vr,
+      economicInterestPercent: ei,
     };
   });
 }
@@ -200,14 +205,21 @@ function normalizeSuppliers(raw: any[]): SupplierInput[] {
 function normalizeContributions(raw: any[]): ContributionInput[] {
   return raw.map(c => {
     let category: 'sd' | 'ed' | 'sed' = 'ed';
-    const rawCat = String(c.category || c.type || '').toLowerCase();
-    if (rawCat.includes('sd') || rawCat.includes('supplier')) category = 'sd';
-    else if (rawCat.includes('sed') || rawCat.includes('socio')) category = 'sed';
-    else if (rawCat.includes('ed') || rawCat.includes('enterprise')) category = 'ed';
+    const rawCat = String(c.category || '').toLowerCase();
+    if (rawCat === 'sd' || rawCat === 'supplier_development' || rawCat.includes('supplier dev')) category = 'sd';
+    else if (rawCat === 'sed' || rawCat === 'socio_economic' || rawCat.includes('socio')) category = 'sed';
+    else if (rawCat === 'ed' || rawCat === 'enterprise_development' || rawCat.includes('enterprise')) category = 'ed';
+    else if (rawCat.includes('supplier')) category = 'sd';
+    else if (rawCat.includes('sed')) category = 'sed';
+    else if (rawCat.includes('sd')) category = 'sd';
+    else if (rawCat.includes('ed')) category = 'ed';
+
+    const contribType = String(c.type || c.contributionType || 'direct_cost').toLowerCase()
+      .replace(/\s+/g, '_');
 
     return {
       beneficiary: c.beneficiary || c.name || 'Beneficiary',
-      type: c.type || c.contributionType || 'direct_cost',
+      type: contribType,
       amount: normalizeNumber(c.amount || c.value || 0),
       category,
       benefitFactor: normalizeNumber(c.benefitFactor || c.benefit_factor || 1.0),
@@ -225,9 +237,9 @@ const FINANCIAL_ENTITY_MAP: Record<string, keyof FinancialsInput> = {
   'annual turnover': 'revenue', 'annual revenue': 'revenue', 'gross revenue': 'revenue',
   'total turnover': 'revenue', 'sales revenue': 'revenue',
   'npat': 'npat', 'net profit after tax': 'npat', 'net_profit_after_tax': 'npat',
-  'net profit': 'npat', 'pat': 'npat', 'profit after tax': 'npat',
-  'deemed_npat': 'npat', 'deemed npat': 'npat', 'deemed net profit': 'npat',
-  'indicative npat': 'npat', 'npat margin': 'npat',
+  'net profit after tax (npat)': 'npat', 'net profit': 'npat', 'pat': 'npat',
+  'profit after tax': 'npat', 'deemed_npat': 'npat', 'deemed npat': 'npat',
+  'deemed net profit': 'npat', 'indicative npat': 'npat', 'npat margin': 'npat',
   'leviable_amount': 'leviableAmount', 'leviable amount': 'leviableAmount',
   'leviableamount': 'leviableAmount', 'payroll': 'leviableAmount',
   'total_payroll': 'leviableAmount', 'total payroll': 'leviableAmount',
@@ -240,7 +252,8 @@ const FINANCIAL_ENTITY_MAP: Record<string, keyof FinancialsInput> = {
   'total procurement': 'tmps', 'total spend': 'tmps',
   'headcount': 'headcount', 'number_of_employees': 'headcount',
   'number of employees': 'headcount', 'total employees': 'headcount',
-  'employee count': 'headcount', 'applicable employee headcount': 'headcount',
+  'total employees (headcount)': 'headcount', 'employee count': 'headcount',
+  'applicable employee headcount': 'headcount',
   'total headcount': 'headcount', 'staff count': 'headcount',
 };
 
@@ -271,14 +284,22 @@ function extractFinancialsFromEntities(
   for (const entity of entities) {
     if (entity.status === 'rejected' || entity.value == null) continue;
     const lower = entity.name.toLowerCase();
-    const key = FINANCIAL_ENTITY_MAP[lower];
+    let key = FINANCIAL_ENTITY_MAP[lower];
+    if (!key) {
+      const stripped = lower.replace(/\s*\(.*?\)\s*/g, '').trim();
+      key = FINANCIAL_ENTITY_MAP[stripped];
+    }
     if (key) {
       const val = normalizeNumber(entity.value);
       if (val > 0 && financials[key] === 0) {
         (financials as any)[key] = val;
       }
     }
-    const ownershipKey = OWNERSHIP_FINANCIAL_MAP[lower];
+    let ownershipKey = OWNERSHIP_FINANCIAL_MAP[lower];
+    if (!ownershipKey) {
+      const stripped = lower.replace(/\s*\(.*?\)\s*/g, '').trim();
+      ownershipKey = OWNERSHIP_FINANCIAL_MAP[stripped];
+    }
     if (ownershipKey) {
       const val = normalizeNumber(entity.value);
       if (val > 0 && !(financials as any)[ownershipKey]) {
@@ -307,12 +328,42 @@ function extractFinancialsFromEntities(
     financials.leviableAmount = financials.revenue * 0.35;
   }
 
+  // Extract from structured financials table (from AI table extraction)
+  if ((tables as any).financials?.length) {
+    const ft = (tables as any).financials[0];
+    if (financials.revenue === 0 && normalizeNumber(ft.revenue) > 0) financials.revenue = normalizeNumber(ft.revenue);
+    if (financials.npat === 0 && normalizeNumber(ft.npat) > 0) financials.npat = normalizeNumber(ft.npat);
+    if (financials.leviableAmount === 0 && normalizeNumber(ft.leviableAmount || ft.leviable_amount || ft.payroll) > 0) {
+      financials.leviableAmount = normalizeNumber(ft.leviableAmount || ft.leviable_amount || ft.payroll);
+    }
+    if (financials.tmps === 0 && normalizeNumber(ft.tmps) > 0) financials.tmps = normalizeNumber(ft.tmps);
+    if (financials.headcount === 0 && normalizeNumber(ft.headcount) > 0) financials.headcount = normalizeNumber(ft.headcount);
+    if (normalizeNumber(ft.companyValue) > 0 && !(financials as any).companyValue) {
+      (financials as any).companyValue = normalizeNumber(ft.companyValue);
+    }
+    if (normalizeNumber(ft.outstandingDebt) > 0 && !(financials as any).outstandingDebt) {
+      (financials as any).outstandingDebt = normalizeNumber(ft.outstandingDebt);
+    }
+    if (normalizeNumber(ft.yearsHeld) > 0 && !(financials as any).yearsHeld) {
+      (financials as any).yearsHeld = normalizeNumber(ft.yearsHeld);
+    }
+    if (normalizeNumber(ft.deemedNpat) > 0 && !(financials as any).deemedNpat) {
+      (financials as any).deemedNpat = normalizeNumber(ft.deemedNpat);
+    }
+  }
+
   // Extract ownership financials
   if (tables.ownershipFinancials?.length) {
     const of = tables.ownershipFinancials[0];
-    if (of.companyValue > 0) (financials as any).companyValue = normalizeNumber(of.companyValue);
-    if (of.outstandingDebt > 0) (financials as any).outstandingDebt = normalizeNumber(of.outstandingDebt);
-    if (of.yearsHeld > 0) (financials as any).yearsHeld = normalizeNumber(of.yearsHeld);
+    if (normalizeNumber(of.companyValue) > 0 && !(financials as any).companyValue) {
+      (financials as any).companyValue = normalizeNumber(of.companyValue);
+    }
+    if (normalizeNumber(of.outstandingDebt) > 0 && !(financials as any).outstandingDebt) {
+      (financials as any).outstandingDebt = normalizeNumber(of.outstandingDebt);
+    }
+    if (normalizeNumber(of.yearsHeld) > 0 && !(financials as any).yearsHeld) {
+      (financials as any).yearsHeld = normalizeNumber(of.yearsHeld);
+    }
   }
 
   return financials;
@@ -575,7 +626,7 @@ async function aiRepairEmployeeDesignations(employees: EmployeeInput[]): Promise
       currentDesignation: e.designation,
     }));
 
-    const response = await chatCompletion(
+    const response = await fastChatCompletion(
       [
         {
           role: 'system',
@@ -598,7 +649,7 @@ async function aiRepairEmployeeDesignations(employees: EmployeeInput[]): Promise
     }
 
     return employees.map(e => {
-      const fix = fixes.get(e.name);
+      const fix = e.name ? fixes.get(e.name) : undefined;
       return fix ? { ...e, designation: fix } : e;
     });
   } catch (err) {

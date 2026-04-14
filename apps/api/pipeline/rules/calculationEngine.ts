@@ -121,6 +121,8 @@ export interface ShareholderInput {
   yearsHeld?: number;
   isDesignatedGroup?: boolean;
   blackNewEntrant?: boolean;
+  votingRightsPercent?: number;
+  economicInterestPercent?: number;
 }
 
 export interface SupplierInput {
