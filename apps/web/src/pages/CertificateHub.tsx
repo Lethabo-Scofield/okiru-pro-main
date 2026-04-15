@@ -531,7 +531,7 @@ export default function CertificateHub() {
             </button>
             <button
               onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.08] hover:bg-white/[0.14] transition-colors border border-[#2c2c2e]"
             >
               <Upload className="h-3.5 w-3.5" />
               Upload
