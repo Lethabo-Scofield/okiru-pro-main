@@ -3,7 +3,8 @@ import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown, FileSearch,
-  RefreshCw, Users, ShieldCheck, Clock, AlertTriangle, BarChart3, Award
+  RefreshCw, Users, ShieldCheck, Clock, AlertTriangle, BarChart3, Award,
+  Upload, CloudUpload, CheckCircle2, XCircle, FileUp
 } from 'lucide-react';
 
 interface CertificateFile {
@@ -216,6 +217,13 @@ export default function CertificateHub() {
   const [chunksLoading, setChunksLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<Array<{ fileName: string; status: 'uploaded' | 'error'; error?: string }> | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const loadChunks = useCallback(async () => {
     try {
       const res = await fetch('/api/supplier-certificates');
@@ -237,6 +245,79 @@ export default function CertificateHub() {
     setChunksLoading(true);
     loadChunks();
   }, [loadChunks]);
+
+  const reloadCertificates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/certificates/list');
+      if (!res.ok) throw new Error('Failed to reload');
+      const data: CertificateFile[] = await res.json();
+      setCertificates(data);
+    } catch {}
+  }, []);
+
+  const handleFilesSelected = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    setUploadFiles(prev => [...prev, ...fileArray]);
+    setUploadResults(null);
+  }, []);
+
+  const removeUploadFile = useCallback((index: number) => {
+    setUploadFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleUpload = useCallback(async () => {
+    if (uploadFiles.length === 0) return;
+    if (uploadFiles.length > 20) {
+      toast({ title: 'Too many files', description: 'Maximum 20 files per upload', variant: 'destructive' });
+      return;
+    }
+    const oversized = uploadFiles.filter(f => f.size > 50 * 1024 * 1024);
+    if (oversized.length > 0) {
+      toast({ title: 'File too large', description: `${oversized[0].name} exceeds 50MB limit`, variant: 'destructive' });
+      return;
+    }
+    setUploading(true);
+    setUploadResults(null);
+    try {
+      const formData = new FormData();
+      uploadFiles.forEach(f => formData.append('files', f));
+      const res = await fetch('/api/certificates/upload', { method: 'POST', body: formData });
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server error (${res.status})`);
+      }
+      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      setUploadResults(data.results || []);
+      const successCount = (data.results || []).filter((r: any) => r.status === 'uploaded').length;
+      if (successCount > 0) {
+        toast({ title: 'Upload complete', description: data.message });
+        await reloadCertificates();
+      }
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  }, [uploadFiles, toast, reloadCertificates]);
+
+  const closeUploadModal = useCallback(() => {
+    if (!uploading) {
+      setShowUpload(false);
+      setUploadFiles([]);
+      setUploadResults(null);
+      setDragOver(false);
+    }
+  }, [uploading]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleFilesSelected(e.dataTransfer.files);
+    }
+  }, [handleFilesSelected]);
 
   const kpis = useMemo(() => {
     const latestBySupplier = new Map<string, SupplierChunk>();
@@ -428,14 +509,23 @@ export default function CertificateHub() {
             Hub
           </Link>
           <span className="text-[13px] font-medium text-[#e5e5ea]">Certificate Hub</span>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-1 text-[13px] text-[#8e8e93] hover:text-white transition-colors disabled:opacity-50"
-            aria-label="Refresh KPIs"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-1 text-[13px] text-[#8e8e93] hover:text-white transition-colors disabled:opacity-50"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Upload
+            </button>
+          </div>
         </div>
       </header>
 
@@ -711,6 +801,118 @@ export default function CertificateHub() {
           </div>
         )}
       </main>
+
+      {showUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <h2 className="text-[15px] font-semibold text-white">Upload Certificates</h2>
+              <button onClick={closeUploadModal} disabled={uploading} className="text-[#636366] hover:text-white transition-colors disabled:opacity-50">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  dragOver
+                    ? 'border-[#2563eb] bg-[#2563eb]/10'
+                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-white/[0.02]'
+                }`}
+              >
+                <CloudUpload className={`h-8 w-8 mx-auto mb-3 ${dragOver ? 'text-[#2563eb]' : 'text-[#48484a]'}`} />
+                <p className="text-[14px] text-[#e5e5ea] mb-1">
+                  {dragOver ? 'Drop files here' : 'Drag & drop files here'}
+                </p>
+                <p className="text-[12px] text-[#48484a]">
+                  or click to browse · PDF, PNG, JPG, XLS, DOC · up to 50MB each
+                </p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.doc,.docx"
+                className="hidden"
+                onChange={e => { if (e.target.files) handleFilesSelected(e.target.files); e.target.value = ''; }}
+              />
+
+              {uploadFiles.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-48 overflow-y-auto">
+                  {uploadFiles.map((file, idx) => {
+                    const result = uploadResults?.find(r => r.fileName === file.name);
+                    return (
+                      <div
+                        key={`${file.name}-${idx}`}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <FileUp className="h-4 w-4 text-[#636366] shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[13px] text-[#e5e5ea] truncate">{file.name}</p>
+                            <p className="text-[11px] text-[#48484a]">{(file.size / 1024).toFixed(0)} KB</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {result && result.status === 'uploaded' && (
+                            <CheckCircle2 className="h-4 w-4 text-[#22c55e]" />
+                          )}
+                          {result && result.status === 'error' && (
+                            <XCircle className="h-4 w-4 text-[#ef4444]" title={result.error} />
+                          )}
+                          {!uploading && !result && (
+                            <button onClick={() => removeUploadFile(idx)} className="text-[#48484a] hover:text-white transition-colors">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <p className="text-[12px] text-[#48484a]">
+                {uploadFiles.length} file{uploadFiles.length !== 1 ? 's' : ''} selected
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={closeUploadModal}
+                  disabled={uploading}
+                  className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                >
+                  {uploadResults ? 'Close' : 'Cancel'}
+                </button>
+                {!uploadResults && (
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading || uploadFiles.length === 0}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-3.5 w-3.5" />
+                        Upload {uploadFiles.length > 0 ? `(${uploadFiles.length})` : ''}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
