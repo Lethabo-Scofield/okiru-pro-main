@@ -1,6 +1,8 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
+import type { EAPGroupBreakdown } from "@toolkit/lib/calculators/management";
+import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -9,7 +11,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX } from "lucide-react";
+import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -184,9 +186,10 @@ const defaultFormState: EmployeeFormState = {
 };
 
 export default function ManagementControl() {
-  const { management, client, addEmployee, removeEmployee, addEmployeesBulk, updateEmployee, calculatorConfig } = useBbeeStore();
+  const { management, client, addEmployee, removeEmployee, addEmployeesBulk, updateEmployee, calculatorConfig, updateSettings } = useBbeeStore();
   const { toast } = useToast();
   const { employees } = management;
+  const [expandedMcRows, setExpandedMcRows] = useState<Set<number>>(new Set());
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -426,7 +429,15 @@ export default function ManagementControl() {
   const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
   if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
-  const mcScore = calculateManagementScore(management, calculatorConfig);
+  const mcScore = calculateManagementScore(management, calculatorConfig, client.eapProvince);
+
+  const eapLevelMap: Record<number, string> = {};
+  mcScore.subLines.forEach((sl, idx) => {
+    if (idx >= 6 && idx <= 11) {
+      const level = idx <= 7 ? 'senior' : idx <= 9 ? 'middle' : 'junior';
+      eapLevelMap[idx] = level;
+    }
+  });
 
   // Foreign employee count (for display)
   const foreignCount = employees.filter(e => e.isForeign).length;
@@ -609,6 +620,22 @@ export default function ManagementControl() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 mr-2">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">EAP Province:</Label>
+            <Select
+              value={client.eapProvince || 'National'}
+              onValueChange={(v) => updateSettings(v, client.industrySector || '', client.measurementPeriodStart, client.measurementPeriodEnd)}
+            >
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {getProvinces().map(p => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button 
             variant="outline" 
             className={cn("gap-2", showForeignOnly && "bg-amber-100 border-amber-300")}
@@ -717,52 +744,101 @@ export default function ManagementControl() {
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>Direct translation of GP Excel toolkit calculations</CardDescription>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle>Detailed Scorecard Breakdown</CardTitle>
+              <CardDescription>Click EAP rows to see per-demographic breakdown</CardDescription>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              <Globe className="h-3 w-3 mr-1" />
+              EAP: {mcScore.eapProvince || 'National'}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Indicator</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Weighting</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Actual %</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Score</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Weighting</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Actual %</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mcScore.subLines.map((sl, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 text-muted-foreground">{sl.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.target}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.weighting.toFixed(0)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-primary">
-                      {(() => {
-                        const statsKey = [
-                          'boardBlackPct', 'boardBWOPct',
-                          'execBlackPct', 'execBWOPct',
-                          'otherExecBlackPct', 'otherExecBWOPct',
-                          'seniorBlackPct', 'seniorBWOPct',
-                          'middleBlackPct', 'middleBWOPct',
-                          'juniorBlackPct', 'juniorBWOPct',
-                          'disabledBlackPct',
-                        ][idx] as keyof typeof mcScore.rawStats;
-                        const val = mcScore.rawStats[statsKey];
-                        return val !== undefined ? `${(val * 100).toFixed(2)}%` : '—';
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-primary">{sl.score.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {mcScore.subLines.map((sl, idx) => {
+                  const statsKeys = [
+                    'boardBlackPct', 'boardBWOPct',
+                    'execBlackPct', 'execBWOPct',
+                    'otherExecBlackPct', 'otherExecBWOPct',
+                    'seniorBlackPct', 'seniorBWOPct',
+                    'middleBlackPct', 'middleBWOPct',
+                    'juniorBlackPct', 'juniorBWOPct',
+                    'disabledBlackPct',
+                  ];
+                  const statsKey = statsKeys[idx] as keyof typeof mcScore.rawStats | undefined;
+                  const actualPct = statsKey ? mcScore.rawStats[statsKey] : undefined;
+                  const eapLevel = eapLevelMap[idx];
+                  const hasBreakdown = !!eapLevel;
+                  const isExpanded = expandedMcRows.has(idx);
+                  const breakdown = eapLevel ? mcScore.eapBreakdowns[eapLevel] : undefined;
+
+                  return (
+                    <React.Fragment key={idx}>
+                      <tr
+                        className={cn("hover:bg-muted/30", hasBreakdown && "cursor-pointer")}
+                        onClick={() => {
+                          if (!hasBreakdown) return;
+                          setExpandedMcRows(prev => {
+                            const next = new Set(prev);
+                            next.has(idx) ? next.delete(idx) : next.add(idx);
+                            return next;
+                          });
+                        }}
+                      >
+                        <td className="px-4 py-3 text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            {hasBreakdown && (isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />)}
+                            {sl.name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(0)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-primary whitespace-nowrap">
+                          {actualPct !== undefined ? `${(actualPct * 100).toFixed(2)}%` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                      </tr>
+                      {isExpanded && breakdown && (
+                        <tr className="bg-muted/10">
+                          <td colSpan={5} className="px-6 py-2">
+                            <div className="grid grid-cols-6 gap-2 text-xs">
+                              {breakdown.map((bg) => (
+                                <div key={bg.group} className="text-center p-2 rounded border bg-card/50">
+                                  <div className="font-semibold text-foreground">{bg.group}</div>
+                                  <div className="text-muted-foreground mt-0.5">EAP: {(bg.eapTarget * 100).toFixed(1)}%</div>
+                                  <div className={cn("font-mono mt-0.5", bg.actual >= bg.eapTarget ? "text-emerald-600" : "text-amber-600")}>
+                                    {(bg.actual * 100).toFixed(1)}%
+                                  </div>
+                                  <div className="text-muted-foreground/60">{bg.count}/{bg.totalInLevel}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total Management Control Score</td>
-                  <td className="px-4 py-4 text-right font-mono">19.00</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">19.00</td>
                   <td className="px-4 py-4"></td>
-                  <td className="px-4 py-4 text-right font-mono text-lg text-primary">{mcScore.total.toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{mcScore.total.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>

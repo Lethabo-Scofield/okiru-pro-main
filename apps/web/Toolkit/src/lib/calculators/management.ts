@@ -18,6 +18,14 @@ export interface ManagementSubLine {
   score: number;
 }
 
+export interface EAPGroupBreakdown {
+  group: DemoGroup;
+  eapTarget: number;
+  actual: number;
+  count: number;
+  totalInLevel: number;
+}
+
 export interface ManagementResult {
   boardVotingBlack: number;
   boardVotingBWO: number;
@@ -37,6 +45,8 @@ export interface ManagementResult {
   total: number;
   subMinimumMet: boolean;
   subLines: ManagementSubLine[];
+  eapBreakdowns: Record<string, EAPGroupBreakdown[]>;
+  eapProvince: string;
   rawStats: {
     boardBlackPct: number;
     boardBWOPct: number;
@@ -54,7 +64,7 @@ export interface ManagementResult {
   };
 }
 
-type DemoGroup = 'AM' | 'CM' | 'IM' | 'AF' | 'CF' | 'IF';
+export type DemoGroup = 'AM' | 'CM' | 'IM' | 'AF' | 'CF' | 'IF';
 
 /**
  * National EAP proportions per demographic group (slide 100)
@@ -78,22 +88,25 @@ function classifyDemographic(emp: Employee): DemoGroup | null {
  * Each group gets its own effective target, effective weight, and score.
  * Achievement is capped at the EAP proportion to prevent gaming.
  */
-function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): number {
-  if (employees.length === 0) return 0;
+function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): { score: number; breakdown: EAPGroupBreakdown[] } {
+  if (employees.length === 0) return { score: 0, breakdown: [] };
   let totalScore = 0;
+  const breakdown: EAPGroupBreakdown[] = [];
   for (const group of Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]) {
     const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
     const effectiveTarget = eapProp * categoryTarget;
     const effectiveWeight = eapProp * maxPoints;
-    if (effectiveTarget <= 0) continue;
 
     const count = employees.filter(e => classifyDemographic(e) === group).length;
-    const ratio = count / employees.length;
+    const ratio = employees.length > 0 ? count / employees.length : 0;
+    breakdown.push({ group, eapTarget: round2(eapProp), actual: round2(ratio), count, totalInLevel: employees.length });
+
+    if (effectiveTarget <= 0) continue;
     const cappedRatio = Math.min(ratio, eapProp);
     const achievement = cappedRatio / effectiveTarget;
     totalScore += Math.min(achievement, 1) * effectiveWeight;
   }
-  return totalScore;
+  return { score: totalScore, breakdown };
 }
 
 const countBlack = (emps: Employee[]): number =>
@@ -209,11 +222,14 @@ export function calculateManagementScore(
   const middleTarget = cfg?.middleBlackTarget ?? middleEAP.blackTarget;
   const juniorTarget = cfg?.juniorBlackTarget ?? juniorEAP.blackTarget;
 
-  const seniorScore = clampScore(calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts), seniorMaxPts + seniorBWMaxPts);
-  const middleScore = clampScore(calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts), middleMaxPts + middleBWMaxPts);
+  const seniorEAPResult = calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts);
+  const seniorScore = clampScore(seniorEAPResult.score, seniorMaxPts + seniorBWMaxPts);
+  const middleEAPResult = calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts);
+  const middleScore = clampScore(middleEAPResult.score, middleMaxPts + middleBWMaxPts);
 
   const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
-  const juniorScore = clampScore(calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts), juniorMaxPts + juniorBWMaxPts);
+  const juniorEAPResult = calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts);
+  const juniorScore = clampScore(juniorEAPResult.score, juniorMaxPts + juniorBWMaxPts);
 
   // Split combined EAP score into Black/BWO proportions for display
   const seniorBlack = clampScore(seniorScore * (seniorMaxPts / (seniorMaxPts + seniorBWMaxPts)), seniorMaxPts);
@@ -275,6 +291,12 @@ export function calculateManagementScore(
     total: round2(clampScore(totalPoints, maxTotal)),
     subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
+    eapBreakdowns: {
+      senior: seniorEAPResult.breakdown,
+      middle: middleEAPResult.breakdown,
+      junior: juniorEAPResult.breakdown,
+    },
+    eapProvince: province,
     rawStats: {
       boardBlackPct: pctOf(board, countBlack),
       boardBWOPct: pctOf(board, countBlackWomen),

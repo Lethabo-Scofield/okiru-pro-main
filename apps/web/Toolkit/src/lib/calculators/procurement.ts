@@ -61,7 +61,7 @@ function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): n
  * @see docs/domain/pillars/04_preferential_procurement.md#scorecard
  * @see docs/domain/calculations/tmps_calculation.md
  * VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
- * CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, NO procurement bonuses
+ * CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, DG is bonus (excluded from sub-min)
  */
 export function calculateProcurementScore(data: ProcurementData, config: CalculatorConfig): ProcurementResult {
   if (!config) throw new Error('CalculatorConfig is required for procurement score calculation');
@@ -144,12 +144,13 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   const blackFemaleOwned30Score = clampScore(safeRatio(blackFemaleOwned30Spend, TARGET_BWO30, bwo30MaxPts), bwo30MaxPts);
   const designatedGroupScore = clampScore(safeRatio(designatedGroupSpend, TARGET_DG, dgMaxPts), dgMaxPts);
 
-  // Procurement has NO graduation/jobs bonuses - these are ED only
-  const baseTotal = empoweringScore + qseScore + emeScore + blackOwned51Score + blackFemaleOwned30Score + designatedGroupScore;
-  const totalScore = clampScore(baseTotal, maxPoints);
+  // Designated Group is a bonus indicator per RCOGP 2019
+  const baseTotal = empoweringScore + qseScore + emeScore + blackOwned51Score + blackFemaleOwned30Score;
+  const totalScore = clampScore(baseTotal + designatedGroupScore, maxPoints);
 
-  // FIX: subMinThreshold is a percentage (e.g., 40), not points. Convert to points threshold.
-  const subMinThresholdPoints = (subMinThreshold / 100) * maxPoints;
+  // Sub-minimum excludes bonus points (DG is bonus per RCOGP 2019)
+  const baseMaxPoints = allSuppliersMaxPts + qseMaxPts + emeMaxPts + bo51MaxPts + bwo30MaxPts;
+  const subMinThresholdPoints = (subMinThreshold / 100) * baseMaxPoints;
 
   const subLines: ProcurementSubLine[] = [
     { name: "B-BBEE Procurement Spend from Empowering Suppliers", target: `${(allSuppliersTarget * 100).toFixed(0)}% of TMPS`, weighting: allSuppliersMaxPts, score: empoweringScore, spend: empoweringSpend },
@@ -157,7 +158,7 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     { name: "Spend on EME Suppliers", target: `${(emeTarget * 100).toFixed(0)}% of TMPS`, weighting: emeMaxPts, score: emeScore, spend: emeSpend },
     { name: "Spend on Empowering Suppliers ≥51% Black Owned", target: `${(bo51Target * 100).toFixed(0)}% of TMPS`, weighting: bo51MaxPts, score: blackOwned51Score, spend: blackOwned51Spend },
     { name: "Spend on Empowering Suppliers >30% Black Female Owned", target: `${(bwo30Target * 100).toFixed(0)}% of TMPS`, weighting: bwo30MaxPts, score: blackFemaleOwned30Score, spend: blackFemaleOwned30Spend },
-    { name: "Spend on Designated Group Suppliers ≥51% Black Owned", target: `${(dgTarget * 100).toFixed(0)}% of TMPS`, weighting: dgMaxPts, score: designatedGroupScore, spend: designatedGroupSpend },
+    { name: "Spend on Designated Group Suppliers ≥51% Black Owned", target: `${(dgTarget * 100).toFixed(0)}% of TMPS`, weighting: dgMaxPts, score: designatedGroupScore, spend: designatedGroupSpend, isBonus: true },
   ];
 
   return {
@@ -169,7 +170,7 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
     total: round2(totalScore),
-    subMinimumMet: baseTotal >= subMinThresholdPoints,
+    subMinimumMet: baseTotal >= subMinThresholdPoints, // Excludes DG bonus
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

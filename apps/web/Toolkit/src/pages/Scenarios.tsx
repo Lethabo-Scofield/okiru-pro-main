@@ -5,6 +5,7 @@ import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Plus, ArrowRight, ArrowLeftRight, Trash2, Save, Play, CheckCircle2, TrendingUp, TrendingDown, RefreshCcw } from "lucide-react";
+import { cn } from "@toolkit/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -258,8 +259,10 @@ export default function Scenarios() {
                     { key: 'managementControl', label: 'Management Control' },
                     { key: 'skillsDevelopment', label: 'Skills Development' },
                     { key: 'procurement', label: 'Preferential Procurement' },
-                    { key: 'enterpriseDevelopment', label: 'Enterprise & Supplier Dev' },
+                    { key: 'supplierDevelopment', label: 'Supplier Development' },
+                    { key: 'enterpriseDevelopment', label: 'Enterprise Development' },
                     { key: 'socioEconomicDevelopment', label: 'Socio-Economic Development' },
+                    { key: 'yesInitiative', label: 'YES 4 Youth' },
                   ].map((pillar) => {
                     const baseVal = baseScorecard[pillar.key as keyof ScorecardResult];
                     const scenarioVal = currentScorecard[pillar.key as keyof ScorecardResult];
@@ -310,6 +313,55 @@ export default function Scenarios() {
           </CardContent>
         </Card>
       )}
+
+      {isScenarioMode && activeScenarioId && (() => {
+        const gaps = [
+          { key: 'ownership', label: 'Ownership', score: currentScorecard.ownership?.score ?? 0, weighting: currentScorecard.ownership?.weighting ?? 25 },
+          { key: 'managementControl', label: 'Management Control', score: currentScorecard.managementControl?.score ?? 0, weighting: currentScorecard.managementControl?.weighting ?? 19 },
+          { key: 'skillsDevelopment', label: 'Skills Development', score: currentScorecard.skillsDevelopment?.score ?? 0, weighting: currentScorecard.skillsDevelopment?.weighting ?? 25 },
+          { key: 'procurement', label: 'Preferential Procurement', score: currentScorecard.procurement?.score ?? 0, weighting: currentScorecard.procurement?.weighting ?? 29 },
+          { key: 'supplierDevelopment', label: 'Supplier Development', score: currentScorecard.supplierDevelopment?.score ?? 0, weighting: currentScorecard.supplierDevelopment?.weighting ?? 10 },
+          { key: 'enterpriseDevelopment', label: 'Enterprise Development', score: currentScorecard.enterpriseDevelopment?.score ?? 0, weighting: currentScorecard.enterpriseDevelopment?.weighting ?? 7 },
+          { key: 'socioEconomicDevelopment', label: 'SED', score: currentScorecard.socioEconomicDevelopment?.score ?? 0, weighting: currentScorecard.socioEconomicDevelopment?.weighting ?? 5 },
+        ].map(p => ({ ...p, gap: p.weighting - p.score, pct: p.weighting > 0 ? (p.score / p.weighting) * 100 : 100 }))
+         .sort((a, b) => a.pct - b.pct);
+
+        return (
+          <Card className="glass-panel mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Improvement Opportunities
+              </CardTitle>
+              <CardDescription>Pillars ranked by room for improvement (lowest achievement first)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {gaps.slice(0, 4).map((p) => (
+                  <div key={p.key} className="flex items-center gap-4">
+                    <div className="w-40 text-sm font-medium truncate">{p.label}</div>
+                    <div className="flex-1">
+                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all", p.pct >= 80 ? "bg-emerald-500" : p.pct >= 50 ? "bg-amber-500" : "bg-destructive")}
+                          style={{ width: `${Math.min(100, p.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="w-24 text-right text-sm font-mono">
+                      <span className="text-muted-foreground">{p.score.toFixed(1)}</span>
+                      <span className="text-muted-foreground/50"> / {p.weighting}</span>
+                    </div>
+                    <Badge variant="outline" className="text-xs w-16 justify-center">
+                      +{p.gap.toFixed(1)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

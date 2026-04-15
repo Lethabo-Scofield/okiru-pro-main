@@ -322,7 +322,7 @@ export default function ScorecardBuilder() {
             Could not load the {state.sectorCode} {state.scorecardType} template.
           </p>
           <button
-            onClick={() => setLocation('/dashboard')}
+            onClick={() => setLocation('/')}
             className="px-4 py-2 bg-white/[0.12] text-white rounded-lg text-sm hover:bg-white/[0.18] transition-colors"
           >
             Return to Dashboard
@@ -339,7 +339,7 @@ export default function ScorecardBuilder() {
         <div className="max-w-[1600px] mx-auto px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setLocation('/dashboard')}
+              onClick={() => setLocation('/')}
               className="flex items-center gap-2 text-[#98989f] hover:text-white transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />

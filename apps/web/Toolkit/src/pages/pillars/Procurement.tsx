@@ -406,30 +406,32 @@ export default function Procurement() {
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
               <span>Target: 29 points | Max spend recognition: 135%</span>
             </div>
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Criteria</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target Points</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target %</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Actual Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target %</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Actual Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {/* CRITICAL FIX: 50% target (not 40%) for BO51, 11 pts (not 10) */}
                 {score.subLines.map((line, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 text-muted-foreground">{line.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{line.weighting.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono">{line.target}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-primary">{round2(line.score).toFixed(2)}</td>
+                  <tr key={idx} className={cn("hover:bg-muted/30", line.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {line.isBonus && <Badge variant="outline" className="text-[9px] mr-1.5 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
+                      {line.name}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{line.weighting.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{line.target}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{round2(line.score).toFixed(2)}</td>
                   </tr>
                 ))}
                 <tr className="bg-primary/5 border-t-2 border-primary/20">
                   <td className="px-4 py-3 text-primary font-semibold uppercase text-xs tracking-wider">Procurement Total</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">29.00</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{score.subLines.reduce((a, l) => a + l.weighting, 0).toFixed(2)}</td>
                   <td className="px-4 py-3"></td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{round2(score.total).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{round2(score.total).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
