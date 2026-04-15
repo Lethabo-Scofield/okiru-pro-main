@@ -40,7 +40,8 @@ The Certificate Hub (`/certificates`) features:
 1. **KPI Dashboard** — 6 glassmorphic metric cards: Total Suppliers, Valid Certificates, Expiring Soon, Expired, Avg B-BBEE Level, Empowering Suppliers. All KPIs compute client-side from supplier chunk data. Clicking a card filters the registry table below.
 2. **Supplier Certificate Registry** — sortable, filterable table of suppliers with B-BBEE level badges, status indicators, expiry dates, and CSV export.
 3. **Certificate Files** — full-text PDF content search powered by Azure AI Search (tab-based view).
-4. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory with seeded demo data).
+4. **Certificate Upload** — drag-and-drop upload modal (header button) supporting PDF, PNG, JPG, XLS, DOC up to 50MB, multi-file (up to 20). Uploads go to Azure Blob Storage via `POST /api/certificates/upload` (auth-protected, multer, UUID-prefixed blob names scoped by org). File list auto-refreshes after upload.
+5. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory).
 
 ## Certificate Hub — Full-Text Search (Azure AI Search)
 The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.

@@ -1,12 +1,35 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential, SASProtocol } from '@azure/storage-blob';
+import multer from 'multer';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../logger.js';
 import { searchCertificates, isAzureSearchConfigured } from '../services/azureSearch.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
 
 const CONTAINER_NAME = 'clients-certs';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'image/png', 'image/jpeg', 'image/jpg',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} is not allowed. Accepted: PDF, PNG, JPG, XLS, XLSX, DOC, DOCX`));
+    }
+  },
+});
 
 async function fallbackFilenameSearch(q: string, res: Response) {
   const blobServiceClient = getBlobServiceClient();
@@ -222,6 +245,79 @@ router.get('/:userId', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error('Failed to list certificates', err as Error);
     return res.status(500).json({ message: 'Failed to list certificates' });
+  }
+});
+
+router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunction) => {
+  upload.array('files', 20)(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File too large. Maximum size is 50MB per file.' });
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ message: 'Too many files. Maximum is 20 per upload.' });
+      }
+      return res.status(400).json({ message: `Upload error: ${err.message}` });
+    }
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Upload failed' });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  try {
+    const blobServiceClient = getBlobServiceClient();
+    if (!blobServiceClient) {
+      logger.error('Azure Storage connection string not configured');
+      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: 'No files provided' });
+    }
+
+    const containerClient = getContainerClient(blobServiceClient);
+    const orgId = req.session.organizationId || 'default';
+
+    const results: Array<{ fileName: string; blobName: string; status: 'uploaded' | 'error'; error?: string }> = [];
+
+    for (const file of files) {
+      try {
+        const sanitized = file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+        const blobName = `${orgId}/${randomUUID()}-${sanitized}`;
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+        await blockBlobClient.uploadData(file.buffer, {
+          blobHTTPHeaders: {
+            blobContentType: file.mimetype,
+          },
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            originalName: file.originalname,
+            organizationId: orgId,
+            uploadedBy: req.session.userId || 'unknown',
+          },
+        });
+
+        results.push({ fileName: file.originalname, blobName, status: 'uploaded' });
+        logger.info('Certificate uploaded', { fileName: file.originalname, blobName, size: file.size, mimetype: file.mimetype, orgId });
+      } catch (uploadErr: any) {
+        results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
+        logger.error('Failed to upload certificate', { fileName: file.originalname, error: uploadErr.message });
+      }
+    }
+
+    const uploaded = results.filter(r => r.status === 'uploaded').length;
+    const failed = results.filter(r => r.status === 'error').length;
+
+    return res.json({
+      message: `${uploaded} file(s) uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
+      results,
+    });
+  } catch (err: any) {
+    logger.error('Certificate upload failed', err);
+    return res.status(500).json({ message: 'Upload failed' });
   }
 });
 
