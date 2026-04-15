@@ -351,45 +351,61 @@ export default function CertificateHub() {
     return { total, valid, expiring, expired, avgLevel, empoweringCount, empoweringPct };
   }, [chunks]);
 
-  const certKpis = useMemo(() => {
-    const now = new Date();
-    const sixtyDaysFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-    const total = certificates.length;
-    let valid = 0, expiring = 0, expired = 0;
+  const [certStats, setCertStats] = useState<{ total: number; valid: number; expiring: number; expired: number; unknown: number; processed: number; pending: number } | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<{ done: number; total: number } | null>(null);
 
-    const datePattern = /^(\d{4})\s+(\d{2})\s+(\d{1,2})/;
-
-    for (const cert of certificates) {
-      const baseName = cert.fileName.includes('/') ? cert.fileName.split('/').pop()! : cert.fileName;
-      const match = datePattern.exec(baseName);
-
-      let issuedDate: Date | null = null;
-      if (match) {
-        const [, year, month, day] = match;
-        issuedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      } else if (cert.lastModified) {
-        issuedDate = new Date(cert.lastModified);
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/certificates/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setCertStats(data);
       }
+    } catch {}
+  }, []);
 
-      if (!issuedDate || isNaN(issuedDate.getTime())) {
-        valid++;
-        continue;
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  const handleExtract = useCallback(async () => {
+    setExtracting(true);
+    setExtractProgress(null);
+    try {
+      const res = await fetch('/api/certificates/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: false }) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Extraction failed' }));
+        throw new Error(err.message);
       }
-
-      const expiryDate = new Date(issuedDate);
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-
-      if (expiryDate < now) {
-        expired++;
-      } else if (expiryDate <= sixtyDaysFromNow) {
-        expiring++;
-      } else {
-        valid++;
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'progress') setExtractProgress({ done: event.done, total: event.total });
+              if (event.type === 'complete') {
+                toast({ title: 'Extraction complete', description: `${event.processed} processed, ${event.skipped} skipped, ${event.errors} errors` });
+              }
+            } catch {}
+          }
+        }
       }
+      await loadStats();
+    } catch (err: any) {
+      toast({ title: 'Extraction failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setExtracting(false);
+      setExtractProgress(null);
     }
-
-    return { total, valid, expiring, expired };
-  }, [certificates]);
+  }, [toast, loadStats]);
 
   useEffect(() => {
     (async () => {
@@ -580,32 +596,64 @@ export default function CertificateHub() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             <KpiCard
               title="Total Certificates"
-              value={String(certKpis.total)}
+              value={String(certificates.length)}
               subtitle="in storage"
               iconColor="#3b82f6"
               icon={<FileText className="h-4 w-4" />}
             />
             <KpiCard
               title="Valid"
-              value={String(certKpis.valid)}
-              subtitle="up to date"
+              value={certStats ? String(certStats.valid) : '—'}
+              subtitle={certStats && certStats.processed > 0 ? `of ${certStats.processed} scanned` : 'run extraction first'}
               iconColor="#22c55e"
               icon={<ShieldCheck className="h-4 w-4" />}
             />
             <KpiCard
               title="Expiring Soon"
-              value={String(certKpis.expiring)}
+              value={certStats ? String(certStats.expiring) : '—'}
               subtitle="within 60 days"
               iconColor="#f59e0b"
               icon={<Clock className="h-4 w-4" />}
             />
             <KpiCard
               title="Expired"
-              value={String(certKpis.expired)}
+              value={certStats ? String(certStats.expired) : '—'}
               subtitle="needs renewal"
               iconColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
             />
+          </div>
+        )}
+
+        {!loading && certStats && certStats.processed < certificates.length && (
+          <div className="mb-6 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e] flex items-center justify-between">
+            <div>
+              <p className="text-[13px] text-[#e5e5ea]">
+                {certStats.processed === 0
+                  ? 'Certificate expiry dates have not been extracted yet.'
+                  : `${certStats.processed} of ${certificates.length} certificates scanned.`}
+              </p>
+              <p className="text-[11px] text-[#636366] mt-0.5">
+                Run extraction to read each certificate and detect its expiry date.
+              </p>
+            </div>
+            <button
+              onClick={handleExtract}
+              disabled={extracting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 shrink-0 ml-4"
+            >
+              {extracting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {extractProgress ? `${extractProgress.done}/${extractProgress.total}` : 'Starting...'}
+                </>
+              ) : (
+                <>
+                  <FileSearch className="h-3.5 w-3.5" />
+                  Extract Dates
+                </>
+              )}
+            </button>
           </div>
         )}
 

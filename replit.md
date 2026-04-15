@@ -41,7 +41,8 @@ The Certificate Hub (`/certificates`) features:
 2. **Supplier Certificate Registry** — sortable, filterable table of suppliers with B-BBEE level badges, status indicators, expiry dates, and CSV export.
 3. **Certificate Files** — full-text PDF content search powered by Azure AI Search (tab-based view).
 4. **Certificate Upload** — drag-and-drop upload modal (header button) supporting PDF, PNG, JPG, XLS, DOC up to 50MB, multi-file (up to 20). Uploads go to Azure Blob Storage via `POST /api/certificates/upload` (auth-protected, multer, UUID-prefixed blob names scoped by org). File list auto-refreshes after upload.
-5. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory).
+5. **Expiry Date Extraction** — `POST /api/certificates/extract` reads each certificate PDF/image from Azure Blob, extracts text via pdfjs-dist (text layer) or Tesseract OCR (scanned), and uses regex NER to find expiry dates (patterns: "Valid until", "Expiry Date", "Expires", etc.). Results stored in MongoDB `certificate_metadata` collection. `GET /api/certificates/stats` returns live KPI counts computed from extracted expiry dates. Frontend shows "Extract Dates" button with SSE progress when metadata is missing.
+6. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory).
 
 ## Certificate Hub — Full-Text Search (Azure AI Search)
 The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.
