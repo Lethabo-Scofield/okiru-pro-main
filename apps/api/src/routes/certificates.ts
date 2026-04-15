@@ -375,6 +375,20 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const uploaded = results.filter(r => r.status === 'uploaded').length;
     const failed = results.filter(r => r.status === 'error').length;
 
+    if (uploaded > 0) {
+      const uploadedBlobs = results.filter(r => r.status === 'uploaded').map(r => r.blobName);
+      setImmediate(async () => {
+        for (const blobName of uploadedBlobs) {
+          try {
+            await processOneCertificate(blobServiceClient, blobName, true);
+          } catch (err: any) {
+            logger.error('Background extraction failed for uploaded cert', { blobName, error: err.message });
+          }
+        }
+        logger.info('Background extraction complete for uploaded certs', { count: uploadedBlobs.length });
+      });
+    }
+
     return res.json({
       message: `${uploaded} file(s) uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
       results,

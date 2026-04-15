@@ -119,5 +119,24 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
   const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
+
+    setImmediate(async () => {
+      try {
+        const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
+        if (!connStr) return;
+        const { BlobServiceClient } = await import("@azure/storage-blob");
+        const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
+        const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
+        logger.info("Starting background certificate extraction...");
+        const result = await processAllCertificates(blobServiceClient, false, (done, total) => {
+          if (done % 25 === 0 || done === total) {
+            logger.info("Certificate extraction progress", { done, total });
+          }
+        });
+        logger.info("Background certificate extraction complete", result);
+      } catch (err) {
+        logger.warn("Background certificate extraction failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
   });
 })();

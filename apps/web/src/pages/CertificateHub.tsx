@@ -290,6 +290,7 @@ export default function CertificateHub() {
       if (successCount > 0) {
         toast({ title: 'Upload complete', description: data.message });
         await reloadCertificates();
+        setTimeout(() => loadStats(), 5000);
       }
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
@@ -352,8 +353,6 @@ export default function CertificateHub() {
   }, [chunks]);
 
   const [certStats, setCertStats] = useState<{ total: number; valid: number; expiring: number; expired: number; unknown: number; processed: number; pending: number } | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [extractProgress, setExtractProgress] = useState<{ done: number; total: number } | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -366,46 +365,6 @@ export default function CertificateHub() {
   }, []);
 
   useEffect(() => { loadStats(); }, [loadStats]);
-
-  const handleExtract = useCallback(async () => {
-    setExtracting(true);
-    setExtractProgress(null);
-    try {
-      const res = await fetch('/api/certificates/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: false }) });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Extraction failed' }));
-        throw new Error(err.message);
-      }
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response stream');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6));
-              if (event.type === 'progress') setExtractProgress({ done: event.done, total: event.total });
-              if (event.type === 'complete') {
-                toast({ title: 'Extraction complete', description: `${event.processed} processed, ${event.skipped} skipped, ${event.errors} errors` });
-              }
-            } catch {}
-          }
-        }
-      }
-      await loadStats();
-    } catch (err: any) {
-      toast({ title: 'Extraction failed', description: err.message, variant: 'destructive' });
-    } finally {
-      setExtracting(false);
-      setExtractProgress(null);
-    }
-  }, [toast, loadStats]);
 
   useEffect(() => {
     (async () => {
@@ -622,38 +581,6 @@ export default function CertificateHub() {
               iconColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
             />
-          </div>
-        )}
-
-        {!loading && certStats && certStats.processed < certificates.length && (
-          <div className="mb-6 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e] flex items-center justify-between">
-            <div>
-              <p className="text-[13px] text-[#e5e5ea]">
-                {certStats.processed === 0
-                  ? 'Certificate expiry dates have not been extracted yet.'
-                  : `${certStats.processed} of ${certificates.length} certificates scanned.`}
-              </p>
-              <p className="text-[11px] text-[#636366] mt-0.5">
-                Run extraction to read each certificate and detect its expiry date.
-              </p>
-            </div>
-            <button
-              onClick={handleExtract}
-              disabled={extracting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 shrink-0 ml-4"
-            >
-              {extracting ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {extractProgress ? `${extractProgress.done}/${extractProgress.total}` : 'Starting...'}
-                </>
-              ) : (
-                <>
-                  <FileSearch className="h-3.5 w-3.5" />
-                  Extract Dates
-                </>
-              )}
-            </button>
           </div>
         )}
 
