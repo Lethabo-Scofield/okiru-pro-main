@@ -33,12 +33,33 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   const defaultSed = { id: '', clientId: '', contributions: [] };
 
   const cfg = state.calculatorConfig;
-  if (!cfg) throw new Error('Cannot export Excel: calculatorConfig not loaded');
-  const ownCalc = calculateOwnershipScore(state.ownership || defaultOwnership, cfg);
+  if (!cfg) {
+    throw new Error('Cannot export Excel: calculator configuration not loaded. Please load a client or scorecard first.');
+  }
+
+  const ownershipData = state.ownership || defaultOwnership;
+  if (!ownershipData.ownershipScorePoints && ownershipData.ownershipScorePoints !== 0) {
+    ownershipData.ownershipScorePoints = 0;
+    ownershipData.ownershipScorePercent = 0;
+    ownershipData.netValuePoints = 0;
+    ownershipData.netValuePercent = 0;
+  }
+
+  const skillsData = state.skills || defaultSkills;
+  if (!skillsData.yesCandidatesCount && skillsData.yesCandidatesCount !== 0) {
+    skillsData.yesCandidatesCount = 0;
+    skillsData.yesAbsorbedCount = 0;
+  }
+
+  const esdData = state.esd || defaultEsd;
+  if (esdData.graduationBonus === undefined) esdData.graduationBonus = false;
+  if (esdData.jobsCreatedBonus === undefined) esdData.jobsCreatedBonus = false;
+
+  const ownCalc = calculateOwnershipScore(ownershipData, cfg);
   const mgtCalc = calculateManagementScore(state.management || defaultManagement, cfg);
-  const skillCalc = calculateSkillsScore(state.skills || defaultSkills, cfg);
+  const skillCalc = calculateSkillsScore(skillsData, cfg);
   const procCalc = calculateProcurementScore(state.procurement || defaultProcurement, cfg);
-  const esdCalc = calculateEsdScore(state.esd || defaultEsd, state.client?.npat || 0, cfg);
+  const esdCalc = calculateEsdScore(esdData, state.client?.npat || 0, cfg);
   const sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg);
 
   const deemedNpat = state.client.industryNorm && state.client.npat < (state.client.revenue * state.client.industryNorm * 0.25)
@@ -68,23 +89,23 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     [''],
     ['GENERIC SCORECARD (Amended Codes of Good Practice)'],
     ['Element', 'Indicator', 'Weighting', 'Target Points', 'Score Achieved', 'Achievement %', 'Sub-minimum', 'Sub-min Met'],
-    ['Ownership', '', 25, 25, fmt(ownCalc.total), pct(ownCalc.total, 25), '≥ 10 pts', ownCalc.total >= 10 || ownCalc.subMinimumMet ? 'Yes' : 'No'],
+    ['Ownership', '', state.scorecard.ownership.target || 25, state.scorecard.ownership.target || 25, fmt(ownCalc.total), pct(ownCalc.total, state.scorecard.ownership.target || 25), '≥ 10 pts', ownCalc.total >= 10 || ownCalc.subMinimumMet ? 'Yes' : 'No'],
     ...ownCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Management Control', '', 19, 19, fmt(mgtCalc.total), pct(mgtCalc.total, 19), 'N/A', 'N/A'],
+    ['Management Control', '', state.scorecard.managementControl.target || 19, state.scorecard.managementControl.target || 19, fmt(mgtCalc.total), pct(mgtCalc.total, state.scorecard.managementControl.target || 19), 'N/A', 'N/A'],
     ...mgtCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Skills Development', '', 25, 25, fmt(skillCalc.total), pct(skillCalc.total, 25), '≥ 10 pts', state.scorecard.skillsDevelopment.subMinimumMet ? 'Yes' : 'No'],
+    ['Skills Development', '', state.scorecard.skillsDevelopment.target || 25, state.scorecard.skillsDevelopment.target || 25, fmt(skillCalc.total), pct(skillCalc.total, state.scorecard.skillsDevelopment.target || 25), '≥ 10 pts', state.scorecard.skillsDevelopment.subMinimumMet ? 'Yes' : 'No'],
     ...skillCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Preferential Procurement', '', 29, 29, fmt(procCalc.base), pct(procCalc.base, 29), '≥ 11.6 pts (base)', state.scorecard.procurement.subMinimumMet ? 'Yes' : 'No'],
+    ['Preferential Procurement', '', state.scorecard.procurement.target || 29, state.scorecard.procurement.target || 29, fmt(procCalc.base), pct(procCalc.base, state.scorecard.procurement.target || 29), '≥ 11.6 pts (base)', state.scorecard.procurement.subMinimumMet ? 'Yes' : 'No'],
     ...procCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Supplier Development', '', 10, 10, fmt(esdCalc.sdTotal), pct(esdCalc.sdTotal, 10), '≥ 4 pts', esdCalc.sdSubMinimumMet ? 'Yes' : 'No'],
+    ['Supplier Development', '', state.scorecard.supplierDevelopment?.target || 10, state.scorecard.supplierDevelopment?.target || 10, fmt(esdCalc.sdTotal), pct(esdCalc.sdTotal, state.scorecard.supplierDevelopment?.target || 10), '≥ 4 pts', esdCalc.sdSubMinimumMet ? 'Yes' : 'No'],
     ...esdCalc.sdSubLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Enterprise Development', '', 7, 7, fmt(esdCalc.edTotal), pct(esdCalc.edTotal, 7), '≥ 2 pts', esdCalc.edSubMinimumMet ? 'Yes' : 'No'],
+    ['Enterprise Development', '', state.scorecard.enterpriseDevelopment?.target || 7, state.scorecard.enterpriseDevelopment?.target || 7, fmt(esdCalc.edTotal), pct(esdCalc.edTotal, state.scorecard.enterpriseDevelopment?.target || 7), '≥ 2 pts', esdCalc.edSubMinimumMet ? 'Yes' : 'No'],
     ...esdCalc.edSubLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Socio-Economic Development', '', 5, 5, fmt(sedCalc.total), pct(sedCalc.total, 5), 'N/A', 'N/A'],
-    ['', 'SED Contributions (1% of NPAT)', '', 5, fmt(sedCalc.total), '', '', ''],
-    ['YES Initiative', '', 5, 5, fmt(state.scorecard.yesInitiative?.score || 0), pct(state.scorecard.yesInitiative?.score || 0, 5), 'N/A', 'N/A'],
+    ['Socio-Economic Development', '', state.scorecard.socioEconomicDevelopment.target || 5, state.scorecard.socioEconomicDevelopment.target || 5, fmt(sedCalc.total), pct(sedCalc.total, state.scorecard.socioEconomicDevelopment.target || 5), 'N/A', 'N/A'],
+    ['', 'SED Contributions (1% of NPAT)', '', state.scorecard.socioEconomicDevelopment.target || 5, fmt(sedCalc.total), '', '', ''],
+    ['YES Initiative', '', state.scorecard.yesInitiative?.target || 3, state.scorecard.yesInitiative?.target || 3, fmt(state.scorecard.yesInitiative?.score || 0), pct(state.scorecard.yesInitiative?.score || 0, state.scorecard.yesInitiative?.target || 3), 'N/A', 'N/A'],
     [''],
-    ['TOTAL', '', 120, 120, fmt(state.scorecard.total.score), pct(state.scorecard.total.score, 120), '', state.scorecard.isDiscounted ? 'DISCOUNTED' : 'ALL MET'],
+    ['TOTAL', '', state.scorecard.total.target || 120, state.scorecard.total.target || 120, fmt(state.scorecard.total.score), pct(state.scorecard.total.score, state.scorecard.total.target || 120), '', state.scorecard.isDiscounted ? 'DISCOUNTED' : 'ALL MET'],
     [''],
     ['RESULT'],
     ['B-BBEE Status Level', currentLevel >= 9 ? 'Non-Compliant' : `Level ${currentLevel}`],
@@ -350,8 +371,8 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     ['Total Black Recognised Spend', skillCalc.rawStats.blackSpend, pct(skillCalc.rawStats.blackSpend, leviable) + ' of Leviable Amount'],
     ['Bursary Spend', skillCalc.rawStats.bursarySpend, pct(skillCalc.rawStats.bursarySpend, leviable) + ' of Leviable Amount'],
     ['Black Disabled Spend', skillCalc.rawStats.disabledSpend, ''],
-    ['Non-Black Spend', programs.filter((p: any) => !p.isBlack).reduce((s: number, p: any) => s + p.cost, 0), 'Not counted towards score'],
-    ['Total All Training Spend', programs.reduce((s: number, p: any) => s + p.cost, 0), 'Including non-black spend'],
+    ['Non-Black Spend', programs.filter((p: any) => !(p.isBlack ?? ['African', 'Coloured', 'Indian'].includes(p.race))).reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0), 'Not counted towards score'],
+    ['Total All Training Spend', programs.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0), 'Including non-black spend'],
     [''],
     ['SCORING DETAIL'],
     ['Indicator', 'Target', 'Max Points', 'Score Achieved'],
@@ -373,13 +394,13 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     ['Category', 'Count', 'Total Spend (ZAR)', 'Black Spend (ZAR)', '% of Total'],
   ];
 
-  const categories = ['learnership', 'internship', 'short_course', 'bursary', 'other'];
+  const categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'learnership', 'internship', 'short_course', 'bursary', 'other'];
   categories.forEach(cat => {
-    const catProgs = programs.filter((p: any) => p.category === cat);
-    const catTotal = catProgs.reduce((s: number, p: any) => s + p.cost, 0);
-    const catBlack = catProgs.filter((p: any) => p.isBlack).reduce((s: number, p: any) => s + p.cost, 0);
+    const catProgs = programs.filter((p: any) => (p.categoryCode || p.category) === cat);
+    const catTotal = catProgs.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0);
+    const catBlack = catProgs.filter((p: any) => p.isBlack ?? ['African', 'Coloured', 'Indian'].includes(p.race)).reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0);
     if (catProgs.length > 0) {
-      skillsRows.push([cat.replace(/_/g, ' '), catProgs.length, catTotal, catBlack, pct(catTotal, programs.reduce((s: number, p: any) => s + p.cost, 0))]);
+      skillsRows.push([cat.replace(/_/g, ' '), catProgs.length, catTotal, catBlack, pct(catTotal, programs.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0))]);
     }
   });
 
@@ -389,9 +410,11 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     ['#', 'Programme Name', 'Category', 'Cost (ZAR)', 'Employed', 'Black (ACI)', 'Gender', 'Race', 'Disabled', 'Start Date', 'End Date'],
   );
   programs.forEach((p: any, idx: number) => {
+    const isBlack = p.isBlack ?? ['African', 'Coloured', 'Indian'].includes(p.race);
+    const isEmployed = p.isEmployed ?? (p.employmentStatus === 'Permanent' || p.employmentStatus === 'Fixed-Term');
     skillsRows.push([
-      idx + 1, p.name, (p.category || '').replace(/_/g, ' '), p.cost,
-      p.isEmployed ? 'Yes' : 'No', p.isBlack ? 'Yes' : 'No',
+      idx + 1, p.programName || p.name || '', (p.categoryCode || p.category || '').replace(/_/g, ' '), p.totalCost || p.cost || 0,
+      isEmployed ? 'Yes' : 'No', isBlack ? 'Yes' : 'No',
       p.gender || '', p.race || '', p.isDisabled ? 'Yes' : 'No',
       p.startDate || '', p.endDate || '',
     ]);
@@ -699,13 +722,13 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   ];
 
   const pillars = [
-    { name: 'Ownership', score: ownCalc.total, target: 25 },
-    { name: 'Management Control', score: mgtCalc.total, target: 19 },
-    { name: 'Skills Development', score: skillCalc.total, target: 25 },
-    { name: 'Procurement (base)', score: procCalc.base, target: 29 },
-    { name: 'Supplier Development', score: esdCalc.sdTotal, target: 10 },
-    { name: 'Enterprise Development', score: esdCalc.edTotal, target: 7 },
-    { name: 'Socio-Economic Dev', score: sedCalc.total, target: 5 },
+    { name: 'Ownership', score: ownCalc.total, target: state.scorecard.ownership.target || 25 },
+    { name: 'Management Control', score: mgtCalc.total, target: state.scorecard.managementControl.target || 19 },
+    { name: 'Skills Development', score: skillCalc.total, target: state.scorecard.skillsDevelopment.target || 25 },
+    { name: 'Procurement (base)', score: procCalc.base, target: state.scorecard.procurement.target || 29 },
+    { name: 'Supplier Development', score: esdCalc.sdTotal, target: state.scorecard.supplierDevelopment?.target || 10 },
+    { name: 'Enterprise Development', score: esdCalc.edTotal, target: state.scorecard.enterpriseDevelopment?.target || 7 },
+    { name: 'Socio-Economic Dev', score: sedCalc.total, target: state.scorecard.socioEconomicDevelopment.target || 5 },
   ];
 
   pillars.forEach(p => {

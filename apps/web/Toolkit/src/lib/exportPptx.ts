@@ -156,7 +156,8 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
   const levelColor = currentLevelNum <= 2 ? C.GREEN_DARK : currentLevelNum <= 4 ? C.PURPLE : currentLevelNum <= 6 ? C.ORANGE : C.RED;
 
   addStatCard(s2, pres, 0.6, 1.2, 2.7, 1.3, "B-BBEE LEVEL", currentLevel, levelColor, state.scorecard.recognitionLevel);
-  addStatCard(s2, pres, 3.55, 1.2, 2.7, 1.3, "TOTAL SCORE", `${state.scorecard.total.score.toFixed(1)} / 127`, C.PURPLE, `${pct(state.scorecard.total.score, 127).toFixed(0)}% achievement`);
+  const totalTarget = state.scorecard.total.target || 120;
+  addStatCard(s2, pres, 3.55, 1.2, 2.7, 1.3, "TOTAL SCORE", `${state.scorecard.total.score.toFixed(1)} / ${totalTarget}`, C.PURPLE, `${pct(state.scorecard.total.score, totalTarget).toFixed(0)}% achievement`);
   addStatCard(s2, pres, 6.5, 1.2, 3, 1.3, "SUB-MINIMUM", state.scorecard.isDiscounted ? "Failed" : "All Passed", state.scorecard.isDiscounted ? C.RED : C.GREEN_DARK, state.scorecard.isDiscounted ? "Level discounted by 1" : "No discounting applied");
 
   s2.addShape(pres.ShapeType.roundRect, { x: 0.6, y: 2.8, w: 8.8, h: 1.8, fill: { color: C.GREY_50 }, rectRadius: 0.12 });
@@ -186,13 +187,13 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
   addMasterFooter(s3, entityName);
 
   const elements = [
-    { key: "ownership", name: "Ownership", score: state.scorecard.ownership.score, target: 25, subMin: state.scorecard.ownership.subMinimumMet },
-    { key: "management", name: "Management Control", score: state.scorecard.managementControl.score, target: 27, subMin: null },
-    { key: "skills", name: "Skills Development", score: state.scorecard.skillsDevelopment.score, target: 25, subMin: state.scorecard.skillsDevelopment.subMinimumMet },
-    { key: "procurement", name: "Preferential Procurement", score: state.scorecard.procurement.score, target: 25, subMin: state.scorecard.procurement.subMinimumMet },
-    { key: "esd", name: "Enterprise & Supplier Dev", score: state.scorecard.enterpriseDevelopment.score, target: 15, subMin: null },
-    { key: "sed", name: "Socio-Economic Dev", score: state.scorecard.socioEconomicDevelopment.score, target: 5, subMin: null },
-    { key: "yes", name: "YES Initiative", score: state.scorecard.yesInitiative?.score || 0, target: 5, subMin: null },
+    { key: "ownership", name: "Ownership", score: state.scorecard.ownership.score, target: state.scorecard.ownership.target || 25, subMin: state.scorecard.ownership.subMinimumMet },
+    { key: "management", name: "Management Control", score: state.scorecard.managementControl.score, target: state.scorecard.managementControl.target || 19, subMin: null },
+    { key: "skills", name: "Skills Development", score: state.scorecard.skillsDevelopment.score, target: state.scorecard.skillsDevelopment.target || 25, subMin: state.scorecard.skillsDevelopment.subMinimumMet },
+    { key: "procurement", name: "Preferential Procurement", score: state.scorecard.procurement.score, target: state.scorecard.procurement.target || 29, subMin: state.scorecard.procurement.subMinimumMet },
+    { key: "esd", name: "Enterprise & Supplier Dev", score: (state.scorecard.supplierDevelopment?.score || 0) + state.scorecard.enterpriseDevelopment.score, target: (state.scorecard.supplierDevelopment?.target || 10) + (state.scorecard.enterpriseDevelopment?.target || 7), subMin: null },
+    { key: "sed", name: "Socio-Economic Dev", score: state.scorecard.socioEconomicDevelopment.score, target: state.scorecard.socioEconomicDevelopment.target || 5, subMin: null },
+    { key: "yes", name: "YES Initiative", score: state.scorecard.yesInitiative?.score || 0, target: state.scorecard.yesInitiative?.target || 3, subMin: null },
   ];
 
   const tableRows: pptxgen.TableRow[] = [
@@ -222,8 +223,8 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
   tableRows.push([
     { text: "TOTAL", options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", color: C.WHITE, margin: [4, 8, 4, 8] } },
     { text: state.scorecard.total.score.toFixed(2), options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: C.WHITE } },
-    { text: "127", options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: C.GREY_300 } },
-    { text: `${pct(state.scorecard.total.score, 127).toFixed(0)}%`, options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: C.WHITE } },
+    { text: totalTarget.toString(), options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: C.GREY_300 } },
+    { text: `${pct(state.scorecard.total.score, totalTarget).toFixed(0)}%`, options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: C.WHITE } },
     { text: state.scorecard.isDiscounted ? "DISCOUNTED" : "ALL PASSED", options: { bold: true, fill: { color: C.PURPLE }, fontSize: 9, fontFace: "Helvetica Neue", align: "center", color: state.scorecard.isDiscounted ? C.RED : C.GREEN } },
   ]);
 
@@ -269,7 +270,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
       title: "Ownership",
       key: "ownership",
       score: state.scorecard.ownership.score,
-      target: 25,
+      target: state.scorecard.ownership.target || 25,
       details: [
         ["Company Value", formatCurrency(state.ownership?.companyValue || 0)],
         ["Outstanding Debt", formatCurrency(state.ownership?.outstandingDebt || 0)],
@@ -283,7 +284,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
       title: "Management Control",
       key: "management",
       score: state.scorecard.managementControl.score,
-      target: 27,
+      target: state.scorecard.managementControl.target || 19,
       details: [
         ["Total Employees", `${state.management?.employees?.length || 0}`],
         ["Board Members", `${(state.management?.employees || []).filter((e: any) => e.designation === 'Board').length}`],
@@ -298,11 +299,11 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
       title: "Skills Development",
       key: "skills",
       score: state.scorecard.skillsDevelopment.score,
-      target: 25,
+      target: state.scorecard.skillsDevelopment.target || 25,
       details: [
         ["Leviable Amount", formatCurrency(state.skills?.leviableAmount || 0)],
         ["Target Spend (3.5%)", formatCurrency((state.skills?.leviableAmount || 0) * 0.035)],
-        ["Actual Spend", formatCurrency((state.skills?.trainingPrograms || []).reduce((s: number, p: any) => s + p.cost, 0))],
+        ["Actual Spend", formatCurrency((state.skills?.trainingPrograms || []).reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0))],
         ["Training Programs", `${state.skills?.trainingPrograms?.length || 0}`],
         ["Sub-minimum", state.scorecard.skillsDevelopment.subMinimumMet ? "Met (\u226540%)" : "Not Met (<40%)"],
       ],
@@ -312,7 +313,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
       title: "Preferential Procurement",
       key: "procurement",
       score: state.scorecard.procurement.score,
-      target: 25,
+      target: state.scorecard.procurement.target || 29,
       details: [
         ["TMPS", formatCurrency(state.procurement?.tmps || 0)],
         ["Total Suppliers", `${state.procurement?.suppliers?.length || 0}`],
@@ -325,8 +326,8 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
     {
       title: "Enterprise & Supplier Development",
       key: "esd",
-      score: state.scorecard.enterpriseDevelopment.score,
-      target: 15,
+      score: (state.scorecard.supplierDevelopment?.score || 0) + state.scorecard.enterpriseDevelopment.score,
+      target: (state.scorecard.supplierDevelopment?.target || 10) + (state.scorecard.enterpriseDevelopment?.target || 7),
       details: [
         ["NPAT", formatCurrency(state.client.npat)],
         ["SD Target (2% NPAT)", formatCurrency(Math.abs(state.client.npat) * 0.02)],
@@ -340,7 +341,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
       title: "Socio-Economic Development",
       key: "sed",
       score: state.scorecard.socioEconomicDevelopment.score,
-      target: 5,
+      target: state.scorecard.socioEconomicDevelopment.target || 5,
       details: [
         ["SED Target (1% NPAT)", formatCurrency(Math.abs(state.client.npat) * 0.01)],
         ["Total Contributions", `${state.sed?.contributions?.length || 0}`],
