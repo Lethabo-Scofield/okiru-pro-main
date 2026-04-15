@@ -124,6 +124,10 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
       try {
         const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
         if (!connStr) return;
+        if (process.env.CERT_EXTRACTION_ON_STARTUP === 'false') {
+          logger.info("Startup certificate extraction disabled via CERT_EXTRACTION_ON_STARTUP=false");
+          return;
+        }
         const { BlobServiceClient } = await import("@azure/storage-blob");
         const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
         const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);

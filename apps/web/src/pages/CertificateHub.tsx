@@ -6,6 +6,7 @@ import {
   RefreshCw, Users, ShieldCheck, Clock, AlertTriangle, BarChart3, Award,
   Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText
 } from 'lucide-react';
+import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 
 interface CertificateFile {
   name: string;
@@ -563,7 +564,7 @@ export default function CertificateHub() {
             <KpiCard
               title="Valid"
               value={certStats ? String(certStats.valid) : '—'}
-              subtitle={certStats && certStats.processed > 0 ? `of ${certStats.processed} scanned` : 'run extraction first'}
+              subtitle={certStats && certStats.processed > 0 ? `of ${certStats.processed} scanned` : 'scanning...'}
               iconColor="#22c55e"
               icon={<ShieldCheck className="h-4 w-4" />}
             />
@@ -585,16 +586,9 @@ export default function CertificateHub() {
         )}
 
         {loading && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e] animate-pulse">
-                <div className="shrink-0 w-9 h-9 rounded-lg bg-white/[0.04]" />
-                <div className="flex-1">
-                  <div className="h-5 w-10 rounded bg-white/[0.04] mb-1.5" />
-                  <div className="h-2.5 w-20 rounded bg-white/[0.03]" />
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col items-center justify-center py-20">
+            <img src={logoCircle} alt="Loading" className="h-12 w-12 rounded-[10px] animate-pulse" />
+            <p className="mt-3 text-[12px] text-[#636366]">Loading certificates...</p>
           </div>
         )}
 
