@@ -32,7 +32,7 @@ This is a **pnpm monorepo** with three services:
 1. **B-BBEE Scorecard Management** — pillar-by-pillar data entry (Ownership, Management Control, Skills Development, ESD, SED, YES)
 2. **Document Extraction** — AI-powered parsing of PDFs and Excel toolkits
 3. **Formula Graph Engine** — dependency-aware B-BBEE calculation pipeline
-4. **Reporting** — PDF and PPTX scorecard export
+4. **Reporting** — PDF (Certificate + Verification Report), Excel, and PPTX scorecard exports
 5. **What-If Modeling** — scenario planning for scorecard optimization
 
 ## Certificate Hub — KPI Dashboard & Supplier Registry
