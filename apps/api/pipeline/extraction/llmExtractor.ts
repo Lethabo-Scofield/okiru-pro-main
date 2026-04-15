@@ -9,6 +9,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { isAzureOpenAIConfigured, fastChatCompletion } from './azureOpenAIClient.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('LLMExtractor');
 import { extractPageEntities, normalizeEntityValue, DEFAULT_BBBEE_PATTERNS } from './nerEngine.js';
 
 export interface LLMExtractionRequest {
@@ -218,8 +221,7 @@ export function structuralVerify(
   return false;
 }
 
-// Log LLM configuration status on module load
-console.log(`[LLMExtractor] Provider: Azure OpenAI — configured:${isAzureOpenAIConfigured()}`);
+logger.info('Provider loaded', { provider: 'Azure OpenAI', configured: isAzureOpenAIConfigured() });
 
 /**
  * Check if the LLM provider (Azure OpenAI) is available.
@@ -450,7 +452,7 @@ export class LLMExtractor {
       rawLLMResponse = result.response;
       provider = result.provider;
     } catch (llmError: any) {
-      console.warn(`[LLMExtractor] LLM call failed for ${req.entityName}, falling back to rule-based: ${llmError.message}`);
+      logger.warn('LLM call failed, falling back to rule-based', { entityName: req.entityName, error: llmError.message });
       return this.ruleBasedExtract(req);
     }
 
@@ -760,7 +762,7 @@ export async function groqVerifyBatch(
       { temperature: 0, maxTokens: 800 },
     );
   } catch (err: any) {
-    console.warn('[LLMVerify] Azure OpenAI error — treating all as valid:', err?.message ?? err);
+    logger.warn('Verification error — treating all as valid', { error: err?.message ?? String(err) });
     return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification error', correctedValue: null }));
   }
 
@@ -768,7 +770,7 @@ export async function groqVerifyBatch(
   try {
     parsed = JSON.parse(content);
   } catch {
-    console.warn('[LLMVerify] Could not parse JSON response — treating all as valid');
+    logger.warn('Could not parse JSON response — treating all as valid');
     return entries.map(e => ({ entityName: e.entityName, valid: true, reason: 'Verification parse error', correctedValue: null }));
   }
 

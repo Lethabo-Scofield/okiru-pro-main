@@ -1,7 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { createLogger } from '../../src/logger.js';
 import type { BM25SearchResult } from './bm25Index.js';
+
+const logger = createLogger('HybridRetriever');
 import type { EntitySearchResult } from './entityIndex.js';
 import { BM25Index } from './bm25Index.js';
 import { EntityIndex } from './entityIndex.js';
@@ -146,7 +149,7 @@ export class HybridRetriever {
           score: r.score,
         }));
       } catch (error) {
-        console.warn('[HybridRetriever] Vector search failed:', error);
+        logger.warn('Vector search failed', { error: error instanceof Error ? error.message : String(error) });
         // Continue without semantic results
       }
     }
@@ -187,7 +190,7 @@ export class HybridRetriever {
           // Update ranks
           results = results.map((r, idx) => ({ ...r, rank: idx + 1 }));
         } catch (error) {
-          console.warn('[HybridRetriever] Reranking failed:', error);
+          logger.warn('Reranking failed', { error: error instanceof Error ? error.message : String(error) });
           // Continue with original results
         }
       }

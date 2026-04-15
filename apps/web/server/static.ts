@@ -1,6 +1,9 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { createLogger } from "./logger";
+
+const logger = createLogger("Static");
 
 export function serveStatic(app: Express) {
   // In the compiled CJS bundle __dirname is "." (the CWD), so we must use
@@ -18,7 +21,7 @@ export function serveStatic(app: Express) {
   for (const p of candidates) {
     if (fs.existsSync(path.join(p, "index.html"))) {
       distPath = p;
-      console.log(`[Static] Serving from: ${distPath}`);
+      logger.info('Serving static assets', { path: distPath });
       break;
     }
   }

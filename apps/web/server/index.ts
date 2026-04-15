@@ -7,8 +7,9 @@ import { registerApiProxy } from "./apiProxy";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
-import { createLogger } from "./logger";
+import { createLogger, requestContext } from "./logger";
 import { connectArango } from "../../api/arango/connection.js";
+import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
 
@@ -46,36 +47,28 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
-
 const requestLogger = createLogger("HttpRequest");
 
 app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      requestLogger.debug(`${req.method} ${path} ${res.statusCode} in ${duration}ms`, {
-        method: req.method,
-        path,
-        status: res.statusCode,
-        durationMs: duration,
-      });
-    }
+  const rid = (req.headers['x-request-id'] as string) || crypto.randomUUID();
+  res.setHeader('X-Request-Id', rid);
+  const userId = (req.session as any)?.userId;
+  const ctx = { requestId: rid, userId, method: req.method, path: req.path };
+  requestContext.run(ctx, () => {
+    const start = Date.now();
+    res.on("finish", () => {
+      const durationMs = Date.now() - start;
+      const isHealth = req.path === "/health" || req.path === "/api/health";
+      if (!isHealth && req.path.startsWith("/api")) {
+        const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+        requestLogger[level === "error" ? "error" : level === "warn" ? "warn" : "info"](
+          `${req.method} ${req.path} ${res.statusCode}`,
+          { method: req.method, path: req.path, status: res.statusCode, durationMs, requestId: rid },
+        );
+      }
+    });
+    next();
   });
-
-  next();
 });
 
 (async () => {

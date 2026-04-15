@@ -17,6 +17,9 @@ import {
   EntityFieldRepository,
 } from '../arango/repositories/index.js';
 import { ensureCollections } from '../arango/collections.js';
+import { createLogger } from '../src/logger.js';
+
+const logger = createLogger('SeedOntology');
 import {
   getAllManifests,
   buildManifest,
@@ -312,9 +315,7 @@ export async function seedOntology(options?: {
     }
 
     if (existingSectors.length > 0) {
-      console.log(
-        `[Seed] Skipping ${existingSectors.length} existing sectors (use force: true to override)`
-      );
+      logger.info('Skipping existing sectors', { skippedCount: existingSectors.length, hint: 'use force: true to override' });
       // Filter out existing sectors so we don't re-seed them
       const existingKeys = new Set(existingSectors.map(s => `${s.sectorCode}-${s.scorecardType}`));
       sectorsToActuallySeed = sectorsToSeed.filter(
@@ -323,7 +324,7 @@ export async function seedOntology(options?: {
     }
 
     if (sectorsToActuallySeed.length === 0) {
-      console.log('[Seed] All sectors already seeded, nothing to do');
+      logger.info('All sectors already seeded, nothing to do');
       return {
         totalSectors: 0,
         totalCriteria: 0,
@@ -337,7 +338,7 @@ export async function seedOntology(options?: {
   // Seed each sector
   const results: SeedResult[] = [];
   for (const { sectorCode, scorecardType } of sectorsToActuallySeed) {
-    console.log(`[Seed] Seeding ${sectorCode} ${scorecardType}...`);
+    logger.info('Seeding sector', { sectorCode, scorecardType });
     const result = await seedSector(
       sectorCode,
       scorecardType,
@@ -348,13 +349,9 @@ export async function seedOntology(options?: {
     results.push(result);
 
     if (result.errors.length > 0) {
-      console.warn(
-        `[Seed] ${sectorCode} ${scorecardType} completed with ${result.errors.length} errors`
-      );
+      logger.warn('Sector seeding completed with errors', { sectorCode, scorecardType, errorCount: result.errors.length });
     } else {
-      console.log(
-        `[Seed] ${sectorCode} ${scorecardType}: ${result.criteriaCount} criteria, ${result.entityFieldsCount} fields`
-      );
+      logger.info('Sector seeded', { sectorCode, scorecardType, criteriaCount: result.criteriaCount, entityFieldsCount: result.entityFieldsCount });
     }
   }
 
@@ -507,24 +504,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Running as script
   seedOntology({ force: process.argv.includes('--force') })
     .then(summary => {
-      console.log('\n[Seed] Complete!');
-      console.log(`  Sectors: ${summary.totalSectors}`);
-      console.log(`  Criteria: ${summary.totalCriteria}`);
-      console.log(`  Entity Fields: ${summary.totalEntityFields}`);
-      console.log(`  Duration: ${summary.durationMs}ms`);
+      logger.info('Seed complete', {
+        totalSectors: summary.totalSectors,
+        totalCriteria: summary.totalCriteria,
+        totalEntityFields: summary.totalEntityFields,
+        durationMs: summary.durationMs,
+      });
 
       const errors = summary.results.flatMap(r =>
         r.errors.map(e => `  - ${r.sectorCode} ${r.scorecardType}: ${e}`)
       );
       if (errors.length > 0) {
-        console.log(`\n[Seed] Errors (${errors.length}):`);
-        errors.forEach(e => console.log(e));
+        logger.warn('Seed completed with errors', { errorCount: errors.length, errors });
         process.exit(1);
       }
       process.exit(0);
     })
     .catch(err => {
-      console.error('[Seed] Failed:', err);
+      logger.error('Seed failed', err);
       process.exit(1);
     });
 }

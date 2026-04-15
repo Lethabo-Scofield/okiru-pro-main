@@ -14,6 +14,10 @@
  * and Sector-Specific Codes (ICT, FSC, AgriBEE, etc.)
  */
 
+import { createLogger } from '../src/logger.js';
+
+const logger = createLogger('SectorConfig');
+
 export interface PillarConfig {
   maxPoints: number;
   hasSubMinimum: boolean;
@@ -797,7 +801,7 @@ export function detectSectorFromName(nameOrSector: string): SectorConfig {
   if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return FSC_GENERIC;
   if (/agri|agriculture|farming|agribee/i.test(lower)) return AGRI_GENERIC;
   if (hasQSE) return RCOGP_QSE;
-  console.warn(`[detectSectorFromName] No sector match for "${nameOrSector}" — defaulting to RCOGP Generic`);
+  logger.warn('No sector match — defaulting to RCOGP Generic', { input: nameOrSector });
   return RCOGP_GENERIC;
 }
 

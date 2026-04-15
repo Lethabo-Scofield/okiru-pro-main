@@ -4,6 +4,9 @@ type Request = ExpressRequest<Record<string, string>, any, any, Record<string, s
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { storage } from '../../storage.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger("Import");
 import { requireAuth } from '../middleware/auth.js';
 import { parseExcelBuffer, buildPipelineResult } from '../../pipeline/index.js';
 
@@ -48,7 +51,7 @@ router.get('/logs', requireAuth, async (req: Request, res: Response) => {
     const result = await storage.getImportLogsByUserPaginated(req.session.userId!, page, limit);
     return res.json(result);
   } catch (error: unknown) {
-    console.error('Get import logs error:', error);
+    logger.error('Get import logs error', error);
     return res.status(500).json({ message: "Failed to fetch import logs" });
   }
 });
@@ -106,13 +109,13 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
           errors: pipelineResult.extractionSummary.errors,
         });
       } catch (logErr) {
-        console.error('Failed to log import:', logErr);
+        logger.error('Failed to log import', logErr);
       }
     }
 
     return res.json(pipelineResult);
   } catch (error: unknown) {
-    console.error('Import error:', error);
+    logger.error('Import error', error);
     const message = isProd ? 'An unexpected error occurred during import.' : (error instanceof Error ? error.message : 'An unexpected error occurred during import.');
     return res.status(500).json({
       status: 'failed',

@@ -1,19 +1,41 @@
 import { queryClient } from "./queryClient";
 import { API_BASE } from "./config";
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function apiRequest(url: string, options?: RequestInit) {
-  const res = await fetch(`${API_BASE}${url}`, {
-    credentials: "include", // ensures cookies/session are sent
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${url}`, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+    });
+  } catch (networkErr) {
+    console.error("[API] Network error", { url, error: networkErr });
+    throw new ApiError("Connection lost — please check your network", 0);
+  }
+
+  if (res.status === 401) {
+    window.location.href = "/";
+    throw new ApiError("Session expired — please sign in again", 401);
+  }
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ message: "Request failed" }));
-    throw new Error(data.message || `Request failed: ${res.status}`);
+    const msg = data.message || `Request failed: ${res.status}`;
+    console.error("[API] Request failed", { url, status: res.status, message: msg });
+    throw new ApiError(msg, res.status);
   }
 
   return res.json();

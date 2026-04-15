@@ -9,7 +9,10 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { createLogger } from '../logger.js';
 import { aql } from 'arangojs';
+
+const logger = createLogger("EntityMapping");
 import {
   buildEntityCellMapping,
   getEntityCellMapping,
@@ -59,7 +62,7 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
           message: `No formula graph found for ${sectorCode}/${scorecardType}. Please ingest a template first.` 
         });
       }
-      console.log(`[EntityMapping] Auto-resolved graphKey: ${graphKey} for ${sectorCode}/${scorecardType}`);
+      logger.info('Auto-resolved graphKey', { graphKey, sectorCode, scorecardType });
     }
 
     // Get required entities for this sector/type
@@ -91,7 +94,7 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
       },
     });
   } catch (error: unknown) {
-    console.error('[EntityMapping] build error:', error);
+    logger.error('Build error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to build mapping',
     });
@@ -147,7 +150,7 @@ router.post('/build-all', async (_req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[EntityMapping] build-all error:', error);
+    logger.error('Build-all error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to build all mappings',
     });
@@ -186,7 +189,7 @@ router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) =>
       },
     });
   } catch (error: unknown) {
-    console.error('[EntityMapping] get error:', error);
+    logger.error('Get mapping error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to get mapping',
     });
@@ -233,7 +236,7 @@ router.post('/apply', async (req: Request, res: Response) => {
       canCalculate: validation.valid,
     });
   } catch (error: unknown) {
-    console.error('[EntityMapping] apply error:', error);
+    logger.error('Apply error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to apply entities',
     });
@@ -268,7 +271,7 @@ router.get('/:sectorCode/:scorecardType/unmapped', async (req: Request, res: Res
       totalUnmapped: mapping.coverage.unmappedEntities.length,
     });
   } catch (error: unknown) {
-    console.error('[EntityMapping] unmapped error:', error);
+    logger.error('Unmapped entities error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to get unmapped entities',
     });

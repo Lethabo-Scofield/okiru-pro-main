@@ -14,6 +14,9 @@
 
 import { chatCompletion, fastChatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
 import type { EmployeeInput, ShareholderInput, SupplierInput, ContributionInput, FinancialsInput } from '../rules/calculationEngine.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('AIEntityMapper');
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -501,7 +504,7 @@ export async function inferTablesFromEntities(
     );
   }
 
-  console.log('[aiEntityMapper] Inferring tables from entities via LLM:', {
+  logger.info('Inferring tables from entities via LLM', {
     ownership: groups.ownership.length,
     employees: groups.employees.length,
     suppliers: groups.suppliers.length,
@@ -590,7 +593,7 @@ export async function inferTablesFromEntities(
     );
   }
 
-  console.log('[aiEntityMapper] LLM inferred tables:', {
+  logger.info('LLM inferred tables', {
     shareholders: tables.shareholders?.length || 0,
     employees: tables.employees?.length || 0,
     suppliers: tables.suppliers?.length || 0,
@@ -618,7 +621,7 @@ async function aiRepairEmployeeDesignations(employees: EmployeeInput[]): Promise
   const unknownPct = unknownDesigs.length / employees.length;
   if (unknownPct < 0.3) return employees;
 
-  console.log(`[aiEntityMapper] ${unknownDesigs.length}/${employees.length} employees have unclear designations, attempting AI repair`);
+  logger.info('Attempting AI designation repair', { unclearCount: unknownDesigs.length, totalEmployees: employees.length });
 
   try {
     const sample = employees.slice(0, 50).map(e => ({
@@ -653,7 +656,7 @@ async function aiRepairEmployeeDesignations(employees: EmployeeInput[]): Promise
       return fix ? { ...e, designation: fix } : e;
     });
   } catch (err) {
-    console.warn('[aiEntityMapper] AI designation repair failed:', err);
+    logger.warn('AI designation repair failed', { error: err instanceof Error ? err.message : String(err) });
     return employees;
   }
 }
@@ -704,7 +707,7 @@ export async function mapToUCSPayload(
       suppliers.length === 0 && 'suppliers',
       contributions.length === 0 && 'contributions',
     ].filter(Boolean);
-    console.log('[aiEntityMapper] Inferring empty pillars from entities:', emptyPillars.join(', '));
+    logger.info('Inferring empty pillars from entities', { emptyPillars });
 
     try {
       const inferred = await inferTablesFromEntities(entities);
@@ -714,7 +717,7 @@ export async function mapToUCSPayload(
       if (contributions.length === 0) contributions = normalizeContributions(inferred.contributions || []);
       if (trainingPrograms.length === 0) trainingPrograms = inferred.trainingPrograms || [];
     } catch (err) {
-      console.warn('[aiEntityMapper] Per-pillar inference failed:', err);
+      logger.warn('Per-pillar inference failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }
 

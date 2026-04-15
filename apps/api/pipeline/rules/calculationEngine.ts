@@ -23,6 +23,9 @@ import {
   type FormulaParams,
   type FormulaResult,
 } from './formulaRegistry.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('CalculationEngine');
 import type {
   CriterionEntity,
   EntityManifest,
@@ -496,7 +499,7 @@ function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: an
     set('category_a_spend', categoryASpend);
     set('category_b_spend', categoryBSpend);
 
-    console.log('[calculationEngine] Training aggregated:', { totalTrainingCost, bursarySpend, disabledTrainingCost, programs: trainingPrograms.length });
+    logger.debug('Training aggregated', { totalTrainingCost, bursarySpend, disabledTrainingCost, programs: trainingPrograms.length });
   }
 }
 
@@ -1033,9 +1036,7 @@ export class CalculationEngine {
     const maxPoints = this.context.sectorConfig.totalMaxPoints || pillarResults.reduce((sum, p) => sum + p.maxPoints, 0);
     const overallPercentage = maxPoints > 0 ? (rawTotal / maxPoints) * 100 : 0;
 
-    // DEBUG: Log pillar scores
-    console.log('[calculationEngine] Pillar scores:', pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`));
-    console.log('[calculationEngine] rawTotal:', rawTotal, 'maxPoints:', maxPoints);
+    logger.debug('Pillar scores', { pillars: pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`), rawTotal, maxPoints });
 
     const levelResult = this.determineLevel(rawTotal, pillarResults);
 
@@ -1469,9 +1470,8 @@ export async function calculateScorecard(
   const hasGradBonus = esdContribs.some(c => (c as any).graduationBonus);
   const hasJobsBonus = esdContribs.some(c => (c as any).jobsCreatedBonus);
 
-  console.log('[calculationEngine] Using pillar calculators (frontend parity)');
-  console.log('[calculationEngine] Financials:', financials);
-  console.log('[calculationEngine] Arrays:', {
+  logger.debug('Using pillar calculators (frontend parity)', {
+    financials,
     employees: (options.employees || []).length,
     shareholders: shareholders.length,
     suppliers: suppliers.length,
@@ -1504,8 +1504,7 @@ export async function calculateScorecard(
   const subMinimums: Record<string, boolean> = {};
   for (const p of pillarResults) subMinimums[p.pillarCode] = p.subMinimumMet;
 
-  console.log('[calculationEngine] Pillar scores:', pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`));
-  console.log('[calculationEngine] Total:', result.totalPoints, 'Level:', result.beeLevel);
+  logger.debug('Pillar scores (simplified)', { pillars: pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`), totalPoints: result.totalPoints, beeLevel: result.beeLevel });
 
   return {
     assessmentId: options.assessmentId,

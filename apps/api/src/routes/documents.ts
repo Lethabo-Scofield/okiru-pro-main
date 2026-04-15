@@ -13,7 +13,9 @@ import * as XLSX from 'xlsx';
 import { Document, DocumentChunk } from '../../models.js';
 import { DocumentChunker } from '../../pipeline/extraction/documentChunker.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { createLogger } from '../logger.js';
 
+const logger = createLogger('Documents');
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -77,7 +79,7 @@ async function parseFileToPages(
       }
       return pages;
     } catch (pdfError) {
-      console.error('PDF parsing error:', pdfError);
+      logger.error('PDF parsing failed', pdfError);
       return [{ pageId: 'pdf_1', text: '[PDF parsing failed]', metadata: { type: 'pdf', error: true } }];
     }
   }
@@ -130,7 +132,7 @@ async function parseFileToPages(
         return [{ pageId: 'docx_1', text, metadata: { type: 'docx' } }];
       }
     } catch (error) {
-      console.warn('[documents] DOCX parsing failed:', error);
+      logger.warn('DOCX parsing failed', { error: error instanceof Error ? error.message : String(error) });
     }
 
     return [{ pageId: 'docx_1', text: '', metadata: { type: 'docx', error: 'Failed to parse' } }];
@@ -144,6 +146,7 @@ async function parseFileToPages(
 // POST /api/documents/upload - Upload a document for storage and chunking
 // ---------------------------------------------------------------------------
 router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+  const start = Date.now();
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'File is required (multipart field: file)' });
@@ -178,11 +181,11 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     });
 
     // Parse and chunk the document immediately on upload
-    console.log(`[documents] Parsing ${filename} for chunking...`);
+    logger.info('Parsing document for chunking', { filename });
     const parseStart = Date.now();
     const pages = await parseFileToPages(buffer, fileType, filename);
     const parseTime = Date.now() - parseStart;
-    console.log(`[documents] Parsed ${pages.length} pages in ${parseTime}ms`);
+    logger.info('Document parsed', { filename, pageCount: pages.length, parseTimeMs: parseTime });
 
     if (pages.length === 0 || pages.every(p => !p.text.trim())) {
       await Document.findByIdAndUpdate(doc._id, { status: 'uploaded', chunkCount: 0 });
@@ -199,16 +202,16 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     }
 
     // Build chunks
-    console.log(`[documents] Building chunks...`);
+    logger.info('Building chunks', { filename });
     const chunkStart = Date.now();
     const chunker = new DocumentChunker();
     const documentId = doc._id.toString();
     const chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), documentId);
     const chunkTime = Date.now() - chunkStart;
-    console.log(`[documents] Created ${chunks.length} chunks in ${chunkTime}ms`);
+    logger.info('Chunks created', { filename, chunkCount: chunks.length, chunkTimeMs: chunkTime });
 
     // Save chunks to MongoDB
-    console.log(`[documents] Saving ${chunks.length} chunks to database...`);
+    logger.info('Saving chunks to database', { chunkCount: chunks.length });
     const saveStart = Date.now();
     const chunkDocs = chunks.map((chunk, index) => ({
       documentId: doc._id,
@@ -224,10 +227,12 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
 
     await DocumentChunk.insertMany(chunkDocs);
     const saveTime = Date.now() - saveStart;
-    console.log(`[documents] Saved chunks in ${saveTime}ms`);
+    logger.info('Chunks saved', { chunkCount: chunks.length, saveTimeMs: saveTime });
 
     // Update document status
     await Document.findByIdAndUpdate(doc._id, { status: 'chunked', chunkCount: chunks.length });
+
+    logger.info('Document uploaded successfully', { documentId: doc._id, filename, fileSize: buffer.length, chunkCount: chunks.length, durationMs: Date.now() - start });
 
     return res.json({
       documentId: doc._id,
@@ -245,7 +250,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       },
     });
   } catch (error: unknown) {
-    console.error('[documents] Upload failed:', error);
+    logger.error('Upload failed', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Upload failed',
     });
