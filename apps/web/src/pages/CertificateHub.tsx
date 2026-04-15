@@ -174,28 +174,23 @@ function getSupplierStatus(expiryDate: string | null): 'valid' | 'expiring' | 'e
 }
 
 function KpiCard({
-  title, value, subtitle, borderColor, icon,
+  title, value, subtitle, iconColor, icon,
 }: {
   title: string;
   value: string;
   subtitle: string;
-  borderColor: string;
+  iconColor: string;
   icon: React.ReactNode;
 }) {
   return (
-    <div
-      className="relative rounded-xl p-5 text-left w-full bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200"
-      style={{
-        backdropFilter: 'blur(16px)',
-        borderBottom: `3px solid ${borderColor}`,
-      }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-medium tracking-wider text-[#636366] uppercase">{title}</span>
-        <span style={{ color: borderColor }} className="opacity-60">{icon}</span>
+    <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e]">
+      <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-white/[0.04]" style={{ color: iconColor }}>
+        {icon}
       </div>
-      <div className="text-[2.5rem] font-bold text-white leading-none tracking-tight">{value}</div>
-      <div className="text-[12px] text-[#636366] mt-1.5">{subtitle}</div>
+      <div className="min-w-0">
+        <div className="text-[20px] font-semibold text-white leading-tight">{value}</div>
+        <div className="text-[11px] text-[#636366] truncate">{title}</div>
+      </div>
     </div>
   );
 }
@@ -546,28 +541,28 @@ export default function CertificateHub() {
               title="Total Certificates"
               value={loading ? '—' : String(certificates.length)}
               subtitle="in storage"
-              borderColor="#3b82f6"
+              iconColor="#3b82f6"
               icon={<FileText className="h-4 w-4" />}
             />
             <KpiCard
               title="Valid Certificates"
               value={String(kpis.valid)}
               subtitle="up to date"
-              borderColor="#22c55e"
+              iconColor="#22c55e"
               icon={<ShieldCheck className="h-4 w-4" />}
             />
             <KpiCard
               title="Expiring Soon"
               value={String(kpis.expiring)}
               subtitle="within 60 days"
-              borderColor="#f59e0b"
+              iconColor="#f59e0b"
               icon={<Clock className="h-4 w-4" />}
             />
             <KpiCard
               title="Expired"
               value={String(kpis.expired)}
               subtitle="action required"
-              borderColor="#ef4444"
+              iconColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
             />
           </div>
@@ -576,10 +571,12 @@ export default function CertificateHub() {
         {chunksLoading && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl p-5 bg-white/[0.03] animate-pulse" style={{ borderBottom: '3px solid #2c2c2e' }}>
-                <div className="h-2.5 w-20 rounded bg-white/[0.04] mb-4" />
-                <div className="h-8 w-16 rounded bg-white/[0.04] mb-2" />
-                <div className="h-2 w-14 rounded bg-white/[0.03]" />
+              <div key={i} className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e] animate-pulse">
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-white/[0.04]" />
+                <div className="flex-1">
+                  <div className="h-5 w-10 rounded bg-white/[0.04] mb-1.5" />
+                  <div className="h-2.5 w-20 rounded bg-white/[0.03]" />
+                </div>
               </div>
             ))}
           </div>
