@@ -181,7 +181,7 @@ export default function Dashboard() {
   const handleDeleteSession = useCallback(async (sessionId: string) => {
     setIsDeletingSession(true);
     try {
-      const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`, { method: 'DELETE', credentials: 'include' });
       if (res.ok) {
         setProcessorSessions(prev => prev.filter(s => s.id !== sessionId));
         toast({ title: 'Assessment deleted', description: 'The client assessment has been removed.' });
@@ -199,7 +199,7 @@ export default function Dashboard() {
   const fetchSessions = useCallback(async () => {
     setLoadingSessions(true);
     try {
-      const res = await fetch(`${API_BASE}/api/processor-sessions`);
+      const res = await fetch(`${API_BASE}/api/processor-sessions`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setProcessorSessions(Array.isArray(data) ? data : []);

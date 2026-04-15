@@ -12,11 +12,12 @@ import crypto from 'crypto';
 import * as XLSX from 'xlsx';
 import { Document, DocumentChunk } from '../../models.js';
 import { DocumentChunker } from '../../pipeline/extraction/documentChunker.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
-// Document extraction will be handled internally using patterns from audit-ai as reference
+router.use(requireAuth);
 
 /**
  * Parse uploaded file to text pages based on file type.
@@ -153,7 +154,9 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const fileType = req.file.mimetype || 'application/octet-stream';
     const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    const existing = await Document.findOne({ fileHash });
+    const userId = (req.session as any).userId;
+
+    const existing = await Document.findOne({ fileHash, userId });
     if (existing) {
       return res.json({
         message: 'Document already uploaded',
@@ -162,12 +165,11 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       });
     }
 
-    // Create document record first
     const doc = await Document.create({
       filename,
       fileType,
       uploadedAt: new Date(),
-      userId: req.body.userId || null,
+      userId,
       entityId: req.body.entityId || null,
       fileHash,
       fileSize: buffer.length,
@@ -255,8 +257,10 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
 // ---------------------------------------------------------------------------
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const userId = (req.session as any).userId;
     const entityId = req.query.entityId as string | undefined;
-    const filter = entityId ? { entityId } : {};
+    const filter: Record<string, any> = { userId };
+    if (entityId) filter.entityId = entityId;
     const docs = await Document.find(filter)
       .select('-rawContent')
       .sort({ uploadedAt: -1 })
@@ -274,7 +278,8 @@ router.get('/', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const doc = await Document.findById(req.params.id).select('-rawContent');
+    const userId = (req.session as any).userId;
+    const doc = await Document.findOne({ _id: req.params.id, userId }).select('-rawContent');
     if (!doc) return res.status(404).json({ message: 'Document not found' });
     return res.json(doc);
   } catch (error: unknown) {
@@ -289,6 +294,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/chunks', async (req: Request, res: Response) => {
   try {
+    const userId = (req.session as any).userId;
+    const parentDoc = await Document.findOne({ _id: req.params.id, userId }).select('_id');
+    if (!parentDoc) return res.status(404).json({ message: 'Document not found' });
     const chunks = await DocumentChunk.find({ documentId: req.params.id })
       .sort({ chunkIndex: 1 });
     return res.json({
@@ -299,6 +307,26 @@ router.get('/:id/chunks', async (req: Request, res: Response) => {
   } catch (error: unknown) {
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to get chunks',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/documents/:id/download - Download raw file content for session resume
+// ---------------------------------------------------------------------------
+router.get('/:id/download', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.session as any).userId;
+    const doc = await Document.findOne({ _id: req.params.id, userId });
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    if (!doc.rawContent) return res.status(404).json({ message: 'No file content stored' });
+    res.setHeader('Content-Type', doc.fileType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.filename)}"`);
+    res.setHeader('Content-Length', doc.rawContent.length);
+    return res.send(doc.rawContent);
+  } catch (error: unknown) {
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : 'Failed to download document',
     });
   }
 });

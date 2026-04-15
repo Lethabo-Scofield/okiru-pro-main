@@ -18,6 +18,7 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { inferTablesFromEntities } from '../../pipeline/extraction/aiEntityMapper.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 // Strings the LLM sometimes returns meaning "no value found"
 const NULL_VALUE_SENTINELS = /^(null|n\/a|none|not\s+found|not\s+available|unknown|-)$/i;
@@ -611,6 +612,7 @@ async function parseFileToPages(
  */
 router.post(
   '/extract-entities-hybrid',
+  requireAuth,
   upload.single('file'),
   async (req, res) => {
     const totalStartTime = Date.now();
@@ -1201,7 +1203,7 @@ router.post(
   }
 );
 
-router.post('/infer-tables', async (req, res) => {
+router.post('/infer-tables', requireAuth, async (req, res) => {
   try {
     const { entities } = req.body;
     if (!Array.isArray(entities) || entities.length === 0) {
