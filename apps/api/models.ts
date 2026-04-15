@@ -256,13 +256,13 @@ export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoos
 
 const sessionBlobSchema = new Schema({
   sessionId: { type: String, required: true, index: true },
-  field: { type: String, required: true }, // e.g., 'scorecardResult', 'foundationData', 'pillarData', 'extractionResults'
+  createdByUserId: { type: String, default: null, index: true },
+  field: { type: String, required: true },
   data: { type: Schema.Types.Mixed, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { collection: "sessionBlobs" });
 
-// Compound unique index on sessionId + field
 sessionBlobSchema.index({ sessionId: 1, field: 1 }, { unique: true });
 
 sessionBlobSchema.pre('save', function(next) {

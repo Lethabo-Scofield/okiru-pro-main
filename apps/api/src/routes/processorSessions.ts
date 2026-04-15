@@ -17,7 +17,7 @@ function stripFileBuffers(filesData: any[]): any[] {
     size: f.size,
     type: f.type,
     status: f.status,
-    // Explicitly exclude: content, buffer, data, base64, arrayBuffer, textContent
+    documentId: f.documentId || null,
   }));
 }
 
@@ -53,12 +53,12 @@ function stripExtractionResults(results: any[]): any[] {
  * Save a blob field to the separate sessionBlobs collection.
  * Uses upsert to replace existing blob for this session+field.
  */
-async function saveBlob(sessionId: string, field: string, data: any): Promise<void> {
+async function saveBlob(sessionId: string, field: string, data: any, userId?: string): Promise<void> {
   if (data === undefined || data === null) return;
   try {
     await SessionBlobModel.findOneAndUpdate(
       { sessionId, field },
-      { sessionId, field, data, updatedAt: new Date() },
+      { sessionId, field, data, createdByUserId: userId || null, updatedAt: new Date() },
       { upsert: true, new: true }
     );
   } catch (err) {
@@ -226,22 +226,19 @@ export function createProcessorSessionsRouter(): Router {
       // Strip extraction results to essentials
       const safeExtractionResults = stripExtractionResults(extractionResults);
 
-      // Save large data fields as separate blobs (in parallel)
       const blobPromises: Promise<void>[] = [];
       if (scorecardResult !== undefined) {
-        blobPromises.push(saveBlob(sessionId, 'scorecardResult', scorecardResult));
+        blobPromises.push(saveBlob(sessionId, 'scorecardResult', scorecardResult, userId));
       }
       if (foundationData !== undefined) {
-        blobPromises.push(saveBlob(sessionId, 'foundationData', foundationData));
+        blobPromises.push(saveBlob(sessionId, 'foundationData', foundationData, userId));
       }
       if (pillarData !== undefined) {
-        blobPromises.push(saveBlob(sessionId, 'pillarData', pillarData));
+        blobPromises.push(saveBlob(sessionId, 'pillarData', pillarData, userId));
       }
       if (extractionResults !== undefined) {
-        blobPromises.push(saveBlob(sessionId, 'extractionResults', safeExtractionResults));
+        blobPromises.push(saveBlob(sessionId, 'extractionResults', safeExtractionResults, userId));
       }
-      
-      // Wait for all blob saves to complete
       await Promise.all(blobPromises);
 
       // Main document only stores metadata and small fields
@@ -312,11 +309,10 @@ export function createProcessorSessionsRouter(): Router {
           if (field === 'extractionResults' && Array.isArray(data)) {
             data = stripExtractionResults(data);
           }
-          blobPromises.push(saveBlob(sessionId, field, data));
+          blobPromises.push(saveBlob(sessionId, field, data, userId));
         }
       }
 
-      // Save blobs in parallel with main doc update
       await Promise.all([
         ...blobPromises,
         ProcessorSessionModel.findOneAndUpdate(

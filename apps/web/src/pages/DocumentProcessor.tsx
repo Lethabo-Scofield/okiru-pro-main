@@ -61,6 +61,7 @@ interface UploadedFile {
   uploadProgress: number;
   status: 'uploading' | 'ready' | 'error';
   textContent: string;
+  documentId?: string;
 }
 
 interface CompanyInfo {
@@ -447,13 +448,14 @@ const EMPTY_YES_DATA: YESData = {
 };
 
 function generateSessionId() {
-  return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `sess-${crypto.randomUUID()}`;
 }
 
 async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSession | null> {
   try {
     const res = await fetch(`${API_BASE}/api/processor-sessions`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionId: session.id,
@@ -465,7 +467,6 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
         docStatuses: session.docStatuses,
         isComplete: session.isComplete,
         scorecardResult: session.scorecardResult,
-        // Include build flow data if present
         foundationData: session.foundationData,
         pillarData: session.pillarData,
         flowMode: session.flowMode,
@@ -478,7 +479,7 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
 
 async function apiLoadSession(sessionId: string): Promise<ProcessorSession | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`);
+    const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`, { credentials: 'include' });
     if (!res.ok) return null;
     const data = await res.json();
     return {
@@ -1348,22 +1349,23 @@ export default function DocumentProcessor() {
       if (sess.filesData && sess.filesData.length > 0) {
         const NativeFile = window.File as typeof globalThis.File;
         const restored: UploadedFile[] = sess.filesData.map((fd: any) => {
-          let fileObj: globalThis.File;
-          if (fd.fileBase64) {
-            try {
-              const binary = atob(fd.fileBase64);
-              const bytes = new Uint8Array(binary.length);
-              for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-              fileObj = new NativeFile([bytes], fd.name, { type: 'application/pdf' });
-            } catch {
-              fileObj = new NativeFile([], fd.name, { type: 'application/pdf' });
-            }
-          } else {
-            fileObj = new NativeFile([], fd.name, { type: fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream' });
-          }
-          return { id: fd.id, file: fileObj, name: fd.name, size: fd.size, type: fd.type, uploadProgress: 100, status: 'ready' as const, textContent: fd.textContent || '' };
+          const mimeType = fd.type === 'PDF' ? 'application/pdf' : 'application/octet-stream';
+          const fileObj = new NativeFile([], fd.name, { type: mimeType });
+          return { id: fd.id, file: fileObj, name: fd.name, size: fd.size, type: fd.type, uploadProgress: 100, status: 'ready' as const, textContent: fd.textContent || '', documentId: fd.documentId };
         });
         setUploadedFiles(restored);
+        // Re-download file content from documents collection for files that have documentId
+        restored.forEach((rf) => {
+          if (!rf.documentId) return;
+          fetch(`${API_BASE}/api/documents/${rf.documentId}/download`, { credentials: 'include' })
+            .then(r => r.ok ? r.blob() : null)
+            .then(blob => {
+              if (!blob) return;
+              const realFile = new NativeFile([blob], rf.name, { type: blob.type || 'application/octet-stream' });
+              setUploadedFiles(prev => prev.map(f => f.id === rf.id ? { ...f, file: realFile } : f));
+            })
+            .catch(() => {});
+        });
       }
       // Restore build flow data if present
       if (sess.foundationData) {
@@ -1521,6 +1523,7 @@ export default function DocumentProcessor() {
         size: f.size,
         type: f.type,
         status: f.status,
+        documentId: f.documentId,
       })),
       fileClassifications: opts?.classifications ?? fileClassifications,
       extractionResults: (opts?.results ?? extractionResults).map((r: any) => ({
@@ -2020,10 +2023,21 @@ export default function DocumentProcessor() {
       void (async () => {
         try {
           const textContent = await readFileText(newFile.file);
+          // Persist file to documents collection for session resume
+          let documentId: string | undefined;
+          try {
+            const fd = new FormData();
+            fd.append('file', newFile.file);
+            const uploadRes = await fetch(`${API_BASE}/api/documents/upload`, { method: 'POST', credentials: 'include', body: fd });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              documentId = uploadData.documentId?.toString();
+            }
+          } catch { /* non-blocking — file still usable from memory */ }
           setUploadedFiles(prev =>
             prev.map(f =>
               f.id === newFile.id
-                ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent }
+                ? { ...f, uploadProgress: 100, status: 'ready' as const, textContent, documentId }
                 : f,
             ),
           );
@@ -2205,7 +2219,16 @@ export default function DocumentProcessor() {
             })),
             tables: data.tables || {},
           };
-          setCompletedCount(prev => { const next = prev + 1; if (next >= documents.length) finalizeResults(); return next; });
+          setCompletedCount(prev => {
+            const next = prev + 1;
+            // Incrementally save partial results so mid-extraction crashes don't lose completed docs
+            const partial = resultsAccumulator.filter(Boolean);
+            if (partial.length > 0) {
+              persistSession('extract', { results: partial }).catch(() => {});
+            }
+            if (next >= documents.length) finalizeResults();
+            return next;
+          });
           break;
         case "complete":
           finalizeResults();
@@ -2249,6 +2272,7 @@ export default function DocumentProcessor() {
 
         const response = await fetch('/api/extract-entities-hybrid?skipVerify=true', {
           method: 'POST',
+          credentials: 'include',
           body: formData,
           signal: controller.signal,
         });
