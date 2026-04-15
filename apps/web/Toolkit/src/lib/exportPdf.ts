@@ -239,7 +239,7 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
   doc.text("Financial Year", col2X, detailY);
   doc.setFontSize(13);
   doc.setTextColor(...SLATE_900);
-  doc.text(`${state.scorecard.total.score.toFixed(2)} / 127`, col1X, detailY + 7);
+  doc.text(`${state.scorecard.total.score.toFixed(2)} / ${state.scorecard.total.target}`, col1X, detailY + 7);
   doc.text(state.client.financialYear, col2X, detailY + 7);
 
   doc.setFontSize(9);
@@ -321,19 +321,31 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
     "Socio-Economic Dev": BLUE,
   };
 
+  const ownTarget = state.scorecard.ownership.target || 25;
+  const mgtTarget = state.scorecard.managementControl.target || 19;
+  const sklTarget = state.scorecard.skillsDevelopment.target || 25;
+  const procTarget = state.scorecard.procurement.target || 29;
+  const sdTarget = state.scorecard.supplierDevelopment?.target || 10;
+  const edTarget = state.scorecard.enterpriseDevelopment?.target || 7;
+  const esdCombinedTarget = sdTarget + edTarget;
+  const sedTarget = state.scorecard.socioEconomicDevelopment.target || 5;
+  const yesTarget = state.scorecard.yesInitiative?.target || 3;
+  const totalTarget = state.scorecard.total.target || 120;
+  const esdCombinedScore = (state.scorecard.supplierDevelopment?.score || 0) + state.scorecard.enterpriseDevelopment.score;
+
   autoTable(doc, {
     startY: y,
     head: [["Element", "Points", "Target", "Achievement", "Sub-min"]],
     body: [
-      ["Ownership", state.scorecard.ownership.score.toFixed(2), "25", `${((state.scorecard.ownership.score / 25) * 100).toFixed(0)}%`, state.scorecard.ownership.subMinimumMet ? "Passed" : "Failed"],
-      ["Management Control", state.scorecard.managementControl.score.toFixed(2), "27", `${((state.scorecard.managementControl.score / 27) * 100).toFixed(0)}%`, "N/A"],
-      ["Skills Development", state.scorecard.skillsDevelopment.score.toFixed(2), "25", `${((state.scorecard.skillsDevelopment.score / 25) * 100).toFixed(0)}%`, state.scorecard.skillsDevelopment.subMinimumMet ? "Passed" : "Failed"],
-      ["Preferential Procurement", state.scorecard.procurement.score.toFixed(2), "25", `${((state.scorecard.procurement.score / 25) * 100).toFixed(0)}%`, state.scorecard.procurement.subMinimumMet ? "Passed" : "Failed"],
-      ["Enterprise & Supplier Dev", state.scorecard.enterpriseDevelopment.score.toFixed(2), "15", `${((state.scorecard.enterpriseDevelopment.score / 15) * 100).toFixed(0)}%`, "N/A"],
-      ["Socio-Economic Dev", state.scorecard.socioEconomicDevelopment.score.toFixed(2), "5", `${((state.scorecard.socioEconomicDevelopment.score / 5) * 100).toFixed(0)}%`, "N/A"],
-      ["YES Initiative", (state.scorecard.yesInitiative?.score || 0).toFixed(2), "5", "0%", "N/A"],
+      ["Ownership", state.scorecard.ownership.score.toFixed(2), ownTarget.toString(), `${((state.scorecard.ownership.score / ownTarget) * 100).toFixed(0)}%`, state.scorecard.ownership.subMinimumMet ? "Passed" : "Failed"],
+      ["Management Control", state.scorecard.managementControl.score.toFixed(2), mgtTarget.toString(), `${((state.scorecard.managementControl.score / mgtTarget) * 100).toFixed(0)}%`, "N/A"],
+      ["Skills Development", state.scorecard.skillsDevelopment.score.toFixed(2), sklTarget.toString(), `${((state.scorecard.skillsDevelopment.score / sklTarget) * 100).toFixed(0)}%`, state.scorecard.skillsDevelopment.subMinimumMet ? "Passed" : "Failed"],
+      ["Preferential Procurement", state.scorecard.procurement.score.toFixed(2), procTarget.toString(), `${((state.scorecard.procurement.score / procTarget) * 100).toFixed(0)}%`, state.scorecard.procurement.subMinimumMet ? "Passed" : "Failed"],
+      ["Enterprise & Supplier Dev", esdCombinedScore.toFixed(2), esdCombinedTarget.toString(), `${(esdCombinedTarget > 0 ? (esdCombinedScore / esdCombinedTarget) * 100 : 0).toFixed(0)}%`, "N/A"],
+      ["Socio-Economic Dev", state.scorecard.socioEconomicDevelopment.score.toFixed(2), sedTarget.toString(), `${((state.scorecard.socioEconomicDevelopment.score / sedTarget) * 100).toFixed(0)}%`, "N/A"],
+      ["YES Initiative", (state.scorecard.yesInitiative?.score || 0).toFixed(2), yesTarget.toString(), `${(yesTarget > 0 ? ((state.scorecard.yesInitiative?.score || 0) / yesTarget) * 100 : 0).toFixed(0)}%`, "N/A"],
     ],
-    foot: [["TOTAL", state.scorecard.total.score.toFixed(2), "127", `${((state.scorecard.total.score / 127) * 100).toFixed(0)}%`, state.scorecard.isDiscounted ? "DISCOUNTED" : "ALL PASSED"]],
+    foot: [["TOTAL", state.scorecard.total.score.toFixed(2), totalTarget.toString(), `${((state.scorecard.total.score / totalTarget) * 100).toFixed(0)}%`, state.scorecard.isDiscounted ? "DISCOUNTED" : "ALL PASSED"]],
     theme: 'grid',
     headStyles: { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
     footStyles: { fillColor: [248, 244, 255], textColor: SLATE_900, fontStyle: 'bold', fontSize: 9, lineWidth: 0.3, lineColor: PURPLE_LIGHT },
@@ -487,7 +499,7 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
     doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
     doc.setFontSize(9);
     doc.setTextColor(...TEAL);
-    doc.text(`Total Employees: ${employees.length}    |    Employees with Disabilities: ${disabledCount} (${disabledBlack} black)    |    Score: ${state.scorecard.managementControl.score.toFixed(2)} / 27`, margin + 5, y + 7);
+    doc.text(`Total Employees: ${employees.length}    |    Employees with Disabilities: ${disabledCount} (${disabledBlack} black)    |    Score: ${state.scorecard.managementControl.score.toFixed(2)} / ${state.scorecard.managementControl.target || 19}`, margin + 5, y + 7);
     y += 18;
   }
 
@@ -498,15 +510,18 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
     autoTable(doc, {
       startY: y,
       head: [["Program", "Category", "Cost (ZAR)", "Black", "Gender", "Race", "Disabled"]],
-      body: programs.map((p: any) => [
-        p.name,
-        (p.category || '').replace(/_/g, ' '),
-        formatCurrency(p.cost),
-        p.isBlack ? "Yes" : "No",
-        p.gender || "—",
-        p.race || "—",
-        p.isDisabled ? "Yes" : "No"
-      ]),
+      body: programs.map((p: any) => {
+        const isBlack = p.isBlack ?? ['African', 'Coloured', 'Indian'].includes(p.race);
+        return [
+          p.programName || p.name || '—',
+          (p.categoryCode || p.category || '').replace(/_/g, ' '),
+          formatCurrency(p.totalCost || p.cost || 0),
+          isBlack ? "Yes" : "No",
+          p.gender || "—",
+          p.race || "—",
+          p.isDisabled ? "Yes" : "No"
+        ];
+      }),
       theme: 'grid',
       headStyles: { fillColor: EMERALD, textColor: WHITE, fontSize: 9, fontStyle: 'bold' },
       styles: { fontSize: 9, cellPadding: 4, lineWidth: 0.2, lineColor: [200, 220, 200] },
@@ -523,13 +538,13 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
     });
     y = (doc as any).lastAutoTable.finalY + 6;
 
-    const totalSkillsSpend = programs.reduce((s: number, p: any) => s + (p.cost || 0), 0);
+    const totalSkillsSpend = programs.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0);
     const leviable = state.skills?.leviableAmount || 0;
     doc.setFillColor(...EMERALD_LIGHT);
     doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
     doc.setFontSize(9);
     doc.setTextColor(...EMERALD);
-    doc.text(`Total Spend: ${formatCurrency(totalSkillsSpend)}    |    Leviable Amount: ${formatCurrency(leviable)}    |    Score: ${state.scorecard.skillsDevelopment.score.toFixed(2)} / 25`, margin + 5, y + 7);
+    doc.text(`Total Spend: ${formatCurrency(totalSkillsSpend)}    |    Leviable Amount: ${formatCurrency(leviable)}    |    Score: ${state.scorecard.skillsDevelopment.score.toFixed(2)} / ${state.scorecard.skillsDevelopment.target || 25}`, margin + 5, y + 7);
   }
 
   doc.addPage();

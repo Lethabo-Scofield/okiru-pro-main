@@ -32,7 +32,7 @@ This is a **pnpm monorepo** with three services:
 1. **B-BBEE Scorecard Management** — pillar-by-pillar data entry (Ownership, Management Control, Skills Development, ESD, SED, YES)
 2. **Document Extraction** — AI-powered parsing of PDFs and Excel toolkits
 3. **Formula Graph Engine** — dependency-aware B-BBEE calculation pipeline
-4. **Reporting** — PDF (Certificate + Verification Report), Excel, and PPTX scorecard exports
+4. **Reporting** — PDF (Certificate + Verification Report), Excel, and PPTX scorecard exports. All exports use dynamic pillar targets from `state.scorecard.<pillar>.target` (RCOGP Generic defaults: Ownership 25, Management 19, Skills 25, Procurement 29, SD 10, ED 7, SED 5, YES 3, Total 120). Skills programs use schema-aware field names (`programName`/`totalCost`/`categoryCode`/`race`-derived `isBlack`) with legacy fallbacks.
 5. **What-If Modeling** — scenario planning for scorecard optimization
 
 ## Certificate Hub — KPI Dashboard & Supplier Registry

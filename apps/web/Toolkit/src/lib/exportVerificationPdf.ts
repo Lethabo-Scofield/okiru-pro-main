@@ -489,7 +489,7 @@ export const exportVerificationPdf = (state: any, options: ExportOptions = {}) =
 
   const programs = state.skills?.trainingPrograms || [];
   const leviable = state.skills?.leviableAmount || state.client?.leviableAmount || 0;
-  const blackPrograms = programs.filter((p: any) => p.isBlack || ["African", "Coloured", "Indian"].includes(p.race));
+  const blackPrograms = programs.filter((p: any) => p.isBlack ?? ["African", "Coloured", "Indian"].includes(p.race));
   const blackSpend = blackPrograms.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0);
   const totalSpend = programs.reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0);
 
@@ -534,7 +534,7 @@ export const exportVerificationPdf = (state: any, options: ExportOptions = {}) =
       catCounts[cat].count += 1;
       const cost = p.totalCost || p.cost || 0;
       catCounts[cat].total += cost;
-      const isBlack = p.isBlack || ["African", "Coloured", "Indian"].includes(p.race);
+      const isBlack = p.isBlack ?? ["African", "Coloured", "Indian"].includes(p.race);
       if (isBlack) catCounts[cat].blackSpend += cost;
     });
 
