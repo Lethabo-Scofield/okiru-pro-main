@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import { createLogger } from '../logger.js';
 import { searchCertificates, isAzureSearchConfigured } from '../services/azureSearch.js';
 import { requireAuth } from '../middleware/auth.js';
+import { processAllCertificates, processOneCertificate, getCertificateStats } from '../services/certificateExtractor.js';
+import { CertificateMetadataModel } from '../../models.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -211,6 +213,67 @@ router.get('/search', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error('Search failed', err as Error);
     return res.status(500).json({ message: 'Search failed' });
+  }
+});
+
+router.get('/stats', async (_req: Request, res: Response) => {
+  try {
+    const stats = await getCertificateStats();
+    return res.json(stats);
+  } catch (err: any) {
+    logger.error('Failed to get certificate stats', err);
+    return res.status(500).json({ message: 'Failed to get certificate stats' });
+  }
+});
+
+router.get('/metadata', async (_req: Request, res: Response) => {
+  try {
+    const docs = await CertificateMetadataModel.find(
+      { extractionStatus: 'completed' },
+      { extractedText: 0 },
+    ).lean();
+    return res.json(docs);
+  } catch (err: any) {
+    logger.error('Failed to get certificate metadata', err);
+    return res.status(500).json({ message: 'Failed to get metadata' });
+  }
+});
+
+router.post('/extract', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const blobServiceClient = getBlobServiceClient();
+    if (!blobServiceClient) {
+      return res.status(500).json({ message: 'Azure Storage is not configured.' });
+    }
+
+    const force = req.body?.force === true;
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    const sendEvent = (data: any) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    sendEvent({ type: 'start', message: 'Starting certificate extraction...' });
+
+    const result = await processAllCertificates(blobServiceClient, force, (done, total) => {
+      if (done % 5 === 0 || done === total) {
+        sendEvent({ type: 'progress', done, total });
+      }
+    });
+
+    sendEvent({ type: 'complete', ...result });
+    res.end();
+  } catch (err: any) {
+    logger.error('Certificate extraction failed', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Extraction failed' });
+    }
+    res.end();
   }
 });
 

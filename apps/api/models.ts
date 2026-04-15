@@ -279,3 +279,24 @@ sessionBlobSchema.set("toJSON", {
 });
 
 export const SessionBlobModel = mongoose.models.SessionBlob || mongoose.model("SessionBlob", sessionBlobSchema);
+
+const certificateMetadataSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  blobName: { type: String, required: true, unique: true },
+  fileName: { type: String, required: true },
+  expiryDate: { type: Date, default: null },
+  issueDate: { type: Date, default: null },
+  supplierName: { type: String, default: null },
+  bbbeeLevel: { type: Number, default: null },
+  status: { type: String, enum: ['valid', 'expiring', 'expired', 'unknown'], default: 'unknown' },
+  extractedText: { type: String, default: null },
+  extractionStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
+  extractionError: { type: String, default: null },
+  processedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+}, { collection: "certificate_metadata" });
+
+certificateMetadataSchema.index({ expiryDate: 1 });
+certificateMetadataSchema.index({ status: 1 });
+
+export const CertificateMetadataModel = mongoose.models.CertificateMetadata || mongoose.model("CertificateMetadata", certificateMetadataSchema);
