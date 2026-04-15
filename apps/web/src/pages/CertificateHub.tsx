@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown, FileSearch,
   RefreshCw, Users, ShieldCheck, Clock, AlertTriangle, BarChart3, Award,
-  Upload, CloudUpload, CheckCircle2, XCircle, FileUp
+  Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText
 } from 'lucide-react';
 
 interface CertificateFile {
@@ -540,8 +540,15 @@ export default function CertificateHub() {
           </p>
         </div>
 
-        {!chunksLoading && chunks.length > 0 && (
+        {!chunksLoading && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+            <KpiCard
+              title="Total Certificates"
+              value={loading ? '—' : String(certificates.length)}
+              subtitle="in storage"
+              borderColor="#3b82f6"
+              icon={<FileText className="h-4 w-4" />}
+            />
             <KpiCard
               title="Total Suppliers"
               value={String(kpis.total)}
@@ -576,13 +583,6 @@ export default function CertificateHub() {
               subtitle="across portfolio"
               borderColor="#8b5cf6"
               icon={<BarChart3 className="h-4 w-4" />}
-            />
-            <KpiCard
-              title="Empowering Suppliers"
-              value={`${kpis.empoweringCount} (${kpis.empoweringPct.toFixed(0)}%)`}
-              subtitle="of total base"
-              borderColor="#ec4899"
-              icon={<Award className="h-4 w-4" />}
             />
           </div>
         )}
