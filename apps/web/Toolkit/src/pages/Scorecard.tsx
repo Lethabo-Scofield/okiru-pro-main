@@ -20,6 +20,7 @@ interface SubIndicator {
   weighting: number;
   score: number;
   formula: string;
+  isBonus?: boolean;
 }
 
 interface ScorecardElement {
@@ -76,7 +77,7 @@ export default function Scorecard() {
     try {
       const res = await fetch(`/api/processor-sessions/${activeClientId}`, { method: 'DELETE' });
       if (res.ok) {
-        window.location.href = '/dashboard';
+        window.location.href = '/';
       }
     } catch {
       // silently fail — user can retry
@@ -157,14 +158,15 @@ export default function Scorecard() {
       ...(scorecard.skillsDevelopment || EMPTY_PILLAR),
       accentColor: "text-emerald-500 dark:text-emerald-400",
       barColor: "bg-emerald-500",
-      subMinLabel: skillResult ? `Skills total ≥ 10 pts (40% of 25): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subMinLabel: skillResult ? `Skills base ≥ 8 pts (40% of 20 base, excl. bonus): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
       subIndicators: skillResult ? [
         ...skillResult.subLines.map(sl => ({
-          name: sl.name,
+          name: sl.isBonus ? `★ ${sl.name}` : sl.name,
           target: sl.target,
           weighting: sl.weighting,
           score: sl.score,
-          formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
+          formula: sl.isBonus ? `Bonus: ${sl.score.toFixed(2)} / ${sl.weighting} pts` : `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
+          isBonus: sl.isBonus,
         })),
         ...skillResult.categoryBreakdown.filter(cb => cb.spend > 0).map(cb => ({
           name: `  Cat ${cb.code}: ${cb.label}`,
@@ -181,15 +183,16 @@ export default function Scorecard() {
       ...(scorecard.procurement || EMPTY_PILLAR),
       accentColor: "text-amber-500 dark:text-amber-400",
       barColor: "bg-amber-500",
-      subMinLabel: procResult ? `Procurement base >= 11.6 pts: ${procResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
+      subMinLabel: procResult ? `Procurement base ≥ 10.8 pts (40% of 27 base, excl. bonus): ${procResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
       subIndicators: procResult?.subLines.map(sl => ({
-        name: sl.isBonus ? `* ${sl.name}` : sl.name,
+        name: sl.isBonus ? `★ ${sl.name}` : sl.name,
         target: sl.target,
         weighting: sl.weighting,
         score: sl.score,
         formula: sl.isBonus
-          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} - tick-box + evidence`
+          ? `Bonus: ${sl.score.toFixed(2)} / ${sl.weighting} pts`
           : `Spend R${sl.spend.toLocaleString()} / ${sl.target} of TMPS R${tmps.toLocaleString()} x ${sl.weighting} pts`,
+        isBonus: sl.isBonus,
       })) || [],
     },
     {
@@ -264,10 +267,10 @@ export default function Scorecard() {
   const skillsData = scorecard.skillsDevelopment || EMPTY_PILLAR;
   const subMinimumItems = [
     { name: "Ownership", threshold: "≥ 10 pts", detail: "40% of 25 (Net Value)", met: ownData.subMinimumMet, score: ownData.score, target: 25, color: "text-violet-500 dark:text-violet-400" },
-    { name: "Skills Dev", threshold: "≥ 10 pts", detail: "40% of 25", met: skillsData.subMinimumMet, score: skillsData.score, target: 25, color: "text-emerald-500 dark:text-emerald-400" },
-    { name: "Procurement", threshold: "≥ 11.6 pts", detail: "40% of 29", met: (scorecard.procurement || EMPTY_PILLAR).subMinimumMet, score: (scorecard.procurement || EMPTY_PILLAR).score, target: 29, color: "text-amber-500 dark:text-amber-400" },
+    { name: "Skills Dev", threshold: "≥ 8 pts", detail: "40% of 20 base (excl. bonus)", met: skillsData.subMinimumMet, score: skillsData.score, target: 25, color: "text-emerald-500 dark:text-emerald-400" },
+    { name: "Procurement", threshold: "≥ 10.8 pts", detail: "40% of 27 base (excl. bonus)", met: (scorecard.procurement || EMPTY_PILLAR).subMinimumMet, score: (scorecard.procurement || EMPTY_PILLAR).score, target: 29, color: "text-amber-500 dark:text-amber-400" },
     { name: "Supplier Dev", threshold: "≥ 4 pts", detail: "40% of 10", met: (scorecard.supplierDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.supplierDevelopment || EMPTY_PILLAR).score, target: 10, color: "text-rose-500 dark:text-rose-400" },
-    { name: "Enterprise Dev", threshold: "≥ 2 pts", detail: "40% of 5", met: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).score, target: 7, color: "text-orange-500 dark:text-orange-400" },
+    { name: "Enterprise Dev", threshold: "≥ 2 pts", detail: "40% of 5 base (excl. bonus)", met: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).score, target: 7, color: "text-orange-500 dark:text-orange-400" },
   ];
 
   return (
@@ -612,7 +615,7 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
                   <table className={cn("w-full text-xs", wrapMode && "table-fixed")}>
                     <tbody>
                       {el.subIndicators.map((sub, idx) => (
-                        <tr key={idx} className="hover:bg-muted/15 border-b border-border/10 last:border-b-0">
+                        <tr key={idx} className={cn("hover:bg-muted/15 border-b border-border/10 last:border-b-0", sub.isBonus && "bg-amber-50/30 dark:bg-amber-950/10")}>
                           <td className={cn("px-4 py-2 pl-11 text-muted-foreground", wrapMode ? "w-[32%] break-words" : "min-w-[220px]")}>
                             {sub.name}
                           </td>

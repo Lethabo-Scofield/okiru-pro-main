@@ -228,8 +228,9 @@ export default function Dashboard() {
           {pillarMeta.map((p) => {
             const data = (scorecard as any)[p.key];
             if (!data) return null;
-            const pct = Math.min(100, (data.score / data.weighting) * 100);
+            const pct = Math.min(100, data.weighting > 0 ? (data.score / data.weighting) * 100 : 0);
             const failedSubMin = data.subMinimumMet === false;
+            const hasBonusPillar = ['skillsDevelopment', 'procurement', 'enterpriseDevelopment'].includes(p.key);
 
             return (
               <motion.div
@@ -249,6 +250,9 @@ export default function Dashboard() {
                     <p.icon className={cn("h-3.5 w-3.5", p.iconColor)} />
                   </div>
                   <span className="text-[13px] font-medium">{p.name}</span>
+                  {hasBonusPillar && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100/80 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-medium ml-auto">+Bonus</span>
+                  )}
                 </div>
                 <div className="flex items-end justify-between">
                   <div>

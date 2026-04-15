@@ -542,22 +542,22 @@ export default function Ownership() {
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Indicator</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Weighting</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Score</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Weighting</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {score.subLines.map((sl, idx) => (
                   <tr key={idx} className="hover:bg-muted/30">
                     <td className="px-4 py-3 text-muted-foreground">{sl.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.target}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.weighting.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-primary">{sl.score.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

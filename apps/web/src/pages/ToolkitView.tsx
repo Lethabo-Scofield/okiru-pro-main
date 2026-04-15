@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearch } from "wouter";
+import { useSearch } from "wouter";
 import { queryClient } from "@toolkit/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@toolkit/components/ui/toaster";
@@ -85,16 +85,11 @@ async function hydrateStoreFromSession(session: any) {
 }
 
 export default function ToolkitView() {
-  const params = useParams<{ clientId: string }>();
   const search = useSearch();
-  const clientId = params.clientId || "";
   const sessionParam = new URLSearchParams(search).get("session");
+  const clientId = localStorage.getItem("okiru-pro-active-client") || "";
   const isSyntheticId = clientId.startsWith('build-') || clientId.startsWith('session') || clientId.startsWith('upload-');
   const [sessionLoading, setSessionLoading] = useState(!!sessionParam || (isSyntheticId && !useBbeeStore.getState().isLoaded));
-
-  if (clientId && !isSyntheticId) {
-    localStorage.setItem("okiru-pro-active-client", clientId);
-  }
 
   useEffect(() => {
     // Case 1: session param in query string -- load session from API

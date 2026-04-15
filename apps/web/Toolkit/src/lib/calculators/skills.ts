@@ -9,10 +9,10 @@ import { safeRatio, clampScore, round2 } from './shared';
 /**
  * @domain-rule pillar:skills_development, slide:86
  * @see docs/domain/pillars/03_skills_development.md#certification-rules
- * Categories F & G (informal/uncertified) capped at 15% of total SD target each.
+ * Categories F & G (informal/uncertified) capped at 25% of total SD target each (2019 amendment).
  * SDF/training manager admin costs capped at 15% of total skills spend.
  */
-const CATEGORY_FG_CAP = 0.15;
+const CATEGORY_FG_CAP = 0.25;
 const ADMIN_COST_CAP = 0.15;
 
 export interface SkillsSubLine {
@@ -20,6 +20,7 @@ export interface SkillsSubLine {
   target: string;
   weighting: number;
   score: number;
+  isBonus?: boolean;
 }
 
 export interface CategoryBreakdown {
@@ -197,20 +198,19 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
     : 0;
   const absorptionScore = clampScore(safeRatio(absorptionRate, absorptionTargetPct / 100, absorptionMaxPts), absorptionMaxPts);
 
-  const totalScore = clampScore(
-    learningScore + bursaryScore + disabledScore + learnershipScore + absorptionScore,
-    maxPoints
-  );
+  const baseScore = learningScore + bursaryScore + disabledScore + learnershipScore;
+  const totalScore = clampScore(baseScore + absorptionScore, maxPoints);
 
-  // FIX: subMinThreshold is a percentage (e.g., 40), not points. Convert to points threshold.
-  const subMinThresholdPoints = (subMinThreshold / 100) * maxPoints;
+  // Sub-minimum excludes bonus points (absorption is bonus per RCOGP 2019)
+  const baseMaxPoints = (learningMaxPts + bursaryMaxPts + disabledMaxPts + learnershipMaxPts);
+  const subMinThresholdPoints = (subMinThreshold / 100) * baseMaxPoints;
 
   const subLines: SkillsSubLine[] = [
     { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
     { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
     { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: disabledScore },
     { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: learnershipScore },
-    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore },
+    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },
   ];
 
   return {
@@ -220,7 +220,7 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: round2(totalScore),
-    subMinimumMet: totalScore >= subMinThresholdPoints,
+    subMinimumMet: baseScore >= subMinThresholdPoints,
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {

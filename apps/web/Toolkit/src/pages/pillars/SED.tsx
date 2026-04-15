@@ -164,34 +164,33 @@ export default function SED() {
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
-              <span>data as at <strong className="text-foreground">24 February 2026</strong></span>
+              <span>data as at <strong className="text-foreground">{client.measurementPeriodEnd ? new Date(client.measurementPeriodEnd).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>
             </div>
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Indicator</th>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Criteria</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target Points</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target %</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Actual Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target %</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Actual Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {/* Socio-Economic Development */}
                 <tr className="hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">Socio-Economic Development</td>
                   <td className="px-4 py-3 text-muted-foreground">Annual value of all Socio-Economic Development Contributions made by the Measured Entity as a percentage of the target</td>
-                  <td className="px-4 py-3 text-right font-mono">5.00</td>
-                  <td className="px-4 py-3 text-right font-mono">1%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(5, (score.rawStats?.spendSED || 0) / (npat * 0.01) * 5).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">5.00</td>
+                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">1%</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
               </tbody>
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total SED Score</td>
-                  <td className="px-4 py-4 text-right font-mono">5.00</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">5.00</td>
                   <td className="px-4 py-4"></td>
-                  <td className="px-4 py-4 text-right font-mono text-lg text-primary">{score.total.toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>

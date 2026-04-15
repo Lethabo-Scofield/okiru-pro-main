@@ -408,86 +408,91 @@ export default function ESD() {
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
-              <span>data as at <strong className="text-foreground">24 February 2026</strong></span>
+              <span>data as at <strong className="text-foreground">{client.measurementPeriodEnd ? new Date(client.measurementPeriodEnd).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>
             </div>
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Indicator</th>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Criteria</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target Points</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target %</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Actual Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target Points</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target %</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Actual Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium" rowSpan={6}>Preferential Procurement</td>
-                  <td className="px-4 py-3 text-muted-foreground">B-BBEE Procurement Spend from all Empowering Suppliers</td>
-                  <td className="px-4 py-3 text-right font-mono">5.00</td>
-                  <td className="px-4 py-3 text-right font-mono">80%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(5, (score.rawStats?.spendAllBlackOwned || 0) / (tmps * 0.8) * 5).toFixed(2)}</td>
-                </tr>
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-muted-foreground">B-BBEE Procurement Spend from all Empowering Suppliers that are QSEs</td>
-                  <td className="px-4 py-3 text-right font-mono">3.00</td>
-                  <td className="px-4 py-3 text-right font-mono">15%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(3, (score.rawStats?.spendQSE || 0) / (tmps * 0.15) * 3).toFixed(2)}</td>
-                </tr>
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-muted-foreground">B-BBEE Procurement Spend from all Empowering Suppliers that are EMEs</td>
-                  <td className="px-4 py-3 text-right font-mono">4.00</td>
-                  <td className="px-4 py-3 text-right font-mono">15%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(4, (score.rawStats?.spendEME || 0) / (tmps * 0.15) * 4).toFixed(2)}</td>
-                </tr>
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-muted-foreground">B-BBEE Procurement Spend from all Empowering Suppliers that are at least 51% black owned</td>
-                  <td className="px-4 py-3 text-right font-mono">11.00</td>
-                  <td className="px-4 py-3 text-right font-mono">50%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(11, (score.rawStats?.spendAllBlackOwned || 0) / (tmps * 0.5) * 11).toFixed(2)}</td>
-                </tr>
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-muted-foreground">B-BBEE Procurement Spend from at least 30% Black Women Owned Suppliers</td>
-                  <td className="px-4 py-3 text-right font-mono">4.00</td>
-                  <td className="px-4 py-3 text-right font-mono">12%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{Math.min(4, (score.rawStats?.spendBlackWomenOwned || 0) / (tmps * 0.12) * 4).toFixed(2)}</td>
-                </tr>
-
-                <tr className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-muted-foreground">Designated Group Supplier Contributions</td>
-                  <td className="px-4 py-3 text-right font-mono">2.00</td>
-                  <td className="px-4 py-3 text-right font-mono">—</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{score.designatedGroup.toFixed(2)}</td>
-                </tr>
+                {score.subLines.map((sl, idx) => (
+                  <tr key={idx} className={cn("hover:bg-muted/30", sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}>
+                    {idx === 0 && (
+                      <td className="px-4 py-3 font-medium align-top" rowSpan={score.subLines.length}>
+                        Preferential Procurement
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {sl.isBonus && <Badge variant="outline" className="text-[9px] mr-1.5 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
+                      {sl.name}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                  </tr>
+                ))}
                 <tr className="bg-primary/5 border-t-2 border-primary/20">
                   <td className="px-4 py-3 text-primary font-semibold uppercase text-xs tracking-wider" colSpan={2}>Procurement Subtotal</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">29.00</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{score.subLines.reduce((a, l) => a + l.weighting, 0).toFixed(2)}</td>
                   <td className="px-4 py-3"></td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{score.base.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
 
-                <tr className="hover:bg-muted/30 border-t-2">
-                  <td className="px-4 py-3 font-medium">Supplier Development</td>
-                  <td className="px-4 py-3 text-muted-foreground">Annual value of all Supplier Development Contributions</td>
-                  <td className="px-4 py-3 text-right font-mono">10.00</td>
-                  <td className="px-4 py-3 text-right font-mono">2%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{esdScore.supplierDev.toFixed(2)}</td>
-                </tr>
+                {esdScore.sdSubLines?.map((sl, idx) => (
+                  <tr key={`sd-${idx}`} className="hover:bg-muted/30 border-t-2">
+                    {idx === 0 && (
+                      <td className="px-4 py-3 font-medium align-top" rowSpan={esdScore.sdSubLines.length}>Supplier Development</td>
+                    )}
+                    <td className="px-4 py-3 text-muted-foreground">{sl.name}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                  </tr>
+                )) || (
+                  <tr className="hover:bg-muted/30 border-t-2">
+                    <td className="px-4 py-3 font-medium">Supplier Development</td>
+                    <td className="px-4 py-3 text-muted-foreground">Annual value of all Supplier Development Contributions</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">10.00</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">2% of NPAT</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{esdScore.supplierDev.toFixed(2)}</td>
+                  </tr>
+                )}
 
-                <tr className="hover:bg-muted/30 border-t-2">
-                  <td className="px-4 py-3 font-medium">Enterprise Development</td>
-                  <td className="px-4 py-3 text-muted-foreground">Annual value of Enterprise Development Contributions and Sector Specific Programmes</td>
-                  <td className="px-4 py-3 text-right font-mono">5.00</td>
-                  <td className="px-4 py-3 text-right font-mono">1%</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-primary">{esdScore.enterpriseDev.toFixed(2)}</td>
-                </tr>
+                {esdScore.edSubLines?.map((sl, idx) => (
+                  <tr key={`ed-${idx}`} className={cn("hover:bg-muted/30", idx === 0 && "border-t-2", sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}>
+                    {idx === 0 && (
+                      <td className="px-4 py-3 font-medium align-top" rowSpan={esdScore.edSubLines.length}>Enterprise Development</td>
+                    )}
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {sl.isBonus && <Badge variant="outline" className="text-[9px] mr-1.5 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
+                      {sl.name}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                  </tr>
+                )) || (
+                  <tr className="hover:bg-muted/30 border-t-2">
+                    <td className="px-4 py-3 font-medium">Enterprise Development</td>
+                    <td className="px-4 py-3 text-muted-foreground">Annual value of Enterprise Development Contributions</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">5.00</td>
+                    <td className="px-4 py-3 text-right font-mono whitespace-nowrap">1% of NPAT</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{esdScore.enterpriseDev.toFixed(2)}</td>
+                  </tr>
+                )}
               </tbody>
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total ESD Score</td>
-                  <td className="px-4 py-4 text-right font-mono">{(29 + 10 + 5).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">{(score.subLines.reduce((a, l) => a + l.weighting, 0) + (esdScore.sdSubLines || []).reduce((a, l) => a + l.weighting, 0) + (esdScore.edSubLines || []).reduce((a, l) => a + l.weighting, 0)).toFixed(2)}</td>
                   <td className="px-4 py-4"></td>
-                  <td className="px-4 py-4 text-right font-mono text-lg text-primary">{(score.total + esdScore.total).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{(score.total + esdScore.total).toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>

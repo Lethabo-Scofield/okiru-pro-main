@@ -22,6 +22,7 @@ interface PillarSummary {
   accentColor: string;
   barColor: string;
   subMinimumMet?: boolean;
+  bonusPoints?: number;
 }
 
 function fmt(value: number): string {
@@ -79,6 +80,7 @@ export default function ScorecardSummary() {
       accentColor: "text-emerald-500 dark:text-emerald-400",
       barColor: "bg-emerald-500",
       subMinimumMet: scorecard.skillsDevelopment.subMinimumMet,
+      bonusPoints: skillResult.absorption,
     },
     {
       key: "procurement",
@@ -90,6 +92,7 @@ export default function ScorecardSummary() {
       accentColor: "text-amber-500 dark:text-amber-400",
       barColor: "bg-amber-500",
       subMinimumMet: scorecard.procurement.subMinimumMet,
+      bonusPoints: procResult.designatedGroup,
     },
     {
       key: "supplierDevelopment",
@@ -112,6 +115,7 @@ export default function ScorecardSummary() {
       accentColor: "text-orange-500 dark:text-orange-400",
       barColor: "bg-orange-500",
       subMinimumMet: scorecard.enterpriseDevelopment.subMinimumMet,
+      bonusPoints: (esdResult.graduationBonus ? 1 : 0) + (esdResult.jobsCreatedBonus ? 1 : 0),
     },
     {
       key: "socioEconomicDevelopment",
@@ -141,8 +145,8 @@ export default function ScorecardSummary() {
 
   const subMinimumItems = [
     { name: "Ownership", threshold: "≥ 10 pts", met: scorecard.ownership.subMinimumMet, score: scorecard.ownership.score, target: 25 },
-    { name: "Skills Dev", threshold: "≥ 10 pts", met: scorecard.skillsDevelopment.subMinimumMet, score: scorecard.skillsDevelopment.score, target: 25 },
-    { name: "Procurement", threshold: "≥ 11.6 pts", met: scorecard.procurement.subMinimumMet, score: scorecard.procurement.score, target: 29 },
+    { name: "Skills Dev", threshold: "≥ 8 pts", met: scorecard.skillsDevelopment.subMinimumMet, score: scorecard.skillsDevelopment.score, target: 25 },
+    { name: "Procurement", threshold: "≥ 10.8 pts", met: scorecard.procurement.subMinimumMet, score: scorecard.procurement.score, target: 29 },
     { name: "Supplier Dev", threshold: "≥ 4 pts", met: scorecard.supplierDevelopment.subMinimumMet, score: scorecard.supplierDevelopment.score, target: 10 },
     { name: "Enterprise Dev", threshold: "≥ 2 pts", met: scorecard.enterpriseDevelopment.subMinimumMet, score: scorecard.enterpriseDevelopment.score, target: 7 },
   ];
@@ -274,7 +278,14 @@ export default function ScorecardSummary() {
                     <div className={cn("w-3 h-12 rounded-full", pillar.barColor)} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className={cn("font-semibold", pillar.accentColor)}>{pillar.name}</span>
+                        <span className="flex items-center gap-2">
+                          <span className={cn("font-semibold", pillar.accentColor)}>{pillar.name}</span>
+                          {pillar.bonusPoints !== undefined && pillar.bonusPoints > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 font-medium">
+                              +{fmt(pillar.bonusPoints)} bonus
+                            </span>
+                          )}
+                        </span>
                         <span className="text-sm font-mono tabular-nums">
                           {fmt(pillar.score)} / {pillar.weighting}
                         </span>
@@ -366,7 +377,7 @@ export default function ScorecardSummary() {
             {isExporting ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Download className="h-5 w-5 mr-2" />}
             Download Full Report
           </Button>
-          <Button size="lg" variant="outline" onClick={() => window.location.href = '/dashboard'} className="w-full sm:w-auto">
+          <Button size="lg" variant="outline" onClick={() => window.location.href = '/'} className="w-full sm:w-auto">
             Go to Dashboard
           </Button>
         </div>

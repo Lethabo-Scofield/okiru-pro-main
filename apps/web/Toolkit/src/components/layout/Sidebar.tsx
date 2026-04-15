@@ -16,6 +16,7 @@ import {
   LineChart,
   Table,
   ChevronDown,
+  Award,
 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 import { useBbeeStore } from "@toolkit/lib/store";
@@ -40,6 +41,7 @@ const pillarItems = [
   { name: "Skills Development", href: "/pillars/skills", icon: BookOpen, scoreKey: "skillsDevelopment", target: 25, color: "text-emerald-400", barFill: "bg-emerald-400/60", dot: "bg-emerald-400" },
   { name: "Enterprise & Supplier", href: "/pillars/esd", icon: Handshake, scoreKey: "enterpriseDevelopment", target: 42, color: "text-amber-400", barFill: "bg-amber-400/60", dot: "bg-amber-400" },
   { name: "Socio-Economic Dev", href: "/pillars/sed", icon: HeartHandshake, scoreKey: "socioEconomicDevelopment", target: 5, color: "text-sky-400", barFill: "bg-sky-400/60", dot: "bg-sky-400" },
+  { name: "YES 4 Youth", href: "/pillars/yes", icon: Award, scoreKey: "yesInitiative", target: 3, color: "text-rose-400", barFill: "bg-rose-400/60", dot: "bg-rose-400" },
 ];
 
 function NavItem({ item, isActive, searchParams }: { item: { name: string; href: string; icon: any }; isActive: boolean; searchParams?: string }) {

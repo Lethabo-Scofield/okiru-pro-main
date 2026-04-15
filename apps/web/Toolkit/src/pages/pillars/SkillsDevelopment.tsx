@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -9,7 +9,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, GraduationCap, Trash2, Pencil, Upload, UserCheck, Calendar, DollarSign, BookOpen, Bus, Home, Utensils, PenTool, Building, Wallet, FileText, AlertCircle } from "lucide-react";
+import { Plus, GraduationCap, Trash2, Pencil, Upload, UserCheck, Calendar, DollarSign, BookOpen, Bus, Home, Utensils, PenTool, Building, Wallet, FileText, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -147,9 +147,13 @@ export default function SkillsDevelopment() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [formState, setFormState] = useState<InterventionFormState>({ ...defaultFormState });
+  const [expandedSkillRows, setExpandedSkillRows] = useState<Set<number>>(new Set());
 
-  const targetSpend = leviableAmount * 0.06;
-  const bursaryTarget = leviableAmount * 0.025;
+  const sc = calculatorConfig?.skills;
+  const overallTargetPct = sc?.overallSpendPercent ?? sc?.overallTarget ?? 0.035;
+  const bursaryTargetPct = sc?.bursarySpendPercent ?? sc?.bursaryTarget ?? 0.025;
+  const targetSpend = leviableAmount * overallTargetPct;
+  const bursaryTarget = leviableAmount * bursaryTargetPct;
   
   // Calculate totals from interventions
   const blackInterventions = trainingPrograms.filter(p => isBlackRace(p.race) && !p.isForeign);
@@ -737,7 +741,7 @@ export default function SkillsDevelopment() {
 
         <Card className="glass-panel">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Black Skills Spend</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Black Skills Spend ({(overallTargetPct * 100).toFixed(1)}% target)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end gap-2">
@@ -747,7 +751,7 @@ export default function SkillsDevelopment() {
             <div className="mt-2 h-2 w-full bg-secondary rounded-full overflow-hidden">
               <div 
                 className="h-full bg-chart-3 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (totalSpend / targetSpend) * 100)}%` }}
+                style={{ width: `${Math.min(100, targetSpend > 0 ? (totalSpend / targetSpend) * 100 : 0)}%` }}
               />
             </div>
           </CardContent>
@@ -755,7 +759,7 @@ export default function SkillsDevelopment() {
 
         <Card className="glass-panel">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Bursary Spend</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Bursary Spend ({(bursaryTargetPct * 100).toFixed(1)}% target)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end gap-2">
@@ -765,7 +769,7 @@ export default function SkillsDevelopment() {
             <div className="mt-2 h-2 w-full bg-secondary rounded-full overflow-hidden">
               <div 
                 className="h-full bg-chart-1 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (bursarySpend / bursaryTarget) * 100)}%` }}
+                style={{ width: `${Math.min(100, bursaryTarget > 0 ? (bursarySpend / bursaryTarget) * 100 : 0)}%` }}
               />
             </div>
           </CardContent>
@@ -893,50 +897,69 @@ export default function SkillsDevelopment() {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>5 sub-line indicators per RCOGP Generic Codes</CardDescription>
+          <CardDescription>5 sub-line indicators per RCOGP Generic Codes (20 base + 5 bonus)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">Indicator</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Target</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Weighting</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">Score</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Target</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Weighting</th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground whitespace-nowrap">Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {score.subLines.map((sl, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 text-muted-foreground">{sl.name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.target}</td>
-                    <td className="px-4 py-3 text-right font-mono">{sl.weighting.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-primary">{sl.score.toFixed(2)}</td>
-                  </tr>
-                ))}
-                {score.categoryBreakdown.filter(cb => cb.spend > 0).map((cb, idx) => (
-                  <tr key={`cat-${idx}`} className="bg-muted/10">
-                    <td className="px-4 py-2 pl-8 text-xs text-muted-foreground/70">↳ Cat {cb.code}: {cb.label}</td>
-                    <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">{cb.cap ? `≤${(cb.cap * 100).toFixed(0)}% cap` : 'No cap'}</td>
-                    <td className="px-4 py-2"></td>
-                    <td className="px-4 py-2 text-right font-mono text-xs font-semibold">
-                      R{cb.recognisedSpend.toLocaleString()}{cb.capApplied ? ' (capped)' : ''}
-                    </td>
-                  </tr>
-                ))}
+                {score.subLines.map((sl, idx) => {
+                  const isExpanded = expandedSkillRows.has(idx);
+                  const isSpendRow = idx <= 2;
+                  return (
+                    <React.Fragment key={idx}>
+                      <tr
+                        className={cn("hover:bg-muted/30 cursor-pointer", sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}
+                        onClick={() => setExpandedSkillRows(prev => {
+                          const next = new Set(prev);
+                          next.has(idx) ? next.delete(idx) : next.add(idx);
+                          return next;
+                        })}
+                      >
+                        <td className="px-4 py-3 text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            {isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                            {sl.isBonus && <Badge variant="outline" className="text-[9px] bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
+                            {sl.name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                      </tr>
+                      {isExpanded && isSpendRow && score.categoryBreakdown.filter(cb => cb.spend > 0).map((cb, ci) => (
+                        <tr key={`cat-${idx}-${ci}`} className="bg-muted/10">
+                          <td className="px-4 py-2 pl-10 text-xs text-muted-foreground/70">↳ Cat {cb.code}: {cb.label}</td>
+                          <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground whitespace-nowrap">{cb.cap ? `≤${(cb.cap * 100).toFixed(0)}% cap` : 'No cap'}</td>
+                          <td className="px-4 py-2"></td>
+                          <td className="px-4 py-2 text-right font-mono text-xs font-semibold whitespace-nowrap">
+                            R{cb.recognisedSpend.toLocaleString()}{cb.capApplied ? ' (capped)' : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total Skills Development Score</td>
-                  <td className="px-4 py-4 text-right font-mono">25.00</td>
-                  <td className="px-4 py-4 text-right font-mono text-lg text-primary">{score.total.toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">{score.subLines.reduce((a, l) => a + l.weighting, 0).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            Sub-minimum: ≥ 10 pts (40% of 25) — {score.subMinimumMet ? (
+            Sub-minimum: ≥ {((40 / 100) * score.subLines.filter(l => !l.isBonus).reduce((a, l) => a + l.weighting, 0)).toFixed(1)} pts (40% of {score.subLines.filter(l => !l.isBonus).reduce((a, l) => a + l.weighting, 0)} base, excludes bonus) — {score.subMinimumMet ? (
               <span className="text-emerald-600 font-bold">PASSED</span>
             ) : (
               <span className="text-destructive font-bold">FAILED</span>

@@ -44,7 +44,7 @@ export interface Client {
   numberOfEmployees: number;
   
   // EAP targeting
-  eapProvince: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'National';
+  eapProvince: 'National' | 'Western Cape' | 'Eastern Cape' | 'Northern Cape' | 'Free State' | 'KwaZulu-Natal' | 'KZN' | 'North West' | 'Gauteng' | 'Mpumalanga' | 'Limpopo';
   industryNorm?: number;
   
   // Financial history

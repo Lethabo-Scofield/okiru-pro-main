@@ -28,6 +28,8 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import type { YESCandidate } from "@toolkit/lib/types";
 
+const formatCurrency = formatRand;
+
 const RACE_OPTIONS = [
   { value: "African", label: "African" },
   { value: "Coloured", label: "Coloured" },

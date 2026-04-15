@@ -15,7 +15,7 @@ export function Topbar() {
   const [, navigate] = useLocation();
 
   const handleBackToPlatform = () => {
-    window.location.href = '/dashboard';
+    window.location.href = '/';
   };
 
   const handleLogout = () => {
