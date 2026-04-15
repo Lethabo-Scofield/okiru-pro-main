@@ -17,6 +17,7 @@ import { useAuth } from "@toolkit/lib/auth";
 import { exportCertificatePdf } from "@toolkit/lib/exportPdf";
 import { exportAuditorExcel } from "@toolkit/lib/exportExcel";
 import { exportStrategyPptx } from "@toolkit/lib/exportPptx";
+import { exportVerificationPdf } from "@toolkit/lib/exportVerificationPdf";
 import { api } from "@toolkit/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@toolkit/lib/utils";
@@ -67,7 +68,7 @@ export default function ExportResults({ className }: ExportResultsProps) {
     includeDraft2026,
   };
 
-  const handleExport = async (type: 'certificate' | 'audit-excel' | 'strategy-pack') => {
+  const handleExport = async (type: 'certificate' | 'audit-excel' | 'strategy-pack' | 'verification-report') => {
     setIsExporting(type);
     try {
       let fileName = '';
@@ -77,6 +78,8 @@ export default function ExportResults({ className }: ExportResultsProps) {
         fileName = exportAuditorExcel(state, exportOptions);
       } else if (type === 'strategy-pack') {
         fileName = await exportStrategyPptx(state, exportOptions);
+      } else if (type === 'verification-report') {
+        fileName = exportVerificationPdf(state, exportOptions);
       }
 
       setCompletedExports(prev => [...prev, type]);
@@ -89,9 +92,15 @@ export default function ExportResults({ className }: ExportResultsProps) {
         });
       } catch {}
 
+      const exportNames: Record<string, string> = {
+        'verification-report': 'Verification Report',
+        'certificate': 'Certificate PDF',
+        'audit-excel': 'Auditor Excel Pack',
+        'strategy-pack': 'Strategy Pack',
+      };
       toast({
         title: "Export Complete",
-        description: `Your ${type === 'certificate' ? 'Certificate PDF' : type === 'audit-excel' ? 'Auditor Excel Pack' : 'Strategy Pack'} has been downloaded.`,
+        description: `Your ${exportNames[type] || type} has been downloaded.`,
       });
     } catch (error: any) {
       console.error('Export error:', error);
@@ -108,10 +117,11 @@ export default function ExportResults({ className }: ExportResultsProps) {
   const handleExportAll = async () => {
     setIsExporting('all');
     try {
+      exportVerificationPdf(state, exportOptions);
       exportCertificatePdf(state, exportOptions);
       exportAuditorExcel(state, exportOptions);
       await exportStrategyPptx(state, exportOptions);
-      setCompletedExports(['certificate', 'audit-excel', 'strategy-pack']);
+      setCompletedExports(['verification-report', 'certificate', 'audit-excel', 'strategy-pack']);
 
       try {
         await api.logExport({
@@ -123,7 +133,7 @@ export default function ExportResults({ className }: ExportResultsProps) {
 
       toast({
         title: "All Exports Complete",
-        description: "Certificate PDF, Auditor Excel, and Strategy Pack have been downloaded.",
+        description: "Verification Report, Certificate PDF, Auditor Excel, and Strategy Pack have been downloaded.",
       });
     } catch (error: any) {
       console.error('Export all error:', error);
@@ -138,6 +148,15 @@ export default function ExportResults({ className }: ExportResultsProps) {
   };
 
   const exports = [
+    {
+      id: 'verification-report' as const,
+      title: 'Verification Report',
+      description: 'Final BEE Verification Report with sub-element tables, EAP targets, spend breakdowns, and status',
+      icon: BsFileEarmarkPdfFill,
+      iconColor: 'text-purple-600 dark:text-purple-500',
+      iconBg: 'bg-purple-500/10',
+      pages: '7 pages',
+    },
     {
       id: 'certificate' as const,
       title: 'Certificate PDF',
@@ -324,7 +343,7 @@ export default function ExportResults({ className }: ExportResultsProps) {
             animate={{ opacity: 1 }}
             className="text-[11px] text-muted-foreground text-center"
           >
-            {completedExports.length} of 3 exports generated.
+            {completedExports.length} of {exports.length} exports generated.
           </motion.p>
         )}
       </CardContent>
