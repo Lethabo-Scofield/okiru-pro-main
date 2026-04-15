@@ -357,13 +357,26 @@ export default function CertificateHub() {
     const total = certificates.length;
     let valid = 0, expiring = 0, expired = 0;
 
+    const datePattern = /^(\d{4})\s+(\d{2})\s+(\d{1,2})/;
+
     for (const cert of certificates) {
-      if (!cert.lastModified) {
+      const baseName = cert.fileName.includes('/') ? cert.fileName.split('/').pop()! : cert.fileName;
+      const match = datePattern.exec(baseName);
+
+      let issuedDate: Date | null = null;
+      if (match) {
+        const [, year, month, day] = match;
+        issuedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } else if (cert.lastModified) {
+        issuedDate = new Date(cert.lastModified);
+      }
+
+      if (!issuedDate || isNaN(issuedDate.getTime())) {
         valid++;
         continue;
       }
-      const issued = new Date(cert.lastModified);
-      const expiryDate = new Date(issued);
+
+      const expiryDate = new Date(issuedDate);
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
       if (expiryDate < now) {
