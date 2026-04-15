@@ -541,20 +541,13 @@ export default function CertificateHub() {
         </div>
 
         {!chunksLoading && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             <KpiCard
               title="Total Certificates"
               value={loading ? '—' : String(certificates.length)}
               subtitle="in storage"
               borderColor="#3b82f6"
               icon={<FileText className="h-4 w-4" />}
-            />
-            <KpiCard
-              title="Total Suppliers"
-              value={String(kpis.total)}
-              subtitle="in database"
-              borderColor="#14b8a6"
-              icon={<Users className="h-4 w-4" />}
             />
             <KpiCard
               title="Valid Certificates"
@@ -577,19 +570,12 @@ export default function CertificateHub() {
               borderColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
             />
-            <KpiCard
-              title="Avg B-BBEE Level"
-              value={kpis.avgLevel.toFixed(1)}
-              subtitle="across portfolio"
-              borderColor="#8b5cf6"
-              icon={<BarChart3 className="h-4 w-4" />}
-            />
           </div>
         )}
 
         {chunksLoading && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="rounded-xl p-5 bg-white/[0.03] animate-pulse" style={{ borderBottom: '3px solid #2c2c2e' }}>
                 <div className="h-2.5 w-20 rounded bg-white/[0.04] mb-4" />
                 <div className="h-8 w-16 rounded bg-white/[0.04] mb-2" />
