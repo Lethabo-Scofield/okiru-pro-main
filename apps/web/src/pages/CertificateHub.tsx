@@ -10,6 +10,7 @@ import {
 interface CertificateFile {
   name: string;
   fileName: string;
+  lastModified: string | null;
 }
 
 interface SearchResultItem {
@@ -350,6 +351,33 @@ export default function CertificateHub() {
     return { total, valid, expiring, expired, avgLevel, empoweringCount, empoweringPct };
   }, [chunks]);
 
+  const certKpis = useMemo(() => {
+    const now = new Date();
+    const sixtyDaysFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const total = certificates.length;
+    let valid = 0, expiring = 0, expired = 0;
+
+    for (const cert of certificates) {
+      if (!cert.lastModified) {
+        valid++;
+        continue;
+      }
+      const issued = new Date(cert.lastModified);
+      const expiryDate = new Date(issued);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+      if (expiryDate < now) {
+        expired++;
+      } else if (expiryDate <= sixtyDaysFromNow) {
+        expiring++;
+      } else {
+        valid++;
+      }
+    }
+
+    return { total, valid, expiring, expired };
+  }, [certificates]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -535,40 +563,40 @@ export default function CertificateHub() {
           </p>
         </div>
 
-        {!chunksLoading && (
+        {!loading && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             <KpiCard
               title="Total Certificates"
-              value={loading ? '—' : String(certificates.length)}
+              value={String(certKpis.total)}
               subtitle="in storage"
               iconColor="#3b82f6"
               icon={<FileText className="h-4 w-4" />}
             />
             <KpiCard
-              title="Valid Certificates"
-              value={String(kpis.valid)}
+              title="Valid"
+              value={String(certKpis.valid)}
               subtitle="up to date"
               iconColor="#22c55e"
               icon={<ShieldCheck className="h-4 w-4" />}
             />
             <KpiCard
               title="Expiring Soon"
-              value={String(kpis.expiring)}
+              value={String(certKpis.expiring)}
               subtitle="within 60 days"
               iconColor="#f59e0b"
               icon={<Clock className="h-4 w-4" />}
             />
             <KpiCard
               title="Expired"
-              value={String(kpis.expired)}
-              subtitle="action required"
+              value={String(certKpis.expired)}
+              subtitle="needs renewal"
               iconColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
             />
           </div>
         )}
 
-        {chunksLoading && (
+        {loading && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e] animate-pulse">

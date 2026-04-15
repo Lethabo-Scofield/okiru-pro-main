@@ -141,14 +141,15 @@ router.get('/list', async (req: Request, res: Response) => {
     }
 
     const containerClient = getContainerClient(blobServiceClient);
-    const blobs: Array<{ name: string; fileName: string }> = [];
+    const blobs: Array<{ name: string; fileName: string; lastModified: string | null }> = [];
 
-    for await (const blob of containerClient.listBlobsFlat()) {
+    for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
       const fileName = blob.name;
       if (!search || fileName.toLowerCase().includes(search)) {
         blobs.push({
           name: blob.name,
           fileName,
+          lastModified: blob.properties.lastModified?.toISOString() || null,
         });
       }
     }
