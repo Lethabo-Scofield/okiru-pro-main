@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $ACR_NAME = "okiruproacrde4d539b"
 $ACR_LOGIN = "$ACR_NAME.azurecr.io"
-$VERSION = "v1.0.23"
+$VERSION = "v1.0.24"
 $NAMESPACE = "okiru-pro"
 
 Write-Host "=== Okiru Pro Deployment Script ($VERSION) ===" -ForegroundColor Cyan
