@@ -35,6 +35,13 @@ This is a **pnpm monorepo** with three services:
 4. **Reporting** — PDF and PPTX scorecard export
 5. **What-If Modeling** — scenario planning for scorecard optimization
 
+## Certificate Hub — KPI Dashboard & Supplier Registry
+The Certificate Hub (`/certificates`) features:
+1. **KPI Dashboard** — 6 glassmorphic metric cards: Total Suppliers, Valid Certificates, Expiring Soon, Expired, Avg B-BBEE Level, Empowering Suppliers. All KPIs compute client-side from supplier chunk data. Clicking a card filters the registry table below.
+2. **Supplier Certificate Registry** — sortable, filterable table of suppliers with B-BBEE level badges, status indicators, expiry dates, and CSV export.
+3. **Certificate Files** — full-text PDF content search powered by Azure AI Search (tab-based view).
+4. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory with seeded demo data).
+
 ## Certificate Hub — Full-Text Search (Azure AI Search)
 The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.
 
