@@ -8,6 +8,23 @@ import {
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-purple-500/30 text-purple-300 rounded-sm px-0.5">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 interface CertificateFile {
   name: string;
   fileName: string;
@@ -687,7 +704,7 @@ export default function CertificateHub() {
                         <FileFormatIcon fileName={result.file_name} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                            {result.file_name.replace(/\.[^/.]+$/, '')}
+                            <HighlightMatch text={result.file_name.replace(/\.[^/.]+$/, '')} query={search} />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#3a3a3c] tracking-wide">
@@ -702,7 +719,7 @@ export default function CertificateHub() {
                           </div>
                           {result.snippet && (
                             <p className="text-[11px] text-[#48484a] mt-1 line-clamp-2 leading-relaxed">
-                              ...{result.snippet}...
+                              ...<HighlightMatch text={result.snippet} query={search} />...
                             </p>
                           )}
                         </div>
