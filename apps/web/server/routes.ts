@@ -2160,32 +2160,7 @@ Respond ONLY with a valid JSON array.`;
     }
   });
 
-  const supplierCertificates: any[] = [
-    { id: "SUP001", supplier_name: "Amalfi Holdings (Pty) Ltd", expiry_date: "2026-09-15", level: 1, empowering_supplier: true, upload_date: "2026-01-10", enterprise_type: "Generic", black_ownership: 65 },
-    { id: "SUP002", supplier_name: "Bokamoso Consulting Group", expiry_date: "2026-02-28", level: 2, empowering_supplier: true, upload_date: "2025-12-05", enterprise_type: "QSE", black_ownership: 100 },
-    { id: "SUP003", supplier_name: "Cedar Point Logistics", expiry_date: "2025-11-30", level: 4, empowering_supplier: false, upload_date: "2025-06-20", enterprise_type: "Generic", black_ownership: 30 },
-    { id: "SUP004", supplier_name: "Duma Tech Solutions", expiry_date: "2026-08-12", level: 1, empowering_supplier: true, upload_date: "2026-03-15", enterprise_type: "EME", black_ownership: 80 },
-    { id: "SUP005", supplier_name: "Eagle Eye Security Services", expiry_date: "2026-05-20", level: 3, empowering_supplier: true, upload_date: "2025-11-08", enterprise_type: "Generic", black_ownership: 51 },
-    { id: "SUP006", supplier_name: "First National Catering", expiry_date: "2026-01-15", level: 2, empowering_supplier: true, upload_date: "2025-08-22", enterprise_type: "QSE", black_ownership: 75 },
-    { id: "SUP007", supplier_name: "Greenfields Agriculture", expiry_date: "2025-09-01", level: 5, empowering_supplier: false, upload_date: "2025-03-10", enterprise_type: "Generic", black_ownership: 20 },
-    { id: "SUP008", supplier_name: "Horizon Petroleum SA", expiry_date: "2026-12-31", level: 1, empowering_supplier: true, upload_date: "2026-04-01", enterprise_type: "Generic", black_ownership: 90 },
-    { id: "SUP009", supplier_name: "iThemba Construction", expiry_date: "2026-07-18", level: 2, empowering_supplier: true, upload_date: "2026-02-14", enterprise_type: "QSE", black_ownership: 100 },
-    { id: "SUP010", supplier_name: "Johannesburg Steel Works", expiry_date: "2025-12-15", level: 6, empowering_supplier: false, upload_date: "2025-05-30", enterprise_type: "Generic", black_ownership: 15 },
-    { id: "SUP011", supplier_name: "Kgosi Mining Supplies", expiry_date: "2026-10-22", level: 1, empowering_supplier: true, upload_date: "2026-03-28", enterprise_type: "Generic", black_ownership: 85 },
-    { id: "SUP012", supplier_name: "Langa Electrical Contractors", expiry_date: "2026-06-05", level: 3, empowering_supplier: true, upload_date: "2025-12-18", enterprise_type: "EME", black_ownership: 60 },
-    { id: "SUP013", supplier_name: "Mzansi Digital Agency", expiry_date: "2026-04-30", level: 2, empowering_supplier: true, upload_date: "2025-10-15", enterprise_type: "QSE", black_ownership: 100 },
-    { id: "SUP014", supplier_name: "Nelson Cape Traders", expiry_date: "2025-08-20", level: 7, empowering_supplier: false, upload_date: "2025-02-14", enterprise_type: "Generic", black_ownership: 10 },
-    { id: "SUP015", supplier_name: "Omni Freight Solutions", expiry_date: "2026-11-08", level: 1, empowering_supplier: true, upload_date: "2026-04-10", enterprise_type: "Generic", black_ownership: 70 },
-    { id: "SUP016", supplier_name: "Protea Financial Services", expiry_date: "2026-03-25", level: 3, empowering_supplier: true, upload_date: "2025-09-12", enterprise_type: "Generic", black_ownership: 55 },
-    { id: "SUP017", supplier_name: "QuickServe Cleaning Co", expiry_date: "2026-08-01", level: 2, empowering_supplier: true, upload_date: "2026-01-25", enterprise_type: "EME", black_ownership: 100 },
-    { id: "SUP018", supplier_name: "Rainbow Medical Supplies", expiry_date: "2025-10-10", level: 4, empowering_supplier: false, upload_date: "2025-04-18", enterprise_type: "Generic", black_ownership: 40 },
-    { id: "SUP019", supplier_name: "Siyakhula IT Services", expiry_date: "2026-09-30", level: 1, empowering_supplier: true, upload_date: "2026-04-05", enterprise_type: "QSE", black_ownership: 95 },
-    { id: "SUP020", supplier_name: "Tshwane Office Furniture", expiry_date: "2026-05-15", level: 3, empowering_supplier: true, upload_date: "2025-11-20", enterprise_type: "EME", black_ownership: 60 },
-    { id: "SUP021", supplier_name: "Ubuntu Waste Management", expiry_date: "2026-02-10", level: 2, empowering_supplier: true, upload_date: "2025-07-30", enterprise_type: "Generic", black_ownership: 80 },
-    { id: "SUP022", supplier_name: "Vukani Transport Holdings", expiry_date: "2026-11-25", level: 1, empowering_supplier: true, upload_date: "2026-04-12", enterprise_type: "Generic", black_ownership: 88 },
-    { id: "SUP023", supplier_name: "Western Cape Printers", expiry_date: "2025-07-05", level: 8, empowering_supplier: false, upload_date: "2025-01-15", enterprise_type: "Generic", black_ownership: 5 },
-    { id: "SUP024", supplier_name: "Xhariep Water Services", expiry_date: "2026-06-28", level: 2, empowering_supplier: true, upload_date: "2025-12-22", enterprise_type: "QSE", black_ownership: 100 },
-  ];
+  const supplierCertificates: any[] = [];
 
   app.get("/api/supplier-certificates", requireAuth, (_req: Request, res: Response) => {
     res.json({ chunks: supplierCertificates });
