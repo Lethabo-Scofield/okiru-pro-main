@@ -8,8 +8,11 @@
 
 import { OpenAI } from 'openai';
 import dotenv from 'dotenv';
+import { createLogger } from '../../src/logger.js';
 
 dotenv.config();
+
+const logger = createLogger('AzureOpenAI');
 
 // Azure OpenAI configuration from environment
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT || '';
@@ -19,7 +22,7 @@ const AZURE_OPENAI_FAST_DEPLOYMENT = process.env.AZURE_OPENAI_FAST_DEPLOYMENT ||
 const AZURE_OPENAI_EMBEDDING_DEPLOYMENT = process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || 'text-embedding-3-small';
 const AZURE_OPENAI_API_VERSION = process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview';
 
-console.log(`[AzureOpenAI] Config — premium:${AZURE_OPENAI_DEPLOYMENT}, fast:${AZURE_OPENAI_FAST_DEPLOYMENT}, embeddings:${AZURE_OPENAI_EMBEDDING_DEPLOYMENT}`);
+logger.info('Config loaded', { premium: AZURE_OPENAI_DEPLOYMENT, fast: AZURE_OPENAI_FAST_DEPLOYMENT, embeddings: AZURE_OPENAI_EMBEDDING_DEPLOYMENT });
 
 // Embedding dimensions for text-embedding-3-small
 export const EMBEDDING_DIMENSIONS = 1536;
@@ -29,7 +32,7 @@ export const EMBEDDING_DIMENSIONS = 1536;
  */
 export function getAzureChatClient(): OpenAI | null {
   if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY) {
-    console.warn('[AzureOpenAI] Missing configuration - AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_API_KEY not set');
+    logger.warn('Missing configuration - AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_API_KEY not set');
     return null;
   }
 
@@ -63,7 +66,7 @@ export function getAzureFastChatClient(): OpenAI | null {
  */
 export function getAzureEmbeddingClient(): OpenAI | null {
   if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY) {
-    console.warn('[AzureOpenAI] Missing configuration - AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_API_KEY not set');
+    logger.warn('Missing configuration - AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_API_KEY not set');
     return null;
   }
 
@@ -125,7 +128,7 @@ export async function generateEmbeddings(
         options.onProgress(Math.min(i + batchSize, texts.length), texts.length);
       }
     } catch (error) {
-      console.error(`[AzureOpenAI] Error generating embeddings for batch ${i}-${i + batchSize}:`, error);
+      logger.error('Error generating embeddings', error, { batchStart: i, batchEnd: i + batchSize });
       throw error;
     }
   }
@@ -168,7 +171,7 @@ export async function chatCompletion(
 
     return response.choices[0]?.message?.content || '';
   } catch (error) {
-    console.error('[AzureOpenAI] Premium chat completion error:', error);
+    logger.error('Premium chat completion error', error);
     throw error;
   }
 }
@@ -200,7 +203,7 @@ export async function fastChatCompletion(
 
     return response.choices[0]?.message?.content || '';
   } catch (error) {
-    console.error('[AzureOpenAI] Fast chat completion error:', error);
+    logger.error('Fast chat completion error', error);
     throw error;
   }
 }
@@ -262,7 +265,7 @@ Scores should reflect:
 
     return reranked;
   } catch (error) {
-    console.error('[AzureOpenAI] Reranking error:', error);
+    logger.error('Reranking error', error);
     return limitedCandidates
       .map(c => ({ ...c, llmScore: c.initialScore * 10 }))
       .sort((a, b) => b.llmScore - a.llmScore)

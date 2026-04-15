@@ -189,6 +189,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/register", async (req, res) => {
+    const start = Date.now();
     try {
       const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
 
@@ -287,6 +288,7 @@ export async function registerRoutes(
         (req.session as any).userId = user.id;
         (req.session as any).userData = safeUser;
         (req.session as any).otpVerified = true;
+        logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
         return res.json({
           user: safeUser,
           message: "Account created successfully!",
@@ -301,6 +303,8 @@ export async function registerRoutes(
 
       (req.session as any).pendingUserId = user.id;
       (req.session as any).otpVerified = false;
+
+      logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
 
       res.json({
         requiresVerification: true,
@@ -320,6 +324,7 @@ export async function registerRoutes(
   const LOGIN_RATE_WINDOW = 15 * 60 * 1000;
 
   app.post("/api/auth/login", async (req, res) => {
+    const start = Date.now();
     try {
       const { username, email, password } = req.body;
       const loginId = username || email;
@@ -372,6 +377,7 @@ export async function registerRoutes(
       (req.session as any).userData = safeUser;
       (req.session as any).otpVerified = true;
       await storage.setLastLogin(user.id);
+      logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -1555,7 +1561,7 @@ Respond ONLY with a valid JSON array.`;
             entities: Array.isArray(entities) ? entities : [],
           });
         } catch (docError: any) {
-          console.error(`Error processing document ${fileName}:`, docError);
+          logger.error('Document processing failed', docError, { fileName, index: i });
           send("doc-error", {
             index: i,
             fileName,
@@ -1669,6 +1675,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.post("/api/extract-and-score", requireAuth, async (req, res) => {
+    const start = Date.now();
     try {
       const { documentTexts, sectorCode, scorecardType, clientName } = req.body;
       
@@ -1708,12 +1715,15 @@ Respond ONLY with a valid JSON array.`;
       const requiredRoles = manifest.requiredEntities.map((e: any) => e.name);
       const confidence = pipeline.buildConfidenceReport(extractionResults, requiredRoles);
 
+      const entityCount = extractionResults.length;
+      logger.info('Extract and score complete', { sectorCode, scorecardType, entityCount, durationMs: Date.now() - start });
+
       return res.json({
         success: true,
         scorecard,
         confidence,
         extractedEntities: extractionResults.filter(r => r.extractedValue !== null).length,
-        totalEntities: extractionResults.length,
+        totalEntities: entityCount,
         sectorCode,
         scorecardType,
         clientName: clientName || parseResult.client.name,
@@ -1733,7 +1743,7 @@ Respond ONLY with a valid JSON array.`;
       // FIXED: Always filter by userId to ensure session isolation
       // Users should only see their own sessions, not other users' sessions
       const query = { createdByUserId: userId };
-      console.log(`[ProcessorSessions] Fetching sessions for user: ${userId}`);
+      logger.debug('Fetching sessions', { userId });
       const sessions = await ProcessorSessionModel.find(query)
         .select({
           sessionId: 1,
@@ -1780,6 +1790,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.get("/api/processor-sessions/:sessionId", requireAuth, async (req, res) => {
+    const start = Date.now();
     if (!isMongoConnected()) {
       return res.status(404).json({ error: "Session not found (database unavailable)" });
     }
@@ -1789,6 +1800,7 @@ Respond ONLY with a valid JSON array.`;
       // FIXED: Also filter by userId to ensure users can only access their own sessions
       const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean() as any;
       if (!doc) return res.status(404).json({ error: "Session not found" });
+      logger.info('Session loaded', { sessionId, durationMs: Date.now() - start });
       res.json({ ...doc, id: doc.sessionId });
     } catch (error: any) {
       logger.error("Error fetching processor session", error);
@@ -1797,6 +1809,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.post("/api/processor-sessions", requireAuth, async (req, res) => {
+    const start = Date.now();
     if (!isMongoConnected()) {
       return res.status(503).json({ error: "Database unavailable" });
     }
@@ -1833,6 +1846,7 @@ Respond ONLY with a valid JSON array.`;
         updateData,
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
+      logger.info('Session saved', { sessionId, durationMs: Date.now() - start });
       res.json({ ...doc.toJSON(), id: (doc as any).sessionId });
     } catch (error: any) {
       logger.error("Error saving processor session", error);
@@ -1891,6 +1905,7 @@ Respond ONLY with a valid JSON array.`;
   
   // Save foundation data (client info + financials)
   app.post("/api/assessments/foundation", requireAuth, async (req, res) => {
+    const start = Date.now();
     try {
       const { sessionId, clientInfo, financials, assessmentId } = req.body;
       const userId = (req.session as any)?.userId;
@@ -1953,6 +1968,8 @@ Respond ONLY with a valid JSON array.`;
         createdBy: userId,
       });
       
+      logger.info('Foundation data saved', { assessmentId: finalAssessmentId, durationMs: Date.now() - start });
+
       res.json({
         success: true,
         assessmentId: finalAssessmentId,
@@ -2200,6 +2217,12 @@ Respond ONLY with a valid JSON array.`;
     res.status(201).json(newChunk);
   });
 
-  console.log("[Routes] Route registration completed");
+  app.post("/api/client-errors", (req, res) => {
+    const { message, stack, componentStack, url, timestamp } = req.body || {};
+    logger.error("Client-side error", undefined, { clientError: true, message, stack: stack?.slice(0, 500), url, timestamp });
+    res.json({ ok: true });
+  });
+
+  logger.info("Route registration completed");
   return httpServer;
 }

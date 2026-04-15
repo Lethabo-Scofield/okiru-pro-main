@@ -8,6 +8,9 @@
  */
 
 import { generateEmbeddings, generateEmbedding, EMBEDDING_DIMENSIONS } from './azureOpenAIClient.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('EmbeddingStore');
 
 export interface ChunkEmbedding {
   chunkId: string;
@@ -66,7 +69,7 @@ export class InMemoryVectorStore {
     }
 
     this.isReady = true;
-    console.log(`[EmbeddingStore] Indexed ${chunks.length} chunks with ${EMBEDDING_DIMENSIONS}-dim embeddings`);
+    logger.info('Indexed chunks', { chunkCount: chunks.length, dimensions: EMBEDDING_DIMENSIONS });
   }
 
   /**

@@ -11,7 +11,10 @@
  */
 
 import { Router } from 'express';
+import { createLogger } from '../logger.js';
 import { buildManifest, getAllEntities, toExtractionRequest } from '../../pipeline/extraction/entityManifest.js';
+
+const logger = createLogger("ExtractAndScore");
 import { LLMExtractor } from '../../pipeline/extraction/llmExtractor.js';
 import type { LLMExtractionRequest } from '../../pipeline/extraction/llmExtractor.js';
 import {
@@ -125,7 +128,7 @@ router.post('/extract-and-score', async (req, res) => {
       clientName: clientName ?? parseResult.client.name,
     });
   } catch (err) {
-    console.error('[extract-and-score] Error:', err);
+    logger.error('Extraction failed', err);
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Extraction failed',
     });

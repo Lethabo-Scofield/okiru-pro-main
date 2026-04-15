@@ -11,6 +11,9 @@
 
 import { getSectorConfig, type SectorConfig } from '../sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('EntityManifest');
 
 // ---------------------------------------------------------------------------
 // Layer 5: Evidence — source of an extracted or entered value
@@ -1873,7 +1876,7 @@ async function resolveSectorConfig(sectorCode: string, scorecardType: string): P
       return normaliseStoredRule(storedRule);
     }
   } catch (error) {
-    console.warn(`[EntityManifest] ArangoDB unavailable, using hardcoded config for ${sectorCode} ${scorecardType}:`, error);
+    logger.warn('ArangoDB unavailable, using hardcoded config', { sectorCode, scorecardType, error: error instanceof Error ? error.message : String(error) });
   }
 
   // Fallback to hardcoded config

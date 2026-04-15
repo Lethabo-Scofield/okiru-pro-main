@@ -472,15 +472,24 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
         flowMode: session.flowMode,
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('[Session] Save failed', { sessionId: session.id, status: res.status });
+      return null;
+    }
     return await res.json();
-  } catch { return null; }
+  } catch (err) {
+    console.error('[Session] Save error', { sessionId: session.id, error: err });
+    return null;
+  }
 }
 
 async function apiLoadSession(sessionId: string): Promise<ProcessorSession | null> {
   try {
     const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionId}`, { credentials: 'include' });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('[Session] Load failed', { sessionId, status: res.status });
+      return null;
+    }
     const data = await res.json();
     return {
       id: data.sessionId || data.id,
@@ -494,12 +503,14 @@ async function apiLoadSession(sessionId: string): Promise<ProcessorSession | nul
       docStatuses: data.docStatuses || {},
       isComplete: data.isComplete || false,
       scorecardResult: data.scorecardResult || null,
-      // Restore build flow data if present
       foundationData: data.foundationData,
       pillarData: data.pillarData,
       flowMode: data.flowMode,
     };
-  } catch { return null; }
+  } catch (err) {
+    console.error('[Session] Load error', { sessionId, error: err });
+    return null;
+  }
 }
 
 const FileIcon = ({ type, className }: { type: string; className?: string }) => {

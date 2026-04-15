@@ -8,8 +8,11 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { createLogger } from '../logger.js';
 import * as fs from 'fs';
 import { requireAuth } from '../middleware/auth.js';
+
+const logger = createLogger("Accuracy");
 import { buildFormulaGraph, extractScorecardSubgraph } from '../../pipeline/formulaGraphBuilder.js';
 import { parseExcelBuffer, buildPipelineResult } from '../../pipeline/index.js';
 import { validateAll } from '../../pipeline/extraction/index.js';
@@ -63,7 +66,7 @@ router.post('/ingest', requireAuth, async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[Accuracy] Ingest error:', error);
+    logger.error('Ingest error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Ingestion failed',
     });
@@ -179,7 +182,7 @@ router.post('/compare', requireAuth, async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[Accuracy] Compare error:', error);
+    logger.error('Compare error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Comparison failed',
     });
@@ -232,7 +235,7 @@ router.post('/graph-analyze', requireAuth, async (req: Request, res: Response) =
       },
     });
   } catch (error: unknown) {
-    console.error('[Accuracy] Graph analyze error:', error);
+    logger.error('Graph analyze error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Analysis failed',
     });
@@ -322,7 +325,7 @@ router.post('/provenance', requireAuth, async (req: Request, res: Response) => {
       sheets: effectiveGraph.processedSheets,
     });
   } catch (error: unknown) {
-    console.error('[Accuracy] Provenance error:', error);
+    logger.error('Provenance error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Provenance extraction failed',
     });

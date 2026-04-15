@@ -3,6 +3,9 @@ import { Router, type Request as ExpressRequest, type Response } from 'express';
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import multer from 'multer';
 import { storage } from '../../storage.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger("Clients");
 import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
 import {
   ShareholderModel, OwnershipDataModel, EmployeeModel, TrainingProgramModel,
@@ -27,7 +30,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     const client = await storage.createClient({ ...req.body, organizationId: orgId });
     return res.json(client);
   } catch (error: unknown) {
-    console.error('Create client error:', error);
+    logger.error('Create client error', error);
     return res.status(500).json({ message: "Failed to create client" });
   }
 });
@@ -119,7 +122,7 @@ router.get('/:id/data', requireAuth, async (req: Request, res: Response) => {
       scenarios: scenariosData,
     });
   } catch (error: unknown) {
-    console.error('Get client data error:', error);
+    logger.error('Get client data error', error);
     return res.status(500).json({ message: "Failed to load client data" });
   }
 });

@@ -8,7 +8,10 @@
  */
 
 import { Router } from 'express';
+import { createLogger } from '../logger.js';
 import { buildManifest } from '../../pipeline/extraction/entityManifest.js';
+
+const logger = createLogger("ScorecardBuilder");
 import { calculateScorecard } from '../../pipeline/rules/calculationEngine.js';
 import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, ContributionInput } from '../../pipeline/rules/calculationEngine.js';
 import { ScoreResultRepository } from '../../arango/repositories/scoreResultRepository.js';
@@ -30,7 +33,7 @@ router.get('/manifest', async (req, res) => {
     
     res.json(manifest);
   } catch (err) {
-    console.error('Error loading manifest:', err);
+    logger.error('Error loading manifest', err);
     res.status(500).json({ 
       error: 'Failed to load manifest',
       details: err instanceof Error ? err.message : 'Unknown error'
@@ -175,11 +178,12 @@ function extractFromPillarData(body: CalculateRequest): {
 }
 
 router.post('/calculate', async (req, res) => {
+  const start = Date.now();
   try {
     const body = (req.body || {}) as CalculateRequest;
     const { sectorCode, scorecardType } = body;
 
-    console.log('[API /calculate] Request:', { sectorCode, scorecardType, employees: body.employees?.length, shareholders: body.shareholders?.length, suppliers: body.suppliers?.length });
+    logger.info('Calculate request', { sectorCode, scorecardType, employees: body.employees?.length, shareholders: body.shareholders?.length, suppliers: body.suppliers?.length });
 
     if (!sectorCode || !scorecardType) {
       return res.status(400).json({ success: false, error: 'sectorCode and scorecardType are required' });
@@ -352,12 +356,14 @@ router.post('/calculate', async (req, res) => {
         ontologySnapshot: result.ontologySnapshot as unknown as Record<string, unknown>,
       });
     } catch (arangoErr) {
-      console.warn('[Calculate] ArangoDB storage failed (non-fatal):', arangoErr instanceof Error ? arangoErr.message : arangoErr);
+      logger.warn('ArangoDB storage failed (non-fatal)', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
     }
+
+    logger.info('Scorecard calculated', { sessionId: assessmentId, sector: sectorCode, durationMs: Date.now() - start });
 
     res.json({ success: true, scorecard: result });
   } catch (err) {
-    console.error('Calculation error:', err);
+    logger.error('Calculation error', err);
     res.status(500).json({ 
       success: false,
       error: 'Calculation failed',
@@ -381,20 +387,20 @@ router.post('/calculate-from-extraction', async (req, res) => {
       return res.status(400).json({ success: false, error: 'sectorCode and scorecardType are required' });
     }
 
-    console.log('[API /calculate-from-extraction] Mapping extraction to UCS format...');
+    logger.info('Mapping extraction to UCS format');
 
     const payload = await mapToUCSPayload({ entities: entities || [], tables: tables || {} });
 
-    console.log('[API /calculate-from-extraction] Data quality:', payload.dataQuality);
-    console.log('[API /calculate-from-extraction] Arrays:', {
+    logger.info('Extraction data quality', { dataQuality: payload.dataQuality });
+    logger.info('Extraction arrays', {
       employees: payload.employees.length,
       shareholders: payload.shareholders.length,
       suppliers: payload.suppliers.length,
       contributions: payload.contributions.length,
       trainingPrograms: payload.trainingPrograms.length,
     });
-    console.log('[API /calculate-from-extraction] Financials:', payload.financials);
-    console.log('[API /calculate-from-extraction] CrossPillarValues:', Object.fromEntries(payload.crossPillarValues));
+    logger.debug('Extraction financials', { financials: payload.financials });
+    logger.debug('Cross-pillar values', { crossPillarValues: Object.fromEntries(payload.crossPillarValues) });
 
     const assessmentId = `upload-${sessionId || Date.now()}`;
 
@@ -428,7 +434,7 @@ router.post('/calculate-from-extraction', async (req, res) => {
         subMinimumsMet: result.subMinimums,
       });
     } catch (arangoErr) {
-      console.warn('[calculate-from-extraction] ArangoDB storage failed (non-fatal):', arangoErr instanceof Error ? arangoErr.message : arangoErr);
+      logger.warn('ArangoDB storage failed (non-fatal)', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
     }
 
     res.json({
@@ -445,7 +451,7 @@ router.post('/calculate-from-extraction', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[calculate-from-extraction] Error:', err);
+    logger.error('Calculation from extraction failed', err);
     res.status(500).json({
       success: false,
       error: 'Calculation from extraction failed',
@@ -487,7 +493,7 @@ router.post('/assessments', async (req, res) => {
           await evidenceRepo.storeEvidences(evidences);
         }
       } catch (evidenceErr) {
-        console.warn('[Assessments] Evidence storage failed (non-fatal):', evidenceErr instanceof Error ? evidenceErr.message : evidenceErr);
+        logger.warn('Evidence storage failed (non-fatal)', { error: evidenceErr instanceof Error ? evidenceErr.message : String(evidenceErr) });
       }
     }
 
@@ -517,7 +523,7 @@ router.post('/assessments', async (req, res) => {
           });
         }
       } catch (clientErr) {
-        console.warn('[Assessments] Client creation failed (non-fatal):', clientErr instanceof Error ? clientErr.message : clientErr);
+        logger.warn('Client creation failed (non-fatal)', { error: clientErr instanceof Error ? clientErr.message : String(clientErr) });
       }
     }
 
@@ -528,7 +534,7 @@ router.post('/assessments', async (req, res) => {
       assessment: savedClient ? { clientId: savedClient.id || (savedClient as any)._id?.toString() } : null,
     });
   } catch (err) {
-    console.error('[Assessments] Save error:', err);
+    logger.error('Assessment save error', err);
     res.status(500).json({
       error: 'Save failed',
       details: err instanceof Error ? err.message : 'Unknown error'

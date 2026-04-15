@@ -11,6 +11,9 @@
  */
 
 import { chatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
+import { createLogger } from '../../src/logger.js';
+
+const logger = createLogger('AITableClassifier');
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -117,7 +120,7 @@ export async function classifySheets(
 
     return classifications;
   } catch (err) {
-    console.warn('[aiTableClassifier] LLM classification failed, using fallback:', err);
+    logger.warn('LLM classification failed, using fallback', { error: err instanceof Error ? err.message : String(err) });
     return sheetSamples.map(s => ({
       sheetName: s.sheetName,
       pillarType: fallbackClassify(s.sheetName, s.sampleText),
@@ -301,7 +304,7 @@ export async function extractTablesFromClassifiedSheets(
   const tables: ExtractedTables = {};
 
   if (!isLLMAvailable()) {
-    console.warn('[aiTableClassifier] LLM unavailable, cannot extract tables');
+    logger.warn('LLM unavailable, cannot extract tables');
     return tables;
   }
 
@@ -365,9 +368,9 @@ export async function extractTablesFromClassifiedSheets(
           }
         }
 
-        console.log(`[aiTableClassifier] Extracted ${key}: ${(tables as any)[key]?.length || 0} rows (from ${texts.length} chunks, ${combinedText.length} chars)`);
+        logger.info('Extracted table', { pillarType: key, rows: (tables as any)[key]?.length || 0, chunks: texts.length, chars: combinedText.length });
       } catch (err) {
-        console.warn(`[aiTableClassifier] Table extraction failed for ${pillarType}:`, err);
+        logger.warn('Table extraction failed', { pillarType, error: err instanceof Error ? err.message : String(err) });
       }
     }
   );
@@ -389,7 +392,7 @@ export async function extractTablesFromClassifiedSheets(
 export async function smartExtractTables(
   sheetChunks: Map<string, string[]>
 ): Promise<{ tables: ExtractedTables; classifications: SheetClassification[] }> {
-  console.log(`[aiTableClassifier] Starting smart classification for ${sheetChunks.size} sheets`);
+  logger.info('Starting smart classification', { sheetCount: sheetChunks.size });
 
   const sheetSamples: Array<{ sheetName: string; sampleText: string }> = [];
   for (const [sheetName, texts] of sheetChunks.entries()) {
@@ -405,10 +408,14 @@ export async function smartExtractTables(
   // Step 1: Classify
   const classifications = await classifySheets(sheetSamples);
 
-  console.log('[aiTableClassifier] Classifications:');
-  for (const c of classifications) {
-    console.log(`  ${c.sheetName} → ${c.pillarType} (${(c.confidence * 100).toFixed(0)}%) — ${c.reason}`);
-  }
+  logger.info('Classifications complete', {
+    classifications: classifications.map(c => ({
+      sheetName: c.sheetName,
+      pillarType: c.pillarType,
+      confidence: Math.round(c.confidence * 100),
+      reason: c.reason,
+    })),
+  });
 
   // Step 2: Build classified sheets with full text
   const classifiedSheets: ClassifiedSheet[] = classifications

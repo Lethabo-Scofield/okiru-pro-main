@@ -7,8 +7,11 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { createLogger } from '../logger.js';
 import { aql } from 'arangojs';
 import { getComputeClient } from '../../pipeline/computeClient.js';
+
+const logger = createLogger("Scorecard");
 import { evaluateGraphWithOverrides } from '../../pipeline/tsGraphEvaluator.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
@@ -33,7 +36,7 @@ router.get('/models', async (_req: Request, res: Response) => {
     const models = await computeClient.listModels();
     return res.json(models);
   } catch (error: unknown) {
-    console.error('[Scorecard] listModels error:', error);
+    logger.error('listModels error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to list models',
     });
@@ -52,7 +55,7 @@ router.get('/models/:versionId/summary', async (req: Request, res: Response) => 
     const summary = await computeClient.getModelSummary(versionId);
     return res.json(summary);
   } catch (error: unknown) {
-    console.error('[Scorecard] getModelSummary error:', error);
+    logger.error('getModelSummary error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to get model summary',
     });
@@ -100,14 +103,14 @@ router.post('/compile', async (req: Request, res: Response) => {
         `);
         await upsertCursor.all();
       } catch (dbError: unknown) {
-        console.warn('[Scorecard] Failed to store sector mapping:', dbError);
+        logger.warn('Failed to store sector mapping', { error: dbError instanceof Error ? dbError.message : String(dbError) });
         // Continue - compile succeeded, mapping is optional
       }
     }
 
     return res.json(modelVersion);
   } catch (error: unknown) {
-    console.error('[Scorecard] compile error:', error);
+    logger.error('Compile error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Compilation failed',
     });
@@ -131,7 +134,7 @@ router.post('/evaluate', async (req: Request, res: Response) => {
     const result = await computeClient.evaluateModel(versionId, overrides ?? undefined);
     return res.json(result);
   } catch (error: unknown) {
-    console.error('[Scorecard] evaluate error:', error);
+    logger.error('Evaluate error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Evaluation failed',
     });
@@ -177,7 +180,7 @@ router.post('/evaluate-by-sector', async (req: Request, res: Response) => {
           return res.json(result);
         }
       } catch (engineErr) {
-        console.warn('[Scorecard] Computation Engine unavailable:', engineErr);
+        logger.warn('Computation Engine unavailable', { error: engineErr instanceof Error ? engineErr.message : String(engineErr) });
       }
     }
 
@@ -202,7 +205,7 @@ router.post('/evaluate-by-sector', async (req: Request, res: Response) => {
       engine: 'typescript-evaluator',
     });
   } catch (error: unknown) {
-    console.error('[Scorecard] evaluate-by-sector error:', error);
+    logger.error('Evaluate-by-sector error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Evaluation by sector failed',
     });
@@ -217,7 +220,7 @@ router.get('/health', async (_req: Request, res: Response) => {
     const available = await computeClient.isAvailable();
     return res.json({ available });
   } catch (error: unknown) {
-    console.error('[Scorecard] health check error:', error);
+    logger.error('Health check error', error);
     return res.json({ available: false });
   }
 });
@@ -298,7 +301,7 @@ router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
         }
       }
     } catch (engineErr) {
-      console.warn('[Scorecard] Computation Engine unavailable, falling back to TS evaluator:', engineErr);
+      logger.warn('Computation Engine unavailable, falling back to TS evaluator', { error: engineErr instanceof Error ? engineErr.message : String(engineErr) });
     }
 
     if (usedEngine === 'none') {
@@ -308,7 +311,7 @@ router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
         evaluationStats = tsResult.stats;
         usedEngine = 'typescript-evaluator';
       } catch (tsErr) {
-        console.error('[Scorecard] TypeScript evaluator also failed:', tsErr);
+        logger.error('TypeScript evaluator also failed', tsErr);
         return res.status(500).json({
           message: 'Both Computation Engine and TS evaluator failed. Check that the toolkit is properly ingested.',
           cellOverrides,
@@ -331,7 +334,7 @@ router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[Scorecard] evaluate-from-entities error:', error);
+    logger.error('Evaluate-from-entities error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Entity evaluation failed',
     });
@@ -355,7 +358,7 @@ router.post('/generate-summary', async (req: Request, res: Response) => {
     const summary = generateScorecardSummary(pipelineResult);
     return res.json(summary);
   } catch (error: unknown) {
-    console.error('[Scorecard] generate-summary error:', error);
+    logger.error('Generate-summary error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Summary generation failed',
     });
@@ -595,7 +598,7 @@ router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res
         return res.json({ success: true, config: dbConfig, source: 'arangodb' });
       }
     } catch (arangoErr) {
-      console.warn('[Scorecard] ArangoDB unavailable, falling back to hardcoded:', arangoErr);
+      logger.warn('ArangoDB unavailable, falling back to hardcoded', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
     }
 
     // Fallback: Use verified hardcoded sectorConfig.ts
@@ -604,14 +607,14 @@ router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res
       const config = sectorConfigToCalculatorConfig(fallbackConfig);
       return res.json({ success: true, config, source: 'hardcoded' });
     } catch (fallbackErr) {
-      console.error('[Scorecard] Config failed for', sectorCode, scorecardType, ':', fallbackErr);
+      logger.error('Config failed', fallbackErr, { sectorCode, scorecardType });
       return res.status(500).json({
         success: false,
         message: 'Failed to load sector configuration'
       });
     }
   } catch (error: unknown) {
-    console.error('[Scorecard] sector-config error:', error);
+    logger.error('Sector-config error', error);
     return res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to get sector config',

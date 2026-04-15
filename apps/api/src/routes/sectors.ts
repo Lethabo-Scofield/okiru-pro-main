@@ -6,8 +6,11 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { createLogger } from '../logger.js';
 import { aql } from 'arangojs';
 import { getArangoDB, isArangoConnected } from '../../arango/connection.js';
+
+const logger = createLogger("Sectors");
 import { COLLECTIONS } from '../../arango/collections.js';
 import { listSectorConfigs, type SectorConfig } from '../../pipeline/sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
@@ -21,7 +24,7 @@ router.get('/', async (_req: Request, res: Response) => {
   try {
     // Check if ArangoDB is connected
     if (!isArangoConnected()) {
-      console.warn('[Sectors] ArangoDB not connected, falling back to hardcoded sectors');
+      logger.warn('ArangoDB not connected, falling back to hardcoded sectors');
       const fallbackSectors = getFallbackSectors();
       return res.json({
         success: true,
@@ -52,7 +55,7 @@ router.get('/', async (_req: Request, res: Response) => {
 
     // If no sectors found in ArangoDB, seed and retry
     if (sectors.length === 0) {
-      console.log('[Sectors] No sectors found in ArangoDB, seeding from hardcoded configs...');
+      logger.info('No sectors found in ArangoDB, seeding from hardcoded configs');
       const { seedOntology } = await import('../../pipeline/seedOntology.js');
       await seedOntology();
 
@@ -85,7 +88,7 @@ router.get('/', async (_req: Request, res: Response) => {
       sectors,
     });
   } catch (error: unknown) {
-    console.error('[Sectors] Error fetching sectors:', error);
+    logger.error('Error fetching sectors', error);
     const fallbackSectors = getFallbackSectors();
     return res.status(500).json({
       success: false,
@@ -101,7 +104,7 @@ router.get('/', async (_req: Request, res: Response) => {
 router.get('/options', async (_req: Request, res: Response) => {
   try {
     if (!isArangoConnected()) {
-      console.warn('[Sectors] ArangoDB not connected, falling back to hardcoded options');
+      logger.warn('ArangoDB not connected, falling back to hardcoded options');
       return res.json({
         success: true,
         source: 'fallback',
@@ -145,7 +148,7 @@ router.get('/options', async (_req: Request, res: Response) => {
       options,
     });
   } catch (error: unknown) {
-    console.error('[Sectors] Error fetching sector options:', error);
+    logger.error('Error fetching sector options', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch sector options',
@@ -192,7 +195,7 @@ router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) =>
       config,
     });
   } catch (error: unknown) {
-    console.error('[Sectors] Error fetching sector config:', error);
+    logger.error('Error fetching sector config', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch sector config',
@@ -216,7 +219,7 @@ router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
       manifest,
     });
   } catch (error: unknown) {
-    console.error('[Sectors] Error building manifest:', error);
+    logger.error('Error building manifest', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to build manifest',
@@ -242,7 +245,7 @@ router.post('/seed', async (_req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[Sectors] Error seeding sectors:', error);
+    logger.error('Error seeding sectors', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to seed sectors',

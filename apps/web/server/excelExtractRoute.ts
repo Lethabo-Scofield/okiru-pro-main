@@ -606,7 +606,7 @@ export function registerExcelExtractRoute(app: Express): void {
 
             res.end();
         } catch (error: any) {
-            console.error('[extract-excel-stream] Error:', error);
+            logger.error('Excel stream extraction failed', error);
             send('error', { error: error.message || 'Failed to extract from Excel/CSV file' });
             res.end();
         }

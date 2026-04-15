@@ -734,8 +734,11 @@ export const storage: IStorage = useDatabase
   ? new DatabaseStorage()
   : new MemoryStorage();
 
+import { createLogger } from "./logger";
+const storageLogger = createLogger("Storage");
+
 if (!useDatabase) {
-  console.log("Storage: Using in-memory storage (MONGODB_URI not set). Data will not persist across restarts.");
+  storageLogger.warn("Using in-memory storage (MONGODB_URI not set) — data will not persist across restarts");
   (async () => {
     const bcrypt = await import("bcryptjs");
     const hashedPassword = await bcrypt.hash("demo", 8);
@@ -749,7 +752,7 @@ if (!useDatabase) {
       organizationName: "Okiru Demo",
       profilePicture: null,
     });
-    console.log("Storage: Seeded dummy user — username: demo, password: demo");
+    storageLogger.info("Seeded demo user", { username: "demo" });
 
     const { starterTemplates } = await import("../src/data/starterTemplates");
     for (const t of starterTemplates) {
@@ -761,10 +764,10 @@ if (!useDatabase) {
         userId: null,
       });
     }
-    console.log(`Storage: Seeded ${starterTemplates.length} predefined templates`);
+    storageLogger.info("Seeded predefined templates", { count: starterTemplates.length });
   })();
 } else {
-  console.log("Storage: Using MongoDB database storage.");
+  storageLogger.info("Using MongoDB database storage");
   (async () => {
     try {
       const { starterTemplates } = await import("../src/data/starterTemplates");
@@ -782,12 +785,12 @@ if (!useDatabase) {
             userId: null,
           });
         }
-        console.log(`Storage: Seeded ${missing.length} missing default templates into database (total: ${sharedTemplates.length + missing.length})`);
+        storageLogger.info("Seeded missing default templates", { seeded: missing.length, total: sharedTemplates.length + missing.length });
       } else {
-        console.log(`Storage: All ${sharedTemplates.length} default templates already exist, skipping seed`);
+        storageLogger.debug("All default templates already exist", { count: sharedTemplates.length });
       }
     } catch (err) {
-      console.error("Storage: Failed to seed default templates:", err);
+      storageLogger.error("Failed to seed default templates", err);
     }
   })();
 }

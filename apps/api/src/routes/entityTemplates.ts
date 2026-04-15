@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { createLogger } from '../logger.js';
 import { EntityTemplateModel } from '../../models.js';
+
+const logger = createLogger("EntityTemplates");
 import { getAllManifests } from '../../pipeline/extraction/entityManifest.js';
 import { GraphRepository } from '../../arango/repositories/graphRepository.js';
 
@@ -97,7 +100,7 @@ router.get('/', async (_req: Request, res: Response) => {
     // Combine both, with ontology templates first
     return res.json([...ontologyTemplates, ...oldTemplates]);
   } catch (err) {
-    console.error('[EntityTemplates] Error:', err);
+    logger.error('Error listing entity templates', err);
     return res.status(500).json({ message: 'Failed to list entity templates' });
   }
 });

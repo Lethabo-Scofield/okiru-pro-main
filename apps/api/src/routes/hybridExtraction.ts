@@ -19,6 +19,9 @@ import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { inferTablesFromEntities } from '../../pipeline/extraction/aiEntityMapper.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('HybridExtraction');
 
 // Strings the LLM sometimes returns meaning "no value found"
 const NULL_VALUE_SENTINELS = /^(null|n\/a|none|not\s+found|not\s+available|unknown|-)$/i;
@@ -399,7 +402,7 @@ async function parseFileToPages(
         .filter(row => row && row.length > 0 && row.some((c: any) => c !== undefined && c !== null && String(c).trim() !== ''));
 
       if (jsonData.length < 2) {
-        console.log(`[hybridExtraction] Skipping sheet "${sheetName}" (${jsonData.length} rows — no data)`);
+        logger.debug('Skipping empty sheet', { sheetName, rowCount: jsonData.length });
         continue;
       }
 
@@ -407,7 +410,7 @@ async function parseFileToPages(
       const sheetChunks = parseSheetToChunks(sheetName, jsonData);
       pages.push(...sheetChunks);
 
-      console.log(`[hybridExtraction] Sheet "${sheetName}": ${jsonData.length} rows → ${sheetChunks.length} chunks (${tabular ? 'tabular' : 'key-value'})`);
+      logger.info('Sheet parsed', { sheetName, rowCount: jsonData.length, chunkCount: sheetChunks.length, format: tabular ? 'tabular' : 'key-value' });
     }
 
     return pages;
@@ -434,10 +437,10 @@ async function parseFileToPages(
     const totalText = pages.map(p => p.text).join(' ');
     const scannedDetection = isScannedPdf(totalText);
     
-    console.log(`[hybridExtraction] PDF text extraction: ${totalText.length} chars. Scanned PDF detected: ${scannedDetection}`);
+    logger.info('PDF text extraction complete', { charCount: totalText.length, scannedDetected: scannedDetection });
     
     if (scannedDetection) {
-      console.log(`[hybridExtraction] Switching to GPT-4o Vision OCR for scanned PDF`);
+      logger.info('Switching to GPT-4o Vision OCR for scanned PDF');
       try {
         const visionResults = await extractFromScannedPdf(buffer, 'RCOGP', 'Generic', null);
         
@@ -455,17 +458,17 @@ async function parseFileToPages(
           }));
         }
       } catch (visionErr) {
-        console.warn(`[hybridExtraction] Vision OCR failed, falling back to text extraction:`, visionErr);
+        logger.warn('Vision OCR failed, falling back to text extraction', { error: String(visionErr) });
       }
     } else {
       // Digital PDF with text — run vision on table-heavy pages for layout-aware extraction
       try {
-        console.log(`[hybridExtraction] Running vision table extraction on digital PDF`);
+        logger.info('Running vision table extraction on digital PDF');
         const visionTables = await extractTablesFromDigitalPdf(buffer, pages);
         
         if (visionTables.length > 0) {
           const totalVisionTables = visionTables.reduce((s, v) => s + v.tables.length, 0);
-          console.log(`[hybridExtraction] Vision extracted ${totalVisionTables} tables from ${visionTables.length} pages`);
+          logger.info('Vision table extraction results', { tableCount: totalVisionTables, pageCount: visionTables.length });
           
           // Enhance pages with vision-extracted table data
           for (const vt of visionTables) {
@@ -494,7 +497,7 @@ async function parseFileToPages(
           }
         }
       } catch (visionErr) {
-        console.warn(`[hybridExtraction] Vision table extraction failed (non-fatal):`, visionErr);
+        logger.warn('Vision table extraction failed (non-fatal)', { error: String(visionErr) });
       }
     }
 
@@ -568,7 +571,7 @@ async function parseFileToPages(
         .trim();
 
       if (result.messages?.length) {
-        console.warn(`[hybridExtraction] DOCX warnings:`, result.messages.map((m: any) => m.message).join('; '));
+        logger.warn('DOCX conversion warnings', { warnings: result.messages.map((m: any) => m.message).join('; ') });
       }
 
       // Split into manageable chunks (one per ~5000 chars)
@@ -593,10 +596,10 @@ async function parseFileToPages(
         }
       }
 
-      console.log(`[hybridExtraction] DOCX extracted: ${text.length} chars → ${pages.length} chunks`);
+      logger.info('DOCX extracted', { charCount: text.length, chunkCount: pages.length });
       return pages;
     } catch (error) {
-      console.warn('[hybridExtraction] DOCX/DOC parsing failed:', error);
+      logger.warn('DOCX/DOC parsing failed', { error: String(error) });
     }
 
     return [{ pageId: 'docx_1', text: '', metadata: { type: 'docx', error: 'Failed to parse' } }];
@@ -669,7 +672,7 @@ router.post(
 
       // Option 1: Use pre-chunked document from database
       if (documentId) {
-        console.log(`[hybridExtraction] Loading pre-chunked document ${documentId} for ${sectorCode}/${scorecardType}`);
+        logger.info('Loading pre-chunked document', { documentId, sectorCode, scorecardType });
 
         const loadStart = Date.now();
 
@@ -701,17 +704,17 @@ router.post(
 
         sourceDocumentId = documentId;
         loadTime = Date.now() - loadStart;
-        console.log(`[hybridExtraction] Loaded ${chunks.length} chunks from database in ${loadTime}ms`);
+        logger.info('Loaded chunks from database', { chunkCount: chunks.length, durationMs: loadTime });
       }
       // Option 2: Process uploaded file (legacy mode - for direct uploads without saving)
       else if (file) {
-        console.log(`[hybridExtraction] Processing uploaded file ${file.originalname} for ${sectorCode}/${scorecardType}`);
+        logger.info('Processing uploaded file', { fileName: file.originalname, sectorCode, scorecardType });
 
         // Step 1: Parse file to pages
         const parseStart = Date.now();
         parsedPages = await parseFileToPages(file.buffer, file.mimetype, file.originalname);
         parseTime = Date.now() - parseStart;
-        console.log(`[hybridExtraction] Parsed ${parsedPages.length} pages in ${parseTime}ms`);
+        logger.info('File parsed to pages', { pageCount: parsedPages.length, durationMs: parseTime });
         const pages = parsedPages;
 
         if (pages.length === 0 || pages.every(p => !p.text.trim())) {
@@ -724,11 +727,11 @@ router.post(
         sourceDocumentId = `doc_${Date.now()}`;
         chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), sourceDocumentId);
         chunkTime = Date.now() - chunkStart;
-        console.log(`[hybridExtraction] Created ${chunks.length} chunks in ${chunkTime}ms`);
+        logger.info('Chunks created', { chunkCount: chunks.length, durationMs: chunkTime });
 
         // Log sample chunks for debugging
         for (let ci = 0; ci < Math.min(3, chunks.length); ci++) {
-          console.log(`[hybridExtraction] Sample chunk ${ci}: pageId=${chunks[ci].pageId} len=${chunks[ci].text.length} preview="${chunks[ci].text.substring(0, 150).replace(/\n/g, '\\n')}..."`);
+          logger.debug('Sample chunk', { index: ci, pageId: chunks[ci].pageId, length: chunks[ci].text.length, preview: chunks[ci].text.substring(0, 150) });
         }
       }
 
@@ -765,13 +768,13 @@ router.post(
           {
             onProgress: (completed, total) => {
               if (completed % 50 === 0 || completed === total) {
-                console.log(`[hybridExtraction] Embeddings: ${completed}/${total}`);
+                logger.debug('Embedding progress', { completed, total });
               }
             },
           }
         );
       } catch (error) {
-        console.warn('[hybridExtraction] Embedding generation failed:', error);
+        logger.warn('Embedding generation failed', { error: String(error) });
         // Continue without embeddings
       }
 
@@ -790,7 +793,7 @@ router.post(
       });
 
       indexTime = Date.now() - indexStart;
-      console.log(`[hybridExtraction] Indexes built in ${indexTime}ms (embeddings: ${hasEmbeddings}, llm: ${llmAvailable})`);
+      logger.info('Indexes built', { durationMs: indexTime, hasEmbeddings, llmAvailable });
 
       // Step 4: Load entity manifest
       const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
@@ -812,18 +815,18 @@ router.post(
       // Extract ALL entities using natural language search
       const allEntities = getAllEntities(manifest);
       const entities = allEntities;
-      console.log(`[hybridExtraction] Extracting all ${entities.length} entities via natural language search`);
+      logger.info('Starting entity extraction', { entityCount: entities.length });
 
       // Pre-compute all entity query embeddings in ONE batch API call
       // This eliminates ~N individual embedding calls (major speedup)
-      console.log(`[hybridExtraction] Pre-computing embeddings for ${entities.length} entity queries...`);
+      logger.info('Pre-computing entity query embeddings', { queryCount: entities.length });
       const entityQueries = entities.map(e => [e.name, ...e.extraction.aliases].join(' '));
       let queryEmbeddings: number[][] = [];
       if (hasEmbeddings) {
         try {
           queryEmbeddings = await generateEmbeddings(entityQueries, { batchSize: 100 });
         } catch (err) {
-          console.warn('[hybridExtraction] Batch embedding generation failed, falling back to per-entity:', err);
+          logger.warn('Batch embedding generation failed, falling back to per-entity', { error: String(err) });
         }
       }
 
@@ -952,7 +955,7 @@ router.post(
               // Log extraction details for debugging
               if (!formattedValue) {
                 const zoneMatch = entityZones.length === 0 || chunkMatchesZone(topChunk, entityZones);
-                console.log(`[extract:MISS] ${entity.name} | zones=${entityZones.join(',')} | topChunk=${topChunk.pageId} | zoneMatch=${zoneMatch} | score=${topResult.score.toFixed(3)} | llm=${llmResult.extractedValue}`);
+                logger.debug('Extraction miss', { entity: entity.name, zones: entityZones, topChunk: topChunk.pageId, zoneMatch, score: topResult.score, llmValue: llmResult.extractedValue });
               }
 
               return {
@@ -973,7 +976,7 @@ router.post(
                 validation,
               };
             } catch (error) {
-              console.error(`[hybridExtraction] Error extracting ${entity.name}:`, error);
+              logger.error('Entity extraction failed', error, { entity: entity.name });
 
               return {
                 name: entity.name,
@@ -999,7 +1002,7 @@ router.post(
 
         // Progress logging with extraction success rate
         const batchFound = batchResults.filter(r => r.value !== null).length;
-        console.log(`[hybridExtraction] Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchFound}/${batchResults.length} extracted | Total: ${Math.min(i + BATCH_SIZE, entities.length)}/${entities.length} entities`);
+        logger.info('Extraction batch complete', { batch: Math.floor(i / BATCH_SIZE) + 1, batchExtracted: batchFound, batchSize: batchResults.length, totalProcessed: Math.min(i + BATCH_SIZE, entities.length), totalEntities: entities.length });
       }
 
       extractTime = Date.now() - extractStart;
@@ -1018,7 +1021,7 @@ router.post(
           .map((r, idx) => ({ r, idx }))
           .filter(({ r }) => r.value !== null && r.value !== '');
 
-        console.log(`[hybridExtraction] Starting LLM verification for ${toVerify.length} non-null entities (parallel)`);
+        logger.info('Starting LLM verification', { entityCount: toVerify.length });
 
         // Process verification batches in parallel groups
         for (let vi = 0; vi < toVerify.length; vi += VERIFY_BATCH * MAX_PARALLEL_BATCHES) {
@@ -1057,12 +1060,12 @@ router.post(
                   if (ver.correctedValue) {
                     extractionResults[idx].value = ver.correctedValue;
                     extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence, 0.75);
-                    console.log(`[LLMVerify] Corrected "${r.name}": "${r.value}" → "${ver.correctedValue}"`);
+                    logger.info('Verification corrected value', { entity: r.name, original: r.value, corrected: ver.correctedValue });
                   } else {
                     extractionResults[idx].value = null;
                     extractionResults[idx].status = 'not_found';
                     extractionResults[idx].confidence = Math.max(extractionResults[idx].confidence * 0.3, 0.1);
-                    console.log(`[LLMVerify] Invalidated "${r.name}": was "${r.value}" — ${ver.reason}`);
+                    logger.info('Verification invalidated value', { entity: r.name, original: r.value, reason: ver.reason });
                   }
                 } else {
                   extractionResults[idx].confidence = Math.min(extractionResults[idx].confidence * 1.05, 0.99);
@@ -1072,13 +1075,13 @@ router.post(
           }
 
           await Promise.all(parallelBatches);
-          console.log(`[hybridExtraction] Verified ${Math.min(vi + (VERIFY_BATCH * MAX_PARALLEL_BATCHES), toVerify.length)}/${toVerify.length} entities`);
+          logger.debug('Verification progress', { verified: Math.min(vi + (VERIFY_BATCH * MAX_PARALLEL_BATCHES), toVerify.length), total: toVerify.length });
         }
 
         verifyTime = Date.now() - verifyStart;
-        console.log(`[hybridExtraction] LLM verification complete in ${verifyTime}ms`);
+        logger.info('LLM verification complete', { durationMs: verifyTime });
       } else {
-        console.log('[hybridExtraction] Skipping LLM verification (skipVerify=true)');
+        logger.info('Skipping LLM verification (skipVerify=true)');
       }
 
       // ── AI-Powered Table Extraction ─────────────────────────────────────
@@ -1104,14 +1107,22 @@ router.post(
         const { tables: aiTables, classifications } = await smartExtractTables(sheetChunks);
         extractedTables = aiTables;
 
-        console.log(`[hybridExtraction] AI classified ${classifications.length} sheets:`);
-        for (const c of classifications) {
-          console.log(`  ${c.sheetName} → ${c.pillarType} (${(c.confidence * 100).toFixed(0)}%)`);
-        }
+        logger.info('AI sheet classification complete', {
+          sheetCount: classifications.length,
+          classifications: classifications.map(c => ({ sheet: c.sheetName, pillar: c.pillarType, confidence: Math.round(c.confidence * 100) })),
+        });
       }
 
       const tableTime = Date.now() - tableStart;
-      console.log(`[hybridExtraction] AI table extraction complete in ${tableTime}ms: employees=${extractedTables.employees?.length || 0}, shareholders=${extractedTables.shareholders?.length || 0}, suppliers=${extractedTables.suppliers?.length || 0}, contributions=${extractedTables.contributions?.length || 0}, training=${extractedTables.trainingPrograms?.length || 0}, financials=${(extractedTables as any).financials?.length || 0}`);
+      logger.info('AI table extraction complete', {
+        durationMs: tableTime,
+        employees: extractedTables.employees?.length || 0,
+        shareholders: extractedTables.shareholders?.length || 0,
+        suppliers: extractedTables.suppliers?.length || 0,
+        contributions: extractedTables.contributions?.length || 0,
+        trainingPrograms: extractedTables.trainingPrograms?.length || 0,
+        financials: (extractedTables as any).financials?.length || 0,
+      });
 
       const totalTime = Date.now() - totalStartTime;
 
@@ -1134,39 +1145,37 @@ router.post(
         else byPillar[p].missed.push(r.name);
       }
 
-      console.log(`\n${'═'.repeat(70)}`);
-      console.log(`[hybridExtraction] EXTRACTION REPORT`);
-      console.log(`${'═'.repeat(70)}`);
-      console.log(`  Total entities:  ${extractionResults.length}`);
-      console.log(`  Extracted:       ${extractedCount} (${Math.round(extractedCount / extractionResults.length * 100)}%)`);
-      console.log(`  Missing:         ${nullCount}`);
-      console.log(`  Verified:        ${verifiedCount}`);
-      console.log(`  Invalidated:     ${invalidatedCount}`);
-      console.log(`  Avg confidence:  ${(avgConfidence * 100).toFixed(1)}%`);
-      console.log(`  Timing:          parse=${parseTime}ms chunk=${chunkTime}ms index=${indexTime}ms extract=${extractTime}ms verify=${verifyTime}ms total=${totalTime}ms`);
-      console.log(`  Chunks indexed:  ${chunks.length}`);
-      console.log(`${'─'.repeat(70)}`);
+      logger.info('Extraction report', {
+        totalEntities: extractionResults.length,
+        extractedCount,
+        extractedPct: Math.round(extractedCount / extractionResults.length * 100),
+        nullCount,
+        verifiedCount,
+        invalidatedCount,
+        avgConfidence: Math.round(avgConfidence * 1000) / 10,
+        chunksIndexed: chunks.length,
+        timing: { parseMs: parseTime, chunkMs: chunkTime, indexMs: indexTime, extractMs: extractTime, verifyMs: verifyTime, totalMs: totalTime },
+        byPillar: Object.fromEntries(
+          Object.entries(byPillar).map(([pillar, data]) => [pillar, { found: data.found.length, missed: data.missed.length }])
+        ),
+      });
 
       for (const [pillar, data] of Object.entries(byPillar)) {
-        console.log(`  [${pillar}]  found=${data.found.length}  missed=${data.missed.length}`);
-        if (data.found.length > 0) console.log(`    ✓ ${data.found.join(', ')}`);
-        if (data.missed.length > 0) console.log(`    ✗ ${data.missed.join(', ')}`);
+        logger.debug('Pillar detail', { pillar, found: data.found, missed: data.missed });
       }
 
       if (missedEntities.length > 0) {
-        console.log(`${'─'.repeat(70)}`);
-        console.log(`  MISSED ENTITIES (${missedEntities.length}):`);
-        for (const m of missedEntities) {
+        const missedDetails = missedEntities.map(m => {
           const reason = m.provenance.textSnippet === 'No relevant passages found' ? 'no_retrieval_match'
             : m.provenance.textSnippet === 'Chunk not found' ? 'chunk_not_found'
             : m.provenance.method === 'llm_fallback' ? 'llm_returned_null'
             : 'extraction_null';
-          console.log(`    ✗ ${m.name} [${m.pillar}] reason=${reason} retrieval_score=${m.provenance.retrievalScore.toFixed(3)}`);
-        }
+          return { name: m.name, pillar: m.pillar, reason, retrievalScore: m.provenance.retrievalScore };
+        });
+        logger.debug('Missed entities', { count: missedEntities.length, entities: missedDetails });
       }
-      console.log(`${'═'.repeat(70)}\n`);
 
-      console.log(`[hybridExtraction] Complete: ${extractionResults.length} entities, ${totalTime}ms total (verify: ${verifyTime}ms)`);
+      logger.info('Extraction complete', { entityCount: extractionResults.length, totalMs: totalTime, verifyMs: verifyTime });
 
       const response: ExtractionResponse = {
         success: true,
@@ -1194,7 +1203,7 @@ router.post(
 
       res.json(response);
     } catch (error) {
-      console.error('[hybridExtraction] Error:', error);
+      logger.error('Extraction failed', error);
       res.status(500).json({
         error: 'Extraction failed',
         message: String(error),
@@ -1210,10 +1219,10 @@ router.post('/infer-tables', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'entities array is required' });
     }
 
-    console.log(`[infer-tables] Inferring tables from ${entities.length} flat entities`);
+    logger.info('Inferring tables from flat entities', { entityCount: entities.length });
     const tables = await inferTablesFromEntities(entities);
 
-    console.log('[infer-tables] Inferred tables:', {
+    logger.info('Tables inferred', {
       shareholders: tables.shareholders?.length ?? 0,
       employees: tables.employees?.length ?? 0,
       suppliers: tables.suppliers?.length ?? 0,
@@ -1223,7 +1232,7 @@ router.post('/infer-tables', requireAuth, async (req, res) => {
 
     res.json({ tables });
   } catch (error: any) {
-    console.error('[infer-tables] Error:', error);
+    logger.error('Table inference failed', error);
     res.status(500).json({ error: 'Table inference failed', message: error.message || String(error) });
   }
 });

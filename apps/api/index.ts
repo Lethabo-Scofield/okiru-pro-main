@@ -10,7 +10,8 @@ import { createServer } from "http";
 import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
-import { createLogger } from "./src/logger.js";
+import { createLogger, requestContext } from "./src/logger.js";
+import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
 
@@ -44,22 +45,28 @@ app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody 
 app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 
-// Logging middleware
+// Request context + logging middleware
 const requestLog = createLogger("ApiRequest");
 app.use((req, res, next) => {
-  const start = Date.now();
-  res.on("finish", () => {
-    if (req.path.startsWith("/api") || req.path === "/health") {
-      const duration = Date.now() - start;
-      requestLog.debug(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`, {
-        method: req.method,
-        path: req.path,
-        status: res.statusCode,
-        durationMs: duration,
-      });
-    }
+  const rid = (req.headers['x-request-id'] as string) || crypto.randomUUID();
+  res.setHeader('X-Request-Id', rid);
+  const userId = (req.session as any)?.userId;
+  const ctx = { requestId: rid, userId, method: req.method, path: req.path };
+  requestContext.run(ctx, () => {
+    const start = Date.now();
+    res.on("finish", () => {
+      const durationMs = Date.now() - start;
+      const isHealth = req.path === "/health" || req.path === "/api/health";
+      const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+      if (!isHealth) {
+        requestLog[level === "error" ? "error" : level === "warn" ? "warn" : "info"](
+          `${req.method} ${req.path} ${res.statusCode}`,
+          { method: req.method, path: req.path, status: res.statusCode, durationMs, requestId: rid, ...(userId ? { userId } : {}) },
+        );
+      }
+    });
+    next();
   });
-  next();
 });
 
 process.on("uncaughtException", (err) => logger.error("Uncaught Exception", err));

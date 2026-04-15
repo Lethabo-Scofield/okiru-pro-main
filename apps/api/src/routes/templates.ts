@@ -11,8 +11,11 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { createLogger } from '../logger.js';
 import multer from 'multer';
 import { aql } from 'arangojs';
+
+const logger = createLogger("Templates");
 import {
   buildFormulaGraph,
   extractScorecardStructure,
@@ -80,7 +83,7 @@ router.post('/ingest', upload.single('file'), async (req: Request, res: Response
         }
       }
     } catch (err: unknown) {
-      console.warn('[Templates] Computation Engine compile failed (non-blocking):', err);
+      logger.warn('Computation Engine compile failed (non-blocking)', { error: err instanceof Error ? err.message : String(err) });
     }
 
     return res.json({
@@ -97,7 +100,7 @@ router.post('/ingest', upload.single('file'), async (req: Request, res: Response
       errors: ingestionResult.errors,
     });
   } catch (error: unknown) {
-    console.error('[Templates] ingest error:', error);
+    logger.error('Ingest error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Ingestion failed',
     });
@@ -394,7 +397,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       ...result,
     });
   } catch (error: unknown) {
-    console.error('[Templates] delete error:', error);
+    logger.error('Delete error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Deletion failed',
     });
@@ -415,7 +418,7 @@ router.post('/ingest-all', async (req: Request, res: Response) => {
     const result = await ingestAllToolkits(basePath);
     return res.json(result);
   } catch (error: unknown) {
-    console.error('[Templates] ingest-all error:', error);
+    logger.error('Ingest-all error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Bulk ingestion failed',
       detail: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : String(error),
@@ -447,7 +450,7 @@ router.post('/store-files', async (req: Request, res: Response) => {
       const mapping = getSectorAndScorecardFromFilename(file);
       
       if (!mapping) {
-        console.warn(`[Templates] Could not determine sector/type for file: ${file}`);
+        logger.warn('Could not determine sector/type for file', { file });
         continue;
       }
 
@@ -470,7 +473,7 @@ router.post('/store-files', async (req: Request, res: Response) => {
 
     return res.json({ success: true, storedFiles: results });
   } catch (error: unknown) {
-    console.error('[Templates] store-files error:', error);
+    logger.error('Store-files error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'File storage failed'
     });
@@ -485,7 +488,7 @@ router.get('/files', async (_req: Request, res: Response) => {
     const files = await toolkitFilesRepo.getAllToolkitFilesMetadata();
     return res.json({ success: true, files });
   } catch (error: unknown) {
-    console.error('[Templates] get files error:', error);
+    logger.error('Get files error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to fetch files list'
     });
@@ -512,7 +515,7 @@ router.get('/files/:key', async (req: Request, res: Response) => {
     
     return res.send(fileBuffer);
   } catch (error: unknown) {
-    console.error('[Templates] download file error:', error);
+    logger.error('Download file error', error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to download file'
     });

@@ -2,6 +2,9 @@ import { Router, type Request as ExpressRequest, type Response } from 'express';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import { storage } from '../../storage.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger("Export");
 import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
 
 const router = Router();
@@ -14,7 +17,7 @@ router.post('/log', requireAuth, async (req: Request, res: Response) => {
     });
     return res.json(result);
   } catch (error: unknown) {
-    console.error('Export log error:', error);
+    logger.error('Export log error', error);
     return res.status(500).json({ message: "Failed to log export" });
   }
 });
@@ -25,7 +28,7 @@ router.get('/:clientId/logs', requireAuth, async (req: Request, res: Response) =
     const logs = await storage.getExportLogs(String(req.params.clientId));
     return res.json(logs);
   } catch (error: unknown) {
-    console.error('Get export logs error:', error);
+    logger.error('Get export logs error', error);
     return res.status(500).json({ message: "Failed to fetch export logs" });
   }
 });
