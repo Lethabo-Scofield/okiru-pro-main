@@ -18,3 +18,9 @@ id = "aQo4F3xeq6WVswFN_B8Kh"
 uri = "file://DEPLOYMENT.md"
 type = "text"
 title = "Production Deployment Guide"
+
+[[outputs]]
+id = "OFi-yhoqCX1zWi16N-oUb"
+uri = "file://docs/predefined-templates.md"
+type = "text"
+title = "Predefined Templates - Okiru BEE Starter Pack"
