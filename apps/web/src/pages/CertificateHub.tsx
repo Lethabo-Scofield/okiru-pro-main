@@ -717,11 +717,6 @@ export default function CertificateHub() {
                               </>
                             )}
                           </div>
-                          {result.snippet && (
-                            <p className="text-[11px] text-[#48484a] mt-1 line-clamp-2 leading-relaxed">
-                              ...<HighlightMatch text={result.snippet} query={search} />...
-                            </p>
-                          )}
                         </div>
                       </div>
                       <button
