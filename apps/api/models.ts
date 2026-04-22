@@ -288,6 +288,12 @@ const certificateMetadataSchema = new Schema({
   issueDate: { type: Date, default: null },
   supplierName: { type: String, default: null },
   bbbeeLevel: { type: Number, default: null },
+  bbbeeScore: { type: Number, default: null },
+  blackOwnership: { type: Number, default: null },
+  blackWomenOwnership: { type: Number, default: null },
+  verificationAgency: { type: String, default: null },
+  certificateNumber: { type: String, default: null },
+  slug: { type: String, default: null, index: true },
   status: { type: String, enum: ['valid', 'expiring', 'expired', 'unknown'], default: 'unknown' },
   extractedText: { type: String, default: null },
   extractionStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
@@ -298,5 +304,6 @@ const certificateMetadataSchema = new Schema({
 
 certificateMetadataSchema.index({ expiryDate: 1 });
 certificateMetadataSchema.index({ status: 1 });
+certificateMetadataSchema.index({ bbbeeLevel: 1 });
 
 export const CertificateMetadataModel = mongoose.models.CertificateMetadata || mongoose.model("CertificateMetadata", certificateMetadataSchema);

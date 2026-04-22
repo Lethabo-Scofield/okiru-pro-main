@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { registerExcelExtractRoute } from "./excelExtractRoute";
 import { registerApiProxy } from "./apiProxy";
+import { registerSeoRoutes } from "./seo";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
@@ -84,6 +85,9 @@ app.use((req, res, next) => {
 
   logger.debug("Registering API proxy...");
   registerApiProxy(app);
+
+  logger.debug("Registering SEO routes...");
+  registerSeoRoutes(app);
 
   logger.info("Starting route registration...");
   try {
