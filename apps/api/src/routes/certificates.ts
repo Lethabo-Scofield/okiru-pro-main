@@ -7,6 +7,7 @@ import { searchCertificates, isAzureSearchConfigured } from '../services/azureSe
 import { requireAuth } from '../middleware/auth.js';
 import { processAllCertificates, processOneCertificate, getCertificateStats } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel } from '../../models.js';
+import { isMongoConnected } from '../../db.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -227,6 +228,9 @@ router.get('/stats', async (_req: Request, res: Response) => {
 });
 
 router.get('/metadata', async (_req: Request, res: Response) => {
+  if (!isMongoConnected()) {
+    return res.json([]);
+  }
   try {
     const docs = await CertificateMetadataModel.find(
       { extractionStatus: 'completed' },
@@ -236,6 +240,100 @@ router.get('/metadata', async (_req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Failed to get certificate metadata', err);
     return res.status(500).json({ message: 'Failed to get metadata' });
+  }
+});
+
+// ============================================================================
+// SEO endpoints — used by the web tier to render SSR certificate hub pages.
+// ============================================================================
+
+function slugifyForSeo(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+function buildCertSlug(name: string | null | undefined, certNo: string | null | undefined): string {
+  const a = slugifyForSeo(name) || 'company';
+  const b = slugifyForSeo(certNo) || 'certificate';
+  return `${a}-${b}`;
+}
+
+function toSeoRecord(doc: any) {
+  const slug = doc.slug || buildCertSlug(doc.supplierName, doc.certificateNumber || doc.blobName);
+  return {
+    slug,
+    companyName: doc.supplierName || doc.fileName || 'Unknown company',
+    bbbeeLevel: doc.bbbeeLevel ?? null,
+    bbbeeScore: doc.bbbeeScore ?? null,
+    blackOwnership: doc.blackOwnership ?? null,
+    blackWomenOwnership: doc.blackWomenOwnership ?? null,
+    verificationAgency: doc.verificationAgency ?? null,
+    certificateNumber: doc.certificateNumber ?? null,
+    expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
+    issueDate: doc.issueDate ? new Date(doc.issueDate).toISOString().slice(0, 10) : null,
+    blobName: doc.blobName || null,
+    status: doc.status || 'unknown',
+    updatedAt: (doc.processedAt || doc.createdAt || new Date()).toISOString
+      ? new Date(doc.processedAt || doc.createdAt || new Date()).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
+  };
+}
+
+router.get('/seo/list', async (_req: Request, res: Response) => {
+  if (!isMongoConnected()) {
+    return res.json([]);
+  }
+  try {
+    const docs = await CertificateMetadataModel.find(
+      { extractionStatus: 'completed' },
+      { extractedText: 0 },
+    )
+      .sort({ processedAt: -1 })
+      .limit(500)
+      .lean();
+    return res.json(docs.map(toSeoRecord));
+  } catch (err: any) {
+    logger.error('Failed to list SEO certificates', err);
+    return res.json([]);
+  }
+});
+
+router.get('/by-slug/:slug', async (req: Request, res: Response) => {
+  const slug = (req.params.slug || '').toLowerCase();
+  if (!slug) return res.status(400).json({ message: 'slug required' });
+
+  if (!isMongoConnected()) {
+    return res.status(404).json({ message: 'Certificate not found' });
+  }
+
+  try {
+    let doc = await CertificateMetadataModel.findOne(
+      { slug },
+      { extractedText: 0 },
+    ).lean();
+
+    if (!doc) {
+      const candidates = await CertificateMetadataModel.find(
+        { extractionStatus: 'completed' },
+        { extractedText: 0 },
+      ).lean();
+      doc = candidates.find(
+        (d: any) => buildCertSlug(d.supplierName, d.certificateNumber || d.blobName) === slug,
+      ) as any;
+    }
+
+    if (!doc) return res.status(404).json({ message: 'Certificate not found' });
+    return res.json(toSeoRecord(doc));
+  } catch (err: any) {
+    logger.error('Failed to look up certificate by slug', err);
+    return res.status(500).json({ message: 'Lookup failed' });
   }
 });
 
