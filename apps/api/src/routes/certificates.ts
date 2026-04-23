@@ -3,9 +3,9 @@ import { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, 
 import multer from 'multer';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../logger.js';
-import { searchCertificates, isAzureSearchConfigured } from '../services/azureSearch.js';
+import { searchCertificates, isAzureSearchConfigured, getSearchClient } from '../services/azureSearch.js';
 import { requireAuth } from '../middleware/auth.js';
-import { processAllCertificates, processOneCertificate, getCertificateStats } from '../services/certificateExtractor.js';
+import { processAllCertificates, processOneCertificate, getCertificateStats, extractDatesFromText } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
 
@@ -265,42 +265,188 @@ function buildCertSlug(name: string | null | undefined, certNo: string | null | 
   return `${a}-${b}`;
 }
 
-function toSeoRecord(doc: any) {
-  const slug = doc.slug || buildCertSlug(doc.supplierName, doc.certificateNumber || doc.blobName);
+// ---- SEO record helpers (Azure-first, with optional Mongo enrichment) ----
+
+interface SeoRecord {
+  slug: string;
+  companyName: string;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  verificationAgency: string | null;
+  certificateNumber: string | null;
+  expiryDate: string | null;
+  issueDate: string | null;
+  blobName: string | null;
+  status: 'valid' | 'expiring' | 'expired' | 'unknown';
+  updatedAt: string;
+}
+
+function deriveCompanyName(fileName: string): string {
+  const base = fileName.split('/').pop() || fileName;
+  const noExt = base.replace(/\.[a-z0-9]+$/i, '');
+  const trimmed = noExt
+    .replace(/^\d{4}[\s_-]+\d{2}[\s_-]+\d{1,2}[\s_-]+/, '')
+    .replace(/[_-]?\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
+    .replace(/[_-]?B-?BBEE.*$/i, '')
+    .replace(/[_-]?Certificate.*$/i, '')
+    .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return trimmed || 'Unknown company';
+}
+
+function isoDay(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function statusFromExpiry(expiry: Date | null): 'valid' | 'expiring' | 'expired' | 'unknown' {
+  if (!expiry) return 'unknown';
+  const now = Date.now();
+  const sixtyDays = now + 60 * 24 * 60 * 60 * 1000;
+  const t = expiry.getTime();
+  if (t < now) return 'expired';
+  if (t <= sixtyDays) return 'expiring';
+  return 'valid';
+}
+
+function parseFromContent(content: string, fileName: string) {
+  const extracted = extractDatesFromText(content || '', fileName);
+
+  const ownershipPatterns: Array<{ key: 'blackOwnership' | 'blackWomenOwnership'; re: RegExp }> = [
+    { key: 'blackWomenOwnership', re: /black\s*women[^%]{0,40}?(\d{1,3}(?:[.,]\d+)?)\s*%/i },
+    { key: 'blackOwnership', re: /black\s*(?:economic\s*interest|ownership|shareholding)[^%]{0,40}?(\d{1,3}(?:[.,]\d+)?)\s*%/i },
+  ];
+  const ownership: Record<string, number | null> = { blackOwnership: null, blackWomenOwnership: null };
+  for (const p of ownershipPatterns) {
+    const m = p.re.exec(content || '');
+    if (m) {
+      const v = parseFloat(m[1].replace(',', '.'));
+      if (Number.isFinite(v) && v >= 0 && v <= 100) ownership[p.key] = v;
+    }
+  }
+
+  const scoreMatch = /(?:overall\s*score|total\s*score|bbbee\s*score|score\s*achieved)[:\s]*(\d{1,3}(?:[.,]\d+)?)/i.exec(content || '');
+  const score = scoreMatch ? parseFloat(scoreMatch[1].replace(',', '.')) : null;
+
+  const agencyMatch = /(?:verification\s*agency|verified\s*by|issued\s*by|verification\s*by)[:\s]+([A-Z][A-Za-z&.\- ]{2,80})/i.exec(content || '');
+  const agency = agencyMatch ? agencyMatch[1].replace(/\s{2,}/g, ' ').trim() : null;
+
+  const certNoMatch = /(?:certificate\s*(?:no|number|#)|cert\s*no)[:\s.#-]*([A-Z0-9][A-Z0-9\-_/]{3,30})/i.exec(content || '');
+  const certNumber = certNoMatch ? certNoMatch[1].toUpperCase().replace(/[_/]/g, '-') : null;
+
+  return {
+    expiryDate: extracted.expiryDate,
+    issueDate: extracted.issueDate,
+    bbbeeLevel: extracted.bbbeeLevel,
+    supplierName: extracted.supplierName,
+    bbbeeScore: score && score >= 0 && score <= 130 ? score : null,
+    blackOwnership: ownership.blackOwnership,
+    blackWomenOwnership: ownership.blackWomenOwnership,
+    verificationAgency: agency,
+    certificateNumber: certNumber,
+  };
+}
+
+async function lookupSearchContent(blobName: string): Promise<string> {
+  if (!isAzureSearchConfigured()) return '';
+  const client = getSearchClient();
+  if (!client) return '';
+  try {
+    const escaped = blobName.replace(/'/g, "''");
+    const results = await client.search('*', {
+      filter: `document_id eq '${escaped}'`,
+      top: 5,
+      includeTotalCount: false,
+    });
+    const chunks: string[] = [];
+    for await (const r of results.results) {
+      const c = (r.document as any)?.content;
+      if (c) chunks.push(String(c));
+    }
+    return chunks.join('\n').slice(0, 20000);
+  } catch (err: any) {
+    logger.warn('Azure Search lookup failed for blob', { blobName, error: err?.message });
+    return '';
+  }
+}
+
+async function loadMongoMetadataMap(blobNames: string[]): Promise<Map<string, any>> {
+  if (!isMongoConnected() || blobNames.length === 0) return new Map();
+  try {
+    const docs = await CertificateMetadataModel.find(
+      { blobName: { $in: blobNames } },
+      { extractedText: 0 },
+    ).lean();
+    const m = new Map<string, any>();
+    for (const d of docs as any[]) m.set(d.blobName, d);
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
+function buildSeoRecord(blob: { name: string; lastModified: Date | null }, mongoDoc: any | null, parsed: ReturnType<typeof parseFromContent> | null): SeoRecord {
+  const fileName = blob.name.split('/').pop() || blob.name;
+  const companyName = mongoDoc?.supplierName || parsed?.supplierName || deriveCompanyName(fileName);
+  const certificateNumber = mongoDoc?.certificateNumber || parsed?.certificateNumber || null;
+  const slug = mongoDoc?.slug || buildCertSlug(companyName, certificateNumber || fileName);
+  const expiry = mongoDoc?.expiryDate ? new Date(mongoDoc.expiryDate) : (parsed?.expiryDate || null);
+  const issue = mongoDoc?.issueDate ? new Date(mongoDoc.issueDate) : (parsed?.issueDate || null);
+  const status = (mongoDoc?.status as SeoRecord['status']) || statusFromExpiry(expiry);
   return {
     slug,
-    companyName: doc.supplierName || doc.fileName || 'Unknown company',
-    bbbeeLevel: doc.bbbeeLevel ?? null,
-    bbbeeScore: doc.bbbeeScore ?? null,
-    blackOwnership: doc.blackOwnership ?? null,
-    blackWomenOwnership: doc.blackWomenOwnership ?? null,
-    verificationAgency: doc.verificationAgency ?? null,
-    certificateNumber: doc.certificateNumber ?? null,
-    expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
-    issueDate: doc.issueDate ? new Date(doc.issueDate).toISOString().slice(0, 10) : null,
-    blobName: doc.blobName || null,
-    status: doc.status || 'unknown',
-    updatedAt: (doc.processedAt || doc.createdAt || new Date()).toISOString
-      ? new Date(doc.processedAt || doc.createdAt || new Date()).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10),
+    companyName,
+    bbbeeLevel: mongoDoc?.bbbeeLevel ?? parsed?.bbbeeLevel ?? null,
+    bbbeeScore: mongoDoc?.bbbeeScore ?? parsed?.bbbeeScore ?? null,
+    blackOwnership: mongoDoc?.blackOwnership ?? parsed?.blackOwnership ?? null,
+    blackWomenOwnership: mongoDoc?.blackWomenOwnership ?? parsed?.blackWomenOwnership ?? null,
+    verificationAgency: mongoDoc?.verificationAgency ?? parsed?.verificationAgency ?? null,
+    certificateNumber,
+    expiryDate: isoDay(expiry),
+    issueDate: isoDay(issue),
+    blobName: blob.name,
+    status,
+    updatedAt: isoDay(blob.lastModified || mongoDoc?.processedAt || mongoDoc?.createdAt || new Date()) || new Date().toISOString().slice(0, 10),
   };
 }
 
 router.get('/seo/list', async (_req: Request, res: Response) => {
-  if (!isMongoConnected()) {
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
     return res.json([]);
   }
+
   try {
-    const docs = await CertificateMetadataModel.find(
-      { extractionStatus: 'completed' },
-      { extractedText: 0 },
-    )
-      .sort({ processedAt: -1 })
-      .limit(500)
-      .lean();
-    return res.json(docs.map(toSeoRecord));
+    const containerClient = getContainerClient(blobServiceClient);
+    const blobs: Array<{ name: string; lastModified: Date | null }> = [];
+    for await (const blob of containerClient.listBlobsFlat()) {
+      blobs.push({ name: blob.name, lastModified: blob.properties.lastModified || null });
+    }
+
+    const mongoMap = await loadMongoMetadataMap(blobs.map((b) => b.name));
+
+    const records: SeoRecord[] = [];
+    for (const b of blobs) {
+      const md = mongoMap.get(b.name) || null;
+      records.push(buildSeoRecord(b, md, null));
+    }
+
+    const seenSlugs = new Set<string>();
+    const deduped = records.filter((r) => {
+      if (!r.slug || seenSlugs.has(r.slug)) return false;
+      seenSlugs.add(r.slug);
+      return true;
+    });
+
+    deduped.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return res.json(deduped.slice(0, 1000));
   } catch (err: any) {
-    logger.error('Failed to list SEO certificates', err);
+    logger.error('Failed to list SEO certificates from Azure', err);
     return res.json([]);
   }
 });
@@ -309,28 +455,53 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   const slug = (req.params.slug || '').toLowerCase();
   if (!slug) return res.status(400).json({ message: 'slug required' });
 
-  if (!isMongoConnected()) {
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
     return res.status(404).json({ message: 'Certificate not found' });
   }
 
   try {
-    let doc = await CertificateMetadataModel.findOne(
-      { slug },
-      { extractedText: 0 },
-    ).lean();
+    const containerClient = getContainerClient(blobServiceClient);
 
-    if (!doc) {
-      const candidates = await CertificateMetadataModel.find(
-        { extractionStatus: 'completed' },
-        { extractedText: 0 },
-      ).lean();
-      doc = candidates.find(
-        (d: any) => buildCertSlug(d.supplierName, d.certificateNumber || d.blobName) === slug,
-      ) as any;
+    let matchedBlob: { name: string; lastModified: Date | null } | null = null;
+    let matchedRecord: SeoRecord | null = null;
+
+    const blobs: Array<{ name: string; lastModified: Date | null }> = [];
+    for await (const blob of containerClient.listBlobsFlat()) {
+      blobs.push({ name: blob.name, lastModified: blob.properties.lastModified || null });
+    }
+    const mongoMap = await loadMongoMetadataMap(blobs.map((b) => b.name));
+
+    for (const b of blobs) {
+      const md = mongoMap.get(b.name) || null;
+      const candidate = buildSeoRecord(b, md, null);
+      if (candidate.slug === slug) {
+        matchedBlob = b;
+        matchedRecord = candidate;
+        break;
+      }
     }
 
-    if (!doc) return res.status(404).json({ message: 'Certificate not found' });
-    return res.json(toSeoRecord(doc));
+    if (!matchedBlob || !matchedRecord) {
+      return res.status(404).json({ message: 'Certificate not found' });
+    }
+
+    const needsEnrichment =
+      matchedRecord.bbbeeLevel == null ||
+      matchedRecord.bbbeeScore == null ||
+      matchedRecord.blackOwnership == null ||
+      matchedRecord.verificationAgency == null;
+
+    if (needsEnrichment) {
+      const content = await lookupSearchContent(matchedBlob.name);
+      if (content) {
+        const parsed = parseFromContent(content, matchedBlob.name.split('/').pop() || matchedBlob.name);
+        const md = mongoMap.get(matchedBlob.name) || null;
+        matchedRecord = buildSeoRecord(matchedBlob, md, parsed);
+      }
+    }
+
+    return res.json(matchedRecord);
   } catch (err: any) {
     logger.error('Failed to look up certificate by slug', err);
     return res.status(500).json({ message: 'Lookup failed' });
