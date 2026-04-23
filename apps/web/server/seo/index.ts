@@ -29,10 +29,20 @@ function getHost(req: Request): string | undefined {
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,200}$/;
 
+const VERIFICATION_FILES: Record<string, string> = {
+  "googlea288ba49cef187fc.html": "google-site-verification: googlea288ba49cef187fc.html",
+};
+
 export function registerSeoRoutes(app: Express): void {
   app.get("/robots.txt", (req: Request, res: Response) => {
     res.type("text/plain").send(renderRobots(getHost(req), getProto(req)));
   });
+
+  for (const [fileName, content] of Object.entries(VERIFICATION_FILES)) {
+    app.get(`/${fileName}`, (_req: Request, res: Response) => {
+      res.type("text/html").send(content);
+    });
+  }
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
