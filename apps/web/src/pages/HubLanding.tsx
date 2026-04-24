@@ -136,11 +136,11 @@ export default function HubLanding() {
               <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.10] items-center justify-center text-foreground font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
-              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
+              <span className="text-foreground/90 font-medium">{user?.fullName || user?.username || ''}</span>
             </div>
             <button
               onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-[12px] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
               data-testid="btn-sign-out"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -225,7 +225,7 @@ export default function HubLanding() {
                   <div className="space-y-1.5 mb-4">
                     {toolkit.features.map((feature, fi) => (
                       <div key={fi} className="flex items-center gap-2 text-[11px]">
-                        <span className={`w-1 h-1 rounded-full shrink-0 ${isActive ? 'bg-[#636366]' : 'bg-[#2c2c2e]'}`}></span>
+                        <span className={`w-1 h-1 rounded-full shrink-0 ${isActive ? 'bg-[#636366]' : 'bg-muted'}`}></span>
                         <span className={isActive ? 'text-[#636366]' : 'text-[#3a3a3c]'}>{feature}</span>
                       </div>
                     ))}

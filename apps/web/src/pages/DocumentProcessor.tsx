@@ -942,7 +942,7 @@ function PDFDocumentViewer({ file, entities, hoveredEntity, onHoverEntity }: {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="w-6 h-6 text-[#d1d1d6] animate-spin" />
+        <Loader2 className="w-6 h-6 text-foreground/90 animate-spin" />
         <p className="text-[#8e8e93] text-sm">Rendering document...</p>
       </div>
     );
@@ -1050,7 +1050,7 @@ function PopulatingScreen({
         </p>
 
         {/* Progress bar */}
-        <div className="mt-5 h-1 bg-[#1c1c1e] rounded-full overflow-hidden">
+        <div className="mt-5 h-1 bg-card rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{ width: `${done ? 100 : progress}%`, background: 'linear-gradient(90deg,#5e9bff,#a78bfa)' }}
@@ -2749,7 +2749,7 @@ export default function DocumentProcessor() {
               <ChevronLeft className="h-4 w-4" />
               <span className="text-[13px] font-medium hidden sm:inline">Dashboard</span>
             </Link>
-            <div className="w-px h-4 bg-[#1c1c1e]"></div>
+            <div className="w-px h-4 bg-card"></div>
             <span className="text-[14px] font-medium text-foreground">Document Processor</span>
           </div>
 
@@ -2757,9 +2757,9 @@ export default function DocumentProcessor() {
             <Link href="/builder" className="text-[13px] font-medium text-[#48484a] hover:text-foreground transition-colors px-3 py-1.5 rounded-lg" data-testid="link-builder-nav">
               Builder
             </Link>
-            <div className="w-px h-4 bg-[#1c1c1e] mx-0.5"></div>
+            <div className="w-px h-4 bg-card mx-0.5"></div>
             <div className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-[12px]" data-testid="user-menu">
-              <span className="inline-flex h-5 w-5 rounded-full bg-[#2c2c2e] items-center justify-center text-[#8e8e93] font-semibold text-[9px]">
+              <span className="inline-flex h-5 w-5 rounded-full bg-muted items-center justify-center text-[#8e8e93] font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
               <span className="text-[#8e8e93] font-medium">{user?.fullName || user?.username || ''}</span>
@@ -2812,13 +2812,13 @@ export default function DocumentProcessor() {
                         ? 'bg-primary text-primary-foreground group-hover:bg-primary/80'
                         : isCurrent
                           ? 'bg-primary text-primary-foreground'
-                          : 'bg-[#1c1c1e] text-[#48484a]'
+                          : 'bg-card text-[#48484a]'
                     }`}>
                       {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
                     </div>
                     <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
                       isComplete
-                        ? 'text-[#d1d1d6] group-hover:text-foreground'
+                        ? 'text-foreground/90 group-hover:text-foreground'
                         : isCurrent
                           ? 'text-foreground'
                           : 'text-[#48484a]'
@@ -2862,7 +2862,7 @@ export default function DocumentProcessor() {
                       <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Logo</p>
                       <div className="flex items-center gap-5">
                         <div
-                          className="w-[72px] h-[72px] rounded-2xl bg-[#1a1a1a] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer transition-colors hover:ring-2 hover:ring-[#48484a]/50"
+                          className="w-[72px] h-[72px] rounded-2xl bg-card flex items-center justify-center overflow-hidden shrink-0 cursor-pointer transition-colors hover:ring-2 hover:ring-[#48484a]/50"
                           style={{ border: '2px dashed #2c2c2e' }}
                           onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
                           data-testid="logo-upload-zone"
@@ -2885,7 +2885,7 @@ export default function DocumentProcessor() {
                           <div className="flex items-center gap-2">
                             <button type="button"
                               onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                              className="px-3.5 py-2 rounded-xl bg-card/[0.06] hover:bg-card/[0.09] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-white/[0.08]"
+                              className="px-3.5 py-2 rounded-xl bg-card/[0.06] hover:bg-card/[0.09] text-foreground/90 text-[12px] font-medium smooth press-sm border border-white/[0.08]"
                               data-testid="button-upload-logo">
                               {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
                             </button>
@@ -2911,14 +2911,14 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Company Name <span className="text-red-400">*</span></label>
                           <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
                             placeholder="e.g. Acme Holdings (Pty) Ltd"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-company-name" autoFocus />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Registration Number</label>
                           <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
                             placeholder="e.g. 2021/123456/07"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-company-regno" />
                         </div>
                         <div>
@@ -2930,7 +2930,7 @@ export default function DocumentProcessor() {
                             value={companyInfo.sector}
                             onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
                             disabled={loadingSectors}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none disabled:opacity-50"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none disabled:opacity-50"
                             data-testid="select-company-sector">
                             <option value="">{loadingSectors ? 'Loading sectors...' : 'Select a sector…'}</option>
                             {availableSectors.map(s => (
@@ -2949,20 +2949,20 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover (ZAR)</label>
                           <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
                             placeholder="e.g. R 50,000,000"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-annual-turnover" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Number of Employees</label>
                           <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
                             placeholder="e.g. 150"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-employees" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End</label>
                           <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
                             data-testid="select-fye">
                             <option value="">Select month…</option>
                             {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
@@ -2971,7 +2971,7 @@ export default function DocumentProcessor() {
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Current B-BBEE Level</label>
                           <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
                             data-testid="select-bbee-level">
                             <option value="">Select level…</option>
                             {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -2981,7 +2981,7 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Physical Address</label>
                           <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
                             placeholder="e.g. 10 Mandela Square, Sandton, 2196"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-address" />
                         </div>
                       </div>
@@ -2995,21 +2995,21 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Full Name</label>
                           <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
                             placeholder="e.g. Jane Dlamini"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-name" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Email Address</label>
                           <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
                             placeholder="e.g. jane@company.co.za"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-email" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Phone Number</label>
                           <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
                             placeholder="e.g. +27 82 123 4567"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-phone" />
                         </div>
                       </div>
@@ -3021,7 +3021,7 @@ export default function DocumentProcessor() {
                       <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
                         placeholder="Any additional context about this client or assessment…"
                         rows={3}
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all resize-none"
+                        className="w-full bg-card border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all resize-none"
                         data-testid="input-notes" />
                     </div>
 
@@ -3051,7 +3051,7 @@ export default function DocumentProcessor() {
                       setCurrentPage(nextPage);
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
-                    className="w-full mt-4 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
+                    className="w-full mt-4 py-3 bg-card hover:bg-primary/90 disabled:bg-card disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
                     data-testid="button-next-mode"
                   >
                     {isSavingSession
@@ -3156,7 +3156,7 @@ export default function DocumentProcessor() {
                 <div className="rounded-xl p-4 mb-6 flex items-start gap-3" style={{ background: '#1a1a1a', border: '1px solid #2c2c2e' }}>
                   <AlertTriangle className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-[#d1d1d6]">No templates available</p>
+                    <p className="text-sm font-medium text-foreground/90">No templates available</p>
                     <p className="text-xs text-[#636366] mt-1">Create a template in the Entity Builder first. <Link href="/builder" className="underline text-foreground">Go to Builder</Link></p>
                   </div>
                 </div>
@@ -3202,7 +3202,7 @@ export default function DocumentProcessor() {
                   <button
                     type="button"
                     onClick={() => setCurrentPage('choose-mode')}
-                    className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
+                    className="flex-1 px-5 py-3 bg-card text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
                     data-testid="button-back-choose-mode-empty"
                   >
                     Back
@@ -3232,7 +3232,7 @@ export default function DocumentProcessor() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#48484a]">{file.size}</span>
                             {file.status === 'uploading' && (
-                              <div className="flex-1 h-0.5 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[100px]">
+                              <div className="flex-1 h-0.5 bg-muted rounded-full overflow-hidden max-w-[100px]">
                                 <div className="h-full bg-card transition-all rounded-full" style={{ width: `${file.uploadProgress}%` }}></div>
                               </div>
                             )}
@@ -3249,13 +3249,13 @@ export default function DocumentProcessor() {
                     <button
                       type="button"
                       onClick={() => setCurrentPage('choose-mode')}
-                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
+                      className="px-5 py-3 bg-card text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
                       data-testid="button-back-choose-mode-upload"
                     >
                       Back
                     </button>
                     <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
-                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
+                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-card disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
                       {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                     </button>
                   </div>
@@ -3360,10 +3360,10 @@ export default function DocumentProcessor() {
                                                 persistTemplateSelection(t.id);
                                                 setOpenTemplateDropdown(null);
                                               }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
+                                              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-muted"
                                             >
                                               <div className="flex-1 min-w-0">
-                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-foreground' : 'text-[#d1d1d6]'}`}>{t.name}</div>
+                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-foreground' : 'text-foreground/90'}`}>{t.name}</div>
                                                 <div className="text-[11px] text-[#48484a]">{(t.entities ?? []).length} field{(t.entities ?? []).length !== 1 ? 's' : ''} · v{t.version}</div>
                                               </div>
                                               {isSel && <Check className="w-4 h-4 text-foreground shrink-0" />}
@@ -3382,7 +3382,7 @@ export default function DocumentProcessor() {
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
-                                  !isScanned ? 'bg-[#1c1c1e] text-foreground' : 'text-[#48484a] hover:text-[#636366]'
+                                  !isScanned ? 'bg-card text-foreground' : 'text-[#48484a] hover:text-[#636366]'
                                 }`}
                               >
                                 <Monitor className="w-3 h-3" />
@@ -3393,7 +3393,7 @@ export default function DocumentProcessor() {
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
-                                  isScanned ? 'bg-[#1c1c1e] text-foreground' : 'text-[#48484a] hover:text-[#636366]'
+                                  isScanned ? 'bg-card text-foreground' : 'text-[#48484a] hover:text-[#636366]'
                                 }`}
                               >
                                 <ScanLine className="w-3 h-3" />
@@ -3420,11 +3420,11 @@ export default function DocumentProcessor() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-upload">
+                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3 bg-card text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-upload">
                   Back
                 </button>
                 <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
-                  className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
+                  className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-card disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
                   {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                 </button>
               </div>
@@ -3469,7 +3469,7 @@ export default function DocumentProcessor() {
                       {allEntities.map((ent) => (
                         <div key={ent.label} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#1a1a1a' }}>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[13px] font-medium text-[#d1d1d6]">{ent.label}</span>
+                            <span className="text-[13px] font-medium text-foreground/90">{ent.label}</span>
                             {ent.definition && <p className="text-[11px] text-[#48484a] mt-0.5 line-clamp-1">{ent.definition}</p>}
                           </div>
                         </div>
@@ -3513,7 +3513,7 @@ export default function DocumentProcessor() {
                         <span className="text-[11px] text-[#636366]">{doneCount} of {totalCount} complete</span>
                         <span className="text-[11px] text-[#636366] tabular-nums">{Math.round(pct)}%</span>
                       </div>
-                      <div className="h-1.5 bg-[#1c1c1e] rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-card rounded-full overflow-hidden">
                         <div className="h-full bg-card transition-all duration-500 rounded-full" style={{ width: `${pct}%` }}></div>
                       </div>
                     </div>
@@ -3522,12 +3522,12 @@ export default function DocumentProcessor() {
 
                 <div className="flex gap-3">
                   <button onClick={() => { if (!anyProcessing) setCurrentPage('classify'); }} disabled={anyProcessing}
-                    className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-classify">
+                    className="px-5 py-3 bg-card text-[#8e8e93] hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-classify">
                     Back
                   </button>
                   {!allDone && (
                     <button onClick={startProcessing} disabled={anyProcessing}
-                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
+                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-card disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
                       {anyProcessing ? (
                         <><Loader2 className="w-3.5 h-3.5 mr-1.5 inline-block animate-spin" />Extracting...</>
                       ) : 'Extract All'}
@@ -3838,7 +3838,7 @@ export default function DocumentProcessor() {
                   <button onClick={() => {
                     if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); setEditingEntity(null); }
                     else setCurrentPage('extract');
-                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-foreground hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
+                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-foreground hover:bg-card rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
                   <div>
@@ -3846,7 +3846,7 @@ export default function DocumentProcessor() {
                     <p className="text-[11px] text-[#636366] truncate max-w-[240px]">{extractionResults[activeReviewDoc]?.fileName}</p>
                   </div>
                   {extractionResults.length > 1 && (
-                    <span className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] rounded-lg text-[11px] font-medium">
+                    <span className="px-2.5 py-1 bg-card text-[#8e8e93] rounded-lg text-[11px] font-medium">
                       {activeReviewDoc + 1} / {extractionResults.length}
                     </span>
                   )}
@@ -3857,7 +3857,7 @@ export default function DocumentProcessor() {
                     className={`px-3.5 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 border transition-colors
                       ${savedDocs.has(activeReviewDoc)
                         ? 'bg-status-success/10 border-status-success/25 text-status-success hover:bg-status-success/15'
-                        : 'bg-[#1c1c1e] border-[#2c2c2e] text-[#d1d1d6] hover:text-foreground hover:border-[#48484a]'}
+                        : 'bg-card border-border text-foreground/90 hover:text-foreground hover:border-[#48484a]'}
                       disabled:opacity-40 disabled:cursor-not-allowed`}
                     data-testid="button-save-doc">
                     {isSavingSession
@@ -3869,7 +3869,7 @@ export default function DocumentProcessor() {
 
                   {/* Next button */}
                   <button onClick={handleNext} disabled={isLastDoc || isSavingSession || isSubmitted}
-                    className="px-3.5 py-2 bg-[#1c1c1e] border border-[#2c2c2e] hover:border-[#48484a] text-[#d1d1d6] hover:text-foreground rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 bg-card border border-border hover:border-[#48484a] text-foreground/90 hover:text-foreground rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
                     data-testid="button-next-doc">
                     Next <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -3887,7 +3887,7 @@ export default function DocumentProcessor() {
                     const labels: Record<string, string> = { employees: 'Employees', shareholders: 'Shareholders', suppliers: 'Suppliers', contributions: 'ESD/SED', trainingPrograms: 'Training' };
                     const parts = Object.entries(tbl).map(([k, v]) => `${v} ${labels[k] || k}`);
                     return (
-                      <div className="px-2 py-1.5 bg-[#1c1c1e] rounded-lg text-[10px] text-[#8e8e93] flex items-center gap-1.5 max-w-[260px] truncate" title={`${entityCount} entities, ${parts.join(', ')}`}>
+                      <div className="px-2 py-1.5 bg-card rounded-lg text-[10px] text-[#8e8e93] flex items-center gap-1.5 max-w-[260px] truncate" title={`${entityCount} entities, ${parts.join(', ')}`}>
                         <span className="text-status-success font-mono">{entityCount}</span>
                         <span>entities</span>
                         {parts.length > 0 && <span className="text-[#48484a]">|</span>}
@@ -3904,7 +3904,7 @@ export default function DocumentProcessor() {
                         ? 'bg-green-600 text-foreground'
                         : allSaved
                           ? 'bg-card/[0.12] hover:bg-card/[0.18] text-foreground'
-                          : 'bg-[#1c1c1e] border border-[#2c2c2e] text-[#48484a] cursor-not-allowed'}
+                          : 'bg-card border border-border text-[#48484a] cursor-not-allowed'}
                       disabled:opacity-60`}
                     data-testid="button-submit">
                     {isSavingSession
@@ -3987,7 +3987,7 @@ export default function DocumentProcessor() {
                         {(['structured', 'raw'] as const).map(tab => (
                           <button key={tab} onClick={() => setReviewTab(tab)}
                             className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold smooth press-sm transition-colors capitalize ${
-                              reviewTab === tab ? 'bg-[#1c1c1e] text-foreground' : 'text-[#636366] hover:text-[#8e8e93]'
+                              reviewTab === tab ? 'bg-card text-foreground' : 'text-[#636366] hover:text-[#8e8e93]'
                             }`}>
                             {tab === 'structured' ? 'Structured View' : 'Raw Entities'}
                           </button>
@@ -3997,12 +3997,12 @@ export default function DocumentProcessor() {
                         <div className="flex items-center gap-1.5">
                           {(['all', 'edited', 'by-page'] as const).map(f => (
                             <button key={f} onClick={() => setReviewFilter(f)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-foreground' : 'text-[#8e8e93] hover:text-foreground'}`}>
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-card text-foreground' : 'text-[#8e8e93] hover:text-foreground'}`}>
                               {f === 'by-page' ? 'By Page' : f}
                             </button>
                           ))}
                           <button onClick={() => approveAllForDoc(activeReviewDoc)}
-                            className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
+                            className="px-2.5 py-1 bg-card text-[#8e8e93] hover:text-foreground border border-border rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
                             <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
                           </button>
                         </div>
@@ -4036,7 +4036,7 @@ export default function DocumentProcessor() {
                           const color = confidence >= 0.85 ? '#34d399' : confidence >= 0.6 ? '#f59e0b' : '#f87171';
                           return (
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[60px]">
+                              <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden max-w-[60px]">
                                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                               </div>
                               <span className="text-[9px] text-[#636366] tabular-nums">{pct}%</span>
@@ -4087,7 +4087,7 @@ export default function DocumentProcessor() {
                                   <select
                                     autoFocus
                                     defaultValue={isBool ? (value ? 'Yes' : value === false ? 'No' : '') : (value ?? '')}
-                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
+                                    className="w-full mt-0.5 bg-muted border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
                                     onChange={(e) => handleSave(e.target.value)}
                                     onBlur={() => setEditingField(null)}
                                   >
@@ -4103,7 +4103,7 @@ export default function DocumentProcessor() {
                                     type={isNum ? 'number' : 'text'}
                                     step={isNum ? 'any' : undefined}
                                     defaultValue={String(displayVal)}
-                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
+                                    className="w-full mt-0.5 bg-muted border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') { handleSave((e.target as HTMLInputElement).value); }
                                       if (e.key === 'Escape') setEditingField(null);
@@ -4117,7 +4117,7 @@ export default function DocumentProcessor() {
 
                           return (
                             <div
-                              className="min-w-0 group/field cursor-pointer rounded px-1 -mx-1 hover:bg-[#2c2c2e]/60 transition-colors"
+                              className="min-w-0 group/field cursor-pointer rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
                               onClick={() => setEditingField({ pillar, field: fieldKey, rowIndex })}
                             >
                               <span className="text-[9px] text-[#636366] uppercase tracking-wider block truncate">
@@ -4175,10 +4175,10 @@ export default function DocumentProcessor() {
                         return (
                           <>
                             {/* Financials bar */}
-                            <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3 border border-[#2c2c2e]">
+                            <div className="bg-card rounded-2xl px-4 py-3 border border-border">
                               <div className="flex items-center gap-2 mb-3">
                                 <Briefcase className="w-3.5 h-3.5 text-[#8e8e93]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Financials</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">Financials</span>
                               </div>
                               <div className="grid grid-cols-3 gap-3">
                                 <EditableFieldCell label="Revenue" value={revenueE?.value} confidence={revenueE?.confidence} required fieldKey="revenue" pillar="financials" />
@@ -4190,10 +4190,10 @@ export default function DocumentProcessor() {
                             </div>
 
                             {/* Ownership */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <Users className="w-3.5 h-3.5 text-[#5e9bff]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Ownership</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">Ownership</span>
                                 <CompletenessChip filled={shFilled} total={shareholders.length} hasData={shareholders.length > 0} />
                               </div>
                               <div className="px-4 pb-3 space-y-2">
@@ -4201,7 +4201,7 @@ export default function DocumentProcessor() {
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No shareholders extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => addTableRow('shareholders')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#5e9bff]/40 transition-colors">
+                                        <button onClick={() => addTableRow('shareholders')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#5e9bff]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
                                       </div>
@@ -4211,7 +4211,7 @@ export default function DocumentProcessor() {
                                     const bComplete = shReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
                                     return aComplete - bComplete;
                                   }).map((sh: any, i: number) => (
-                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                       <div className="flex items-center justify-between mb-2">
                                         <EditableFieldCell label="Name" value={sh.name} fieldKey="name" pillar="ownership" rowIndex={i} tableName="shareholders" />
                                         <button onClick={() => deleteTableRow('shareholders', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
@@ -4229,17 +4229,17 @@ export default function DocumentProcessor() {
                                       </div>
                                     </div>
                                   ))}
-                                  <button onClick={() => addTableRow('shareholders')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#5e9bff]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <button onClick={() => addTableRow('shareholders')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#5e9bff]/40 transition-colors flex items-center justify-center gap-1.5">
                                     <Plus className="w-3 h-3" /> Add Shareholder
                                   </button>
                                 </div>
                             </div>
 
                             {/* Management Control */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <Building2 className="w-3.5 h-3.5 text-[#34d399]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Management Control</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">Management Control</span>
                                 <CompletenessChip filled={empFilled} total={employees.length} hasData={employees.length > 0} />
                               </div>
                               <div className="px-4 pb-3 space-y-2">
@@ -4247,7 +4247,7 @@ export default function DocumentProcessor() {
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No employees extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => addTableRow('employees')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#34d399]/40 transition-colors">
+                                        <button onClick={() => addTableRow('employees')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#34d399]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
                                       </div>
@@ -4257,7 +4257,7 @@ export default function DocumentProcessor() {
                                     const bComplete = empReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
                                     return aComplete - bComplete;
                                   }).map((emp: any, i: number) => (
-                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                       <div className="flex items-center justify-between mb-2">
                                         <EditableFieldCell label="Name" value={emp.name} fieldKey="name" pillar="management" rowIndex={i} tableName="employees" />
                                         <button onClick={() => deleteTableRow('employees', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
@@ -4271,17 +4271,17 @@ export default function DocumentProcessor() {
                                       </div>
                                     </div>
                                   ))}
-                                  <button onClick={() => addTableRow('employees')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#34d399]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <button onClick={() => addTableRow('employees')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#34d399]/40 transition-colors flex items-center justify-center gap-1.5">
                                     <Plus className="w-3 h-3" /> Add Employee
                                   </button>
                                 </div>
                             </div>
 
                             {/* Skills Development */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <BookOpen className="w-3.5 h-3.5 text-[#f59e0b]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Skills Development</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">Skills Development</span>
                                 <CompletenessChip filled={tpFilled} total={trainingPrograms.length} hasData={trainingPrograms.length > 0} />
                               </div>
                               <div className="px-4 pb-3 space-y-2">
@@ -4289,7 +4289,7 @@ export default function DocumentProcessor() {
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No training programs extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => addTableRow('trainingPrograms')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f59e0b]/40 transition-colors">
+                                        <button onClick={() => addTableRow('trainingPrograms')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#f59e0b]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
                                       </div>
@@ -4299,7 +4299,7 @@ export default function DocumentProcessor() {
                                     const bComplete = tpReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
                                     return aComplete - bComplete;
                                   }).map((tp: any, i: number) => (
-                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                       <div className="flex items-center justify-between mb-2">
                                         <EditableFieldCell label="Learner Name" value={tp.name || tp.learnerName} fieldKey="name" pillar="skills" rowIndex={i} tableName="trainingPrograms" />
                                         <button onClick={() => deleteTableRow('trainingPrograms', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
@@ -4313,17 +4313,17 @@ export default function DocumentProcessor() {
                                       </div>
                                     </div>
                                   ))}
-                                  <button onClick={() => addTableRow('trainingPrograms')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f59e0b]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <button onClick={() => addTableRow('trainingPrograms')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#f59e0b]/40 transition-colors flex items-center justify-center gap-1.5">
                                     <Plus className="w-3 h-3" /> Add Training Program
                                   </button>
                                 </div>
                             </div>
 
                             {/* Procurement */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <ShoppingCart className="w-3.5 h-3.5 text-[#a78bfa]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">Procurement</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">Procurement</span>
                                 <CompletenessChip filled={supFilled} total={suppliers.length} hasData={suppliers.length > 0} />
                               </div>
                               <div className="px-4 pb-3 space-y-2">
@@ -4331,7 +4331,7 @@ export default function DocumentProcessor() {
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No suppliers extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => addTableRow('suppliers')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#a78bfa]/40 transition-colors">
+                                        <button onClick={() => addTableRow('suppliers')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#a78bfa]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
                                       </div>
@@ -4341,7 +4341,7 @@ export default function DocumentProcessor() {
                                     const bComplete = supReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
                                     return aComplete - bComplete;
                                   }).map((sup: any, i: number) => (
-                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                       <div className="flex items-center justify-between mb-2">
                                         <EditableFieldCell label="Name" value={sup.name} fieldKey="name" pillar="procurement" rowIndex={i} tableName="suppliers" />
                                         <button onClick={() => deleteTableRow('suppliers', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
@@ -4356,17 +4356,17 @@ export default function DocumentProcessor() {
                                       </div>
                                     </div>
                                   ))}
-                                  <button onClick={() => addTableRow('suppliers')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#a78bfa]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <button onClick={() => addTableRow('suppliers')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#a78bfa]/40 transition-colors flex items-center justify-center gap-1.5">
                                     <Plus className="w-3 h-3" /> Add Supplier
                                   </button>
                                 </div>
                             </div>
 
                             {/* ESD / SED */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <Heart className="w-3.5 h-3.5 text-[#f472b6]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">ESD / SED</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">ESD / SED</span>
                                 <CompletenessChip filled={contFilled} total={contributions.length} hasData={contributions.length > 0} />
                               </div>
                               <div className="px-4 pb-3 space-y-2">
@@ -4374,7 +4374,7 @@ export default function DocumentProcessor() {
                                     <div className="py-4 text-center space-y-2">
                                       <p className="text-[11px] text-[#48484a] italic">No contributions extracted</p>
                                       <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => addTableRow('contributions')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f472b6]/40 transition-colors">
+                                        <button onClick={() => addTableRow('contributions')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#f472b6]/40 transition-colors">
                                           <Plus className="w-3 h-3" /> Add Manually
                                         </button>
                                       </div>
@@ -4384,7 +4384,7 @@ export default function DocumentProcessor() {
                                     const bComplete = contReqFields.every(f => b[f] != null && b[f] !== '') ? 0 : 1;
                                     return aComplete - bComplete;
                                   }).map((cont: any, i: number) => (
-                                    <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                    <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                       <div className="flex items-center justify-between mb-2">
                                         <EditableFieldCell label="Beneficiary" value={cont.beneficiary} fieldKey="beneficiary" pillar="esd-sed" rowIndex={i} tableName="contributions" />
                                         <button onClick={() => deleteTableRow('contributions', i)} className="p-1 rounded hover:bg-red-500/10 text-[#48484a] hover:text-red-400 transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>
@@ -4396,17 +4396,17 @@ export default function DocumentProcessor() {
                                       </div>
                                     </div>
                                   ))}
-                                  <button onClick={() => addTableRow('contributions')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#f472b6]/40 transition-colors flex items-center justify-center gap-1.5">
+                                  <button onClick={() => addTableRow('contributions')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#f472b6]/40 transition-colors flex items-center justify-center gap-1.5">
                                     <Plus className="w-3 h-3" /> Add Contribution
                                   </button>
                                 </div>
                             </div>
 
                             {/* YES Initiative */}
-                            <div className="bg-[#0a0a0a] rounded-2xl border border-[#2c2c2e] overflow-hidden">
+                            <div className="bg-background rounded-2xl border border-border overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-3">
                                 <Zap className="w-3.5 h-3.5 text-[#22d3ee]" />
-                                <span className="text-[12px] font-semibold text-[#d1d1d6] uppercase tracking-wider">YES Initiative</span>
+                                <span className="text-[12px] font-semibold text-foreground/90 uppercase tracking-wider">YES Initiative</span>
                                 {(tbl.yesCandidates?.length > 0) && (
                                   <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20">
                                     {tbl.yesCandidates.length} candidate{tbl.yesCandidates.length !== 1 ? 's' : ''}
@@ -4418,15 +4418,15 @@ export default function DocumentProcessor() {
                                   <div className="py-4 text-center space-y-2">
                                     <p className="text-[11px] text-[#48484a] italic">No YES candidates extracted</p>
                                     <div className="flex items-center justify-center gap-2">
-                                      <button onClick={() => addTableRow('yesCandidates')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-[#3a3a3c] rounded-lg text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#22d3ee]/40 transition-colors">
+                                      <button onClick={() => addTableRow('yesCandidates')} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border rounded-lg text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#22d3ee]/40 transition-colors">
                                         <Plus className="w-3 h-3" /> Add Manually
                                       </button>
                                     </div>
                                   </div>
                                 ) : (tbl.yesCandidates || []).map((yc: any, i: number) => (
-                                  <div key={i} className="bg-[#1c1c1e] rounded-xl px-3 py-2.5 border border-[#2c2c2e]">
+                                  <div key={i} className="bg-card rounded-xl px-3 py-2.5 border border-border">
                                     <div className="flex items-center justify-between mb-2">
-                                      <span className="text-[11px] font-medium text-[#d1d1d6]">{yc.name || `Candidate ${i + 1}`}</span>
+                                      <span className="text-[11px] font-medium text-foreground/90">{yc.name || `Candidate ${i + 1}`}</span>
                                       <button onClick={() => deleteTableRow('yesCandidates', i)} className="text-[#636366] hover:text-red-400 transition-colors">
                                         <Trash2 className="w-3 h-3" />
                                       </button>
@@ -4442,7 +4442,7 @@ export default function DocumentProcessor() {
                                     </div>
                                   </div>
                                 ))}
-                                <button onClick={() => addTableRow('yesCandidates')} className="w-full py-2.5 border border-dashed border-[#3a3a3c] rounded-xl text-[11px] text-[#636366] hover:text-[#d1d1d6] hover:border-[#22d3ee]/40 transition-colors flex items-center justify-center gap-1.5">
+                                <button onClick={() => addTableRow('yesCandidates')} className="w-full py-2.5 border border-dashed border-border rounded-xl text-[11px] text-[#636366] hover:text-foreground/90 hover:border-[#22d3ee]/40 transition-colors flex items-center justify-center gap-1.5">
                                   <Plus className="w-3 h-3" /> Add YES Candidate
                                 </button>
                               </div>
@@ -4485,10 +4485,10 @@ export default function DocumentProcessor() {
                         if (pageKeys.length === 0) {
                           return (
                             <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <div className="w-12 h-12 rounded-2xl bg-[#1c1c1e] flex items-center justify-center mb-4">
+                              <div className="w-12 h-12 rounded-2xl bg-card flex items-center justify-center mb-4">
                                 <FileQuestion className="w-5 h-5 text-[#636366]" />
                               </div>
-                              <p className="text-[#d1d1d6] text-sm font-medium mb-1">No page data available</p>
+                              <p className="text-foreground/90 text-sm font-medium mb-1">No page data available</p>
                               <p className="text-[#636366] text-xs">Page-level provenance is not available for this extraction</p>
                             </div>
                           );
@@ -4499,7 +4499,7 @@ export default function DocumentProcessor() {
                               <div key={pk} className="mb-4">
                                 <div className="flex items-center gap-2 mb-2 px-1">
                                   <span className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider">{pk}</span>
-                                  <span className="text-[10px] text-[#636366] bg-[#1c1c1e] px-2 py-0.5 rounded-md">{pageGroups[pk].length} entities</span>
+                                  <span className="text-[10px] text-[#636366] bg-card px-2 py-0.5 rounded-md">{pageGroups[pk].length} entities</span>
                                 </div>
                                 <div className="space-y-2">
                                   {pageGroups[pk].map((entity: any) => {
@@ -4509,14 +4509,14 @@ export default function DocumentProcessor() {
                                       <div key={realIdx}
                                         className={`rounded-2xl border transition-all duration-150 ${
                                           entity.status === 'approved' ? 'border-green-500/25' :
-                                          entity.status === 'rejected' ? 'border-[#2c2c2e] opacity-35' :
-                                          isNotFound ? 'border-[#1c1c1e] opacity-40' :
-                                          hoveredEntity === realIdx ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
+                                          entity.status === 'rejected' ? 'border-border opacity-35' :
+                                          isNotFound ? 'border-border opacity-40' :
+                                          hoveredEntity === realIdx ? 'border-border' : 'border-border'
                                         }`}
                                         onMouseEnter={() => setHoveredEntity(realIdx)}
                                         onMouseLeave={() => setHoveredEntity(null)}
                                       >
-                                        <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3">
+                                        <div className="bg-card rounded-2xl px-4 py-3">
                                           <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest truncate">{fmtLabel(entity.name)}</span>
                                             {entity.status === 'approved' && <span className="text-[10px] text-green-400 font-medium flex items-center gap-0.5"><Check className="w-2.5 h-2.5" />Approved</span>}
@@ -4525,7 +4525,7 @@ export default function DocumentProcessor() {
                                           <p className="text-[13px] text-foreground break-words">{entity.value || <span className="text-[#48484a] italic">Not found</span>}</p>
                                           {entity.confidence != null && (
                                             <div className="mt-1.5 flex items-center gap-1.5">
-                                              <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                              <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
                                                 <div className="h-full rounded-full" style={{ width: `${Math.round(entity.confidence * 100)}%`, backgroundColor: entity.confidence >= 0.85 ? '#34d399' : entity.confidence >= 0.6 ? '#f59e0b' : '#f87171' }} />
                                               </div>
                                               <span className="text-[10px] text-[#636366] tabular-nums">{Math.round(entity.confidence * 100)}%</span>
@@ -4545,10 +4545,10 @@ export default function DocumentProcessor() {
                       if (filtered.length === 0) {
                         return (
                           <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <div className="w-12 h-12 rounded-2xl bg-[#1c1c1e] flex items-center justify-center mb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-card flex items-center justify-center mb-4">
                               <FileQuestion className="w-5 h-5 text-[#636366]" />
                             </div>
-                            <p className="text-[#d1d1d6] text-sm font-medium mb-1">
+                            <p className="text-foreground/90 text-sm font-medium mb-1">
                               {reviewFilter === 'all' ? 'No entities found' : 'No edited entities'}
                             </p>
                             <p className="text-[#636366] text-xs">
@@ -4582,15 +4582,15 @@ export default function DocumentProcessor() {
                             className={`rounded-2xl border transition-all duration-150 group ${
                               isEditingThis ? 'border-white/[0.16] shadow-[0_0_0_3px_rgba(168,85,247,0.08)]' :
                               isApproved ? 'border-green-500/25' :
-                              isRejected ? 'border-[#2c2c2e] opacity-35' :
-                              isNotFound ? 'border-[#1c1c1e] opacity-60' :
-                              isHovered ? 'border-[#3a3a3c]' : 'border-[#2c2c2e]'
+                              isRejected ? 'border-border opacity-35' :
+                              isNotFound ? 'border-border opacity-60' :
+                              isHovered ? 'border-border' : 'border-border'
                             }`}
                             onMouseEnter={() => setHoveredEntity(realIdx)}
                             onMouseLeave={() => setHoveredEntity(null)}
                             data-testid={`review-entity-${realIdx}`}
                           >
-                            <div className="bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
+                            <div className="bg-card rounded-2xl px-4 py-3.5">
 
                               <div className="flex items-center justify-between mb-2.5">
                                 <div className="flex items-center gap-2 min-w-0">
@@ -4603,7 +4603,7 @@ export default function DocumentProcessor() {
                                     </span>
                                   )}
                                   {isEdited && !isEditingThis && (
-                                    <span className="text-[10px] text-[#d1d1d6] font-medium shrink-0">Edited</span>
+                                    <span className="text-[10px] text-foreground/90 font-medium shrink-0">Edited</span>
                                   )}
                                   {isRejected && (
                                     <span className="text-[10px] text-red-400 font-medium shrink-0">Rejected</span>
@@ -4617,7 +4617,7 @@ export default function DocumentProcessor() {
                                   {!isEditingThis && (
                                     <button
                                       onClick={startEdit}
-                                      className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-[#2c2c2e]"
+                                      className="p-1.5 rounded-lg smooth press-sm text-[#3a3a3c] hover:text-[#8e8e93] hover:bg-muted"
                                       title={isNotFound ? "Add value" : "Edit value"}
                                       data-testid={`button-edit-${realIdx}`}
                                     >
@@ -4634,7 +4634,7 @@ export default function DocumentProcessor() {
                               {!isEditingThis && (
                                 <div
                                   onClick={startEdit}
-                                  className="cursor-text rounded-xl px-3 py-2 mb-2 transition-colors hover:bg-[#2c2c2e]/60"
+                                  className="cursor-text rounded-xl px-3 py-2 mb-2 transition-colors hover:bg-muted/60"
                                   title="Click to edit"
                                 >
                                   {entity.value ? (
@@ -4653,7 +4653,7 @@ export default function DocumentProcessor() {
 
                               {!isEditingThis && entity.confidence != null && (
                                 <div className="mb-3 flex items-center gap-1.5 px-3">
-                                  <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                  <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
                                     <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(entity.confidence * 100)}%`, backgroundColor: entity.confidence >= 0.85 ? '#34d399' : entity.confidence >= 0.6 ? '#f59e0b' : '#f87171' }} />
                                   </div>
                                   <span className="text-[10px] text-[#636366] tabular-nums">{Math.round(entity.confidence * 100)}%</span>
@@ -4675,12 +4675,12 @@ export default function DocumentProcessor() {
                                     }}
                                     rows={Math.min(Math.max((editingEntity.draft.match(/\n/g) || []).length + 1, 1), 4)}
                                     placeholder="Enter value…"
-                                    className="w-full text-[14px] text-foreground bg-[#2c2c2e] rounded-xl px-3 py-2.5 border border-white/[0.16] focus:border-white/[0.25] focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
+                                    className="w-full text-[14px] text-foreground bg-muted rounded-xl px-3 py-2.5 border border-white/[0.16] focus:border-white/[0.25] focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
                                     data-testid={`input-entity-value-${realIdx}`}
                                   />
                                   <div className="flex items-center justify-end gap-2">
                                     <button onClick={cancelEdit}
-                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-foreground rounded-lg hover:bg-[#2c2c2e] smooth press-sm">
+                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-foreground rounded-lg hover:bg-muted smooth press-sm">
                                       Cancel
                                     </button>
                                     <button onClick={saveEdit}
@@ -4705,7 +4705,7 @@ export default function DocumentProcessor() {
                                   ) : isRejected ? null : (
                                     <button
                                       onClick={() => approveEntity(activeReviewDoc, realIdx)}
-                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-green-400 hover:bg-green-500/10 border border-[#2c2c2e] hover:border-green-500/20 smooth press-sm"
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-green-400 hover:bg-green-500/10 border border-border hover:border-green-500/20 smooth press-sm"
                                       data-testid={`button-approve-${realIdx}`}
                                     >
                                       <Check className="w-3.5 h-3.5" />Approve
@@ -4722,7 +4722,7 @@ export default function DocumentProcessor() {
                                   ) : isApproved ? null : (
                                     <button
                                       onClick={() => rejectEntity(activeReviewDoc, realIdx)}
-                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-red-400 hover:bg-red-500/10 border border-[#2c2c2e] hover:border-red-500/20 smooth press-sm"
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[12px] font-medium text-[#636366] hover:text-red-400 hover:bg-red-500/10 border border-border hover:border-red-500/20 smooth press-sm"
                                       data-testid={`button-reject-${realIdx}`}
                                     >
                                       <X className="w-3.5 h-3.5" />Reject
@@ -4835,7 +4835,7 @@ export default function DocumentProcessor() {
                         {entities.map((e: any, i: number) => (
                           <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-card/[0.02] transition-colors">
                             <div className="flex flex-col min-w-0">
-                              <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
+                              <span className="text-[13px] font-medium text-foreground/90 truncate">{fmtLabel(e.name)}</span>
                               {e._docName && (
                                 <span className="text-[11px] text-[#48484a] truncate mt-0.5">{e._docName}</span>
                               )}
@@ -4864,12 +4864,12 @@ export default function DocumentProcessor() {
                     <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
                       <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#636366]" />
                       <span className="text-[14px] font-semibold text-foreground">Other</span>
-                      <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#1c1c1e] text-[#636366] ml-auto">{otherEntities.length} entities</span>
+                      <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-card text-[#636366] ml-auto">{otherEntities.length} entities</span>
                     </div>
                     <div className="divide-y" style={{ borderColor: '#1a1a1a' }}>
                       {otherEntities.map((e: any, i: number) => (
                         <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-card/[0.02] transition-colors">
-                          <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
+                          <span className="text-[13px] font-medium text-foreground/90 truncate">{fmtLabel(e.name)}</span>
                           <span className="text-[13px] font-semibold text-foreground max-w-[240px] truncate text-right">{e.value}</span>
                         </div>
                       ))}
@@ -4989,10 +4989,10 @@ export default function DocumentProcessor() {
             return (
               <div className="max-w-4xl mx-auto py-8 space-y-5" data-testid="scorecard-result">
                 {/* Header */}
-                <div className="bg-[#1c1c1e] rounded-2xl p-6 border border-[#2c2c2e] flex items-center justify-between gap-4">
+                <div className="bg-card rounded-2xl p-6 border border-border flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-white/[0.06] to-blue-500/20 flex items-center justify-center border border-white/[0.12]">
-                      <ScanLine className="w-7 h-7 text-[#d1d1d6]" />
+                      <ScanLine className="w-7 h-7 text-foreground/90" />
                     </div>
                     <div>
                       <h2 className="text-xl font-bold text-foreground">B-BBEE Scorecard</h2>
@@ -5006,21 +5006,21 @@ export default function DocumentProcessor() {
                     {source === 'calculation_engine' && (
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-status-success/10 text-status-success border border-status-success/20">Build Mode</span>
                     )}
-                    <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-foreground rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
+                    <button className="px-4 py-2 bg-muted hover:bg-[#3a3a3c] text-foreground rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
                       Export PDF
                     </button>
                   </div>
                 </div>
 
                 {isSavingSession ? (
-                  <div className="flex flex-col items-center justify-center py-20 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
-                    <Loader2 className="w-8 h-8 animate-spin text-[#d1d1d6] mb-4" />
+                  <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl border border-border">
+                    <Loader2 className="w-8 h-8 animate-spin text-foreground/90 mb-4" />
                     <p className="text-[#8e8e93]">Generating scorecard...</p>
                   </div>
                 ) : sc ? (
                   <>
                     {/* Level banner */}
-                    <div className="bg-[#1c1c1e] rounded-2xl p-6 border border-[#2c2c2e] flex flex-col sm:flex-row items-center gap-6" data-testid="scorecard-level-banner">
+                    <div className="bg-card rounded-2xl p-6 border border-border flex flex-col sm:flex-row items-center gap-6" data-testid="scorecard-level-banner">
                       <div className="flex-shrink-0 flex flex-col items-center justify-center w-28 h-28 rounded-2xl border-2" style={{ borderColor: levelColor, background: `${levelColor}18` }}>
                         <span className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: levelColor }}>Level</span>
                         <span className="text-5xl font-black" style={{ color: levelColor }} data-testid="scorecard-level-number">{level}</span>
@@ -5030,7 +5030,7 @@ export default function DocumentProcessor() {
                           <span className="text-4xl font-black text-foreground" data-testid="scorecard-total-score">{totalScore}</span>
                           <span className="text-[#8e8e93] text-lg mb-1">/ {totalTarget} points</span>
                         </div>
-                        <div className="w-full h-3 bg-[#2c2c2e] rounded-full overflow-hidden">
+                        <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
                           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, (totalScore / totalTarget) * 100)}%`, background: levelColor }} />
                         </div>
                         <div className="flex items-center gap-4 mt-1">
@@ -5046,7 +5046,7 @@ export default function DocumentProcessor() {
 
                     {/* Sub-minimum summary (for hierarchical results) */}
                     {isHierarchical && sc.subMinimums && (
-                      <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-[#2c2c2e]">
+                      <div className="bg-card rounded-2xl p-5 border border-border">
                         <h3 className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider mb-3">Sub-Minimum Requirements</h3>
                         <div className="flex flex-wrap gap-3">
                           {Object.entries(sc.subMinimums as Record<string, boolean>).map(([pillarCode, met]) => (
@@ -5061,8 +5061,8 @@ export default function DocumentProcessor() {
                     )}
 
                     {/* Pillar breakdown */}
-                    <div className="bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] overflow-hidden" data-testid="scorecard-pillars">
-                      <div className="px-6 py-4 border-b border-[#2c2c2e]">
+                    <div className="bg-card rounded-2xl border border-border overflow-hidden" data-testid="scorecard-pillars">
+                      <div className="px-6 py-4 border-b border-border">
                         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Pillar Breakdown</h3>
                       </div>
                       <div className="divide-y divide-[#2c2c2e]">
@@ -5082,7 +5082,7 @@ export default function DocumentProcessor() {
                                     {hasCriteria && (
                                       <ChevronRight className={`w-3.5 h-3.5 text-[#636366] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                                     )}
-                                    <span className="text-sm font-medium text-[#d1d1d6]">{pillar.label}</span>
+                                    <span className="text-sm font-medium text-foreground/90">{pillar.label}</span>
                                   </div>
                                   <div className="flex items-center gap-3">
                                     {pillar.subMinimumMet === false && (
@@ -5096,7 +5096,7 @@ export default function DocumentProcessor() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="w-full h-2 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                                   <div
                                     className="h-full rounded-full transition-all duration-500"
                                     style={{ width: `${pct}%`, background: pillar.color }}
@@ -5116,10 +5116,10 @@ export default function DocumentProcessor() {
                                   {pillar.criteria!.map((cr: any) => {
                                     const crPct = cr.maxPoints > 0 ? Math.round((cr.points / cr.maxPoints) * 100) : 0;
                                     return (
-                                      <div key={cr.criterionCode} className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#1e1e1e] items-center">
+                                      <div key={cr.criterionCode} className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-2 rounded-lg bg-card border border-[#1e1e1e] items-center">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-status-success' : 'bg-[#3a3a3c]'}`} />
-                                          <span className="text-[12px] text-[#d1d1d6] truncate">{cr.name || cr.criterionCode}</span>
+                                          <span className="text-[12px] text-foreground/90 truncate">{cr.name || cr.criterionCode}</span>
                                           {cr.targetMet && <CheckCircle2 className="w-3 h-3 text-status-success shrink-0" />}
                                         </div>
                                         <span className={`text-[12px] font-mono text-right ${cr.points > 0 ? 'text-status-success' : 'text-[#636366]'}`}>
@@ -5138,15 +5138,15 @@ export default function DocumentProcessor() {
                           );
                         })}
                       </div>
-                      <div className="px-6 py-4 bg-[#141414] border-t border-[#2c2c2e] flex items-center justify-between">
-                        <span className="text-sm font-semibold text-[#d1d1d6]">TOTAL</span>
+                      <div className="px-6 py-4 bg-[#141414] border-t border-border flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground/90">TOTAL</span>
                         <span className="text-sm font-bold text-foreground" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
                       </div>
                     </div>
 
                     {/* Calculation errors (if any) */}
                     {isHierarchical && sc.calculationErrors && sc.calculationErrors.length > 0 && (
-                      <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-amber-500/20">
+                      <div className="bg-card rounded-2xl p-5 border border-amber-500/20">
                         <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">Calculation Warnings</h3>
                         <div className="space-y-1.5">
                           {sc.calculationErrors.map((err: string, i: number) => (
@@ -5161,11 +5161,11 @@ export default function DocumentProcessor() {
 
                     {/* Source info */}
                     {sc._entityCounts && (
-                      <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-[#2c2c2e]" data-testid="scorecard-entity-summary">
+                      <div className="bg-card rounded-2xl p-5 border border-border" data-testid="scorecard-entity-summary">
                         <h3 className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider mb-3">Entities Extracted</h3>
                         <div className="flex flex-wrap gap-3">
                           {Object.entries(sc._entityCounts as Record<string, number>).map(([k, v]) => (
-                            <div key={k} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2c2c2e] rounded-xl">
+                            <div key={k} className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-xl">
                               <span className="text-[#8e8e93] text-xs capitalize">{k.replace(/([A-Z])/g, ' $1').toLowerCase()}:</span>
                               <span className="text-foreground text-xs font-semibold">{v}</span>
                             </div>
@@ -5180,7 +5180,7 @@ export default function DocumentProcessor() {
                         <>
                           <button
                             onClick={() => setCurrentPage('build-pillars')}
-                            className="flex items-center gap-2 px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-foreground rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                            className="flex items-center gap-2 px-6 py-3 bg-card hover:bg-muted text-foreground/90 hover:text-foreground rounded-xl font-semibold transition-colors border border-border"
                           >
                             <ChevronLeft className="w-4 h-4" />
                             Edit Data
@@ -5263,7 +5263,7 @@ export default function DocumentProcessor() {
                               setExtractionResults([]);
                               setIsSubmitted(false);
                             }}
-                            className="px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#8e8e93] hover:text-foreground rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                            className="px-6 py-3 bg-card hover:bg-muted text-[#8e8e93] hover:text-foreground rounded-xl font-semibold transition-colors border border-border"
                           >
                             New Assessment
                           </button>
@@ -5272,7 +5272,7 @@ export default function DocumentProcessor() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-16 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
+                  <div className="text-center py-16 bg-card rounded-2xl border border-border">
                     <p className="text-[#8e8e93] mb-4">No scorecard data yet. Complete the previous steps to generate a scorecard.</p>
                     <button
                       onClick={() => setCurrentPage(flowMode === 'build' ? 'build-pillars' : 'review')}
@@ -5297,7 +5297,7 @@ export default function DocumentProcessor() {
         <div className="fixed z-50 bottom-6 right-6">
           <button
             onClick={fillLakeTradingTestData}
-            className="h-10 gap-2 px-4 inline-flex items-center rounded-xl bg-[#1c1c1e] border border-[#3a3a3c] text-[#a78bfa] shadow-lg hover:bg-[#2c2c2e] hover:scale-[1.02] transition-all text-xs font-semibold"
+            className="h-10 gap-2 px-4 inline-flex items-center rounded-xl bg-card border border-border text-[#a78bfa] shadow-lg hover:bg-muted hover:scale-[1.02] transition-all text-xs font-semibold"
           >
             <Wand2 className="w-4 h-4" />
             Fill Lake Trading Data

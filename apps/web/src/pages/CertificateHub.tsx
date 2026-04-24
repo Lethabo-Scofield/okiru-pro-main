@@ -142,7 +142,7 @@ function FilterDropdown({
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors ${
           active
             ? 'bg-primary text-primary-foreground'
-            : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground border border-[#2c2c2e]'
+            : 'bg-card text-[#8e8e93] hover:text-foreground border border-border'
         }`}
       >
         {active ? options.find(o => o.value === value)?.label || label : label}
@@ -158,15 +158,15 @@ function FilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 z-40 bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg overflow-hidden min-w-[160px] shadow-xl">
+          <div className="absolute top-full left-0 mt-1 z-40 bg-card border border-border rounded-lg overflow-hidden min-w-[160px] shadow-xl">
             {options.map(opt => (
               <button
                 key={opt.value}
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={`w-full text-left px-3 py-2 text-[13px] flex items-center justify-between transition-colors ${
                   value === opt.value
-                    ? 'bg-[#2c2c2e] text-foreground'
-                    : 'text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-foreground'
+                    ? 'bg-muted text-foreground'
+                    : 'text-[#8e8e93] hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <span>{opt.label}</span>
@@ -202,7 +202,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e]">
+    <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-card border border-border">
       <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-card/[0.04]" style={{ color: iconColor }}>
         {icon}
       </div>
@@ -549,7 +549,7 @@ export default function CertificateHub() {
             </button>
             <button
               onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-foreground bg-card/[0.08] hover:bg-card/[0.14] transition-colors border border-[#2c2c2e]"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-foreground bg-card/[0.08] hover:bg-card/[0.14] transition-colors border border-border"
             >
               <Upload className="h-3.5 w-3.5" />
               Upload
@@ -616,7 +616,7 @@ export default function CertificateHub() {
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search certificates by name or content..."
-            className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-foreground placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
+            className="w-full bg-card rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-foreground placeholder:text-[#48484a] outline-none border border-border focus:border-[#48484a] transition-colors"
           />
           {searching && (
             <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a] animate-spin" />
@@ -666,7 +666,7 @@ export default function CertificateHub() {
 
         {searchResults !== null && search.trim() ? (
           searching ? (
-            <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+            <div className="rounded-xl overflow-hidden border border-border">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonRow key={i} />
               ))}
@@ -689,7 +689,7 @@ export default function CertificateHub() {
               <p className="text-[12px] text-[#636366] mb-3">
                 {searchResults.length} document{searchResults.length !== 1 ? 's' : ''} found matching "{search}"
               </p>
-              <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+              <div className="rounded-xl overflow-hidden border border-border">
                 {searchResults.map((result, idx) => {
                   const certType = extractCertType(result.file_name);
                   const isDownloading = downloadingFile === result.file_url;
@@ -697,7 +697,7 @@ export default function CertificateHub() {
                   return (
                     <div
                       key={result.file_url + idx}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-[#1c1c1e] transition-colors group"
+                      className="flex items-center justify-between px-4 py-3 hover:bg-card transition-colors group"
                       style={{ borderBottom: idx < searchResults.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -723,7 +723,7 @@ export default function CertificateHub() {
                         onClick={() => downloadCertificate(result.file_url, result.file_name)}
                         disabled={isDownloading}
                         aria-label={`Download ${result.file_name}`}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
                       >
                         {isDownloading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -739,7 +739,7 @@ export default function CertificateHub() {
             </>
           )
         ) : loading ? (
-          <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+          <div className="rounded-xl overflow-hidden border border-border">
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonRow key={i} />
             ))}
@@ -757,7 +757,7 @@ export default function CertificateHub() {
             )}
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+          <div className="rounded-xl overflow-hidden border border-border">
             {filtered.map((cert, idx) => {
               const certType = extractCertType(cert.fileName);
               const isDownloading = downloadingFile === cert.name;
@@ -765,7 +765,7 @@ export default function CertificateHub() {
               return (
                 <div
                   key={cert.name}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-[#1c1c1e] transition-colors group"
+                  className="flex items-center justify-between px-4 py-3 hover:bg-card transition-colors group"
                   style={{ borderBottom: idx < filtered.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -791,7 +791,7 @@ export default function CertificateHub() {
                     onClick={() => downloadCertificate(cert.name, cert.fileName)}
                     disabled={isDownloading}
                     aria-label={`Download ${cert.fileName}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
                   >
                     {isDownloading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -809,7 +809,7 @@ export default function CertificateHub() {
 
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden">
+          <div className="w-full max-w-lg mx-4 rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <h2 className="text-[15px] font-semibold text-foreground">Upload Certificates</h2>
               <button onClick={closeUploadModal} disabled={uploading} className="text-[#636366] hover:text-foreground transition-colors disabled:opacity-50">
@@ -826,7 +826,7 @@ export default function CertificateHub() {
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                   dragOver
                     ? 'border-[#2563eb] bg-[#2563eb]/10'
-                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-card/[0.02]'
+                    : 'border-border hover:border-[#48484a] hover:bg-card/[0.02]'
                 }`}
               >
                 <CloudUpload className={`h-8 w-8 mx-auto mb-3 ${dragOver ? 'text-[#2563eb]' : 'text-[#48484a]'}`} />
