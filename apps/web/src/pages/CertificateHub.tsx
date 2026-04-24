@@ -105,6 +105,44 @@ function extractCertType(fileName: string): string | null {
   return null;
 }
 
+function extractCompanyName(fileName: string): string {
+  let name = fileName;
+
+  const lastSlash = name.lastIndexOf('/');
+  if (lastSlash !== -1) name = name.substring(lastSlash + 1);
+
+  const sanitizedBase = name;
+
+  name = name.replace(
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-/i,
+    ''
+  );
+
+  name = name.replace(/\.[^/.]+$/, '');
+
+  name = name.replace(/_/g, ' ');
+
+  name = name.replace(/^\d{4}[\s\-]\d{2}[\s\-]\d{2}[\s\-]?/, '');
+  name = name.replace(/^\d{4}[\s\-]\d{2}[\s\-]?/, '');
+  name = name.replace(/^\d{4}[\s\-]/, '');
+
+  name = name.replace(/\s*[-–—]\s*(EME|QSE|Generic|Specialised|Specialized)\b/gi, '');
+
+  name = name.replace(/\bB[\s\-]?B[\s\-]?BEE\s+Certificate\b/gi, '');
+  name = name.replace(/\bBBBEE\s+Certificate\b/gi, '');
+  name = name.replace(/\bBEE\s+Certificate\b/gi, '');
+  name = name.replace(/\bCertificate\b/gi, '');
+  name = name.replace(/\bCert\b/gi, '');
+
+  name = name.replace(/\b\d{4}[-/]\d{2}[-/]\d{2}\b/g, '');
+  name = name.replace(/\b(19|20)\d{2}\b/g, '');
+
+  name = name.replace(/\s+/g, ' ');
+  name = name.replace(/^[\s\-–—_]+|[\s\-–—_]+$/g, '');
+
+  return name || sanitizedBase.replace(/\.[^/.]+$/, '');
+}
+
 function extractYear(fileName: string): string | null {
   const match = fileName.match(/^(\d{4})\s/);
   return match ? match[1] : null;
@@ -704,7 +742,7 @@ export default function CertificateHub() {
                         <FileFormatIcon fileName={result.file_name} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                            <HighlightMatch text={result.file_name.replace(/\.[^/.]+$/, '')} query={search} />
+                            <HighlightMatch text={extractCompanyName(result.file_name)} query={search} />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#3a3a3c] tracking-wide">
@@ -772,7 +810,7 @@ export default function CertificateHub() {
                     <FileFormatIcon fileName={cert.fileName} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                        {cert.fileName.replace(/\.[^/.]+$/, '')}
+                        {extractCompanyName(cert.fileName)}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-[#3a3a3c] tracking-wide">
