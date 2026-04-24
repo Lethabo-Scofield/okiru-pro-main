@@ -110,7 +110,7 @@ router.get('/download', async (req: Request, res: Response) => {
     const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000);
 
     const baseFileName = file.trim().split('/').pop() || file.trim();
-    const safeDownloadName = baseFileName.replace(/[\r\n"\\]/g, '_');
+    const safeDownloadName = baseFileName.replace(/[\r\n"\\\x00-\x1F\x7F]/g, '_');
     const contentDisposition = `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
 
     const sasToken = generateBlobSASQueryParameters({
