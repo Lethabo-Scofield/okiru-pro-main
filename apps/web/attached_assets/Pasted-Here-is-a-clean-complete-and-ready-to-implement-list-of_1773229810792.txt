@@ -1,0 +1,117 @@
+Here is a **clean, complete, and ready-to-implement list of all required changes** based on the full call transcript with Chengetai.
+
+This list is written so you can copy-paste it directly into Replit (or any task tracker / README.md) and then build the features one by one. Everything is prioritized, explained clearly, and includes:
+
+- What must be added / fixed
+- Why (direct quote or logic from call)
+- Where it lives in UI (dashboard / scorecard / new screen)
+- Admin / settings implication (where admins should be able to override calculations)
+
+### 1. Preferential Procurement – Full sub-indicator breakdown + bonus points
+
+**Change**
+- Expand the Preferential Procurement row to show **all 6 sub-lines** + **2 bonus lines** when clicked/expanded
+- Current: only main category or partial view
+- New sub-lines to display:
+
+  1. Spend on empowering suppliers (5 pts)
+  2. Spend on QSE empowering suppliers (3 pts)
+  3. Spend on EME suppliers (4 pts)
+  4. Spend on empowering suppliers with ≥51% black ownership (11 pts)
+  5. Spend on empowering suppliers with >30% black female ownership (4 pts)
+  6. Spend on designated group suppliers with ≥51% black ownership (2 pts)
+  7. **Bonus** – Graduation of ED beneficiaries to SD (1 pt) → tick-box + evidence note
+  8. **Bonus** – Jobs created from ED & SD initiatives (1 pt) → tick-box + evidence note
+
+**Why**  
+Chengetai: “Preferential procurement… doesn't have all the elements here… wage 25. and you're fine. 80% of TMPS, but remember, that's broken up into EME QSC, whatnot… bonus points here aren't there… graduation and job creation.”
+
+**Admin override**  
+- Admin settings → “Procurement Bonus Rules” → toggle whether graduation/jobs bonuses are auto-calculated or manual tick
+- Allow admin to change point values (in case codes change)
+
+**UI location**  
+Scorecard → Preferential Procurement row → expand → table of 8 lines
+
+### 2. Skills Development – Demographic split by EAP + training category classification (A–F)
+
+**Change A – Demographic split**
+- Under “Expenditure on learning programmes for Black people” (6 pts / 3.5% payroll target):
+  - Show **pie chart or breakdown table** of the 3.5% split by race/gender based on **selected EAP region**
+  - Example (Gauteng): African male ~1.9%, African female ~1.6%, etc.
+  - Points awarded proportionally — can't get full 6 pts by only training one group
+  - When EAP region changes → instantly recalculate split percentages
+
+**Change B – Training category classification**
+- When adding/editing a training program, add **mandatory dropdown**: Category A–F
+- Categories & rules (exact from call/PPTX):
+
+  | Category | Examples                          | Recognition                          | Cap?          |
+  |----------|-----------------------------------|--------------------------------------|---------------|
+  | A        | Bursaries                         | 100% course + stipend/salary         | No cap        |
+  | B        | Internships, Learnerships         | 100% course + salary during program  | No cap        |
+  | C        | Short courses, workshops          | 100% course cost                     | No cap        |
+  | D        | Other accredited training         | 100% course cost                     | No cap        |
+  | E        | Non-accredited / informal         | Only course cost – limited           | 25% total spend |
+  | F        | Other (travel, venue, catering…)  | Limited                              | 15% total spend |
+
+- Enforce caps in calculation logic (E ≤25%, F ≤15% of total Skills spend)
+
+**Why**  
+Chengetai: “African males only 2.6% of that 5%… max you can get is 5.6 points unless you take on… 6 candidates… category A, B, C, D, E, F… each one is treated differently… category E, 100% of course cost, otherwise limit to 25%…”
+
+**Admin override**  
+- Settings → “Skills Categories” → edit point multipliers or caps per category (future-proof for code changes)
+- Settings → “EAP Regions” → add/edit regional EAP percentages
+
+**UI location**  
+Scorecard → Skills row → expand → demographic pie/table + category dropdown in “Add Training” form
+
+### 3. Enterprise & Supplier Development – Add graduation & jobs bonus points
+
+**Change**
+- Under Enterprise Development row:
+  - Add two bonus lines (total ED becomes 7 base → 9 possible)
+  - Graduation of ED beneficiaries to Supplier Development → +1 pt (tick-box)
+  - Jobs created from ED & SD → +1 pt (tick-box + number input)
+
+**Why**  
+Chengetai: “bonus points… graduation and job creation… one point, one point… total possible 17 points, not 15”
+
+**Admin override**  
+- Settings → “ESD Bonus Rules” → toggle auto vs manual, edit point values
+
+**UI location**  
+Scorecard → Enterprise Development row → expand → show 2 bonus lines
+
+### 4. General scorecard & UX improvements
+
+| # | Change | Why (from call) | Admin override? | Location |
+|---|--------|------------------|------------------|----------|
+| 1 | Scores never show >2 decimals unless “Full figures” toggled | “points should never be more than two decimal points” | No | Global toggle already exists |
+| 2 | Expand/collapse all button works correctly | Already good, keep it | No | Scorecard header |
+| 3 | Wrap text toggle affects long names cleanly | Already good | No | Scorecard header |
+| 4 | When adding training program → form must include category A–F, race/gender split, cost breakdown (course, travel, accommodation, etc.) | “type of spins… course cost, travel cost, accommodation cost, catering cost…” | Yes – edit cost types | New “Add Program” modal |
+| 5 | All pillars must expand to show full sub-indicators (Ownership already good, Procurement & ESD need work) | “break further… all of these are there” | No | Scorecard table |
+| 6 | SED tooltip: “Grass-roots only (health, safety). Education = Skills” | Confirmed in call | No | SED row hover |
+
+### 5. Future / nice-to-have (from call end)
+
+- **Sharing** — “share scorecard with Nani / Zoleka / Anita” → user roles & share links
+- **Export Excel** — full audit format (like BE Information Gathering sheet)
+- **Export PowerPoint** — slides from Empower sheets (Current State, Strategy, Actions, etc.)
+- **AI Recommendations** — “lowest hanging fruit… prioritizes lowest random point” → plug LLM later
+
+### Priority Order for Today / This Week
+
+1. Fix Preferential Procurement (add 6 subs + 2 bonuses) – highest urgency from call
+2. Add demographic split + category A–F to Skills
+3. Add graduation/jobs bonuses to ED
+4. Add “Add Training Program” form with all fields
+5. Test EAP change → Skills & MC update instantly
+6. Polish decimals / wrap / expand UX
+
+You now have a **complete change list** that mirrors the Excel + PPTX + call exactly.  
+Implement one at a time, test with the Lakeside example data Chengetai mentioned.
+
+Let me know which one you want detailed code / component help for first (e.g. “Preferential Procurement sub-table” or “Skills demographic pie”). I’ll give you ready-to-paste React code.

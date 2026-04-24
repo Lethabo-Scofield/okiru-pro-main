@@ -1,0 +1,133 @@
+Here is a clear, detailed explanation of **how the Scorecard should look and what it MUST include**, directly based on the structure, logic, and content of the Excel document ("Okiru Toolkit (RCOGP)_Template_v.1.0.xlsx").
+
+This mirrors the Excel's **Summary Scorecard** sheet (main overview), **pillar-specific scorecards** (Ownership, MC, Skills, etc.), and how data flows between sheets (Financials → targets → calculations → display).
+
+### 1. Overall Scorecard Philosophy (from Excel)
+- **One main view** = Summary Scorecard (like Sheet 4)
+- **Expandable rows** for each pillar → shows full sub-indicators (like how Ownership expands to Voting Rights, Net Value, etc.)
+- **Real-time calculations** pulled from input sheets (Financials, EAP, employee data, procurement spend, etc.)
+- **Priority elements highlighted** with sub-minimum warnings (40% rule → discount if failed)
+- **Totals & recognition level** always visible at top/bottom
+- **Gaps, % achieved, projected values** shown clearly
+- **Toggle options**: Wrap text, full precision (2 vs 4 decimals), expand/collapse all
+
+### 2. Top Section – Hero / Status Bar (Always Visible)
+This should be fixed/sticky at the top (like Excel row 1–3 style summary).
+
+Must include:
+- **Company Name & Period**  
+  Example: "Lakeside Trading – 1 Mar 2025 – 28 Feb 2026 (Current YTD)"
+- **Current Level & Recognition %**  
+  Example: "Level 6 Contributor – 60% Recognition"  
+  Color-coded: Green (1–3), Blue/Teal (4), Amber (5–6), Red (7–Non-compliant)
+- **Total Points**  
+  Example: "68.4 / 120 pts" + progress bar (68.4 / 120 = 57%)
+- **Discount Status** (red banner if active)  
+  Example: "Level discounted by 1 – Ownership Net Value sub-minimum failed (2.8 / 8 pts)"
+- **Projected Level** (if no more action)  
+  Example: "Projected: Level 7 (no further spend)"
+- **YES Status**  
+  Example: "YES Tier 1 – +1 level possible (8/12 youth placed, 2.5% absorption)"
+
+### 3. Main Scorecard Table (Core Content)
+Table format like Excel Summary Scorecard, with expandable rows.
+
+**Columns** (fixed widths for readability):
+1. Element / Pillar (left-aligned, clickable to expand)
+2. Weight / Target Points
+3. Prior Year
+4. Actual YTD
+5. Gap (red if negative)
+6. Projected (end-of-year estimate)
+7. % Achieved (progress mini-bar + number)
+8. Status (icons: ✓ On Track / ⚠ At Risk / ✗ Critical + text)
+9. Priority? (Yes/No or red star)
+10. Sub-minimum (Passed/Failed/N/A – only for priority pillars)
+
+**Rows** (in exact Excel order):
+- Ownership (25 pts) → expands to 7 sub-lines + Net Value
+- Management Control (19 pts) → expands to 13 sub-lines (board → disabilities)
+- Skills Development (25 pts) → expands to 5 sub-lines (learning 6, bursaries 4, disabled 4, learnerships 6, absorption 5)
+- Preferential Procurement (29 pts) → expands to 6 sub-lines + 2 bonuses (graduation/jobs)
+- Supplier Development (10 pts) → expands to 1 main + bonuses if applicable
+- Enterprise Development (7 pts) → expands to 3 sub-lines + 2 bonuses
+- Socio-Economic Development (5 pts) → expands to 1 line
+- **Grand Total** (120 pts) – bold row at bottom
+- **YES Bonus** – separate row or highlighted tile
+
+**Expandable behavior** (like Excel grouped rows):
+- Click row → shows sub-indicators indented below
+- Sub-rows show: Name, Weight, Target, Actual, Gap, % Achieved, Formula tooltip
+
+### 4. Priority Elements Section (Must Be Very Visible)
+Separate card or red/amber highlighted box below hero.
+
+Must show:
+- Ownership Net Value → X / 8 pts → Failed if < 3.2
+- Skills Development → X / 25 pts → Failed if < 10
+- Preferential Procurement → X / 29 pts → Failed if < 11.6
+- Supplier Development → X / 10 pts → Failed if < 4
+- Enterprise Development → X / 5 pts → Failed if < 2
+
+Warning text:
+"Level will be discounted by 1 until at least 3 priority sub-minimums are met."
+
+### 5. Additional MUST-HAVE Sections / Features
+
+**Demographic Breakdowns** (EAP influence)
+- Skills → under "Learning Programmes for Black People": pie chart / table showing % split (African male, African female, Coloured male, etc.) based on selected EAP region
+- Management Control → bar chart or numbers showing actual vs EAP target per level (board, exec, senior, mid, junior)
+
+**Training Category Classification** (A–F)
+- When adding/editing training: dropdown with A (Bursaries), B (Learnerships), C (Short courses), D (Accredited), E (Non-accredited), F (Other costs)
+- Show caps in tooltip: E ≤25% total spend, F ≤15%
+
+**Bonus Indicators**
+- Preferential Procurement → +1 graduation, +1 jobs
+- Enterprise Development → +1 graduation, +1 jobs
+- Make them tick-boxes with evidence upload field
+
+**Admin / Settings Overrides**
+Create an **Admin Settings** page (accessible only to admin role):
+- Edit point weights per pillar (future code changes)
+- Edit sub-minimum thresholds (40% rule)
+- Edit EAP percentages per region
+- Toggle bonus auto-calc vs manual
+- Edit category caps (25%/15% for E/F)
+- Edit NPAT target % (1% SED, 2% SD, etc.)
+
+### Visual & UX MUST-HAVES
+- Sticky header with period selector ("Current YTD" default)
+- Color-coding: Green ≥100%, Amber 70–99%, Red <70%
+- Progress bars in every score cell
+- Tooltips on every sub-indicator showing formula (e.g., "MIN((Actual % / Target),1) × Weight")
+- Expand/Collapse All button
+- Wrap text toggle
+- Full figures toggle (2 vs 4 decimals)
+
+### Final Scorecard Structure Summary (Visual Layout)
+
+```
+[Sticky Hero: Company | Period | Level | Points | Recognition | Discount Warning | YES Status]
+
+[Priority Elements Card – red/amber if failed]
+
+[Main Table]
+- Ownership (25) → expand to 7 subs
+- Management Control (19) → expand to 13 subs + EAP bars
+- Skills Development (25) → expand to 5 subs + demographic pie
+- Preferential Procurement (29) → expand to 6 subs + 2 bonuses
+- Supplier Development (10) → expand
+- Enterprise Development (7) → expand + 2 bonuses
+- Socio-Economic Development (5) → expand
+- Grand Total (120)
+- YES Bonus
+
+[Admin Settings Link – bottom or sidebar]
+```
+
+This exactly replicates the Excel's intent: full visibility, drill-down, priority warnings, EAP influence, category rules, and bonus logic.
+
+If you want, I can give you **ready-to-paste React component code** for any specific part (e.g. expanded Preferential Procurement row, Skills demographic breakdown, or Admin Settings form). Just say which one first.
+
+You're building something very close to a full professional B-BBEE toolkit — great progress! 🚀

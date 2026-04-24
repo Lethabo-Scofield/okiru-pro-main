@@ -1,0 +1,91 @@
+You are integrating a powerful Excel import pipeline into an existing B-BBEE compliance web platform. The feature must live primarily in a dedicated "Import Excel" tab (or section) on the dashboard, and it should feel seamless, modern, reliable, and user-friendly — especially for Johannesburg-based transformation managers who often deal with messy or incomplete Excel files from clients or internal teams.
+
+The goal is to allow users to upload one or multiple Excel files (and optionally supporting PDFs), automatically detect and extract structured B-BBEE data (entities, financials, ownership, MC, skills, procurement, ESD/SED, etc.), map it to the platform's internal scorecard model, run all calculations, update the live scorecard, and enable instant what-if scenario planning on the imported data — all while handling errors gracefully and giving clear feedback.
+
+Core Requirements for the "Import Excel" Tab Integration:
+
+1. Tab / Section Location & Entry Point
+   - Add a prominent tab or sidebar item called "Import Excel" (or "Upload Data / Import Toolkit") right next to Dashboard, Scorecard, Scenarios, etc.
+   - When clicked, show a clean full-page view with:
+     - Hero area: big drag-and-drop zone + "Select Files" button
+     - Supported formats badge: Excel (.xlsx, .xls), PDF (certs/invoices), CSV (bulk lists)
+     - Quick tips: "Best results with Okiru Toolkit templates. Bulk upload OK. Max 50 MB total."
+     - Recent imports list (last 5 uploads with date, file count, status, entity name)
+
+2. Upload & Processing Flow (Step-by-Step UX)
+   - Step 1: User drags/drops or selects files (single or multiple)
+     - Show file list with thumbnails/icons, remove buttons, total size
+     - Primary file detection: if one file has "Client Information" or "Summary Scorecard" sheet → mark as main scorecard file
+   - Step 2: "Start Import" button (disabled until files selected)
+     - On click: show progress bar + status messages ("Uploading…", "Parsing sheets…", "Detecting entities…", "Mapping to scorecard…", "Calculating level…")
+     - Backend: Send files to API endpoint (multipart/form-data)
+   - Step 3: Real-time feedback during processing
+     - Live log-style messages: "Found Client Information sheet", "Extracted Revenue R10M, NPAT R500k", "Detected 8 shareholders", "Skills data incomplete – 3 training rows missing IDs"
+     - Success: "Import complete! Scorecard updated → Level 5 (92 points)"
+     - Partial success: "Imported 80% of data. Manual review needed for MC & Procurement"
+
+3. Data Detection & Extraction Logic (Backend + Feedback)
+   - Parse main Excel:
+     - Sheet name matching (fuzzy): "Client Information", "Financials", "Ownership Data", "MC Data", "Skills Data", "Procurement Data", "ESD Data", "SED Data", "Industry Norms", "EAP", etc.
+     - Column/header detection: "Revenue", "NPAT", "Shareholder", "BO%", "Full Name", "Race", "Designation", "Supplier Name", "B-BBEE Level", "Spend", etc.
+     - Value extraction: numbers, percentages, dates, strings
+   - Handle supporting files:
+     - PDFs: OCR/extract B-BBEE level, ownership %, supplier names, spend amounts
+     - CSVs: bulk employee/supplier lists → append to MC/Procurement
+   - Output structured JSON ready for scorecard engine:
+     {
+       "client": { "name": "...", "revenue": 10000000, "npat": 500000, "year": 2025 },
+       "ownership": [ { "name": "...", "boPercent": 0.25, "bwoPercent": 0.10 } ],
+       "mc": [ { "name": "...", "race": "Black", "gender": "Female", "designation": "Executive" } ],
+       "procurement": [ { "supplier": "...", "level": 1, "spend": 2000000 } ],
+       "financials": { "years": [ { "year": 2024, "revenue": ..., "npat": ... } ] },
+       "errors": [ "Missing ID in MC row 5", "Negative NPAT detected – deemed used" ],
+       "warnings": [ "No ESD data found", "Industry norm not matched – using All Industries" ]
+     }
+
+4. Mapping & Scorecard Update
+   - Feed extracted JSON directly into existing scorecard calculation engine
+   - Recalculate:
+     - Deemed NPAT (using Industry Norms lookup)
+     - TMPS (if procurement data present)
+     - All pillar scores (Ownership, MC, Skills, PP, ESD, SED)
+     - Total points, level, discounted level, YES tier
+     - Gaps & sub-minimum flags
+   - Update live dashboard & scorecard views immediately
+   - Save imported dataset as a "snapshot" linked to current entity/client record
+
+5. Error Handling & User Guidance
+   - Graceful failures:
+     - "No recognizable B-BBEE sheets found" → offer manual entry or template download
+     - "Partial data" → highlight missing sections (e.g., red badges on MC/Skills tabs)
+     - "Conflicting values" → show diff and let user choose
+   - Review screen after import:
+     - Summary: "Imported 7 sheets, 120 entities, detected Level 6"
+     - Quick fixes: inline edit for flagged rows (e.g., missing race/gender)
+     - "Accept & Update Scorecard" button
+     - "Discard" or "Save as Draft Scenario"
+
+6. Integration with Existing Features
+   - After import → auto-navigate to Dashboard with updated scores
+   - Scenarios: Add "Create Scenario from Import" button → clone imported data as base for what-if
+   - Exports: Include import metadata in reports ("Data sourced from uploaded Excel – 24 Feb 2026")
+   - Industry Norms & EAP: If uploaded file has these sheets → override platform defaults
+   - Audit trail: Log "Imported by ScoField on 24 Feb 2026 14:03 – files: toolkit.xlsx, cert.pdf"
+
+7. Technical & Security Notes
+   - Frontend: React + Dropzone or react-dropzone for upload UI
+   - Backend: Node.js/Express or Python/FastAPI; use openpyxl + pdfplumber/Tesseract for parsing
+   - Store raw uploads temporarily (S3 or local), delete after processing (POPIA compliance)
+   - Rate limit: max 5 imports/hour per user (prevent abuse)
+   - Toast notifications everywhere: success, warnings, errors
+
+Deliverables expected:
+- UI component structure for "Import Excel" tab
+- Mock API endpoint spec (/api/import/excel) – request/response shape
+- Example success & error flows with user messages
+- Suggestions for progress UI (linear progress + status list)
+- How to link imported data to existing scorecard state
+
+Make this feel like magic: user drops messy Excel → platform understands it → scorecard lights up with accurate level & gaps. Prioritize reliability and clear feedback so users trust the auto-detection.
+
+Build something Johannesburg transformation teams will love!

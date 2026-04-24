@@ -1,0 +1,97 @@
+modules = ["nodejs-20", "web", "python-3.12"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["arangodb"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "API Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Computation Engine"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/web && pnpm dev"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "API Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/api && pnpm dev"
+waitForPort = 3000
+
+[[workflows.workflow]]
+name = "Computation Engine"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd apps/Computation-Engine && python run_server.py"
+waitForPort = 8000
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 3100
+externalPort = 3002
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
+localPort = 24679
+externalPort = 3001
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["bash", "-c", "(cd apps/api && API_PORT=3000 NODE_ENV=production pnpm start &) && sleep 2 && cd apps/web && PORT=${PORT:-5000} API_SERVER_URL=http://127.0.0.1:3000 NODE_ENV=production pnpm start"]
+build = ["bash", "-c", "pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build"]
+
+[userenv]
+
+[userenv.shared]
+ARANGO_URL = "https://051f856d6032.arangodb.cloud:8529"
+ARANGO_DB = "bbbee_db"
+ARANGO_USER = "root"
+ARANGO_VERIFY_SSL = "true"
+ALLOW_IN_MEMORY_DB = "true"

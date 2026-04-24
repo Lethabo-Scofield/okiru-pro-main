@@ -1,0 +1,20 @@
+# Flux Bootstrap Kustomization for Staging Cluster
+# This is the entry point for Flux CD to bootstrap the staging cluster
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flux-system
+resources:
+  # Flux GitRepository sources
+  - ../../gitops/flux/gitrepository.yaml
+  # Flux Kustomizations (environments)
+  - ../../gitops/flux/kustomization-staging.yaml
+  # Flux Image Automation (staging)
+  - ../../gitops/flux/image-automation.yaml
+  # Infrastructure components (base + staging overlay)
+  - ../../infrastructure/base/namespace.yaml
+  - ../../infrastructure/cert-manager/cluster-issuer.yaml
+
+# Note: This is used for a dedicated staging cluster
+# For a single cluster with multiple namespaces, use the production bootstrap
+# and apply both staging and production Kustomizations

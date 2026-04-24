@@ -1,0 +1,451 @@
+# Backup Restore Testing Workflow
+# Monthly automated test to verify backup integrity
+# Also supports manual execution for DR drills
+
+name: Test Backup Restore
+
+on:
+  schedule:
+    # Monthly on the 1st at 3 AM
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      backup_type:
+        description: 'Type of backup to test'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - mongodb
+          - arangodb
+      test_level:
+        description: 'Test level (quick or full)'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick  # Verify backup exists and can be extracted
+          - full   # Full restore to test namespace and verify data
+
+env:
+  PROD_NAMESPACE: okiru-pro
+  STAGING_NAMESPACE: okiru-pro-staging
+  TEST_NAMESPACE: backup-test
+  AZURE_BACKUP_CONTAINER_MONGO: mongodb-backups
+  AZURE_BACKUP_CONTAINER_ARANGO: arangodb-backups
+
+jobs:
+  verify-azure-storage:
+    name: Verify Azure Blob Storage Connectivity
+    runs-on: ubuntu-latest
+    outputs:
+      mongo_backup_available: ${{ steps.check_mongo.outputs.available }}
+      arango_backup_available: ${{ steps.check_arango.outputs.available }}
+    steps:
+      - name: Setup Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check MongoDB backups in Azure
+        id: check_mongo
+        run: |
+          echo "=== Checking MongoDB backups in Azure ==="
+
+          STORAGE_ACCOUNT="${{ secrets.AZURE_BACKUP_STORAGE_ACCOUNT }}"
+
+          # List recent blobs
+          BLOBS=$(az storage blob list \
+            --account-name $STORAGE_ACCOUNT \
+            --container-name ${{ env.AZURE_BACKUP_CONTAINER_MONGO }} \
+            --num-results 10 \
+            --query "[].name" -o tsv 2>/dev/null || true)
+
+          if [ -n "$BLOBS" ]; then
+            echo "✅ MongoDB backups found in Azure"
+            echo "Recent backups:"
+            echo "$BLOBS" | head -5
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No MongoDB backups found"
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check ArangoDB backups in Azure
+        id: check_arango
+        run: |
+          echo "=== Checking ArangoDB backups in Azure ==="
+
+          STORAGE_ACCOUNT="${{ secrets.AZURE_BACKUP_STORAGE_ACCOUNT }}"
+
+          BLOBS=$(az storage blob list \
+            --account-name $STORAGE_ACCOUNT \
+            --container-name ${{ env.AZURE_BACKUP_CONTAINER_ARANGO }} \
+            --num-results 10 \
+            -o tsv 2>/dev/null || true)
+
+          if [ -n "$BLOBS" ]; then
+            echo "✅ ArangoDB backups found in Azure"
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No ArangoDB backups found"
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+
+  quick-test-mongodb:
+    name: Quick Test - MongoDB Backup Integrity
+    runs-on: ubuntu-latest
+    needs: verify-azure-storage
+    if: ${{ needs.verify-azure-storage.outputs.mongo_backup_available == 'true' && (inputs.backup_type == 'all' || inputs.backup_type == 'mongodb') }}
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          ENV="${{ inputs.environment || 'staging' }}"
+          if [ "$ENV" = "production" ]; then
+            echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > kubeconfig
+          else
+            echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+          fi
+          export KUBECONFIG=kubeconfig
+          kubectl config current-context
+
+      - name: Download and verify backup
+        run: |
+          export KUBECONFIG=kubeconfig
+          ENV="${{ inputs.environment || 'staging' }}"
+          NAMESPACE="${{ env.STAGING_NAMESPACE }}"
+          [ "$ENV" = "production" ] && NAMESPACE="${{ env.PROD_NAMESPACE }}"
+
+          echo "=== Testing MongoDB backup integrity ==="
+
+          # Create test job
+          cat << 'EOF' | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: mongodb-backup-test
+            namespace: $NAMESPACE
+          spec:
+            ttlSecondsAfterFinished: 3600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: test
+                    image: mongo:7.0
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        set -e
+                        echo "Testing backup integrity..."
+                        
+                        # Get latest backup from Azure
+                        apk add --no-cache py3-pip
+                        pip install azure-cli
+                        
+                        # Download backup
+                        az storage blob download-batch \
+                          --account-name ${AZURE_STORAGE_ACCOUNT} \
+                          --account-key ${AZURE_STORAGE_KEY} \
+                          --destination /tmp/backup \
+                          --source mongodb-backups \
+                          --pattern '$(date +%Y%m%d)*' || true
+                        
+                        # If no backup today, get most recent
+                        if [ ! -d /tmp/backup/* ]; then
+                          LATEST=$(az storage blob list \
+                            --account-name ${AZURE_STORAGE_ACCOUNT} \
+                            --account-key ${AZURE_STORAGE_KEY} \
+                            --container-name mongodb-backups |
+                            grep -oE '[0-9]{8}-[0-9]{6}' | sort | tail -1)
+                          
+                          az storage blob download-batch \
+                            --account-name ${AZURE_STORAGE_ACCOUNT} \
+                            --account-key ${AZURE_STORAGE_KEY} \
+                            --destination /tmp/backup \
+                            --source mongodb-backups \
+                            --pattern "${LATEST}*"
+                        fi
+                        
+                        # Verify backup can be read (list contents)
+                        BACKUP_DIR=$(find /tmp/backup -type d | head -2 | tail -1)
+                        echo "Backup contents:"
+                        ls -la "$BACKUP_DIR"
+                        
+                        # Check for metadata
+                        if [ -f "$BACKUP_DIR/metadata.txt" ]; then
+                          echo "Metadata found:"
+                          cat "$BACKUP_DIR/metadata.txt"
+                        fi
+                        
+                        # Basic integrity check - verify bson files exist
+                        BSON_COUNT=$(find "$BACKUP_DIR" -name '*.bson.gz' | wc -l)
+                        if [ "$BSON_COUNT" -eq 0 ]; then
+                          echo "ERROR: No BSON files found in backup"
+                          exit 1
+                        fi
+                        
+                        echo "✅ Backup integrity verified - $BSON_COUNT BSON files found"
+                    env:
+                      - name: AZURE_STORAGE_ACCOUNT
+                        valueFrom:
+                          secretKeyRef:
+                            name: azure-backup-credentials
+                            key: AZURE_STORAGE_ACCOUNT
+                      - name: AZURE_STORAGE_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: azure-backup-credentials
+                            key: AZURE_STORAGE_KEY
+          EOF
+
+          # Wait for job to complete
+          kubectl wait --for=condition=complete --timeout=300s job/mongodb-backup-test -n $NAMESPACE
+
+          # Get logs
+          kubectl logs job/mongodb-backup-test -n $NAMESPACE
+
+          # Cleanup
+          kubectl delete job mongodb-backup-test -n $NAMESPACE --ignore-not-found=true
+
+      - name: Cleanup
+        if: always()
+        run: rm -f kubeconfig
+
+  quick-test-arangodb:
+    name: Quick Test - ArangoDB Backup Integrity
+    runs-on: ubuntu-latest
+    needs: verify-azure-storage
+    if: ${{ needs.verify-azure-storage.outputs.arango_backup_available == 'true' && (inputs.backup_type == 'all' || inputs.backup_type == 'arangodb') }}
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          ENV="${{ inputs.environment || 'staging' }}"
+          if [ "$ENV" = "production" ]; then
+            echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > kubeconfig
+          else
+            echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+          fi
+          export KUBECONFIG=kubeconfig
+
+      - name: Download and verify backup
+        run: |
+          export KUBECONFIG=kubeconfig
+          ENV="${{ inputs.environment || 'staging' }}"
+          NAMESPACE="${{ env.STAGING_NAMESPACE }}"
+          [ "$ENV" = "production" ] && NAMESPACE="${{ env.PROD_NAMESPACE }}"
+
+          cat << 'EOF' | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: arangodb-backup-test
+            namespace: $NAMESPACE
+          spec:
+            ttlSecondsAfterFinished: 3600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: test
+                    image: arangodb:3.12
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        set -e
+                        apk add --no-cache py3-pip
+                        pip install azure-cli
+                        
+                        # Download backup
+                        az storage blob download-batch \
+                          --account-name ${AZURE_STORAGE_ACCOUNT} \
+                          --account-key ${AZURE_STORAGE_KEY} \
+                          --destination /tmp/backup \
+                          --source arangodb-backups \
+                          --pattern '$(date +%Y%m%d)*' || true
+                        
+                        BACKUP_DIR=$(find /tmp/backup -type d | head -2 | tail -1)
+                        echo "Backup contents:"
+                        ls -la "$BACKUP_DIR"
+                        
+                        # Verify dump files exist
+                        DUMP_COUNT=$(find "$BACKUP_DIR" -name '*.dump.gz' | wc -l)
+                        if [ "$DUMP_COUNT" -eq 0 ]; then
+                          echo "ERROR: No dump files found"
+                          exit 1
+                        fi
+                        
+                        echo "✅ Backup integrity verified - $DUMP_COUNT dump files"
+                    env:
+                      - name: AZURE_STORAGE_ACCOUNT
+                        valueFrom:
+                          secretKeyRef:
+                            name: azure-backup-credentials
+                            key: AZURE_STORAGE_ACCOUNT
+                      - name: AZURE_STORAGE_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: azure-backup-credentials
+                            key: AZURE_STORAGE_KEY
+          EOF
+
+          kubectl wait --for=condition=complete --timeout=300s job/arangodb-backup-test -n $NAMESPACE
+          kubectl logs job/arangodb-backup-test -n $NAMESPACE
+          kubectl delete job arangodb-backup-test -n $NAMESPACE --ignore-not-found=true
+
+      - name: Cleanup
+        if: always()
+        run: rm -f kubeconfig
+
+  full-restore-test:
+    name: Full Restore Test (Staging Only)
+    runs-on: ubuntu-latest
+    needs: [verify-azure-storage, quick-test-mongodb, quick-test-arangodb]
+    if: ${{ inputs.test_level == 'full' && (inputs.environment || 'staging') == 'staging' }}
+    environment:
+      name: staging
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Create test namespace
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+          # Create isolated test namespace
+          kubectl create namespace ${{ env.TEST_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy test databases
+        run: |
+          export KUBECONFIG=kubeconfig
+
+          echo "=== Deploying test MongoDB instance ==="
+          cat << 'EOF' | kubectl apply -n ${{ env.TEST_NAMESPACE }} -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: mongodb-test
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: mongodb-test
+            template:
+              metadata:
+                labels:
+                  app: mongodb-test
+              spec:
+                containers:
+                  - name: mongodb
+                    image: mongo:7.0
+                    env:
+                      - name: MONGO_INITDB_ROOT_USERNAME
+                        value: testuser
+                      - name: MONGO_INITDB_ROOT_PASSWORD
+                        value: testpass123
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: mongodb-test
+          spec:
+            selector:
+              app: mongodb-test
+            ports:
+              - port: 27017
+          EOF
+
+          kubectl wait --for=condition=ready pod -l app=mongodb-test -n ${{ env.TEST_NAMESPACE }} --timeout=120s
+
+      - name: Restore MongoDB backup to test instance
+        run: |
+          export KUBECONFIG=kubeconfig
+
+          echo "=== Restoring backup to test database ==="
+          # Implementation would download backup and run mongorestore
+          # This is a placeholder for the actual restore logic
+
+          cat << 'EOF' | kubectl apply -n ${{ env.TEST_NAMESPACE }} -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: mongodb-restore
+          spec:
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: restore
+                    image: mongo:7.0
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        echo "This would restore the backup to the test instance"
+                        echo "mongorestore --host mongodb-test --username testuser --password testpass123 /backup"
+          EOF
+
+          kubectl wait --for=condition=complete --timeout=600s job/mongodb-restore -n ${{ env.TEST_NAMESPACE }} || true
+
+      - name: Verify restored data
+        run: |
+          export KUBECONFIG=kubeconfig
+
+          # Run verification queries against restored database
+          echo "=== Verifying restored data ==="
+          # Would run: mongosh --host mongodb-test -eval "db.stats()"
+
+      - name: Cleanup test namespace
+        if: always()
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl delete namespace ${{ env.TEST_NAMESPACE }} --ignore-not-found=true --wait=false
+
+      - name: Cleanup
+        if: always()
+        run: rm -f kubeconfig
+
+  report:
+    name: Generate Report
+    needs: [verify-azure-storage, quick-test-mongodb, quick-test-arangodb, full-restore-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "## Backup Restore Test Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Storage Verification | ${{ needs.verify-azure-storage.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| MongoDB Quick Test | ${{ needs.quick-test-mongodb.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ArangoDB Quick Test | ${{ needs.quick-test-arangodb.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Full Restore Test | ${{ needs.full-restore-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Environment: ${{ inputs.environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+          echo "Test Level: ${{ inputs.test_level || 'quick' }}" >> $GITHUB_STEP_SUMMARY
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY

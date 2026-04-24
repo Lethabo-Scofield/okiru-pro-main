@@ -1,0 +1,178 @@
+# Web Frontend Deployment (Express + Vite SSR)
+# Serves the user interface and proxies API requests
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: okiru-pro
+  labels:
+    app: web
+    component: frontend
+    tier: web
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        component: frontend
+        tier: web
+    spec:
+      imagePullSecrets:
+        - name: acr-pull-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - web
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: wait-for-api
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z api 5000; do
+                echo "Waiting for API..."
+                sleep 2
+              done
+      containers:
+        - name: web
+          image: okiruproacrde4d539b.azurecr.io/okiru-pro/web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5001
+              name: http
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WEB_PORT
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEXT_PUBLIC_API_URL
+            - name: API_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: API_SERVER_URL
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: MONGODB_URI
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: SESSION_SECRET
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: GROQ_API_KEY
+                  optional: true
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_HOST
+                  optional: true
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_PORT
+                  optional: true
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_USER
+                  optional: true
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_PASS
+                  optional: true
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 100Mi

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arangodb-pvc
+  labels:
+    app: arangodb
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-premium
+  resources:
+    requests:
+      storage: 10Gi

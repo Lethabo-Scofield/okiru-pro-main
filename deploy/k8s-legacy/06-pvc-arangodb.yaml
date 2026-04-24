@@ -1,0 +1,17 @@
+# PersistentVolumeClaim for ArangoDB
+# 10GB Standard SSD for graph database storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arangodb-pvc
+  namespace: okiru-pro
+  labels:
+    app: arangodb
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-standard-ssd
+  resources:
+    requests:
+      storage: 10Gi

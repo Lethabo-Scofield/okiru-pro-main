@@ -1,0 +1,97 @@
+# ArgoCD Application for Production Environment
+# Tracks the production overlay with conservative sync policies
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: okiru-pro-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # Production requires manual approval for changes
+    # Set to "true" to enable automatic sync
+    argocd.argoproj.io/sync-enabled: "true"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+    targetRevision: main
+    path: kubernetes/infrastructure/overlays/prod
+    kustomize:
+      # Enable Kustomize features
+      commonAnnotations:
+        argocd.argoproj.io/managed-by: argocd
+      # Optional: Enable strict validation
+      # strict: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: okiru-pro
+  syncPolicy:
+    # Production: manual sync by default for safety
+    # Change to 'automated' after confidence is established
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ReplaceResourceOnImmutableFieldChange=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # HPA controls replicas
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/spec/containers/0/image  # Image updater controls images
+  revisionHistoryLimit: 20  # Keep more history for production
+---
+# ArgoCD Application for Production Image Updates (Optional)
+# Disabled by default - enable after setting up proper testing pipeline
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: okiru-pro-prod-images
+  namespace: argocd
+  annotations:
+    # Image Updater annotations
+    argocd-image-updater.argoproj.io/image-list: |
+      api=okiruproacrde4d539b.azurecr.io/okiru-pro-api,
+      web=okiruproacrde4d539b.azurecr.io/okiru-pro-web,
+      compute=okiruproacrde4d539b.azurecr.io/okiru-pro-compute
+    # Production: use semver with explicit versioning
+    argocd-image-updater.argoproj.io/api.update-strategy: semver
+    argocd-image-updater.argoproj.io/api.allow-tags: regexp:^[vV]?[0-9]+\.[0-9]+\.[0-9]+$
+    argocd-image-updater.argoproj.io/web.update-strategy: semver
+    argocd-image-updater.argoproj.io/web.allow-tags: regexp:^[vV]?[0-9]+\.[0-9]+\.[0-9]+$
+    argocd-image-updater.argoproj.io/compute.update-strategy: semver
+    argocd-image-updater.argoproj.io/compute.allow-tags: regexp:^[vV]?[0-9]+\.[0-9]+\.[0-9]+$
+    # Write back to git
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+    argocd-image-updater.argoproj.io/git-branch: main
+    # Disabled by default - set to "true" to enable
+    argocd-image-updater.argoproj.io/enabled: "false"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+    targetRevision: main
+    path: kubernetes/infrastructure/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: okiru-pro
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
