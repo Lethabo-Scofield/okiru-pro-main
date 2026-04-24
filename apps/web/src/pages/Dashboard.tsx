@@ -346,7 +346,7 @@ export default function Dashboard() {
             <h3 className="text-[17px] font-semibold text-foreground text-center mb-2 tracking-tight">Delete Template?</h3>
             <p className="text-[13px] text-[#8e8e93] text-center mb-7 leading-relaxed">This action cannot be undone. The template and all its entities will be permanently removed.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-muted text-foreground/90 rounded-xl hover:bg-[#3a3a3c] smooth press-sm font-medium text-[13px]" data-testid="button-cancel-delete">Cancel</button>
+              <button onClick={() => setDeleteConfirm(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-muted text-foreground/90 rounded-xl hover:bg-muted smooth press-sm font-medium text-[13px]" data-testid="button-cancel-delete">Cancel</button>
               <button onClick={() => deleteConfirm !== null && deleteTemplate(deleteConfirm)} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500 text-foreground rounded-xl hover:bg-red-600 smooth press-sm font-semibold text-[13px] shadow-sm shadow-red-500/20" data-testid="button-confirm-delete">
                 {isDeleting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Deleting...</> : "Delete"}
               </button>
@@ -372,7 +372,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setPage('home'); startTour(); }}
-              className="p-2 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
+              className="p-2 rounded-full bg-card hover:bg-muted smooth press-sm text-[#8e8e93] hover:text-foreground/90"
               title="Take a tour"
               aria-label="Take a guided tour"
               data-testid="button-help-tour"
@@ -387,7 +387,7 @@ export default function Dashboard() {
             </div>
             <button
               onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card hover:bg-muted text-[12px] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
               data-testid="button-sign-out"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -473,7 +473,7 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-muted smooth press-sm text-[#8e8e93]"
                     onClick={() => goTo('home')}
                     data-testid="button-back-home"
                   >
@@ -636,7 +636,7 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-muted smooth press-sm text-[#8e8e93]"
                     onClick={() => goTo('home')}
                     data-testid="button-back-home-sc"
                   >

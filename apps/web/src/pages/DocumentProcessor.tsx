@@ -539,8 +539,8 @@ function FileFormatBadge({ type, size = 'md' }: { type: string; size?: 'sm' | 'm
       style={{
         width: w, height: h,
         borderRadius: r,
-        background: '#1c1c1e',
-        border: '1px solid #2c2c2e',
+        background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border))',
       }}
     >
       <span
@@ -1033,7 +1033,7 @@ function PopulatingScreen({
     : 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b] flex flex-col items-center justify-start pt-10 pb-16 px-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start pt-10 pb-16 px-6">
       {/* Header */}
       <div className="w-full max-w-2xl mb-8">
         <div className="flex items-center gap-3 mb-1">
@@ -1069,7 +1069,7 @@ function PopulatingScreen({
           return (
             <div
               key={pillar.label}
-              className="rounded-xl border border-[#2a2a2e] bg-[#111113] overflow-hidden"
+              className="rounded-xl border border-[#2a2a2e] bg-card overflow-hidden"
               style={{ borderLeftColor: pillar.color, borderLeftWidth: 3, opacity: visible ? 1 : 0, transition: 'opacity 0.3s' }}
             >
               {/* Pillar header */}
@@ -2728,7 +2728,7 @@ export default function DocumentProcessor() {
     ].filter(p => p.entities.length > 0);
 
     return (
-      <div className="bg-[#0a0a0b] h-screen overflow-y-auto">
+      <div className="bg-background h-screen overflow-y-auto">
         <PopulatingScreen
           pillars={populatingPillars}
           totalEntities={Object.values(populatingData.entityCounts || {}).reduce((a: number, b) => a + (b as number), 0)}
@@ -2825,8 +2825,8 @@ export default function DocumentProcessor() {
                     }`}>{step.label}</span>
                   </div>
                   {idx < steps.length - 1 && (
-                    <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
-                      <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
+                    <div className="flex-1 h-px mx-4" style={{ background: 'hsl(var(--muted))' }}>
+                      <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: 'hsl(var(--muted-foreground))' }}></div>
                     </div>
                   )}
                 </React.Fragment>
@@ -2855,7 +2855,7 @@ export default function DocumentProcessor() {
                   </div>
 
                   {/* ── Card ── */}
-                  <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                  <div className="rounded-2xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
 
                     {/* Section: Company Logo */}
                     <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
@@ -3153,7 +3153,7 @@ export default function DocumentProcessor() {
               </div>
 
               {templates.length === 0 && !loadingTemplates && (
-                <div className="rounded-xl p-4 mb-6 flex items-start gap-3" style={{ background: '#1a1a1a', border: '1px solid #2c2c2e' }}>
+                <div className="rounded-xl p-4 mb-6 flex items-start gap-3" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                   <AlertTriangle className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-foreground/90">No templates available</p>
@@ -3165,7 +3165,7 @@ export default function DocumentProcessor() {
               <div
                 className="rounded-2xl text-center transition-all cursor-pointer mb-8"
                 style={{
-                  background: '#111111',
+                  background: 'hsl(var(--card))',
                   border: `1px dashed ${isDragActive ? '#636366' : '#2c2c2e'}`,
                   padding: uploadedFiles.length > 0 ? '16px' : '48px 24px',
                 }}
@@ -3178,14 +3178,14 @@ export default function DocumentProcessor() {
                   onChange={(e) => { if (e.target.files?.length) handleFiles(Array.from(e.target.files)); }} />
                 {uploadedFiles.length === 0 ? (
                   <>
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-transform ${isDragActive ? 'scale-105' : ''}`} style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-transform ${isDragActive ? 'scale-105' : ''}`} style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                       <CloudUpload className="w-6 h-6 text-[#636366]" />
                     </div>
                     <h3 className="text-[15px] font-medium text-foreground mb-1">Drop files here</h3>
                     <p className="text-[13px] text-[#636366] mb-4">or click to browse</p>
                     <div className="flex items-center justify-center gap-1.5 text-[11px]">
                       {['PDF', 'XLSX', 'CSV', 'DOCX', 'TXT'].map(ext => (
-                        <span key={ext} className="px-2 py-0.5 rounded text-[#48484a]" style={{ background: '#1c1c1e' }}>{ext}</span>
+                        <span key={ext} className="px-2 py-0.5 rounded text-[#48484a]" style={{ background: 'hsl(var(--card))' }}>{ext}</span>
                       ))}
                     </div>
                   </>
@@ -3223,7 +3223,7 @@ export default function DocumentProcessor() {
                   </div>
                   <div className="space-y-1.5 mb-8">
                     {uploadedFiles.map((file) => (
-                      <div key={file.id} className={`rounded-xl px-4 py-3 flex items-center gap-3 transition-all ${file.status === 'uploading' ? 'opacity-70' : ''}`} style={{ background: '#111111', border: '1px solid #1c1c1e' }} data-testid={`file-row-${file.id}`}>
+                      <div key={file.id} className={`rounded-xl px-4 py-3 flex items-center gap-3 transition-all ${file.status === 'uploading' ? 'opacity-70' : ''}`} style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} data-testid={`file-row-${file.id}`}>
                         <div className="shrink-0">
                           <FileFormatBadge type={file.type} size="sm" />
                         </div>
@@ -3285,7 +3285,7 @@ export default function DocumentProcessor() {
                           key={file.id}
                           className="rounded-2xl transition-all"
                           style={{
-                            background: '#111111',
+                            background: 'hsl(var(--card))',
                             border: `1px solid ${selectedTemplate ? '#3a3a3c' : '#222224'}`,
                             position: 'relative',
                             zIndex: isDropdownOpen ? 50 : 1,
@@ -3339,7 +3339,7 @@ export default function DocumentProcessor() {
                                   <div className="fixed inset-0 z-40" onClick={() => setOpenTemplateDropdown(null)} />
                                   <div
                                     className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden"
-                                    style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+                                    style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
                                   >
                                     <div className="max-h-56 overflow-y-auto py-1">
                                       {loadingTemplates ? (
@@ -3377,7 +3377,7 @@ export default function DocumentProcessor() {
                               )}
                             </div>
 
-                            <div className="flex rounded-lg overflow-hidden" style={{ background: '#0c0c0c', border: '1px solid #222224' }} data-testid={`select-doctype-${file.id}`}>
+                            <div className="flex rounded-lg overflow-hidden" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} data-testid={`select-doctype-${file.id}`}>
                               <button
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
@@ -3388,7 +3388,7 @@ export default function DocumentProcessor() {
                                 <Monitor className="w-3 h-3" />
                                 Digital
                               </button>
-                              <div className="w-px" style={{ background: '#222224' }} />
+                              <div className="w-px" style={{ background: 'hsl(var(--border))' }} />
                               <button
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
@@ -3404,10 +3404,10 @@ export default function DocumentProcessor() {
                             {selectedTemplate && (selectedTemplate.entities ?? []).length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {(selectedTemplate.entities ?? []).slice(0, 5).map((ent, i) => (
-                                  <span key={i} className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#636366]" style={{ background: '#1a1a1a' }}>{ent.label}</span>
+                                  <span key={i} className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#636366]" style={{ background: 'hsl(var(--card))' }}>{ent.label}</span>
                                 ))}
                                 {(selectedTemplate.entities ?? []).length > 5 && (
-                                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#48484a]" style={{ background: '#1a1a1a' }}>+{(selectedTemplate.entities ?? []).length - 5}</span>
+                                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium text-[#48484a]" style={{ background: 'hsl(var(--card))' }}>+{(selectedTemplate.entities ?? []).length - 5}</span>
                                 )}
                               </div>
                             )}
@@ -3460,14 +3460,14 @@ export default function DocumentProcessor() {
                 </div>
 
                 {!anyProcessing && !allDone && (
-                  <div className="rounded-2xl p-5 mb-6" style={{ background: '#111111', border: '1px solid #1c1c1e' }}>
+                  <div className="rounded-2xl p-5 mb-6" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                     <div className="flex items-center gap-2 mb-4">
                       <span className="text-[13px] font-medium text-[#8e8e93]">Entities to Extract</span>
                       <span className="text-[12px] text-[#48484a] ml-auto">{allEntities.length}</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {allEntities.map((ent) => (
-                        <div key={ent.label} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#1a1a1a' }}>
+                        <div key={ent.label} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'hsl(var(--card))' }}>
                           <div className="flex-1 min-w-0">
                             <span className="text-[13px] font-medium text-foreground/90">{ent.label}</span>
                             {ent.definition && <p className="text-[11px] text-[#48484a] mt-0.5 line-clamp-1">{ent.definition}</p>}
@@ -3484,8 +3484,8 @@ export default function DocumentProcessor() {
                     const tid = fileClassifications[String(file.id)];
                     const tmpl = templates.find(t => t.id === tid);
                     return (
-                      <div key={file.id} className="rounded-xl px-4 py-3 flex items-center gap-3 transition-all" style={{ background: '#111111', border: `1px solid ${status === 'done' ? '#2c2c2e' : '#1c1c1e'}` }} data-testid={`extract-row-${idx}`}>
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#1c1c1e' }}>
+                      <div key={file.id} className="rounded-xl px-4 py-3 flex items-center gap-3 transition-all" style={{ background: 'hsl(var(--card))', border: `1px solid hsl(var(--border))` }} data-testid={`extract-row-${idx}`}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'hsl(var(--card))' }}>
                           {status === 'waiting' && <Circle className="w-2 h-2 text-[#48484a]" />}
                           {status === 'processing' && <Loader2 className="w-3.5 h-3.5 text-[#8e8e93] animate-spin" />}
                           {status === 'done' && <Check className="w-3.5 h-3.5 text-foreground" />}
@@ -4802,7 +4802,7 @@ export default function DocumentProcessor() {
                     { label: 'High Confidence', value: allEntities.filter(e => (e.confidence || 0) >= 0.85).length },
                     { label: 'Documents Processed', value: extractionResults.length },
                   ].map(stat => (
-                    <div key={stat.label} className="rounded-xl p-4 flex flex-col gap-1" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                    <div key={stat.label} className="rounded-xl p-4 flex flex-col gap-1" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                       <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">{stat.label}</span>
                       <span className="text-[28px] font-bold text-foreground leading-none">{stat.value}</span>
                     </div>
@@ -4814,7 +4814,7 @@ export default function DocumentProcessor() {
                   const entities = byPillar[pillar.key] || [];
                   const avgConf = entities.reduce((s, e) => s + (e.confidence || 0), 0) / entities.length;
                   return (
-                    <div key={pillar.key} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                    <div key={pillar.key} className="rounded-2xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                       {/* Pillar header */}
                       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
                         <div className="flex items-center gap-3">
@@ -4860,9 +4860,9 @@ export default function DocumentProcessor() {
 
                 {/* Uncategorised entities */}
                 {otherEntities.length > 0 && (
-                  <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                  <div className="rounded-2xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                     <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#636366]" />
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-muted-foreground" />
                       <span className="text-[14px] font-semibold text-foreground">Other</span>
                       <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-card text-[#636366] ml-auto">{otherEntities.length} entities</span>
                     </div>
@@ -4879,7 +4879,7 @@ export default function DocumentProcessor() {
 
                 {/* Empty state */}
                 {allEntities.length === 0 && (
-                  <div className="rounded-2xl flex flex-col items-center justify-center py-20 gap-3" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                  <div className="rounded-2xl flex flex-col items-center justify-center py-20 gap-3" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                     <FileQuestion className="w-8 h-8 text-[#48484a]" />
                     <p className="text-[#8e8e93] text-sm">No entities were extracted.</p>
                   </div>
@@ -5006,7 +5006,7 @@ export default function DocumentProcessor() {
                     {source === 'calculation_engine' && (
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-status-success/10 text-status-success border border-status-success/20">Build Mode</span>
                     )}
-                    <button className="px-4 py-2 bg-muted hover:bg-[#3a3a3c] text-foreground rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
+                    <button className="px-4 py-2 bg-muted hover:bg-muted text-foreground rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
                       Export PDF
                     </button>
                   </div>
@@ -5106,7 +5106,7 @@ export default function DocumentProcessor() {
 
                               {/* Criterion detail drill-down */}
                               {isExpanded && hasCriteria && (
-                                <div className="px-6 pb-4 space-y-1.5 bg-[#141414]">
+                                <div className="px-6 pb-4 space-y-1.5 bg-card">
                                   <div className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-1.5 text-[10px] font-semibold text-[#636366] uppercase tracking-wider">
                                     <span>Criterion</span>
                                     <span className="text-right">Points</span>
@@ -5118,7 +5118,7 @@ export default function DocumentProcessor() {
                                     return (
                                       <div key={cr.criterionCode} className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-2 rounded-lg bg-card border border-[#1e1e1e] items-center">
                                         <div className="flex items-center gap-2 min-w-0">
-                                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-status-success' : 'bg-[#3a3a3c]'}`} />
+                                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-status-success' : 'bg-muted'}`} />
                                           <span className="text-[12px] text-foreground/90 truncate">{cr.name || cr.criterionCode}</span>
                                           {cr.targetMet && <CheckCircle2 className="w-3 h-3 text-status-success shrink-0" />}
                                         </div>
@@ -5138,7 +5138,7 @@ export default function DocumentProcessor() {
                           );
                         })}
                       </div>
-                      <div className="px-6 py-4 bg-[#141414] border-t border-border flex items-center justify-between">
+                      <div className="px-6 py-4 bg-card border-t border-border flex items-center justify-between">
                         <span className="text-sm font-semibold text-foreground/90">TOTAL</span>
                         <span className="text-sm font-bold text-foreground" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
                       </div>
