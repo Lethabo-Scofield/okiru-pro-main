@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arangodb-config
+data:
+  ARANGO_OPTIONS: |
+    --log.level info
+    --server.statistics true
+    --javascript.v8-contexts 2
+    --javascript.v8-contexts-minimum 1

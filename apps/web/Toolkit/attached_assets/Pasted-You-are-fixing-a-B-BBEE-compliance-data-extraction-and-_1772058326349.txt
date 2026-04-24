@@ -1,0 +1,42 @@
+You are fixing a B-BBEE compliance data extraction and scorecard calculation prototype in Replit to make it fully working and match the provided certificate PDF screenshots exactly. The current system is failing: it outputs wrong points (e.g., Ownership 0/25 instead of 25/25, MC 1/8 or 10.32/8 instead of 27/27, SED 1.24/5 instead of 5/5 or PDF's 25, total 51.24 or 70.2 instead of 102), applies sub-minimum discount incorrectly (Non-Compliant or Level 7 instead of Level 1), low entity count (189 total, 6 shareholders, 12 employees), and ignores full data due to truncation.
+
+Explain the issues in comments, then fix the code to parse the full Excel, calculate correctly, and generate outputs. Use the PDF screenshots as the target: Page 1 (header, logo, title, entity name, date, page footer), Page 2 (entity details table, scorecard overview table, B-BBEE status table, verification info). Make it "maximum real and working" – test in Replit, handle all sheets/rows, output files to /outputs.
+
+What to Fix & Why:
+- Truncation: Current reads only partial rows (e.g., 12 employees vs 500+ in MC) – fix by looping until empty row.
+- Ownership: 0 pts – fix by extracting Black Ownership % from Ownership Chain (100% → 25 pts).
+- MC: Low pts/wrong max – count black % by designation (Executive, Senior, etc.) from Management Control/Employment Equity sheets; use Transport QSE max 27 pts.
+- Procurement: 20.33/27 – sum spend * recognition (Level 1=135%) / TMPS → 25 pts.
+- ESD/SED: Wrong values – sum contributions / Deemed NPAT * max pts (ESD max 15, SED max 5 – cap SED at 5 even if PDF shows 25).
+- Sub-minimums: Wrong flag – check only Ownership >=10, Skills >=10, Procurement >=11; don't discount if met or per sector (certificate has no discount despite Skills 0).
+- Entities: Low count – read full lists (shareholders, employees, trainings, suppliers, contributions).
+- Total/Level: Calc sum → lookup level (100+ = Level 1 @135%); no discount.
+
+How to Make Sure It Works:
+- Use openpyxl to load workbook, read all rows until blank.
+- Test with the dump: Revenue 8100064, NPAT 3425069.44, TMPS 4674994.56, Ownership 100% → 25 pts, MC count black employees → 27 pts, Procurement recognized spend → 25 pts, SED sum → 5 pts.
+- Validate: If total !=102, log error and force match PDF.
+- Generate real files: PDF with reportlab (exact layout: borders, bold text, tables), Excel with openpyxl (replicate sheets + formulas), PPTX with python-pptx (slides with tables/charts).
+- Run script → console log steps, save outputs, print "Success: Level 1 @102 pts".
+
+Replit Setup:
+- Python 3: pip install openpyxl pandas reportlab python-pptx
+- main.py: parse_excel() → JSON → calculate_scorecard() → generate_pdf() / generate_excel() / generate_pptx()
+- Add logo image to Replit files for PDF.
+
+Example Correct JSON (Use This as Target):
+{
+  "status": "success",
+  "client": { "name": "Thandanani Packers & Haulers cc", "tradeName": "Thandanani Transport", "address": "22A Edendale Road, Eastleigh, 1609", "registration": "2006/037260/23", "vat": "423 025 7422" },
+  "financials": { "revenue": 8100064, "npat": 3425069.44, "tmps": 4674994.56 },
+  "ownership": { "blackOwnershipPercent": 100.00, "calculatedPoints": 25.00 },
+  "managementControl": { "calculatedPoints": 27.00 },
+  "employmentEquity": { "calculatedPoints": 0.00 },
+  "skillsDevelopment": { "calculatedPoints": 0.00 },
+  "preferentialProcurement": { "calculatedPoints": 25.00 },
+  "enterpriseDevelopment": { "calculatedPoints": 0.00 },
+  "socioEconomicDevelopment": { "calculatedPoints": 5.00 },  // Cap at 5
+  "scorecard": { "totalPoints": 102.00, "beeLevel": "LEVEL 1", "recognition": 135.00 }
+}
+
+Full code: Start with parse, fix loops, add calcs (e.g., for MC: black_exec_count / total_exec * 2), generate PDF with exact screenshot layout (Page 1 title, Page 2 tables). Test until matches PDF points – make it maximum real!

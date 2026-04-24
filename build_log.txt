@@ -1,0 +1,111 @@
+﻿az : WARNING: Packing source code into tar to upload...
+At C:\Users\Administrator\AppData\Local\Temp\ps-script-fa447cd7-19c5-483f-ae16-ed4430050c0f.ps1:82 char:144
++ ... ormat %s)); az acr build --registry okiruproacrde4d539b --image api:t ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: Packin...ar to upload...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING: Excluding '.git' based on default ignore rules
+WARNING: Excluding '.gitignore' based on default ignore rules
+WARNING: Excluding '.kilo/.gitignore' based on default ignore rules
+WARNING: Excluding 'apps/api/.gitignore' based on default ignore rules
+WARNING: Excluding 'apps/web/.gitignore' based on default ignore rules
+WARNING: Excluding 'node_modules/.pnpm/node_modules/@okiru/api/.gitignore' based on default ignore rules
+WARNING: Excluding 'node_modules/.pnpm/node_modules/rest-express/.gitignore' based on default ignore rules
+WARNING: Uploading archived source code from 
+'C:\Users\ADMINI~1\AppData\Local\Temp\build_archive_a3c466bed32a4b6097f681134ea2127d.tar.gz'...
+WARNING: Sending context (5.868 MiB) to registry: okiruproacrde4d539b...
+WARNING: Queued a build with ID: df4q
+WARNING: Waiting for an agent...
+2026/04/11 20:22:54 Downloading source code...
+
+2026/04/11 20:22:54 Finished downloading source code
+
+2026/04/11 20:22:55 Using acb_vol_3a0f7d52-6599-42c5-84ac-4bfb37d705d2 as the home volume
+2026/04/11 20:22:55 Setting up Docker configuration...
+2026/04/11 20:22:55 Successfully set up Docker configuration
+2026/04/11 20:22:55 Logging in to registry: okiruproacrde4d539b.azurecr.io
+2026/04/11 20:22:56 Successfully logged into okiruproacrde4d539b.azurecr.io
+2026/04/11 20:22:56 Executing step ID: build. Timeout(sec): 28800, Working directory: '', Network: ''
+2026/04/11 20:22:56 Scanning for dependencies...
+2026/04/11 20:22:56 Successfully scanned dependencies
+2026/04/11 20:22:56 Launching container with name: build
+Sending build context to Docker daemon  17.18MB
+
+
+
+Step 1/21 : FROM node:20-alpine AS builder
+20-alpine: Pulling from library/node
+
+589002ba0eae: Pulling fs layer
+d7f6aca05b78: Pulling fs layer
+62e0e1181d88: Pulling fs layer
+c7734204880f: Pulling fs layer
+c7734204880f: Waiting
+589002ba0eae: Verifying Checksum
+589002ba0eae: Download complete
+62e0e1181d88: Verifying Checksum
+62e0e1181d88: Download complete
+d7f6aca05b78: Verifying Checksum
+d7f6aca05b78: Download complete
+
+589002ba0eae: Pull complete
+c7734204880f: Verifying Checksum
+c7734204880f: Download complete
+d7f6aca05b78: Pull complete
+62e0e1181d88: Pull complete
+c7734204880f: Pull complete
+Digest: sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+Status: Downloaded newer image for node:20-alpine
+ ---> ccfb9f0dc7ac
+Step 2/21 : WORKDIR /build
+ ---> Running in dbc06b4722c5
+Removing intermediate container dbc06b4722c5
+ ---> 0c7db396f2f7
+Step 3/21 : COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+ ---> 4ab50288c423
+Step 4/21 : COPY packages/types/package.json packages/types/
+ ---> b03c7538dcbc
+Step 5/21 : COPY apps/api/package.json apps/api/
+ ---> 011871c319cb
+Step 6/21 : RUN corepack enable && corepack prepare pnpm@10.26.1 --activate     && pnpm install --no-frozen-lockfile     && npm rebuild esbuild
+
+ ---> Running in 1685b18084d3
+Preparing pnpm@10.26.1 for immediate activation...
+Scope: all 3 workspace projects
+
+ERROR: The command failed with an unexpected error. Here is the traceback:
+ERROR: 'charmap' codec can't encode characters in position 60-108: character maps to <undefined>
+Traceback (most recent call last):
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\knack/cli.py", line 233, in invoke
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/core/commands/__init__.py", 
+line 666, in execute
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/core/commands/__init__.py", 
+line 734, in _run_jobs_serially
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/core/commands/__init__.py", 
+line 703, in _run_job
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/core/commands/__init__.py", 
+line 336, in __call__
+  File 
+"D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/core/commands/command_operation.py", 
+line 120, in handler
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/command_modules/acr/build.py", 
+line 149, in acr_build
+  File 
+"D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/command_modules/acr/_stream_utils.py", 
+line 56, in stream_logs
+  File 
+"D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\azure/cli/command_modules/acr/_stream_utils.py", 
+line 126, in _stream_logs
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\colorama/ansitowin32.py", line 47, in 
+write
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\colorama/ansitowin32.py", line 177, in 
+write
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\colorama/ansitowin32.py", line 205, in 
+write_and_convert
+  File "D:\a\_work\1\s\build_scripts\windows\artifacts\cli\Lib\site-packages\colorama/ansitowin32.py", line 210, in 
+write_plain_text
+  File "encodings\cp1252.py", line 19, in encode
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 60-108: character maps to <undefined>
+To check existing issues, please visit: https://github.com/Azure/azure-cli/issues

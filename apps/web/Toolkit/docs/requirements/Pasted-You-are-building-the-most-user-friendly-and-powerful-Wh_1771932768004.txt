@@ -1,0 +1,98 @@
+You are building the most user-friendly and powerful "What-If" / Scenario Planning tab for a modern B-BBEE compliance & strategy web application (similar to a financial modeling tool but for Broad-Based Black Economic Empowerment scorecards).
+
+Goal:
+Create an intuitive, beautiful and fast Scenario Planner tab that lets users answer questions like:
+• "What do we need to do to reach Level 4 by next verification?"
+• "How many more black female junior managers do we need to hire?"
+• "What if we shift R5 million of procurement to Level 1 suppliers?"
+• "What happens to our score if we spend an extra R1.2m on bursaries and grants?"
+
+This tab should feel empowering, visual, instant-feedback driven — like playing with levers and immediately seeing the B-BBEE level move up.
+
+Core requirements for the Scenario Tab:
+
+1. Layout & Visual Style
+   - Full-width modern dashboard feel
+   - Dark/light mode support (default light with blue/green accents for positive deltas)
+   - Three main zones:
+     A. Left sidebar – Scenario list & controls (20–25% width)
+     B. Middle – Comparison table + summary cards (50–60% width)
+     C. Right – Intervention builder & quick actions (20–25% width)  [collapsible on mobile]
+
+2. Left Sidebar – Scenario Management
+   - "Base Case" is always shown (read-only snapshot of current real data)
+   - List of user-created scenarios (card style):
+     • Name (editable)
+     • Created / Last edited timestamp
+     • Projected Level badge (Level 1 green → Level 8 red)
+     • Delta points (+8 green / -3 red)
+     • Status badge: Draft / Saved / Compared
+   - Big "+ New Scenario" button (duplicate from Base or from another scenario)
+   - Delete / Rename / Duplicate / Archive icons per scenario
+   - Search/filter by name or level
+
+3. Main Area – Side-by-Side Comparison (the money maker)
+   - Dynamic columns: Base Case | Scenario A | Scenario B | ... (up to 3–4 columns)
+   - Each column shows:
+     • Pillar name (Ownership, Management Control, Skills, Procurement, ESD, SED, YES)
+     • Base points
+     • Scenario points
+     • Delta (with arrow ↑↓ and color)
+     • Projected total score & B-BBEE Level (big number + badge)
+     • YES Tier change (if applicable)
+   - Waterfall-style summary chart at top showing how each changed pillar contributes to the total delta
+   - Toggle: Show only changed pillars / Show all
+   - Highlight rows where delta ≥ +1 or causes level change
+
+4. Right Panel – Intervention Builder (the fun part)
+   - Collapsible panel called "Add Intervention" or "Pull Levers"
+   - Categorized quick actions (accordion or tabs):
+     • Management Control
+       - Add black employees (race/gender/designation picker + count)
+       - Promote existing employees to higher levels
+     • Skills Development
+       - Increase All Spend / Bursaries / Disabilities by R-amount or %
+       - Add unemployed learners (count + absorption %)
+     • Procurement
+       - Shift spend to higher B-BBEE levels (sliders: % to Level 1, Level 2, 51% BO…)
+     • ESD / SED
+       - Add new contribution (dropdown: Grant / Loan / Employee time / CSI)
+       - Amount input + auto-benefit factor
+     • Financials override
+       - Change projected NPAT / Revenue (affects Deemed NPAT)
+   - Each intervention has:
+     - Estimated cost field (optional, currency)
+     - "Apply to this scenario" button → instant recalc
+     - Undo last intervention button
+   - "Bulk mode" toggle: apply several changes before recalculating (for speed)
+
+5. Top Bar / Global Controls
+   - Scenario name (big editable title)
+   - "Compare with Base" toggle
+   - "Reset scenario to Base" button
+   - "Save scenario" + "Save as new" buttons
+   - "Export this scenario" → include in strategy pack (PPT slide + Excel)
+
+6. Technical & UX Details
+   - Instant recalculation after every change (client-side JS preferred for speed)
+   - Show loading spinner only if server validation needed (e.g. complex sub-minimums)
+   - Toast notifications: "Level improved to 4! (+7 points)" or "Sub-minimum still failed in Skills"
+   - Mobile: collapse right panel into bottom sheet; limit to 2-column comparison
+   - Accessibility: ARIA labels on deltas, keyboard navigation in tables
+   - Tooltips everywhere explaining what changed and why points moved
+
+7. Bonus Cool Touches (if time allows)
+   - Confetti animation when level improves (subtle, professional version)
+   - "Target Level" selector: set desired level → app suggests minimum interventions needed
+   - Progress ring showing % toward next level
+   - Dark theme "night mode" for late-night strategy sessions 😄
+
+Deliverables expected:
+- High-level component structure (React/Vue/whatever you're using)
+- Main components: ScenarioList, ComparisonTable, InterventionPanel, SummaryCards
+- Example state shape for a scenario (baseData + overrides)
+- How recalculation flow works (event → update overrides → recompute pillars → update totals)
+
+Make it feel like a strategic game where every lever pull moves the business forward — exciting, clear and empowering for transformation managers.
+
+Go build something awesome!

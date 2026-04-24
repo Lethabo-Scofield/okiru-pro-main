@@ -1,0 +1,185 @@
+# ArangoDB Backup CronJob
+# Runs daily at 3 AM to create an arangodump backup
+#
+# Backups are stored in PVC and synced to Azure Blob Storage for durability
+# Requires: azure-backup-credentials secret (see templates/secrets-template.yaml)
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arangodb-backup-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: managed-csi-premium
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arangodb-backup
+  labels:
+    app: arangodb-backup
+    component: database
+spec:
+  schedule: "0 3 * * *"  # Daily at 3 AM (1 hour after MongoDB)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: arangodump
+              image: arangodb:3.12
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  echo "Starting ArangoDB backup at $(date)"
+                  BACKUP_DIR="/backup/$(date +%Y%m%d-%H%M%S)"
+                  mkdir -p "$BACKUP_DIR"
+
+                  # Wait for ArangoDB to be ready
+                  echo "Waiting for ArangoDB..."
+                  until wget -qO- --post-data='{"query":"RETURN 1"}' \
+                    --header='Content-Type: application/json' \
+                    --user="root:$ARANGO_ROOT_PASSWORD" \
+                    http://arangodb:8529/_api/cursor > /dev/null 2>&1; do
+                    echo "Waiting for ArangoDB to be ready..."
+                    sleep 2
+                  done
+
+                  # Perform backup
+                  arangodump \
+                    --server.endpoint tcp://arangodb:8529 \
+                    --server.username root \
+                    --server.password "$ARANGO_ROOT_PASSWORD" \
+                    --server.database "$ARANGO_DB_NAME" \
+                    --output-directory "$BACKUP_DIR" \
+                    --compress-output
+
+                  # Create metadata file
+                  echo "Backup created: $(date -u)" > "$BACKUP_DIR/metadata.txt"
+                  echo "ArangoDB host: arangodb" >> "$BACKUP_DIR/metadata.txt"
+                  echo "Database: $ARANGO_DB_NAME" >> "$BACKUP_DIR/metadata.txt"
+
+                  # Cleanup old backups (keep last 7 days)
+                  cd /backup
+                  ls -t | tail -n +8 | xargs -r rm -rf
+
+                  echo "Backup completed: $BACKUP_DIR"
+                  ls -la "$BACKUP_DIR"
+              env:
+                - name: ARANGO_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: arangodb-credentials
+                      key: ARANGO_ROOT_PASSWORD
+                - name: ARANGO_DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: arangodb-credentials
+                      key: ARANGO_DB_NAME
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "250m"
+          # Azure Blob Storage Sync Container
+            - name: azure-sync
+              image: mcr.microsoft.com/azure-cli:latest
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  echo "Starting Azure Blob Storage sync for ArangoDB at $(date)"
+
+                  apk add --no-cache findutils coreutils
+
+                  BACKUP_DIR=$(find /backup -type d -name "20*" | sort | tail -1)
+
+                  if [ -z "$BACKUP_DIR" ]; then
+                    echo "ERROR: No backup directory found"
+                    exit 1
+                  fi
+
+                  echo "Syncing backup: $BACKUP_DIR"
+
+                  az storage blob upload-batch \
+                    --account-name "$AZURE_STORAGE_ACCOUNT" \
+                    --account-key "$AZURE_STORAGE_KEY" \
+                    --destination "arangodb-backups/$(basename $BACKUP_DIR)" \
+                    --source "$BACKUP_DIR" \
+                    --overwrite true \
+                    --validate-content
+
+                  if [ $? -eq 0 ]; then
+                    echo "✅ Successfully synced ArangoDB backup to Azure"
+                    echo "Container: arangodb-backups"
+                    echo "Path: $(basename $BACKUP_DIR)"
+                  else
+                    echo "❌ Azure sync failed"
+                    exit 1
+                  fi
+
+                  # Cleanup old backups (30 days retention)
+                  CUTOFF_DATE=$(date -d '30 days ago' +%Y%m%d)
+
+                  az storage blob list \
+                    --account-name "$AZURE_STORAGE_ACCOUNT" \
+                    --account-key "$AZURE_STORAGE_KEY" \
+                    --container-name arangodb-backups \
+                    --query "[].name" -o tsv | \
+                  while read blob; do
+                    BLOB_DATE=$(echo "$blob" | grep -oE '^[0-9]{8}' || true)
+                    if [ -n "$BLOB_DATE" ] && [ "$BLOB_DATE" -lt "$CUTOFF_DATE" ]; then
+                      echo "Deleting old backup: $blob"
+                      az storage blob delete \
+                        --account-name "$AZURE_STORAGE_ACCOUNT" \
+                        --account-key "$AZURE_STORAGE_KEY" \
+                        --container-name arangodb-backups \
+                        --name "$blob" \
+                        --delete-snapshots include
+                    fi
+                  done
+
+                  echo "Azure sync completed at $(date)"
+              env:
+                - name: AZURE_STORAGE_ACCOUNT
+                  valueFrom:
+                    secretKeyRef:
+                      name: azure-backup-credentials
+                      key: AZURE_STORAGE_ACCOUNT
+                - name: AZURE_STORAGE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: azure-backup-credentials
+                      key: AZURE_STORAGE_KEY
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                  readOnly: true
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "250m"
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: arangodb-backup-pvc

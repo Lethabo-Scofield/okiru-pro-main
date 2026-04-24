@@ -1,0 +1,122 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: okiru-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - okiru.20.164.101.114.nip.io
+      secretName: okiru-pro-tls
+  rules:
+    - host: okiru.20.164.101.114.nip.io
+      http:
+        paths:
+          # API auth routes (MUST come before web routes)
+          - path: /api/auth/login
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/me
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/logout
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/register
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          # API backend routes (all other /api/*)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          # Web-specific API routes (served by web Express server)
+          - path: /api/organizations
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/auth/check-username
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/sector-templates
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Web frontend (everything else including /assets/*)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+---
+# Separate ingress for compute to isolate the rewrite-target annotation
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: okiru-ingress-compute
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - okiru.20.164.101.114.nip.io
+      secretName: okiru-pro-tls
+  rules:
+    - host: okiru.20.164.101.114.nip.io
+      http:
+        paths:
+          # Compute routes - strip /compute prefix
+          - path: /compute(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: compute
+                port:
+                  number: 8000

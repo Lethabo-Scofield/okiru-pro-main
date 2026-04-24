@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entity Builder Studio (Light)</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          },
+          colors: {
+            brand: {
+              50: "#f0f9ff",
+              100: "#e0f2fe",
+              500: "#0ea5e9",
+              600: "#0284c7",
+              900: "#0c4a6e",
+            },
+            ink: {
+              50: "#f8fafc",
+              100: "#f1f5f9",
+              200: "#e2e8f0",
+              300: "#cbd5e1",
+              400: "#94a3b8",
+              500: "#64748b",
+              600: "#475569",
+              700: "#334155",
+              800: "#1f2937",
+              900: "#0f172a",
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Light Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Animations */
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .highlight-entity {
+      background-color: rgba(14, 165, 233, 0.18);
+      border-bottom: 2px solid #0ea5e9;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .highlight-entity:hover { background-color: rgba(14, 165, 233, 0.28); }
+
+    .highlight-rejected {
+      background-color: rgba(239, 68, 68, 0.16);
+      border-bottom: 2px solid #ef4444;
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .completeness-bar { transition: width 0.5s ease-in-out, background-color 0.5s; }
+  </style>
+</head>
+
+<body class="bg-ink-50 text-ink-800 font-sans h-screen overflow-hidden flex flex-col">
+  <!-- ONBOARDING MODAL (Flow 0) -->
+  <div id="onboardingModal" class="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/30 backdrop-blur-sm">
+    <div class="bg-white border border-ink-200 rounded-xl shadow-2xl w-full max-w-2xl p-8 fade-in">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-500/10 text-brand-600 mb-4">
+          <i class="fa-solid fa-cube text-3xl"></i>
+        </div>
+        <h1 class="text-3xl font-bold text-ink-900 mb-2">Entity Builder Studio</h1>
+        <p class="text-ink-600">Define extraction rules without writing code.</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-8">
+        <button onclick="startWithTemplate()" class="group p-6 rounded-lg border border-ink-200 bg-white hover:border-brand-500 hover:bg-brand-50 transition-all text-left shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <i class="fa-solid fa-layer-group text-brand-600 text-xl"></i>
+            <i class="fa-solid fa-arrow-right opacity-0 group-hover:opacity-100 transition-opacity text-brand-600"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-ink-900 mb-1">Start with Template</h3>
+          <p class="text-sm text-ink-600">Use pre-built configs for Invoices, IDs, or Dates.</p>
+        </button>
+
+        <button onclick="startWithNL()" class="group p-6 rounded-lg border border-ink-200 bg-white hover:border-brand-500 hover:bg-brand-50 transition-all text-left shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <i class="fa-solid fa-wand-magic-sparkles text-purple-600 text-xl"></i>
+            <i class="fa-solid fa-arrow-right opacity-0 group-hover:opacity-100 transition-opacity text-purple-600"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-ink-900 mb-1">Describe in Plain English</h3>
+          <p class="text-sm text-ink-600">"Extract Invoice Number and Due Date..."</p>
+        </button>
+      </div>
+
+      <div class="text-center">
+        <p class="text-xs text-ink-500 mb-2">Recommended Setup</p>
+        <div class="flex items-center justify-center gap-2 text-sm text-ink-700 bg-ink-50 py-2 px-4 rounded-full inline-block border border-ink-200">
+          <i class="fa-solid fa-circle-check text-green-600"></i>
+          <span>Upload 3-10 sample documents for best results</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD DOCUMENT MODAL -->
+  <div id="uploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/30 backdrop-blur-sm hidden">
+    <div class="bg-white border border-ink-200 rounded-xl shadow-2xl w-full max-w-lg p-6 fade-in">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-xl font-bold text-ink-900">Upload Sample Document</h3>
+        <button onclick="closeUploadModal()" class="text-ink-500 hover:text-ink-900">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <div class="border-2 border-dashed border-ink-300 rounded-lg p-8 text-center hover:border-brand-500 hover:bg-brand-50 transition-all cursor-pointer"
+           onclick="document.getElementById('fileInput').click()">
+        <i class="fa-solid fa-cloud-arrow-up text-4xl text-ink-400 mb-4"></i>
+        <p class="text-ink-900 font-medium mb-2">Click to upload or drag and drop</p>
+        <p class="text-sm text-ink-600">PDF, PNG, JPG, EML (Max 10MB)</p>
+        <input type="file" id="fileInput" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.eml" onchange="handleFileUpload(this)" />
+      </div>
+
+      <div class="mt-4">
+        <label class="block text-xs font-bold text-ink-500 uppercase mb-2">Or paste text directly</label>
+        <textarea id="pasteText"
+                  class="w-full bg-white border border-ink-200 rounded p-3 text-sm text-ink-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  rows="4"
+                  placeholder="Paste document content here..."></textarea>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="closeUploadModal()" class="flex-1 py-2 border border-ink-300 text-ink-700 rounded hover:bg-ink-50">Cancel</button>
+        <button onclick="confirmUpload()" class="flex-1 py-2 bg-brand-600 text-white rounded hover:bg-brand-500">Add to Test Set</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP BAR -->
+  <header class="h-14 bg-white border-b border-ink-200 flex items-center justify-between px-4 shrink-0 z-20">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-brand-600 font-bold text-lg tracking-tight">
+        <i class="fa-solid fa-cube"></i>
+        <span>Entity<span class="text-ink-900">Flow</span></span>
+      </div>
+      <div class="h-6 w-px bg-ink-200 mx-2"></div>
+
+      <div class="flex items-center gap-2 bg-ink-50 px-3 py-1 rounded border border-ink-200 text-sm shadow-sm">
+        <i class="fa-solid fa-briefcase text-ink-500"></i>
+        <span class="font-medium text-ink-900">Payments NER v3</span>
+        <i class="fa-solid fa-chevron-down text-xs text-ink-400 ml-2"></i>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs font-medium bg-yellow-500/10 text-yellow-700 px-2 py-1 rounded border border-yellow-500/20">
+        <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+        DRAFT
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button onclick="runTest()" class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-ink-50 border border-ink-200 rounded text-sm font-medium transition-colors shadow-sm">
+        <i class="fa-solid fa-play text-green-600"></i> Run Test
+      </button>
+      <button id="publishBtn" onclick="publishVersion()" disabled
+              class="flex items-center gap-2 px-4 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium shadow-lg shadow-brand-500/10 transition-all">
+        <i class="fa-solid fa-rocket"></i> Publish v1.0
+      </button>
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white border border-white/40">
+        JD
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN LAYOUT -->
+  <div class="flex flex-1 overflow-hidden">
+    <!-- LEFT SIDEBAR -->
+    <aside class="w-64 bg-white border-r border-ink-200 flex flex-col shrink-0">
+      <nav class="flex-1 p-4 space-y-6 overflow-y-auto">
+        <div>
+          <h4 class="text-xs font-bold text-ink-500 uppercase tracking-wider mb-3 px-2">Build</h4>
+          <ul class="space-y-1">
+            <li>
+              <a href="#" class="flex items-center gap-3 px-3 py-2 bg-brand-500/10 text-brand-700 rounded-md border border-brand-500/20">
+                <i class="fa-solid fa-shapes w-5"></i> Entity Types
+              </a>
+            </li>
+            <li>
+              <a href="#" class="flex items-center gap-3 px-3 py-2 text-ink-600 hover:text-ink-900 hover:bg-ink-50 rounded-md transition-colors">
+                <i class="fa-solid fa-file-import w-5"></i> Test Set
+                <span id="testSetCount" class="ml-auto text-xs bg-ink-100 px-1.5 py-0.5 rounded text-ink-600">1</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-ink-500 uppercase tracking-wider mb-3 px-2">Analyze</h4>
+          <ul class="space-y-1">
+            <li>
+              <a href="#" class="flex items-center gap-3 px-3 py-2 text-ink-600 hover:text-ink-900 hover:bg-ink-50 rounded-md transition-colors">
+                <i class="fa-solid fa-chart-line w-5"></i> Analytics
+              </a>
+            </li>
+            <li>
+              <a href="#" class="flex items-center gap-3 px-3 py-2 text-ink-600 hover:text-ink-900 hover:bg-ink-50 rounded-md transition-colors">
+                <i class="fa-solid fa-clock-rotate-left w-5"></i> History
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="pt-4 border-t border-ink-200">
+          <button class="w-full flex items-center justify-center gap-2 px-4 py-2 border border-dashed border-ink-300 text-ink-600 hover:text-ink-900 hover:border-ink-400 rounded-lg text-sm transition-all bg-white">
+            <i class="fa-solid fa-plus"></i> New Entity
+          </button>
+          <button onclick="openUploadModal()" class="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-ink-50 border border-ink-200 text-ink-700 hover:text-ink-900 hover:bg-white rounded-lg text-sm transition-all shadow-sm">
+            <i class="fa-solid fa-upload"></i> Upload Sample Doc
+          </button>
+        </div>
+      </nav>
+
+      <!-- Mini Status -->
+      <div class="p-4 border-t border-ink-200 bg-ink-50">
+        <div class="flex justify-between text-xs text-ink-600 mb-1">
+          <span>System Status</span>
+          <span class="text-green-700">Online</span>
+        </div>
+        <div class="w-full bg-ink-200 h-1 rounded-full overflow-hidden">
+          <div class="bg-green-600 w-full h-full"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER WORKSPACE -->
+    <main class="flex-1 flex flex-col min-w-0 bg-ink-50 relative">
+      <!-- FLOW 1: Natural Language Input -->
+      <div class="p-6 border-b border-ink-200 bg-white/70 backdrop-blur z-10">
+        <div class="max-w-4xl mx-auto">
+          <label class="block text-sm font-medium text-ink-600 mb-2">
+            <i class="fa-solid fa-wand-magic-sparkles mr-1 text-brand-600"></i> Describe your extraction goal
+          </label>
+
+          <div class="relative group">
+            <input
+              type="text"
+              id="nlInput"
+              class="w-full bg-white border border-ink-200 text-ink-900 text-lg rounded-lg px-4 py-3 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all placeholder-ink-400 shadow-sm"
+              placeholder="e.g. Extract Invoice Number, PO Number, Due Date, and Amount Due..."
+              onkeydown="if(event.key === 'Enter') parseNaturalLanguage()"
+            />
+            <button onclick="parseNaturalLanguage()" class="absolute right-2 top-2 bottom-2 px-4 bg-brand-600 hover:bg-brand-500 text-white rounded-md font-medium transition-colors shadow-sm">
+              Generate
+            </button>
+          </div>
+
+          <div class="flex gap-4 mt-3 text-xs text-ink-500">
+            <span class="flex items-center gap-1"><i class="fa-solid fa-check text-ink-400"></i> Strictness: Balanced</span>
+            <span class="flex items-center gap-1"><i class="fa-solid fa-check text-ink-400"></i> Sources: Email, PDF</span>
+            <span class="flex items-center gap-1"><i class="fa-solid fa-check text-ink-400"></i> Domain: Finance</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCROLLABLE ENTITY CARDS AREA -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-6" id="entityContainer"></div>
+    </main>
+
+    <!-- RIGHT PANEL: LIVE TEST & FEEDBACK -->
+    <aside class="w-[450px] bg-white border-l border-ink-200 flex flex-col shrink-0 z-10">
+      <div class="h-12 border-b border-ink-200 flex items-center justify-between px-4 bg-ink-50">
+        <h3 class="font-semibold text-ink-900 flex items-center gap-2">
+          <i class="fa-solid fa-vial text-purple-600"></i> Live Test
+        </h3>
+        <select id="docSelector" onchange="switchDocument(this.value)"
+                class="bg-white border border-ink-200 text-xs rounded px-2 py-1 text-ink-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+          <option value="0">Sample_Invoice_01.pdf</option>
+        </select>
+      </div>
+
+      <!-- Document Viewer (Simulated) -->
+      <div class="h-64 bg-white border-b border-ink-200 relative overflow-hidden group">
+        <div class="absolute inset-0 p-6 font-mono text-xs text-ink-700 overflow-y-auto leading-relaxed" id="docViewer"></div>
+        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button class="bg-white p-1.5 rounded border border-ink-200 text-ink-600 hover:text-ink-900 shadow-sm">
+            <i class="fa-solid fa-expand"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="flex-1 overflow-y-auto bg-white">
+        <div class="p-3 bg-ink-50 border-b border-ink-200 flex justify-between items-center">
+          <span class="text-xs font-bold text-ink-500 uppercase">Extractions</span>
+          <span class="text-xs bg-ink-100 px-2 py-0.5 rounded text-ink-700" id="resultCount">0 found</span>
+        </div>
+
+        <div id="resultsList" class="divide-y divide-ink-100">
+          <div class="p-8 text-center text-ink-500 text-sm">
+            <i class="fa-solid fa-circle-play text-3xl mb-2 opacity-60"></i>
+            <p>Click "Run Test" to see results</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggestions Rail (Flow 7) -->
+      <div id="suggestionsPanel" class="hidden bg-brand-50 border-t border-brand-500/30 p-4">
+        <h4 class="text-xs font-bold text-brand-700 uppercase mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-lightbulb"></i> Suggested Improvements
+        </h4>
+        <ul class="space-y-2 text-sm" id="suggestionsList"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // --- STATE MANAGEMENT ---
+    const state = {
+      entities: [],
+      testDocs: [
+        {
+          id: 0,
+          name: "Sample_Invoice_01.pdf",
+          text: `INVOICE\n\nInvoice Number: INV-2024-0042\nDate: October 12, 2024\n\nBill To:\nAcme Corp\n123 Business Rd\n\nDescription: Consulting Services\nAmount Due: $5,000.00\nDue Date: November 01, 2024\n\nPO Number: PO-9981-X\nStatus: Pending`,
+          type: "pdf",
+        },
+      ],
+      currentDocIndex: 0,
+      extractions: [],
+      isReviewMode: false,
+    };
+
+    // --- INITIALIZATION ---
+    document.addEventListener("DOMContentLoaded", () => {
+      renderDocViewer();
+    });
+
+    // --- ONBOARDING LOGIC ---
+    function closeOnboarding() {
+      document.getElementById("onboardingModal").classList.add("hidden");
+    }
+
+    function startWithTemplate() {
+      closeOnboarding();
+      state.entities = [
+        createEntity("InvoiceNumber", "The unique identifier for the invoice document.", 60),
+        createEntity("AmountDue", "Total amount payable.", 40),
+        createEntity("DueDate", "Payment deadline.", 40),
+      ];
+      renderEntities();
+      updatePublishStatus();
+    }
+
+    function startWithNL() {
+      closeOnboarding();
+      const input = document.getElementById("nlInput");
+      input.focus();
+      input.classList.add("ring-2", "ring-brand-500/30");
+      setTimeout(() => input.classList.remove("ring-2", "ring-brand-500/30"), 1000);
+    }
+
+    // --- UPLOAD MODAL LOGIC ---
+    function openUploadModal() {
+      document.getElementById("uploadModal").classList.remove("hidden");
+    }
+
+    function closeUploadModal() {
+      document.getElementById("uploadModal").classList.add("hidden");
+      document.getElementById("fileInput").value = "";
+      document.getElementById("pasteText").value = "";
+    }
+
+    function handleFileUpload(input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = function () {
+          const simulatedText = `UPLOADED DOCUMENT: ${file.name}\n\nThis is simulated content for the uploaded file.\nInvoice Number: UPLOAD-001\nAmount: $1,250.00\nDate: ${new Date().toLocaleDateString()}`;
+          document.getElementById("pasteText").value = simulatedText;
+        };
+        reader.readAsText(file);
+      }
+    }
+
+    function confirmUpload() {
+      const text = document.getElementById("pasteText").value;
+      const fileInput = document.getElementById("fileInput");
+      let docName = "Pasted_Text.txt";
+
+      if (fileInput.files && fileInput.files[0]) {
+        docName = fileInput.files[0].name;
+      } else if (!text.trim()) {
+        alert("Please upload a file or paste text content");
+        return;
+      }
+
+      const newDoc = {
+        id: state.testDocs.length,
+        name: docName,
+        text: text || `Content from ${docName}`,
+        type: "upload",
+      };
+
+      state.testDocs.push(newDoc);
+
+      const selector = document.getElementById("docSelector");
+      const option = document.createElement("option");
+      option.value = newDoc.id;
+      option.text = docName;
+      selector.appendChild(option);
+      selector.value = newDoc.id;
+
+      document.getElementById("testSetCount").textContent = state.testDocs.length;
+
+      state.currentDocIndex = newDoc.id;
+      renderDocViewer();
+
+      closeUploadModal();
+
+      const btn = document.querySelector('button[onclick="openUploadModal()"]');
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = `<i class="fa-solid fa-check"></i> Uploaded!`;
+      btn.classList.add("text-green-700");
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.classList.remove("text-green-700");
+      }, 2000);
+    }
+
+    function switchDocument(docId) {
+      state.currentDocIndex = parseInt(docId);
+      renderDocViewer();
+      document.getElementById("resultsList").innerHTML = `
+        <div class="p-8 text-center text-ink-500 text-sm">
+          <i class="fa-solid fa-circle-play text-3xl mb-2 opacity-60"></i>
+          <p>Click "Run Test" to see results</p>
+        </div>
+      `;
+      document.getElementById("resultCount").textContent = "0 found";
+    }
+
+    // --- ENTITY FACTORY ---
+    function createEntity(label, definition, completeness = 20) {
+      return {
+        id: Date.now() + Math.random(),
+        label,
+        definition,
+        synonyms: [],
+        positives: [],
+        negatives: [],
+        zones: ["Email Body", "PDF Header"],
+        keywords: { must: [], nice: [], neg: [] },
+        pattern: "",
+        completeness,
+        expanded: true,
+      };
+    }
+
+    // --- FLOW 1: NL PARSER (Simulation) ---
+    function parseNaturalLanguage() {
+      const input = document.getElementById("nlInput").value;
+      if (!input) return;
+
+      state.entities = [];
+      if (input.toLowerCase().includes("invoice")) state.entities.push(createEntity("InvoiceNumber", "Unique invoice identifier", 30));
+      if (input.toLowerCase().includes("date")) state.entities.push(createEntity("DueDate", "Payment due date", 30));
+      if (input.toLowerCase().includes("amount") || input.toLowerCase().includes("money")) state.entities.push(createEntity("AmountDue", "Total monetary amount", 30));
+      if (input.toLowerCase().includes("po") || input.toLowerCase().includes("purchase")) state.entities.push(createEntity("PurchaseOrder", "Purchase Order reference", 30));
+      if (state.entities.length === 0) state.entities.push(createEntity("CustomEntity", "Entity extracted from description", 20));
+
+      renderEntities();
+      updatePublishStatus();
+
+      const btn = document.querySelector('button[onclick="parseNaturalLanguage()"]');
+      const originalText = btn.innerText;
+      btn.innerText = "Generated!";
+      btn.classList.add("bg-green-600");
+      setTimeout(() => {
+        btn.innerText = originalText;
+        btn.classList.remove("bg-green-600");
+      }, 1500);
+    }
+
+    // --- RENDERING LOGIC ---
+    function renderEntities() {
+      const container = document.getElementById("entityContainer");
+      container.innerHTML = "";
+
+      state.entities.forEach((entity, index) => {
+        const card = document.createElement("div");
+        card.className = `bg-white border ${entity.completeness > 80 ? "border-green-500/30" : "border-ink-200"} rounded-xl overflow-hidden mb-4 shadow-sm fade-in`;
+        card.style.animationDelay = `${index * 100}ms`;
+
+        card.innerHTML = `
+          <div class="p-4 border-b border-ink-200 flex items-center justify-between cursor-pointer hover:bg-ink-50 transition-colors" onclick="toggleEntity(${entity.id})">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded bg-ink-100 flex items-center justify-center font-mono text-xs font-bold text-ink-900">
+                ${entity.label.substring(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h3 class="font-semibold text-ink-900">${entity.label}</h3>
+                <p class="text-xs text-ink-600">${entity.definition}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="w-32">
+                <div class="flex justify-between text-[10px] text-ink-500 mb-1">
+                  <span>Completeness</span>
+                  <span>${entity.completeness}%</span>
+                </div>
+                <div class="h-1.5 bg-ink-200 rounded-full overflow-hidden">
+                  <div class="h-full ${entity.completeness > 80 ? "bg-green-600" : "bg-brand-600"} completeness-bar" style="width: ${entity.completeness}%"></div>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-down text-ink-400 transition-transform ${entity.expanded ? "rotate-180" : ""}"></i>
+            </div>
+          </div>
+
+          ${
+            entity.expanded
+              ? `
+            <div class="p-5 space-y-6 bg-white">
+              <div class="flex gap-6 border-b border-ink-200 text-sm">
+                <button class="pb-2 border-b-2 border-brand-500 text-ink-900 font-medium">Definition</button>
+                <button class="pb-2 border-b-2 border-transparent text-ink-500 hover:text-ink-800">Retrieval Hints</button>
+                <button class="pb-2 border-b-2 border-transparent text-ink-500 hover:text-ink-800">Validation</button>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-bold text-ink-500 uppercase mb-1">Definition</label>
+                    <textarea
+                      class="w-full bg-white border border-ink-200 rounded p-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                      rows="2"
+                      onchange="updateEntity(${entity.id}, 'definition', this.value)"
+                    >${entity.definition}</textarea>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-ink-500 uppercase mb-1">Aliases / Synonyms</label>
+                    <input
+                      type="text"
+                      class="w-full bg-white border border-ink-200 rounded p-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                      placeholder="e.g. Invoice ID, Bill No."
+                    />
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-bold text-ink-500 uppercase mb-1 flex justify-between">
+                      <span>Positive Examples</span>
+                      <span class="text-[10px] bg-brand-50 text-brand-700 px-1 rounded border border-brand-500/20">Required</span>
+                    </label>
+                    <div class="flex flex-wrap gap-2 p-2 bg-white border border-ink-200 rounded min-h-[40px]" onclick="this.querySelector('input').focus()">
+                      ${entity.positives.map(p => `<span class="bg-green-500/10 text-green-700 text-xs px-2 py-1 rounded border border-green-500/20">${p}</span>`).join("")}
+                      <input
+                        type="text"
+                        class="bg-transparent border-none outline-none text-sm text-ink-900 flex-1 min-w-[60px]"
+                        placeholder="Add example..."
+                        onkeydown="if(event.key==='Enter'){addExample(${entity.id}, 'positives', this.value); this.value='';}"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-bold text-ink-500 uppercase mb-1">Negative Examples</label>
+                    <div class="flex flex-wrap gap-2 p-2 bg-white border border-ink-200 rounded min-h-[40px]">
+                      ${entity.negatives.map(n => `<span class="bg-red-500/10 text-red-700 text-xs px-2 py-1 rounded border border-red-500/20">${n}</span>`).join("")}
+                      <input
+                        type="text"
+                        class="bg-transparent border-none outline-none text-sm text-ink-900 flex-1 min-w-[60px]"
+                        placeholder="Add anti-example..."
+                        onkeydown="if(event.key==='Enter'){addExample(${entity.id}, 'negatives', this.value); this.value='';}"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-ink-500 uppercase mb-2">Where it appears (Zones)</label>
+                <div class="flex flex-wrap gap-3">
+                  ${["Email Subject", "Email Body", "PDF Header", "Tables"].map(zone => `
+                    <label class="flex items-center gap-2 text-sm text-ink-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        class="rounded border-ink-300 bg-white text-brand-600 focus:ring-2 focus:ring-brand-500/20"
+                        ${entity.zones.includes(zone) ? "checked" : ""}
+                        onchange="toggleZone(${entity.id}, '${zone}')"
+                      />
+                      ${zone}
+                    </label>
+                  `).join("")}
+                </div>
+              </div>
+
+              <div class="pt-4 border-t border-ink-200">
+                <h4 class="text-xs font-bold text-ink-500 uppercase mb-3">Retrieval Hints (BM25)</h4>
+                <div class="grid grid-cols-3 gap-4">
+                  <div>
+                    <span class="text-[10px] text-green-700 font-bold uppercase">Must Have</span>
+                    <input type="text" class="w-full mt-1 bg-white border border-ink-200 rounded px-2 py-1 text-xs text-ink-800 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" placeholder="Keyword..." />
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-yellow-700 font-bold uppercase">Nice to Have</span>
+                    <input type="text" class="w-full mt-1 bg-white border border-ink-200 rounded px-2 py-1 text-xs text-ink-800 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" placeholder="Keyword..." />
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-red-700 font-bold uppercase">Negative</span>
+                    <input type="text" class="w-full mt-1 bg-white border border-ink-200 rounded px-2 py-1 text-xs text-ink-800 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" placeholder="Exclude..." />
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+              : ""
+          }
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    // --- ACTIONS ---
+    function toggleEntity(id) {
+      const ent = state.entities.find((e) => e.id === id);
+      if (ent) {
+        ent.expanded = !ent.expanded;
+        renderEntities();
+      }
+    }
+
+    function updateEntity(id, field, value) {
+      const ent = state.entities.find((e) => e.id === id);
+      if (ent) {
+        ent[field] = value;
+        calculateCompleteness(ent);
+        renderEntities();
+        updatePublishStatus();
+      }
+    }
+
+    function addExample(id, type, value) {
+      if (!value) return;
+      const ent = state.entities.find((e) => e.id === id);
+      if (ent) {
+        ent[type].push(value);
+        calculateCompleteness(ent);
+        renderEntities();
+        updatePublishStatus();
+      }
+    }
+
+    function toggleZone(id, zone) {
+      const ent = state.entities.find((e) => e.id === id);
+      if (ent) {
+        if (ent.zones.includes(zone)) ent.zones = ent.zones.filter((z) => z !== zone);
+        else ent.zones.push(zone);
+        calculateCompleteness(ent);
+        renderEntities();
+        updatePublishStatus();
+      }
+    }
+
+    function calculateCompleteness(ent) {
+      let score = 0;
+      if (ent.definition.length > 10) score += 20;
+      if (ent.positives.length > 0) score += 20;
+      if (ent.negatives.length > 0) score += 20;
+      if (ent.zones.length > 0) score += 20;
+      if (ent.completeness > 80) score += 20; // Mock for other factors
+      ent.completeness = Math.min(score, 100);
+    }
+
+    function updatePublishStatus() {
+      const allComplete = state.entities.every((e) => e.completeness >= 80);
+      const btn = document.getElementById("publishBtn");
+      if (allComplete && state.entities.length > 0) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-rocket"></i> Publish v1.0`;
+      } else {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-lock"></i> Complete Entities`;
+      }
+    }
+
+    // --- LIVE TEST LOGIC (Flow 6) ---
+    function renderDocViewer() {
+      const viewer = document.getElementById("docViewer");
+      const doc = state.testDocs[state.currentDocIndex];
+
+      let html = doc.text
+        .replace(/(Invoice Number|Amount Due|Due Date|PO Number|Date):/g, '<span class="text-ink-500">$1:</span>')
+        .replace(/(INV-\d+-\d+|UPLOAD-\d+)/g, '<span id="span-inv" class="highlight-entity">$1</span>')
+        .replace(/(\$\d+,?\d+\.\d+)/g, '<span id="span-amt" class="highlight-entity">$1</span>')
+        .replace(/(November \d+, \d+|October \d+, \d+)/g, '<span id="span-date" class="highlight-entity">$1</span>');
+
+      viewer.innerHTML = html;
+    }
+
+    function runTest() {
+      const resultsList = document.getElementById("resultsList");
+      const resultCount = document.getElementById("resultCount");
+      const doc = state.testDocs[state.currentDocIndex];
+
+      let results = [];
+
+      if (doc.text.includes("INV-")) {
+        results.push({ id: 1, entity: "InvoiceNumber", value: doc.text.match(/INV-\d+-\d+/)?.[0] || "INV-2024-0042", conf: 98, method: "Hybrid", status: "pending" });
+      }
+      if (doc.text.includes("UPLOAD-")) {
+        results.push({ id: 1, entity: "InvoiceNumber", value: doc.text.match(/UPLOAD-\d+/)?.[0] || "UPLOAD-001", conf: 95, method: "Pattern", status: "pending" });
+      }
+      if (doc.text.includes("$")) {
+        const amount = doc.text.match(/\$\d+,?\d+\.\d+/)?.[0] || "$5,000.00";
+        results.push({ id: 2, entity: "AmountDue", value: amount, conf: 95, method: "Pattern", status: "pending" });
+      }
+      if (doc.text.includes("Due Date") || doc.text.includes("Date:")) {
+        results.push({ id: 3, entity: "DueDate", value: "November 01, 2024", conf: 88, method: "NER", status: "pending" });
+      }
+
+      state.extractions = results;
+      resultCount.innerText = `${results.length} found`;
+
+      if (results.length === 0) {
+        resultsList.innerHTML = `
+          <div class="p-8 text-center text-ink-500 text-sm">
+            <i class="fa-solid fa-circle-question text-3xl mb-2 opacity-60"></i>
+            <p>No entities found in this document</p>
+          </div>
+        `;
+        return;
+      }
+
+      resultsList.innerHTML = results
+        .map(
+          (r) => `
+        <div class="p-3 hover:bg-ink-50 transition-colors group" id="result-${r.id}">
+          <div class="flex justify-between items-start mb-1">
+            <div>
+              <span class="text-xs font-bold text-brand-700 uppercase">${r.entity}</span>
+              <div class="text-ink-900 font-mono text-sm">${r.value}</div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-ink-500">${r.conf}% conf</div>
+              <div class="text-[10px] bg-ink-100 px-1 rounded text-ink-700 inline-block border border-ink-200">${r.method}</div>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="feedback(${r.id}, 'correct')" class="flex-1 py-1 bg-green-500/10 hover:bg-green-500/15 text-green-700 border border-green-500/20 rounded text-xs flex items-center justify-center gap-1">
+              <i class="fa-solid fa-check"></i> Correct
+            </button>
+            <button onclick="feedback(${r.id}, 'reject')" class="flex-1 py-1 bg-red-500/10 hover:bg-red-500/15 text-red-700 border border-red-500/20 rounded text-xs flex items-center justify-center gap-1">
+              <i class="fa-solid fa-xmark"></i> Reject
+            </button>
+          </div>
+        </div>
+      `
+        )
+        .join("");
+
+      document.getElementById("suggestionsPanel").classList.add("hidden");
+    }
+
+    function feedback(id, type) {
+      const row = document.getElementById(`result-${id}`);
+
+      if (type === "correct") {
+        row.classList.add("bg-green-500/5");
+        row.innerHTML += `<div class="mt-2 text-xs text-green-700"><i class="fa-solid fa-check-circle"></i> Feedback recorded. Model updated.</div>`;
+      } else {
+        row.classList.add("bg-red-500/5");
+        row.innerHTML = `
+          <div class="p-3">
+            <div class="text-xs font-bold text-red-700 mb-2">Why is this wrong?</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="applySuggestion('Wrong Entity Type')" class="text-left px-2 py-1.5 bg-white border border-ink-200 rounded text-xs text-ink-700 hover:border-red-500 hover:text-ink-900">Wrong Entity Type</button>
+              <button onclick="applySuggestion('Span Boundary Error')" class="text-left px-2 py-1.5 bg-white border border-ink-200 rounded text-xs text-ink-700 hover:border-red-500 hover:text-ink-900">Wrong Span</button>
+              <button onclick="applySuggestion('False Positive')" class="text-left px-2 py-1.5 bg-white border border-ink-200 rounded text-xs text-ink-700 hover:border-red-500 hover:text-ink-900">False Positive</button>
+              <button onclick="applySuggestion('Zone Mismatch')" class="text-left px-2 py-1.5 bg-white border border-ink-200 rounded text-xs text-ink-700 hover:border-red-500 hover:text-ink-900">Zone Mismatch</button>
+            </div>
+          </div>
+        `;
+
+        const span = document.getElementById("span-inv");
+        if (span) span.classList.replace("highlight-entity", "highlight-rejected");
+      }
+    }
+
+    // --- SUGGESTIONS RAIL (Flow 7) ---
+    function applySuggestion(reason) {
+      const panel = document.getElementById("suggestionsPanel");
+      const list = document.getElementById("suggestionsList");
+
+      panel.classList.remove("hidden");
+
+      let suggestionText = "";
+      if (reason === "False Positive") {
+        suggestionText = "Add negative keyword: <b>Subtotal</b> to <b>AmountDue</b>";
+      } else if (reason === "Wrong Entity Type") {
+        suggestionText = "Add contrast example: <b>Order Ref: 12345</b> as negative for <b>InvoiceNumber</b>";
+      } else {
+        suggestionText = "Tighten regex pattern for <b>Date</b> to exclude headers.";
+      }
+
+      const li = document.createElement("li");
+      li.className = "flex items-start gap-2 animate-pulse";
+      li.innerHTML = `
+        <i class="fa-solid fa-wand-magic-sparkles text-brand-600 mt-1"></i>
+        <div class="flex-1">
+          <p class="text-ink-800">${suggestionText}</p>
+          <button onclick="this.parentElement.parentElement.remove()" class="text-xs text-brand-700 hover:text-ink-900 mt-1 font-medium">Apply Fix</button>
+        </div>
+      `;
+
+      list.innerHTML = "";
+      list.appendChild(li);
+      setTimeout(() => li.classList.remove("animate-pulse"), 1000);
+    }
+
+    function publishVersion() {
+      const btn = document.getElementById("publishBtn");
+      btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Publishing...`;
+
+      setTimeout(() => {
+        alert("Version 1.0 Published Successfully!\n\nPipeline 'Payments NER v3' updated.");
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> Published`;
+        btn.classList.replace("bg-brand-600", "bg-green-600");
+        btn.classList.add("hover:bg-green-500");
+      }, 1500);
+    }
+  </script>
+</body>
+</html>

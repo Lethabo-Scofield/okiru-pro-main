@@ -1,0 +1,36 @@
+# Azure Disk Storage Classes for AKS
+# Standard SSD for budget-conscious deployments with option for Premium SSD
+
+---
+# Standard SSD Storage Class - Cost-effective for dev/test workloads
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-standard-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: StandardSSD_LRS  # Standard SSD locally redundant storage
+  cachingMode: ReadOnly
+reclaimPolicy: Retain  # Keep volume after PVC deletion (data safety)
+allowVolumeExpansion: true  # Allow resizing volumes
+volumeBindingMode: WaitForFirstConsumer  # Delay provisioning until pod is scheduled
+mountOptions:
+  - debug
+
+---
+# Premium SSD Storage Class - For production workloads requiring higher IOPS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-premium-ssd
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS  # Premium SSD for high-performance workloads
+  cachingMode: ReadOnly
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - debug

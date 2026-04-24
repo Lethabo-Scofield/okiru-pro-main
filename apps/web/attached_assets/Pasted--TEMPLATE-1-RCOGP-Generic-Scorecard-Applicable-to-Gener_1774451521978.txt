@@ -1,0 +1,74 @@
+=== TEMPLATE 1: RCOGP Generic Scorecard ===
+Applicable to: Generic enterprises under the Revised Codes of Good Practice (turnover > R50M)
+Pillars: Ownership (25pts) | Management Control (19pts) | Skills Dev (25pts) | Procurement (27pts) | ESD (15pts) | SED (5pts)
+Entities to extract:
+FINANCIAL:
+- TotalRevenue — Total annual turnover/revenue for the measurement period
+- NPAT — Net profit after tax
+- LeviableAmount — Total leviable payroll (salary bill)
+- TMPS — Total measured procurement spend
+- FinancialYearEnd — End date of financial year (format: YYYY-MM-DD)
+OWNERSHIP:
+- ShareholderName — Name of each shareholder/equity holder
+- BlackOwnershipPercentage — % equity held by black people (target: ≥25%)
+- BlackWomenOwnershipPercentage — % equity held by black women (target: ≥10%)
+- ShareholdingPercentage — % total equity held per shareholder
+- ShareValue — Monetary value of shares per shareholder
+MANAGEMENT CONTROL:
+- EmployeeName — Full name of employee
+- EmployeeGender — Male/Female
+- EmployeeRace — African/Coloured/Indian/White
+- EmployeeDesignation — Occupational level (Top/Senior/Professionally Qualified/Skilled/Semi-skilled/Unskilled)
+- EmployeeDisabilityStatus — Yes/No (PWD)
+SKILLS DEVELOPMENT:
+- TrainingProgrammeName — Name/title of training programme or course
+- TrainingCost — Cost/spend on training
+- LearnerName — Full name of learner enrolled
+- LearnerEmploymentStatus — Employed/Unemployed/Learnership
+- LearnerRaceStatus — African/Coloured/Indian/White
+PROCUREMENT:
+- SupplierName — Registered name of supplier
+- SupplierBEELevel — B-BBEE level (1–8 or Non-compliant)
+- SupplierBlackOwnership — % black owned (target: ≥51%)
+- SupplierSpend — Amount spent with supplier during period
+ESD:
+- ESDBeneficiary — Name of enterprise/supplier receiving ESD support
+- ESDContributionType — Grant/Loan/Guarantee/Direct cost/Mentorship
+- ESDAmount — Monetary value of ESD contribution
+- ESDCategory — Enterprise Development or Supplier Development
+SED:
+- SEDBeneficiary — Name of SED beneficiary organisation/project
+- SEDContributionType — Monetary/In-kind/Time of employees
+- SEDAmount — Monetary value of SED contribution
+=== TEMPLATE 2: ICT Generic Scorecard ===
+Applicable to: Generic enterprises under the ICT Sector Code (turnover > R50M)
+SAME AS TEMPLATE 1, PLUS these 2 ICT-specific procurement entities:
+- ICTBlackOwnedSpend — ICT procurement spend with ≥51% black-owned ICT suppliers
+- ThirdPartyICTSpend — Total spend on 3rd-party ICT products and services
+=== TEMPLATE 3: ICT QSE Scorecard ===
+Applicable to: Qualifying Small Enterprises under ICT Sector Code (R10M–R50M turnover)
+Note: Simplified — Management Control and EE are combined; ESD/SED is a single combined figure
+Entities to extract:
+FINANCIAL (same as above):
+- TotalRevenue, NPAT, LeviableAmount, TMPS, FinancialYearEnd
+OWNERSHIP (same as above):
+- ShareholderName, BlackOwnershipPercentage, BlackWomenOwnershipPercentage,
+  ShareholdingPercentage, ShareValue
+MANAGEMENT CONTROL (simplified, no disability field):
+- EmployeeName
+- EmployeeGender — Male/Female
+- EmployeeRace — African/Coloured/Indian/White
+- EmployeeDesignation — Top/Senior/Professionally Qualified/Skilled Technical
+SKILLS DEVELOPMENT (same as above):
+- TrainingProgrammeName, TrainingCost, LearnerName,
+  LearnerEmploymentStatus, LearnerRaceStatus
+PROCUREMENT (same as above):
+- SupplierName, SupplierBEELevel, SupplierBlackOwnership, SupplierSpend
+ESD + SED (combined for QSE):
+- ESDSEDContribution — Total enterprise, supplier, and socio-economic development 
+  contributions combined (target: ≥1% of NPAT for SED + 2% NPAT for SD + 1% NPAT for ED)
+The key differences between the 3:
+
+RCOGP Generic → full 7-pillar set, standard procurement targets
+ICT Generic → same + 2 extra ICT procurement fields, slightly different point allocations
+ICT QSE → trimmed down — no disability tracking, ESD/SED merged into one field, simplified MC

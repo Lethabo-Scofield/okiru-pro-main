@@ -1,0 +1,33 @@
+# GitRepository resources for Flux CD
+# These define the Git repositories to sync from
+---
+# Production GitRepository (tracks main branch)
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: okiru-pro
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  url: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+  # If using a private repo, reference a secret with Git credentials
+  # secretRef:
+  #   name: github-token
+---
+# Staging GitRepository (tracks main branch with staging overlay)
+# Uses the same repo but different Kustomization path
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: okiru-pro-staging
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  url: https://github.com/Lethabo-Scofield/okiru-pro-main.git
+  # If using a private repo, reference a secret with Git credentials
+  # secretRef:
+  #   name: github-token

@@ -1,0 +1,314 @@
+# 🚀 **BUILDING THE STANDALONE SYSTEM (Moving Away from Excel)**
+
+Ah now I understand! You're not just wrapping Excel - you're **REPLACING it** with a proper web system. Here's what we need to build:
+
+## 🎯 **THE NEW SYSTEM ARCHITECTURE**
+
+### **Instead of Excel → We Build:**
+
+```
+┌─────────────────────────────────────────┐
+│         FRONTEND (Next.js)              │
+│  https://okiru.pro                       │
+├─────────────────────────────────────────┤
+│  Dashboard │ Pillar Pages │ Scenarios   │
+│  Data Hub  │ Exports      │ Admin       │
+└─────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────┐
+│         BACKEND (FastAPI)                │
+├─────────────────────────────────────────┤
+│  Auth │ Calculations │ AI Processing    │
+│  Export Engine │ Scenario Engine        │
+└─────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────┐
+│         DATABASE (PostgreSQL)            │
+├─────────────────────────────────────────┤
+│  Clients │ Ownership │ Management       │
+│  Skills │ Procurement │ ESD │ SED      │
+│  Scenarios │ Audit Logs │ Documents    │
+└─────────────────────────────────────────┘
+```
+
+## 📋 **COMPLETE BUILDING BLOCKS**
+
+### **1. DATA HUB (The "Excel Replacement")**
+```typescript
+// Instead of Excel sheets, we have input forms
+pages/
+  ├── data-hub/
+  │   ├── client-info.tsx        ← Client Information sheet
+  │   ├── financials.tsx          ← Financials sheet
+  │   ├── ownership/              ← Ownership Data sheet
+  │   │   ├── shareholders.tsx    ← Add/edit shareholders
+  │   │   └── company-value.tsx   ← Company value inputs
+  │   ├── management/
+  │   │   └── employees.tsx       ← Employee table (like MC Data sheet)
+  │   ├── skills/
+  │   │   ├── training.tsx        ← Training programs
+  │   │   └── leviable.tsx        ← Leviable amount
+  │   ├── procurement/
+  │   │   ├── suppliers.tsx       ← Supplier table
+  │   │   └── transactions.tsx    ← Procurement spend
+  │   ├── esd/                     ← ESD contributions
+  │   └── sed/                     ← SED contributions
+```
+
+### **2. CALCULATION ENGINE (The "Excel Formulas")**
+```python
+# Instead of Excel formulas, we have Python classes
+calculators/
+  ├── ownership.py      # Contains ALL ownership formulas
+  ├── management.py     # EAP-based calculations
+  ├── skills.py         # Training spend calculations
+  ├── procurement.py    # Recognition calculations
+  ├── esd_sed.py        # Benefit factor calculations
+  ├── yes.py            # YES initiative calculations
+  └── summary.py        # Final scoring + discounting
+```
+
+### **3. DASHBOARD (The "Summary Scorecard")**
+```typescript
+dashboard/
+  ├── scorecard-view.tsx     # Shows Level, Points, Status
+  ├── pillar-cards.tsx       # Each pillar with progress
+  ├── sub-minimum-alert.tsx  # Red warnings
+  ├── trend-chart.tsx        # Quarter-over-quarter
+  └── eap-selector.tsx       # Province dropdown
+```
+
+### **4. SCENARIO ENGINE (The "What-If" Tool)**
+```typescript
+scenarios/
+  ├── scenario-list.tsx       # Base + A/B/C tabs
+  ├── scenario-cloner.tsx     # Clone current data
+  ├── intervention-builder.tsx # Add hires, suppliers, etc.
+  ├── comparison-view.tsx     # Side-by-side differences
+  └── impact-analysis.tsx     # Cost vs benefit
+```
+
+### **5. EXPORT ENGINE (The "Output")**
+```typescript
+exports/
+  ├── pdf-generator.ts        # Client Scorecard PDF
+  ├── ppt-generator.ts        # Strategy Pack
+  ├── excel-generator.ts      # Audit Data Pack
+  └── zip-generator.ts        # Verification Pack
+```
+
+### **6. AI INGESTION (The "Auto-fill")**
+```python
+ai/
+  ├── document-processor.py   # Handles PDF/Excel/Word/Images
+  ├── field-mapper.py         # Maps to database fields
+  ├── validation-engine.py    # Checks for errors
+  └── suggestion-engine.py    # Recommends improvements
+```
+
+## 🔄 **HOW THE NEW SYSTEM WORKS**
+
+### **User Journey (No Excel Needed):**
+
+```
+1. USER LOGS INTO okiru.pro
+   ↓
+2. CREATES NEW CLIENT
+   ↓
+3. EITHER:
+   A) MANUALLY ENTERS DATA via forms
+   B) UPLOADS DOCUMENTS (AI extracts data)
+   ↓
+4. SYSTEM CALCULATES SCORES instantly
+   ↓
+5. DASHBOARD SHOWS:
+   - B-BBEE Level
+   - Points per pillar
+   - Sub-minimum status
+   - Gap analysis
+   ↓
+6. USER CREATES SCENARIOS:
+   - "What if we hire 3 black managers?"
+   - "What if we add this supplier?"
+   ↓
+7. SYSTEM SHOWS IMPACT in real-time
+   ↓
+8. USER EXPORTS:
+   - PDF scorecard for client
+   - PowerPoint for board
+   - Excel audit pack
+```
+
+## 🗄️ **DATABASE STRUCTURE (The REAL Storage)**
+
+```sql
+-- Instead of Excel sheets, we have tables
+tenants
+clients
+users
+
+-- Pillar data (one row per client per scenario)
+ownership_data
+management_employees
+training_programs
+suppliers
+procurement_transactions
+esd_contributions
+sed_contributions
+yes_initiatives
+
+-- Calculated scores (cached for performance)
+ownership_scores
+management_scores
+skills_scores
+procurement_scores
+esd_scores
+sed_scores
+summary_scores
+
+-- Version control
+data_versions
+audit_logs
+
+-- Reference data
+eap_tables
+industry_norms
+recognition_tables
+```
+
+## 🎨 **UI COMPONENTS TO BUILD**
+
+### **1. Client Dashboard**
+```
+┌─────────────────────────────────────┐
+│  Okiru.pro                          │
+├─────────────────────────────────────┤
+│  Client: ABC Pty Ltd                │
+│  Financial Year: 2024               │
+├─────────────────────────────────────┤
+│  ┌─────────┐ ┌─────────┐ ┌────────┐│
+│  │ Level 6 │ │  68.54  │ │ At Risk││
+│  │ Achieved│ │ Points  │ │        ││
+│  └─────────┘ └─────────┘ └────────┘│
+├─────────────────────────────────────┤
+│  Pillar          Score   Progress   │
+│  Ownership       18/25   ██████░░  │
+│  Management      12/19   █████░░░  │
+│  Skills          20/25   ████████  │
+│  Procurement     22/29   ███████░  │
+│  ESD             15/17   ████████  │
+│  SED             5/5     ████████  │
+└─────────────────────────────────────┘
+```
+
+### **2. Ownership Data Entry (Replaces Excel sheet)**
+```
+┌─────────────────────────────────────┐
+│  Shareholders                       │
+├─────────────────────────────────────┤
+│  Name      Race   Gender  Shares % │
+│  John Dube Black  Male     25%     │
+│  Mary Sitho Black  Female   15%     │
+│  [ + Add Shareholder ]              │
+├─────────────────────────────────────┤
+│  Company Value: R 10,000,000       │
+│  Years Held: 3                      │
+├─────────────────────────────────────┤
+│  Calculated Scores:                 │
+│  Voting Rights: 4.0/4              │
+│  Economic Interest: 6.2/8          │
+│  Net Value: 5.8/8                  │
+└─────────────────────────────────────┘
+```
+
+### **3. Scenario Planner**
+```
+┌─────────────────────────────────────┐
+│  Scenario A vs Base                 │
+├─────────────────────────────────────┤
+│  Base: Level 6 (68.54 pts)          │
+│  Scenario A: Level 5 (72.34 pts)    │
+│  Difference: +3.8 pts, +1 Level     │
+├─────────────────────────────────────┤
+│  Interventions Applied:              │
+│  ✓ Hire 3 Black Managers (R 450k)   │
+│  ✓ Add Level 1 Supplier (R 500k)    │
+│  ✓ Increase Training (R 100k)       │
+├─────────────────────────────────────┤
+│  Investment Required: R 1,050,000   │
+│  Cost per point: R 276,316          │
+└─────────────────────────────────────┘
+```
+
+## 🚀 **DEVELOPMENT SPRINTS**
+
+### **Sprint 1: Core Platform (Week 1-2)**
+- [ ] Database schema with all tables
+- [ ] Authentication (login/register)
+- [ ] Client CRUD operations
+- [ ] Basic data entry forms
+
+### **Sprint 2: Calculation Engine (Week 3-4)**
+- [ ] Ownership calculator (with graduation)
+- [ ] Management calculator (with EAP)
+- [ ] Skills calculator (with targets)
+- [ ] Procurement calculator (with recognition)
+- [ ] ESD/SED calculators
+- [ ] Summary with sub-minimum
+
+### **Sprint 3: Dashboard & UI (Week 5-6)**
+- [ ] Main dashboard with levels
+- [ ] Pillar pages with data entry
+- [ ] Real-time score updates
+- [ ] EAP province selector
+- [ ] Sub-minimum warnings
+
+### **Sprint 4: Scenario Engine (Week 7-8)**
+- [ ] Scenario cloning
+- [ ] Intervention builder
+- [ ] Side-by-side comparison
+- [ ] Impact analysis
+
+### **Sprint 5: Exports (Week 9-10)**
+- [ ] PDF scorecard generation
+- [ ] PowerPoint export
+- [ ] Excel audit pack
+- [ ] Verification ZIP
+
+### **Sprint 6: AI Ingestion (Week 11-12)**
+- [ ] Document upload (PDF/Excel/Images)
+- [ ] OCR text extraction
+- [ ] Field mapping
+- [ ] Validation & suggestions
+
+## ✅ **WHAT "DONE" LOOKS LIKE**
+
+When Chengetai logs into okiru.pro, she can:
+
+1. **Create a new client** with basic info
+2. **Enter data manually** OR **upload documents** (AI fills it)
+3. **See the scorecard** instantly with correct calculations
+4. **Spot sub-minimum issues** with red warnings
+5. **Create scenarios** to test improvements
+6. **Export professional reports** for clients
+7. **All without touching Excel**
+
+## 📊 **SUCCESS METRICS**
+
+- **Accuracy**: Calculations match Excel 100%
+- **Speed**: Dashboard loads < 2 seconds
+- **Usability**: Client setup < 10 minutes
+- **Reliability**: Zero crashes with real data
+- **Adoption**: Clients prefer web over Excel
+
+## 🎯 **IMMEDIATE NEXT STEPS**
+
+1. **Set up database** (PostgreSQL)
+2. **Create authentication**
+3. **Build client management**
+4. **Implement ONE pillar fully** (start with Ownership)
+5. **Show working prototype**
+
+**Which pillar should we build first to prove it works?**

@@ -1,0 +1,33 @@
+{
+  "name": "okiru-pro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "B-BBEE Compliance and Scorecard Management Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm run --parallel dev",
+    "dev:web": "pnpm --filter @okiru/web dev",
+    "dev:api": "pnpm --filter @okiru/api dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @okiru/web build",
+    "build:api": "pnpm --filter @okiru/api build",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "install:all": "pnpm install"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.35",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.26.1"
+}
