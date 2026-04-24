@@ -52,6 +52,7 @@ function deriveCompanyNameFromFileName(fileName: string): string {
 
 interface SearchResultItem {
   file_name: string;
+  company_name?: string;
   file_url: string;
   snippet: string;
 }
@@ -762,7 +763,7 @@ export default function CertificateHub() {
                         <FileFormatIcon fileName={result.file_name} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                            <HighlightMatch text={deriveCompanyNameFromFileName(result.file_name)} query={search} />
+                            <HighlightMatch text={result.company_name || deriveCompanyNameFromFileName(result.file_name)} query={search} />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#3a3a3c] tracking-wide">

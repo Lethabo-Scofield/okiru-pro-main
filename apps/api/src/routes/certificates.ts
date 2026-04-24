@@ -144,24 +144,20 @@ router.get('/list', async (req: Request, res: Response) => {
     }
 
     const containerClient = getContainerClient(blobServiceClient);
-    const blobs: Array<{ name: string; fileName: string; companyName: string; lastModified: string | null }> = [];
-    const blobNames: string[] = [];
+    const allBlobs: Array<{ name: string; fileName: string; companyName: string; lastModified: string | null }> = [];
 
     for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
       const fileName = blob.name;
-      if (!search || fileName.toLowerCase().includes(search)) {
-        blobs.push({
-          name: blob.name,
-          fileName,
-          companyName: deriveCompanyName(fileName),
-          lastModified: blob.properties.lastModified?.toISOString() || null,
-        });
-        blobNames.push(blob.name);
-      }
+      allBlobs.push({
+        name: blob.name,
+        fileName,
+        companyName: deriveCompanyName(fileName),
+        lastModified: blob.properties.lastModified?.toISOString() || null,
+      });
     }
 
-    const mongoMap = await loadMongoMetadataMap(blobNames);
-    for (const b of blobs) {
+    const mongoMap = await loadMongoMetadataMap(allBlobs.map(b => b.name));
+    for (const b of allBlobs) {
       const md = mongoMap.get(b.name);
       const supplierName = md?.supplierName;
       if (supplierName && typeof supplierName === 'string' && supplierName.trim()) {
@@ -169,7 +165,14 @@ router.get('/list', async (req: Request, res: Response) => {
       }
     }
 
-    logger.info('Listed certificates', { search: search || '(all)', count: blobs.length });
+    const blobs = search
+      ? allBlobs.filter(b =>
+          b.fileName.toLowerCase().includes(search) ||
+          b.companyName.toLowerCase().includes(search),
+        )
+      : allBlobs;
+
+    logger.info('Listed certificates', { search: search || '(all)', total: allBlobs.length, count: blobs.length });
     return res.json(blobs);
   } catch (err) {
     logger.error('Failed to list certificates', err as Error);
@@ -186,19 +189,43 @@ router.get('/search', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'q query parameter is required' });
     }
 
-    const merged = new Map<string, { file_name: string; file_url: string; snippet: string }>();
+    const merged = new Map<string, { file_name: string; company_name: string; file_url: string; snippet: string }>();
 
     const blobServiceClient = getBlobServiceClient();
     if (blobServiceClient) {
       const containerClient = getContainerClient(blobServiceClient);
       const searchLower = q.toLowerCase();
+
+      const allBlobs: Array<{ name: string; fileName: string; companyName: string }> = [];
       for await (const blob of containerClient.listBlobsFlat()) {
         const fileName = blob.name.split('/').pop() || blob.name;
-        if (fileName.toLowerCase().includes(searchLower)) {
-          merged.set(blob.name, {
-            file_name: fileName,
-            file_url: blob.name,
-            snippet: `Filename match`,
+        allBlobs.push({
+          name: blob.name,
+          fileName,
+          companyName: deriveCompanyName(blob.name),
+        });
+      }
+
+      const mongoMap = await loadMongoMetadataMap(allBlobs.map(b => b.name));
+
+      for (const b of allBlobs) {
+        const md = mongoMap.get(b.name);
+        const supplierName: string | undefined =
+          typeof md?.supplierName === 'string' && md.supplierName.trim() ? md.supplierName.trim() : undefined;
+        const displayName = supplierName || b.companyName;
+
+        const haystacks = [
+          b.fileName.toLowerCase(),
+          b.companyName.toLowerCase(),
+          supplierName ? supplierName.toLowerCase() : '',
+        ];
+
+        if (haystacks.some(h => h && h.includes(searchLower))) {
+          merged.set(b.name, {
+            file_name: b.fileName,
+            company_name: displayName,
+            file_url: b.name,
+            snippet: supplierName ? `Entity match: ${supplierName}` : `Match: ${displayName}`,
           });
         }
       }
@@ -212,7 +239,13 @@ router.get('/search', async (req: Request, res: Response) => {
           if (existing) {
             existing.snippet = result.snippet;
           } else {
-            merged.set(result.file_url, result);
+            const fileName = result.file_name || (result.file_url.split('/').pop() || result.file_url);
+            merged.set(result.file_url, {
+              file_name: fileName,
+              company_name: deriveCompanyName(result.file_url || fileName),
+              file_url: result.file_url,
+              snippet: result.snippet,
+            });
           }
         }
       } catch (searchErr) {
