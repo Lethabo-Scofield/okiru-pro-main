@@ -4,9 +4,22 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown, FileSearch,
   RefreshCw, Users, ShieldCheck, Clock, AlertTriangle, BarChart3, Award,
-  Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText
+  Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp, Database
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+
+function formatBytes(bytes: number | undefined): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
+function pctText(part: number | undefined, whole: number | undefined): string {
+  if (!whole || whole <= 0 || part == null) return '—';
+  return `${Math.round((part / whole) * 100)}% of portfolio`;
+}
 
 function HighlightMatch({ text, query }: { text: string; query: string }) {
   if (!query.trim()) return <>{text}</>;
@@ -227,9 +240,12 @@ function KpiCard({
       <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-white/[0.04]" style={{ color: iconColor }}>
         {icon}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-[20px] font-semibold text-white leading-tight">{value}</div>
-        <div className="text-[11px] text-[#636366] truncate">{title}</div>
+        <div className="text-[11px] text-[#8e8e93] truncate font-medium">{title}</div>
+        {subtitle && (
+          <div className="text-[10px] text-[#636366] truncate mt-0.5">{subtitle}</div>
+        )}
       </div>
     </div>
   );
@@ -430,7 +446,23 @@ export default function CertificateHub() {
     return { total, valid, expiring, expired, avgLevel, empoweringCount, empoweringPct };
   }, [chunks]);
 
-  const [certStats, setCertStats] = useState<{ total: number; valid: number; expiring: number; expired: number; unknown: number; processed: number; pending: number } | null>(null);
+  const [certStats, setCertStats] = useState<{
+    total: number;
+    totalBytes?: number;
+    recentUploads7d?: number;
+    recentUploads30d?: number;
+    lastUploadedAt?: string | null;
+    valid: number;
+    expiring: number;
+    expiringIn30?: number;
+    expired: number;
+    unknown: number;
+    processed: number;
+    pending: number;
+    avgLevel?: number | null;
+    avgBlackOwnership?: number | null;
+    extractionAvailable?: boolean;
+  } | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -630,34 +662,78 @@ export default function CertificateHub() {
         </div>
 
         {!loading && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
             <KpiCard
               title="Total Certificates"
-              value={String(certificates.length)}
-              subtitle="in storage"
+              value={String(certStats?.total ?? certificates.length)}
+              subtitle={
+                certStats?.totalBytes
+                  ? `${formatBytes(certStats.totalBytes)} stored`
+                  : 'in storage'
+              }
               iconColor="#3b82f6"
               icon={<FileText className="h-4 w-4" />}
             />
             <KpiCard
+              title="Recent Uploads"
+              value={String(certStats?.recentUploads7d ?? 0)}
+              subtitle={
+                certStats?.recentUploads30d != null
+                  ? `${certStats.recentUploads30d} in last 30 days`
+                  : 'last 7 days'
+              }
+              iconColor="#a855f7"
+              icon={<TrendingUp className="h-4 w-4" />}
+            />
+            <KpiCard
               title="Valid"
-              value={certStats ? String(certStats.valid) : '—'}
-              subtitle={certStats && certStats.processed > 0 ? `of ${certStats.processed} scanned` : 'scanning...'}
+              value={certStats?.extractionAvailable ? String(certStats.valid) : '—'}
+              subtitle={
+                certStats?.extractionAvailable
+                  ? pctText(certStats.valid, certStats.total)
+                  : 'awaiting extraction'
+              }
               iconColor="#22c55e"
               icon={<ShieldCheck className="h-4 w-4" />}
             />
             <KpiCard
               title="Expiring Soon"
-              value={certStats ? String(certStats.expiring) : '—'}
-              subtitle="within 60 days"
+              value={certStats?.extractionAvailable ? String(certStats.expiring) : '—'}
+              subtitle={
+                certStats?.extractionAvailable
+                  ? `${certStats.expiringIn30 ?? 0} within 30 days`
+                  : 'within 60 days'
+              }
               iconColor="#f59e0b"
               icon={<Clock className="h-4 w-4" />}
             />
             <KpiCard
               title="Expired"
-              value={certStats ? String(certStats.expired) : '—'}
-              subtitle="needs renewal"
+              value={certStats?.extractionAvailable ? String(certStats.expired) : '—'}
+              subtitle={
+                certStats?.extractionAvailable
+                  ? pctText(certStats.expired, certStats.total)
+                  : 'needs renewal'
+              }
               iconColor="#ef4444"
               icon={<AlertTriangle className="h-4 w-4" />}
+            />
+            <KpiCard
+              title="Avg B-BBEE Level"
+              value={
+                certStats?.extractionAvailable && certStats.avgLevel != null
+                  ? certStats.avgLevel.toFixed(1)
+                  : '—'
+              }
+              subtitle={
+                certStats?.extractionAvailable && certStats.avgBlackOwnership != null
+                  ? `${certStats.avgBlackOwnership.toFixed(1)}% black ownership`
+                  : certStats?.extractionAvailable
+                    ? 'across portfolio'
+                    : 'awaiting extraction'
+              }
+              iconColor="#06b6d4"
+              icon={<Award className="h-4 w-4" />}
             />
           </div>
         )}

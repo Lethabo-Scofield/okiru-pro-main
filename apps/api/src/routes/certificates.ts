@@ -264,8 +264,107 @@ router.get('/search', async (req: Request, res: Response) => {
 
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
-    const stats = await getCertificateStats();
-    return res.json(stats);
+    const blobServiceClient = getBlobServiceClient();
+    let total = 0;
+    let recentUploads7d = 0;
+    let recentUploads30d = 0;
+    let totalBytes = 0;
+    let lastUploadedAt: string | null = null;
+
+    if (blobServiceClient) {
+      try {
+        const containerClient = getContainerClient(blobServiceClient);
+        const now = Date.now();
+        const sevenDays = now - 7 * 24 * 60 * 60 * 1000;
+        const thirtyDays = now - 30 * 24 * 60 * 60 * 1000;
+        let latest = 0;
+
+        for await (const blob of containerClient.listBlobsFlat()) {
+          total++;
+          const size = blob.properties.contentLength;
+          if (typeof size === 'number') totalBytes += size;
+          const lm = blob.properties.lastModified ? new Date(blob.properties.lastModified).getTime() : 0;
+          if (lm) {
+            if (lm > latest) latest = lm;
+            if (lm >= sevenDays) recentUploads7d++;
+            if (lm >= thirtyDays) recentUploads30d++;
+          }
+        }
+        if (latest > 0) lastUploadedAt = new Date(latest).toISOString();
+      } catch (azureErr) {
+        logger.warn('Azure blob enumeration failed during stats — returning Mongo-only stats', {
+          err: (azureErr as Error).message,
+        });
+      }
+    }
+
+    let extraction: {
+      valid: number;
+      expiring: number;
+      expiringIn30: number;
+      expired: number;
+      unknown: number;
+      processed: number;
+      pending: number;
+      avgLevel: number | null;
+      avgBlackOwnership: number | null;
+      extractionAvailable: boolean;
+    } = {
+      valid: 0,
+      expiring: 0,
+      expiringIn30: 0,
+      expired: 0,
+      unknown: 0,
+      processed: 0,
+      pending: 0,
+      avgLevel: null,
+      avgBlackOwnership: null,
+      extractionAvailable: false,
+    };
+
+    if (isMongoConnected()) {
+      try {
+        const stats = await getCertificateStats();
+        const now = new Date();
+        const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const expiringIn30Doc = await CertificateMetadataModel.countDocuments({
+          extractionStatus: 'completed',
+          expiryDate: { $gte: now, $lte: thirtyDays },
+        });
+        const levelAgg = await CertificateMetadataModel.aggregate([
+          { $match: { extractionStatus: 'completed', bbbeeLevel: { $ne: null } } },
+          { $group: { _id: null, avg: { $avg: '$bbbeeLevel' } } },
+        ]);
+        const ownershipAgg = await CertificateMetadataModel.aggregate([
+          { $match: { extractionStatus: 'completed', blackOwnership: { $ne: null } } },
+          { $group: { _id: null, avg: { $avg: '$blackOwnership' } } },
+        ]);
+
+        extraction = {
+          valid: stats.valid,
+          expiring: stats.expiring,
+          expiringIn30: expiringIn30Doc,
+          expired: stats.expired,
+          unknown: stats.unknown,
+          processed: stats.processed,
+          pending: stats.pending,
+          avgLevel: levelAgg[0]?.avg != null ? Number(levelAgg[0].avg.toFixed(1)) : null,
+          avgBlackOwnership: ownershipAgg[0]?.avg != null ? Number(ownershipAgg[0].avg.toFixed(1)) : null,
+          extractionAvailable: true,
+        };
+      } catch (mongoErr) {
+        logger.warn('Mongo stats query failed — returning blob-only stats', { err: (mongoErr as Error).message });
+      }
+    }
+
+    return res.json({
+      total,
+      totalBytes,
+      recentUploads7d,
+      recentUploads30d,
+      lastUploadedAt,
+      ...extraction,
+    });
   } catch (err: any) {
     logger.error('Failed to get certificate stats', err);
     return res.status(500).json({ message: 'Failed to get certificate stats' });
