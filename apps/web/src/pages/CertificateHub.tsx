@@ -592,7 +592,7 @@ export default function CertificateHub() {
     setMonthFilter('');
   };
 
-  const downloadCertificate = async (blobName: string, fileName: string) => {
+  const downloadCertificate = async (blobName: string, _fileName: string) => {
     setDownloadingFile(blobName);
     try {
       const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(blobName)}`);
@@ -601,20 +601,20 @@ export default function CertificateHub() {
         throw new Error(body.message || `Error ${res.status}`);
       }
       const { url } = await res.json();
+      if (!url) throw new Error('No download URL returned');
 
-      const fileRes = await fetch(url);
-      if (!fileRes.ok) throw new Error('Failed to fetch file from storage');
-      const blob = await fileRes.blob();
-      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = fileName;
+      a.href = url;
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(objectUrl);
     } catch (err: any) {
-      toast({ title: 'Download failed', description: err.message || 'Could not generate a secure download link.', variant: 'destructive' });
+      toast({
+        title: 'Download failed',
+        description: err.message || 'Could not generate a secure download link.',
+        variant: 'destructive',
+      });
     } finally {
       setDownloadingFile(null);
     }
