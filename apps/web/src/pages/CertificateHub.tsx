@@ -41,11 +41,12 @@ function deriveCompanyNameFromFileName(fileName: string): string {
   );
   const trimmed = noUuid
     .replace(/^\d{4}[\s_-]+\d{2}[\s_-]+\d{1,2}[\s_-]+/, '')
-    .replace(/[_-]?\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
-    .replace(/[_-]?B-?BBEE.*$/i, '')
-    .replace(/[_-]?Certificate.*$/i, '')
+    .replace(/[\s_-]*\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
+    .replace(/[\s_-]*B-?BBEE.*$/i, '')
+    .replace(/[\s_-]*Certificate.*$/i, '')
     .replace(/[_]+/g, ' ')
     .replace(/\s+/g, ' ')
+    .replace(/[\s_\-–—]+$/u, '')
     .trim();
   return trimmed || 'Unknown company';
 }
