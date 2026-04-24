@@ -339,14 +339,14 @@ export default function Dashboard() {
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }} data-testid="modal-delete-overlay">
           <div className="absolute inset-0 bg-background/60 backdrop-blur-xl" onClick={() => { if (!isDeleting) setDeleteConfirm(null); }} />
-          <div className="relative bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm p-7 scale-in" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }}>
+          <div className="relative bg-card rounded-3xl shadow-2xl w-full max-w-sm p-7 scale-in" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }}>
             <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-5">
               <Trash2 className="h-6 w-6 text-red-500" />
             </div>
             <h3 className="text-[17px] font-semibold text-foreground text-center mb-2 tracking-tight">Delete Template?</h3>
             <p className="text-[13px] text-[#8e8e93] text-center mb-7 leading-relaxed">This action cannot be undone. The template and all its entities will be permanently removed.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-[#2c2c2e] text-[#d1d1d6] rounded-xl hover:bg-[#3a3a3c] smooth press-sm font-medium text-[13px]" data-testid="button-cancel-delete">Cancel</button>
+              <button onClick={() => setDeleteConfirm(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-muted text-foreground/90 rounded-xl hover:bg-[#3a3a3c] smooth press-sm font-medium text-[13px]" data-testid="button-cancel-delete">Cancel</button>
               <button onClick={() => deleteConfirm !== null && deleteTemplate(deleteConfirm)} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500 text-foreground rounded-xl hover:bg-red-600 smooth press-sm font-semibold text-[13px] shadow-sm shadow-red-500/20" data-testid="button-confirm-delete">
                 {isDeleting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Deleting...</> : "Delete"}
               </button>
@@ -362,32 +362,32 @@ export default function Dashboard() {
               <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
               <span className="text-[13px] font-medium tracking-wide">Back to Hub</span>
             </Link>
-            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
+            <div className="w-px h-5 bg-muted hidden sm:block"></div>
             <button onClick={() => goTo('home')} className="flex items-center gap-3 press-sm" data-testid="logo-home">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-              <span className="text-lg font-semibold tracking-tight text-foreground border-l border-[#2c2c2e] pl-3">Dashboard</span>
+              <span className="text-lg font-semibold tracking-tight text-foreground border-l border-border pl-3">Dashboard</span>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setPage('home'); startTour(); }}
-              className="p-2 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              className="p-2 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
               title="Take a tour"
               aria-label="Take a guided tour"
               data-testid="button-help-tour"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
-            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
+            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-card text-[12px]" data-testid="user-menu">
               <span className="inline-flex h-5 w-5 rounded-full bg-card/[0.12] items-center justify-center text-foreground font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
-              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
+              <span className="text-foreground/90 font-medium">{user?.fullName || user?.username || ''}</span>
             </div>
             <button
               onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-foreground/90"
               data-testid="button-sign-out"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -408,7 +408,7 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth"
+                className="group text-left rounded-2xl bg-card p-6 lift press hover:bg-muted smooth"
                 onClick={() => goTo('templates')}
                 data-testid="card-create-entity"
               >
@@ -418,7 +418,7 @@ export default function Dashboard() {
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse, edit, or create templates.</div>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
-                    <Plus className="h-5 w-5 text-[#d1d1d6]" />
+                    <Plus className="h-5 w-5 text-foreground/90" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -427,7 +427,7 @@ export default function Dashboard() {
               </button>
 
               <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-1"
+                className="group text-left rounded-2xl bg-card p-6 lift press hover:bg-muted smooth opacity-0 fade-in stagger-1"
                 onClick={() => navigate('/processor?new=true')}
                 data-testid="card-upload-docs"
               >
@@ -437,7 +437,7 @@ export default function Dashboard() {
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Build B-BBEE scorecards manually or upload documents.</div>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
-                    <FileText className="h-5 w-5 text-[#d1d1d6]" />
+                    <FileText className="h-5 w-5 text-foreground/90" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -446,7 +446,7 @@ export default function Dashboard() {
               </button>
 
               <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-2"
+                className="group text-left rounded-2xl bg-card p-6 lift press hover:bg-muted smooth opacity-0 fade-in stagger-2"
                 onClick={() => goTo('scorecards')}
                 data-testid="card-scorecards"
               >
@@ -456,7 +456,7 @@ export default function Dashboard() {
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse companies and compliance.</div>
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
-                    <Building2 className="h-5 w-5 text-[#d1d1d6]" />
+                    <Building2 className="h-5 w-5 text-foreground/90" />
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
@@ -473,7 +473,7 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
                     onClick={() => goTo('home')}
                     data-testid="button-back-home"
                   >
@@ -494,13 +494,13 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            <div className="rounded-2xl bg-[#1c1c1e] p-4 mb-5">
+            <div className="rounded-2xl bg-card p-4 mb-5">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#636366]" />
                 <input
                   type="text"
                   placeholder="Search templates..."
-                  className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
+                  className="w-full rounded-xl bg-muted pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
                   data-testid="input-template-search"
@@ -511,7 +511,7 @@ export default function Dashboard() {
             {loadingTemplates && storedTemplates.length === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="rounded-2xl bg-[#1c1c1e] p-5">
+                  <div key={i} className="rounded-2xl bg-card p-5">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="h-10 w-10 rounded-xl bg-card/[0.06] shimmer" />
                       <div className="flex-1">
@@ -530,7 +530,7 @@ export default function Dashboard() {
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Toolkit Templates</h2>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-card/[0.08] text-[#d1d1d6] font-semibold">{filteredStoredTemplates.length}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-card/[0.08] text-foreground/90 font-semibold">{filteredStoredTemplates.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {filteredStoredTemplates.map((t, idx) => {
@@ -540,9 +540,9 @@ export default function Dashboard() {
                       FSC: 'bg-amber-500/15 text-amber-400',
                       AGRI: 'bg-green-500/15 text-green-400',
                     };
-                    const sectorBadge = sectorColors[t.sectorCode || ''] || 'bg-card/[0.08] text-[#d1d1d6]';
+                    const sectorBadge = sectorColors[t.sectorCode || ''] || 'bg-card/[0.08] text-foreground/90';
                     return (
-                    <div key={t.id} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`stored-template-${t.id}`}>
+                    <div key={t.id} className={`rounded-2xl bg-card p-5 hover:bg-muted smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`stored-template-${t.id}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-[14px] font-semibold tracking-tight text-foreground">{t.name}</div>
@@ -598,12 +598,12 @@ export default function Dashboard() {
                           )}
                           <button
                             onClick={() => { setEditingTemplateId(t.id); navigate(`/builder?template=${t.id}`); }}
-                            className="p-2 text-[#636366] hover:text-[#d1d1d6] hover:bg-card/[0.18]/10 rounded-lg smooth press-sm"
+                            className="p-2 text-[#636366] hover:text-foreground/90 hover:bg-card/[0.18]/10 rounded-lg smooth press-sm"
                             title={t.isOntology ? "Load in builder" : "Edit template"}
                             data-testid={`button-edit-${t.id}`}
                           >
                             {editingTemplateId === t.id
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#d1d1d6]" />
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground/90" />
                               : <Pencil className="h-3.5 w-3.5" />}
                           </button>
                         </div>
@@ -623,7 +623,7 @@ export default function Dashboard() {
             )}
 
             {filteredStoredTemplates.length === 0 && (
-              <div className="rounded-2xl bg-[#1c1c1e] p-8 text-[14px] text-[#636366] text-center fade-in" data-testid="templates-empty">
+              <div className="rounded-2xl bg-card p-8 text-[14px] text-[#636366] text-center fade-in" data-testid="templates-empty">
                 No templates found. Try a different search.
               </div>
             )}
@@ -636,7 +636,7 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-card hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
                     onClick={() => goTo('home')}
                     data-testid="button-back-home-sc"
                   >
@@ -659,20 +659,20 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="rounded-2xl bg-[#1c1c1e] p-5 fade-in">
+              <div className="rounded-2xl bg-card p-5 fade-in">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Total Clients</div>
                 <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-foreground" data-testid="stat-companies">
                   {loadingSessions ? <Loader2 className="w-6 h-6 animate-spin text-[#636366] inline-block" /> : stats.total}
                 </div>
               </div>
-              <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-1">
+              <div className="rounded-2xl bg-card p-5 opacity-0 fade-in stagger-1">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Industries</div>
                 <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-foreground" data-testid="stat-industries">
                   {loadingSessions ? '—' : stats.industries}
                 </div>
                 <div className="text-[10px] text-[#636366] mt-2">{stats.industryList || 'No sessions yet'}</div>
               </div>
-              <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-2">
+              <div className="rounded-2xl bg-card p-5 opacity-0 fade-in stagger-2">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Statuses</div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
                   <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 font-medium">In Progress: {stats.inProgress}</span>
@@ -681,7 +681,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-[#1c1c1e] p-4 mb-5">
+            <div className="rounded-2xl bg-card p-4 mb-5">
               <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
                 <div className="flex-1">
                   <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="companySearch">Search companies</label>
@@ -691,7 +691,7 @@ export default function Dashboard() {
                       id="companySearch"
                       type="text"
                       placeholder="Search by company name or ID..."
-                      className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
+                      className="w-full rounded-xl bg-muted pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                       value={companySearch}
                       onChange={(e) => setCompanySearch(e.target.value)}
                       data-testid="input-company-search"
@@ -704,7 +704,7 @@ export default function Dashboard() {
                     <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="industryFilter">Industry</label>
                     <select
                       id="industryFilter"
-                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
+                      className="mt-1.5 block rounded-xl bg-muted px-3 py-2.5 text-[13px] text-foreground/90 outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
                       value={industryFilter}
                       onChange={(e) => setIndustryFilter(e.target.value)}
                       data-testid="select-industry"
@@ -717,7 +717,7 @@ export default function Dashboard() {
                     <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="statusFilter">Status</label>
                     <select
                       id="statusFilter"
-                      className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
+                      className="mt-1.5 block rounded-xl bg-muted px-3 py-2.5 text-[13px] text-foreground/90 outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
                       data-testid="select-status"
@@ -731,7 +731,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
+            <div className="rounded-2xl bg-card overflow-hidden">
               <div className="px-5 py-3.5 flex items-center justify-between">
                 <div className="text-[13px] font-semibold text-foreground">Client Assessments</div>
                 <div className="text-[11px] text-[#98989f] font-medium" data-testid="results-count">
@@ -741,7 +741,7 @@ export default function Dashboard() {
 
               {loadingSessions ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <Loader2 className="w-6 h-6 text-[#d1d1d6] animate-spin" />
+                  <Loader2 className="w-6 h-6 text-foreground/90 animate-spin" />
                   <p className="text-[#8e8e93] text-sm">Loading assessments...</p>
                 </div>
               ) : (
@@ -934,7 +934,7 @@ export default function Dashboard() {
                             <div className="flex flex-col items-center gap-3">
                               <Building2 className="w-8 h-8 text-[#3a3a3c]" />
                               <p className="text-[14px] text-[#636366]">No assessments yet</p>
-                              <Link href="/processor?new=true" className="text-[13px] text-[#d1d1d6] hover:text-[#e5e5e7] font-medium smooth">
+                              <Link href="/processor?new=true" className="text-[13px] text-foreground/90 hover:text-[#e5e5e7] font-medium smooth">
                                 Start a new assessment →
                               </Link>
                             </div>

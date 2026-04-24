@@ -305,7 +305,7 @@ export default function ScorecardBuilder() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 text-[#d1d1d6] animate-spin mx-auto" />
+          <Loader2 className="w-8 h-8 text-foreground/90 animate-spin mx-auto" />
           <p className="text-[#636366] text-sm">Loading scorecard template...</p>
         </div>
       </div>
@@ -335,7 +335,7 @@ export default function ScorecardBuilder() {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="h-14 sticky top-0 z-20 bg-black border-b border-[#2c2c2e]">
+      <header className="h-14 sticky top-0 z-20 bg-black border-b border-border">
         <div className="max-w-[1600px] mx-auto px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
@@ -345,7 +345,7 @@ export default function ScorecardBuilder() {
               <ChevronLeft className="w-4 h-4" />
               <span className="text-[13px] font-medium">Back</span>
             </button>
-            <div className="w-px h-5 bg-[#2c2c2e]" />
+            <div className="w-px h-5 bg-muted" />
             <div>
               <h1 className="text-[14px] font-semibold text-white">
                 {state.sectorCode} {state.scorecardType} Scorecard
@@ -359,9 +359,9 @@ export default function ScorecardBuilder() {
 
           <div className="flex items-center gap-3">
             {/* Progress */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1c1c1e] rounded-lg border border-[#2c2c2e]">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-card rounded-lg border border-border">
               <span className="text-[11px] text-[#636366]">Progress</span>
-              <div className="w-20 h-1.5 rounded-full bg-[#2c2c2e] overflow-hidden">
+              <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div 
                   className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                   style={{ width: `${overallProgress}%` }}
@@ -386,7 +386,7 @@ export default function ScorecardBuilder() {
             <button
               onClick={saveScorecard}
               disabled={state.isSaving || !state.scorecardResult}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:bg-[#2c2c2e] text-white rounded-lg text-[12px] font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:bg-muted text-white rounded-lg text-[12px] font-semibold transition-colors"
             >
               {state.isSaving ? (
                 <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
@@ -428,12 +428,12 @@ export default function ScorecardBuilder() {
               >
                 <div className={`
                   w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                  ${isActive ? 'bg-white/[0.08]' : 'bg-[#1c1c1e]'}
+                  ${isActive ? 'bg-white/[0.08]' : 'bg-card'}
                 `}>
                   <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#636366]'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[13px] font-medium truncate ${isActive ? 'text-white' : 'text-[#d1d1d6]'}`}>
+                  <p className={`text-[13px] font-medium truncate ${isActive ? 'text-white' : 'text-foreground/90'}`}>
                     {pillar.pillarName}
                   </p>
                   <p className="text-[10px] text-[#636366]">
@@ -443,7 +443,7 @@ export default function ScorecardBuilder() {
                 {isValid ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 ) : (
-                  <div className="w-4 h-4 rounded-full border-2 border-[#2c2c2e] shrink-0" />
+                  <div className="w-4 h-4 rounded-full border-2 border-border shrink-0" />
                 )}
               </button>
             );
@@ -451,25 +451,25 @@ export default function ScorecardBuilder() {
 
           {/* Results Summary */}
           {state.scorecardResult && (
-            <div className="mt-6 p-4 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
+            <div className="mt-6 p-4 bg-card rounded-2xl border border-border">
               <h3 className="text-[12px] font-medium text-[#636366] uppercase tracking-wider mb-3">
                 Results
               </h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-[#d1d1d6]">Level</span>
+                  <span className="text-[13px] text-foreground/90">Level</span>
                   <span className="text-[18px] font-bold text-white">
                     {state.scorecardResult.beeLevel}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-[#d1d1d6]">Total</span>
+                  <span className="text-[13px] text-foreground/90">Total</span>
                   <span className="text-[16px] font-mono font-medium text-emerald-400">
                     {state.scorecardResult.totalPoints.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-[#d1d1d6]">Recognition</span>
+                  <span className="text-[13px] text-foreground/90">Recognition</span>
                   <span className="text-[13px] font-medium text-white">
                     {state.scorecardResult.recognitionLevel}%
                   </span>

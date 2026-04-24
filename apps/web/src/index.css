@@ -96,10 +96,10 @@
 :root {
   /* === Sim Design Language — Light theme === */
   /* Background: neutral-50 #fafafa */
-  --background: 0 0% 98%;
+  --background: 0 0% 100%;
   --foreground: 0 0% 9%;             /* neutral-900 #171717 */
 
-  --card: 0 0% 100%;                  /* surface white */
+  --card: 90 8% 96%;                  /* light warm grey — distinct from white background */
   --card-foreground: 0 0% 9%;
 
   --popover: 0 0% 100%;
