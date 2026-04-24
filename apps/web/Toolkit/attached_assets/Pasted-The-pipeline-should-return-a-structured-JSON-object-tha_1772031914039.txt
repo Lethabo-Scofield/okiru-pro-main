@@ -1,0 +1,182 @@
+The pipeline should return a **structured JSON object** that contains everything needed to:
+
+- Run the full B-BBEE scorecard calculation engine (all pillars, sub-minimums, discounting, YES enhancement, level determination)
+- Populate the **certificate PDF** exactly like the example you shared (layout, fields, formatting)
+- Generate the **auditor Excel pack** (raw data + calculated fields + formulas)
+- Build the **strategy pack PDF/PPTX** (slides with visuals, gaps, recommendations)
+
+This JSON is the single "source of truth" output after parsing the uploaded/filled "BEE Information Gathering File" Excel (and any PDF cross-checks).
+
+### Example Output JSON from the Pipeline
+
+Here is a realistic example based on the **Thandanani Transport** filled file and the certificate you provided. This is what the backend parser should return after processing the upload:
+
+```json
+{
+  "status": "success",
+  "processedAt": "2026-02-25T17:15:00+02:00",
+  "sourceFiles": ["BEE Information Gathering File - Thandanani Transport.xlsx"],
+  "extractionSummary": {
+    "sheetsParsed": 10,
+    "rowsExtracted": 320,
+    "warnings": ["Skills Development: only 12 training rows – possible incomplete", "No YES youth employees found"],
+    "errors": []
+  },
+
+  "client": {
+    "name": "Thandanani Packers & Haulers cc",
+    "tradeName": "Thandanani Transport",
+    "address": "22A Edendale Road, Eastleigh, 1609",
+    "registrationNumber": "2006/037260/23",
+    "vatNumber": "423 025 7422",
+    "financialYearEnd": "28 February 2025",
+    "industrySector": "Transport Road & Freight",
+    "applicableScorecard": "QSE",
+    "applicableCodes": "Integrated Transport Sector Code",
+    "certificateNumber": "13609"   // if extracted from PDF or manual input
+  },
+
+  "financials": {
+    "revenue": 8100064,                    // from Finance sheet
+    "npat": 3425069.44,                    // from Finance sheet
+    "payroll": 2753331,                    // total wages & salaries
+    "tmpsInclusions": 8100064,             // sum of CoS + OpEx etc.
+    "tmpsExclusions": 3425069.44,          // sum of imports, salaries, depreciation etc.
+    "tmps": 4674994.56,                    // calculated or extracted total
+    "deemedNpat": 467499.46,               // if actual margin < 25% norm → Revenue × norm
+    "deemedNpatUsed": false,               // true if margin too low
+    "industryNormUsed": 5.76                // % from Norms lookup
+  },
+
+  "ownership": {
+    "blackOwnershipPercent": 100.00,
+    "blackFemaleOwnershipPercent": 0.00,
+    "votingRightsBlack": 100.00,
+    "economicInterestBlack": 100.00,
+    "calculatedPoints": 25.00,
+    "shareholders": [
+      // array from Ownership / Ownership Chain sheets – only if detailed rows exist
+      { "name": "Example Shareholder", "boPercent": 100.00, "bwoPercent": 0.00 }
+    ]
+  },
+
+  "managementControl": {
+    "calculatedPoints": 27.00,
+    "employeesCount": 150,                 // from MC / Employment Equity sheets
+    "blackBoardPercent": 50.00,
+    "blackExecPercent": 60.00,
+    "disabledPercent": 2.00,
+    "employees": [
+      // first few rows example – full list in rawData if needed
+      { "fullName": "John Doe", "gender": "Male", "race": "Black", "designation": "Executive", "disabled": false, "idNumber": "..." }
+    ]
+  },
+
+  "skillsDevelopment": {
+    "calculatedPoints": 0.00,              // in example – no data filled
+    "leviableAmount": 2753331,             // from payroll
+    "totalSpendBlack": 0,
+    "trainingProgramsCount": 0,
+    "trainings": []                        // array if filled
+  },
+
+  "preferentialProcurement": {
+    "calculatedPoints": 25.00,
+    "tmps": 4674994.56,
+    "recognizedSpend": 4674994.56,         // example assumes 100% recognition
+    "suppliersCount": 45,
+    "suppliers": [
+      { "supplierName": "Supplier A", "level": 1, "spend": 1200000, "blackOwnership": 51.00 }
+    ]
+  },
+
+  "enterpriseSupplierDevelopment": {
+    "calculatedPoints": 0.00,              // no contributions in example
+    "totalContributions": 0,
+    "esdList": []
+  },
+
+  "socioEconomicDevelopment": {
+    "calculatedPoints": 25.00,             // in example – full points?
+    "totalSpend": 46749.95,                // example 1% of deemed
+    "sedList": [
+      { "beneficiaryName": "Example Charity", "type": "Donation", "amount": 46749.95, "blackBenefitingPercent": 100.00 }
+    ]
+  },
+
+  "yes": {
+    "qualified": false,
+    "youthCount": 0,
+    "absorbedCount": 0
+  },
+
+  "scorecard": {
+    "pillars": {
+      "ownership": 25.00,
+      "managementControl": 27.00,
+      "skillsDevelopment": 0.00,
+      "preferentialProcurement": 25.00,
+      "enterpriseSupplierDevelopment": 0.00,
+      "socioEconomicDevelopment": 25.00,
+      "totalPoints": 102.00
+    },
+    "beeLevel": "LEVEL 1",
+    "recognitionLevelPercent": 135.00,
+    "blackOwnershipPercent": 100.00,
+    "blackFemaleOwnershipPercent": 0.00,
+    "valueAddingSupplier": "YES",
+    "edBeneficiary": "YES",
+    "edCategory": "CATEGORY A",
+    "subMinimumsMet": true,                // all priority pillars ≥40%
+    "discountedLevel": "LEVEL 1",
+    "yesTier": null
+  },
+
+  "rawData": {
+    // optional: full extracted rows for auditor Excel
+    "financeRaw": [/* array of rows */],
+    "ownershipRaw": [/* ... */]
+  },
+
+  "pdfCertificateData": {
+    "docNo": "BO112",
+    "approvedBy": "Executive Committee",
+    "revisionNo": "05",
+    "lastModified": "13 November 2024",
+    "verificationDate": "30 January 2026",
+    "analyst": "Johanna Mayisa",
+    "signatory": "Kuda Chitura"
+  },
+
+  "strategyPackSuggestions": [
+    "Ownership: Already maxed at 25 pts – maintain 100% black ownership.",
+    "Skills: 0 pts – recommend R150k bursaries to gain 4–6 pts.",
+    "Procurement: Strong at 25 pts – focus on 30% BWO for bonus."
+  ]
+}
+```
+
+### Why this JSON structure?
+
+- **client** → fills certificate header (name, address, reg/VAT, date)
+- **financials** → feeds Deemed NPAT, TMPS, Leviable → Procurement/Skills/ESD/SED targets
+- **ownership / mc / skills / procurement / esd / sed / yes** → raw lists for auditor Excel + %/counts for calcs
+- **scorecard** → directly populates certificate "Scorecard Overview" table + status block
+- **pdfCertificateData** → static branding / metadata (doc no, revision, signatures) – can be templated or user-input
+- **strategyPackSuggestions** → auto-generated text for presentation slides (gaps + recommendations)
+- **rawData** → backup for full auditor Excel export
+
+### How this JSON is used downstream
+
+1. **Certificate PDF**  
+   - Use jsPDF / pdf-lib to layout exactly like your example: logo, header box, entity details table, scorecard table (pillars + points), status box, footer (page X of 7).
+
+2. **Auditor Excel**  
+   - exceljs: create sheets mirroring uploaded ones + add "Calculated Scorecard" sheet with the "scorecard" object above.
+
+3. **Strategy Pack (PPTX/PDF)**  
+   - pptxgenjs: create slides with text from "strategyPackSuggestions", charts from pillar points/gaps, tables from "scorecard.pillars".
+
+This JSON is **the single return value** the pipeline should produce — clean, complete, and ready for all downstream generation steps.
+
+If you want me to refine the JSON keys, add more calculated fields, or show how to map specific cells from your filled Excel example to this structure — just point to a sheet/cell and I’ll show the extraction rule.

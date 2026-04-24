@@ -1,0 +1,60 @@
+modules = ["nodejs-20", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["twelf"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[[ports]]
+localPort = 3333
+externalPort = 3000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 24678
+externalPort = 3001
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "./dist/index.cjs"]
+build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+MONGODB_URI = "mongodb+srv://scofieldx911_db_user:bMn26IskYLn67m0n@kuriopro.qwmqzkd.mongodb.net/?appName=KurioPro"
+SMTP_HOST = "smtp.zoho.com"
+SMTP_PORT = "587"
+SMTP_USER = "contact@okiru.co.za"
+SMTP_FROM = "contact@okiru.co.za"
+OTP_LENGTH = "6"
+OTP_EXPIRY_MINUTES = "5"
+MAX_OTP_ATTEMPTS = "5"

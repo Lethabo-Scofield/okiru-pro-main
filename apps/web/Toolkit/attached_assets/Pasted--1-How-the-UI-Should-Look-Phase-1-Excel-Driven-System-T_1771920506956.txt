@@ -1,0 +1,501 @@
+### 1. How the UI Should Look (Phase 1 – Excel-Driven System)
+
+The UI should be **simple and structured around the Excel toolkit**, because Excel is the current source of truth. The goal is not a full SaaS platform yet, but a **clean operational interface for consultants and clients.**
+
+The UI should have **five main sections.**
+
+---
+
+## A. Main Navigation Layout
+
+Left sidebar or top navigation:
+
+```
+Dashboard
+Scorecard
+Pillars
+Scenarios
+Exports
+Settings
+```
+
+Simple and minimal. Avoid complex menus.
+
+---
+
+## B. Dashboard Page (Most Important)
+
+Purpose:
+Show overall compliance status.
+
+Layout:
+
+Top section:
+
+```
+Client Name
+Industry
+Province (EAP selection)
+Period (Quarter)
+```
+
+Main score area:
+
+```
+Total Score: 64.3
+Level: Level 4
+
+Target Score: 75
+Gap: 10.7
+```
+
+Pillar cards:
+
+```
+Ownership            18 / 25
+Management           12 / 19
+Skills Development   14 / 20
+Procurement          20 / 25
+ESD                  10 / 15
+```
+
+Charts:
+
+* Score over time
+
+Example:
+
+```
+Q1   58
+Q2   61
+Q3   64
+```
+
+This page replaces the Excel dashboard sheet.
+
+---
+
+## C. Scorecard Page
+
+Purpose:
+Display full scorecard calculations.
+
+Layout:
+
+Table format:
+
+```
+Element              Value      Target      Score
+
+Black Ownership      32%        40%         12
+Black Female         18%        20%          4
+Voting Rights        30%        25%          2
+```
+
+Totals at bottom:
+
+```
+Ownership Score = 18
+```
+
+This is a direct translation of Excel formulas into UI.
+
+---
+
+## D. Pillar Pages
+
+Purpose:
+Edit inputs.
+
+Each pillar needs a page.
+
+Example:
+
+### Ownership Page
+
+Fields:
+
+```
+Black Ownership %
+Black Female Ownership %
+Voting Rights %
+Net Value %
+```
+
+Editable inputs:
+
+```
+[ 32 ]
+[ 18 ]
+[ 30 ]
+[ 12 ]
+```
+
+Scores update automatically.
+
+---
+
+### Management Page
+
+Fields:
+
+```
+Total Managers
+Black Managers
+Black Female Managers
+Junior Management
+Senior Management
+```
+
+Editable:
+
+```
+Total Managers: 12
+Black Managers: 5
+Black Female: 3
+```
+
+Live recalculation.
+
+---
+
+### Skills Development Page
+
+Fields:
+
+```
+Payroll Total
+Training Spend
+Black Training Spend
+Disabled Training Spend
+```
+
+Again identical to Excel inputs.
+
+---
+
+## E. Scenario Page
+
+Purpose:
+Test interventions.
+
+Layout:
+
+Top:
+
+```
+Scenario Name: Hire Managers
+Base Score: 64
+Scenario Score: 71
+```
+
+Editable fields:
+
+```
+Black Managers: 5 → 8
+Training Spend: 200k → 350k
+```
+
+Comparison:
+
+```
+Base        Scenario
+
+Ownership 18    18
+Management 12   16
+Skills     14   17
+Total      64   71
+```
+
+This is critical.
+
+---
+
+## F. Excel Upload Page
+
+Purpose:
+Load Excel toolkit.
+
+Layout:
+
+```
+Upload GP Excel File
+[ Choose File ]
+
+Upload Button
+```
+
+After upload:
+
+```
+File Loaded Successfully
+Last Updated: Today
+```
+
+System parses Excel into inputs.
+
+---
+
+## G. Export Page
+
+Purpose:
+Generate outputs.
+
+Buttons:
+
+```
+Export Excel
+Export Slides
+Export Scorecard PDF
+```
+
+Later:
+
+Slides use Chengetai templates.
+
+---
+
+## H. Settings Page
+
+Purpose:
+
+EAP and industry selection.
+
+Example:
+
+```
+Province:
+
+[ Gauteng ▼ ]
+
+Industry:
+
+[ Manufacturing ▼ ]
+```
+
+These values affect calculations.
+
+---
+
+## 2. Do You Need a Database?
+
+### Short Answer
+
+Yes, but a **simple database**, not a complex architecture.
+
+---
+
+## 3. Why You Need a Database
+
+Even Phase 1 needs storage for:
+
+### A. Client Data
+
+```
+Client Name
+Industry
+Province
+```
+
+Otherwise everything is lost.
+
+---
+
+### B. Excel Uploads
+
+You must store:
+
+```
+Excel File
+Upload Date
+Client
+```
+
+---
+
+### C. Scorecard Inputs
+
+Example:
+
+```
+Black Managers = 5
+Training Spend = 200000
+Ownership = 32%
+```
+
+These must persist.
+
+---
+
+### D. Scenarios
+
+Example:
+
+```
+Scenario Name: Hire Managers
+
+Black Managers = 8
+```
+
+Without DB scenarios disappear.
+
+---
+
+### E. Historical Tracking
+
+Quarter tracking requires storage:
+
+```
+Q1 Score = 58
+Q2 Score = 61
+Q3 Score = 64
+```
+
+Excel alone cannot do this reliably.
+
+---
+
+## 4. Minimum Database Design
+
+Keep it simple.
+
+Tables:
+
+### Clients
+
+```
+id
+name
+industry
+province
+```
+
+---
+
+### Scorecard Inputs
+
+```
+id
+client_id
+field
+value
+period
+```
+
+Example:
+
+```
+client_id = 1
+field = black_managers
+value = 5
+period = 2025Q3
+```
+
+---
+
+### Scenarios
+
+```
+id
+client_id
+name
+base_period
+```
+
+---
+
+### Scenario Values
+
+```
+scenario_id
+field
+value
+```
+
+---
+
+### Uploads
+
+```
+id
+client_id
+file_path
+upload_date
+```
+
+---
+
+## 5. What You Do NOT Need Yet
+
+Not required now:
+
+* Multi-tenant DB
+* Complex schema
+* AI storage
+* Document indexing
+* Vector DB
+
+Those are Phase 2.
+
+---
+
+## 6. Recommended Stack
+
+Best simple setup:
+
+Backend:
+
+```
+FastAPI
+PostgreSQL
+```
+
+Frontend:
+
+```
+Next.js
+```
+
+---
+
+## 7. Correct Architecture for Now
+
+Phase 1:
+
+```
+Excel
+   ↓
+Parser
+   ↓
+Database
+   ↓
+Score Engine
+   ↓
+Dashboard
+```
+
+Phase 2:
+
+```
+Documents
+   ↓
+AI Pipeline
+   ↓
+Database
+   ↓
+Score Engine
+   ↓
+Dashboard
+```
+
+---
+
+## 8. Most Important UI Principle
+
+The UI should look like a **clean version of the Excel toolkit**, not a generic SaaS app.
+
+If a consultant can say:
+
+> "This works exactly like the Excel toolkit"
+
+then the UI is correct.

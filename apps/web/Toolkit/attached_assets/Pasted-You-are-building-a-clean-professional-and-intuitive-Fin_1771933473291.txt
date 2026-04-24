@@ -1,0 +1,86 @@
+You are building a clean, professional, and intuitive "Financials & TMPS" section for a modern B-BBEE compliance web application. This section handles historical/projected financial data (Revenue, NPAT, margins) to calculate averages, Deemed NPAT, Leviable Amount, and Total Measured Procurement Spend (TMPS) — which feeds into Procurement scorecard (max 29 points) and ESD/SED targets (% of Deemed NPAT).
+
+Goal:
+Make this feel like a smart financial dashboard: easy input, instant calcs, clear explanations, and visual impact previews. Users (CFOs, transformation managers) should quickly see historical trends, deemed adjustments, TMPS breakdowns, and how changes affect overall B-BBEE level.
+
+Core Requirements for the UI Section:
+
+1. Overall Layout & Style
+   - Full-width page/tab: "Financials & TMPS Calculator"
+   - Modern design: light mode default, blue/green accents (green for positive calcs, orange for warnings like negative NPAT)
+   - Responsive: desktop shows 2–3 column layout, mobile stacks
+   - Four zones:
+     A. Top: Summary cards (key outputs)
+     B. Left/Middle: Financials input table + calcs
+     C. Right/Bottom: TMPS inclusions/exclusions breakdown + Procurement impact preview
+
+2. Top Section – Summary Hero Cards
+   - Big title: "Financials Overview & TMPS Calculator"
+   - 4–5 cards in a row:
+     - Current Year Revenue: R XXX,XXX,XXX (editable link to input table)
+     - Current Year NPAT: R XXX,XXX,XXX (editable)
+     - NPAT Margin: X.XX% (auto-calc)
+     - Deemed NPAT: R XXX,XXX,XXX (big number, green if deemed > actual, blue if actual used)
+     - TMPS: R XXX,XXX,XXX (total measured spend)
+     - Leviable Amount: R XXX,XXX,XXX (for Skills target)
+   - Small note: "Deemed NPAT used if actual margin < 25% of industry norm (from Stats SA P0044)"
+
+3. Financials Input & Calculation Area
+   - Editable table for historical/projected years (5–10 rows, add/remove):
+     - Columns: Year (dropdown 2015–2030), Revenue (ZAR input), NPAT (ZAR input), NPAT Margin % (auto-calc), Indicative NPAT (optional manual), Industry Norm % (pull from Industry Norms section), Notes
+   - Auto-calcs below table:
+     - Last 3/5 Year Average NPAT: average of filled rows
+     - Last 3/5 Year Average Margin: average margin
+     - Industry Norm (latest for selected sector): X.XX% (link to Industry Norms dropdown)
+     - 25% of Norm: X.XX%
+     - Deemed NPAT logic (step-by-step display):
+       If actual margin ≥ 25% of norm → Use actual NPAT
+       Else → Deemed NPAT = Revenue × Industry Norm (floor negative norms at 0%)
+     - Leviable Amount: typically = Revenue or payroll (simple input field with tooltip: "Usually total payroll for Skills")
+   - Buttons: "Add Year Row", "Clear Table", "Use Latest Norms"
+
+4. TMPS (Total Measured Procurement Spend) Breakdown
+   - Collapsible card: "TMPS Calculation (Feeds Procurement Scorecard)"
+   - Two sub-tables side-by-side:
+     A. Inclusions (editable inputs):
+        - Cost of Sales
+        - Operating Expenses
+        - Capital Expenditure (if applicable)
+        - Other procurement items
+        - Auto-sum: Total Inclusions
+     B. Exclusions (checkbox list + amounts):
+        - Imports (capital goods/components for value-add in SA)
+        - Imports with no local production (brand/tech different)
+        - Salaries & wages
+        - Statutory payments (UIF, PAYE, etc.)
+        - Depreciation
+        - Bad debts
+        - Other (manual add)
+        - Auto-sum: Total Exclusions
+   - Result: TMPS = Inclusions - Exclusions (big bold number)
+   - Warning/tooltips: "Imports require ESD plan if not capital/value-add (per Code 400, Statement 400). Draft 2026 changes emphasize 100% black-owned targets."
+   - Impact preview: "Procurement spend target based on TMPS: e.g., 25% from 51% black-owned → points potential"
+
+5. Data & Integration
+   - Pull Revenue/NPAT from Client Information/Financials if pre-filled
+   - Push Deemed NPAT to ESD/SED scorecards (2%/1%/1% targets)
+   - Push TMPS to Procurement scorecard (spend % of TMPS)
+   - In Scenario mode: allow overrides (e.g., "Project higher Revenue") → show "Scenario TMPS" and deltas
+   - Draft 2026 note (toggle): "Preview new rules: 25% TMPS from 100% black-owned (7 points), etc. Pending finalisation Mar 2026"
+
+6. UX Polish & Features
+   - Instant recalc on input change (debounce 500ms)
+   - Tooltips everywhere (e.g., "Why deemed NPAT? Prevents zero targets on losses/low profits – per Codes")
+   - Charts: Line chart for Revenue/NPAT trend over years; Pie for TMPS (inclusions vs exclusions)
+   - Validation: Numbers only, warn on negative NPAT ("Deemed likely used")
+   - Toast: "Deemed NPAT updated – ESD target now R XXXk"
+   - Mobile: collapse tables to accordions
+   - Accessibility: ARIA, keyboard nav
+
+Deliverables:
+- Component structure (React + Tailwind/MUI): FinancialsTable, TMPSBreakdown, DeemedCalculator, SummaryCards
+- Example state (e.g., { years: [{year:2025, revenue:..., npat:...}], tmpsInclusions:..., exclusions:... })
+- How to integrate with Industry Norms (use selected norm %)
+- Visual suggestions: green for deemed/positive, orange warnings
+
+Make it feel accurate, transparent, and empowering — users should instantly see "If we hit this Revenue, our real targets become X."

@@ -1,0 +1,33 @@
+You are an expert React + Tailwind developer working inside the CertiHub project.
+
+We already have:
+- A "Chunks" array/object containing parsed B-BBEE certificate data for suppliers.
+- Each chunk includes fields like: supplier_id or supplier_name, expiry_date, level (B-BBEE level as number), empowering_supplier (boolean or "Yes"/"No"), upload_date or parsed_date.
+- The existing Supplier Certificate Registry table below the dashboard.
+- Dark theme with navy background (#0a1428 or similar).
+- SharePoint Sync button already present.
+
+Task:
+Create or update the top KPI dashboard section to exactly match this style and layout:
+
+- A responsive grid of 6 metric cards in one row on large screens (stack on smaller screens: 2 or 3 columns).
+- Dark glassmorphic cards with subtle bottom border gradients in different colors.
+- Each card must show:
+  1. TOTAL SUPPLIERS → big number + "in database" (teal bottom border)
+  2. VALID CERTIFICATES → big number + "up to date" (bright green bottom border)
+  3. EXPIRING SOON → big number + "within 60 days" (yellow/orange bottom border)
+  4. EXPIRED → big number + "action required" (pink/red bottom border)
+  5. AVG B-BBEE LEVEL → big number (one decimal) + "across portfolio" (blue/purple bottom border)
+  6. EMPOWERING SUPPLIERS → big number with % + "of total base" (magenta/pink bottom border)
+
+Requirements:
+- Calculate all 6 KPIs directly from the existing "chunks" data in JavaScript (no SQL, no new backend calls).
+- Use the latest chunk per supplier for level and empowering_supplier (compare by upload_date or parsed_date).
+- Make each card clickable: clicking a card should filter the Supplier Certificate Registry table below to show only the relevant suppliers (e.g. click EXPIRED → show only expired ones). Use state for filtering.
+- Match the exact card styling, fonts, and colors from the screenshot (big bold numbers ~2.5-3rem, small gray subtitles).
+- Keep the header "Certificate Database" and the filter bar (Filter suppliers..., All Levels, All Status, Export CSV) above the cards if they exist.
+- Add a small refresh icon/button near SharePoint Sync that re-calculates the KPIs when clicked.
+- Make it fully responsive and accessible.
+- Use modern React (hooks, useState, useEffect, useMemo for calculations).
+
+Output only the new/updated component code (or the changes needed) so I can paste it directly into the project. Include all calculation logic inside the component.

@@ -1,0 +1,131 @@
+Base URL
+Production (Render): https://okirudotpro-backend.onrender.com
+Development (Replit): http://localhost:5000
+
+Authentication
+The API uses session-based authentication with cookies. This means:
+
+After login/register, the server sets a session cookie automatically
+Your frontend needs to include credentials: "include" in every fetch request so the cookie gets sent along
+No tokens to manage — the session handles everything
+Example fetch setup:
+
+fetch("https://okirudotpro-backend.onrender.com/api/auth/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include",  // Required for session cookies
+  body: JSON.stringify({ username: "user", password: "pass" })
+})
+Auth Endpoints
+POST /api/auth/register
+Creates a new user and organization.
+
+Body:
+
+{
+  "username": "johndoe",
+  "password": "SecurePass123!",
+  "email": "john@example.com",
+  "fullName": "John Doe",
+  "organizationName": "My Company"
+}
+username (required, 3-50 chars)
+password (required, min 8 chars)
+email, fullName, organizationName are optional
+Response: Returns the created user and organization objects.
+
+POST /api/auth/login
+Logs in and creates a session.
+
+Body:
+
+{
+  "username": "johndoe",
+  "password": "SecurePass123!"
+}
+Response: Returns the user object.
+
+POST /api/auth/logout
+Ends the session. No body needed.
+
+GET /api/auth/me
+Returns the currently logged-in user. Use this to check if a session is still active (e.g., on page load).
+
+Response: Returns user object, or 401 if not logged in.
+
+Client Management (all require login)
+GET /api/clients
+Returns all clients belonging to the user's organization.
+
+POST /api/clients
+Creates a new client.
+
+Body:
+
+{
+  "name": "Client Company",
+  "industry": "Mining",
+  "registrationNumber": "2024/123456/07",
+  "contactEmail": "client@example.com"
+}
+GET /api/clients/:id
+Get a single client by ID.
+
+PATCH /api/clients/:id
+Update a client's details. Send only the fields you want to change.
+
+DELETE /api/clients/:id
+Delete a client and all its associated data.
+
+GET /api/clients/:id/data
+Returns ALL data for a client in one call — financial years, shareholders, ownership, employees, training programs, suppliers, procurement, ESD, SED, and scenarios. This is your main "load everything" endpoint.
+
+POST /api/clients/:id/logo
+Upload a client logo. Send as multipart/form-data with a logo file field.
+
+BEE Scorecard Data (all require login)
+Each data type follows the same pattern — create under a client, delete/update by its own ID:
+
+Data Type	Create	Delete	Update
+Shareholders	POST /api/clients/:id/shareholders	DELETE /api/shareholders/:id	PATCH /api/shareholders/:id
+Ownership	PATCH /api/clients/:id/ownership	—	—
+Employees	POST /api/clients/:id/employees	DELETE /api/employees/:id	—
+Training Programs	POST /api/clients/:id/training-programs	DELETE /api/training-programs/:id	—
+Suppliers	POST /api/clients/:id/suppliers	DELETE /api/suppliers/:id	—
+ESD Contributions	POST /api/clients/:id/esd	DELETE /api/esd/:id	—
+SED Contributions	POST /api/clients/:id/sed	DELETE /api/sed/:id	—
+Scenarios	POST /api/clients/:id/scenarios	DELETE /api/scenarios/:id	—
+Financial Years	POST /api/clients/:id/financial-years	DELETE /api/financial-years/:id	—
+Excel Import Pipeline
+POST /api/clients/:id/import
+Upload a BEE scorecard Excel file. Send as multipart/form-data with a file field.
+
+The backend parses the Excel file automatically, extracts BEE data (shareholders, employees, suppliers, etc.), and returns a pipeline result with the full scorecard calculation.
+
+GET /api/import-logs
+Returns import history. Supports query params: ?clientId=xxx
+
+POST /api/export-log
+Log an export action.
+
+GET /api/clients/:id/export-logs
+Get export history for a client.
+
+Health/Status
+GET /
+Returns {"status":"ok","name":"Okiru Backend","version":"1.0.0"}
+
+GET /api/health
+Returns status with uptime and environment info.
+
+Important Notes for Frontend Integration
+CORS: Your frontend domain needs to be in the CORS_ORIGIN env var on Render (comma-separated if multiple). For example: https://your-frontend.vercel.app
+
+Cookies: Since auth is session-based with cross-origin cookies, make sure:
+
+Every fetch uses credentials: "include"
+The backend's CORS_ORIGIN matches your frontend URL exactly
+Cookies work cross-site because sameSite: "none" and secure: true are set in production
+Error format: All errors return { "message": "..." } with an appropriate HTTP status code (400, 401, 404, 500).
+
+Rate limiting: Auth endpoints are rate-limited (max 5 attempts per 15 minutes per IP). API endpoints have a general limit of 100 requests per 15 minutes.

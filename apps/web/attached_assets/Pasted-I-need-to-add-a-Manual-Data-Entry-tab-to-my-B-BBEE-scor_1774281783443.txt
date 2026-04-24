@@ -1,0 +1,44 @@
+I need to add a "Manual Data Entry" tab to my B-BBEE scorecard application. The current UI has tabs for Templates, Classification, Extraction, and Scorecard. Please add a new tab called "Manual Entry" between Extraction and Scorecard.
+
+Requirements for the Manual Entry tab:
+
+1. **Layout & Styling**: Match the existing application's design system (same colors, fonts, spacing, card styles, and button styling as the other tabs). Do NOT use the plain white card style shown in the reference image.
+
+2. **Form Sections**: Create the following sections with appropriate inputs:
+   - OWNERSHIP METRICS:
+     * Black Ownership (%) - number input, 0-100, step 0.1
+     * Black Female Ownership (%) - number input, 0-100, step 0.1
+   
+   - MANAGEMENT CONTROL:
+     * Black Board Members (%) - number input, 0-100, step 0.1
+     * Black Executive Management (%) - number input, 0-100, step 0.1
+   
+   - SKILLS DEVELOPMENT:
+     * Skills Development Spend on Black People (R) - currency/number input
+     * Number of Black Learnerships - number input, integer
+
+3. **Custom Entity Targets**: Add a dynamic section where users can add custom entity targets. Include:
+   - An "Add Custom Entity Target" button
+   - Each custom entry should have: Entity Name (text) and Target Value (number)
+   - Ability to remove custom entries
+
+4. **Form Actions**: Add two buttons at the bottom:
+   - "Back" button that navigates to the previous tab
+   - "Generate Scorecard" button that:
+     * Validates all required fields
+     * Saves the manual entry data to the application state
+     * Skips the Templates, Classification, and Extraction phases
+     * Navigates directly to the Scorecard generation tab
+     * Displays a success toast notification
+
+5. **Form Validation**:
+   - All percentage fields must be between 0 and 100
+   - Spend amount must be a positive number
+   - Learnerships must be a non-negative integer
+   - Show inline validation errors if needed
+
+6. **Data Structure**: When submitted, the manual entry data should be structured to match the existing scorecard data model so the Scorecard component can consume it without modification.
+
+7. **State Management**: Store the manual entry data in a persistent state (localStorage or global state) so it persists if the user navigates away and returns.
+
+Please implement this tab component and integrate it into the existing tab navigation system. Use the existing project's component patterns and styling approach.

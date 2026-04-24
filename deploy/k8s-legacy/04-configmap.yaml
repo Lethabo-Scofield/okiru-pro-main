@@ -1,0 +1,123 @@
+# ConfigMap for non-sensitive configuration
+# These values can be safely committed to version control
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: okiru-pro
+data:
+  # Environment
+  NODE_ENV: "production"
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  
+  # API Configuration
+  API_PORT: "5000"
+  API_HOST: "0.0.0.0"
+  API_URL: "https://api.okiru-pro.com"
+  
+  # Web Configuration  
+  WEB_PORT: "5001"
+  WEB_HOST: "0.0.0.0"
+  NEXT_PUBLIC_API_URL: "https://api.okiru-pro.com"
+  
+  # Inter-service communication (K8s service names)
+  API_SERVER_URL: "http://api:5000"
+  COMPUTE_ENGINE_URL: "http://compute:8000"
+  
+  # Computation Engine
+  COMPUTE_PORT: "8000"
+  COMPUTE_HOST: "0.0.0.0"
+  
+  # MongoDB Configuration (non-sensitive)
+  MONGODB_HOST: "mongodb"
+  MONGODB_PORT: "27017"
+  MONGODB_OPTIONS: "retryWrites=true&w=majority"
+  
+  # ArangoDB Configuration (non-sensitive)
+  ARANGO_HOST: "arangodb"
+  ARANGO_PORT: "8529"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  
+  # CORS Settings
+  CORS_ORIGIN: "https://okiru-pro.com,https://www.okiru-pro.com"
+  CORS_ORIGINS: "https://okiru-pro.com,https://www.okiru-pro.com,http://api:5000"
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "900000"  # 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: "100"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-config
+  namespace: okiru-pro
+data:
+  # MongoDB configuration
+  mongod.conf: |
+    storage:
+      dbPath: /data/db
+      wiredTiger:
+        engineConfig:
+          cacheSizeGB: 0.25  # Limit cache for budget instances
+    systemLog:
+      destination: file
+      logAppend: true
+      path: /var/log/mongodb/mongod.log
+    net:
+      port: 27017
+      bindIp: 0.0.0.0
+    security:
+      authorization: enabled
+    operationProfiling:
+      slowOpThresholdMs: 100
+      mode: slowOp
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arangodb-config
+  namespace: okiru-pro
+data:
+  # ArangoDB startup options
+  ARANGO_OPTIONS: |
+    --log.level info
+    --server.statistics true
+    --javascript.v8-contexts 2
+    --javascript.v8-contexts-minimum 1
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: okiru-pro
+data:
+  # Redis configuration for production
+  redis.conf: |
+    # Memory management
+    maxmemory 128mb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Security
+    protected-mode yes
+    
+    # Performance
+    tcp-keepalive 300
+    timeout 0
+    
+    # Logging
+    loglevel notice

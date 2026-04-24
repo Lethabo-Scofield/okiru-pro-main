@@ -1,0 +1,71 @@
+You are building a working prototype in Replit for a B-BBEE compliance data extraction pipeline. The goal is to take a filled Excel file ("BEE Information Gathering File" template) as input, extract structured data for all pillars (Ownership, Management Control, Skills, Procurement, ESD, SED, YES, etc.), compute the scorecard (points, level, gaps), and generate real outputs: a B-BBEE Certificate PDF (matching the provided layout screenshots), an Auditor Excel pack (with raw data + calcs), and a Strategy Pack (PDF + PPTX with slides, visuals, recommendations). This must be a fully functional script/app – "maximum real and working" – running in Replit (Python or Node.js preferred).
+
+Use the provided Excel dump structure to guide parsing. Handle truncations, zeros/empties, and common issues (e.g., partial fills). Output a JSON first, then use it to generate files. Show console logs for steps, and serve downloads if web-based.
+
+Core Steps for the Replit Project:
+
+1. Setup Replit Environment
+   - Use Python 3 (with openpyxl, pandas for parsing; reportlab or pdfkit for PDF; python-pptx for PPTX; openpyxl/exceljs if Node)
+   - If Node.js: exceljs for Excel, pdf-lib for PDF, pptxgenjs for PPTX
+   - Upload the Excel dump as a file in Replit (simulate user upload)
+   - Install deps via requirements.txt or package.json (e.g., pip install openpyxl pandas reportlab python-pptx)
+
+2. Extraction Pipeline (What to Extract & How)
+   - Load Excel file (e.g., openpyxl.load_workbook('BEE Information Gathering File - Thandanani Transport.xlsx'))
+   - Sheet-by-sheet:
+     - "Instructions": Extract Measured Entity Name (row2: "Thandanani Transport"), Applicable Code ("Revised Codes"), Industry Sector ("Transport")
+     - "Finance": Extract Revenue/NPAT/Payroll (row74: revenue=8100064, npat=3425069.44), TMPS (row76: 4674994.56), inclusions/exclusions lists (rows 1–73: e.g., Commission paid, Council Levies)
+     - "Ownership": Extract shareholder rows (rows 5–106: Detail, dropdowns for Black Voting/Economic, totals like 100% BO)
+     - "Ownership Chain": Extract chain details (rows 5–106: BLACK VOTING RIGHTS, BLACK ECONOMIC INTEREST)
+     - "Management Control": Extract employee list (rows 3–506: Full Name, Gender, Race, Designation, Disabled?, ID, etc.), count by levels (Executive, Senior)
+     - "Employment Equity": Extract EE profile (rows 3–3018: similar to MC, with counts for Non-Executive)
+     - "Y.E.S Employees": Extract youth list (rows 3–1006: Name, Age, Absorbed?, etc.)
+     - "Skills Development": Extract training list (rows 3–1999: Program Name, Category, Cost columns, Learner Name, Race, etc.)
+     - "Procurement": Extract supplier list (rows 4–2000: Supplier Name, B-BBEE Level, Spend, Black Ownership, etc.)
+     - "Imports": Extract import exclusions (rows 3–2000: Amounts for Capital goods, Different Brand, No local production)
+     - "Enterprise Development": Extract ESD contributions (rows 2–39: Supplier Name, Contribution Type, Amount, etc.)
+     - "Social Development": Extract SED contributions (rows 3–100: Beneficiary Name, Type, Amount, % Black Benefiting)
+     - "Economic Development": Extract if relevant (rows 4–39: Asset Disposal, Investment, Property)
+     - "Empowerment Financing": Extract financing details (rows 4–41: TI - Transformational Infrastructure, Black SME, etc.)
+     - "AFS - LTI/STI": Extract Access to Financial Services (rows 7–17: Contributions by type like Black SME's Equipment)
+     - "Definitions": Ignore or use for tooltips (definitions text)
+   - Handle truncation: Assume zeros for empty lists; sum where possible (e.g., total spend); fuzzy match columns (e.g., "Spend *" → spend)
+   - Output JSON: Structured as below example – include raw lists for auditor export, calculated points for scorecard
+
+3. Scorecard Calculation (What Next After Extraction)
+   - Use extracted JSON to compute:
+     - Deemed NPAT: If margin <25% norm (from Norms – use 2.69% for Transport) → Revenue * norm
+     - TMPS: Inclusions - Exclusions from Finance/Imports
+     - Pillar points: Ownership (sum % BO * pts), MC (% black by level * pts), Skills (spend % leviable * pts), etc.
+     - Total points, level (≥100=Level 1@135%), sub-minimums, discounting, YES tier
+   - Add gaps/suggestions: e.g., if Skills=0, suggest "Add R150k bursaries"
+
+4. Generate Outputs (Using JSON)
+   - Certificate PDF: Match screenshots – Page 1: Logo, Title, Entity, Date; Page 2: Details table, Scorecard table (pillars pts), BEE Status table
+     - Use reportlab/pdfkit: Add borders, bold text, badges (e.g., "LEVEL 1")
+   - Auditor Excel: Replicate sheets with raw data + add "Scorecard" sheet with totals/formulas
+     - Use openpyxl: Write rows, add SUM/IF formulas
+   - Strategy Pack PPTX/PDF: 10 slides – Cover, Scorecard Overview, Per-Pillar (charts), Gaps (bars), Recommendations (from suggestions), Next Steps
+     - Use python-pptx: Add tables, bar charts (e.g., pillar points vs targets), export to PDF via unoconv or similar
+
+5. Example JSON Output (Show This in Code)
+   {
+     "client": { "name": "Thandanani Transport", "registration": "2006/037260/23", ... },
+     "financials": { "revenue": 8100064, "npat": 3425069.44, "tmps": 4674994.56 },
+     "ownership": { "blackOwnershipPercent": 100.00, "calculatedPoints": 25.00, "shareholders": [] },
+     "mc": { "calculatedPoints": 27.00, "employees": [] },
+     "skills": { "calculatedPoints": 0.00, "trainings": [] },
+     "procurement": { "calculatedPoints": 25.00, "suppliers": [] },
+     "esd": { "calculatedPoints": 0.00, "esdList": [] },
+     "sed": { "calculatedPoints": 25.00, "sedList": [] },
+     "yes": { "qualified": false },
+     "scorecard": { "totalPoints": 102.00, "beeLevel": "LEVEL 1" },
+     "strategyPackSuggestions": [ "Improve Skills..." ]
+   }
+
+6. Replit Project Structure
+   - main.py (or index.js): Load file, parse, calc, generate outputs, save to /outputs folder
+   - Run: "python main.py" → console: "Extracted... Calculated Level 1... Generated certificate.pdf"
+   - Web if needed: Simple Flask/Express server for upload/test
+
+Deliver a full, working Replit code – test with the dump, handle truncations as zeros. Make it maximum real!
