@@ -164,7 +164,7 @@ export default function ToolkitView() {
   }
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />

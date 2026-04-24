@@ -126,9 +126,9 @@ function statusLabel(status: string) {
 
 function statusPillClass(status: string) {
   const base = "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium";
-  if (status === "complete") return `${base} bg-emerald-500/15 text-emerald-400`;
+  if (status === "complete") return `${base} bg-status-success/15 text-status-success`;
   if (status === "in_progress") return `${base} bg-amber-500/15 text-amber-400`;
-  return `${base} bg-white/[0.06] text-[#8e8e93]`;
+  return `${base} bg-card/[0.06] text-[#8e8e93]`;
 }
 
 export default function Dashboard() {
@@ -332,22 +332,22 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="font-sans min-h-screen bg-black" style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}>
+    <div className="font-sans min-h-screen bg-background text-foreground" style={{ letterSpacing: '-0.011em' }}>
 
       {showTour && page === 'home' && <OnboardingTour onComplete={completeTour} onDismiss={dismissTour} />}
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }} data-testid="modal-delete-overlay">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xl" onClick={() => { if (!isDeleting) setDeleteConfirm(null); }} />
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-xl" onClick={() => { if (!isDeleting) setDeleteConfirm(null); }} />
           <div className="relative bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm p-7 scale-in" style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.5)' }}>
             <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-5">
               <Trash2 className="h-6 w-6 text-red-500" />
             </div>
-            <h3 className="text-[17px] font-semibold text-white text-center mb-2 tracking-tight">Delete Template?</h3>
+            <h3 className="text-[17px] font-semibold text-foreground text-center mb-2 tracking-tight">Delete Template?</h3>
             <p className="text-[13px] text-[#8e8e93] text-center mb-7 leading-relaxed">This action cannot be undone. The template and all its entities will be permanently removed.</p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-[#2c2c2e] text-[#d1d1d6] rounded-xl hover:bg-[#3a3a3c] smooth press-sm font-medium text-[13px]" data-testid="button-cancel-delete">Cancel</button>
-              <button onClick={() => deleteConfirm !== null && deleteTemplate(deleteConfirm)} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 smooth press-sm font-semibold text-[13px] shadow-sm shadow-red-500/20" data-testid="button-confirm-delete">
+              <button onClick={() => deleteConfirm !== null && deleteTemplate(deleteConfirm)} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500 text-foreground rounded-xl hover:bg-red-600 smooth press-sm font-semibold text-[13px] shadow-sm shadow-red-500/20" data-testid="button-confirm-delete">
                 {isDeleting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Deleting...</> : "Delete"}
               </button>
             </div>
@@ -355,17 +355,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+      <header className="h-14 shrink-0 z-20 sticky top-0 bg-background" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/hub" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0">
+            <Link href="/hub" className="flex items-center gap-2 text-[#98989f] hover:text-foreground smooth group shrink-0">
               <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
               <span className="text-[13px] font-medium tracking-wide">Back to Hub</span>
             </Link>
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
             <button onClick={() => goTo('home')} className="flex items-center gap-3 press-sm" data-testid="logo-home">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">Dashboard</span>
+              <span className="text-lg font-semibold tracking-tight text-foreground border-l border-[#2c2c2e] pl-3">Dashboard</span>
             </button>
           </div>
 
@@ -380,7 +380,7 @@ export default function Dashboard() {
               <HelpCircle className="h-4 w-4" />
             </button>
             <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
-              <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.12] items-center justify-center text-white font-semibold text-[9px]">
+              <span className="inline-flex h-5 w-5 rounded-full bg-card/[0.12] items-center justify-center text-foreground font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
               <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
@@ -402,7 +402,7 @@ export default function Dashboard() {
         {page === 'home' && (
           <section data-testid="page-home" className="fade-in">
             <div className="mb-10">
-              <h1 className="text-[32px] font-bold tracking-[-0.03em] text-white">Dashboard</h1>
+              <h1 className="text-[32px] font-bold tracking-[-0.03em] text-foreground">Dashboard</h1>
               <p className="text-[15px] text-[#98989f] mt-1">Choose what you want to do.</p>
             </div>
 
@@ -414,10 +414,10 @@ export default function Dashboard() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">Entity Templates</div>
+                    <div className="text-[15px] font-semibold tracking-tight text-foreground">Entity Templates</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse, edit, or create templates.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                  <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
                     <Plus className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
@@ -433,10 +433,10 @@ export default function Dashboard() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">Create Scorecard</div>
+                    <div className="text-[15px] font-semibold tracking-tight text-foreground">Create Scorecard</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Build B-BBEE scorecards manually or upload documents.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                  <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
                     <FileText className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
@@ -452,10 +452,10 @@ export default function Dashboard() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">View Scorecards</div>
+                    <div className="text-[15px] font-semibold tracking-tight text-foreground">View Scorecards</div>
                     <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Browse companies and compliance.</div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                  <div className="h-10 w-10 rounded-xl bg-card/[0.06] grid place-items-center group-hover:bg-card/[0.18]/15 smooth">
                     <Building2 className="h-5 w-5 text-[#d1d1d6]" />
                   </div>
                 </div>
@@ -482,11 +482,11 @@ export default function Dashboard() {
                   </button>
                   <span className="text-[11px] text-[#636366] font-medium">/ Entity Templates</span>
                 </div>
-                <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Entity Templates</h1>
+                <h1 className="text-[28px] font-bold tracking-[-0.03em] text-foreground">Entity Templates</h1>
                 <p className="text-[14px] text-[#98989f] mt-1">Start from a template, then customise fields & extraction rules.</p>
               </div>
               <Link href="/builder"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.12] text-white hover:bg-white/[0.18] text-[13px] font-semibold smooth press-sm shrink-0 shadow-sm shadow-black/10"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card/[0.12] text-foreground hover:bg-card/[0.18] text-[13px] font-semibold smooth press-sm shrink-0 shadow-sm shadow-black/10"
                 data-testid="button-build-entity"
               >
                 <Sparkles className="h-4 w-4" />
@@ -500,7 +500,7 @@ export default function Dashboard() {
                 <input
                   type="text"
                   placeholder="Search templates..."
-                  className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
+                  className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
                   data-testid="input-template-search"
@@ -513,14 +513,14 @@ export default function Dashboard() {
                 {[1, 2, 3].map(i => (
                   <div key={i} className="rounded-2xl bg-[#1c1c1e] p-5">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="h-10 w-10 rounded-xl bg-white/[0.06] shimmer" />
+                      <div className="h-10 w-10 rounded-xl bg-card/[0.06] shimmer" />
                       <div className="flex-1">
-                        <div className="h-4 bg-white/[0.06] rounded-lg w-2/3 mb-2 shimmer" />
-                        <div className="h-3 bg-white/[0.06] rounded-lg w-1/3 shimmer" />
+                        <div className="h-4 bg-card/[0.06] rounded-lg w-2/3 mb-2 shimmer" />
+                        <div className="h-3 bg-card/[0.06] rounded-lg w-1/3 shimmer" />
                       </div>
                     </div>
-                    <div className="h-3 bg-white/[0.04] rounded-lg w-full mb-2 shimmer" />
-                    <div className="h-3 bg-white/[0.04] rounded-lg w-4/5 shimmer" />
+                    <div className="h-3 bg-card/[0.04] rounded-lg w-full mb-2 shimmer" />
+                    <div className="h-3 bg-card/[0.04] rounded-lg w-4/5 shimmer" />
                   </div>
                 ))}
               </div>
@@ -530,22 +530,22 @@ export default function Dashboard() {
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-[12px] font-semibold text-[#98989f] uppercase tracking-wider">Toolkit Templates</h2>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-[#d1d1d6] font-semibold">{filteredStoredTemplates.length}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-card/[0.08] text-[#d1d1d6] font-semibold">{filteredStoredTemplates.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {filteredStoredTemplates.map((t, idx) => {
                     const sectorColors: Record<string, string> = {
                       RCOGP: 'bg-blue-500/15 text-blue-400',
-                      ICT: 'bg-purple-500/15 text-purple-400',
+                      ICT: 'bg-primary/15 text-primary',
                       FSC: 'bg-amber-500/15 text-amber-400',
                       AGRI: 'bg-green-500/15 text-green-400',
                     };
-                    const sectorBadge = sectorColors[t.sectorCode || ''] || 'bg-white/[0.08] text-[#d1d1d6]';
+                    const sectorBadge = sectorColors[t.sectorCode || ''] || 'bg-card/[0.08] text-[#d1d1d6]';
                     return (
                     <div key={t.id} className={`rounded-2xl bg-[#1c1c1e] p-5 hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-${Math.min(idx + 1, 6)}`} data-testid={`stored-template-${t.id}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-[14px] font-semibold tracking-tight text-white">{t.name}</div>
+                          <div className="text-[14px] font-semibold tracking-tight text-foreground">{t.name}</div>
                           <div className="text-[11px] text-[#98989f] mt-1">
                             {t.pillarPacks
                               ? `${t.pillarPacks.length} pillars · ${t.pillarPacks.reduce((s: number, p: any) => s + (p.criteriaCount || 0), 0)} criteria · ${(t.entities || []).length} entities`
@@ -557,7 +557,7 @@ export default function Dashboard() {
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${sectorBadge}`}>{t.sectorCode}</span>
                           )}
                           {t.scorecardType && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${t.scorecardType === 'QSE' ? 'bg-orange-500/15 text-orange-400' : 'bg-emerald-500/15 text-emerald-400'}`}>{t.scorecardType}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${t.scorecardType === 'QSE' ? 'bg-orange-500/15 text-orange-400' : 'bg-status-success/15 text-status-success'}`}>{t.scorecardType}</span>
                           )}
                         </div>
                       </div>
@@ -578,7 +578,7 @@ export default function Dashboard() {
                       <div className="mt-4">
                         <div className="flex flex-wrap gap-1.5">
                           {(t.entities || []).slice(0, 4).map((e: any, i: number) => (
-                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#8e8e93] font-medium">{e.label}</span>
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-card/[0.06] text-[#8e8e93] font-medium">{e.label}</span>
                           ))}
                           {(t.entities || []).length > 4 && <span className="text-[10px] text-[#636366] font-medium self-center">+{(t.entities || []).length - 4} more</span>}
                         </div>
@@ -598,7 +598,7 @@ export default function Dashboard() {
                           )}
                           <button
                             onClick={() => { setEditingTemplateId(t.id); navigate(`/builder?template=${t.id}`); }}
-                            className="p-2 text-[#636366] hover:text-[#d1d1d6] hover:bg-white/[0.18]/10 rounded-lg smooth press-sm"
+                            className="p-2 text-[#636366] hover:text-[#d1d1d6] hover:bg-card/[0.18]/10 rounded-lg smooth press-sm"
                             title={t.isOntology ? "Load in builder" : "Edit template"}
                             data-testid={`button-edit-${t.id}`}
                           >
@@ -608,7 +608,7 @@ export default function Dashboard() {
                           </button>
                         </div>
                         <Link href={`/processor?new=true&template=${t.id}`}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/[0.12] text-white hover:bg-white/[0.18] text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/8"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-card/[0.12] text-foreground hover:bg-card/[0.18] text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/8"
                           data-testid={`button-use-${t.id}`}
                         >
                           Use Template
@@ -645,12 +645,12 @@ export default function Dashboard() {
                   </button>
                   <span className="text-[11px] text-[#636366] font-medium">/ Scorecards</span>
                 </div>
-                <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Company Scorecards</h1>
+                <h1 className="text-[28px] font-bold tracking-[-0.03em] text-foreground">Company Scorecards</h1>
                 <p className="text-[14px] text-[#98989f] mt-1">Search and filter companies by industry and status.</p>
               </div>
               <Link
                 href="/processor?new=true"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-8"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card/[0.12] hover:bg-card/[0.18] text-foreground text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-8"
                 data-testid="button-new-assessment"
               >
                 <UploadCloud className="h-4 w-4" />
@@ -661,13 +661,13 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="rounded-2xl bg-[#1c1c1e] p-5 fade-in">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Total Clients</div>
-                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-companies">
+                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-foreground" data-testid="stat-companies">
                   {loadingSessions ? <Loader2 className="w-6 h-6 animate-spin text-[#636366] inline-block" /> : stats.total}
                 </div>
               </div>
               <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-1">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Industries</div>
-                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-industries">
+                <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-foreground" data-testid="stat-industries">
                   {loadingSessions ? '—' : stats.industries}
                 </div>
                 <div className="text-[10px] text-[#636366] mt-2">{stats.industryList || 'No sessions yet'}</div>
@@ -676,7 +676,7 @@ export default function Dashboard() {
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Statuses</div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
                   <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 font-medium">In Progress: {stats.inProgress}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">Complete: {stats.complete}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-status-success/15 text-status-success font-medium">Complete: {stats.complete}</span>
                 </div>
               </div>
             </div>
@@ -691,7 +691,7 @@ export default function Dashboard() {
                       id="companySearch"
                       type="text"
                       placeholder="Search by company name or ID..."
-                      className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
+                      className="w-full rounded-xl bg-[#2c2c2e] pl-10 pr-4 py-2.5 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.15] smooth placeholder:text-[#48484a]"
                       value={companySearch}
                       onChange={(e) => setCompanySearch(e.target.value)}
                       data-testid="input-company-search"
@@ -733,7 +733,7 @@ export default function Dashboard() {
 
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
               <div className="px-5 py-3.5 flex items-center justify-between">
-                <div className="text-[13px] font-semibold text-white">Client Assessments</div>
+                <div className="text-[13px] font-semibold text-foreground">Client Assessments</div>
                 <div className="text-[11px] text-[#98989f] font-medium" data-testid="results-count">
                   {loadingSessions ? <Loader2 className="w-3 h-3 animate-spin inline-block" /> : `${filteredCompanies.length} result${filteredCompanies.length !== 1 ? 's' : ''}`}
                 </div>
@@ -747,7 +747,7 @@ export default function Dashboard() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-[13px]">
-                    <thead className="bg-white/[0.03]">
+                    <thead className="bg-card/[0.03]">
                       <tr className="text-left text-[10px] text-[#98989f] uppercase tracking-wider">
                         <th className="px-5 py-2.5 font-semibold">Company</th>
                         <th className="px-5 py-2.5 font-semibold">Type</th>
@@ -766,16 +766,16 @@ export default function Dashboard() {
                         const progress = getStepProgress(c.currentStep, c.flowMode);
                         return (
                         <tr key={c.id}
-                          className="hover:bg-white/[0.03] smooth group"
+                          className="hover:bg-card/[0.03] smooth group"
                           data-testid={`company-row-${c.id}`}
                           onMouseEnter={() => setHoveredRow(c.sessionId)}
                           onMouseLeave={() => { if (deleteSessionConfirm !== c.sessionId) setHoveredRow(null); }}
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
-                              <div className="font-semibold text-white">{c.name}</div>
+                              <div className="font-semibold text-foreground">{c.name}</div>
                               {c.isComplete && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold tracking-wider uppercase">Done</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-status-success/15 text-status-success font-semibold tracking-wider uppercase">Done</span>
                               )}
                             </div>
                             <div className="text-[10px] text-[#636366] mt-0.5">{c.subtitle}</div>
@@ -783,7 +783,7 @@ export default function Dashboard() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-1.5">
                               {isBuild ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold">
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
                                   <Wrench className="h-2.5 w-2.5" />
                                   Build
                                 </span>
@@ -798,8 +798,8 @@ export default function Dashboard() {
                           <td className="px-5 py-3.5">
                             {c.isComplete ? (
                               <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                                <span className="text-[11px] text-emerald-400 font-medium">Complete</span>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-status-success" />
+                                <span className="text-[11px] text-status-success font-medium">Complete</span>
                               </div>
                             ) : (
                               <div className="min-w-[140px]">
@@ -807,7 +807,7 @@ export default function Dashboard() {
                                   <span className="text-[10px] text-[#8e8e93] font-medium">{progress.stepLabel}</span>
                                   <span className="text-[10px] text-[#636366] font-mono">{progress.percentage}%</span>
                                 </div>
-                                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                                <div className="h-1.5 rounded-full bg-card/[0.06] overflow-hidden">
                                   <div
                                     className="h-full rounded-full transition-all duration-500"
                                     style={{
@@ -847,7 +847,7 @@ export default function Dashboard() {
                                   <button
                                     onClick={() => handleDeleteSession(c.sessionId)}
                                     disabled={isDeletingSession}
-                                    className="px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-400 text-white text-[11px] font-semibold smooth press-sm disabled:opacity-60"
+                                    className="px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-400 text-foreground text-[11px] font-semibold smooth press-sm disabled:opacity-60"
                                     data-testid={`button-confirm-delete-${c.id}`}
                                   >
                                     {isDeletingSession ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Yes, delete'}
@@ -855,7 +855,7 @@ export default function Dashboard() {
                                   <button
                                     onClick={() => { setDeleteSessionConfirm(null); setHoveredRow(null); }}
                                     disabled={isDeletingSession}
-                                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-[#8e8e93] text-[11px] font-medium smooth press-sm"
+                                    className="px-2.5 py-1 rounded-lg bg-card/[0.06] hover:bg-card/[0.1] text-[#8e8e93] text-[11px] font-medium smooth press-sm"
                                     data-testid={`button-cancel-delete-${c.id}`}
                                   >
                                     Cancel
@@ -867,7 +867,7 @@ export default function Dashboard() {
                                     <button
                                       onClick={() => moveRow(c.sessionId, 'up')}
                                       disabled={isFirst}
-                                      className="p-1 rounded text-[#636366] hover:text-white hover:bg-white/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
+                                      className="p-1 rounded text-[#636366] hover:text-foreground hover:bg-card/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
                                       title="Move up"
                                       data-testid={`button-move-up-${c.id}`}
                                     >
@@ -876,7 +876,7 @@ export default function Dashboard() {
                                     <button
                                       onClick={() => moveRow(c.sessionId, 'down')}
                                       disabled={isLast}
-                                      className="p-1 rounded text-[#636366] hover:text-white hover:bg-white/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
+                                      className="p-1 rounded text-[#636366] hover:text-foreground hover:bg-card/[0.08] smooth press-sm disabled:opacity-20 disabled:cursor-not-allowed"
                                       title="Move down"
                                       data-testid={`button-move-down-${c.id}`}
                                     >
@@ -895,7 +895,7 @@ export default function Dashboard() {
                                     c.toolkitClientId ? (
                                       <Link
                                         href={`/toolkit/${c.toolkitClientId}`}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-status-success hover:bg-status-success text-foreground text-[12px] font-semibold smooth press-sm"
                                         data-testid={`button-toolkit-${c.id}`}
                                       >
                                         <ExternalLink className="h-3 w-3" />
@@ -904,7 +904,7 @@ export default function Dashboard() {
                                     ) : (
                                       <Link
                                         href={`/toolkit?session=${c.sessionId}`}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-status-success hover:bg-status-success text-foreground text-[12px] font-semibold smooth press-sm"
                                         data-testid={`button-toolkit-${c.id}`}
                                       >
                                         <ExternalLink className="h-3 w-3" />
@@ -914,7 +914,7 @@ export default function Dashboard() {
                                   ) : (
                                     <Link
                                       href={`/processor?session=${c.sessionId}`}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white text-[12px] font-semibold smooth press-sm"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card/[0.12] hover:bg-card/[0.18] text-foreground text-[12px] font-semibold smooth press-sm"
                                       data-testid={`button-resume-${c.id}`}
                                     >
                                       <Play className="h-2.5 w-2.5" />

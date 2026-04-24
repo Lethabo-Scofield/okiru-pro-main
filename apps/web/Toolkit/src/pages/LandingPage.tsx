@@ -1,22 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
-    --ink:   #0a0a0f;
-    --ink2:  #111018;
-    --rule:  rgba(255,255,255,0.07);
-    --muted: rgba(255,255,255,0.32);
-    --body:  rgba(255,255,255,0.56);
-    --hi:    rgba(255,255,255,0.92);
-    --pur:   #6366f1;
-    --pur-d: #4338ca;
-    --pur-l: #818cf8;
-    --mono:  'Geist Mono', monospace;
-    --serif: 'Instrument Serif', serif;
-    --sans:  'Geist', sans-serif;
+    --ink:   #fafafa;
+    --ink2:  #ffffff;
+    --rule:  rgba(0,0,0,0.08);
+    --muted: #737373;
+    --body:  #525252;
+    --hi:    #171717;
+    --pur:   #6a9b82;
+    --pur-d: #4f7d68;
+    --pur-l: #94bea1;
+    --mono:  'JetBrains Mono', 'Roboto Mono', monospace;
+    --serif: 'Season', 'Inter', system-ui, sans-serif;
+    --sans:  'Season', 'Inter', system-ui, sans-serif;
 
     background: var(--ink);
     color: var(--body);
@@ -27,7 +27,7 @@ const GLOBAL_CSS = `
     overflow-x: hidden;
     min-height: 100%;
   }
-  .okiru-root ::selection { background: rgba(99,102,241,0.25); }
+  .okiru-root ::selection { background: rgba(106,155,130,0.25); }
 
   .okiru-root .okiru-grain {
     position: fixed; inset: 0; z-index: 500; pointer-events: none;
@@ -134,7 +134,7 @@ const GLOBAL_CSS = `
     padding: 12px 22px; border-radius: 4px;
     transition: color .2s, border-color .2s;
   }
-  .okiru-root .ok-btn-sec:hover { color: var(--pur-l); border-color: rgba(99,102,241,.35); }
+  .okiru-root .ok-btn-sec:hover { color: var(--pur-l); border-color: rgba(106,155,130,.35); }
 
   /* stats */
   .okiru-root .ok-stats {
@@ -183,40 +183,40 @@ const GLOBAL_CSS = `
   /* scorecard widget */
   .okiru-root .ok-sc {
     position: relative; border-radius: 12px; overflow: hidden;
-    background: #0d0c15;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.08);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(106,155,130,0.08);
     font-family: var(--mono);
   }
   .okiru-root .ok-sc::before {
     content: ''; position: absolute; inset: -1px; border-radius: 13px; z-index: -1;
-    background: linear-gradient(135deg,rgba(99,102,241,0.15),transparent 60%);
+    background: linear-gradient(135deg,rgba(106,155,130,0.15),transparent 60%);
     pointer-events: none;
   }
   .okiru-root .ok-sc-chrome {
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    background: rgba(0,0,0,0.02);
   }
   .okiru-root .ok-sc-dots { display: flex; gap: 5px; }
   .okiru-root .ok-sc-dot { width: 9px; height: 9px; border-radius: 50%; }
-  .okiru-root .ok-sc-url { font-size: 10px; letter-spacing: .06em; color: rgba(255,255,255,.22); }
-  .okiru-root .ok-sc-live { display: flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(255,255,255,.3); }
+  .okiru-root .ok-sc-url { font-size: 10px; letter-spacing: .06em; color: rgba(0,0,0,.22); }
+  .okiru-root .ok-sc-live { display: flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(0,0,0,.3); }
   @keyframes okiru-scPulse {
-    0%,100% { opacity:1; box-shadow: 0 0 6px #6366f1; }
-    50% { opacity:.3; box-shadow: 0 0 2px #6366f1; }
+    0%,100% { opacity:1; box-shadow: 0 0 6px #6a9b82; }
+    50% { opacity:.3; box-shadow: 0 0 2px #6a9b82; }
   }
   .okiru-root .ok-sc-livedot {
     width: 5px; height: 5px; border-radius: 50%;
-    background: #6366f1; box-shadow: 0 0 6px #6366f1;
+    background: #6a9b82; box-shadow: 0 0 6px #6a9b82;
     animation: okiru-scPulse 1.8s ease-in-out infinite;
   }
   .okiru-root .ok-sc-body { padding: 20px 20px 18px; }
   .okiru-root .ok-sc-level-row {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 20px; padding-bottom: 18px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
   }
   .okiru-root .ok-sc-level-l { display: flex; align-items: baseline; gap: 8px; }
   .okiru-root .ok-sc-num {
@@ -224,28 +224,28 @@ const GLOBAL_CSS = `
     font-size: 4rem; line-height: 1; color: var(--hi); letter-spacing: -0.04em;
     transition: opacity .4s ease, transform .4s ease;
   }
-  .okiru-root .ok-sc-denom { font-size: 12px; color: rgba(255,255,255,.25); margin-top: 4px; }
+  .okiru-root .ok-sc-denom { font-size: 12px; color: rgba(0,0,0,.25); margin-top: 4px; }
   .okiru-root .ok-sc-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
   .okiru-root .ok-sc-badge-rec {
     font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
     padding: 3px 10px; border-radius: 3px;
-    color: #818cf8; background: rgba(99,102,241,.12);
-    border: 1px solid rgba(99,102,241,.2);
+    color: #94bea1; background: rgba(106,155,130,.12);
+    border: 1px solid rgba(106,155,130,.2);
     transition: opacity .4s ease;
   }
   .okiru-root .ok-sc-badge-sub {
-    font-size: 10px; color: rgba(255,255,255,.28);
+    font-size: 10px; color: rgba(0,0,0,.28);
     transition: opacity .4s ease;
   }
   .okiru-root .ok-sc-pillars { display: flex; flex-direction: column; gap: 11px; margin-bottom: 18px; }
   .okiru-root .ok-sc-pillar-meta {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
   }
-  .okiru-root .ok-sc-pillar-name { font-size: 11px; color: rgba(255,255,255,.38); }
-  .okiru-root .ok-sc-pillar-val { font-size: 11px; color: rgba(255,255,255,.22); }
+  .okiru-root .ok-sc-pillar-name { font-size: 11px; color: rgba(0,0,0,.38); }
+  .okiru-root .ok-sc-pillar-val { font-size: 11px; color: rgba(0,0,0,.22); }
   .okiru-root .ok-sc-track {
     height: 4px; border-radius: 2px; overflow: hidden;
-    background: rgba(255,255,255,0.05);
+    background: rgba(0,0,0,0.05);
   }
   .okiru-root .ok-sc-fill {
     height: 100%; border-radius: 2px;
@@ -258,33 +258,33 @@ const GLOBAL_CSS = `
   }
   .okiru-root .ok-sc-fill::after {
     content: ''; position: absolute; top: 0; left: -60%; width: 60%; height: 100%;
-    background: linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent);
+    background: linear-gradient(90deg,transparent,rgba(0,0,0,0.35),transparent);
     animation: okiru-shimmer 2.2s ease-in-out infinite;
   }
   .okiru-root .ok-sc-foot {
     display: flex; align-items: center; justify-content: space-between;
-    padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 14px; border-top: 1px solid rgba(0,0,0,0.05);
   }
   .okiru-root .ok-sc-ok {
     display: flex; align-items: center; gap: 6px;
-    font-size: 10px; color: rgba(255,255,255,.3);
+    font-size: 10px; color: rgba(0,0,0,.3);
     transition: opacity .5s ease;
   }
   .okiru-root .ok-sc-export {
-    font-size: 10px; color: rgba(99,102,241,.7);
-    background: none; border: 1px solid rgba(99,102,241,.2);
+    font-size: 10px; color: rgba(106,155,130,.7);
+    background: none; border: 1px solid rgba(106,155,130,.2);
     padding: 4px 11px; border-radius: 3px; cursor: pointer;
     font-family: var(--mono); letter-spacing: .04em;
     transition: background .2s, color .2s, opacity .5s ease;
   }
-  .okiru-root .ok-sc-export:hover { background: rgba(99,102,241,.12); color: var(--pur-l); }
+  .okiru-root .ok-sc-export:hover { background: rgba(106,155,130,.12); color: var(--pur-l); }
   .okiru-root .ok-sc-replay {
     display: block; width: 100%; text-align: center; padding: 10px 0 4px;
     font-size: 10px; font-family: var(--mono);
-    color: rgba(255,255,255,.15); letter-spacing: .08em; cursor: pointer;
+    color: rgba(0,0,0,.15); letter-spacing: .08em; cursor: pointer;
     transition: color .2s; background: none; border: none;
   }
-  .okiru-root .ok-sc-replay:hover { color: rgba(99,102,241,.6); }
+  .okiru-root .ok-sc-replay:hover { color: rgba(106,155,130,.6); }
 
   /* features */
   .okiru-root .ok-feats { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid var(--rule); }
@@ -293,10 +293,10 @@ const GLOBAL_CSS = `
     border-top: 1px solid var(--rule); transition: background .35s; cursor: default;
   }
   .okiru-root .ok-feat:last-child { border-right: none; }
-  .okiru-root .ok-feat:hover { background: rgba(99,102,241,0.04); }
+  .okiru-root .ok-feat:hover { background: rgba(106,155,130,0.04); }
   .okiru-root .ok-feat-idx {
     font-family: var(--mono); font-size: 10px; text-transform: uppercase;
-    letter-spacing: .12em; color: rgba(99,102,241,.45); margin-bottom: 22px;
+    letter-spacing: .12em; color: rgba(106,155,130,.45); margin-bottom: 22px;
   }
   .okiru-root .ok-feat-h {
     font-family: var(--serif); font-size: 1.45rem; font-weight: 400;
@@ -311,10 +311,10 @@ const GLOBAL_CSS = `
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
   }
   .okiru-root .ok-sector-card {
-    background: rgba(255,255,255,0.02); border: 1px solid var(--rule);
+    background: rgba(0,0,0,0.02); border: 1px solid var(--rule);
     border-radius: 10px; padding: 28px 24px; transition: background .3s, border-color .3s;
   }
-  .okiru-root .ok-sector-card:hover { background: rgba(99,102,241,0.04); border-color: rgba(99,102,241,.2); }
+  .okiru-root .ok-sector-card:hover { background: rgba(106,155,130,0.04); border-color: rgba(106,155,130,.2); }
   .okiru-root .ok-sector-badge {
     display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 500;
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -343,49 +343,49 @@ const GLOBAL_CSS = `
   .okiru-root .ok-eb-list li { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: var(--body); }
   .okiru-root .ok-eb-dot {
     flex-shrink: 0; width: 5px; height: 5px; border-radius: 50%;
-    background: var(--pur); box-shadow: 0 0 6px rgba(99,102,241,.5);
+    background: var(--pur); box-shadow: 0 0 6px rgba(106,155,130,.5);
     margin-top: 8px;
   }
 
   /* pipeline card */
   .okiru-root .ok-pipe-card {
-    background: #0d0c15; border: 1px solid rgba(255,255,255,.07);
+    background: #ffffff; border: 1px solid rgba(0,0,0,.07);
     border-radius: 10px; overflow: hidden;
     box-shadow: 0 24px 64px rgba(0,0,0,.5); font-family: var(--mono);
   }
   .okiru-root .ok-pipe-hdr {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,.06);
-    background: rgba(255,255,255,.015);
+    padding: 14px 18px; border-bottom: 1px solid rgba(0,0,0,.06);
+    background: rgba(0,0,0,.015);
   }
-  .okiru-root .ok-pipe-title { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.35); }
+  .okiru-root .ok-pipe-title { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(0,0,0,.35); }
   .okiru-root .ok-pipe-badge {
-    font-size: 10px; font-family: var(--mono); color: #34d399;
-    background: rgba(6,95,70,.2); border: 1px solid rgba(52,211,153,.2);
+    font-size: 10px; font-family: var(--mono); color: #6a9b82;
+    background: rgba(226,232,224,1); border: 1px solid rgba(106,155,130,.2);
     padding: 2px 10px; border-radius: 3px; letter-spacing: .04em;
   }
   .okiru-root .ok-pipe-step {
     display: flex; align-items: center; gap: 14px;
-    padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,.04);
+    padding: 16px 18px; border-bottom: 1px solid rgba(0,0,0,.04);
     transition: background .2s;
   }
   .okiru-root .ok-pipe-step:last-child { border-bottom: none; }
-  .okiru-root .ok-pipe-step:hover { background: rgba(99,102,241,.03); }
+  .okiru-root .ok-pipe-step:hover { background: rgba(106,155,130,.03); }
   .okiru-root .ok-pipe-num {
     width: 28px; height: 28px; border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
     font-size: 11px; font-weight: 600; font-family: var(--sans); flex-shrink: 0;
   }
-  .okiru-root .ok-pipe-step-name { font-size: 12px; color: rgba(255,255,255,.75); letter-spacing: .01em; }
-  .okiru-root .ok-pipe-step-meta { font-size: 10px; color: rgba(255,255,255,.25); letter-spacing: .04em; margin-top: 2px; }
+  .okiru-root .ok-pipe-step-name { font-size: 12px; color: rgba(0,0,0,.75); letter-spacing: .01em; }
+  .okiru-root .ok-pipe-step-meta { font-size: 10px; color: rgba(0,0,0,.25); letter-spacing: .04em; margin-top: 2px; }
   .okiru-root .ok-pipe-step-status {
     margin-left: auto; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
     padding: 2px 8px; border-radius: 3px;
   }
   .okiru-root .ok-pipe-ftr {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 18px; border-top: 1px solid rgba(255,255,255,.05);
-    font-size: 10px; color: rgba(255,255,255,.2); letter-spacing: .04em;
+    padding: 10px 18px; border-top: 1px solid rgba(0,0,0,.05);
+    font-size: 10px; color: rgba(0,0,0,.2); letter-spacing: .04em;
   }
 
   /* process steps */
@@ -404,7 +404,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-proc-step:last-child { border-bottom: none; }
   .okiru-root .ok-proc-num {
     font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
-    text-transform: uppercase; color: rgba(99,102,241,.45); padding-top: 3px;
+    text-transform: uppercase; color: rgba(106,155,130,.45); padding-top: 3px;
   }
   .okiru-root .ok-proc-title {
     font-family: var(--serif); font-size: 1.3rem; color: var(--hi);
@@ -432,7 +432,7 @@ const GLOBAL_CSS = `
   .okiru-root footer { padding: 26px 0; }
   .okiru-root .ok-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .okiru-root .ok-foot-wm { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
-  .okiru-root .ok-foot-c { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.15); letter-spacing: .06em; }
+  .okiru-root .ok-foot-c { font-family: var(--mono); font-size: 10px; color: rgba(0,0,0,.15); letter-spacing: .06em; }
 
   /* scroll reveal */
   .okiru-root .ok-reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
@@ -521,9 +521,9 @@ const GLOBAL_CSS = `
 `;
 
 const PILLARS = [
-  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f46e5,#818cf8)" },
+  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f7d68,#94bea1)" },
   { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#0ea5e9,#38bdf8)" },
-  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#34d399)" },
+  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#6a9b82)" },
   { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#d97706,#fbbf24)" },
   { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#be185d,#f472b6)" },
 ];
@@ -538,7 +538,7 @@ const SECTORS = [
   { code: "RCOGP", name: "Retail, Construction, Oil & Gas, Property", types: "Generic + QSE", nodes: "2,985", edges: "5,695", color: "#60a5fa", bg: "rgba(96,165,250,.12)", border: "rgba(96,165,250,.25)" },
   { code: "ICT", name: "Information & Communications Technology", types: "Generic + QSE", nodes: "5,193", edges: "9,415", color: "#a78bfa", bg: "rgba(167,139,250,.12)", border: "rgba(167,139,250,.2)" },
   { code: "FSC", name: "Financial Sector Code", types: "Generic", nodes: "487", edges: "689", color: "#fbbf24", bg: "rgba(251,191,36,.12)", border: "rgba(251,191,36,.2)" },
-  { code: "AGRI", name: "Agriculture (AgriBEE)", types: "Generic", nodes: "3,281", edges: "6,267", color: "#34d399", bg: "rgba(52,211,153,.12)", border: "rgba(52,211,153,.2)" },
+  { code: "AGRI", name: "Agriculture (AgriBEE)", types: "Generic", nodes: "3,281", edges: "6,267", color: "#6a9b82", bg: "rgba(106,155,130,.12)", border: "rgba(106,155,130,.2)" },
 ];
 
 const STATS = [
@@ -556,10 +556,10 @@ const STEPS = [
 ];
 
 const PIPELINE_STEPS = [
-  { name: "Toolkit Upload", meta: "Excel workbook parsed", status: "Done", statusColor: "#34d399", statusBg: "rgba(6,95,70,.2)", statusBorder: "rgba(52,211,153,.2)", numBg: "rgba(99,102,241,.2)", numColor: "#818cf8" },
-  { name: "Formula Graph", meta: "3,869 nodes · 7,327 edges", status: "Built", statusColor: "#818cf8", statusBg: "rgba(79,70,229,.15)", statusBorder: "rgba(99,102,241,.25)", numBg: "rgba(14,116,144,.15)", numColor: "#38bdf8" },
+  { name: "Toolkit Upload", meta: "Excel workbook parsed", status: "Done", statusColor: "#6a9b82", statusBg: "rgba(226,232,224,1)", statusBorder: "rgba(106,155,130,.2)", numBg: "rgba(106,155,130,.2)", numColor: "#94bea1" },
+  { name: "Formula Graph", meta: "3,869 nodes · 7,327 edges", status: "Built", statusColor: "#94bea1", statusBg: "rgba(79,70,229,.15)", statusBorder: "rgba(106,155,130,.25)", numBg: "rgba(14,116,144,.15)", numColor: "#38bdf8" },
   { name: "Entity Extraction", meta: "33 entities across 5 pillars", status: "Active", statusColor: "#fbbf24", statusBg: "rgba(146,64,14,.2)", statusBorder: "rgba(251,191,36,.2)", numBg: "rgba(146,64,14,.15)", numColor: "#fbbf24" },
-  { name: "Scorecard Output", meta: "Level 2 · 125% recognition", status: "Ready", statusColor: "#34d399", statusBg: "rgba(6,95,70,.2)", statusBorder: "rgba(52,211,153,.2)", numBg: "rgba(6,95,70,.15)", numColor: "#34d399" },
+  { name: "Scorecard Output", meta: "Level 2 · 125% recognition", status: "Ready", statusColor: "#6a9b82", statusBg: "rgba(226,232,224,1)", statusBorder: "rgba(106,155,130,.2)", numBg: "rgba(6,95,70,.15)", numColor: "#6a9b82" },
 ];
 
 const ArrowRight = ({ size = 14 }: { size?: number }) => (

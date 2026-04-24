@@ -632,8 +632,8 @@ export default function EntityBuilder() {
     setTestFileLoading(false);
   };
 
-  const completenessColor = (pct: number) => pct >= 80 ? 'text-emerald-400' : pct >= 40 ? 'text-[#d1d1d6]' : 'text-amber-400';
-  const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-emerald-500' : pct >= 40 ? 'bg-[#636366]' : 'bg-amber-500';
+  const completenessColor = (pct: number) => pct >= 80 ? 'text-status-success' : pct >= 40 ? 'text-[#d1d1d6]' : 'text-amber-400';
+  const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-status-success' : pct >= 40 ? 'bg-[#636366]' : 'bg-amber-500';
 
   const filteredEntities = entitySearch.trim()
     ? entities.filter(e => e.label.toLowerCase().includes(entitySearch.toLowerCase()))
@@ -644,15 +644,15 @@ export default function EntityBuilder() {
     : 0;
 
   return (
-    <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col select-none cursor-default" style={{ letterSpacing: '-0.011em' }}>
+    <div className="bg-background text-foreground font-sans h-screen overflow-hidden flex flex-col select-none cursor-default" style={{ letterSpacing: '-0.011em' }}>
 
       {isLoadingTemplate && (
-        <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-white/[0.08] ring-1 ring-white/[0.08] flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] bg-background flex flex-col items-center justify-center gap-5">
+          <div className="w-16 h-16 rounded-2xl bg-card/[0.08] ring-1 ring-white/[0.08] flex items-center justify-center">
             <Loader2 className="w-7 h-7 text-[#d1d1d6] animate-spin" />
           </div>
           <div className="text-center">
-            <p className="text-[15px] font-semibold text-white">Loading Template</p>
+            <p className="text-[15px] font-semibold text-foreground">Loading Template</p>
             <p className="text-[13px] text-[#636366] mt-1">Fetching entities…</p>
           </div>
         </div>
@@ -660,14 +660,14 @@ export default function EntityBuilder() {
 
       {showPublishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={() => publishStatus === 'idle' && setShowPublishModal(false)} />
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-xl" onClick={() => publishStatus === 'idle' && setShowPublishModal(false)} />
           <div className="relative bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-md p-8" style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.6)', animation: 'scaleIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
             {publishStatus === "idle" && (
               <>
-                <div className="w-14 h-14 rounded-2xl bg-white/[0.08] flex items-center justify-center mx-auto mb-6 ring-1 ring-white/[0.08]">
+                <div className="w-14 h-14 rounded-2xl bg-card/[0.08] flex items-center justify-center mx-auto mb-6 ring-1 ring-white/[0.08]">
                   <Upload className="text-[#d1d1d6] w-6 h-6" />
                 </div>
-                <h3 className="text-[18px] font-semibold text-white text-center mb-1 tracking-tight">
+                <h3 className="text-[18px] font-semibold text-foreground text-center mb-1 tracking-tight">
                   {editingTemplateId ? "Update Template" : "Publish Template"}
                 </h3>
                 <p className="text-[13px] text-[#636366] text-center mb-7">
@@ -676,16 +676,16 @@ export default function EntityBuilder() {
                 <div className="rounded-2xl bg-[#2c2c2e] divide-y divide-[#3a3a3c] mb-7">
                   <div className="flex justify-between items-center px-4 py-3 text-[13px]">
                     <span className="text-[#636366]">Template name</span>
-                    <span className="text-white font-medium">{projectName}</span>
+                    <span className="text-foreground font-medium">{projectName}</span>
                   </div>
                   <div className="flex justify-between items-center px-4 py-3 text-[13px]">
                     <span className="text-[#636366]">Entities</span>
-                    <span className="text-white font-medium">{entities.length}</span>
+                    <span className="text-foreground font-medium">{entities.length}</span>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowPublishModal(false)} className="flex-1 py-3 rounded-xl font-medium text-[14px] text-[#b0b0b8] bg-[#2c2c2e] hover:bg-[#3a3a3c] smooth press-sm">Cancel</button>
-                  <button onClick={handlePublish} className="flex-1 py-3 bg-white/[0.12] hover:bg-white/[0.18] text-white rounded-xl font-semibold text-[14px] smooth press-sm shadow-lg shadow-black/10" data-testid="button-confirm-publish">
+                  <button onClick={handlePublish} className="flex-1 py-3 bg-card/[0.12] hover:bg-card/[0.18] text-foreground rounded-xl font-semibold text-[14px] smooth press-sm shadow-lg shadow-black/10" data-testid="button-confirm-publish">
                     {editingTemplateId ? "Update" : "Publish"}
                   </button>
                 </div>
@@ -699,10 +699,10 @@ export default function EntityBuilder() {
             )}
             {publishStatus === "published" && (
               <div className="py-14 text-center">
-                <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4 ring-1 ring-emerald-500/20">
-                  <Check className="text-emerald-400 w-6 h-6" />
+                <div className="w-14 h-14 rounded-full bg-status-success/15 flex items-center justify-center mx-auto mb-4 ring-1 ring-status-success/20">
+                  <Check className="text-status-success w-6 h-6" />
                 </div>
-                <p className="text-white font-semibold">Saved successfully</p>
+                <p className="text-foreground font-semibold">Saved successfully</p>
                 <p className="text-[13px] text-[#636366] mt-1">Your template is ready to use</p>
               </div>
             )}
@@ -711,7 +711,7 @@ export default function EntityBuilder() {
                 <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4 ring-1 ring-red-500/20">
                   <X className="text-red-400 w-6 h-6" />
                 </div>
-                <p className="text-white font-semibold">Failed to save</p>
+                <p className="text-foreground font-semibold">Failed to save</p>
                 <p className="text-[13px] text-[#636366] mt-1">Please try again</p>
               </div>
             )}
@@ -721,15 +721,15 @@ export default function EntityBuilder() {
 
       {showDraftPrompt && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ animation: 'fadeIn 0.15s ease' }}>
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }} />
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-xl" onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }} />
           <div className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-3xl overflow-hidden" style={{ background: '#1c1c1e', boxShadow: '0 32px 64px -16px rgba(0,0,0,0.7)', animation: 'scaleIn 0.18s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="px-6 pt-7 pb-2 text-center">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/20 flex items-center justify-center mx-auto mb-4">
                 <FilePlus className="w-5 h-5 text-amber-400" />
               </div>
-              <p className="text-[17px] font-semibold text-white tracking-tight">Save your work?</p>
+              <p className="text-[17px] font-semibold text-foreground tracking-tight">Save your work?</p>
               <p className="text-[13px] text-[#636366] mt-1.5 leading-relaxed">
-                <span className="text-white font-medium">"{projectName}"</span> has {entities.length} {entities.length === 1 ? 'entity' : 'entities'} that haven't been published.
+                <span className="text-foreground font-medium">"{projectName}"</span> has {entities.length} {entities.length === 1 ? 'entity' : 'entities'} that haven't been published.
               </p>
             </div>
             <div className="px-4 pb-5 pt-4 flex flex-col gap-2.5">
@@ -739,7 +739,7 @@ export default function EntityBuilder() {
                 const action = pendingAction;
                 setPendingAction(null);
                 action?.();
-              }} className="w-full py-3 rounded-2xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[14px] font-semibold smooth press-sm" data-testid="button-save-draft">
+              }} className="w-full py-3 rounded-2xl bg-card/[0.12] hover:bg-card/[0.18] text-foreground text-[14px] font-semibold smooth press-sm" data-testid="button-save-draft">
                 Save to Drafts
               </button>
               <button onClick={() => {
@@ -747,11 +747,11 @@ export default function EntityBuilder() {
                 const action = pendingAction;
                 setPendingAction(null);
                 action?.();
-              }} className="w-full py-3 rounded-2xl bg-white/[0.06] hover:bg-white/[0.10] text-[#b0b0b8] hover:text-white text-[14px] font-semibold smooth press-sm" data-testid="button-discard-draft">
+              }} className="w-full py-3 rounded-2xl bg-card/[0.06] hover:bg-card/[0.10] text-[#b0b0b8] hover:text-foreground text-[14px] font-semibold smooth press-sm" data-testid="button-discard-draft">
                 Discard
               </button>
               <button onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }}
-                className="w-full py-2.5 text-[13px] text-[#636366] hover:text-white smooth">
+                className="w-full py-2.5 text-[13px] text-[#636366] hover:text-foreground smooth">
                 Keep editing
               </button>
             </div>
@@ -761,16 +761,16 @@ export default function EntityBuilder() {
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={() => setDeleteConfirm(null)} />
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-xl" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm p-7" style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.6)', animation: 'scaleIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="w-12 h-12 rounded-2xl bg-red-500/12 flex items-center justify-center mx-auto mb-5 ring-1 ring-red-500/20">
               <Trash2 className="text-red-400 w-5 h-5" />
             </div>
-            <h3 className="text-[17px] font-semibold text-white text-center mb-2 tracking-tight">Delete Template?</h3>
+            <h3 className="text-[17px] font-semibold text-foreground text-center mb-2 tracking-tight">Delete Template?</h3>
             <p className="text-[13px] text-[#636366] text-center mb-7 leading-relaxed">This cannot be undone. The template will be permanently removed from the repository.</p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl font-medium text-[13px] text-[#b0b0b8] bg-[#2c2c2e] hover:bg-[#3a3a3c] smooth press-sm">Cancel</button>
-              <button onClick={() => deleteTemplateFromRepo(deleteConfirm)} className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 text-white rounded-xl font-semibold text-[13px] smooth press-sm" data-testid="button-confirm-delete">Delete</button>
+              <button onClick={() => deleteTemplateFromRepo(deleteConfirm)} className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 text-foreground rounded-xl font-semibold text-[13px] smooth press-sm" data-testid="button-confirm-delete">Delete</button>
             </div>
           </div>
         </div>
@@ -778,18 +778,18 @@ export default function EntityBuilder() {
 
       {showTemplatesPanel && (
         <div className="fixed inset-0 z-40 flex" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTemplatesPanel(false)} />
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowTemplatesPanel(false)} />
           <div className="relative ml-auto w-[400px] h-full bg-[#111111] flex flex-col shadow-2xl" style={{ borderLeft: '1px solid #2c2c2e', animation: 'slideInRight 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #2c2c2e' }}>
               <div>
-                <h2 className="text-[15px] font-semibold text-white tracking-tight">Template Repository</h2>
+                <h2 className="text-[15px] font-semibold text-foreground tracking-tight">Template Repository</h2>
                 <p className="text-[11px] text-[#636366] mt-0.5">{storedTemplates.length} templates saved</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { fetchTemplates(); }} className="p-2 rounded-lg text-[#636366] hover:text-white hover:bg-white/[0.06] smooth press-sm" title="Refresh">
+                <button onClick={() => { fetchTemplates(); }} className="p-2 rounded-lg text-[#636366] hover:text-foreground hover:bg-card/[0.06] smooth press-sm" title="Refresh">
                   <RefreshCw className={`w-4 h-4 ${loadingTemplates ? 'animate-spin' : ''}`} />
                 </button>
-                <button onClick={() => setShowTemplatesPanel(false)} className="p-2 rounded-lg text-[#636366] hover:text-white hover:bg-white/[0.06] smooth press-sm">
+                <button onClick={() => setShowTemplatesPanel(false)} className="p-2 rounded-lg text-[#636366] hover:text-foreground hover:bg-card/[0.06] smooth press-sm">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -799,14 +799,14 @@ export default function EntityBuilder() {
               {/* Sector Presets Section */}
               <div className="mb-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Sector Presets</span>
+                  <BookOpen className="w-3.5 h-3.5 text-status-success" />
+                  <span className="text-[11px] font-semibold text-status-success uppercase tracking-wider">Sector Presets</span>
                 </div>
                 <div className="space-y-2">
                   {[
                     { key: 'rcogp', name: 'RCOGP Generic', desc: 'Revised Codes of Good Practice', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-                    { key: 'ict_generic', name: 'ICT Generic', desc: 'Information & Communication Technology', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-                    { key: 'ict_qse', name: 'ICT QSE', desc: 'ICT Qualifying Small Enterprise', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+                    { key: 'ict_generic', name: 'ICT Generic', desc: 'Information & Communication Technology', color: 'bg-primary/10 text-primary border-primary/20' },
+                    { key: 'ict_qse', name: 'ICT QSE', desc: 'ICT Qualifying Small Enterprise', color: 'bg-primary/10 text-primary border-primary/20' },
                     { key: 'rcogp_qse', name: 'RCOGP QSE', desc: 'RCOGP Qualifying Small Enterprise', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
                     { key: 'fsc', name: 'FSC Generic', desc: 'Financial Sector Code', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
                     { key: 'agri', name: 'Agri Generic', desc: 'AgriBEE Sector Code', color: 'bg-green-500/10 text-green-400 border-green-500/20' },
@@ -814,7 +814,7 @@ export default function EntityBuilder() {
                     <button
                       key={sector.key}
                       onClick={() => loadSectorPreset(sector.key)}
-                      className="w-full text-left p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] smooth transition-all group"
+                      className="w-full text-left p-3 rounded-xl bg-card/[0.03] hover:bg-card/[0.06] border border-white/[0.06] hover:border-white/[0.12] smooth transition-all group"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
@@ -822,11 +822,11 @@ export default function EntityBuilder() {
                             {sector.key.split('_')[0].substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-[12px] font-semibold text-white group-hover:text-emerald-400 transition-colors">{sector.name}</p>
+                            <p className="text-[12px] font-semibold text-foreground group-hover:text-status-success transition-colors">{sector.name}</p>
                             <p className="text-[10px] text-[#636366]">{sector.desc}</p>
                           </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-[#3a3a3c] group-hover:text-white transition-colors" />
+                        <ChevronRight className="w-4 h-4 text-[#3a3a3c] group-hover:text-foreground transition-colors" />
                       </div>
                     </button>
                   ))}
@@ -834,7 +834,7 @@ export default function EntityBuilder() {
               </div>
 
               {/* Divider */}
-              <div className="h-px bg-white/[0.06] mb-5" />
+              <div className="h-px bg-card/[0.06] mb-5" />
 
               {/* Toolkit Templates Section */}
               <div className="flex items-center justify-between mb-3">
@@ -848,7 +848,7 @@ export default function EntityBuilder() {
               {loadingTemplates && storedTemplates.length === 0 && (
                 <div className="space-y-2">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="h-16 rounded-2xl bg-white/[0.04] animate-pulse" />
+                    <div key={i} className="h-16 rounded-2xl bg-card/[0.04] animate-pulse" />
                   ))}
                 </div>
               )}
@@ -865,15 +865,15 @@ export default function EntityBuilder() {
                   const isExpanded = expandedRepoId === template.id || selectedRepoTemplate?.id === template.id;
                   const sectorColors: Record<string, string> = {
                     RCOGP: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-                    ICT: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                    ICT: 'bg-primary/10 text-primary border-primary/20',
                     FSC: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
                     AGRI: 'bg-green-500/10 text-green-400 border-green-500/20',
                   };
-                  const sectorColor = sectorColors[template.sectorCode || ''] || 'bg-white/[0.06] text-[#d1d1d6] border-white/[0.06]';
+                  const sectorColor = sectorColors[template.sectorCode || ''] || 'bg-card/[0.06] text-[#d1d1d6] border-white/[0.06]';
 
                   return (
                     <div key={template.id}
-                      className={`rounded-2xl p-4 cursor-pointer smooth group ${editingTemplateId === template.id ? 'bg-white/[0.05] ring-1 ring-white/[0.08]' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
+                      className={`rounded-2xl p-4 cursor-pointer smooth group ${editingTemplateId === template.id ? 'bg-card/[0.05] ring-1 ring-white/[0.08]' : 'bg-card/[0.03] hover:bg-card/[0.06]'}`}
                       onClick={() => setSelectedRepoTemplate(selectedRepoTemplate?.id === template.id ? null : template)}
                       data-testid={`template-card-${template.id}`}>
                       <div className="flex items-center gap-3">
@@ -882,14 +882,14 @@ export default function EntityBuilder() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold text-white truncate">{template.name}</span>
+                            <span className="text-[13px] font-semibold text-foreground truncate">{template.name}</span>
                             {template.scorecardType && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${template.scorecardType === 'QSE' ? 'bg-orange-500/10 text-orange-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${template.scorecardType === 'QSE' ? 'bg-orange-500/10 text-orange-400' : 'bg-status-success/10 text-status-success'}`}>
                                 {template.scorecardType}
                               </span>
                             )}
                             {editingTemplateId === template.id && (
-                              <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.08] text-[#d1d1d6] rounded font-semibold shrink-0">Active</span>
+                              <span className="text-[9px] px-1.5 py-0.5 bg-card/[0.08] text-[#d1d1d6] rounded font-semibold shrink-0">Active</span>
                             )}
                           </div>
                           <p className="text-[11px] text-[#636366] mt-0.5">
@@ -909,7 +909,7 @@ export default function EntityBuilder() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={(e) => { e.stopPropagation(); loadTemplateFromRepo(template); }}
-                            className="px-3 py-1.5 text-[11px] font-semibold text-[#d1d1d6] bg-white/[0.06] hover:bg-white/[0.18]/20 rounded-lg smooth press-sm" data-testid={`button-load-${template.id}`}>
+                            className="px-3 py-1.5 text-[11px] font-semibold text-[#d1d1d6] bg-card/[0.06] hover:bg-card/[0.18]/20 rounded-lg smooth press-sm" data-testid={`button-load-${template.id}`}>
                             Load
                           </button>
                         </div>
@@ -919,10 +919,10 @@ export default function EntityBuilder() {
                       {isExpanded && isOntology && pillarPacks && pillarPacks.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
                           {pillarPacks.map((pack: any) => (
-                            <div key={pack.pillarCode} className="rounded-lg bg-white/[0.03] border border-white/[0.04] overflow-hidden">
+                            <div key={pack.pillarCode} className="rounded-lg bg-card/[0.03] border border-white/[0.04] overflow-hidden">
                               <div className="flex items-center justify-between px-3 py-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  <div className="w-1.5 h-1.5 rounded-full bg-status-success" />
                                   <span className="text-[11px] font-semibold text-[#d1d1d6]">{pack.pillarName}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -954,7 +954,7 @@ export default function EntityBuilder() {
                       {isExpanded && !isOntology && (template.entities || []).length > 0 && (
                         <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap gap-1.5">
                           {(template.entities || []).map((e: any, i: number) => (
-                            <span key={i} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.06] text-[#b0b0b8]">{e.label}</span>
+                            <span key={i} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-card/[0.06] text-[#b0b0b8]">{e.label}</span>
                           ))}
                         </div>
                       )}
@@ -966,7 +966,7 @@ export default function EntityBuilder() {
 
             {editingTemplateId && (
               <div className="p-4" style={{ borderTop: '1px solid #2c2c2e' }}>
-                <button onClick={() => guardedNew(() => { startNew(); setShowTemplatesPanel(false); })} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium text-[#b0b0b8] bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm" data-testid="button-start-new">
+                <button onClick={() => guardedNew(() => { startNew(); setShowTemplatesPanel(false); })} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium text-[#b0b0b8] bg-card/[0.04] hover:bg-card/[0.08] smooth press-sm" data-testid="button-start-new">
                   <FilePlus className="w-3.5 h-3.5" /> New Template
                 </button>
               </div>
@@ -975,10 +975,10 @@ export default function EntityBuilder() {
         </div>
       )}
 
-      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
+      <header className="h-14 shrink-0 z-20 sticky top-0 bg-background" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-          <Link href="/dashboard?tab=templates" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0" data-testid="btn-back">
+          <Link href="/dashboard?tab=templates" className="flex items-center gap-2 text-[#98989f] hover:text-foreground smooth group shrink-0" data-testid="btn-back">
             <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
             <span className="text-[13px] font-medium tracking-wide hidden sm:inline">Back to Templates</span>
           </Link>
@@ -990,17 +990,17 @@ export default function EntityBuilder() {
               onChange={(e) => setProjectName(e.target.value)}
               onBlur={() => { setIsEditingProjectName(false); if (entities.length > 0) markDirty(); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { setIsEditingProjectName(false); if (entities.length > 0) markDirty(); } }}
-              className="bg-transparent border-b border-white/[0.20] text-[14px] font-semibold text-white focus:outline-none min-w-0 max-w-[200px] py-0.5" data-testid="input-project-name" />
+              className="bg-transparent border-b border-white/[0.20] text-[14px] font-semibold text-foreground focus:outline-none min-w-0 max-w-[200px] py-0.5" data-testid="input-project-name" />
           ) : (
-            <button onClick={() => setIsEditingProjectName(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-white/[0.05] smooth press-sm group min-w-0 overflow-hidden" data-testid="button-edit-project-name">
-              <span className="text-[14px] font-semibold text-white truncate">{projectName}</span>
+            <button onClick={() => setIsEditingProjectName(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-card/[0.05] smooth press-sm group min-w-0 overflow-hidden" data-testid="button-edit-project-name">
+              <span className="text-[14px] font-semibold text-foreground truncate">{projectName}</span>
               <Pencil className="w-3 h-3 text-[#636366] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
             </button>
           )}
           <div className="flex items-center gap-1.5 shrink-0">
-            {editingTemplateId && <span className="text-[10px] px-2 py-0.5 bg-white/[0.07] text-[#d1d1d6] rounded font-semibold whitespace-nowrap">Editing</span>}
+            {editingTemplateId && <span className="text-[10px] px-2 py-0.5 bg-card/[0.07] text-[#d1d1d6] rounded font-semibold whitespace-nowrap">Editing</span>}
             {hasUnsavedChanges && entities.length > 0 && (
-              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold flex items-center gap-1 whitespace-nowrap ${editingTemplateId ? 'text-amber-400 bg-amber-500/10' : 'text-[#d1d1d6] bg-white/[0.06]'}`}>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-semibold flex items-center gap-1 whitespace-nowrap ${editingTemplateId ? 'text-amber-400 bg-amber-500/10' : 'text-[#d1d1d6] bg-card/[0.06]'}`}>
                 <span className={`w-1 h-1 rounded-full animate-pulse ${editingTemplateId ? 'bg-amber-500' : 'bg-[#636366]'}`} />
                 {editingTemplateId ? 'Unsaved' : 'Draft'}
               </span>
@@ -1010,7 +1010,7 @@ export default function EntityBuilder() {
 
         <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={() => guardedNew(startNew)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-white hover:bg-white/[0.06] rounded-lg smooth press-sm" title="New Template" data-testid="button-new-template">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-foreground hover:bg-card/[0.06] rounded-lg smooth press-sm" title="New Template" data-testid="button-new-template">
             <FilePlus className="w-3.5 h-3.5" /> New
           </button>
           {savedDrafts.length > 0 && (
@@ -1020,7 +1020,7 @@ export default function EntityBuilder() {
             </button>
           )}
           <button onClick={exportEntities} disabled={entities.length === 0}
-            className="p-2 text-[#636366] hover:text-white hover:bg-white/[0.06] rounded-lg smooth press-sm disabled:opacity-30" title="Export JSON" data-testid="button-export">
+            className="p-2 text-[#636366] hover:text-foreground hover:bg-card/[0.06] rounded-lg smooth press-sm disabled:opacity-30" title="Export JSON" data-testid="button-export">
             <Download className="w-4 h-4" />
           </button>
           {hasUnsavedChanges && entities.length > 0 && (
@@ -1031,13 +1031,13 @@ export default function EntityBuilder() {
               </button>
             ) : (
               <button onClick={() => setShowPublishModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[12px] font-semibold smooth press-sm" data-testid="button-save-new">
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-status-success hover:bg-status-success text-foreground rounded-lg text-[12px] font-semibold smooth press-sm" data-testid="button-save-new">
                 <Upload className="w-3 h-3" />Save
               </button>
             )
           )}
           <button onClick={() => entities.length > 0 && setShowPublishModal(true)} disabled={entities.length === 0}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-white/[0.12] hover:bg-white/[0.18] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/10" data-testid="button-publish">
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-card/[0.12] hover:bg-card/[0.18] disabled:opacity-30 disabled:cursor-not-allowed text-foreground rounded-lg text-[12px] font-semibold smooth press-sm shadow-sm shadow-black/10" data-testid="button-publish">
             {editingTemplateId ? "Update" : "Publish"}
           </button>
         </div>
@@ -1062,7 +1062,7 @@ export default function EntityBuilder() {
                     el.style.height = 'auto';
                     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
                   }}
-                  className="flex-1 min-w-0 bg-transparent text-white text-[13px] leading-relaxed focus:outline-none placeholder-[#3a3a3c] resize-none"
+                  className="flex-1 min-w-0 bg-transparent text-foreground text-[13px] leading-relaxed focus:outline-none placeholder-[#3a3a3c] resize-none"
                   style={{ minHeight: '24px', maxHeight: '120px', overflowY: 'auto' }}
                   placeholder="Describe the entity you want to create — e.g. 'B-BBEE contributor level from a verification certificate' or 'invoice date found in document headers'…"
                   rows={1}
@@ -1080,7 +1080,7 @@ export default function EntityBuilder() {
                   {nlInput.trim() ? `${nlInput.length} chars · Enter to generate` : 'Shift+Enter for new line'}
                 </span>
                 <button onClick={parseNaturalLanguage} disabled={isGenerating || !nlInput.trim()}
-                  className="px-4 py-1.5 bg-white/[0.12] hover:bg-white/[0.18] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-white rounded-lg text-[12px] font-semibold smooth press-sm flex items-center gap-1.5 transition-all whitespace-nowrap"
+                  className="px-4 py-1.5 bg-card/[0.12] hover:bg-card/[0.18] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-foreground rounded-lg text-[12px] font-semibold smooth press-sm flex items-center gap-1.5 transition-all whitespace-nowrap"
                   data-testid="button-generate">
                   {isGenerating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Creating…</> : <><Zap className="w-3.5 h-3.5" />Generate</>}
                 </button>
@@ -1106,14 +1106,14 @@ export default function EntityBuilder() {
                 <div className="flex flex-col py-2 px-2 gap-1 flex-1">
                   <button
                     onClick={() => setLeftTab('entities')}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[12px] font-medium text-[#8e8e93] hover:text-white hover:bg-white/[0.08] smooth press-sm transition-colors">
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[12px] font-medium text-[#8e8e93] hover:text-foreground hover:bg-card/[0.08] smooth press-sm transition-colors">
                     <Shapes className="w-4 h-4 shrink-0" />
                     <span>Entities</span>
                     {entities.length > 0 && <span className="ml-auto text-[10px] text-[#3a3a3c]">{entities.length}</span>}
                   </button>
                   <button
                     onClick={() => setLeftTab('testing')}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-white/[0.08] text-[#d1d1d6] smooth">
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[12px] font-semibold bg-card/[0.08] text-[#d1d1d6] smooth">
                     <FlaskConical className="w-4 h-4 shrink-0" />
                     <span>Live Testing</span>
                   </button>
@@ -1126,7 +1126,7 @@ export default function EntityBuilder() {
               <div className="flex shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
                 {(['entities', 'testing'] as const).map(tab => (
                   <button key={tab} onClick={() => setLeftTab(tab)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-colors smooth ${leftTab === tab ? 'text-white' : 'text-[#636366] hover:text-[#b0b0b8]'}`}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-colors smooth ${leftTab === tab ? 'text-foreground' : 'text-[#636366] hover:text-[#b0b0b8]'}`}
                     style={{ borderBottom: leftTab === tab ? '2px solid #a855f7' : '2px solid transparent' }}>
                     {tab === 'entities' ? <><Shapes className="w-3 h-3" />Entities</> : <><FlaskConical className="w-3 h-3" />Testing</>}
                   </button>
@@ -1140,14 +1140,14 @@ export default function EntityBuilder() {
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[#3a3a3c] pointer-events-none" />
                       <input type="text" value={entitySearch} onChange={(e) => setEntitySearch(e.target.value)}
-                        placeholder="Filter…" className="w-full bg-transparent pl-7 pr-3 py-1.5 text-[12px] text-[#b0b0b8] placeholder-[#3a3a3c] focus:outline-none rounded-lg focus:bg-white/[0.04] transition-all" />
+                        placeholder="Filter…" className="w-full bg-transparent pl-7 pr-3 py-1.5 text-[12px] text-[#b0b0b8] placeholder-[#3a3a3c] focus:outline-none rounded-lg focus:bg-card/[0.04] transition-all" />
                     </div>
                   </div>
                 )}
                 <div className="flex-1 overflow-y-auto py-2 px-2">
                   {entities.length === 0 && (
                     <div className="text-center py-10 px-3">
-                      <div className="w-10 h-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center mx-auto mb-3">
+                      <div className="w-10 h-10 rounded-2xl bg-card/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center mx-auto mb-3">
                         <Shapes className="w-4 h-4 text-[#3a3a3c]" />
                       </div>
                       <p className="text-[11px] text-[#3a3a3c] leading-relaxed">Type above to create your first entity</p>
@@ -1189,7 +1189,7 @@ export default function EntityBuilder() {
                         return (
                         <div key={pillarCode} className="mb-2">
                           <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-status-success" />
                             <span className="text-[10px] font-semibold text-[#636366] uppercase tracking-wider">
                               {PILLAR_LABELS[pillarCode] || pillarCode}
                             </span>
@@ -1200,14 +1200,14 @@ export default function EntityBuilder() {
                             return (
                               <div key={entity.id}
                                 onClick={() => setSelectedEntityId(entity.id)}
-                                className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}
+                                className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-card/[0.07]' : 'hover:bg-card/[0.04]'}`}
                                 data-testid={`entity-row-${entity.id}`}>
-                                {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-400" />}
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold shrink-0 transition-all ${isSelected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/[0.05] text-[#636366]'}`}>
+                                {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-status-success" />}
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold shrink-0 transition-all ${isSelected ? 'bg-status-success/10 text-status-success' : 'bg-card/[0.05] text-[#636366]'}`}>
                                   {entity.label.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className={`text-[11px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                                  <p className={`text-[11px] font-semibold truncate transition-colors ${isSelected ? 'text-foreground' : 'text-[#b0b0b8] group-hover:text-foreground'}`}>{entity.label}</p>
                                   {entity.definition && (
                                     <p className="text-[9px] text-[#3a3a3c] truncate">{entity.definition}</p>
                                   )}
@@ -1231,14 +1231,14 @@ export default function EntityBuilder() {
                       return (
                         <div key={entity.id}
                           onClick={() => setSelectedEntityId(entity.id)}
-                          className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}
+                          className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-card/[0.07]' : 'hover:bg-card/[0.04]'}`}
                           data-testid={`entity-row-${entity.id}`}>
                           {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#636366]" />}
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-white/[0.10] text-[#e5e5e7]' : 'bg-white/[0.05] text-[#636366]'}`}>
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-card/[0.10] text-[#e5e5e7]' : 'bg-card/[0.05] text-[#636366]'}`}>
                             {entity.label.substring(0, 2).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-white' : 'text-[#b0b0b8] group-hover:text-white'}`}>{entity.label}</p>
+                            <p className={`text-[12px] font-semibold truncate transition-colors ${isSelected ? 'text-foreground' : 'text-[#b0b0b8] group-hover:text-foreground'}`}>{entity.label}</p>
                           </div>
                           <button onClick={(e) => { e.stopPropagation(); deleteEntity(entity.id); }}
                             className="opacity-0 group-hover:opacity-100 p-1 text-[#636366] hover:text-red-400 rounded-lg hover:bg-red-500/10 smooth press-sm shrink-0 transition-opacity"
@@ -1302,21 +1302,21 @@ export default function EntityBuilder() {
 
                     {/* Live Testing title */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="w-7 h-7 rounded-lg bg-white/[0.08] flex items-center justify-center">
+                      <div className="w-7 h-7 rounded-lg bg-card/[0.08] flex items-center justify-center">
                         <FlaskConical className="w-3.5 h-3.5 text-[#d1d1d6]" />
                       </div>
-                      <span className="text-[13px] font-semibold text-white tracking-tight">Live Testing</span>
+                      <span className="text-[13px] font-semibold text-foreground tracking-tight">Live Testing</span>
                     </div>
 
-                    <div className="w-px h-5 bg-white/[0.06] mx-1 shrink-0" />
+                    <div className="w-px h-5 bg-card/[0.06] mx-1 shrink-0" />
 
                     {/* Template selector */}
                     <div className="flex-1 relative" ref={testTemplateDropRef}>
                       <button onClick={() => setTestTemplateDropOpen(o => !o)}
-                        className="w-full flex items-center justify-between bg-[#1a1a1a] text-white text-[12px] rounded-lg px-3 py-1.5 border border-[#2a2a2a] hover:border-[#3a3a3c] smooth text-left"
+                        className="w-full flex items-center justify-between bg-[#1a1a1a] text-foreground text-[12px] rounded-lg px-3 py-1.5 border border-[#2a2a2a] hover:border-[#3a3a3c] smooth text-left"
                         data-testid="select-test-template">
                         <span className="text-[#636366] text-[11px] mr-1.5 shrink-0">Template</span>
-                        <span className="truncate flex-1 text-[12px] text-white">
+                        <span className="truncate flex-1 text-[12px] text-foreground">
                           {testTemplateId === 'current'
                             ? `Current build (${entities.length} entities)`
                             : (() => { const t = storedTemplates.find(t => t.id === testTemplateId); return t ? `${t.name} (${(t.entities || []).length})` : 'Template'; })()}
@@ -1327,7 +1327,7 @@ export default function EntityBuilder() {
                         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
                           style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
                           <div onClick={() => { setTestTemplateId('current'); setTestTemplateDropOpen(false); }}
-                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-white/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-card/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-card/[0.05]'}`}>
                             <span className="flex-1 truncate">Current build</span>
                             <span className="text-[11px] text-[#636366] shrink-0">({entities.length} entities)</span>
                             {testTemplateId === 'current' && <Check className="w-3 h-3 text-[#d1d1d6] shrink-0" />}
@@ -1335,7 +1335,7 @@ export default function EntityBuilder() {
                           {storedTemplates.length > 0 && <div style={{ borderTop: '1px solid #2c2c2e' }} />}
                           {storedTemplates.map(t => (
                             <div key={t.id} onClick={() => { setTestTemplateId(t.id); setTestTemplateDropOpen(false); }}
-                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-white/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-white/[0.05]'}`}>
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === t.id ? 'bg-card/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-card/[0.05]'}`}>
                               <span className="flex-1 truncate">{t.name}</span>
                               <span className="text-[11px] text-[#636366] shrink-0">({(t.entities || []).length})</span>
                               {testTemplateId === t.id && <Check className="w-3 h-3 text-[#d1d1d6] shrink-0" />}
@@ -1356,7 +1356,7 @@ export default function EntityBuilder() {
                     <button
                       onClick={() => testFileInputRef.current?.click()}
                       disabled={testFileLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#b0b0b8] hover:text-white hover:bg-white/[0.07] smooth press-sm border border-[#2a2a2a] hover:border-[#3a3a3c] transition-colors disabled:opacity-40 shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#b0b0b8] hover:text-foreground hover:bg-card/[0.07] smooth press-sm border border-[#2a2a2a] hover:border-[#3a3a3c] transition-colors disabled:opacity-40 shrink-0"
                       title="Upload a document to test">
                       {testFileLoading
                         ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Reading…</>
@@ -1366,7 +1366,7 @@ export default function EntityBuilder() {
                     {/* Run button */}
                     <button onClick={runTest}
                       disabled={isTesting || !testText.trim() || (testTemplateId === 'current' && entities.length === 0)}
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-white/[0.12] hover:bg-white/[0.18] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg text-[12px] font-semibold smooth press-sm shrink-0"
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-card/[0.12] hover:bg-card/[0.18] disabled:opacity-30 disabled:cursor-not-allowed text-foreground rounded-lg text-[12px] font-semibold smooth press-sm shrink-0"
                       data-testid="button-run-test">
                       {isTesting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing…</> : <><Play className="w-3.5 h-3.5" />Run</>}
                     </button>
@@ -1412,7 +1412,7 @@ export default function EntityBuilder() {
                         )}
 
                         {testFileLoading && (
-                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60">
+                          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/60">
                             <Loader2 className="w-7 h-7 text-[#d1d1d6] animate-spin mb-2" />
                             <p className="text-[12px] text-[#636366]">Extracting text…</p>
                           </div>
@@ -1422,7 +1422,7 @@ export default function EntityBuilder() {
                           <div
                             className="absolute inset-0 flex flex-col items-center justify-center gap-3 cursor-pointer"
                             onClick={() => testFileInputRef.current?.click()}>
-                            <div className="w-14 h-14 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-2xl bg-card/[0.03] ring-1 ring-white/[0.05] flex items-center justify-center">
                               <Upload className="w-6 h-6 text-[#3a3a3c]" />
                             </div>
                             <div className="text-center">
@@ -1436,7 +1436,7 @@ export default function EntityBuilder() {
                           value={testText}
                           onChange={(e) => { setTestText(e.target.value); if (!e.target.value) { setTestFile(null); setTestResults([]); } }}
                           placeholder=""
-                          className="flex-1 w-full h-full bg-transparent text-[12.5px] text-white resize-none p-4 focus:outline-none leading-relaxed font-mono"
+                          className="flex-1 w-full h-full bg-transparent text-[12.5px] text-foreground resize-none p-4 focus:outline-none leading-relaxed font-mono"
                           style={{ opacity: testText ? 1 : 0 }}
                           data-testid="textarea-test-input"
                         />
@@ -1446,7 +1446,7 @@ export default function EntityBuilder() {
                         <span className="text-[10px] text-[#3a3a3c]">{testText.length.toLocaleString()} chars</span>
                         {testText && (
                           <button onClick={() => { setTestText(''); setTestFile(null); setTestResults([]); }}
-                            className="text-[10px] text-[#636366] hover:text-white smooth">
+                            className="text-[10px] text-[#636366] hover:text-foreground smooth">
                             Clear
                           </button>
                         )}
@@ -1482,16 +1482,16 @@ export default function EntityBuilder() {
                           <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-[#1c1c1e]' : 'bg-[#111111] opacity-50'}`}
                             style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
                             <div className="flex items-center gap-2 mb-1">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-status-success' : 'bg-[#3a3a3c]'}`} />
                               <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest flex-1 truncate">{r.name}</span>
                               {r.status === 'extracted' && (
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold shrink-0 ${r.method === 'Pattern' ? 'bg-white/[0.08] text-[#d1d1d6]' : 'bg-[#2c2c2e] text-[#636366]'}`}>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold shrink-0 ${r.method === 'Pattern' ? 'bg-card/[0.08] text-[#d1d1d6]' : 'bg-[#2c2c2e] text-[#636366]'}`}>
                                   {r.method}
                                 </span>
                               )}
                             </div>
                             {r.status === 'extracted'
-                              ? <p className="text-[12px] text-white leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
+                              ? <p className="text-[12px] text-foreground leading-relaxed pl-3.5 line-clamp-3">{r.value}</p>
                               : <p className="text-[11px] text-[#3a3a3c] pl-3.5 italic">Not found</p>}
                           </div>
                         ))}
@@ -1510,10 +1510,10 @@ export default function EntityBuilder() {
               {/* Editor empty state */}
               {!selectedEntity && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                  <div className="w-16 h-16 rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.04] flex items-center justify-center mx-auto mb-5">
+                  <div className="w-16 h-16 rounded-3xl bg-card/[0.03] ring-1 ring-white/[0.04] flex items-center justify-center mx-auto mb-5">
                     <Shapes className="w-7 h-7 text-[#2c2c2e]" />
                   </div>
-                  <p className="text-[16px] font-semibold text-white tracking-tight mb-2">
+                  <p className="text-[16px] font-semibold text-foreground tracking-tight mb-2">
                     {entities.length === 0 ? 'No entities yet' : 'Select an entity'}
                   </p>
                   <p className="text-[13px] text-[#3a3a3c] leading-relaxed max-w-xs">
@@ -1533,7 +1533,7 @@ export default function EntityBuilder() {
                           type="text"
                           value={selectedEntity.label}
                           onChange={(e) => updateEntity(selectedEntity.id, 'label', e.target.value)}
-                          className="w-full bg-transparent text-[20px] font-semibold text-white tracking-tight focus:outline-none placeholder-[#3a3a3c] text-ellipsis overflow-hidden"
+                          className="w-full bg-transparent text-[20px] font-semibold text-foreground tracking-tight focus:outline-none placeholder-[#3a3a3c] text-ellipsis overflow-hidden"
                           placeholder="Entity label"
                           data-testid={`input-label-${selectedEntity.id}`}
                         />
@@ -1541,7 +1541,7 @@ export default function EntityBuilder() {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button onClick={() => duplicateEntity(selectedEntity.id)}
-                          className="p-2 text-[#636366] hover:text-white hover:bg-white/[0.06] rounded-xl smooth press-sm" title="Duplicate" data-testid={`button-duplicate-${selectedEntity.id}`}>
+                          className="p-2 text-[#636366] hover:text-foreground hover:bg-card/[0.06] rounded-xl smooth press-sm" title="Duplicate" data-testid={`button-duplicate-${selectedEntity.id}`}>
                           <Copy className="w-4 h-4" />
                         </button>
                         <button onClick={() => deleteEntity(selectedEntity.id)}
@@ -1555,7 +1555,7 @@ export default function EntityBuilder() {
                   <div className="px-6 py-5 space-y-7">
                 <Section title="Definition" icon={<AlignLeft className="w-3.5 h-3.5" />}>
                   <textarea
-                    className="w-full bg-[#111111] text-[13px] text-white rounded-2xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-white/[0.08] resize-y leading-relaxed placeholder-[#3a3a3c] overflow-y-auto overflow-wrap-anywhere"
+                    className="w-full bg-[#111111] text-[13px] text-foreground rounded-2xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-white/[0.08] resize-y leading-relaxed placeholder-[#3a3a3c] overflow-y-auto overflow-wrap-anywhere"
                     style={{ border: '1px solid #1e1e1e', minHeight: '80px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                     rows={4}
                     placeholder="Describe what this entity represents and when it appears in documents…"
@@ -1568,7 +1568,7 @@ export default function EntityBuilder() {
                 <Section title="Pattern" icon={<Code className="w-3.5 h-3.5" />} hint="Regex to match">
                   <input
                     type="text"
-                    className="w-full bg-[#111111] text-[13px] text-white font-mono rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/[0.08] placeholder-[#3a3a3c]"
+                    className="w-full bg-[#111111] text-[13px] text-foreground font-mono rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/[0.08] placeholder-[#3a3a3c]"
                     style={{ border: '1px solid #1e1e1e' }}
                     placeholder='e.g. INV-\d{4} or \d{4}-\d{2}-\d{2}'
                     value={selectedEntity.pattern}
@@ -1588,7 +1588,7 @@ export default function EntityBuilder() {
                 </Section>
 
                 <div className="grid grid-cols-2 gap-6">
-                  <Section title="Positive Examples" icon={<Check className="w-3.5 h-3.5 text-emerald-500" />} hint="Values that should match">
+                  <Section title="Positive Examples" icon={<Check className="w-3.5 h-3.5 text-status-success" />} hint="Values that should match">
                     <TagField
                       items={selectedEntity.positives}
                       onAdd={(v) => addItem(selectedEntity.id, 'positives', v)}
@@ -1613,7 +1613,7 @@ export default function EntityBuilder() {
                     {["Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block"].map(zone => (
                       <button key={zone} onClick={() => toggleZone(selectedEntity.id, zone)}
                         className={`px-3.5 py-2 rounded-xl text-[12px] font-medium smooth press-sm transition-all ${selectedEntity.zones.includes(zone)
-                          ? 'bg-white/[0.08] text-[#e5e5e7] ring-1 ring-white/[0.10]'
+                          ? 'bg-card/[0.08] text-[#e5e5e7] ring-1 ring-white/[0.10]'
                           : 'bg-[#111111] text-[#636666] ring-1 ring-white/[0.06] hover:ring-white/[0.12] hover:text-[#b0b0b8]'}`}>
                         {zone}
                       </button>
@@ -1624,7 +1624,7 @@ export default function EntityBuilder() {
                 <Section title="Keywords" icon={<Sparkles className="w-3.5 h-3.5" />} hint="Guide extraction accuracy">
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest mb-2">Must have</p>
+                      <p className="text-[10px] font-semibold text-status-success uppercase tracking-widest mb-2">Must have</p>
                       <TagField
                         items={selectedEntity.keywords.must}
                         onAdd={(v) => addKeyword(selectedEntity.id, 'must', v)}
@@ -1650,7 +1650,7 @@ export default function EntityBuilder() {
                   </div>
                 </Section>
 
-                <Section title="Completeness" icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}>
+                <Section title="Completeness" icon={<CheckCircle2 className="w-3.5 h-3.5 text-status-success" />}>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { check: selectedEntity.definition.length > 10, text: "Definition", sub: "Required" },
@@ -1660,12 +1660,12 @@ export default function EntityBuilder() {
                       { check: selectedEntity.zones.length > 0, text: "Zones", sub: `${selectedEntity.zones.length} selected` },
                       { check: !!selectedEntity.pattern, text: "Pattern", sub: "Regex" },
                     ].map((item, i) => (
-                      <div key={i} className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[12px] transition-all overflow-hidden ${item.check ? 'bg-emerald-500/6 ring-1 ring-emerald-500/12' : 'bg-[#111111] ring-1 ring-white/[0.04]'}`}>
+                      <div key={i} className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[12px] transition-all overflow-hidden ${item.check ? 'bg-status-success/6 ring-1 ring-status-success/12' : 'bg-[#111111] ring-1 ring-white/[0.04]'}`}>
                         {item.check
-                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ? <CheckCircle2 className="w-3.5 h-3.5 text-status-success shrink-0" />
                           : <div className="w-3.5 h-3.5 rounded-full border border-[#3a3a3c] shrink-0" />}
                         <div className="min-w-0 overflow-hidden">
-                          <p className={`font-medium truncate ${item.check ? 'text-white' : 'text-[#636366]'}`}>{item.text}</p>
+                          <p className={`font-medium truncate ${item.check ? 'text-foreground' : 'text-[#636366]'}`}>{item.text}</p>
                           <p className={`text-[10px] truncate ${item.check ? 'text-[#636366]' : 'text-[#2c2c2e]'}`}>{item.sub}</p>
                         </div>
                       </div>
@@ -1712,8 +1712,8 @@ function TagField({ items, onAdd, onRemove, placeholder, color, compact }: {
   placeholder: string; color: string; compact?: boolean;
 }) {
   const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
-    blue:  { bg: 'bg-white/[0.06]', text: 'text-[#e5e5e7]', ring: 'ring-white/[0.06]' },
-    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-300', ring: 'ring-emerald-500/15' },
+    blue:  { bg: 'bg-card/[0.06]', text: 'text-[#e5e5e7]', ring: 'ring-white/[0.06]' },
+    green: { bg: 'bg-status-success/10', text: 'text-status-success', ring: 'ring-status-success/15' },
     red:   { bg: 'bg-red-500/10', text: 'text-red-300', ring: 'ring-red-500/15' },
   };
   const c = colorMap[color] || colorMap.blue;
@@ -1724,14 +1724,14 @@ function TagField({ items, onAdd, onRemove, placeholder, color, compact }: {
       {items.map((item: string, i: number) => (
         <span key={i} className={`${c.bg} ${c.text} text-[11px] px-2.5 py-1 rounded-lg ring-1 ${c.ring} flex items-center gap-1.5 font-medium max-w-full overflow-hidden`}>
           <span className="truncate min-w-0">{item}</span>
-          <button onClick={() => onRemove(i)} className="opacity-40 hover:opacity-100 transition-opacity hover:text-white shrink-0">
+          <button onClick={() => onRemove(i)} className="opacity-40 hover:opacity-100 transition-opacity hover:text-foreground shrink-0">
             <X className="w-2.5 h-2.5" />
           </button>
         </span>
       ))}
       <input
         type="text"
-        className="bg-transparent border-none outline-none text-[12px] text-white flex-1 min-w-[80px] placeholder-[#2c2c2e]"
+        className="bg-transparent border-none outline-none text-[12px] text-foreground flex-1 min-w-[80px] placeholder-[#2c2c2e]"
         placeholder={placeholder}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && e.currentTarget.value.trim()) {

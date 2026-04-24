@@ -16,7 +16,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-purple-500/30 text-purple-300 rounded-sm px-0.5">{part}</mark>
+          <mark key={i} className="bg-primary/30 text-primary rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         )
@@ -85,13 +85,13 @@ function SkeletonRow() {
   return (
     <div className="py-3 px-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div className="flex items-center gap-3">
-        <div className="w-[34px] h-[40px] rounded bg-white/[0.04] shimmer" />
+        <div className="w-[34px] h-[40px] rounded bg-card/[0.04] shimmer" />
         <div className="space-y-2">
-          <div className="h-3.5 w-56 rounded bg-white/[0.04] shimmer" />
-          <div className="h-2.5 w-20 rounded bg-white/[0.03] shimmer" />
+          <div className="h-3.5 w-56 rounded bg-card/[0.04] shimmer" />
+          <div className="h-2.5 w-20 rounded bg-card/[0.03] shimmer" />
         </div>
       </div>
-      <div className="h-8 w-8 rounded-lg bg-white/[0.03] shimmer" />
+      <div className="h-8 w-8 rounded-lg bg-card/[0.03] shimmer" />
     </div>
   );
 }
@@ -141,8 +141,8 @@ function FilterDropdown({
         onClick={() => setOpen(!open)}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors ${
           active
-            ? 'bg-white text-black'
-            : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e]'
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground border border-[#2c2c2e]'
         }`}
       >
         {active ? options.find(o => o.value === value)?.label || label : label}
@@ -165,8 +165,8 @@ function FilterDropdown({
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={`w-full text-left px-3 py-2 text-[13px] flex items-center justify-between transition-colors ${
                   value === opt.value
-                    ? 'bg-[#2c2c2e] text-white'
-                    : 'text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-white'
+                    ? 'bg-[#2c2c2e] text-foreground'
+                    : 'text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-foreground'
                 }`}
               >
                 <span>{opt.label}</span>
@@ -203,11 +203,11 @@ function KpiCard({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e]">
-      <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-white/[0.04]" style={{ color: iconColor }}>
+      <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-card/[0.04]" style={{ color: iconColor }}>
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="text-[20px] font-semibold text-white leading-tight">{value}</div>
+        <div className="text-[20px] font-semibold text-foreground leading-tight">{value}</div>
         <div className="text-[11px] text-[#636366] truncate">{title}</div>
       </div>
     </div>
@@ -529,11 +529,11 @@ export default function CertificateHub() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
-      <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <header className="sticky top-0 z-20 bg-background/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-[900px] mx-auto px-5 h-12 flex items-center justify-between">
-          <Link href="/hub" className="flex items-center gap-1.5 text-[13px] text-[#8e8e93] hover:text-white transition-colors">
+          <Link href="/hub" className="flex items-center gap-1.5 text-[13px] text-[#8e8e93] hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
             Hub
           </Link>
@@ -542,14 +542,14 @@ export default function CertificateHub() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-1 text-[13px] text-[#8e8e93] hover:text-white transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 text-[13px] text-[#8e8e93] hover:text-foreground transition-colors disabled:opacity-50"
               aria-label="Refresh"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.08] hover:bg-white/[0.14] transition-colors border border-[#2c2c2e]"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-foreground bg-card/[0.08] hover:bg-card/[0.14] transition-colors border border-[#2c2c2e]"
             >
               <Upload className="h-3.5 w-3.5" />
               Upload
@@ -561,7 +561,7 @@ export default function CertificateHub() {
       <main className="max-w-[900px] mx-auto px-5 pt-8 pb-20">
 
         <div className="mb-6">
-          <h1 className="text-[22px] font-semibold text-white tracking-tight mb-1">B-BBEE Certificates</h1>
+          <h1 className="text-[22px] font-semibold text-foreground tracking-tight mb-1">B-BBEE Certificates</h1>
           <p className="text-[13px] text-[#636366]">
             {loading ? 'Loading...' : searchResults !== null && search.trim()
               ? `Searching across document content`
@@ -616,7 +616,7 @@ export default function CertificateHub() {
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search certificates by name or content..."
-            className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
+            className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-foreground placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
           />
           {searching && (
             <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a] animate-spin" />
@@ -624,7 +624,7 @@ export default function CertificateHub() {
           {search && (
             <button
               onClick={() => { handleSearchChange(''); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-foreground transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -656,7 +656,7 @@ export default function CertificateHub() {
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="text-[12px] text-[#636366] hover:text-white transition-colors ml-1"
+                className="text-[12px] text-[#636366] hover:text-foreground transition-colors ml-1"
               >
                 Clear all
               </button>
@@ -680,7 +680,7 @@ export default function CertificateHub() {
               <p className="text-[12px] text-[#48484a] mb-3">
                 Try searching for names, keywords, or phrases inside certificates
               </p>
-              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors">
+              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-foreground transition-colors">
                 Clear search
               </button>
             </div>
@@ -703,7 +703,7 @@ export default function CertificateHub() {
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <FileFormatIcon fileName={result.file_name} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
+                          <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-foreground transition-colors">
                             <HighlightMatch text={result.file_name.replace(/\.[^/.]+$/, '')} query={search} />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -723,7 +723,7 @@ export default function CertificateHub() {
                         onClick={() => downloadCertificate(result.file_url, result.file_name)}
                         disabled={isDownloading}
                         aria-label={`Download ${result.file_name}`}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
                       >
                         {isDownloading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -751,7 +751,7 @@ export default function CertificateHub() {
               {search || hasActiveFilters ? 'No certificates match your filters' : 'No certificates found'}
             </p>
             {(search || hasActiveFilters) && (
-              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors mt-1">
+              <button onClick={clearAllFilters} className="text-[13px] text-[#8e8e93] hover:text-foreground transition-colors mt-1">
                 Clear all filters
               </button>
             )}
@@ -771,7 +771,7 @@ export default function CertificateHub() {
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <FileFormatIcon fileName={cert.fileName} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
+                      <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-foreground transition-colors">
                         {cert.fileName.replace(/\.[^/.]+$/, '')}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -791,7 +791,7 @@ export default function CertificateHub() {
                     onClick={() => downloadCertificate(cert.name, cert.fileName)}
                     disabled={isDownloading}
                     aria-label={`Download ${cert.fileName}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#636366] hover:text-foreground hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors shrink-0 ml-2 text-[12px]"
                   >
                     {isDownloading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -811,8 +811,8 @@ export default function CertificateHub() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
           <div className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-[15px] font-semibold text-white">Upload Certificates</h2>
-              <button onClick={closeUploadModal} disabled={uploading} className="text-[#636366] hover:text-white transition-colors disabled:opacity-50">
+              <h2 className="text-[15px] font-semibold text-foreground">Upload Certificates</h2>
+              <button onClick={closeUploadModal} disabled={uploading} className="text-[#636366] hover:text-foreground transition-colors disabled:opacity-50">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -826,7 +826,7 @@ export default function CertificateHub() {
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                   dragOver
                     ? 'border-[#2563eb] bg-[#2563eb]/10'
-                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-white/[0.02]'
+                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-card/[0.02]'
                 }`}
               >
                 <CloudUpload className={`h-8 w-8 mx-auto mb-3 ${dragOver ? 'text-[#2563eb]' : 'text-[#48484a]'}`} />
@@ -853,7 +853,7 @@ export default function CertificateHub() {
                     return (
                       <div
                         key={`${file.name}-${idx}`}
-                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03]"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-card/[0.03]"
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <FileUp className="h-4 w-4 text-[#636366] shrink-0" />
@@ -870,7 +870,7 @@ export default function CertificateHub() {
                             <XCircle className="h-4 w-4 text-[#ef4444]" title={result.error} />
                           )}
                           {!uploading && !result && (
-                            <button onClick={() => removeUploadFile(idx)} className="text-[#48484a] hover:text-white transition-colors">
+                            <button onClick={() => removeUploadFile(idx)} className="text-[#48484a] hover:text-foreground transition-colors">
                               <X className="h-3.5 w-3.5" />
                             </button>
                           )}
@@ -890,7 +890,7 @@ export default function CertificateHub() {
                 <button
                   onClick={closeUploadModal}
                   disabled={uploading}
-                  className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-foreground bg-card/[0.04] hover:bg-card/[0.08] transition-colors disabled:opacity-50"
                 >
                   {uploadResults ? 'Close' : 'Cancel'}
                 </button>
@@ -898,7 +898,7 @@ export default function CertificateHub() {
                   <button
                     onClick={handleUpload}
                     disabled={uploading || uploadFiles.length === 0}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-foreground bg-[#2563eb] hover:bg-[#1d4ed8] transition-colors disabled:opacity-50"
                   >
                     {uploading ? (
                       <>
