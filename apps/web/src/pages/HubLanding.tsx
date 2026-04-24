@@ -225,7 +225,7 @@ export default function HubLanding() {
                   <div className="space-y-1.5 mb-4">
                     {toolkit.features.map((feature, fi) => (
                       <div key={fi} className="flex items-center gap-2 text-[11px]">
-                        <span className={`w-1 h-1 rounded-full shrink-0 ${isActive ? 'bg-[#636366]' : 'bg-muted'}`}></span>
+                        <span className={`w-1 h-1 rounded-full shrink-0 ${isActive ? 'bg-muted-foreground' : 'bg-muted'}`}></span>
                         <span className={isActive ? 'text-[#636366]' : 'text-[#3a3a3c]'}>{feature}</span>
                       </div>
                     ))}

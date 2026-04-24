@@ -633,7 +633,7 @@ export default function EntityBuilder() {
   };
 
   const completenessColor = (pct: number) => pct >= 80 ? 'text-status-success' : pct >= 40 ? 'text-foreground/90' : 'text-amber-400';
-  const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-status-success' : pct >= 40 ? 'bg-[#636366]' : 'bg-amber-500';
+  const completenessBarColor = (pct: number) => pct >= 80 ? 'bg-status-success' : pct >= 40 ? 'bg-muted-foreground' : 'bg-amber-500';
 
   const filteredEntities = entitySearch.trim()
     ? entities.filter(e => e.label.toLowerCase().includes(entitySearch.toLowerCase()))
@@ -684,7 +684,7 @@ export default function EntityBuilder() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowPublishModal(false)} className="flex-1 py-3 rounded-xl font-medium text-[14px] text-[#b0b0b8] bg-muted hover:bg-[#3a3a3c] smooth press-sm">Cancel</button>
+                  <button onClick={() => setShowPublishModal(false)} className="flex-1 py-3 rounded-xl font-medium text-[14px] text-[#b0b0b8] bg-muted hover:bg-muted smooth press-sm">Cancel</button>
                   <button onClick={handlePublish} className="flex-1 py-3 bg-card/[0.12] hover:bg-card/[0.18] text-foreground rounded-xl font-semibold text-[14px] smooth press-sm shadow-lg shadow-black/10" data-testid="button-confirm-publish">
                     {editingTemplateId ? "Update" : "Publish"}
                   </button>
@@ -722,7 +722,7 @@ export default function EntityBuilder() {
       {showDraftPrompt && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ animation: 'fadeIn 0.15s ease' }}>
           <div className="absolute inset-0 bg-background/70 backdrop-blur-xl" onClick={() => { setShowDraftPrompt(false); setPendingAction(null); }} />
-          <div className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-3xl overflow-hidden" style={{ background: '#1c1c1e', boxShadow: '0 32px 64px -16px rgba(0,0,0,0.7)', animation: 'scaleIn 0.18s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-3xl overflow-hidden" style={{ background: 'hsl(var(--card))', boxShadow: '0 32px 64px -16px rgba(0,0,0,0.7)', animation: 'scaleIn 0.18s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="px-6 pt-7 pb-2 text-center">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/20 flex items-center justify-center mx-auto mb-4">
                 <FilePlus className="w-5 h-5 text-amber-400" />
@@ -769,7 +769,7 @@ export default function EntityBuilder() {
             <h3 className="text-[17px] font-semibold text-foreground text-center mb-2 tracking-tight">Delete Template?</h3>
             <p className="text-[13px] text-[#636366] text-center mb-7 leading-relaxed">This cannot be undone. The template will be permanently removed from the repository.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl font-medium text-[13px] text-[#b0b0b8] bg-muted hover:bg-[#3a3a3c] smooth press-sm">Cancel</button>
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl font-medium text-[13px] text-[#b0b0b8] bg-muted hover:bg-muted smooth press-sm">Cancel</button>
               <button onClick={() => deleteTemplateFromRepo(deleteConfirm)} className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 text-foreground rounded-xl font-semibold text-[13px] smooth press-sm" data-testid="button-confirm-delete">Delete</button>
             </div>
           </div>
@@ -779,7 +779,7 @@ export default function EntityBuilder() {
       {showTemplatesPanel && (
         <div className="fixed inset-0 z-40 flex" style={{ animation: 'fadeIn 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowTemplatesPanel(false)} />
-          <div className="relative ml-auto w-[400px] h-full bg-[#111111] flex flex-col shadow-2xl" style={{ borderLeft: '1px solid #2c2c2e', animation: 'slideInRight 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="relative ml-auto w-[400px] h-full bg-card flex flex-col shadow-2xl" style={{ borderLeft: '1px solid #2c2c2e', animation: 'slideInRight 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #2c2c2e' }}>
               <div>
                 <h2 className="text-[15px] font-semibold text-foreground tracking-tight">Template Repository</h2>
@@ -1001,7 +1001,7 @@ export default function EntityBuilder() {
             {editingTemplateId && <span className="text-[10px] px-2 py-0.5 bg-card/[0.07] text-foreground/90 rounded font-semibold whitespace-nowrap">Editing</span>}
             {hasUnsavedChanges && entities.length > 0 && (
               <span className={`text-[10px] px-2 py-0.5 rounded font-semibold flex items-center gap-1 whitespace-nowrap ${editingTemplateId ? 'text-amber-400 bg-amber-500/10' : 'text-foreground/90 bg-card/[0.06]'}`}>
-                <span className={`w-1 h-1 rounded-full animate-pulse ${editingTemplateId ? 'bg-amber-500' : 'bg-[#636366]'}`} />
+                <span className={`w-1 h-1 rounded-full animate-pulse ${editingTemplateId ? 'bg-amber-500' : 'bg-muted-foreground'}`} />
                 {editingTemplateId ? 'Unsaved' : 'Draft'}
               </span>
             )}
@@ -1049,8 +1049,8 @@ export default function EntityBuilder() {
 
           {/* AI Prompt Bar */}
           <div className="mb-4 shrink-0">
-            <div className="relative rounded-2xl bg-[#111111] smooth focus-within:ring-2 focus-within:ring-white/[0.10]"
-              style={{ border: '1px solid #2c2c2e' }}>
+            <div className="relative rounded-2xl bg-card smooth focus-within:ring-2 focus-within:ring-white/[0.10]"
+              style={{ border: '1px solid hsl(var(--border))' }}>
               <div className="flex items-start gap-2 px-4 pt-3 pb-2">
                 <Sparkles className={`w-4 h-4 mt-0.5 shrink-0 transition-colors ${nlInput.trim() ? 'text-foreground/90' : 'text-[#3a3a3c]'}`} />
                 <textarea
@@ -1095,8 +1095,8 @@ export default function EntityBuilder() {
             <div
               className="shrink-0 flex flex-col rounded-2xl overflow-hidden"
               style={{
-                background: '#0d0d0d',
-                border: '1px solid #1e1e1e',
+                background: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
                 width: leftTab === 'testing' ? '140px' : '240px',
                 transition: 'width 0.32s cubic-bezier(0.4,0,0.2,1)',
                 minWidth: leftTab === 'testing' ? '140px' : '240px',
@@ -1233,7 +1233,7 @@ export default function EntityBuilder() {
                           onClick={() => setSelectedEntityId(entity.id)}
                           className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-0.5 cursor-pointer smooth ${isSelected ? 'bg-card/[0.07]' : 'hover:bg-card/[0.04]'}`}
                           data-testid={`entity-row-${entity.id}`}>
-                          {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#636366]" />}
+                          {isSelected && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-muted-foreground" />}
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isSelected ? 'bg-card/[0.10] text-[#e5e5e7]' : 'bg-card/[0.05] text-[#636366]'}`}>
                             {entity.label.substring(0, 2).toUpperCase()}
                           </div>
@@ -1289,7 +1289,7 @@ export default function EntityBuilder() {
             </div>
 
             {/* Detail / Empty State Panel */}
-            <div className="flex-1 min-w-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+            <div className="flex-1 min-w-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
 
               {/* ═══════════════════════════════════════════════════════════
                   IMMERSIVE LIVE TESTING MODE — shown when leftTab==='testing'
@@ -1325,7 +1325,7 @@ export default function EntityBuilder() {
                       </button>
                       {testTemplateDropOpen && (
                         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
-                          style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
+                          style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 16px 32px rgba(0,0,0,0.5)' }}>
                           <div onClick={() => { setTestTemplateId('current'); setTestTemplateDropOpen(false); }}
                             className={`flex items-center gap-2 px-3 py-2 cursor-pointer smooth text-[12px] ${testTemplateId === 'current' ? 'bg-card/[0.08] text-[#e5e5e7]' : 'text-[#e5e5e7] hover:bg-card/[0.05]'}`}>
                             <span className="flex-1 truncate">Current build</span>
@@ -1393,7 +1393,7 @@ export default function EntityBuilder() {
 
                       {/* Drag-and-drop zone OR textarea */}
                       <div
-                        className={`flex-1 relative flex flex-col transition-colors ${testDragOver ? 'bg-[#636366]/[0.04]' : ''}`}
+                        className={`flex-1 relative flex flex-col transition-colors ${testDragOver ? 'bg-muted-foreground/[0.04]' : ''}`}
                         onDragOver={(e) => { e.preventDefault(); setTestDragOver(true); }}
                         onDragLeave={() => setTestDragOver(false)}
                         onDrop={(e) => {
@@ -1479,10 +1479,10 @@ export default function EntityBuilder() {
                           </div>
                         )}
                         {testResults.map((r, i) => (
-                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-card' : 'bg-[#111111] opacity-50'}`}
+                          <div key={i} className={`rounded-xl p-3 ${r.status === 'extracted' ? 'bg-card' : 'bg-card opacity-50'}`}
                             style={{ border: `1px solid ${r.status === 'extracted' ? '#2c2c2e' : '#1e1e1e'}` }}>
                             <div className="flex items-center gap-2 mb-1">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-status-success' : 'bg-[#3a3a3c]'}`} />
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === 'extracted' ? 'bg-status-success' : 'bg-muted'}`} />
                               <span className="text-[10px] font-semibold text-[#8e8e93] uppercase tracking-widest flex-1 truncate">{r.name}</span>
                               {r.status === 'extracted' && (
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold shrink-0 ${r.method === 'Pattern' ? 'bg-card/[0.08] text-foreground/90' : 'bg-muted text-[#636366]'}`}>
@@ -1526,7 +1526,7 @@ export default function EntityBuilder() {
 
               {selectedEntity && (
                 <div className="flex-1 overflow-y-auto">
-                  <div className="px-6 py-5 sticky top-0 z-10 shrink-0" style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e' }}>
+                  <div className="px-6 py-5 sticky top-0 z-10 shrink-0" style={{ background: 'hsl(var(--card))', borderBottom: '1px solid #1e1e1e' }}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0 overflow-hidden">
                         <input
@@ -1555,8 +1555,8 @@ export default function EntityBuilder() {
                   <div className="px-6 py-5 space-y-7">
                 <Section title="Definition" icon={<AlignLeft className="w-3.5 h-3.5" />}>
                   <textarea
-                    className="w-full bg-[#111111] text-[13px] text-foreground rounded-2xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-white/[0.08] resize-y leading-relaxed placeholder-[#3a3a3c] overflow-y-auto overflow-wrap-anywhere"
-                    style={{ border: '1px solid #1e1e1e', minHeight: '80px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                    className="w-full bg-card text-[13px] text-foreground rounded-2xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-white/[0.08] resize-y leading-relaxed placeholder-[#3a3a3c] overflow-y-auto overflow-wrap-anywhere"
+                    style={{ border: '1px solid hsl(var(--border))', minHeight: '80px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                     rows={4}
                     placeholder="Describe what this entity represents and when it appears in documents…"
                     value={selectedEntity.definition}
@@ -1568,8 +1568,8 @@ export default function EntityBuilder() {
                 <Section title="Pattern" icon={<Code className="w-3.5 h-3.5" />} hint="Regex to match">
                   <input
                     type="text"
-                    className="w-full bg-[#111111] text-[13px] text-foreground font-mono rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/[0.08] placeholder-[#3a3a3c]"
-                    style={{ border: '1px solid #1e1e1e' }}
+                    className="w-full bg-card text-[13px] text-foreground font-mono rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/[0.08] placeholder-[#3a3a3c]"
+                    style={{ border: '1px solid hsl(var(--border))' }}
                     placeholder='e.g. INV-\d{4} or \d{4}-\d{2}-\d{2}'
                     value={selectedEntity.pattern}
                     onChange={(e) => updateEntity(selectedEntity.id, 'pattern', e.target.value)}
@@ -1614,7 +1614,7 @@ export default function EntityBuilder() {
                       <button key={zone} onClick={() => toggleZone(selectedEntity.id, zone)}
                         className={`px-3.5 py-2 rounded-xl text-[12px] font-medium smooth press-sm transition-all ${selectedEntity.zones.includes(zone)
                           ? 'bg-card/[0.08] text-[#e5e5e7] ring-1 ring-white/[0.10]'
-                          : 'bg-[#111111] text-[#636666] ring-1 ring-white/[0.06] hover:ring-white/[0.12] hover:text-[#b0b0b8]'}`}>
+                          : 'bg-card text-[#636666] ring-1 ring-white/[0.06] hover:ring-white/[0.12] hover:text-[#b0b0b8]'}`}>
                         {zone}
                       </button>
                     ))}
@@ -1660,7 +1660,7 @@ export default function EntityBuilder() {
                       { check: selectedEntity.zones.length > 0, text: "Zones", sub: `${selectedEntity.zones.length} selected` },
                       { check: !!selectedEntity.pattern, text: "Pattern", sub: "Regex" },
                     ].map((item, i) => (
-                      <div key={i} className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[12px] transition-all overflow-hidden ${item.check ? 'bg-status-success/6 ring-1 ring-status-success/12' : 'bg-[#111111] ring-1 ring-white/[0.04]'}`}>
+                      <div key={i} className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[12px] transition-all overflow-hidden ${item.check ? 'bg-status-success/6 ring-1 ring-status-success/12' : 'bg-card ring-1 ring-white/[0.04]'}`}>
                         {item.check
                           ? <CheckCircle2 className="w-3.5 h-3.5 text-status-success shrink-0" />
                           : <div className="w-3.5 h-3.5 rounded-full border border-border shrink-0" />}
@@ -1719,8 +1719,8 @@ function TagField({ items, onAdd, onRemove, placeholder, color, compact }: {
   const c = colorMap[color] || colorMap.blue;
 
   return (
-    <div className={`flex flex-wrap gap-1.5 bg-[#111111] rounded-2xl px-3 ${compact ? 'py-2.5 min-h-[48px]' : 'py-3 min-h-[52px]'} items-center focus-within:ring-2 focus-within:ring-white/[0.08] transition-all`}
-      style={{ border: '1px solid #1e1e1e' }}>
+    <div className={`flex flex-wrap gap-1.5 bg-card rounded-2xl px-3 ${compact ? 'py-2.5 min-h-[48px]' : 'py-3 min-h-[52px]'} items-center focus-within:ring-2 focus-within:ring-white/[0.08] transition-all`}
+      style={{ border: '1px solid hsl(var(--border))' }}>
       {items.map((item: string, i: number) => (
         <span key={i} className={`${c.bg} ${c.text} text-[11px] px-2.5 py-1 rounded-lg ring-1 ${c.ring} flex items-center gap-1.5 font-medium max-w-full overflow-hidden`}>
           <span className="truncate min-w-0">{item}</span>
