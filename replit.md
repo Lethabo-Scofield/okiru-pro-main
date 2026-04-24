@@ -3,6 +3,18 @@
 ## Overview
 Okiru Pro is a comprehensive platform for automating B-BBEE (Broad-Based Black Economic Empowerment) compliance calculations, scorecard management, and reporting for South African businesses.
 
+## Design System
+The UI follows the **Sim Design Language** (tokens defined in `apps/web/src/index.css` and `apps/web/Toolkit/src/index.css`). The brand color palette is preserved (Toolkit purple primary `265 84% 58%`, app dark/slate primary `220 14% 28%`); only structural tokens were aligned to Sim DL.
+
+**Tokens applied:**
+- **Typography**: Season font with system fallbacks; body 15px/24px (weight 450); h1–h6 follow the Sim modular scale (36/30/27/22/18/15px).
+- **Radius scale**: `--radius-sm: 4px`, `--radius-md: 8px`, `--radius-lg: 12px`, `--radius-xl: 16px`. Base `--radius` = `0.5rem`.
+- **Status colors** (semantic, defined in both light + dark): `--status-success`, `--status-warning`, `--status-error`, `--status-info` plus `-bg` variants. Exposed via Tailwind utilities like `bg-status-success-bg` / `text-status-error`.
+- **Elevation**: `--shadow-elev-1/2/4/6` and `.elev-1`–`.elev-6` utility classes.
+- **Motion**: `--motion-duration-xs/sm/base/md` (100/150/200/300ms) and `--motion-easing-standard/spring/out`.
+- **Buttons**: default `min-h-10`, sm `min-h-8`, lg `min-h-12`, icon `h-10 w-10` (Sim DL sizing).
+- **Typography utilities**: `.text-display`, `.text-body-md`, `.text-body-sm`, `.text-caption`, `.text-mono`.
+
 ## Architecture
 This is a **pnpm monorepo** with three services:
 

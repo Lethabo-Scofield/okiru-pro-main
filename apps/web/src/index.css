@@ -4,10 +4,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Sim Design Language radius scale: sm 4px, md 8px, lg 12px */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -71,9 +73,36 @@
   --color-ink-800: #1f2937;
   --color-ink-900: #0f172a;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', sans-serif;
-  --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Plus Jakarta Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Sim Design Language — Status color tokens (semantic) */
+  --color-status-success: hsl(var(--status-success));
+  --color-status-success-bg: hsl(var(--status-success-bg));
+  --color-status-warning: hsl(var(--status-warning));
+  --color-status-warning-bg: hsl(var(--status-warning-bg));
+  --color-status-error: hsl(var(--status-error));
+  --color-status-error-bg: hsl(var(--status-error-bg));
+  --color-status-info: hsl(var(--status-info));
+  --color-status-info-bg: hsl(var(--status-info-bg));
+
+  /* Sim Design Language — Typography. Season is the brand display face.
+     We keep system fallbacks so the UI renders cleanly when Season is unavailable. */
+  --font-sans: 'Season', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', sans-serif;
+  --font-heading: 'Season', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+
+  /* Sim Design Language — Elevation scale */
+  --shadow-elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-elev-2: 0 1px 3px 0 rgba(0, 0, 0, 0.10);
+  --shadow-elev-4: 0 10px 15px -3px rgba(0, 0, 0, 0.10);
+  --shadow-elev-6: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Sim Design Language — Motion tokens */
+  --motion-duration-xs: 100ms;
+  --motion-duration-sm: 150ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-md: 300ms;
+  --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-easing-out: ease-out;
 }
 
 :root {
@@ -109,7 +138,17 @@
   --sidebar-accent-foreground: 220 10% 9%;
   --sidebar-border: 220 6% 87%;
   --sidebar-ring: 220 14% 28%;
-  --radius: 0.625rem;
+  --radius: 0.5rem; /* Sim DL: cards/buttons baseline = 8px */
+
+  /* Sim DL — Semantic status colors (light) */
+  --status-success: 152 18% 51%;       /* #6a9b82 */
+  --status-success-bg: 90 12% 90%;     /* #e2e8e0 */
+  --status-warning: 24 100% 50%;       /* #ff6600 */
+  --status-warning-bg: 28 100% 95%;    /* #fff3e8 */
+  --status-error: 0 84% 60%;           /* #ef4444 */
+  --status-error-bg: 0 86% 97%;        /* #fef2f2 */
+  --status-info: 210 50% 40%;          /* #336699 */
+  --status-info-bg: 214 100% 97%;      /* #eff6ff */
 }
 
 .dark {
@@ -145,12 +184,27 @@
   --sidebar-accent-foreground: 0 0% 86%;
   --sidebar-border: 0 0% 12%;
   --sidebar-ring: 0 0% 40%;
+
+  /* Sim DL — Semantic status colors (dark, slightly lifted for contrast on black) */
+  --status-success: 152 22% 58%;
+  --status-success-bg: 152 18% 14%;
+  --status-warning: 24 100% 60%;
+  --status-warning-bg: 24 60% 14%;
+  --status-error: 0 84% 65%;
+  --status-error-bg: 0 50% 14%;
+  --status-info: 210 60% 60%;
+  --status-info-bg: 210 50% 14%;
 }
 
 @layer base {
   * {
     @apply border-border;
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    /* Sim DL motion: standard 200ms easing for token-driven transitions */
+    transition: color var(--motion-duration-base) var(--motion-easing-standard),
+                background-color var(--motion-duration-base) var(--motion-easing-standard),
+                border-color var(--motion-duration-base) var(--motion-easing-standard),
+                box-shadow var(--motion-duration-base) var(--motion-easing-standard),
+                opacity var(--motion-duration-base) var(--motion-easing-standard);
   }
 
   *,
@@ -162,22 +216,108 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* Sim DL body-md baseline: 15px / 24px line-height */
+    font-size: 15px;
+    line-height: 24px;
+    font-weight: 450;
     font-feature-settings: "rlig" 1, "calt" 1;
-    letter-spacing: -0.011em;
+    letter-spacing: 0;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-heading tracking-tight;
+  /* Sim DL typography scale — applied to native heading elements
+     so existing markup picks up the new system without page-level rewrites. */
+  h1 {
+    @apply font-heading;
+    font-size: 36px;
+    line-height: 52px;
+    font-weight: 600;
+    letter-spacing: -1.5px;
+  }
+  h2 {
+    @apply font-heading;
+    font-size: 30px;
+    line-height: 44px;
+    font-weight: 600;
+    letter-spacing: -1.25px;
+  }
+  h3 {
+    @apply font-heading;
+    font-size: 27px;
+    line-height: 40px;
+    font-weight: 600;
+    letter-spacing: -1px;
+  }
+  h4 {
+    @apply font-heading;
+    font-size: 22px;
+    line-height: 32px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+  h5 {
+    @apply font-heading;
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: -0.25px;
+  }
+  h6 {
+    @apply font-heading;
+    font-size: 15px;
+    line-height: 24px;
+    font-weight: 600;
+    letter-spacing: 0;
   }
 
   ::selection {
-    background: rgba(59, 130, 246, 0.25);
+    background: hsl(var(--primary) / 0.25);
   }
 
   input, select, textarea, button {
     font-family: inherit;
     letter-spacing: inherit;
   }
+}
+
+/* Sim DL — Typography utility classes, available app-wide */
+@layer utilities {
+  .text-display {
+    font-family: var(--font-heading);
+    font-size: 48px;
+    line-height: 68px;
+    font-weight: 600;
+    letter-spacing: -2px;
+  }
+  .text-body-md {
+    font-size: 15px;
+    line-height: 24px;
+    font-weight: 450;
+    letter-spacing: 0;
+  }
+  .text-body-sm {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 450;
+    letter-spacing: 0;
+  }
+  .text-caption {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 450;
+    letter-spacing: 0.5px;
+  }
+  .text-mono {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+
+  /* Elevation helpers driven by Sim DL tokens */
+  .elev-1 { box-shadow: var(--shadow-elev-1); }
+  .elev-2 { box-shadow: var(--shadow-elev-2); }
+  .elev-4 { box-shadow: var(--shadow-elev-4); }
+  .elev-6 { box-shadow: var(--shadow-elev-6); }
 }
 
 .glass-panel {
