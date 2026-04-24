@@ -56,6 +56,12 @@ This is a **pnpm monorepo** with three applications:
 - `OPENAI_API_KEY` or Azure OpenAI variables — for AI extraction features
 - `GROQ_API_KEY` — for AI chat/extraction endpoints
 - `SESSION_SECRET` — express-session secret
+- `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME` — required for the Certificate Hub uploads/downloads against Azure Blob Storage container `clients-certs`. Provided in the Azure deployment environment.
+
+## Certificate Hub
+- **Bulk uploads**: Frontend chunks selections at 20 files per request up to a hard cap of 500 files. Backend multer accepts up to 100 files per chunk (`upload.array('files', 100)`) at 50 MB each. Progress bar shows `X/Y` while uploading.
+- **Display**: Both the file list and search results show only the **company name**. The name is derived from the blob filename (`deriveCompanyName` strips UUID prefix, dates, and noise suffixes like `B-BBEE`, `EME/QSE/Generic`, `Certificate`) and then upgraded with the AI-extracted `supplierName` from MongoDB metadata when available.
+- **Search**: Both `/list?search=` and `/search?q=` match against filename, derived company name, and Mongo `supplierName`, so users can search by entity even when display name and filename differ. `/search` also merges results from Azure AI Search content matching when configured.
 
 **Note**: Without MongoDB and ArangoDB, the app runs with in-memory storage (data won't persist across restarts). Core UI features still work.
 
