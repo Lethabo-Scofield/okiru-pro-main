@@ -92,23 +92,23 @@ export default function HubLanding() {
     : toolkits;
 
   return (
-    <div className="font-sans min-h-screen bg-black" style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}>
+    <div className="font-sans min-h-screen bg-background" >
       
       {needsOnboarding && !showTour && (
         <OnboardingWelcome onStart={startTour} onSkip={completeTour} userName={user?.fullName} />
       )}
       {showTour && <OnboardingTour onComplete={completeTour} onDismiss={dismissTour} />}
 
-      <header className="h-14 shrink-0 z-20 bg-black sticky top-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+      <header className="h-14 shrink-0 z-20 bg-background sticky top-0" >
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-            <span className="text-lg font-semibold tracking-tight text-white border-l border-white/[0.07] pl-3">Okiru Hub</span>
+            <span className="text-lg font-semibold tracking-tight text-foreground border-l border-white/[0.07] pl-3">Okiru Hub</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSearchOpen(prev => !prev)}
-              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
+              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-foreground"
               title="Search toolkits"
               data-testid="btn-search-toolkits"
             >
@@ -116,7 +116,7 @@ export default function HubLanding() {
             </button>
             <button
               onClick={startTour}
-              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
+              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-foreground"
               title="Take a tour"
               data-testid="btn-tour"
             >
@@ -133,7 +133,7 @@ export default function HubLanding() {
               </button>
             )}
             <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] text-[12px]">
-              <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.10] items-center justify-center text-white font-semibold text-[9px]">
+              <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.10] items-center justify-center text-foreground font-semibold text-[9px]">
                 {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
               <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
@@ -151,20 +151,20 @@ export default function HubLanding() {
       </header>
 
       {searchOpen && (
-        <div className="max-w-[1400px] mx-auto w-full px-6 py-3 bg-black" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="max-w-[1400px] mx-auto w-full px-6 py-3 bg-background" >
           <div className="relative max-w-lg mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a]" />
             <input
               type="text"
               placeholder="Search toolkits..."
               autoFocus
-              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/[0.10] smooth placeholder:text-[#48484a]"
+              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-foreground outline-none focus:ring-2 focus:ring-white/[0.10] smooth placeholder:text-[#48484a]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               data-testid="input-search-toolkits"
             />
             {searchQuery && (
-              <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#636366] hover:text-white smooth" data-testid="btn-clear-search">
+              <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#636366] hover:text-foreground smooth" data-testid="btn-clear-search">
                 <X className="h-4 w-4" />
               </button>
             )}
@@ -175,10 +175,10 @@ export default function HubLanding() {
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-16">
         <section className="text-center max-w-2xl mx-auto mb-16 fade-in">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[#8e8e93] text-[11px] font-semibold tracking-wider uppercase mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60 animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-status-success/60 animate-pulse"></span>
             Compliance Suite · South Africa
           </div>
-          <h1 className="text-[38px] leading-[1.08] sm:text-[48px] font-bold tracking-tight text-white mb-4" style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+          <h1 className="text-[38px] leading-[1.08] sm:text-[48px] font-bold tracking-tight text-foreground mb-4" >
             Your compliance<br />command centre.
           </h1>
           <p className="text-[15px] text-[#636366] leading-relaxed max-w-md mx-auto font-light">
@@ -200,7 +200,7 @@ export default function HubLanding() {
               const innerContent = (
                 <div className="flex flex-col h-full">
                   <div className="flex items-start justify-between mb-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400' : 'bg-white/[0.02] border border-white/[0.04] text-[#48484a]'}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-primary/10 border border-primary/20 text-primary' : 'bg-white/[0.02] border border-white/[0.04] text-[#48484a]'}`}>
                       {toolkit.icon}
                     </div>
                     <div className="flex items-center gap-2">
@@ -211,11 +211,11 @@ export default function HubLanding() {
                   </div>
 
                   <div className="flex items-center gap-1.5 mb-2">
-                    <Sparkles className={`w-3 h-3 ${isActive ? 'text-emerald-400/70' : 'text-[#2c2c2e]'}`} />
-                    <span className={`text-[10px] font-medium tracking-wide ${isActive ? 'text-emerald-400/70' : 'text-[#2c2c2e]'}`}>{toolkit.aiBadge}</span>
+                    <Sparkles className={`w-3 h-3 ${isActive ? 'text-status-success' : 'text-[#2c2c2e]'}`} />
+                    <span className={`text-[10px] font-medium tracking-wide ${isActive ? 'text-status-success' : 'text-[#2c2c2e]'}`}>{toolkit.aiBadge}</span>
                   </div>
                   
-                  <h3 className={`text-[16px] font-semibold mb-2 tracking-tight leading-snug ${isActive ? 'text-indigo-300' : 'text-[#48484a]'}`}>
+                  <h3 className={`text-[16px] font-semibold mb-2 tracking-tight leading-snug ${isActive ? 'text-primary' : 'text-[#48484a]'}`}>
                     {toolkit.title}
                   </h3>
                   <p className={`text-[12px] leading-relaxed font-light flex-1 mb-4 ${isActive ? 'text-[#8e8e93]' : 'text-[#3a3a3c]'}`}>
@@ -234,8 +234,8 @@ export default function HubLanding() {
                   <div className={`pt-3 border-t flex items-center justify-between ${isActive ? 'border-white/[0.06]' : 'border-white/[0.03]'}`}>
                     <div className="flex items-center gap-2">
                       {isActive ? (
-                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400/80" data-testid={`status-active-${toolkit.id}`}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80"></span> Active
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-status-success" data-testid={`status-active-${toolkit.id}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-status-success"></span> Active
                         </span>
                       ) : (
                         <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#3a3a3c]" data-testid={`status-coming-${toolkit.id}`}>
@@ -243,7 +243,7 @@ export default function HubLanding() {
                         </span>
                       )}
                     </div>
-                    <div className={`w-7 h-7 rounded-full border flex items-center justify-center ${isActive ? 'border-white/[0.10] text-[#8e8e93] group-hover:bg-white/[0.06] group-hover:text-white' : 'border-white/[0.04] text-[#2c2c2e]'} smooth`}>
+                    <div className={`w-7 h-7 rounded-full border flex items-center justify-center ${isActive ? 'border-white/[0.10] text-[#8e8e93] group-hover:bg-white/[0.06] group-hover:text-foreground' : 'border-white/[0.04] text-[#2c2c2e]'} smooth`}>
                       {isActive ? <ChevronRight className="w-3.5 h-3.5" /> : <Lock className="w-3 h-3" />}
                     </div>
                   </div>
@@ -255,7 +255,7 @@ export default function HubLanding() {
                   <Link
                     key={toolkit.id}
                     href={toolkit.link!}
-                    className={`relative block rounded-2xl bg-white/[0.03] p-5 cursor-pointer overflow-hidden transition-all duration-300 border border-indigo-500/15 hover:border-indigo-500/30 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:shadow-lg hover:shadow-indigo-500/5 fade-in stagger-${Math.min(idx + 1, 6)} group`}
+                    className={`relative block rounded-2xl bg-white/[0.03] p-5 cursor-pointer overflow-hidden transition-all duration-300 border border-primary/20 hover:border-primary/40 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:shadow-lg hover:shadow-primary/5 fade-in stagger-${Math.min(idx + 1, 6)} group`}
                     data-testid={`card-toolkit-${toolkit.id}`}
                   >
                     {innerContent}

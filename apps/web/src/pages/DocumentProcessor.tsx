@@ -619,8 +619,8 @@ function CSVTableViewer({ text, isExcel }: { text: string; isExcel: boolean }) {
             <button key={i} onClick={() => setActiveSheet(i)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
                 activeSheet === i
-                  ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-white/60'
+                  ? 'bg-card text-gray-800 shadow-sm border border-gray-200'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-card/60'
               }`}>
               {s.name}
             </button>
@@ -628,7 +628,7 @@ function CSVTableViewer({ text, isExcel }: { text: string; isExcel: boolean }) {
         </div>
       )}
       <div className="flex-1 overflow-auto p-4">
-        <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+        <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-card">
           <table className="w-full text-left border-collapse" style={{ fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f3f4f6' }}>
@@ -645,7 +645,7 @@ function CSVTableViewer({ text, isExcel }: { text: string; isExcel: boolean }) {
                 <tr><td colSpan={colsToShow + 1} className="px-4 py-6 text-center text-gray-400 text-sm">No data rows</td></tr>
               ) : (
                 body.map((row, ri) => (
-                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <tr key={ri} className={ri % 2 === 0 ? 'bg-card' : 'bg-gray-50/60'} style={{ borderBottom: '1px solid #f3f4f6' }}>
                     <td className="px-3 py-1.5 text-[10px] text-gray-300 font-mono select-none">{ri + 2}</td>
                     {Array.from({ length: colsToShow }).map((_, ci) => {
                       const val = row[ci] ?? '';
@@ -731,7 +731,7 @@ function HighlightedDocument({ text, entities, hoveredEntity, onHoverEntity }: {
   }, [text, entities]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+    <div className="bg-card rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
       <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif', letterSpacing: '0' }}>
         {highlighted.map((seg, i) => {
           if (!seg.highlight) return <span key={i}>{seg.text}</span>;
@@ -969,7 +969,7 @@ function PDFDocumentViewer({ file, entities, hoveredEntity, onHoverEntity }: {
             hoveredEntity={hoveredEntity}
             onHoverEntity={onHoverEntity}
           />
-          <div className="absolute bottom-2 right-3 text-[10px] text-white/40 font-medium bg-black/40 px-2 py-0.5 rounded-md">
+          <div className="absolute bottom-2 right-3 text-[10px] text-foreground/40 font-medium bg-background/40 px-2 py-0.5 rounded-md">
             Page {pageIdx + 1}
           </div>
         </div>
@@ -1042,7 +1042,7 @@ function PopulatingScreen({
             {done ? 'Populating complete' : 'Populating Toolkit'}
           </span>
         </div>
-        <h1 className="text-2xl font-bold text-white mb-1">
+        <h1 className="text-2xl font-bold text-foreground mb-1">
           {done ? 'Opening scorecard…' : `Importing ${companyName}`}
         </h1>
         <p className="text-[13px] text-[#8e8e93]">
@@ -1075,12 +1075,12 @@ function PopulatingScreen({
               {/* Pillar header */}
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#1e1e22]">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: pillar.color }} />
-                <span className="text-[12px] font-semibold text-white/80 tracking-wide">{pillar.label}</span>
+                <span className="text-[12px] font-semibold text-foreground/80 tracking-wide">{pillar.label}</span>
                 <span className="ml-auto text-[11px] text-[#5e5e6a]">
                   {pillar.entities.length} {pillar.entities.length === 1 ? 'record' : 'records'}
                 </span>
                 {(revealed || done) && (
-                  <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -1116,7 +1116,7 @@ function PopulatingScreen({
 
       {/* Done state */}
       {done && (
-        <div className="mt-8 flex items-center gap-3 text-emerald-400 animate-pulse">
+        <div className="mt-8 flex items-center gap-3 text-status-success animate-pulse">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -2740,21 +2740,21 @@ export default function DocumentProcessor() {
   }
 
   return (
-    <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
+    <div className="bg-background text-foreground font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
-      <header className="h-12 shrink-0 z-20 sticky top-0 bg-black/95 backdrop-blur-xl" style={{ borderBottom: '1px solid #1c1c1e' }}>
+      <header className="h-12 shrink-0 z-20 sticky top-0 bg-background/95 backdrop-blur-xl" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center gap-1.5 text-[#636366] hover:text-white transition-colors group shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-1.5 text-[#636366] hover:text-foreground transition-colors group shrink-0">
               <ChevronLeft className="h-4 w-4" />
               <span className="text-[13px] font-medium hidden sm:inline">Dashboard</span>
             </Link>
             <div className="w-px h-4 bg-[#1c1c1e]"></div>
-            <span className="text-[14px] font-medium text-white">Document Processor</span>
+            <span className="text-[14px] font-medium text-foreground">Document Processor</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/builder" className="text-[13px] font-medium text-[#48484a] hover:text-white transition-colors px-3 py-1.5 rounded-lg" data-testid="link-builder-nav">
+            <Link href="/builder" className="text-[13px] font-medium text-[#48484a] hover:text-foreground transition-colors px-3 py-1.5 rounded-lg" data-testid="link-builder-nav">
               Builder
             </Link>
             <div className="w-px h-4 bg-[#1c1c1e] mx-0.5"></div>
@@ -2775,7 +2775,7 @@ export default function DocumentProcessor() {
         </div>
       </header>
 
-      <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
+      <div className="bg-background px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
           {(() => {
             // Build mode has its own step flow
@@ -2809,18 +2809,18 @@ export default function DocumentProcessor() {
                     onClick={() => { if (canNavigate) setCurrentPage(step.page as any); }}>
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all ${
                       isComplete
-                        ? 'bg-white text-black group-hover:bg-[#d1d1d6]'
+                        ? 'bg-primary text-primary-foreground group-hover:bg-primary/80'
                         : isCurrent
-                          ? 'bg-white text-black'
+                          ? 'bg-primary text-primary-foreground'
                           : 'bg-[#1c1c1e] text-[#48484a]'
                     }`}>
                       {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
                     </div>
                     <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
                       isComplete
-                        ? 'text-[#d1d1d6] group-hover:text-white'
+                        ? 'text-[#d1d1d6] group-hover:text-foreground'
                         : isCurrent
-                          ? 'text-white'
+                          ? 'text-foreground'
                           : 'text-[#48484a]'
                     }`}>{step.label}</span>
                   </div>
@@ -2850,7 +2850,7 @@ export default function DocumentProcessor() {
                 <div className="max-w-2xl mx-auto w-full">
 
                   <div className="mb-10">
-                    <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">New Client Assessment</h2>
+                    <h2 className="text-[28px] font-semibold text-foreground tracking-tight leading-tight">New Client Assessment</h2>
                     <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter the client company's details before uploading documents.</p>
                   </div>
 
@@ -2885,7 +2885,7 @@ export default function DocumentProcessor() {
                           <div className="flex items-center gap-2">
                             <button type="button"
                               onClick={() => (document.getElementById('logo-input') as HTMLInputElement)?.click()}
-                              className="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.09] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-white/[0.08]"
+                              className="px-3.5 py-2 rounded-xl bg-card/[0.06] hover:bg-card/[0.09] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-white/[0.08]"
                               data-testid="button-upload-logo">
                               {companyInfo.logo ? 'Change Logo' : 'Upload Logo'}
                             </button>
@@ -2911,14 +2911,14 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Company Name <span className="text-red-400">*</span></label>
                           <input type="text" value={companyInfo.name} onChange={(e) => setCompanyInfo(p => ({ ...p, name: e.target.value }))}
                             placeholder="e.g. Acme Holdings (Pty) Ltd"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-company-name" autoFocus />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Registration Number</label>
                           <input type="text" value={companyInfo.registrationNumber} onChange={(e) => setCompanyInfo(p => ({ ...p, registrationNumber: e.target.value }))}
                             placeholder="e.g. 2021/123456/07"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-company-regno" />
                         </div>
                         <div>
@@ -2930,7 +2930,7 @@ export default function DocumentProcessor() {
                             value={companyInfo.sector}
                             onChange={(e) => setCompanyInfo(p => ({ ...p, sector: e.target.value }))}
                             disabled={loadingSectors}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none disabled:opacity-50"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none disabled:opacity-50"
                             data-testid="select-company-sector">
                             <option value="">{loadingSectors ? 'Loading sectors...' : 'Select a sector…'}</option>
                             {availableSectors.map(s => (
@@ -2949,20 +2949,20 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover (ZAR)</label>
                           <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
                             placeholder="e.g. R 50,000,000"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-annual-turnover" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Number of Employees</label>
                           <input type="text" value={companyInfo.employees} onChange={(e) => setCompanyInfo(p => ({ ...p, employees: e.target.value }))}
                             placeholder="e.g. 150"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-employees" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Financial Year End</label>
                           <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
                             data-testid="select-fye">
                             <option value="">Select month…</option>
                             {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
@@ -2971,7 +2971,7 @@ export default function DocumentProcessor() {
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Current B-BBEE Level</label>
                           <select value={companyInfo.currentBBEELevel} onChange={(e) => setCompanyInfo(p => ({ ...p, currentBBEELevel: e.target.value }))}
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
                             data-testid="select-bbee-level">
                             <option value="">Select level…</option>
                             {BBEE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -2981,7 +2981,7 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Physical Address</label>
                           <input type="text" value={companyInfo.address} onChange={(e) => setCompanyInfo(p => ({ ...p, address: e.target.value }))}
                             placeholder="e.g. 10 Mandela Square, Sandton, 2196"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-address" />
                         </div>
                       </div>
@@ -2995,21 +2995,21 @@ export default function DocumentProcessor() {
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Full Name</label>
                           <input type="text" value={companyInfo.contactName} onChange={(e) => setCompanyInfo(p => ({ ...p, contactName: e.target.value }))}
                             placeholder="e.g. Jane Dlamini"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-name" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Email Address</label>
                           <input type="email" value={companyInfo.contactEmail} onChange={(e) => setCompanyInfo(p => ({ ...p, contactEmail: e.target.value }))}
                             placeholder="e.g. jane@company.co.za"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-email" />
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Phone Number</label>
                           <input type="tel" value={companyInfo.contactPhone} onChange={(e) => setCompanyInfo(p => ({ ...p, contactPhone: e.target.value }))}
                             placeholder="e.g. +27 82 123 4567"
-                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
+                            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-contact-phone" />
                         </div>
                       </div>
@@ -3021,7 +3021,7 @@ export default function DocumentProcessor() {
                       <textarea value={companyInfo.notes} onChange={(e) => setCompanyInfo(p => ({ ...p, notes: e.target.value }))}
                         placeholder="Any additional context about this client or assessment…"
                         rows={3}
-                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all resize-none"
+                        className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-foreground placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all resize-none"
                         data-testid="input-notes" />
                     </div>
 
@@ -3051,7 +3051,7 @@ export default function DocumentProcessor() {
                       setCurrentPage(nextPage);
                     }}
                     disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
-                    className="w-full mt-4 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
+                    className="w-full mt-4 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
                     data-testid="button-next-mode"
                   >
                     {isSavingSession
@@ -3148,7 +3148,7 @@ export default function DocumentProcessor() {
           {currentPage === 'upload' && (
             <div className="max-w-2xl mx-auto w-full">
               <div className="mb-10">
-                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Upload Documents</h2>
+                <h2 className="text-[28px] font-semibold text-foreground tracking-tight leading-tight">Upload Documents</h2>
                 <p className="text-[#8e8e93] text-[15px] mt-1.5">Drag and drop files or click to browse.</p>
               </div>
 
@@ -3157,7 +3157,7 @@ export default function DocumentProcessor() {
                   <AlertTriangle className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-[#d1d1d6]">No templates available</p>
-                    <p className="text-xs text-[#636366] mt-1">Create a template in the Entity Builder first. <Link href="/builder" className="underline text-white">Go to Builder</Link></p>
+                    <p className="text-xs text-[#636366] mt-1">Create a template in the Entity Builder first. <Link href="/builder" className="underline text-foreground">Go to Builder</Link></p>
                   </div>
                 </div>
               )}
@@ -3181,7 +3181,7 @@ export default function DocumentProcessor() {
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-transform ${isDragActive ? 'scale-105' : ''}`} style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
                       <CloudUpload className="w-6 h-6 text-[#636366]" />
                     </div>
-                    <h3 className="text-[15px] font-medium text-white mb-1">Drop files here</h3>
+                    <h3 className="text-[15px] font-medium text-foreground mb-1">Drop files here</h3>
                     <p className="text-[13px] text-[#636366] mb-4">or click to browse</p>
                     <div className="flex items-center justify-center gap-1.5 text-[11px]">
                       {['PDF', 'XLSX', 'CSV', 'DOCX', 'TXT'].map(ext => (
@@ -3202,7 +3202,7 @@ export default function DocumentProcessor() {
                   <button
                     type="button"
                     onClick={() => setCurrentPage('choose-mode')}
-                    className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                    className="flex-1 px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
                     data-testid="button-back-choose-mode-empty"
                   >
                     Back
@@ -3228,12 +3228,12 @@ export default function DocumentProcessor() {
                           <FileFormatBadge type={file.type} size="sm" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-medium text-white truncate">{file.name}</div>
+                          <div className="text-[13px] font-medium text-foreground truncate">{file.name}</div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#48484a]">{file.size}</span>
                             {file.status === 'uploading' && (
                               <div className="flex-1 h-0.5 bg-[#2c2c2e] rounded-full overflow-hidden max-w-[100px]">
-                                <div className="h-full bg-white transition-all rounded-full" style={{ width: `${file.uploadProgress}%` }}></div>
+                                <div className="h-full bg-card transition-all rounded-full" style={{ width: `${file.uploadProgress}%` }}></div>
                               </div>
                             )}
                             {file.status === 'ready' && <Check className="w-3 h-3 text-[#636366]" />}
@@ -3249,13 +3249,13 @@ export default function DocumentProcessor() {
                     <button
                       type="button"
                       onClick={() => setCurrentPage('choose-mode')}
-                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                      className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors"
                       data-testid="button-back-choose-mode-upload"
                     >
                       Back
                     </button>
                     <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
-                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
+                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
                       {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                     </button>
                   </div>
@@ -3267,7 +3267,7 @@ export default function DocumentProcessor() {
           {currentPage === 'classify' && (
             <div className="max-w-2xl mx-auto w-full">
               <div className="mb-10">
-                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Assign Templates</h2>
+                <h2 className="text-[28px] font-semibold text-foreground tracking-tight leading-tight">Assign Templates</h2>
                 <p className="text-[#8e8e93] text-[15px] mt-1.5">Select a template for each document to define the fields to extract.</p>
               </div>
 
@@ -3298,7 +3298,7 @@ export default function DocumentProcessor() {
                             </div>
 
                             <div className="flex-1 min-w-0">
-                              <div className="text-[14px] font-medium text-white truncate leading-tight">{file.name}</div>
+                              <div className="text-[14px] font-medium text-foreground truncate leading-tight">{file.name}</div>
                               <div className="text-[12px] text-[#636366] mt-0.5">{file.size}</div>
                             </div>
 
@@ -3363,10 +3363,10 @@ export default function DocumentProcessor() {
                                               className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[#2c2c2e]"
                                             >
                                               <div className="flex-1 min-w-0">
-                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-white' : 'text-[#d1d1d6]'}`}>{t.name}</div>
+                                                <div className={`text-[13px] font-medium truncate ${isSel ? 'text-foreground' : 'text-[#d1d1d6]'}`}>{t.name}</div>
                                                 <div className="text-[11px] text-[#48484a]">{(t.entities ?? []).length} field{(t.entities ?? []).length !== 1 ? 's' : ''} · v{t.version}</div>
                                               </div>
-                                              {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                                              {isSel && <Check className="w-4 h-4 text-foreground shrink-0" />}
                                             </button>
                                           );
                                         })
@@ -3382,7 +3382,7 @@ export default function DocumentProcessor() {
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'digital' }))}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
-                                  !isScanned ? 'bg-[#1c1c1e] text-white' : 'text-[#48484a] hover:text-[#636366]'
+                                  !isScanned ? 'bg-[#1c1c1e] text-foreground' : 'text-[#48484a] hover:text-[#636366]'
                                 }`}
                               >
                                 <Monitor className="w-3 h-3" />
@@ -3393,7 +3393,7 @@ export default function DocumentProcessor() {
                                 type="button"
                                 onClick={() => setFileDocTypes(prev => ({ ...prev, [String(file.id)]: 'scanned' }))}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-all ${
-                                  isScanned ? 'bg-[#1c1c1e] text-white' : 'text-[#48484a] hover:text-[#636366]'
+                                  isScanned ? 'bg-[#1c1c1e] text-foreground' : 'text-[#48484a] hover:text-[#636366]'
                                 }`}
                               >
                                 <ScanLine className="w-3 h-3" />
@@ -3420,11 +3420,11 @@ export default function DocumentProcessor() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-upload">
+                <button onClick={() => setCurrentPage('upload')} className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-upload">
                   Back
                 </button>
                 <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
-                  className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
+                  className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
                   {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
                 </button>
               </div>
@@ -3449,7 +3449,7 @@ export default function DocumentProcessor() {
             return (
               <div className="max-w-2xl mx-auto w-full">
                 <div className="mb-10">
-                  <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">
+                  <h2 className="text-[28px] font-semibold text-foreground tracking-tight leading-tight">
                     {anyProcessing ? 'Extracting...' : allDone ? 'Extraction Complete' : 'Ready to Extract'}
                   </h2>
                   <p className="text-[#8e8e93] text-[15px] mt-1.5">
@@ -3488,11 +3488,11 @@ export default function DocumentProcessor() {
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#1c1c1e' }}>
                           {status === 'waiting' && <Circle className="w-2 h-2 text-[#48484a]" />}
                           {status === 'processing' && <Loader2 className="w-3.5 h-3.5 text-[#8e8e93] animate-spin" />}
-                          {status === 'done' && <Check className="w-3.5 h-3.5 text-white" />}
+                          {status === 'done' && <Check className="w-3.5 h-3.5 text-foreground" />}
                           {status === 'error' && <X className="w-3.5 h-3.5 text-[#8e8e93]" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-medium text-white truncate">{file.name}</div>
+                          <div className="text-[13px] font-medium text-foreground truncate">{file.name}</div>
                           <div className="text-[11px] text-[#48484a] mt-0.5">
                             {status === 'processing' ? <ExtractionTimer /> : status === 'done' ? 'Complete' : status === 'error' ? 'Failed' : tmpl ? tmpl.name : ''}
                           </div>
@@ -3514,7 +3514,7 @@ export default function DocumentProcessor() {
                         <span className="text-[11px] text-[#636366] tabular-nums">{Math.round(pct)}%</span>
                       </div>
                       <div className="h-1.5 bg-[#1c1c1e] rounded-full overflow-hidden">
-                        <div className="h-full bg-white transition-all duration-500 rounded-full" style={{ width: `${pct}%` }}></div>
+                        <div className="h-full bg-card transition-all duration-500 rounded-full" style={{ width: `${pct}%` }}></div>
                       </div>
                     </div>
                   );
@@ -3522,12 +3522,12 @@ export default function DocumentProcessor() {
 
                 <div className="flex gap-3">
                   <button onClick={() => { if (!anyProcessing) setCurrentPage('classify'); }} disabled={anyProcessing}
-                    className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-classify">
+                    className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[13px] font-medium transition-colors" data-testid="button-back-classify">
                     Back
                   </button>
                   {!allDone && (
                     <button onClick={startProcessing} disabled={anyProcessing}
-                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
+                      className="flex-1 py-3 bg-card hover:bg-primary/90 disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
                       {anyProcessing ? (
                         <><Loader2 className="w-3.5 h-3.5 mr-1.5 inline-block animate-spin" />Extracting...</>
                       ) : 'Extract All'}
@@ -3547,7 +3547,7 @@ export default function DocumentProcessor() {
                         setCurrentPage('review');
                       }
                     }}
-                    className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-go-review">
+                    className="flex-1 py-3 bg-card hover:bg-primary/90 text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-go-review">
                       Review Results
                     </button>
                   )}
@@ -3833,16 +3833,16 @@ export default function DocumentProcessor() {
             };
             return (
             <div className="flex flex-col flex-1 min-h-0 -m-6">
-              <div className="px-6 py-4 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
+              <div className="px-6 py-4 flex items-center justify-between bg-background shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
                 <div className="flex items-center gap-4">
                   <button onClick={() => {
                     if (activeReviewDoc > 0) { setActiveReviewDoc(prev => prev - 1); setHoveredEntity(null); setReviewFilter('all'); setEditingEntity(null); }
                     else setCurrentPage('extract');
-                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
+                  }} className="p-2 -ml-2 text-[#8e8e93] hover:text-foreground hover:bg-[#1c1c1e] rounded-[10px] smooth press-sm" data-testid="button-back-extract">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
                   <div>
-                    <h2 className="text-[15px] font-semibold text-white leading-tight">Review Results</h2>
+                    <h2 className="text-[15px] font-semibold text-foreground leading-tight">Review Results</h2>
                     <p className="text-[11px] text-[#636366] truncate max-w-[240px]">{extractionResults[activeReviewDoc]?.fileName}</p>
                   </div>
                   {extractionResults.length > 1 && (
@@ -3856,8 +3856,8 @@ export default function DocumentProcessor() {
                   <button onClick={handleSave} disabled={isSavingSession || isSubmitted}
                     className={`px-3.5 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 border transition-colors
                       ${savedDocs.has(activeReviewDoc)
-                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15'
-                        : 'bg-[#1c1c1e] border-[#2c2c2e] text-[#d1d1d6] hover:text-white hover:border-[#48484a]'}
+                        ? 'bg-status-success/10 border-status-success/25 text-status-success hover:bg-status-success/15'
+                        : 'bg-[#1c1c1e] border-[#2c2c2e] text-[#d1d1d6] hover:text-foreground hover:border-[#48484a]'}
                       disabled:opacity-40 disabled:cursor-not-allowed`}
                     data-testid="button-save-doc">
                     {isSavingSession
@@ -3869,7 +3869,7 @@ export default function DocumentProcessor() {
 
                   {/* Next button */}
                   <button onClick={handleNext} disabled={isLastDoc || isSavingSession || isSubmitted}
-                    className="px-3.5 py-2 bg-[#1c1c1e] border border-[#2c2c2e] hover:border-[#48484a] text-[#d1d1d6] hover:text-white rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 bg-[#1c1c1e] border border-[#2c2c2e] hover:border-[#48484a] text-[#d1d1d6] hover:text-foreground rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
                     data-testid="button-next-doc">
                     Next <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -3888,7 +3888,7 @@ export default function DocumentProcessor() {
                     const parts = Object.entries(tbl).map(([k, v]) => `${v} ${labels[k] || k}`);
                     return (
                       <div className="px-2 py-1.5 bg-[#1c1c1e] rounded-lg text-[10px] text-[#8e8e93] flex items-center gap-1.5 max-w-[260px] truncate" title={`${entityCount} entities, ${parts.join(', ')}`}>
-                        <span className="text-emerald-400 font-mono">{entityCount}</span>
+                        <span className="text-status-success font-mono">{entityCount}</span>
                         <span>entities</span>
                         {parts.length > 0 && <span className="text-[#48484a]">|</span>}
                         {parts.map((p, i) => <span key={i}>{p}</span>).reduce((a: any, b: any, i: number) => i === 0 ? [b] : [...a, <span key={`sep-${i}`} className="text-[#48484a]">,</span>, b], [] as any)}
@@ -3901,9 +3901,9 @@ export default function DocumentProcessor() {
                     title={!allSaved ? `Save all ${extractionResults.length} document${extractionResults.length > 1 ? 's' : ''} before submitting` : undefined}
                     className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 transition-colors
                       ${isSubmitted
-                        ? 'bg-green-600 text-white'
+                        ? 'bg-green-600 text-foreground'
                         : allSaved
-                          ? 'bg-white/[0.12] hover:bg-white/[0.18] text-white'
+                          ? 'bg-card/[0.12] hover:bg-card/[0.18] text-foreground'
                           : 'bg-[#1c1c1e] border border-[#2c2c2e] text-[#48484a] cursor-not-allowed'}
                       disabled:opacity-60`}
                     data-testid="button-submit">
@@ -3968,11 +3968,11 @@ export default function DocumentProcessor() {
                         <CSVTableViewer text={activeDocText} isExcel={activeFileType === 'excel'} />
                       )
                     ) : activeDocText ? (
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
+                      <div className="bg-card rounded-lg shadow-sm border border-gray-200 p-8 min-h-[400px]">
                         <p className="text-[15px] text-gray-900 whitespace-pre-wrap font-sans leading-[1.8] break-words" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{activeDocText}</p>
                       </div>
                     ) : (
-                      <div className="bg-white rounded-lg border border-gray-200 flex flex-col items-center justify-center py-16 text-center">
+                      <div className="bg-card rounded-lg border border-gray-200 flex flex-col items-center justify-center py-16 text-center">
                         <FileQuestion className="w-8 h-8 text-gray-300 mb-3" />
                         <p className="text-gray-400 text-sm">Document content not available</p>
                       </div>
@@ -3980,14 +3980,14 @@ export default function DocumentProcessor() {
                   </div>
                 </div>
 
-                <div className={`${docFullView ? 'hidden' : 'w-1/2'} overflow-y-auto bg-black`}>
-                  <div className="px-5 py-3 sticky top-0 bg-black z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
+                <div className={`${docFullView ? 'hidden' : 'w-1/2'} overflow-y-auto bg-background`}>
+                  <div className="px-5 py-3 sticky top-0 bg-background z-10" style={{ borderBottom: '1px solid #2c2c2e' }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         {(['structured', 'raw'] as const).map(tab => (
                           <button key={tab} onClick={() => setReviewTab(tab)}
                             className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold smooth press-sm transition-colors capitalize ${
-                              reviewTab === tab ? 'bg-[#1c1c1e] text-white' : 'text-[#636366] hover:text-[#8e8e93]'
+                              reviewTab === tab ? 'bg-[#1c1c1e] text-foreground' : 'text-[#636366] hover:text-[#8e8e93]'
                             }`}>
                             {tab === 'structured' ? 'Structured View' : 'Raw Entities'}
                           </button>
@@ -3997,12 +3997,12 @@ export default function DocumentProcessor() {
                         <div className="flex items-center gap-1.5">
                           {(['all', 'edited', 'by-page'] as const).map(f => (
                             <button key={f} onClick={() => setReviewFilter(f)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-white' : 'text-[#8e8e93] hover:text-white'}`}>
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium smooth press-sm capitalize ${reviewFilter === f ? 'bg-[#1c1c1e] text-foreground' : 'text-[#8e8e93] hover:text-foreground'}`}>
                               {f === 'by-page' ? 'By Page' : f}
                             </button>
                           ))}
                           <button onClick={() => approveAllForDoc(activeReviewDoc)}
-                            className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
+                            className="px-2.5 py-1 bg-[#1c1c1e] text-[#8e8e93] hover:text-foreground border border-[#2c2c2e] rounded-lg text-[11px] font-medium hover:border-[#636366] smooth press-sm ml-1" data-testid="button-approve-all">
                             <CheckCheck className="w-3 h-3 mr-1 inline-block" />Approve All
                           </button>
                         </div>
@@ -4087,7 +4087,7 @@ export default function DocumentProcessor() {
                                   <select
                                     autoFocus
                                     defaultValue={isBool ? (value ? 'Yes' : value === false ? 'No' : '') : (value ?? '')}
-                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-white outline-none"
+                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
                                     onChange={(e) => handleSave(e.target.value)}
                                     onBlur={() => setEditingField(null)}
                                   >
@@ -4103,7 +4103,7 @@ export default function DocumentProcessor() {
                                     type={isNum ? 'number' : 'text'}
                                     step={isNum ? 'any' : undefined}
                                     defaultValue={String(displayVal)}
-                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-white outline-none"
+                                    className="w-full mt-0.5 bg-[#2c2c2e] border border-blue-500/50 rounded px-1.5 py-1 text-[12px] text-foreground outline-none"
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') { handleSave((e.target as HTMLInputElement).value); }
                                       if (e.key === 'Escape') setEditingField(null);
@@ -4126,7 +4126,7 @@ export default function DocumentProcessor() {
                               </span>
                               {hasValue ? (
                                 <>
-                                  <span className="text-[12px] text-white block truncate">{isBool ? (value ? 'Yes' : 'No') : String(value)}</span>
+                                  <span className="text-[12px] text-foreground block truncate">{isBool ? (value ? 'Yes' : 'No') : String(value)}</span>
                                   <ConfidenceBar confidence={confidence} />
                                 </>
                               ) : required ? (
@@ -4141,7 +4141,7 @@ export default function DocumentProcessor() {
 
                         const CompletenessChip = ({ filled, total, hasData }: { filled: number; total: number; hasData: boolean }) => {
                           if (!hasData) return <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 font-medium">No data</span>;
-                          if (filled === total) return <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-medium">{filled}/{total} complete</span>;
+                          if (filled === total) return <span className="text-[10px] px-2 py-0.5 rounded-md bg-status-success/10 text-status-success font-medium">{filled}/{total} complete</span>;
                           return <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 font-medium">{filled}/{total} complete</span>;
                         };
 
@@ -4522,7 +4522,7 @@ export default function DocumentProcessor() {
                                             {entity.status === 'approved' && <span className="text-[10px] text-green-400 font-medium flex items-center gap-0.5"><Check className="w-2.5 h-2.5" />Approved</span>}
                                             {entity.status === 'rejected' && <span className="text-[10px] text-red-400 font-medium">Rejected</span>}
                                           </div>
-                                          <p className="text-[13px] text-white break-words">{entity.value || <span className="text-[#48484a] italic">Not found</span>}</p>
+                                          <p className="text-[13px] text-foreground break-words">{entity.value || <span className="text-[#48484a] italic">Not found</span>}</p>
                                           {entity.confidence != null && (
                                             <div className="mt-1.5 flex items-center gap-1.5">
                                               <div className="h-1 flex-1 bg-[#2c2c2e] rounded-full overflow-hidden">
@@ -4638,7 +4638,7 @@ export default function DocumentProcessor() {
                                   title="Click to edit"
                                 >
                                   {entity.value ? (
-                                    <p className="text-[14px] text-white leading-snug break-words">{entity.value}</p>
+                                    <p className="text-[14px] text-foreground leading-snug break-words">{entity.value}</p>
                                   ) : entity.status === 'not_found' ? (
                                     <p className="text-[13px] text-[#48484a] italic flex items-center gap-1.5">
                                       Not found in document — click to add manually
@@ -4675,16 +4675,16 @@ export default function DocumentProcessor() {
                                     }}
                                     rows={Math.min(Math.max((editingEntity.draft.match(/\n/g) || []).length + 1, 1), 4)}
                                     placeholder="Enter value…"
-                                    className="w-full text-[14px] text-white bg-[#2c2c2e] rounded-xl px-3 py-2.5 border border-white/[0.16] focus:border-white/[0.25] focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
+                                    className="w-full text-[14px] text-foreground bg-[#2c2c2e] rounded-xl px-3 py-2.5 border border-white/[0.16] focus:border-white/[0.25] focus:outline-none resize-none transition-colors placeholder:text-[#48484a]"
                                     data-testid={`input-entity-value-${realIdx}`}
                                   />
                                   <div className="flex items-center justify-end gap-2">
                                     <button onClick={cancelEdit}
-                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-white rounded-lg hover:bg-[#2c2c2e] smooth press-sm">
+                                      className="px-3 py-1.5 text-[12px] font-medium text-[#8e8e93] hover:text-foreground rounded-lg hover:bg-[#2c2c2e] smooth press-sm">
                                       Cancel
                                     </button>
                                     <button onClick={saveEdit}
-                                      className="px-3 py-1.5 text-[12px] font-semibold text-white bg-white/[0.12] hover:bg-white/[0.18] rounded-lg smooth press-sm flex items-center gap-1"
+                                      className="px-3 py-1.5 text-[12px] font-semibold text-foreground bg-card/[0.12] hover:bg-card/[0.18] rounded-lg smooth press-sm flex items-center gap-1"
                                       data-testid={`button-save-entity-${realIdx}`}>
                                       <Check className="w-3 h-3" />Save
                                     </button>
@@ -4781,14 +4781,14 @@ export default function DocumentProcessor() {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-[24px] font-bold text-white tracking-tight">Extraction Summary</h2>
+                    <h2 className="text-[24px] font-bold text-foreground tracking-tight">Extraction Summary</h2>
                     <p className="text-[#8e8e93] text-[14px] mt-1">
                       {allEntities.length} entities extracted across {extractionResults.length} document{extractionResults.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <button
                     onClick={() => setCurrentPage('scorecard')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-card hover:bg-primary/90 text-black rounded-xl font-semibold text-[13px] transition-colors press-sm shrink-0"
                   >
                     <ScanLine className="w-4 h-4" />
                     View Scorecard
@@ -4804,7 +4804,7 @@ export default function DocumentProcessor() {
                   ].map(stat => (
                     <div key={stat.label} className="rounded-xl p-4 flex flex-col gap-1" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
                       <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">{stat.label}</span>
-                      <span className="text-[28px] font-bold text-white leading-none">{stat.value}</span>
+                      <span className="text-[28px] font-bold text-foreground leading-none">{stat.value}</span>
                     </div>
                   ))}
                 </div>
@@ -4819,7 +4819,7 @@ export default function DocumentProcessor() {
                       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #1e1e1e' }}>
                         <div className="flex items-center gap-3">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: pillar.color }} />
-                          <span className="text-[14px] font-semibold text-white">{pillar.label}</span>
+                          <span className="text-[14px] font-semibold text-foreground">{pillar.label}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ background: `${pillar.color}18`, color: pillar.color }}>
@@ -4833,7 +4833,7 @@ export default function DocumentProcessor() {
                       {/* Entity rows */}
                       <div className="divide-y" style={{ borderColor: '#1a1a1a' }}>
                         {entities.map((e: any, i: number) => (
-                          <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
+                          <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-card/[0.02] transition-colors">
                             <div className="flex flex-col min-w-0">
                               <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
                               {e._docName && (
@@ -4841,7 +4841,7 @@ export default function DocumentProcessor() {
                               )}
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-[13px] font-semibold text-white max-w-[200px] truncate text-right">{e.value}</span>
+                              <span className="text-[13px] font-semibold text-foreground max-w-[200px] truncate text-right">{e.value}</span>
                               {e.confidence != null && (
                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{
                                   background: `${confidenceColor(e.confidence)}18`,
@@ -4863,14 +4863,14 @@ export default function DocumentProcessor() {
                   <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
                     <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
                       <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#636366]" />
-                      <span className="text-[14px] font-semibold text-white">Other</span>
+                      <span className="text-[14px] font-semibold text-foreground">Other</span>
                       <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#1c1c1e] text-[#636366] ml-auto">{otherEntities.length} entities</span>
                     </div>
                     <div className="divide-y" style={{ borderColor: '#1a1a1a' }}>
                       {otherEntities.map((e: any, i: number) => (
-                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
+                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-card/[0.02] transition-colors">
                           <span className="text-[13px] font-medium text-[#d1d1d6] truncate">{fmtLabel(e.name)}</span>
-                          <span className="text-[13px] font-semibold text-white max-w-[240px] truncate text-right">{e.value}</span>
+                          <span className="text-[13px] font-semibold text-foreground max-w-[240px] truncate text-right">{e.value}</span>
                         </div>
                       ))}
                     </div>
@@ -4889,7 +4889,7 @@ export default function DocumentProcessor() {
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => setCurrentPage('scorecard')}
-                    className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors press-sm"
+                    className="flex items-center gap-2 px-6 py-3 bg-card hover:bg-primary/90 text-black rounded-xl font-semibold text-[14px] transition-colors press-sm"
                   >
                     <ScanLine className="w-4 h-4" />
                     View Full Scorecard
@@ -4995,7 +4995,7 @@ export default function DocumentProcessor() {
                       <ScanLine className="w-7 h-7 text-[#d1d1d6]" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white">B-BBEE Scorecard</h2>
+                      <h2 className="text-xl font-bold text-foreground">B-BBEE Scorecard</h2>
                       <p className="text-[#8e8e93] text-sm" data-testid="scorecard-company">{companyInfo.name || 'Client'} • {companyInfo.sector || 'General'}</p>
                     </div>
                   </div>
@@ -5004,9 +5004,9 @@ export default function DocumentProcessor() {
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">CSV Import</span>
                     )}
                     {source === 'calculation_engine' && (
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Build Mode</span>
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-status-success/10 text-status-success border border-status-success/20">Build Mode</span>
                     )}
-                    <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
+                    <button className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-foreground rounded-xl text-sm font-medium transition-colors border border-[#48484a]" onClick={() => window.print()}>
                       Export PDF
                     </button>
                   </div>
@@ -5027,14 +5027,14 @@ export default function DocumentProcessor() {
                       </div>
                       <div className="flex-1 flex flex-col gap-2">
                         <div className="flex items-end gap-3">
-                          <span className="text-4xl font-black text-white" data-testid="scorecard-total-score">{totalScore}</span>
+                          <span className="text-4xl font-black text-foreground" data-testid="scorecard-total-score">{totalScore}</span>
                           <span className="text-[#8e8e93] text-lg mb-1">/ {totalTarget} points</span>
                         </div>
                         <div className="w-full h-3 bg-[#2c2c2e] rounded-full overflow-hidden">
                           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, (totalScore / totalTarget) * 100)}%`, background: levelColor }} />
                         </div>
                         <div className="flex items-center gap-4 mt-1">
-                          <span className="text-[#8e8e93] text-sm">Recognition: <strong className="text-white" data-testid="scorecard-recognition">{recognition}</strong></span>
+                          <span className="text-[#8e8e93] text-sm">Recognition: <strong className="text-foreground" data-testid="scorecard-recognition">{recognition}</strong></span>
                           {isDiscounted && (
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                               Level discounted (sub-minimum not met)
@@ -5050,8 +5050,8 @@ export default function DocumentProcessor() {
                         <h3 className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider mb-3">Sub-Minimum Requirements</h3>
                         <div className="flex flex-wrap gap-3">
                           {Object.entries(sc.subMinimums as Record<string, boolean>).map(([pillarCode, met]) => (
-                            <div key={pillarCode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
-                              <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            <div key={pillarCode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${met ? 'bg-status-success/5 border-status-success/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+                              <span className={`text-xs font-medium ${met ? 'text-status-success' : 'text-amber-400'}`}>
                                 {met ? '✓' : '⚠'} {pillarCode.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
                               </span>
                             </div>
@@ -5063,7 +5063,7 @@ export default function DocumentProcessor() {
                     {/* Pillar breakdown */}
                     <div className="bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] overflow-hidden" data-testid="scorecard-pillars">
                       <div className="px-6 py-4 border-b border-[#2c2c2e]">
-                        <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Pillar Breakdown</h3>
+                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Pillar Breakdown</h3>
                       </div>
                       <div className="divide-y divide-[#2c2c2e]">
                         {pillarRows.map(pillar => {
@@ -5074,7 +5074,7 @@ export default function DocumentProcessor() {
                           return (
                             <div key={pillar.code} data-testid={`scorecard-pillar-${pillar.code}`}>
                               <div
-                                className={`px-6 py-4 ${hasCriteria ? 'cursor-pointer hover:bg-white/[0.02]' : ''} transition-colors`}
+                                className={`px-6 py-4 ${hasCriteria ? 'cursor-pointer hover:bg-card/[0.02]' : ''} transition-colors`}
                                 onClick={() => hasCriteria && setExpandedPillarCode(isExpanded ? null : pillar.code)}
                               >
                                 <div className="flex items-center justify-between mb-2">
@@ -5091,7 +5091,7 @@ export default function DocumentProcessor() {
                                     {pillar.subMinimumMet === true && (
                                       <span className="text-[10px] font-semibold uppercase text-green-500">✓ Sub-min</span>
                                     )}
-                                    <span className="text-sm font-bold text-white">
+                                    <span className="text-sm font-bold text-foreground">
                                       {pillar.score} <span className="font-normal text-[#8e8e93]">/ {pillar.maxPoints}</span>
                                     </span>
                                   </div>
@@ -5118,11 +5118,11 @@ export default function DocumentProcessor() {
                                     return (
                                       <div key={cr.criterionCode} className="grid grid-cols-[1fr_80px_80px_60px] gap-2 px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#1e1e1e] items-center">
                                         <div className="flex items-center gap-2 min-w-0">
-                                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-emerald-400' : 'bg-[#3a3a3c]'}`} />
+                                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${cr.points > 0 ? 'bg-status-success' : 'bg-[#3a3a3c]'}`} />
                                           <span className="text-[12px] text-[#d1d1d6] truncate">{cr.name || cr.criterionCode}</span>
-                                          {cr.targetMet && <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />}
+                                          {cr.targetMet && <CheckCircle2 className="w-3 h-3 text-status-success shrink-0" />}
                                         </div>
-                                        <span className={`text-[12px] font-mono text-right ${cr.points > 0 ? 'text-emerald-400' : 'text-[#636366]'}`}>
+                                        <span className={`text-[12px] font-mono text-right ${cr.points > 0 ? 'text-status-success' : 'text-[#636366]'}`}>
                                           {typeof cr.points === 'number' ? cr.points.toFixed(2) : '0.00'}
                                         </span>
                                         <span className="text-[12px] font-mono text-right text-[#636366]">
@@ -5140,7 +5140,7 @@ export default function DocumentProcessor() {
                       </div>
                       <div className="px-6 py-4 bg-[#141414] border-t border-[#2c2c2e] flex items-center justify-between">
                         <span className="text-sm font-semibold text-[#d1d1d6]">TOTAL</span>
-                        <span className="text-sm font-bold text-white" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
+                        <span className="text-sm font-bold text-foreground" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
                       </div>
                     </div>
 
@@ -5167,7 +5167,7 @@ export default function DocumentProcessor() {
                           {Object.entries(sc._entityCounts as Record<string, number>).map(([k, v]) => (
                             <div key={k} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2c2c2e] rounded-xl">
                               <span className="text-[#8e8e93] text-xs capitalize">{k.replace(/([A-Z])/g, ' $1').toLowerCase()}:</span>
-                              <span className="text-white text-xs font-semibold">{v}</span>
+                              <span className="text-foreground text-xs font-semibold">{v}</span>
                             </div>
                           ))}
                         </div>
@@ -5180,7 +5180,7 @@ export default function DocumentProcessor() {
                         <>
                           <button
                             onClick={() => setCurrentPage('build-pillars')}
-                            className="flex items-center gap-2 px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                            className="flex items-center gap-2 px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] hover:text-foreground rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
                           >
                             <ChevronLeft className="w-4 h-4" />
                             Edit Data
@@ -5205,7 +5205,7 @@ export default function DocumentProcessor() {
                                 toast({ title: 'Save failed', description: 'Could not save assessment.', variant: 'destructive' });
                               }
                             }}
-                            className="flex items-center gap-2 px-6 py-3 bg-white/[0.08] hover:bg-white/[0.12] text-white rounded-xl font-semibold transition-colors"
+                            className="flex items-center gap-2 px-6 py-3 bg-card/[0.08] hover:bg-card/[0.12] text-foreground rounded-xl font-semibold transition-colors"
                           >
                             <Save className="w-4 h-4" />
                             Save Assessment
@@ -5225,7 +5225,7 @@ export default function DocumentProcessor() {
                                 navigate('/toolkit');
                               }
                             }}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-status-success hover:bg-status-success text-foreground rounded-xl font-semibold transition-colors"
                           >
                             <ExternalLink className="w-4 h-4" />
                             Open in Toolkit
@@ -5250,7 +5250,7 @@ export default function DocumentProcessor() {
                                 }
                               }
                             }}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-colors"
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-status-success hover:bg-status-success text-foreground rounded-xl font-semibold transition-colors"
                           >
                             <ExternalLink className="w-4 h-4" />
                             Open in Toolkit
@@ -5263,7 +5263,7 @@ export default function DocumentProcessor() {
                               setExtractionResults([]);
                               setIsSubmitted(false);
                             }}
-                            className="px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#8e8e93] hover:text-white rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
+                            className="px-6 py-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#8e8e93] hover:text-foreground rounded-xl font-semibold transition-colors border border-[#2c2c2e]"
                           >
                             New Assessment
                           </button>
@@ -5276,7 +5276,7 @@ export default function DocumentProcessor() {
                     <p className="text-[#8e8e93] mb-4">No scorecard data yet. Complete the previous steps to generate a scorecard.</p>
                     <button
                       onClick={() => setCurrentPage(flowMode === 'build' ? 'build-pillars' : 'review')}
-                      className="px-6 py-2.5 bg-white/[0.08] hover:bg-white/[0.12] text-white rounded-xl text-sm transition-colors"
+                      className="px-6 py-2.5 bg-card/[0.08] hover:bg-card/[0.12] text-foreground rounded-xl text-sm transition-colors"
                     >
                       {flowMode === 'build' ? 'Back to Build' : 'Back to Review'}
                     </button>
