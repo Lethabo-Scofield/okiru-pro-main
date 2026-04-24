@@ -144,7 +144,8 @@ router.get('/list', async (req: Request, res: Response) => {
     }
 
     const containerClient = getContainerClient(blobServiceClient);
-    const blobs: Array<{ name: string; fileName: string; lastModified: string | null }> = [];
+    const blobs: Array<{ name: string; fileName: string; companyName: string; lastModified: string | null }> = [];
+    const blobNames: string[] = [];
 
     for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
       const fileName = blob.name;
@@ -152,8 +153,19 @@ router.get('/list', async (req: Request, res: Response) => {
         blobs.push({
           name: blob.name,
           fileName,
+          companyName: deriveCompanyName(fileName),
           lastModified: blob.properties.lastModified?.toISOString() || null,
         });
+        blobNames.push(blob.name);
+      }
+    }
+
+    const mongoMap = await loadMongoMetadataMap(blobNames);
+    for (const b of blobs) {
+      const md = mongoMap.get(b.name);
+      const supplierName = md?.supplierName;
+      if (supplierName && typeof supplierName === 'string' && supplierName.trim()) {
+        b.companyName = supplierName.trim();
       }
     }
 
@@ -286,7 +298,11 @@ interface SeoRecord {
 function deriveCompanyName(fileName: string): string {
   const base = fileName.split('/').pop() || fileName;
   const noExt = base.replace(/\.[a-z0-9]+$/i, '');
-  const trimmed = noExt
+  const noUuid = noExt.replace(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
+    '',
+  );
+  const trimmed = noUuid
     .replace(/^\d{4}[\s_-]+\d{2}[\s_-]+\d{1,2}[\s_-]+/, '')
     .replace(/[_-]?\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
     .replace(/[_-]?B-?BBEE.*$/i, '')
@@ -582,13 +598,13 @@ router.get('/:userId', async (req: Request, res: Response) => {
 });
 
 router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunction) => {
-  upload.array('files', 20)(req, res, (err: any) => {
+  upload.array('files', 100)(req, res, (err: any) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({ message: 'File too large. Maximum size is 50MB per file.' });
       }
       if (err.code === 'LIMIT_FILE_COUNT') {
-        return res.status(400).json({ message: 'Too many files. Maximum is 20 per upload.' });
+        return res.status(400).json({ message: 'Too many files. Maximum is 100 per batch.' });
       }
       return res.status(400).json({ message: `Upload error: ${err.message}` });
     }

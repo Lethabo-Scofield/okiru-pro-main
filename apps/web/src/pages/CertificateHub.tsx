@@ -28,7 +28,26 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 interface CertificateFile {
   name: string;
   fileName: string;
+  companyName?: string;
   lastModified: string | null;
+}
+
+function deriveCompanyNameFromFileName(fileName: string): string {
+  const base = fileName.split('/').pop() || fileName;
+  const noExt = base.replace(/\.[a-z0-9]+$/i, '');
+  const noUuid = noExt.replace(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
+    '',
+  );
+  const trimmed = noUuid
+    .replace(/^\d{4}[\s_-]+\d{2}[\s_-]+\d{1,2}[\s_-]+/, '')
+    .replace(/[_-]?\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
+    .replace(/[_-]?B-?BBEE.*$/i, '')
+    .replace(/[_-]?Certificate.*$/i, '')
+    .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return trimmed || 'Unknown company';
 }
 
 interface SearchResultItem {
@@ -235,8 +254,12 @@ export default function CertificateHub() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<Array<{ fileName: string; status: 'uploaded' | 'error'; error?: string }> | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const UPLOAD_CHUNK_SIZE = 20;
+  const MAX_UPLOAD_FILES = 500;
 
   const loadChunks = useCallback(async () => {
     try {
@@ -281,8 +304,8 @@ export default function CertificateHub() {
 
   const handleUpload = useCallback(async () => {
     if (uploadFiles.length === 0) return;
-    if (uploadFiles.length > 20) {
-      toast({ title: 'Too many files', description: 'Maximum 20 files per upload', variant: 'destructive' });
+    if (uploadFiles.length > MAX_UPLOAD_FILES) {
+      toast({ title: 'Too many files', description: `Maximum ${MAX_UPLOAD_FILES} files per batch`, variant: 'destructive' });
       return;
     }
     const oversized = uploadFiles.filter(f => f.size > 50 * 1024 * 1024);
@@ -292,29 +315,63 @@ export default function CertificateHub() {
     }
     setUploading(true);
     setUploadResults(null);
+    setUploadProgress({ done: 0, total: uploadFiles.length });
+
+    const allResults: Array<{ fileName: string; status: 'uploaded' | 'error'; error?: string }> = [];
+    let totalSuccess = 0;
+    let firstError: string | null = null;
+
     try {
-      const formData = new FormData();
-      uploadFiles.forEach(f => formData.append('files', f));
-      const res = await fetch('/api/certificates/upload', { method: 'POST', body: formData });
-      let data: any;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(`Server error (${res.status})`);
+      for (let i = 0; i < uploadFiles.length; i += UPLOAD_CHUNK_SIZE) {
+        const chunk = uploadFiles.slice(i, i + UPLOAD_CHUNK_SIZE);
+        const formData = new FormData();
+        chunk.forEach(f => formData.append('files', f));
+
+        try {
+          const res = await fetch('/api/certificates/upload', { method: 'POST', body: formData });
+          let data: any;
+          try {
+            data = await res.json();
+          } catch {
+            throw new Error(`Server error (${res.status})`);
+          }
+          if (!res.ok) throw new Error(data.message || 'Upload failed');
+
+          const chunkResults = (data.results || []) as Array<{ fileName: string; status: 'uploaded' | 'error'; error?: string }>;
+          allResults.push(...chunkResults);
+          totalSuccess += chunkResults.filter(r => r.status === 'uploaded').length;
+          setUploadResults([...allResults]);
+        } catch (chunkErr: any) {
+          const errMsg = chunkErr?.message || 'Upload failed';
+          if (!firstError) firstError = errMsg;
+          for (const f of chunk) {
+            allResults.push({ fileName: f.name, status: 'error', error: errMsg });
+          }
+          setUploadResults([...allResults]);
+        }
+
+        setUploadProgress({ done: Math.min(i + chunk.length, uploadFiles.length), total: uploadFiles.length });
       }
-      if (!res.ok) throw new Error(data.message || 'Upload failed');
-      setUploadResults(data.results || []);
-      const successCount = (data.results || []).filter((r: any) => r.status === 'uploaded').length;
-      if (successCount > 0) {
-        toast({ title: 'Upload complete', description: data.message });
+
+      if (totalSuccess > 0) {
+        const failed = uploadFiles.length - totalSuccess;
+        toast({
+          title: 'Upload complete',
+          description: `${totalSuccess} file(s) uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
+        });
         await reloadCertificates();
         setTimeout(() => loadStats(), 5000);
+      } else if (firstError) {
+        toast({ title: 'Upload failed', description: firstError, variant: 'destructive' });
       }
-    } catch (err: any) {
-      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
+    // loadStats is intentionally omitted from deps: it's declared later in the component
+    // and including it would trigger a TDZ ReferenceError during render. The callback only
+    // invokes loadStats inside a setTimeout after upload completes, so the ref captured at
+    // call time is sufficient.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadFiles, toast, reloadCertificates]);
 
   const closeUploadModal = useCallback(() => {
@@ -322,6 +379,7 @@ export default function CertificateHub() {
       setShowUpload(false);
       setUploadFiles([]);
       setUploadResults(null);
+      setUploadProgress(null);
       setDragOver(false);
     }
   }, [uploading]);
@@ -704,7 +762,7 @@ export default function CertificateHub() {
                         <FileFormatIcon fileName={result.file_name} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                            <HighlightMatch text={result.file_name.replace(/\.[^/.]+$/, '')} query={search} />
+                            <HighlightMatch text={deriveCompanyNameFromFileName(result.file_name)} query={search} />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[11px] text-[#3a3a3c] tracking-wide">
@@ -772,7 +830,7 @@ export default function CertificateHub() {
                     <FileFormatIcon fileName={cert.fileName} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] text-[#e5e5ea] truncate group-hover:text-white transition-colors">
-                        {cert.fileName.replace(/\.[^/.]+$/, '')}
+                        {cert.companyName || deriveCompanyNameFromFileName(cert.fileName)}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-[#3a3a3c] tracking-wide">
@@ -831,10 +889,10 @@ export default function CertificateHub() {
               >
                 <CloudUpload className={`h-8 w-8 mx-auto mb-3 ${dragOver ? 'text-[#2563eb]' : 'text-[#48484a]'}`} />
                 <p className="text-[14px] text-[#e5e5ea] mb-1">
-                  {dragOver ? 'Drop files here' : 'Drag & drop files here'}
+                  {dragOver ? 'Drop files here' : 'Drag & drop files or folders here'}
                 </p>
                 <p className="text-[12px] text-[#48484a]">
-                  or click to browse · PDF, PNG, JPG, XLS, DOC · up to 50MB each
+                  or click to browse · PDF, PNG, JPG, XLS, DOC · up to 50MB each · bulk upload up to {MAX_UPLOAD_FILES} files
                 </p>
               </div>
               <input
@@ -882,6 +940,21 @@ export default function CertificateHub() {
               )}
             </div>
 
+            {uploading && uploadProgress && uploadProgress.total > 0 && (
+              <div className="px-5 pb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[11px] text-[#8e8e93]">Uploading in batches…</p>
+                  <p className="text-[11px] text-[#8e8e93]">{uploadProgress.done} / {uploadProgress.total}</p>
+                </div>
+                <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                  <div
+                    className="h-full bg-[#2563eb] transition-all duration-300"
+                    style={{ width: `${Math.min(100, (uploadProgress.done / Math.max(1, uploadProgress.total)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <p className="text-[12px] text-[#48484a]">
                 {uploadFiles.length} file{uploadFiles.length !== 1 ? 's' : ''} selected
@@ -903,7 +976,7 @@ export default function CertificateHub() {
                     {uploading ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Uploading...
+                        {uploadProgress ? `Uploading ${uploadProgress.done}/${uploadProgress.total}…` : 'Uploading...'}
                       </>
                     ) : (
                       <>
