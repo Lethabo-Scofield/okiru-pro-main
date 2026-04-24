@@ -1,0 +1,19 @@
+name: Deploy Directly to VM
+
+# DISABLED: No VM deployment. Production runs on okiru-rg-group AKS cluster.
+# Deployment is handled by deploy-prod.yml and build-deploy-aks.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'This workflow is disabled. Use deploy-prod.yml for AKS deployment.'
+        required: false
+
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflow disabled
+        run: |
+          echo "VM deployment is disabled. Production runs on the okiru-rg-group AKS cluster."
+          echo "Use the 'Deploy to Production' or 'Build and Deploy to AKS' workflows instead."

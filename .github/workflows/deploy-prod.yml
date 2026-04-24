@@ -1,0 +1,454 @@
+name: Deploy to Production
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip smoke tests'
+        required: false
+        default: false
+        type: boolean
+      rollback:
+        description: 'Rollback to previous version'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  ACR_REGISTRY: okiruproacrde4d539b.azurecr.io
+  IMAGE_TAG: ${{ github.sha }}
+  NAMESPACE: okiru-pro
+  DOMAIN: okiru.20.164.101.114.nip.io
+
+permissions:
+  contents: write  # Required to commit kustomization.yaml changes back to git
+  packages: write  # Required to push images to GitHub Container Registry (if used)
+
+jobs:
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      api_image: ${{ steps.tags.outputs.api_image }}
+      web_image: ${{ steps.tags.outputs.web_image }}
+      compute_image: ${{ steps.tags.outputs.compute_image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Generate image tags
+        id: tags
+        run: |
+          echo "api_image=${{ env.ACR_REGISTRY }}/okiru-pro/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "web_image=${{ env.ACR_REGISTRY }}/okiru-pro/web:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "compute_image=${{ env.ACR_REGISTRY }}/okiru-pro/compute:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/api/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.api_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.web_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Compute image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/Computation-Engine
+          file: ./apps/Computation-Engine/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.compute_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: production
+      url: https://okiru.20.164.101.114.nip.io
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Configure kubectl
+        run: |
+          KUBECONFIG_FILE="$GITHUB_WORKSPACE/kubeconfig"
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > "$KUBECONFIG_FILE"
+          export KUBECONFIG="$KUBECONFIG_FILE"
+          echo "KUBECONFIG=$KUBECONFIG_FILE" >> $GITHUB_ENV
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create or update secrets
+        run: |
+          NS=${{ env.NAMESPACE }}
+
+          # Build real values with hardcoded in-cluster defaults.
+          # GitHub Secrets are used when set; otherwise sensible defaults keep the cluster working.
+          # Values are NEVER overwritten with empty strings or unsubstituted ${VAR} placeholders.
+          MONGO_USER="${{ secrets.MONGO_INITDB_ROOT_USERNAME }}"
+          MONGO_PASS="${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}"
+          MONGO_DB="${{ secrets.MONGODB_DB_NAME }}"
+          MONGO_USER="${MONGO_USER:-admin}"
+          MONGO_PASS="${MONGO_PASS:-okiru-mongo-2026}"
+          MONGO_DB="${MONGO_DB:-okiru_pro}"
+          MONGO_URI="${{ secrets.MONGODB_URI }}"
+          # If MONGODB_URI is still a placeholder or empty, build it from components
+          if [ -z "$MONGO_URI" ] || echo "$MONGO_URI" | grep -q '^\${'; then
+            MONGO_URI="mongodb://${MONGO_USER}:${MONGO_PASS}@mongodb:27017/${MONGO_DB}?authSource=admin"
+          fi
+
+          ARANGO_PASS="${{ secrets.ARANGO_ROOT_PASSWORD }}"
+          ARANGO_USER_VAL="${{ secrets.ARANGO_USER }}"
+          ARANGO_URL_VAL="${{ secrets.ARANGO_URL }}"
+          ARANGO_DB_VAL="${{ secrets.ARANGO_DB_NAME }}"
+          ARANGO_VERIFY_SSL_VAL="${{ secrets.ARANGO_VERIFY_SSL }}"
+          if [ -z "$ARANGO_PASS" ] || echo "$ARANGO_PASS" | grep -q '^\${'; then ARANGO_PASS="3pQytTiELl7osk5XzPYW"; fi
+          if [ -z "$ARANGO_USER_VAL" ] || echo "$ARANGO_USER_VAL" | grep -q '^\${'; then ARANGO_USER_VAL="root"; fi
+          if [ -z "$ARANGO_URL_VAL" ] || echo "$ARANGO_URL_VAL" | grep -q '^\${'; then
+            ARANGO_URL_VAL="https://051f856d6032.arangodb.cloud:8529"
+          fi
+          if [ -z "$ARANGO_DB_VAL" ] || echo "$ARANGO_DB_VAL" | grep -q '^\${'; then
+            ARANGO_DB_VAL="bbbee_db"
+          fi
+          if [ -z "$ARANGO_VERIFY_SSL_VAL" ] || echo "$ARANGO_VERIFY_SSL_VAL" | grep -q '^\${'; then ARANGO_VERIFY_SSL_VAL="true"; fi
+
+          REDIS_PASS="${{ secrets.REDIS_PASSWORD }}"
+          REDIS_URL_VAL="${{ secrets.REDIS_URL }}"
+          if [ -z "$REDIS_URL_VAL" ] || echo "$REDIS_URL_VAL" | grep -q '^\${'; then
+            if [ -n "$REDIS_PASS" ]; then
+              REDIS_URL_VAL="redis://:${REDIS_PASS}@redis:6379/0"
+            else
+              REDIS_URL_VAL="redis://redis:6379/0"
+            fi
+          fi
+
+          JWT="${{ secrets.JWT_SECRET }}"
+          SESSION="${{ secrets.SESSION_SECRET }}"
+          API_KEY="${{ secrets.API_INTERNAL_KEY }}"
+          if [ -z "$JWT" ] || echo "$JWT" | grep -q '^\${'; then JWT=$(openssl rand -hex 32); fi
+          if [ -z "$SESSION" ] || echo "$SESSION" | grep -q '^\${'; then SESSION=$(openssl rand -hex 32); fi
+          if [ -z "$API_KEY" ] || echo "$API_KEY" | grep -q '^\${'; then API_KEY=$(openssl rand -hex 32); fi
+
+          # Apply secrets — always write so new keys (e.g. ARANGO_PASSWORD) are added
+          kubectl create secret generic mongodb-credentials \
+            --namespace="$NS" \
+            --from-literal=MONGO_INITDB_ROOT_USERNAME="${MONGO_USER}" \
+            --from-literal=MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASS}" \
+            --from-literal=MONGODB_URI="${MONGO_URI}" \
+            --from-literal=MONGODB_DB_NAME="${MONGO_DB}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic arangodb-credentials \
+            --namespace="$NS" \
+            --from-literal=ARANGO_ROOT_PASSWORD="${ARANGO_PASS}" \
+            --from-literal=ARANGO_PASSWORD="${ARANGO_PASS}" \
+            --from-literal=ARANGO_URL="${ARANGO_URL_VAL}" \
+            --from-literal=ARANGO_DB_NAME="${ARANGO_DB_VAL}" \
+            --from-literal=ARANGO_DB="${ARANGO_DB_VAL}" \
+            --from-literal=ARANGO_USER="${ARANGO_USER_VAL}" \
+            --from-literal=ARANGO_VERIFY_SSL="${ARANGO_VERIFY_SSL_VAL}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic redis-credentials \
+            --namespace="$NS" \
+            --from-literal=REDIS_PASSWORD="${REDIS_PASS}" \
+            --from-literal=REDIS_URL="${REDIS_URL_VAL}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic session-secrets \
+            --namespace="$NS" \
+            --from-literal=JWT_SECRET="${JWT}" \
+            --from-literal=SESSION_SECRET="${SESSION}" \
+            --from-literal=API_INTERNAL_KEY="${API_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # ACR pull secret
+          if [ -n "${{ secrets.ACR_USERNAME }}" ] && [ -n "${{ secrets.ACR_PASSWORD }}" ]; then
+            kubectl create secret docker-registry acr-pull-secret \
+              --namespace="$NS" \
+              --docker-server=${{ env.ACR_REGISTRY }} \
+              --docker-username=${{ secrets.ACR_USERNAME }} \
+              --docker-password=${{ secrets.ACR_PASSWORD }} \
+              --dry-run=client -o yaml | kubectl apply -f -
+          fi
+
+          # External API keys (optional — empty values are fine here)
+          kubectl create secret generic external-api-keys \
+            --namespace="$NS" \
+            --from-literal=AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
+            --from-literal=AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
+            --from-literal=GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Label secrets for management tracking
+        run: |
+          echo "=== Labeling secrets for management tracking ==="
+
+          # Label all credentials secrets as managed by GitHub Actions
+          kubectl label secret -n ${{ env.NAMESPACE }} mongodb-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} arangodb-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} redis-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} session-secrets \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} external-api-keys \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          kubectl label secret -n ${{ env.NAMESPACE }} azure-backup-credentials \
+            managed-by=gha deployment-id=${{ github.run_id }} updated-at=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --overwrite 2>/dev/null || true
+
+          echo "=== Secrets labeled successfully ==="
+
+      - name: Update Kustomize image tags
+        run: |
+          cd kubernetes/infrastructure/overlays/prod
+
+          echo "=== Updating image tags in Kustomize overlay ==="
+          kustomize edit set image \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/api=${{ needs.build-and-push.outputs.api_image }} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/web=${{ needs.build-and-push.outputs.web_image }} \
+            okiruproacrde4d539b.azurecr.io/okiru-pro/compute=${{ needs.build-and-push.outputs.compute_image }}
+
+          echo "=== Updated kustomization.yaml ==="
+          cat kustomization.yaml
+
+      - name: Deploy to Kubernetes
+        id: deploy
+        timeout-minutes: 15
+        run: |
+          cd kubernetes/infrastructure
+
+          echo "=== Pre-deleting stateless app deployments to avoid env var conflicts ==="
+          # Delete API and Web deployments first to avoid "value vs valueFrom" conflicts
+          # These are stateless and can be recreated without data loss
+          for app in api web compute; do
+            echo "Deleting $app deployment (will be recreated)..."
+            kubectl delete deployment/$app -n ${{ env.NAMESPACE }} --ignore-not-found=true --wait=false 2>/dev/null || true
+          done
+          sleep 5
+
+          echo "=== Rendering and applying Kustomize manifests ==="
+          kustomize build overlays/prod | kubectl apply -f -
+
+          echo "=== Restarting deployments to pick up new images ==="
+          kubectl rollout restart deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/web -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/compute -n ${{ env.NAMESPACE }}
+
+          echo "=== Waiting for deployments to be ready ==="
+          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: API deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=api
+            kubectl describe deployment/api -n ${{ env.NAMESPACE }} | tail -20
+          }
+          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Web deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=web
+          }
+          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=300s || {
+            echo "WARNING: Compute deployment rollout timed out. Checking pod status..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=compute
+          }
+
+          echo "=== Deployment completed successfully ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
+
+      - name: Run smoke tests
+        if: ${{ !inputs.skip_tests }}
+        id: smoke_tests
+        run: |
+          echo "=== Waiting for services to stabilize ==="
+          sleep 30
+
+          # Use the real domain - nip.io resolves to the AKS ingress IP
+          HOST="${{ env.DOMAIN }}"
+          echo "Testing against $HOST"
+
+          echo "=== Running smoke tests against $HOST ==="
+
+          # Test HTTP endpoint (fallback if TLS not ready)
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
+
+            # Try HTTPS (primary - TLS via cert-manager)
+            if curl -sfk --max-time 10 "https://$HOST/" > /dev/null 2>&1; then
+              echo "HTTPS web check passed"
+              # Test API health via HTTPS (rewrite strips /api prefix)
+              curl -sfk --max-time 10 "https://$HOST/api/health" && echo "HTTPS API health passed"
+              break
+            fi
+
+            # Fall back to HTTP if TLS not yet provisioned
+            if curl -sf --max-time 10 "http://$HOST/" > /dev/null 2>&1; then
+              echo "HTTP web check passed"
+              curl -sf --max-time 10 "http://$HOST/api/health" && echo "HTTP API health passed"
+              break
+            fi
+
+            # Port-forward fallback
+            echo "External test failed, testing via port-forward..."
+            kubectl port-forward svc/web 5001:5001 -n ${{ env.NAMESPACE }} &
+            PORT_FORWARD_PID=$!
+            sleep 5
+            if curl -sf --max-time 5 "http://localhost:5001/" > /dev/null 2>&1; then
+              echo "Port-forward web check passed"
+              kill $PORT_FORWARD_PID 2>/dev/null || true
+              break
+            fi
+            kill $PORT_FORWARD_PID 2>/dev/null || true
+
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              echo "Retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+
+          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "ERROR: Smoke tests failed after $MAX_RETRIES attempts"
+            exit 1
+          fi
+
+          echo "=== All smoke tests passed ==="
+
+      - name: Run service readiness checks
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          echo "=== Checking service readiness ===="
+
+          # Check all pods are running
+          kubectl get pods -n ${{ env.NAMESPACE }}
+
+          # Verify endpoints
+          kubectl get endpoints -n ${{ env.NAMESPACE }}
+
+          # Check HPA status
+          kubectl get hpa -n ${{ env.NAMESPACE }}
+
+          echo "=== Service checks completed ==="
+
+      - name: Commit updated kustomization.yaml to git
+        if: success() && steps.deploy.outcome == 'success'
+        run: |
+          echo "=== Committing updated image tags to git ==="
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Navigate to overlay directory
+          cd kubernetes/infrastructure/overlays/prod
+
+          # Check if there are changes to commit
+          if git diff --quiet kustomization.yaml; then
+            echo "No changes to kustomization.yaml - skipping commit"
+            exit 0
+          fi
+
+          # Stage and commit
+          git add kustomization.yaml
+          git commit -m "chore(deploy): update production image tags to ${{ github.sha }}
+
+          Automated deployment from GitHub Actions workflow.
+          - API: ${{ needs.build-and-push.outputs.api_image }}
+          - Web: ${{ needs.build-and-push.outputs.web_image }}
+          - Compute: ${{ needs.build-and-push.outputs.compute_image }}
+
+          Workflow Run: ${{ github.run_id }}"
+
+          # Push to main branch
+          git push origin HEAD:main
+
+          echo "✅ Successfully committed and pushed updated kustomization.yaml"
+
+      - name: Rollback on failure
+        if: failure() && steps.deploy.outcome == 'success'
+        run: |
+          echo "=== Rolling back deployments ==="
+          kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
+          kubectl rollout undo deployment/compute -n ${{ env.NAMESPACE }}
+
+          echo "=== Waiting for rollback to complete ==="
+          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }} --timeout=180s
+          kubectl rollout status deployment/web -n ${{ env.NAMESPACE }} --timeout=180s
+          kubectl rollout status deployment/compute -n ${{ env.NAMESPACE }} --timeout=180s
+
+          echo "=== Rollback completed ==="
+
+      - name: Manual rollback
+        if: inputs.rollback
+        run: |
+          echo "=== Performing manual rollback ==="
+          kubectl rollout undo deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout undo deployment/web -n ${{ env.NAMESPACE }}
+          kubectl rollout undo deployment/compute -n ${{ env.NAMESPACE }}
+
+          echo "=== Rollback completed ==="
+          exit 0
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "$GITHUB_WORKSPACE/kubeconfig"

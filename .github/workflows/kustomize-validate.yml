@@ -1,0 +1,209 @@
+name: Validate Kubernetes Manifests
+
+on:
+  pull_request:
+    paths:
+      - 'kubernetes/**'
+      - '.github/workflows/kustomize-validate.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'kubernetes/**'
+      - '.github/workflows/kustomize-validate.yml'
+
+jobs:
+  validate-kustomize:
+    name: Validate Kustomize Builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Validate Base Kustomization
+        run: |
+          echo "=== Validating Base ==="
+          cd kubernetes/infrastructure
+          kubectl kustomize base > /tmp/base-rendered.yaml
+          if [ $? -eq 0 ]; then
+            echo "✅ Base kustomize build succeeded"
+          else
+            echo "❌ Base kustomize build failed"
+            exit 1
+          fi
+
+      - name: Validate Staging Overlay
+        run: |
+          echo "=== Validating Staging Overlay ==="
+          cd kubernetes/infrastructure
+          # Note: This will fail if secrets/secrets.yaml has unsubstituted ${VAR} values
+          # because Kubernetes validates Secret data. We need to handle this.
+          # For validation, we'll use a dry-run with placeholder substitution
+          
+          # Create placeholder values for validation
+          export MONGO_INITDB_ROOT_USERNAME=validate_user
+          export MONGO_INITDB_ROOT_PASSWORD=validate_pass
+          export MONGODB_URI=mongodb://validate:27017
+          export MONGODB_DB_NAME=validate
+          export ARANGO_ROOT_PASSWORD=validate
+          export ARANGO_URL=http://validate:8529
+          export ARANGO_DB_NAME=validate
+          export REDIS_PASSWORD=validate
+          export REDIS_URL=redis://validate:6379
+          export JWT_SECRET=validate_jwt_secret_32chars_long
+          export SESSION_SECRET=validate_session_secret_32chars_long
+          export API_INTERNAL_KEY=validate_api_key
+          export ACR_PULL_SECRET=eyJhdXRocyI6e319Cg==
+          
+          # Substitute and validate
+          envsubst < overlays/staging/secrets/secrets.yaml > /tmp/staging-secrets-rendered.yaml
+          
+          # Create temporary kustomization without secrets file for validation
+          # (since envsubst can't work inside kustomize directly)
+          mkdir -p /tmp/validate-staging
+          cp -r overlays/staging/* /tmp/validate-staging/
+          
+          # Substitute secrets in place
+          envsubst < overlays/staging/secrets/secrets.yaml > /tmp/validate-staging/secrets/secrets.yaml
+          
+          # Create a temporary kustomization pointing to local base
+          cat > /tmp/validate-staging/kustomization.yaml <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: okiru-pro-staging
+resources:
+  - ../../../../kubernetes/infrastructure/base
+  - secrets/secrets.yaml
+patchesStrategicMerge:
+  - patches/ingress-patch.yaml
+  - patches/resource-limits.yaml
+  - patches/replica-count.yaml
+images:
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+    newTag: validate
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
+    newTag: validate
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+    newTag: validate
+commonLabels:
+  environment: staging
+  app.kubernetes.io/instance: okiru-pro-staging
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=debug
+      - 'CORS_ORIGIN="*"'
+EOF
+          
+          cd /tmp/validate-staging
+          kubectl kustomize . > /tmp/staging-rendered.yaml
+          if [ $? -eq 0 ]; then
+            echo "✅ Staging kustomize build succeeded"
+          else
+            echo "❌ Staging kustomize build failed"
+            exit 1
+          fi
+
+      - name: Validate Production Overlay
+        run: |
+          echo "=== Validating Production Overlay ==="
+          cd kubernetes/infrastructure
+          
+          # Create placeholder values for validation
+          export MONGO_INITDB_ROOT_USERNAME=validate_user
+          export MONGO_INITDB_ROOT_PASSWORD=validate_pass
+          export MONGODB_URI=mongodb://validate:27017
+          export MONGODB_DB_NAME=validate
+          export ARANGO_ROOT_PASSWORD=validate
+          export ARANGO_URL=http://validate:8529
+          export ARANGO_DB_NAME=validate
+          export REDIS_PASSWORD=validate
+          export REDIS_URL=redis://validate:6379
+          export JWT_SECRET=validate_jwt_secret_32chars_long
+          export SESSION_SECRET=validate_session_secret_32chars_long
+          export API_INTERNAL_KEY=validate_api_key
+          export ACR_PULL_SECRET=eyJhdXRocyI6e319Cg==
+          
+          # Setup temporary validation directory
+          mkdir -p /tmp/validate-prod
+          cp -r overlays/prod/* /tmp/validate-prod/
+          
+          # Substitute secrets
+          envsubst < overlays/prod/secrets/secrets.yaml > /tmp/validate-prod/secrets/secrets.yaml
+          
+          # Create temporary kustomization
+          cat > /tmp/validate-prod/kustomization.yaml <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: okiru-pro
+resources:
+  - ../../../../kubernetes/infrastructure/base
+  - secrets/secrets.yaml
+patchesStrategicMerge:
+  - patches/ingress-patch.yaml
+  - patches/resource-limits.yaml
+  - patches/replica-count.yaml
+  - patches/configmap-patch.yaml
+images:
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+    newTag: validate
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
+    newTag: validate
+  - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+    newTag: validate
+commonLabels:
+  environment: production
+  app.kubernetes.io/instance: okiru-pro-prod
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=warn
+      - CORS_ORIGIN=https://validate.example.com
+EOF
+          
+          cd /tmp/validate-prod
+          kubectl kustomize . > /tmp/prod-rendered.yaml
+          if [ $? -eq 0 ]; then
+            echo "✅ Production kustomize build succeeded"
+          else
+            echo "❌ Production kustomize build failed"
+            exit 1
+          fi
+
+      - name: Check for Common Issues
+        run: |
+          echo "=== Checking for Common Issues ==="
+          
+          # Check base for any remaining Secret resources
+          echo "Checking base for Secret resources..."
+          SECRETS_IN_BASE=$(grep -c "^kind: Secret$" /tmp/base-rendered.yaml || echo "0")
+          if [ "$SECRETS_IN_BASE" -gt "0" ]; then
+            echo "⚠️  Warning: Base contains $SECRETS_IN_BASE Secret resources"
+            echo "Secrets should only be in overlays"
+          else
+            echo "✅ No secrets in base (correct)"
+          fi
+          
+          # Check for empty image tags
+          echo "Checking for image tag issues..."
+          if grep -q "image: okiruproacrde4d539b.azurecr.io/okiru-pro/" /tmp/prod-rendered.yaml; then
+            echo "✅ Production images found"
+          fi
+
+      - name: Upload Rendered Manifests (for debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-manifests
+          path: |
+            /tmp/*-rendered.yaml
+          retention-days: 1

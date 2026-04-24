@@ -1,0 +1,135 @@
+# Flux Image Automation Resources
+# Monitors ACR for new images and automatically updates Git with new tags
+---
+# ImageRepository for API
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: okiru-api
+  namespace: flux-system
+spec:
+  image: okiruproacrde4d539b.azurecr.io/okiru-pro/api
+  interval: 1m0s
+  # Exponential backoff for registry errors
+  timeout: 30s
+  # Optional: ACR authentication (if needed)
+  # secretRef:
+  #   name: acr-credentials
+---
+# ImagePolicy for API - Staging (latest images)
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-api-staging
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-api
+  policy:
+    # For staging: use latest build (alphabetical by tag)
+    alphabetical:
+      order: asc
+  # Filter for our tag format: <7-char-sha>-<timestamp>
+  filterTags:
+    pattern: '^[a-f0-9]{7,}-[0-9]{8,}$'
+---
+# ImagePolicy for API - Production (semver, conservative)
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-api-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-api
+  policy:
+    # For production: only update on explicit semver bumps
+    semver:
+      range: ">=1.0.0"
+  filterTags:
+    pattern: '^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$'
+    extract: '$version'
+---
+# ImageRepository for Web
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: okiru-web
+  namespace: flux-system
+spec:
+  image: okiruproacrde4d539b.azurecr.io/okiru-pro/web
+  interval: 1m0s
+  timeout: 30s
+---
+# ImagePolicy for Web - Staging
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-web-staging
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-web
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^[a-f0-9]{7,}-[0-9]{8,}$'
+---
+# ImagePolicy for Web - Production
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-web-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-web
+  policy:
+    semver:
+      range: ">=1.0.0"
+  filterTags:
+    pattern: '^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$'
+    extract: '$version'
+---
+# ImageRepository for Compute
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: okiru-compute
+  namespace: flux-system
+spec:
+  image: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
+  interval: 1m0s
+  timeout: 30s
+---
+# ImagePolicy for Compute - Staging
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-compute-staging
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-compute
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    pattern: '^[a-f0-9]{7,}-[0-9]{8,}$'
+---
+# ImagePolicy for Compute - Production
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: okiru-compute-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: okiru-compute
+  policy:
+    semver:
+      range: ">=1.0.0"
+  filterTags:
+    pattern: '^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$'
+    extract: '$version'

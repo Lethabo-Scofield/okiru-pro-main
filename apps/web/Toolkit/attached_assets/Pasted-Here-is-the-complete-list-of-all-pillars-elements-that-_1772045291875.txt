@@ -1,0 +1,41 @@
+Here is the complete list of **all pillars** (elements) that must be included in your B-BBEE system, based on the certificate and scorecard you provided (from the "Final BEE Verification Report" for Thandanani Transport, dated 30 January 2026).
+
+This matches the **Integrated Transport Sector Code** (QSE scorecard) used in the example, which is a sector-specific variation of the Revised Codes of Good Practice (RCoGP). Your system needs to support **all these pillars** with their maximum points, targets, sub-minimums (where applicable), and calculation logic.
+
+### Full List of Pillars to Include
+
+| #  | Pillar Name (as shown in certificate)          | Max Points | Notes / Status in Example                  | Priority Element? | Sub-Minimum Required? | Included in Your System? |
+|----|------------------------------------------------|------------|--------------------------------------------|-------------------|-----------------------|--------------------------|
+| 1  | Equity Ownership (also called Ownership)       | 25.00      | 25.00 (maxed – 100% Black Ownership)       | Yes               | Yes (40% = 10 pts)    | Yes – critical           |
+| 2  | Management Control                             | 27.00      | 27.00 (maxed or near-max)                  | No                | No                    | Yes – critical           |
+| 3  | Employment Equity                              | 0.00       | 0.00 (not scored in this example)         | No                | No                    | Yes (often combined with MC in QSE) |
+| 4  | Skills Development                             | 0.00       | 0.00 (no data filled)                      | Yes               | Yes (40% = 10 pts)    | Yes – critical           |
+| 5  | Preferential Procurement                       | 25.00      | 25.00 (strong performance)                 | Yes               | Yes (40% = 11.6 pts)  | Yes – critical           |
+| 6  | Enterprise Development (part of ESD)           | 0.00       | 0.00 (no contributions)                    | No                | No (but ESD has sub-min) | Yes                      |
+| 7  | Socio Economic Development (SED)               | 25.00      | 25.00 (appears maxed – unusual, likely typo or sector rule) | No                | No                    | Yes – critical           |
+| 8  | YES (Youth Employment Service) – Enhancer      | Not shown  | Not mentioned (0 youth in file)            | No                | No                    | Yes – optional bonus     |
+
+### Additional Notes on the Pillars
+
+- **Total Score in Example**: 102.00 → Level 1 @ 135% recognition
+- **Missing in Example**: Employment Equity and Enterprise Development scored 0 — common in QSE Transport Sector where some elements are optional or weighted differently.
+- **Sector-Specific (Transport Road & Freight – QSE)**:
+  - Management Control is 27 pts (higher than generic 19 pts — includes more levels or bonuses).
+  - SED shows 25 pts (very unusual — generic max is 5 pts; this may be a reporting error or sector adjustment; your system should cap at 5 unless Transport Code overrides).
+- **Priority Elements** (sub-minimum required to avoid level drop):
+  - Ownership (40% of 25 = 10 pts)
+  - Skills Development (40% of 25 = 10 pts)
+  - Preferential Procurement (40% of 25/29 = ~11.6 pts)
+- **YES Enhancer**: Not shown in certificate, but should be included (adds +1 to +3 levels if qualified).
+
+### Recommendation for Your System
+
+Include **all 8 pillars** listed above — even if some score 0 in many cases. This ensures full compliance with the certificate format and QSE Transport Sector Code.
+
+- Core pillars (always calculate): Ownership, Management Control, Skills, Preferential Procurement, SED
+- Secondary/optional: Employment Equity, Enterprise Development, YES
+- Future-proof: Add toggle for "Draft 2026 Rules" (Transformation Fund, 100% black-owned emphasis)
+
+This matches exactly what appears in your client's certificate and what auditors/verifiers expect. Your import pipeline, scorecard engine, and exports (certificate PDF, auditor Excel, strategy pack) should all reflect these 8 pillars. If any pillar is missing in your current system, add it now to avoid audit failures.
+
+Let me know if you want the max points/targets for each pillar under Transport QSE or generic codes, or the calculation formulas for each.

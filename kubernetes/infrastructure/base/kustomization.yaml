@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: okiru-pro
+
+resources:
+  # Namespace
+  - namespace.yaml
+
+  # Storage (storage-classes.yaml removed - cluster-scoped, already exists, immutable fields)
+  - storage/pvc-mongodb.yaml
+  - storage/pvc-arangodb.yaml
+  - storage/pvc-redis.yaml
+
+  # ConfigMaps
+  - configmaps/app-config.yaml
+  - configmaps/mongodb-config.yaml
+  - configmaps/arangodb-config.yaml
+  - configmaps/redis-config.yaml
+
+  # Database Deployments
+  - deployments/mongodb.yaml
+  - deployments/arangodb.yaml
+  - deployments/redis.yaml
+
+  # Application Deployments
+  - deployments/api.yaml
+  - deployments/web.yaml
+  - deployments/compute.yaml
+
+  # Services
+  - services/services.yaml
+
+  # Ingress
+  - ingress/ingress.yaml
+
+  # HPA
+  - deployments/hpa.yaml
+
+  # Pod Disruption Budgets
+  - deployments/poddisruptionbudgets.yaml
+
+  # Backups
+  - backups/mongodb-backup.yaml
+  - backups/arangodb-backup.yaml
+
+  # Network Policies (uncomment to enable)
+  # - network-policies.yaml
+
+# Use 'labels' instead of 'commonLabels' to avoid modifying selectors
+# which are immutable after deployment creation
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: okiru-pro
+      app.kubernetes.io/managed-by: kustomize

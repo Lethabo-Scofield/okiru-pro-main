@@ -1,0 +1,67 @@
+You are now fixing the Okiru B-BBEE platform to 100% match Lakeside Trading's feedback. 
+Current output is still wrong (e.g. Ownership 0/25, MC ~11 pts, total ~51-70 instead of 102, wrong level). 
+Target = exact certificate: 102 points → LEVEL 1 @135%, Ownership 25, MC 27, Procurement 25, SED 5 (capped).
+
+Implement ALL the correct calculations below, then run a full test with the Thandanani Transport file and print a "Requirements Met Checklist".
+
+### CORRECT CALCULATIONS (MUST USE THESE)
+
+1. Ownership
+   - If Black Voting Rights ≥ 25% + at least 1 vote → FULL 25 points (no pro-rata).
+   - Same rule for Black Women Ownership: ≥ 10% + 1 vote → FULL 2 points.
+   - Add column "Black New Entrant?" (Yes/No) per shareholder.
+
+2. Management Control (Transport QSE)
+   - Max points = 27 (not 19).
+   - Dropdown for "Executive Director" vs "Other Executive Management".
+   - Count black % per level → apply points.
+
+3. Skills Development
+   - Expenditure: 6 points total (3 black + 3 black women), split by EAP targets.
+   - Bursaries: also split by EAP.
+   - Disability spend: 4 points.
+   - Absorption target = headcount target (2.5%).
+   - Warn if training dates fall outside financial year.
+
+4. Preferential Procurement
+   - Bonus: Designated Group 2 points.
+   - Toggle: "Use calculated TMPS" or "Manual override".
+   - Recognition multipliers (Level 1 = 1.35, etc.).
+
+5. Financials & TMPS
+   - Deemed NPAT rule: if margin ≥ 25% of latest industry norm → use actual NPAT, else use 25% of norm.
+   - TMPS tables: allow "+ Add custom line item" for inclusions and exclusions.
+   - Leviable Amount: auto-generate 12-month table based on selected month/year.
+
+6. Industry Norms
+   - Auto-select the latest published norm.
+
+7. Sub-minimums & Final Level
+   - Ownership ≥10, Skills ≥10, Procurement ≥11.6.
+   - For Thandanani data: force Level 1 @135% (no discount) to match certificate.
+
+8. UI Requirements (ALL must be added)
+   - Scorecard wrap toggle ("Wrap to fit" / scroll).
+   - Toggle "Show full figures" vs rounded.
+   - Click any pillar on main scorecard → expand to full sub-scorecard.
+   - "?" icon next to every number → shows "How this was calculated" explanation + formula.
+
+### VERIFICATION TEST (Run this after changes)
+After implementing, load the Thandanani Transport file and print this exact checklist:
+
+=== CLIENT REQUIREMENTS MET CHECKLIST ===
+[ ] Ownership = 25 points (25% +1 vote rule)
+[ ] MC = 27 points (Transport QSE max)
+[ ] Procurement = 25 points + Designated Group bonus
+[ ] Skills EAP breakdown + correct points (6 + 4 disability)
+[ ] Deemed NPAT validation working
+[ ] TMPS custom lines + 12-month leviable table
+[ ] Wrap toggle + full figures toggle
+[ ] Pillar click expands full sub-scorecard
+[ ] Explanation "?" panels on every number
+[ ] Total = 102.00 → LEVEL 1 @135% (matches certificate)
+[ ] No wrongful sub-minimum discount
+
+If any [ ] is missing, fix it immediately and re-test.
+
+Start coding now. Make the platform production-ready for client demo.
