@@ -109,6 +109,10 @@ router.get('/download', async (req: Request, res: Response) => {
     const startsOn = new Date();
     const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000);
 
+    const baseFileName = file.trim().split('/').pop() || file.trim();
+    const safeDownloadName = baseFileName.replace(/[\r\n"\\]/g, '_');
+    const contentDisposition = `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
+
     const sasToken = generateBlobSASQueryParameters({
       containerName: CONTAINER_NAME,
       blobName: file.trim(),
@@ -116,6 +120,7 @@ router.get('/download', async (req: Request, res: Response) => {
       startsOn,
       expiresOn,
       protocol: SASProtocol.Https,
+      contentDisposition,
     }, sharedKeyCredential).toString();
 
     const url = `${blobClient.url}?${sasToken}`;
