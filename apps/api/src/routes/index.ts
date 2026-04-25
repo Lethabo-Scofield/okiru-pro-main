@@ -35,6 +35,7 @@ import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
+import feedbackRouter from './feedback.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -176,6 +177,9 @@ export async function registerRoutes(
 
   // Certificate routes (Azure Blob Storage)
   app.use('/api/certificates', certificatesRouter);
+
+  // Feedback routes (DevMode widget)
+  app.use('/api/feedback', feedbackRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

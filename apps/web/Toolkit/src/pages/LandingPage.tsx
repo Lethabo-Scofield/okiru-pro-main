@@ -433,6 +433,9 @@ const GLOBAL_CSS = `
   .okiru-root .ok-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .okiru-root .ok-foot-wm { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
   .okiru-root .ok-foot-c { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.15); letter-spacing: .06em; }
+  .okiru-root .ok-foot-links { display: flex; align-items: center; gap: 14px; }
+  .okiru-root .ok-foot-link { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.35); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .2s ease; }
+  .okiru-root .ok-foot-link:hover { color: var(--pur-l); }
 
   /* scroll reveal */
   .okiru-root .ok-reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
@@ -937,6 +940,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           <div className="ok-foot">
             <span className="ok-foot-wm">Okiru</span>
             <span className="ok-foot-c">&copy; {new Date().getFullYear()} Okiru Pro — B-BBEE Compliance Platform</span>
+            <div className="ok-foot-links">
+              <a href="/devmode" className="ok-foot-link" data-testid="link-devmode">{`{DevMode}`}</a>
+            </div>
           </div>
         </div>
       </footer>

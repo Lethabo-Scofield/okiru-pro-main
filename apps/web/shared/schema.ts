@@ -475,4 +475,31 @@ export const MessageModel = mongoose.models.Message || mongoose.model("Message",
 export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
 export const ClientModel = mongoose.models.Client || mongoose.model("Client", clientSchema);
 
+const feedbackSchema = new Schema({
+  feedbackId: { type: String, required: true, unique: true },
+  message: { type: String, required: true },
+  category: { type: String, enum: ['bug', 'feature', 'general', 'compliance'], default: 'general' },
+  pageUrl: { type: String, default: null },
+  userName: { type: String, default: null },
+  userEmail: { type: String, default: null },
+  userId: { type: String, default: null, index: true },
+  organizationId: { type: String, default: null, index: true },
+  status: { type: String, enum: ['open', 'in-progress', 'resolved'], default: 'open', index: true },
+  userAgent: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now, index: true },
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "feedback" });
+
+feedbackSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.feedbackId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const FeedbackModel = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
+
 export { getNextSequence };
