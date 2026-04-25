@@ -1,0 +1,44 @@
+I'm deploying a B-BBEE compliance app called Okiru Pro to Azure. The repo is Lethabo-Scofield/okiru-pro-main and the latest commit on main is ff90a87. We use:
+
+Azure Container Registry: okiruproacrde4d539b.azurecr.io
+AKS Cluster: okiru-pro-aks in resource group okiru-pro-rg
+Namespace: okiru-pro
+Production URL: https://okiru.20.164.101.114.nip.io
+Deploy workflow: .github/workflows/deploy-prod.yml (runs on push to main)
+GitOps: ArgoCD watches kubernetes/infrastructure/overlays/prod (image updater bumps tags)
+Three apps: apps/web (frontend + BFF on port 5001), apps/api (Express on port 5000), apps/Computation-Engine (FastAPI on port 8000)
+My goal
+Walk me through, one terminal command at a time, until the latest commit is live at the URL above. Wait for me to paste the output of each command before giving me the next one. If a command fails, diagnose from the output and tell me the next command to fix it. Don't skip ahead.
+
+Tools I have installed locally
+Tell me to install any of these if missing: git, gh (GitHub CLI), az (Azure CLI), kubectl, docker. Confirm versions on my first command.
+
+The order I want to follow
+Verify pre-reqs: confirm I have gh, az, kubectl installed and I'm logged in to all three (gh auth status, az account show, kubectl config current-context). If not, walk me through az login, gh auth login, and az aks get-credentials --resource-group okiru-pro-rg --name okiru-pro-aks.
+Check the GitHub Actions deploy run for commit ff90a87 using gh run list --workflow=deploy-prod.yml --limit 5 and then gh run view <run-id>. Tell me whether it succeeded, failed, or is in progress.
+If still running → wait, then re-check.
+If failed → show me the failed step and tell me the most likely fix.
+If succeeded → continue to step 3.
+Confirm new images landed in ACR with az acr repository show-tags --name okiruproacrde4d539b --repository okiru-pro/api --orderby time_desc --top 5 (and same for okiru-pro/web and okiru-pro/compute). I expect to see the SHA ff90a87 (or the full 40-char SHA) at the top.
+Confirm AKS rolled out the new images with:
+kubectl -n okiru-pro get deploy -o wide (look at the IMAGE column for the SHA)
+kubectl -n okiru-pro rollout status deployment/okiru-pro-api --timeout=300s
+kubectl -n okiru-pro rollout status deployment/okiru-pro-web --timeout=300s
+kubectl -n okiru-pro rollout status deployment/okiru-pro-compute --timeout=300s
+If any pod is not Running → kubectl -n okiru-pro get pods then kubectl -n okiru-pro describe pod <name> and kubectl -n okiru-pro logs <name> --tail=100. Diagnose from the output.
+Smoke-test the live URL:
+curl -sS -o /dev/null -w "%{http_code}\n" https://okiru.20.164.101.114.nip.io/
+curl -sS -o /dev/null -w "%{http_code}\n" https://okiru.20.164.101.114.nip.io/api/health
+curl -sS -X POST https://okiru.20.164.101.114.nip.io/api/feedback -H "Content-Type: application/json" -d '{"message":"deploy smoke test","category":"general"}' — should return 201 with a feedback object containing an id.
+Verify new features:
+Browser-test: open https://okiru.20.164.101.114.nip.io/, check the floating Feedback button bottom-right, click it and submit a test message.
+Sign in with my real prod credentials, navigate to /devmode, confirm the feedback I just submitted appears in the report.
+Open the Certificates Hub and confirm cert names display as company names (e.g. "Acme Holdings") with no leading numbers, dates, or UUIDs.
+What's new in this deploy (so you know what to verify)
+Feedback widget: floating bottom-right button on every page (hidden on /devmode), opens a clean white form with category chips, animations via framer-motion, ⌘/Ctrl+Enter to submit. Saves to MongoDB via POST /api/feedback.
+DevMode page at /devmode: protected, shows feedback report with status filters and stats. Linked from {DevMode} button in landing page footer.
+Certificate name cleanup: apps/api/src/routes/certificates.ts and apps/web/src/pages/CertificateHub.tsx now strip leading numeric/date/UUID prefixes and trailing classification suffixes from filenames.
+Rollback plan if needed
+If the new commit breaks production, tell me to run the rollback workflow:
+gh workflow run rollback.yml -f environment=prod
+or manually: kubectl -n okiru-pro rollout undo deployment/okiru-pro-api && kubectl -n okiru-pro rollout undo deployment/okiru-pro-web && kubectl -n okiru-pro rollout undo deployment/okiru-pro-compute.
