@@ -9,6 +9,7 @@ import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOt
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
+import { registerFeedbackRoutes } from "./feedbackRoutes";
 
 const logger = createLogger("Routes");
 
@@ -139,6 +140,9 @@ export async function registerRoutes(
     entry.count++;
     return entry.count <= limit;
   }
+
+  // Feedback routes (DevMode widget) — public POST, authenticated read/manage
+  registerFeedbackRoutes(app, requireAuth);
 
   app.post("/api/auth/check-username", async (req, res) => {
     try {

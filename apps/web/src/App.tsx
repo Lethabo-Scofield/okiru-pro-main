@@ -16,6 +16,8 @@ import DocumentProcessor from "@/pages/DocumentProcessor";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
 import CertificateHub from "@/pages/CertificateHub";
+import DevMode from "@/pages/DevMode";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 
@@ -64,6 +66,9 @@ function AppRouter() {
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
+      <Route path="/devmode">
+        <ProtectedRoute><DevMode /></ProtectedRoute>
+      </Route>
       <Route>
         <NotFound />
       </Route>
@@ -79,6 +84,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <AppRouter />
+            <FeedbackWidget />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
