@@ -48,17 +48,37 @@ interface CertificateFile {
 function deriveCompanyNameFromFileName(fileName: string): string {
   const base = fileName.split('/').pop() || fileName;
   const noExt = base.replace(/\.[a-z0-9]+$/i, '');
-  const noUuid = noExt.replace(
+  let working = noExt.replace(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
     '',
   );
-  const trimmed = noUuid
-    .replace(/^\d{4}[\s_-]+\d{2}[\s_-]+\d{1,2}[\s_-]+/, '')
-    .replace(/[\s_-]*\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
-    .replace(/[\s_-]*B-?BBEE.*$/i, '')
-    .replace(/[\s_-]*Certificate.*$/i, '')
+  const leadingPrefixPatterns = [
+    /^\d{4}[\s_\-]+\d{1,2}[\s_\-]+\d{1,2}[\s_\-]+/,
+    /^(?:19|20)\d{2}[\s._\-]+/,
+    /^[\s\[\(]*\d+[\s._\-:)\]]+/,
+  ];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pat of leadingPrefixPatterns) {
+      const next = working.replace(pat, '');
+      if (next !== working) {
+        working = next;
+        changed = true;
+      }
+    }
+  }
+  const trimmed = working
     .replace(/[_]+/g, ' ')
     .replace(/\s+/g, ' ')
+    .replace(/\s*\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
+    .replace(/\s*B[\s-]?BBEE.*$/i, '')
+    .replace(/\s*Certificate.*$/i, '')
+    .replace(/\s*Affidavit.*$/i, '')
+    .replace(/\s*Scorecard.*$/i, '')
+    .replace(/\s*Verification.*$/i, '')
+    .replace(/\s+BEE$/i, '')
+    .replace(/\s*\(?\d+\)?$/, '')
     .replace(/[\s_\-–—]+$/u, '')
     .trim();
   return trimmed || 'Unknown company';
