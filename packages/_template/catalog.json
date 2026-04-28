@@ -1,0 +1,19 @@
+{
+  "$schema": "../../catalog.schema.json",
+  "name": "@okiru/_template",
+  "language": "typescript",
+  "category": "shared-library",
+  "tier": "experimental",
+  "isTemplate": true,
+  "owner": "@okiru/platform",
+  "repository": "github.com/okiru/okiru-pro",
+  "path": "packages/_template",
+  "docs": "packages/_template/README.md",
+  "consumers": [],
+  "contractsImplemented": [],
+  "publicApi": [
+    "TEMPLATE_PACKAGE_PLACEHOLDER"
+  ],
+  "breakingChanges": [],
+  "tags": ["template", "scaffold"]
+}

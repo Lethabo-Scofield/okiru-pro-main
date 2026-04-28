@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://okiru/catalog.registry.schema.json",
+  "title": "OkiruRegistryCatalog",
+  "description": "Top-level catalog that aggregates every shared component (`packages/*/catalog.json`) and registers each application. See docs/governance/README.md.",
+  "type": "object",
+  "required": ["version", "components", "applications"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": {
+      "type": "string",
+      "description": "SemVer of the registry catalog format itself, NOT of any individual component."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "components": {
+      "type": "array",
+      "description": "Repo-relative paths to per-package catalog.json files.",
+      "items": { "type": "string" }
+    },
+    "applications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "language", "owner"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "language": {
+            "type": "string",
+            "enum": ["typescript", "javascript", "python"]
+          },
+          "owner": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

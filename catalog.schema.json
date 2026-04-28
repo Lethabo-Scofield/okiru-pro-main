@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://okiru/catalog.schema.json",
+  "title": "OkiruComponentCatalog",
+  "description": "Per-package catalog metadata for Okiru shared components and applications (COM-031).",
+  "type": "object",
+  "required": ["name", "language", "category", "tier", "owner", "path"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": {
+      "type": "string",
+      "description": "Package name. JS: '@okiru/<name>'. Python: 'okiru-<name>'.",
+      "pattern": "^(@okiru/[a-z_][a-z0-9-]*|okiru-[a-z][a-z0-9-]*|okiru-computation-engine)$"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["typescript", "javascript", "python"]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "shared-library",
+        "internal-sdk",
+        "integration-adapter",
+        "observability-middleware",
+        "schemas-types",
+        "test-utilities",
+        "application"
+      ]
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["experimental", "stable", "deprecated"],
+      "description": "Maturity tier. See docs/governance/component-taxonomy.md."
+    },
+    "isTemplate": { "type": "boolean", "default": false },
+    "owner": {
+      "type": "string",
+      "description": "Owning team handle (must match a CODEOWNERS entry)."
+    },
+    "repository": { "type": "string" },
+    "path": {
+      "type": "string",
+      "description": "Repo-relative path to the package root."
+    },
+    "docs": { "type": "string" },
+    "consumers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Names of packages/apps that depend on this component."
+    },
+    "contractsImplemented": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Cross-language contract identifiers, e.g. 'okiru.user@1'."
+    },
+    "publicApi": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Top-level exported symbols covered by SemVer."
+    },
+    "breakingChanges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["version", "summary"],
+        "properties": {
+          "version": { "type": "string" },
+          "summary": { "type": "string" },
+          "migrationDoc": { "type": "string" }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

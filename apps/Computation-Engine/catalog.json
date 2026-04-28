@@ -1,0 +1,25 @@
+{
+  "$schema": "../../catalog.schema.json",
+  "name": "okiru-computation-engine",
+  "language": "python",
+  "category": "application",
+  "tier": "stable",
+  "owner": "@okiru/compute",
+  "repository": "github.com/okiru/okiru-pro",
+  "path": "apps/Computation-Engine",
+  "docs": "apps/Computation-Engine/README.md",
+  "consumers": [
+    "@okiru/api"
+  ],
+  "contractsImplemented": [
+    "okiru.compute-engine.http@1"
+  ],
+  "publicApi": [
+    "GET /health",
+    "POST /compile",
+    "POST /evaluate",
+    "GET /models/{id}"
+  ],
+  "breakingChanges": [],
+  "tags": ["application", "fastapi", "scoring"]
+}

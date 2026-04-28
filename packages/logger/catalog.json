@@ -1,0 +1,26 @@
+{
+  "$schema": "../../catalog.schema.json",
+  "name": "@okiru/logger",
+  "language": "typescript",
+  "category": "shared-library",
+  "tier": "stable",
+  "owner": "@okiru/platform",
+  "repository": "github.com/okiru/okiru-pro",
+  "path": "packages/logger",
+  "docs": "packages/logger/README.md",
+  "consumers": [
+    "@okiru/api",
+    "rest-express"
+  ],
+  "contractsImplemented": [
+    "okiru.log-envelope@1"
+  ],
+  "publicApi": [
+    "createLogger",
+    "Logger",
+    "RequestContext",
+    "requestContext"
+  ],
+  "breakingChanges": [],
+  "tags": ["logging", "observability", "shared"]
+}

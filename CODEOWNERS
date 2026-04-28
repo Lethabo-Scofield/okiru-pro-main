@@ -1,0 +1,27 @@
+# CODEOWNERS — Okiru Pro
+# Each shared component declares its owning team via OWNERS.md inside the package.
+# This file is the GitHub-enforceable mirror of those declarations.
+#
+# Format: <pattern>  @team-or-user [@team-or-user ...]
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default fallback — platform team owns anything unclaimed below.
+*                                   @okiru/platform
+
+# Governance & registry tooling
+/docs/governance/                   @okiru/platform
+/CODEOWNERS                         @okiru/platform
+/.github/workflows/                 @okiru/platform
+/packages/_template/                @okiru/platform
+
+# Shared TypeScript packages
+/packages/types/                    @okiru/platform
+/packages/logger/                   @okiru/platform
+
+# Shared Python packages
+/packages/py-shared/                @okiru/platform
+
+# Applications
+/apps/api/                          @okiru/backend
+/apps/web/                          @okiru/web
+/apps/Computation-Engine/           @okiru/compute

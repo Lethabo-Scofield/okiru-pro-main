@@ -1,0 +1,19 @@
+{
+  "$schema": "../../catalog.schema.json",
+  "name": "okiru-shared",
+  "language": "python",
+  "category": "shared-library",
+  "tier": "experimental",
+  "isTemplate": true,
+  "owner": "@okiru/platform",
+  "repository": "github.com/okiru/okiru-pro",
+  "path": "packages/py-shared",
+  "docs": "packages/py-shared/README.md",
+  "consumers": [],
+  "contractsImplemented": [],
+  "publicApi": [
+    "okiru.shared.TEMPLATE_PACKAGE_PLACEHOLDER"
+  ],
+  "breakingChanges": [],
+  "tags": ["template", "scaffold", "python"]
+}

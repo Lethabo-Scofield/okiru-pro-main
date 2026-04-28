@@ -1,0 +1,174 @@
+name: shared-components-ci
+
+# Lint, typecheck, test, and metadata-validate the shared component packages
+# under packages/. Does not touch app build/deploy pipelines (those live in
+# their own workflow files).
+#
+# Implements Epic 5 (CI/CD integration), in particular COM-041 (PR checks
+# for library repositories). Some controls described in
+# docs/governance/security-policy.md (secret scanning, license scanning,
+# Sigstore provenance) are flagged as roadmap there and are NOT enforced
+# by this workflow yet — they will be added in COM-040 (secretless
+# publishing) when we wire the org-level private registries.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'catalog.json'
+      - 'catalog.schema.json'
+      - 'catalog.registry.schema.json'
+      - 'CODEOWNERS'
+      - 'docs/governance/**'
+      - '.github/workflows/shared-components-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'catalog.json'
+      - 'catalog.schema.json'
+      - 'catalog.registry.schema.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------ #
+  # Catalog hygiene: every package has OWNERS.md + catalog.json,
+  # naming convention is followed, every per-package catalog.json
+  # validates against catalog.schema.json, and the root catalog.json
+  # validates against catalog.registry.schema.json.
+  # ------------------------------------------------------------------ #
+  catalog-hygiene:
+    name: catalog hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install ajv-cli
+        run: npm install --no-save ajv-cli@5 ajv-formats@3
+      - name: Validate root catalog.json against the registry schema
+        run: |
+          npx ajv-cli validate \
+            --spec=draft2020 \
+            -c ajv-formats \
+            -s catalog.registry.schema.json \
+            -d catalog.json
+      - name: Validate every per-package catalog.json against the component schema
+        run: |
+          set -e
+          shopt -s globstar
+          for f in packages/**/catalog.json apps/**/catalog.json; do
+            [ -f "$f" ] || continue
+            echo "validating $f"
+            npx ajv-cli validate \
+              --spec=draft2020 \
+              -c ajv-formats \
+              -s catalog.schema.json \
+              -d "$f"
+          done
+      - name: Every package has OWNERS.md
+        run: |
+          set -e
+          missing=0
+          for d in packages/*/; do
+            if [ ! -f "$d/OWNERS.md" ]; then
+              echo "::error file=${d}OWNERS.md::missing OWNERS.md"
+              missing=1
+            fi
+          done
+          exit $missing
+      - name: Every package has README.md
+        run: |
+          set -e
+          missing=0
+          for d in packages/*/; do
+            if [ ! -f "$d/README.md" ]; then
+              echo "::error file=${d}README.md::missing README.md"
+              missing=1
+            fi
+          done
+          exit $missing
+      - name: Naming convention
+        run: |
+          set -e
+          fail=0
+          for d in packages/*/; do
+            name=$(basename "$d")
+            # Allow either a JS package folder (lowercase, kebab) or a
+            # py-* prefixed Python package, plus the underscore-prefixed
+            # template scaffold.
+            if ! [[ "$name" =~ ^(_[a-z][a-z0-9_-]*|[a-z][a-z0-9-]*|py-[a-z][a-z0-9-]*)$ ]]; then
+              echo "::error::invalid package folder name: $name"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  # ------------------------------------------------------------------ #
+  # TypeScript packages: typecheck + (where present) tests.
+  # Audit is intentionally scoped to the shared packages only; a
+  # workspace-wide `pnpm audit` is run by the existing security-scan
+  # workflow.
+  # ------------------------------------------------------------------ #
+  ts-packages:
+    name: ts packages — typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck shared TS packages
+        run: pnpm --filter "./packages/**" -r --if-present typecheck
+      - name: Test shared TS packages
+        run: pnpm --filter "./packages/**" -r --if-present test
+
+  # ------------------------------------------------------------------ #
+  # Python packages: ruff + pytest, restricted to packages/py-*.
+  # ------------------------------------------------------------------ #
+  py-packages:
+    name: py packages — ruff + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ruff + pytest + hatchling
+        run: pip install --upgrade pip ruff pytest hatchling
+      - name: Discover py-packages
+        id: discover
+        run: |
+          dirs=$(ls -d packages/py-*/ 2>/dev/null || true)
+          echo "dirs<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$dirs"      >> "$GITHUB_OUTPUT"
+          echo "EOF"        >> "$GITHUB_OUTPUT"
+      - name: Lint, install, test each py-package
+        if: steps.discover.outputs.dirs != ''
+        run: |
+          set -e
+          for d in ${{ steps.discover.outputs.dirs }}; do
+            echo "--- $d ---"
+            ruff check "$d"
+            pip install -e "${d}[dev]"
+            (cd "$d" && pytest -q)
+          done

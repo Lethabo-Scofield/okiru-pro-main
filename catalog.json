@@ -1,0 +1,32 @@
+{
+  "$schema": "./catalog.registry.schema.json",
+  "version": "1.0.0",
+  "generatedAt": "2026-04-28T00:00:00Z",
+  "components": [
+    "packages/types/catalog.json",
+    "packages/logger/catalog.json",
+    "packages/_template/catalog.json",
+    "packages/py-shared/catalog.json",
+    "apps/Computation-Engine/catalog.json"
+  ],
+  "applications": [
+    {
+      "name": "@okiru/api",
+      "path": "apps/api",
+      "language": "typescript",
+      "owner": "@okiru/backend"
+    },
+    {
+      "name": "rest-express",
+      "path": "apps/web",
+      "language": "typescript",
+      "owner": "@okiru/web"
+    },
+    {
+      "name": "okiru-computation-engine",
+      "path": "apps/Computation-Engine",
+      "language": "python",
+      "owner": "@okiru/compute"
+    }
+  ]
+}

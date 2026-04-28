@@ -1,0 +1,1 @@
+export const TEMPLATE_PACKAGE_PLACEHOLDER = true;

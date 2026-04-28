@@ -23,6 +23,9 @@ importers:
       '@azure/storage-blob':
         specifier: ^12.31.0
         version: 12.31.0
+      '@okiru/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@okiru/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -165,6 +168,9 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
+      '@okiru/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -488,6 +494,18 @@ importers:
       bufferutil:
         specifier: ^4.0.8
         version: 4.1.0
+
+  packages/_template:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/logger:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/types:
     devDependencies:

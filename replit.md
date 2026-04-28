@@ -66,7 +66,26 @@ This is a **pnpm monorepo** with three applications:
 **Note**: Without MongoDB and ArangoDB, the app runs with in-memory storage (data won't persist across restarts). Core UI features still work.
 
 ## Shared Packages
-- `packages/types` (`@okiru/types`) — shared TypeScript types used by both web and API
+
+The monorepo follows the **Component Registries** governance model — see `docs/governance/` for the full rules.
+
+| Folder                  | Package name        | Purpose                                                      |
+| ----------------------- | ------------------- | ------------------------------------------------------------ |
+| `packages/types`        | `@okiru/types`      | Shared TypeScript domain types (User, Organization, Client). |
+| `packages/logger`       | `@okiru/logger`     | Structured logger with `AsyncLocalStorage` request context.  |
+| `packages/_template`    | `@okiru/_template`  | Scaffold to copy when creating a new shared TS package.      |
+| `packages/py-shared`    | `okiru-shared`      | Scaffold to copy when creating a new shared Python package.  |
+
+Each shared package ships:
+- `OWNERS.md` — owning team, on-call, escalation, SLAs (COM-003)
+- `catalog.json` — machine-readable metadata validated against `catalog.schema.json` (COM-031)
+- `CHANGELOG.md` — Keep-a-Changelog format
+- `README.md` — public API + usage
+
+The root `catalog.json` aggregates all components. `CODEOWNERS` mirrors per-package `OWNERS.md` for GitHub PR-review enforcement. CI checks for shared packages live in `.github/workflows/shared-components-ci.yml` (lint, typecheck, test, audit, schema validation, naming).
+
+### Pilot extraction (COM-050)
+The logger was duplicated in `apps/api/src/logger.ts` and `apps/web/server/logger.ts` (40+ consumer files combined). It now lives in `packages/logger/` and the two old locations are thin re-export shims, so existing imports keep working without changes. New code should import from `@okiru/logger` directly.
 
 ## Deployment
 - Build: `pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build`

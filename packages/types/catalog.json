@@ -1,0 +1,28 @@
+{
+  "$schema": "../../catalog.schema.json",
+  "name": "@okiru/types",
+  "language": "typescript",
+  "category": "schemas-types",
+  "tier": "stable",
+  "owner": "@okiru/platform",
+  "repository": "github.com/okiru/okiru-pro",
+  "path": "packages/types",
+  "docs": "packages/types/README.md",
+  "consumers": [
+    "@okiru/api"
+  ],
+  "contractsImplemented": [
+    "okiru.user@1",
+    "okiru.organization@1",
+    "okiru.client@1"
+  ],
+  "publicApi": [
+    "User",
+    "InsertUser",
+    "Organization",
+    "InsertOrganization",
+    "Client"
+  ],
+  "breakingChanges": [],
+  "tags": ["types", "shared", "domain-model"]
+}
