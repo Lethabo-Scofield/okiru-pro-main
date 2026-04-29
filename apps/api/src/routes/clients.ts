@@ -7,6 +7,7 @@ import { createLogger } from '../logger.js';
 
 const logger = createLogger("Clients");
 import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
+import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
 import {
   ShareholderModel, OwnershipDataModel, EmployeeModel, TrainingProgramModel,
   SupplierModel, ProcurementDataModel, EsdContributionModel, SedContributionModel,
@@ -16,7 +17,7 @@ import {
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), async (req: Request, res: Response) => {
   const orgId = req.session.organizationId!;
   const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
@@ -24,32 +25,52 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   return res.json(result);
 });
 
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   try {
     const orgId = req.session.organizationId!;
     const client = await storage.createClient({ ...req.body, organizationId: orgId });
+    await recordAudit(req, {
+      action: "client.create",
+      resourceType: "client",
+      resourceId: client.id,
+      result: "success",
+      metadata: { name: client.name },
+    });
     return res.json(client);
   } catch (error: unknown) {
     logger.error('Create client error', error);
+    await recordAudit(req, {
+      action: "client.create",
+      resourceType: "client",
+      result: "failure",
+      metadata: { reason: "exception" },
+    });
     return res.status(500).json({ message: "Failed to create client" });
   }
 });
 
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   const client = await storage.getClient(String(req.params.id));
   if (!client) return res.status(404).json({ message: "Client not found" });
   return res.json(client);
 });
 
-router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   const client = await storage.updateClient(String(req.params.id), req.body);
   if (!client) return res.status(404).json({ message: "Client not found" });
+  await recordAudit(req, {
+    action: "client.update",
+    resourceType: "client",
+    resourceId: client.id,
+    result: "success",
+    metadata: { fields: Object.keys(req.body || {}) },
+  });
   return res.json(client);
 });
 
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_DELETE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   const clientId = String(req.params.id);
   await Promise.all([
@@ -67,10 +88,16 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
     ExportLogModel.deleteMany({ clientId }),
   ]);
   await storage.deleteClient(clientId);
+  await recordAudit(req, {
+    action: "client.delete",
+    resourceType: "client",
+    resourceId: clientId,
+    result: "success",
+  });
   return res.json({ message: "Deleted" });
 });
 
-router.post('/:id/logo', requireAuth, upload.single('logo'), async (req: Request, res: Response) => {
+router.post('/:id/logo', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), upload.single('logo'), async (req: Request, res: Response) => {
   try {
     if (!(await verifyClientAccess(req, res))) return;
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -83,7 +110,7 @@ router.post('/:id/logo', requireAuth, upload.single('logo'), async (req: Request
   }
 });
 
-router.get('/:id/data', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/data', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), async (req: Request, res: Response) => {
   try {
     if (!(await verifyClientAccess(req, res))) return;
     const clientId = String(req.params.id);

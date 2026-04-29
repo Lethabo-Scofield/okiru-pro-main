@@ -107,3 +107,12 @@ pnpm dev
 pnpm dev:web   # Web app
 pnpm dev:api   # API server
 ```
+
+## Enterprise Security (Apr 2026)
+The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
+
+- **RBAC** — action-based permissions catalogue (`apps/api/src/security/permissions.ts`) with default role mappings (`auditor`, `analyst`, `manager`, `admin`, legacy `user`). Tenant-scoped overrides via Mongoose `rbacRoles`/`rbacRoleAssignments`. Use `requirePermission(PERMISSIONS.X)` middleware on routes.
+- **Audit log** — append-only `auditLogs` MongoDB collection. Schema-level pre-hooks block update/delete. `recordAudit(req, event)` is fire-and-log (best-effort). Admin query at `GET /api/admin/audit-logs` (requires `audit.read`, hard-pinned to caller's session org). The web server writes to the same collection via `apps/web/server/securityAudit.ts`.
+- **Tenant isolation** — `requireTenantOwnership({ resourceType, loader })` and `assertSameTenant(...)` in `apps/api/src/security/tenant.ts`. Cross-tenant attempts return 403 and are audited.
+- **Request security** — strict CORS allowlist with rejection logging in `apps/api/index.ts`; zod-backed `validateBody` / `validateQuery` middleware in `apps/api/src/security/validate.ts` (applied to register, login, audit query).
+- **Tests** — `apps/api/__tests__/security/*.test.ts` (55 tests, all passing). Run with `pnpm --filter @okiru/api exec vitest run __tests__/security`.
