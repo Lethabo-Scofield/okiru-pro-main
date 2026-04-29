@@ -31,14 +31,25 @@ app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 
-// CORS
+// CORS — strict allowlist. Unknown origins are rejected and logged so operators
+// can see probe attempts. Same-origin / non-browser requests (no Origin header)
+// are allowed through (cors() default behavior when callback is used).
 const corsEnv = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Boolean);
 const allowedOrigins = (corsEnv && corsEnv.length > 0)
   ? corsEnv
   : (isProd
     ? ["https://okiru.20.164.101.114.nip.io", "https://okiru-pro.com", "https://www.okiru-pro.com"]
     : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+const corsLogger = createLogger("Cors");
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true); // same-origin / curl / health checks
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    corsLogger.warn("Rejected request from disallowed origin", { origin, allowed: allowedOrigins });
+    return callback(new Error("Origin not allowed"));
+  },
+  credentials: true,
+}));
 
 // Body parser - increased for large session payloads with full entity arrays
 app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));

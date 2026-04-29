@@ -9,6 +9,7 @@ import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOt
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
+import { recordAudit } from "./securityAudit.js";
 
 const logger = createLogger("Routes");
 
@@ -760,13 +761,44 @@ export async function registerRoutes(
       const { role } = req.body;
       const ALLOWED_ROLES = ["auditor", "analyst", "manager", "admin"];
       if (!role || !ALLOWED_ROLES.includes(role)) {
+        await recordAudit(req, {
+          action: "user.role.change",
+          resourceType: "user",
+          resourceId: userId,
+          result: "failure",
+          metadata: { reason: "invalid_role", attempted: role },
+        });
         return res.status(400).json({ message: "Invalid role" });
       }
+      const before = await storage.getUserById(userId);
       const updated = await storage.updateUser(userId, { role } as any);
-      if (!updated) return res.status(404).json({ message: "User not found" });
+      if (!updated) {
+        await recordAudit(req, {
+          action: "user.role.change",
+          resourceType: "user",
+          resourceId: userId,
+          result: "failure",
+          metadata: { reason: "user_not_found", attempted: role },
+        });
+        return res.status(404).json({ message: "User not found" });
+      }
+      await recordAudit(req, {
+        action: "user.role.change",
+        resourceType: "user",
+        resourceId: userId,
+        result: "success",
+        metadata: { from: before?.role ?? null, to: role },
+      });
       res.json({ user: sanitizeUser(updated), message: `Role updated to ${role}` });
     } catch (error: any) {
       logger.error("Admin role update failed", error);
+      await recordAudit(req, {
+        action: "user.role.change",
+        resourceType: "user",
+        resourceId: req.params.userId,
+        result: "failure",
+        metadata: { reason: "exception" },
+      });
       res.status(500).json({ message: "Failed to update role" });
     }
   });
