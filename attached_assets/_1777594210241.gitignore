@@ -1,0 +1,17 @@
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# Environment files — never commit real credentials
+# .env.example is the ONLY .env file that should be committed
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+.env.test
+.env.*.local
