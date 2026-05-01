@@ -113,6 +113,29 @@ describe("centralized data layer", () => {
       await uow2.rollback();
       await expect(uow2.commit()).rejects.toThrow(/already rolled back/);
     });
+
+    it("supports shouldFailOnCommit per architecture doc §9", async () => {
+      const uow = new FakeUnitOfWork();
+      uow.shouldFailOnCommit = true;
+      await expect(uow.commit()).rejects.toThrow(/simulated commit failure/);
+      expect(uow.committed).toBe(false);
+      expect(uow.commitCount).toBe(0);
+
+      // Custom error wins over the default message.
+      const uow2 = new FakeUnitOfWork();
+      uow2.shouldFailOnCommit = true;
+      uow2.commitError = new Error("custom DB outage");
+      await expect(uow2.commit()).rejects.toThrow(/custom DB outage/);
+
+      // Recovery: clear the flag, commit succeeds, counters update.
+      const uow3 = new FakeUnitOfWork();
+      uow3.shouldFailOnCommit = true;
+      await expect(uow3.commit()).rejects.toThrow();
+      uow3.shouldFailOnCommit = false;
+      await uow3.commit();
+      expect(uow3.committed).toBe(true);
+      expect(uow3.commitCount).toBe(1);
+    });
   });
 
   describe("FakeDataAccessFactory + repository", () => {
@@ -258,14 +281,11 @@ describe("centralized data layer", () => {
     });
 
     it("leaves UoW finalisable when commit throws (state stays 'open')", async () => {
-      // A repo doesn't matter here; we override commit to throw.
+      // Use the canonical shouldFailOnCommit flag from architecture doc §9.
       const repo = new InMemoryUserRepository();
       const uow = new FakeAppUoW(repo);
-      const originalCommit = uow.commit.bind(uow);
-      uow.commit = async () => {
-        // Simulate transient driver error mid-commit.
-        throw new Error("commit failed: network");
-      };
+      uow.shouldFailOnCommit = true;
+      uow.commitError = new Error("commit failed: network");
 
       const factory = new FakeDataAccessFactory<IAppUnitOfWork>(uow);
       const app = express();
@@ -286,12 +306,13 @@ describe("centralized data layer", () => {
       await tick();
 
       // After commit fails, withUowErrorHandler must still be able to roll back
-      // because state is left "open". The fake's rollback is the unmodified one.
-      void originalCommit;
+      // because state is left "open".
       expect(result.status).toBe(500);
       expect(JSON.parse(result.body).message).toMatch(/commit failed/);
       expect(uow.rolledBack).toBe(true);
       expect(uow.committed).toBe(false);
+      expect(uow.commitCount).toBe(0);
+      expect(uow.rollbackCount).toBe(1);
     });
 
     it("commitUow / rollbackUow are idempotent", async () => {
