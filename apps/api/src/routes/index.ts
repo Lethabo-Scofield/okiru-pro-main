@@ -36,6 +36,8 @@ import sectorsRouter from './sectors.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
 import feedbackRouter from './feedback.js';
+import { createDataLayerDemoRouter } from './dataLayerDemo.js';
+import type { DataLayer } from '../data-layer/index.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -180,6 +182,17 @@ export async function registerRoutes(
 
   // Feedback routes (DevMode widget)
   app.use('/api/feedback', feedbackRouter);
+
+  // Centralized data layer — proof-of-concept route. Demonstrates the
+  // Repository / Unit of Work / Data Access Factory pattern. Migrate other
+  // routers to this pattern incrementally; see packages/data-layer/README.md.
+  const dataLayer = app.locals.dataLayer as DataLayer | undefined;
+  if (dataLayer) {
+    app.use('/api/data-layer-demo', createDataLayerDemoRouter(dataLayer.factory));
+    logger.info("Data layer demo router mounted at /api/data-layer-demo");
+  } else {
+    logger.warn("Data layer not initialised — skipping demo router");
+  }
 
   // Import routes
   app.use('/api/import', importRouter);

@@ -1,0 +1,29 @@
+{
+  "name": "@okiru/data-layer",
+  "version": "0.1.0",
+  "description": "Centralized data-access abstractions (Repository, Unit of Work, Data Access Factory) for Okiru Pro. Implementation-free — concrete providers live in apps/api.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "lint": "echo 'No linting for data-layer package'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

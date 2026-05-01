@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['pipeline/__tests__/**/*.test.ts'],
+    include: ['pipeline/__tests__/**/*.test.ts', 'src/data-layer/__tests__/**/*.test.ts'],
     exclude: ['node_modules', 'dist'],
     coverage: {
       reporter: ['text', 'json', 'html'],

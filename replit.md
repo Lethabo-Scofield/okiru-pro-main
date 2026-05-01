@@ -67,6 +67,19 @@ This is a **pnpm monorepo** with three applications:
 
 ## Shared Packages
 - `packages/types` (`@okiru/types`) — shared TypeScript types used by both web and API
+- `packages/data-layer` (`@okiru/data-layer`) — implementation-free abstractions for the centralized data access layer (Repository, Unit of Work, Data Access Factory, Provider Registry). Provides a `/testing` subpath export with `FakeUnitOfWork` and `FakeDataAccessFactory` so route handlers can be unit-tested without any database. See `packages/data-layer/README.md`.
+
+## Centralized Data Layer (apps/api/src/data-layer)
+A pragmatic adoption of the Repository / UoW / Data Access Factory pattern from the architecture docs in `attached_assets/`:
+
+- **Domain interfaces** in `domain/` (e.g. `IUserRepository`, `UserView`) describe what the app needs from storage in framework-agnostic terms.
+- **Mongo provider** in `mongo/` implements those interfaces using the existing `mongoose` models. `MongoUnitOfWork` opens a Mongoose session/transaction when the deployment is a replica set, and gracefully degrades to a session-less call otherwise — same fallback behaviour as the existing in-memory storage layer.
+- **`buildDataLayer()`** (`data-layer/index.ts`) wires the provider into an `InMemoryProviderRegistry` keyed by the `DATA_PROVIDER` env var (defaults to `mongo`). Returns `{ provider, factory }`. The factory is stored on `app.locals.dataLayer` from `apps/api/index.ts`.
+- **`attachUow(factory)` middleware** opens a fresh Unit of Work per request and exposes it as `req.uow`. The companion `withUowErrorHandler()` rolls back any UoW that's still open if the route throws.
+- **POC route**: `GET /api/data-layer-demo/users/by-username/:username` and `/users/:id` — proves the wiring end-to-end without touching any existing route. Returns 503 with a clear message when MongoDB is not connected.
+- **Testing**: `apps/api/src/data-layer/__tests__/data-layer.test.ts` shows how to unit-test the pattern with no database using `FakeUnitOfWork` + an in-memory `IUserRepository`.
+
+To migrate another existing route to this pattern, copy `dataLayerDemo.ts` as a template, add the domain interface + Mongo implementation in `data-layer/`, and register the new repo on `MongoUnitOfWork`. Existing routes are untouched.
 
 ## Deployment
 - Build: `pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build`
