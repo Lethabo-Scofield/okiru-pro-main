@@ -8,6 +8,13 @@ import {
 } from "@okiru/data-layer/testing";
 import { InMemoryProviderRegistry } from "@okiru/data-layer";
 import type { IUserRepository, UserView } from "../domain/user.js";
+import type {
+  IClientRepository,
+  ClientView,
+  ClientCreateInput,
+  ClientUpdateInput,
+  PaginatedResult,
+} from "../domain/client.js";
 import type { IAppUnitOfWork } from "../mongo/mongo-unit-of-work.js";
 import { attachUow, withUowErrorHandler } from "../middleware/attach-uow.js";
 
@@ -67,10 +74,93 @@ class InMemoryUserRepository implements IUserRepository {
   }
 }
 
+/**
+ * In-memory IClientRepository for tests. Mirrors MongoClientRepository's
+ * surface so the same test can swap the fake for the real repo without
+ * touching call sites.
+ */
+class InMemoryClientRepository implements IClientRepository {
+  private readonly clients = new Map<string, ClientView>();
+  private nextId = 1;
+
+  add(client: ClientView): void {
+    this.clients.set(client.id, client);
+  }
+
+  async findById(id: string): Promise<ClientView | null> {
+    return this.clients.get(id) ?? null;
+  }
+
+  async findByOrganization(organizationId: string): Promise<ClientView[]> {
+    return [...this.clients.values()].filter((c) => c.organizationId === organizationId);
+  }
+
+  async findByOrganizationPaginated(
+    organizationId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<ClientView>> {
+    const all = await this.findByOrganization(organizationId);
+    const start = (page - 1) * limit;
+    return { items: all.slice(start, start + limit), total: all.length, page, limit };
+  }
+
+  async create(input: ClientCreateInput): Promise<ClientView> {
+    const id = `client-${this.nextId++}`;
+    const client: ClientView = {
+      id,
+      organizationId: input.organizationId,
+      name: input.name,
+      financialYear: input.financialYear,
+      revenue: input.revenue ?? 0,
+      npat: input.npat ?? 0,
+      leviableAmount: input.leviableAmount ?? 0,
+      industrySector: input.industrySector ?? "",
+      eapProvince: input.eapProvince ?? "",
+      industryNorm: input.industryNorm ?? null,
+      logo: input.logo ?? null,
+      pipelineOverrides: input.pipelineOverrides ?? null,
+      createdAt: new Date("2026-05-01T00:00:00Z").toISOString(),
+    };
+    this.clients.set(id, client);
+    return client;
+  }
+
+  async update(id: string, input: ClientUpdateInput): Promise<ClientView | null> {
+    const existing = this.clients.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...input };
+    this.clients.set(id, updated);
+    return updated;
+  }
+}
+
 class FakeAppUoW extends FakeUnitOfWork implements IAppUnitOfWork {
-  constructor(public readonly users: IUserRepository) {
+  constructor(
+    public readonly users: IUserRepository,
+    public readonly clients: IClientRepository = new InMemoryClientRepository(),
+  ) {
     super();
   }
+}
+
+function makeClient(overrides: Partial<ClientView> = {}): ClientView {
+  return {
+    id: "client-1",
+    organizationId: "org-1",
+    name: "Acme",
+    financialYear: "2026",
+    revenue: 1_000_000,
+    npat: 100_000,
+    leviableAmount: 50_000,
+    industrySector: "Tech",
+    eapProvince: "WC",
+    industryNorm: null,
+    logo: null,
+    pipelineOverrides: null,
+    createdAt: "2026-05-01T00:00:00Z",
+    ...overrides,
+  };
 }
 
 function makeUser(overrides: Partial<UserView> = {}): UserView {
@@ -217,6 +307,61 @@ describe("centralized data layer", () => {
     });
   });
 
+  describe("IClientRepository contract", () => {
+    // These tests run against the in-memory fake but exercise EVERY method on
+    // IClientRepository. Any provider (Mongo, in-memory, future Arango) that
+    // claims to implement IClientRepository must pass this same suite.
+    it("create assigns an id and returns the stored projection", async () => {
+      const repo = new InMemoryClientRepository();
+      const created = await repo.create({
+        organizationId: "org-1",
+        name: "Acme",
+        financialYear: "2026",
+        revenue: 5,
+      });
+      expect(created.id).toBeTruthy();
+      expect(created.organizationId).toBe("org-1");
+      expect(created.revenue).toBe(5);
+      expect(created.npat).toBe(0);
+      expect(await repo.findById(created.id)).toEqual(created);
+    });
+
+    it("findByOrganization filters by tenant", async () => {
+      const repo = new InMemoryClientRepository();
+      repo.add(makeClient({ id: "a", organizationId: "org-1" }));
+      repo.add(makeClient({ id: "b", organizationId: "org-2" }));
+      const got = await repo.findByOrganization("org-1");
+      expect(got.map((c) => c.id)).toEqual(["a"]);
+    });
+
+    it("findByOrganizationPaginated honours page/limit and reports total", async () => {
+      const repo = new InMemoryClientRepository();
+      for (let i = 0; i < 7; i++) {
+        repo.add(makeClient({ id: `c-${i}`, organizationId: "org-1" }));
+      }
+      const page1 = await repo.findByOrganizationPaginated("org-1", 1, 3);
+      expect(page1.total).toBe(7);
+      expect(page1.items).toHaveLength(3);
+      expect(page1.page).toBe(1);
+
+      const page3 = await repo.findByOrganizationPaginated("org-1", 3, 3);
+      expect(page3.items).toHaveLength(1);
+      expect(page3.total).toBe(7);
+    });
+
+    it("update returns null for an unknown id and merges fields when found", async () => {
+      const repo = new InMemoryClientRepository();
+      expect(await repo.update("missing", { name: "x" })).toBeNull();
+
+      repo.add(makeClient());
+      const updated = await repo.update("client-1", { name: "Renamed", revenue: 999 });
+      expect(updated?.name).toBe("Renamed");
+      expect(updated?.revenue).toBe(999);
+      // Untouched fields preserved.
+      expect(updated?.organizationId).toBe("org-1");
+    });
+  });
+
   describe("attachUow middleware lifecycle", () => {
     function buildApp(uow: FakeAppUoW) {
       const factory = new FakeDataAccessFactory<IAppUnitOfWork>(uow);
@@ -312,6 +457,76 @@ describe("centralized data layer", () => {
       expect(uow.rolledBack).toBe(true);
       expect(uow.committed).toBe(false);
       expect(uow.commitCount).toBe(0);
+      expect(uow.rollbackCount).toBe(1);
+    });
+
+    it("commits client mutations alongside reads on the same UoW", async () => {
+      // Validates the second-template promise: the same UoW exposes both
+      // users and clients, both share a transaction boundary, and a single
+      // commitUow finalises both.
+      const userRepo = new InMemoryUserRepository();
+      userRepo.add(makeUser());
+      const clientRepo = new InMemoryClientRepository();
+      const uow = new FakeAppUoW(userRepo, clientRepo);
+      const factory = new FakeDataAccessFactory<IAppUnitOfWork>(uow);
+
+      const app = express();
+      app.use(attachUow(factory));
+      app.get("/mixed", async (req, res) => {
+        const u = await req.uow!.users.findById("user-1");
+        const c = await req.uow!.clients.create({
+          organizationId: "org-1",
+          name: "Acme",
+          financialYear: "2026",
+        });
+        await req.commitUow!();
+        res.json({ user: u?.id, client: c.id });
+      });
+
+      const result = await callApp(app, "GET", "/mixed");
+      await tick();
+
+      expect(result.status).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body.user).toBe("user-1");
+      expect(body.client).toBe("client-1");
+      expect(uow.committed).toBe(true);
+      expect(uow.rolledBack).toBe(false);
+      expect(await clientRepo.findById("client-1")).not.toBeNull();
+    });
+
+    it("rolls back client writes when the route throws after a successful create", async () => {
+      // The most important transactional guarantee: a write that is followed
+      // by an unhandled error must NOT be persisted in production. With the
+      // in-memory fake we cannot reverse the side-effect, but we can prove
+      // that rollback was called instead of commit — the contract Mongo
+      // sessions enforce in production.
+      const userRepo = new InMemoryUserRepository();
+      const clientRepo = new InMemoryClientRepository();
+      const uow = new FakeAppUoW(userRepo, clientRepo);
+      const factory = new FakeDataAccessFactory<IAppUnitOfWork>(uow);
+
+      const app = express();
+      app.use(attachUow(factory));
+      app.get("/write-then-fail", async (req, _res, next) => {
+        await req.uow!.clients.create({
+          organizationId: "org-1",
+          name: "Acme",
+          financialYear: "2026",
+        });
+        next(new Error("downstream failure"));
+      });
+      app.use(withUowErrorHandler());
+      app.use((err: any, _req: any, res: any, _next: any) => {
+        res.status(500).json({ message: err.message });
+      });
+
+      const result = await callApp(app, "GET", "/write-then-fail");
+      await tick();
+
+      expect(result.status).toBe(500);
+      expect(uow.rolledBack).toBe(true);
+      expect(uow.committed).toBe(false);
       expect(uow.rollbackCount).toBe(1);
     });
 

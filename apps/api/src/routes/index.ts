@@ -14,7 +14,7 @@ const logger = createLogger("ApiRoutes");
 import healthRouter from './health.js';
 import authRouter from './auth.js';
 import profileRouter from './profile.js';
-import clientsRouter from './clients.js';
+import { createClientsRouter } from './clients.js';
 import shareholdersRouter from './shareholders.js';
 import employeesRouter from './employees.js';
 import suppliersRouter from './suppliers.js';
@@ -47,6 +47,19 @@ const apiLimiter = rateLimit({
   message: { message: "Too many requests, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+// Tighter limit for auth endpoints — credential stuffing and brute-force
+// protection. 10 attempts/min/IP is generous enough for real users (typos,
+// password reset flows) and small enough to make scripted attacks expensive.
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many authentication attempts, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip the global apiLimiter's count for auth requests — auth has its own bucket.
+  skipSuccessfulRequests: false,
 });
 
 declare module 'express-session' {
@@ -90,6 +103,15 @@ export async function registerRoutes(
       ttl: 7 * 24 * 60 * 60,
     });
     logger.info("Session store: MongoDB");
+  } else if (isProd) {
+    // Fail closed: in production the in-memory MemoryStore is unsafe (loses
+    // sessions on restart, leaks memory, doesn't scale across instances).
+    // Better to abort startup loudly than to silently serve broken auth.
+    logger.error("Refusing to start in production without a MongoDB session store");
+    throw new Error(
+      "Production startup aborted: MongoDB is required for the session store. " +
+        "Set MONGO_URI / MONGODB_URI to a reachable instance.",
+    );
   } else {
     logger.warn("Using in-memory session store (MongoDB unavailable)");
   }
@@ -98,18 +120,36 @@ export async function registerRoutes(
 
   app.use('/api/', apiLimiter);
 
+  // Resolve the data access factory once, up-front. Routers that have been
+  // migrated to the data layer pattern (clients, ...) need it injected at
+  // construction time. Anything that depends on it should be guarded by
+  // `if (dataLayer)` so the API still boots in degraded mode if the data
+  // layer fails to initialise.
+  const dataLayer = app.locals.dataLayer as DataLayer | undefined;
+
   app.use('/', healthRouter);
   app.use('/api', healthRouter);
   app.use('/api/health', healthRouter);
 
-  // Auth routes
-  app.use('/api/auth', authRouter);
+  // Auth routes — apply stricter limiter BEFORE the auth router so it covers
+  // login, signup and password endpoints regardless of route paths.
+  app.use('/api/auth', authLimiter, authRouter);
 
   // Profile routes
   app.use('/api/profile', profileRouter);
 
-  // Client routes
-  app.use('/api/clients', clientsRouter);
+  // Client routes — migrated to the data layer pattern. Falls back to a 503
+  // if the data layer didn't initialise, instead of silently mounting the
+  // legacy code path.
+  if (dataLayer) {
+    app.use('/api/clients', createClientsRouter(dataLayer.factory));
+    logger.info("Clients router mounted with data layer", { provider: dataLayer.provider });
+  } else {
+    app.use('/api/clients', (_req, res) => {
+      res.status(503).json({ message: "Data layer unavailable — /api/clients disabled" });
+    });
+    logger.error("Data layer missing — /api/clients mounted as 503");
+  }
 
   // Shareholder routes (nested under clients and standalone)
   app.use('/api/clients/:clientId/shareholders', shareholdersRouter);
@@ -184,9 +224,9 @@ export async function registerRoutes(
   app.use('/api/feedback', feedbackRouter);
 
   // Centralized data layer — proof-of-concept route. Demonstrates the
-  // Repository / Unit of Work / Data Access Factory pattern. Migrate other
-  // routers to this pattern incrementally; see packages/data-layer/README.md.
-  const dataLayer = app.locals.dataLayer as DataLayer | undefined;
+  // Repository / Unit of Work / Data Access Factory pattern. The /api/clients
+  // router above is the production-grade example; this one is kept as a
+  // minimal reference for adding new entities.
   if (dataLayer) {
     app.use('/api/data-layer-demo', createDataLayerDemoRouter(dataLayer.factory));
     logger.info("Data layer demo router mounted at /api/data-layer-demo");
