@@ -2,17 +2,22 @@ import mongoose, { type ClientSession } from "mongoose";
 import type { IUnitOfWork } from "@okiru/data-layer";
 import { createLogger } from "../../logger.js";
 import type { IUserRepository } from "../domain/user.js";
+import type { IClientRepository } from "../domain/client.js";
 import { MongoUserRepository } from "./mongo-user-repository.js";
+import { MongoClientRepository } from "./mongo-client-repository.js";
 
 const logger = createLogger("MongoUoW");
 
 /**
  * Application-specific Unit of Work that exposes the domain repositories the
  * Okiru API uses. Add new repositories here as they are migrated to the data
- * layer pattern.
+ * layer pattern. Every repository on this UoW shares the same Mongo session,
+ * so all reads/writes inside one request participate in the same transaction
+ * (when transactions are supported by the topology).
  */
 export interface IAppUnitOfWork extends IUnitOfWork {
   readonly users: IUserRepository;
+  readonly clients: IClientRepository;
 }
 
 /**
@@ -103,9 +108,11 @@ export function __resetMongoTopologyCacheForTests(): void {
  */
 export class MongoUnitOfWork implements IAppUnitOfWork {
   readonly users: IUserRepository;
+  readonly clients: IClientRepository;
 
   private constructor(private readonly session: ClientSession | null) {
     this.users = new MongoUserRepository(session);
+    this.clients = new MongoClientRepository(session);
   }
 
   static async begin(): Promise<MongoUnitOfWork> {
