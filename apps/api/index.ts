@@ -11,6 +11,7 @@ import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
 import { createLogger, requestContext } from "./src/logger.js";
+import { buildDataLayer } from "./src/data-layer/index.js";
 import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
@@ -105,6 +106,11 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
   } else {
     logger.warn("Skipping ontology seeding — ArangoDB not connected");
   }
+
+  logger.debug("Building data layer...");
+  const dataLayer = buildDataLayer();
+  app.locals.dataLayer = dataLayer;
+  logger.info("Data layer built", { provider: dataLayer.provider });
 
   logger.debug("Registering routes...");
   await registerRoutes(httpServer, app);

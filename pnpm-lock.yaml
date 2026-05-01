@@ -23,6 +23,9 @@ importers:
       '@azure/storage-blob':
         specifier: ^12.31.0
         version: 12.31.0
+      '@okiru/data-layer':
+        specifier: workspace:*
+        version: link:../../packages/data-layer
       '@okiru/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -488,6 +491,12 @@ importers:
       bufferutil:
         specifier: ^4.0.8
         version: 4.1.0
+
+  packages/data-layer:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/types:
     devDependencies:
