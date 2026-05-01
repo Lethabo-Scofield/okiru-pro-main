@@ -25,6 +25,18 @@ import { createLogger } from "../logger.js";
 const logger = createLogger("DataLayerDemo");
 
 /**
+ * Express's `req.params` typing widens to `string | string[]` because Express
+ * supports parsing repeated path segments. In practice route parameters from
+ * `:foo` patterns are always single strings, but we narrow defensively to keep
+ * downstream code (which calls `.trim()`) type-safe and to reject any caller
+ * that somehow injects an array.
+ */
+function singleParam(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim();
+  return undefined;
+}
+
+/**
  * Short-circuit with a clear 503 when MongoDB is not connected, instead of
  * letting Mongoose buffer the operation and time out 10s later. Only relevant
  * for the default 'mongo' provider.
@@ -52,7 +64,7 @@ export function createDataLayerDemoRouter(factory: AppDataAccessFactory): Router
   router.get(
     "/users/by-username/:username",
     async (req: Request, res: Response, next: NextFunction) => {
-      const username = req.params.username?.trim();
+      const username = singleParam(req.params.username);
       if (!username) {
         // Early return — UoW lifecycle is auto-finalised by attachUow's
         // response-finish safety net, so this cannot leak a session.
@@ -75,7 +87,7 @@ export function createDataLayerDemoRouter(factory: AppDataAccessFactory): Router
   router.get(
     "/users/:id",
     async (req: Request, res: Response, next: NextFunction) => {
-      const id = req.params.id?.trim();
+      const id = singleParam(req.params.id);
       if (!id) {
         return res.status(400).json({ message: "id is required" });
       }

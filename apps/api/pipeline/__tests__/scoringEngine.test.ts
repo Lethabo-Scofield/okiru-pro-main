@@ -37,20 +37,20 @@ function buildCrossPillarValues(input: Record<string, number>): Map<string, numb
 
 describe('B-BBEE Scoring Engine', () => {
   describe('Manifest Building', () => {
-    it('RCOGP Generic manifest builds correctly', () => {
-      const manifest = buildManifest('RCOGP', 'Generic');
+    it('RCOGP Generic manifest builds correctly', async () => {
+      const manifest = await buildManifest('RCOGP', 'Generic');
       expect(manifest.sectorCode).toBe('RCOGP');
       expect(manifest.scorecardType).toBe('Generic');
     });
 
-    it('RCOGP Generic has 120 max points', () => {
-      const manifest = buildManifest('RCOGP', 'Generic');
+    it('RCOGP Generic has 120 max points', async () => {
+      const manifest = await buildManifest('RCOGP', 'Generic');
       const totalMax = manifest.pillarPacks.reduce((sum, p) => sum + p.maxPoints, 0);
       expect(totalMax).toBe(120);
     });
 
-    it('RCOGP Generic has 33 criteria', () => {
-      const manifest = buildManifest('RCOGP', 'Generic');
+    it('RCOGP Generic has 33 criteria', async () => {
+      const manifest = await buildManifest('RCOGP', 'Generic');
       const criteriaCount = manifest.pillarPacks.reduce((sum, p) => sum + p.criteria.length, 0);
       expect(criteriaCount).toBe(33);
     });
@@ -86,8 +86,8 @@ describe('B-BBEE Scoring Engine', () => {
     ];
 
     for (const sector of sectors) {
-      it(`${sector.code} ${sector.type} has ${sector.maxPoints} max points`, () => {
-        const manifest = buildManifest(sector.code, sector.type);
+      it(`${sector.code} ${sector.type} has ${sector.maxPoints} max points`, async () => {
+        const manifest = await buildManifest(sector.code, sector.type);
         const totalMax = manifest.pillarPacks.reduce((sum, p) => sum + p.maxPoints, 0);
         expect(totalMax).toBe(sector.maxPoints);
       });
