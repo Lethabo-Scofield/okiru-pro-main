@@ -58,7 +58,7 @@ function AppRouter() {
         <ProtectedRoute><DocumentProcessor /></ProtectedRoute>
       </Route>
       <Route path="/certificates">
-        <ProtectedRoute><CertificateHub /></ProtectedRoute>
+        <CertificateHub />
       </Route>
       <Route path="/admin/users">
         <ProtectedRoute><AdminUsers /></ProtectedRoute>

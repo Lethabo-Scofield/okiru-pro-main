@@ -718,8 +718,9 @@ function Reveal({ children, delay = "", className = "" }: { children: React.Reac
   );
 }
 
-export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { onNavigateAuth: () => void; onNavigateRegister?: () => void }) {
+export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateCertificates }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
   const goRegister = onNavigateRegister || onNavigateAuth;
+  const goCertificates = onNavigateCertificates || (() => { window.location.href = '/certificates'; });
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -766,6 +767,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
             <span className="ok-nav-chip">B-BBEE Intelligence</span>
           </div>
           <div className="ok-nav-actions">
+            <button className="ok-btn-ghost" onClick={goCertificates}>B-BBEE Certificates</button>
             <button className="ok-btn-ghost" onClick={onNavigateAuth}>Sign in</button>
             <button className="ok-btn-pur" onClick={goRegister}>Get started</button>
             <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen} aria-controls="ok-mobile-nav">
@@ -776,6 +778,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
       </nav>
 
       <div id="ok-mobile-nav" role="navigation" className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
+        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); goCertificates(); }}>B-BBEE Certificates</button>
         <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
         <button className="ok-btn-main" style={{ justifyContent: "center" }} onClick={() => { setMenuOpen(false); goRegister(); }}>
           Get started <span className="arr"><ArrowRight size={14} /></span>

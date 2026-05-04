@@ -287,6 +287,8 @@ const certificateMetadataSchema = new Schema({
   expiryDate: { type: Date, default: null },
   issueDate: { type: Date, default: null },
   supplierName: { type: String, default: null },
+  vatNumber: { type: String, default: null, index: true },
+  companySize: { type: String, default: null, index: true },
   bbbeeLevel: { type: Number, default: null },
   bbbeeScore: { type: Number, default: null },
   blackOwnership: { type: Number, default: null },
@@ -299,7 +301,9 @@ const certificateMetadataSchema = new Schema({
   extractionStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
   extractionError: { type: String, default: null },
   processedAt: { type: Date, default: null },
+  uploadedByUserId: { type: String, default: null, index: true },
   createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 }, { collection: "certificate_metadata" });
 
 certificateMetadataSchema.index({ expiryDate: 1 });

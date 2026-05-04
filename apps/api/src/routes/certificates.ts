@@ -2,12 +2,14 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential, SASProtocol } from '@azure/storage-blob';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
 import { createLogger } from '../logger.js';
 import { searchCertificates, isAzureSearchConfigured, getSearchClient } from '../services/azureSearch.js';
 import { requireAuth } from '../middleware/auth.js';
 import { processAllCertificates, processOneCertificate, getCertificateStats, extractDatesFromText } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
+import { certificateStore, type CertificateRecord } from '../services/certificateStore.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -34,26 +36,6 @@ const upload = multer({
   },
 });
 
-async function fallbackFilenameSearch(q: string, res: Response) {
-  const blobServiceClient = getBlobServiceClient();
-  if (!blobServiceClient) {
-    return res.status(500).json({ message: 'Neither Azure AI Search nor Azure Storage is configured.' });
-  }
-  const containerClient = getContainerClient(blobServiceClient);
-  const blobs: Array<{ file_name: string; file_url: string; snippet: string }> = [];
-  const searchLower = q.toLowerCase();
-  for await (const blob of containerClient.listBlobsFlat()) {
-    if (blob.name.toLowerCase().includes(searchLower)) {
-      blobs.push({
-        file_name: blob.name.split('/').pop() || blob.name,
-        file_url: blob.name,
-        snippet: `Filename match: ${blob.name}`,
-      });
-    }
-  }
-  return res.json(blobs);
-}
-
 function getConnectionString(): string | undefined {
   return process.env.AZURE_STORAGE_CONNECTION_STRING;
 }
@@ -74,362 +56,31 @@ function getContainerClient(blobServiceClient: BlobServiceClient) {
   return blobServiceClient.getContainerClient(CONTAINER_NAME);
 }
 
-router.get('/download', async (req: Request, res: Response) => {
-  try {
-    const file = req.query.file as string;
-    if (!file || file.trim() === '') {
-      return res.status(400).json({ message: 'file query parameter is required' });
-    }
-
-    const connStr = getConnectionString();
-    const accountName = getAccountName();
-    if (!connStr) {
-      logger.error('Azure Storage connection string not configured');
-      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
-    }
-
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
-    const containerClient = getContainerClient(blobServiceClient);
-    const blobClient = containerClient.getBlobClient(file.trim());
-
-    const exists = await blobClient.exists();
-    if (!exists) {
-      return res.status(404).json({ message: 'File not found' });
-    }
-
-    const matchResult = connStr.match(/AccountKey=([^;]+)/);
-    if (!matchResult || !accountName) {
-      logger.error('Could not parse account key or account name for SAS generation');
-      return res.status(500).json({ message: 'Azure Storage configuration incomplete. Ensure AZURE_STORAGE_ACCOUNT_NAME is set.' });
-    }
-
-    const accountKey = matchResult[1];
-    const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
-
-    const startsOn = new Date();
-    const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000);
-
-    const baseFileName = file.trim().split('/').pop() || file.trim();
-    const safeDownloadName = baseFileName.replace(/[\r\n"\\\x00-\x1F\x7F]/g, '_');
-    const contentDisposition = `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
-
-    const sasToken = generateBlobSASQueryParameters({
-      containerName: CONTAINER_NAME,
-      blobName: file.trim(),
-      permissions: BlobSASPermissions.parse('r'),
-      startsOn,
-      expiresOn,
-      protocol: SASProtocol.Https,
-      contentDisposition,
-    }, sharedKeyCredential).toString();
-
-    const url = `${blobClient.url}?${sasToken}`;
-
-    logger.info('Generated SAS download URL', { file: file.trim(), expiresOn: expiresOn.toISOString() });
-
-    const mode = req.query.mode as string;
-    if (mode === 'redirect') {
-      return res.redirect(302, url);
-    }
-    return res.json({ url });
-  } catch (err) {
-    logger.error('Failed to generate download link', err as Error);
-    return res.status(500).json({ message: 'Failed to generate download link' });
-  }
-});
-
-router.get('/list', async (req: Request, res: Response) => {
-  try {
-    const search = (req.query.search as string || '').trim().toLowerCase();
-
-    const blobServiceClient = getBlobServiceClient();
-    if (!blobServiceClient) {
-      logger.error('Azure Storage connection string not configured');
-      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
-    }
-
-    const containerClient = getContainerClient(blobServiceClient);
-    const allBlobs: Array<{ name: string; fileName: string; companyName: string; lastModified: string | null }> = [];
-
-    for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
-      const fileName = blob.name;
-      allBlobs.push({
-        name: blob.name,
-        fileName,
-        companyName: deriveCompanyName(fileName),
-        lastModified: blob.properties.lastModified?.toISOString() || null,
-      });
-    }
-
-    const mongoMap = await loadMongoMetadataMap(allBlobs.map(b => b.name));
-    for (const b of allBlobs) {
-      const md = mongoMap.get(b.name);
-      const supplierName = md?.supplierName;
-      if (supplierName && typeof supplierName === 'string' && supplierName.trim()) {
-        b.companyName = supplierName.trim();
-      }
-    }
-
-    const blobs = search
-      ? allBlobs.filter(b =>
-          b.fileName.toLowerCase().includes(search) ||
-          b.companyName.toLowerCase().includes(search),
-        )
-      : allBlobs;
-
-    logger.info('Listed certificates', { search: search || '(all)', total: allBlobs.length, count: blobs.length });
-    return res.json(blobs);
-  } catch (err) {
-    logger.error('Failed to list certificates', err as Error);
-    return res.status(500).json({ message: 'Failed to list certificates' });
-  }
-});
-
-router.get('/search', async (req: Request, res: Response) => {
-  try {
-    const q = (req.query.q as string || '').trim();
-    const userId = (req.query.userId as string || '').trim();
-
-    if (!q) {
-      return res.status(400).json({ message: 'q query parameter is required' });
-    }
-
-    const merged = new Map<string, { file_name: string; company_name: string; file_url: string; snippet: string }>();
-
-    const blobServiceClient = getBlobServiceClient();
-    if (blobServiceClient) {
-      const containerClient = getContainerClient(blobServiceClient);
-      const searchLower = q.toLowerCase();
-
-      const allBlobs: Array<{ name: string; fileName: string; companyName: string }> = [];
-      for await (const blob of containerClient.listBlobsFlat()) {
-        const fileName = blob.name.split('/').pop() || blob.name;
-        allBlobs.push({
-          name: blob.name,
-          fileName,
-          companyName: deriveCompanyName(blob.name),
-        });
-      }
-
-      const mongoMap = await loadMongoMetadataMap(allBlobs.map(b => b.name));
-
-      for (const b of allBlobs) {
-        const md = mongoMap.get(b.name);
-        const supplierName: string | undefined =
-          typeof md?.supplierName === 'string' && md.supplierName.trim() ? md.supplierName.trim() : undefined;
-        const displayName = supplierName || b.companyName;
-
-        const haystacks = [
-          b.fileName.toLowerCase(),
-          b.companyName.toLowerCase(),
-          supplierName ? supplierName.toLowerCase() : '',
-        ];
-
-        if (haystacks.some(h => h && h.includes(searchLower))) {
-          merged.set(b.name, {
-            file_name: b.fileName,
-            company_name: displayName,
-            file_url: b.name,
-            snippet: supplierName ? `Entity match: ${supplierName}` : `Match: ${displayName}`,
-          });
-        }
-      }
-    }
-
-    if (isAzureSearchConfigured()) {
-      try {
-        const aiResults = await searchCertificates(q, userId || undefined);
-        for (const result of aiResults) {
-          const existing = merged.get(result.file_url);
-          if (existing) {
-            existing.snippet = result.snippet;
-          } else {
-            const fileName = result.file_name || (result.file_url.split('/').pop() || result.file_url);
-            merged.set(result.file_url, {
-              file_name: fileName,
-              company_name: deriveCompanyName(result.file_url || fileName),
-              file_url: result.file_url,
-              snippet: result.snippet,
-            });
-          }
-        }
-      } catch (searchErr) {
-        logger.error('Azure AI Search query failed — using filename matches only', searchErr as Error);
-      }
-    }
-
-    const results = Array.from(merged.values());
-    logger.info('Search completed', { query: q, userId: userId || '(all)', resultCount: results.length });
-    return res.json(results);
-  } catch (err) {
-    logger.error('Search failed', err as Error);
-    return res.status(500).json({ message: 'Search failed' });
-  }
-});
-
-router.get('/stats', async (_req: Request, res: Response) => {
-  try {
-    const blobServiceClient = getBlobServiceClient();
-    let total = 0;
-    let recentUploads7d = 0;
-    let recentUploads30d = 0;
-    let totalBytes = 0;
-    let lastUploadedAt: string | null = null;
-
-    if (blobServiceClient) {
-      try {
-        const containerClient = getContainerClient(blobServiceClient);
-        const now = Date.now();
-        const sevenDays = now - 7 * 24 * 60 * 60 * 1000;
-        const thirtyDays = now - 30 * 24 * 60 * 60 * 1000;
-        let latest = 0;
-
-        for await (const blob of containerClient.listBlobsFlat()) {
-          total++;
-          const size = blob.properties.contentLength;
-          if (typeof size === 'number') totalBytes += size;
-          const lm = blob.properties.lastModified ? new Date(blob.properties.lastModified).getTime() : 0;
-          if (lm) {
-            if (lm > latest) latest = lm;
-            if (lm >= sevenDays) recentUploads7d++;
-            if (lm >= thirtyDays) recentUploads30d++;
-          }
-        }
-        if (latest > 0) lastUploadedAt = new Date(latest).toISOString();
-      } catch (azureErr) {
-        logger.warn('Azure blob enumeration failed during stats — returning Mongo-only stats', {
-          err: (azureErr as Error).message,
-        });
-      }
-    }
-
-    let extraction: {
-      valid: number;
-      expiring: number;
-      expiringIn30: number;
-      expired: number;
-      unknown: number;
-      processed: number;
-      pending: number;
-      avgLevel: number | null;
-      avgBlackOwnership: number | null;
-      extractionAvailable: boolean;
-    } = {
-      valid: 0,
-      expiring: 0,
-      expiringIn30: 0,
-      expired: 0,
-      unknown: 0,
-      processed: 0,
-      pending: 0,
-      avgLevel: null,
-      avgBlackOwnership: null,
-      extractionAvailable: false,
-    };
-
-    if (isMongoConnected()) {
-      try {
-        const stats = await getCertificateStats();
-        const now = new Date();
-        const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-        const expiringIn30Doc = await CertificateMetadataModel.countDocuments({
-          extractionStatus: 'completed',
-          expiryDate: { $gte: now, $lte: thirtyDays },
-        });
-        const levelAgg = await CertificateMetadataModel.aggregate([
-          { $match: { extractionStatus: 'completed', bbbeeLevel: { $ne: null } } },
-          { $group: { _id: null, avg: { $avg: '$bbbeeLevel' } } },
-        ]);
-        const ownershipAgg = await CertificateMetadataModel.aggregate([
-          { $match: { extractionStatus: 'completed', blackOwnership: { $ne: null } } },
-          { $group: { _id: null, avg: { $avg: '$blackOwnership' } } },
-        ]);
-
-        extraction = {
-          valid: stats.valid,
-          expiring: stats.expiring,
-          expiringIn30: expiringIn30Doc,
-          expired: stats.expired,
-          unknown: stats.unknown,
-          processed: stats.processed,
-          pending: stats.pending,
-          avgLevel: levelAgg[0]?.avg != null ? Number(levelAgg[0].avg.toFixed(1)) : null,
-          avgBlackOwnership: ownershipAgg[0]?.avg != null ? Number(ownershipAgg[0].avg.toFixed(1)) : null,
-          extractionAvailable: true,
-        };
-      } catch (mongoErr) {
-        logger.warn('Mongo stats query failed — returning blob-only stats', { err: (mongoErr as Error).message });
-      }
-    }
-
-    return res.json({
-      total,
-      totalBytes,
-      recentUploads7d,
-      recentUploads30d,
-      lastUploadedAt,
-      ...extraction,
-    });
-  } catch (err: any) {
-    logger.error('Failed to get certificate stats', err);
-    return res.status(500).json({ message: 'Failed to get certificate stats' });
-  }
-});
-
-router.get('/metadata', async (_req: Request, res: Response) => {
-  if (!isMongoConnected()) {
-    return res.json([]);
-  }
-  try {
-    const docs = await CertificateMetadataModel.find(
-      { extractionStatus: 'completed' },
-      { extractedText: 0 },
-    ).lean();
-    return res.json(docs);
-  } catch (err: any) {
-    logger.error('Failed to get certificate metadata', err);
-    return res.status(500).json({ message: 'Failed to get metadata' });
-  }
-});
-
 // ============================================================================
-// SEO endpoints — used by the web tier to render SSR certificate hub pages.
+// Public API row shape — used by the certificates browse UI.
 // ============================================================================
-
-function slugifyForSeo(text: string | null | undefined): string {
-  if (!text) return '';
-  return String(text)
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
-}
-
-function buildCertSlug(name: string | null | undefined, certNo: string | null | undefined): string {
-  const a = slugifyForSeo(name) || 'company';
-  const b = slugifyForSeo(certNo) || 'certificate';
-  return `${a}-${b}`;
-}
-
-// ---- SEO record helpers (Azure-first, with optional Mongo enrichment) ----
-
-interface SeoRecord {
-  slug: string;
+interface CertificateRow {
+  name: string;            // blob name (id key for /download)
+  fileName: string;        // displayable filename
   companyName: string;
-  bbbeeLevel: number | null;
-  bbbeeScore: number | null;
+  vatNumber: string | null;
+  companySize: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
-  verificationAgency: string | null;
-  certificateNumber: string | null;
+  bbbeeLevel: number | null;
   expiryDate: string | null;
-  issueDate: string | null;
-  blobName: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
-  updatedAt: string;
+  lastModified: string | null;
+}
+
+function statusFromExpiryDate(expiry: Date | string | null | undefined): CertificateRow['status'] {
+  if (!expiry) return 'unknown';
+  const t = expiry instanceof Date ? expiry.getTime() : new Date(expiry).getTime();
+  if (!Number.isFinite(t)) return 'unknown';
+  const now = Date.now();
+  if (t < now) return 'expired';
+  if (t <= now + 60 * 24 * 60 * 60 * 1000) return 'expiring';
+  return 'valid';
 }
 
 function deriveCompanyName(fileName: string): string {
@@ -469,6 +120,412 @@ function deriveCompanyName(fileName: string): string {
     .replace(/[\s_\-–—]+$/u, '')
     .trim();
   return trimmed || 'Unknown company';
+}
+
+function rowFromLocal(rec: CertificateRecord): CertificateRow {
+  return {
+    name: rec.blobName,
+    fileName: rec.fileName,
+    companyName: rec.companyName,
+    vatNumber: rec.vatNumber,
+    companySize: rec.companySize,
+    blackOwnership: rec.blackOwnership,
+    blackWomenOwnership: rec.blackWomenOwnership,
+    bbbeeLevel: rec.bbbeeLevel,
+    expiryDate: rec.expiryDate,
+    status: rec.status,
+    lastModified: rec.updatedAt,
+  };
+}
+
+function rowFromMongo(doc: any, blobLastModified: string | null = null, fileNameFallback?: string): CertificateRow {
+  const fileName = fileNameFallback || doc.fileName || (doc.blobName?.split('/').pop() || doc.blobName);
+  const expiry = doc.expiryDate ? new Date(doc.expiryDate) : null;
+  return {
+    name: doc.blobName,
+    fileName,
+    companyName: doc.supplierName || deriveCompanyName(fileName),
+    vatNumber: doc.vatNumber || null,
+    companySize: doc.companySize || null,
+    blackOwnership: doc.blackOwnership ?? null,
+    blackWomenOwnership: doc.blackWomenOwnership ?? null,
+    bbbeeLevel: doc.bbbeeLevel ?? null,
+    expiryDate: expiry ? expiry.toISOString().slice(0, 10) : null,
+    status: doc.status || statusFromExpiryDate(expiry),
+    lastModified: blobLastModified || (doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null),
+  };
+}
+
+async function loadAllRows(): Promise<CertificateRow[]> {
+  const rows: CertificateRow[] = [];
+  const seenBlobs = new Set<string>();
+
+  // 1) Local in-memory store (always available)
+  for (const rec of certificateStore.list()) {
+    rows.push(rowFromLocal(rec));
+    seenBlobs.add(rec.blobName);
+  }
+
+  // 2) Azure blob storage (if configured)
+  const blobServiceClient = getBlobServiceClient();
+  let mongoMap = new Map<string, any>();
+  if (blobServiceClient) {
+    try {
+      const containerClient = getContainerClient(blobServiceClient);
+      const azureBlobs: Array<{ name: string; lastModified: string | null }> = [];
+      for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
+        azureBlobs.push({
+          name: blob.name,
+          lastModified: blob.properties.lastModified?.toISOString() || null,
+        });
+      }
+      mongoMap = await loadMongoMetadataMap(azureBlobs.map((b) => b.name));
+      for (const b of azureBlobs) {
+        if (seenBlobs.has(b.name)) continue;
+        const md = mongoMap.get(b.name);
+        const fileName = b.name.split('/').pop() || b.name;
+        if (md) {
+          rows.push(rowFromMongo(md, b.lastModified, fileName));
+        } else {
+          rows.push({
+            name: b.name,
+            fileName,
+            companyName: deriveCompanyName(fileName),
+            vatNumber: null,
+            companySize: null,
+            blackOwnership: null,
+            blackWomenOwnership: null,
+            bbbeeLevel: null,
+            expiryDate: null,
+            status: 'unknown',
+            lastModified: b.lastModified,
+          });
+        }
+        seenBlobs.add(b.name);
+      }
+    } catch (azureErr) {
+      logger.warn('Azure blob enumeration failed — using local + mongo only', {
+        err: (azureErr as Error).message,
+      });
+    }
+  }
+
+  // 3) Mongo-only records (no matching Azure blob)
+  if (isMongoConnected()) {
+    try {
+      const docs = await CertificateMetadataModel.find(
+        {},
+        { extractedText: 0 },
+      ).lean();
+      for (const doc of docs as any[]) {
+        if (!doc.blobName || seenBlobs.has(doc.blobName)) continue;
+        rows.push(rowFromMongo(doc));
+        seenBlobs.add(doc.blobName);
+      }
+    } catch (mongoErr) {
+      logger.warn('Mongo enumeration failed', { err: (mongoErr as Error).message });
+    }
+  }
+
+  return rows;
+}
+
+function applyFilters(rows: CertificateRow[], q: {
+  search?: string;
+  status?: string;
+  size?: string;
+  minOwnership?: number;
+  maxOwnership?: number;
+}): CertificateRow[] {
+  let out = rows;
+  if (q.search) {
+    const s = q.search.toLowerCase();
+    out = out.filter((r) =>
+      r.companyName.toLowerCase().includes(s) ||
+      r.fileName.toLowerCase().includes(s) ||
+      (r.vatNumber || '').toLowerCase().includes(s),
+    );
+  }
+  if (q.status && q.status !== 'all') {
+    out = out.filter((r) => r.status === q.status);
+  }
+  if (q.size && q.size !== 'all') {
+    out = out.filter((r) => (r.companySize || '').toLowerCase() === q.size!.toLowerCase());
+  }
+  if (typeof q.minOwnership === 'number') {
+    out = out.filter((r) => r.blackOwnership != null && r.blackOwnership >= q.minOwnership!);
+  }
+  if (typeof q.maxOwnership === 'number') {
+    out = out.filter((r) => r.blackOwnership != null && r.blackOwnership <= q.maxOwnership!);
+  }
+  return out;
+}
+
+router.get('/download', async (req: Request, res: Response) => {
+  try {
+    const file = req.query.file as string;
+    if (!file || file.trim() === '') {
+      return res.status(400).json({ message: 'file query parameter is required' });
+    }
+
+    const trimmed = file.trim();
+
+    // Try local store first
+    const localRec = certificateStore.getByBlobName(trimmed);
+    if (localRec) {
+      try {
+        if (!fs.existsSync(localRec.filePath)) {
+          return res.status(404).json({ message: 'File not found' });
+        }
+        const baseName = localRec.fileName;
+        const safeName = baseName.replace(/[\r\n"\\\x00-\x1F\x7F]/g, '_');
+        const mode = req.query.mode as string;
+        if (mode === 'redirect') {
+          // Stream the file directly
+          res.setHeader('Content-Type', localRec.mimeType || 'application/octet-stream');
+          res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+          fs.createReadStream(localRec.filePath).pipe(res);
+          return;
+        }
+        // Return a download URL the browser can use; SAS not applicable, use local route.
+        return res.json({ url: `/api/certificates/download?file=${encodeURIComponent(trimmed)}&mode=redirect` });
+      } catch (err) {
+        logger.error('Failed to serve local certificate', err as Error);
+        return res.status(500).json({ message: 'Failed to serve file' });
+      }
+    }
+
+    // Fall through to Azure
+    const connStr = getConnectionString();
+    const accountName = getAccountName();
+    if (!connStr) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
+    const containerClient = getContainerClient(blobServiceClient);
+    const blobClient = containerClient.getBlobClient(trimmed);
+
+    const exists = await blobClient.exists();
+    if (!exists) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const matchResult = connStr.match(/AccountKey=([^;]+)/);
+    if (!matchResult || !accountName) {
+      logger.error('Could not parse account key or account name for SAS generation');
+      return res.status(500).json({ message: 'Azure Storage configuration incomplete. Ensure AZURE_STORAGE_ACCOUNT_NAME is set.' });
+    }
+
+    const accountKey = matchResult[1];
+    const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
+
+    const startsOn = new Date();
+    const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000);
+
+    const baseFileName = trimmed.split('/').pop() || trimmed;
+    const safeDownloadName = baseFileName.replace(/[\r\n"\\\x00-\x1F\x7F]/g, '_');
+    const contentDisposition = `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
+
+    const sasToken = generateBlobSASQueryParameters({
+      containerName: CONTAINER_NAME,
+      blobName: trimmed,
+      permissions: BlobSASPermissions.parse('r'),
+      startsOn,
+      expiresOn,
+      protocol: SASProtocol.Https,
+      contentDisposition,
+    }, sharedKeyCredential).toString();
+
+    const url = `${blobClient.url}?${sasToken}`;
+    const mode = req.query.mode as string;
+    if (mode === 'redirect') {
+      return res.redirect(302, url);
+    }
+    return res.json({ url });
+  } catch (err) {
+    logger.error('Failed to generate download link', err as Error);
+    return res.status(500).json({ message: 'Failed to generate download link' });
+  }
+});
+
+router.get('/list', async (req: Request, res: Response) => {
+  try {
+    const search = (req.query.search as string || '').trim();
+    const status = (req.query.status as string || '').trim();
+    const size = (req.query.size as string || '').trim();
+    const minOwnership = req.query.minOwnership ? Number(req.query.minOwnership) : undefined;
+    const maxOwnership = req.query.maxOwnership ? Number(req.query.maxOwnership) : undefined;
+
+    const all = await loadAllRows();
+    const filtered = applyFilters(all, { search, status, size, minOwnership, maxOwnership });
+
+    logger.info('Listed certificates', {
+      total: all.length,
+      shown: filtered.length,
+      search: search || '(all)',
+      status: status || '(any)',
+    });
+    return res.json(filtered);
+  } catch (err) {
+    logger.error('Failed to list certificates', err as Error);
+    return res.status(500).json({ message: 'Failed to list certificates' });
+  }
+});
+
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    if (!q) {
+      return res.status(400).json({ message: 'q query parameter is required' });
+    }
+
+    const all = await loadAllRows();
+    const filtered = applyFilters(all, { search: q });
+
+    const results = filtered.map((r) => ({
+      file_name: r.fileName,
+      company_name: r.companyName,
+      vat_number: r.vatNumber,
+      company_size: r.companySize,
+      black_ownership: r.blackOwnership,
+      file_url: r.name,
+      snippet: r.vatNumber
+        ? `${r.companyName} · VAT ${r.vatNumber}`
+        : `${r.companyName}`,
+    }));
+
+    // Optional: enrich with Azure AI Search snippets if available
+    if (isAzureSearchConfigured()) {
+      try {
+        const aiResults = await searchCertificates(q);
+        const byUrl = new Map(results.map((r) => [r.file_url, r]));
+        for (const ai of aiResults) {
+          const existing = byUrl.get(ai.file_url);
+          if (existing) {
+            existing.snippet = ai.snippet || existing.snippet;
+          }
+        }
+      } catch (searchErr) {
+        logger.warn('Azure AI Search enrichment failed', { err: (searchErr as Error).message });
+      }
+    }
+
+    logger.info('Search completed', { query: q, count: results.length });
+    return res.json(results);
+  } catch (err) {
+    logger.error('Search failed', err as Error);
+    return res.status(500).json({ message: 'Search failed' });
+  }
+});
+
+router.get('/stats', async (_req: Request, res: Response) => {
+  try {
+    const rows = await loadAllRows();
+    const total = rows.length;
+    let valid = 0, expiring = 0, expired = 0, unknown = 0;
+    let levelSum = 0, levelCount = 0;
+    let blackOwnSum = 0, blackOwnCount = 0;
+
+    const now = Date.now();
+    let recentUploads7d = 0;
+    let recentUploads30d = 0;
+    let lastUploaded = 0;
+
+    for (const r of rows) {
+      switch (r.status) {
+        case 'valid': valid++; break;
+        case 'expiring': expiring++; break;
+        case 'expired': expired++; break;
+        default: unknown++;
+      }
+      if (typeof r.bbbeeLevel === 'number') {
+        levelSum += r.bbbeeLevel;
+        levelCount++;
+      }
+      if (typeof r.blackOwnership === 'number') {
+        blackOwnSum += r.blackOwnership;
+        blackOwnCount++;
+      }
+      if (r.lastModified) {
+        const t = new Date(r.lastModified).getTime();
+        if (Number.isFinite(t)) {
+          if (t > lastUploaded) lastUploaded = t;
+          if (t >= now - 7 * 86400_000) recentUploads7d++;
+          if (t >= now - 30 * 86400_000) recentUploads30d++;
+        }
+      }
+    }
+
+    return res.json({
+      total,
+      valid,
+      expiring,
+      expiringIn30: expiring,
+      expired,
+      unknown,
+      processed: total,
+      pending: 0,
+      avgLevel: levelCount > 0 ? Number((levelSum / levelCount).toFixed(1)) : null,
+      avgBlackOwnership: blackOwnCount > 0 ? Number((blackOwnSum / blackOwnCount).toFixed(1)) : null,
+      extractionAvailable: levelCount > 0 || blackOwnCount > 0,
+      recentUploads7d,
+      recentUploads30d,
+      lastUploadedAt: lastUploaded > 0 ? new Date(lastUploaded).toISOString() : null,
+      totalBytes: 0,
+    });
+  } catch (err: any) {
+    logger.error('Failed to get certificate stats', err);
+    return res.status(500).json({ message: 'Failed to get certificate stats' });
+  }
+});
+
+router.get('/metadata', async (_req: Request, res: Response) => {
+  try {
+    const rows = await loadAllRows();
+    return res.json(rows);
+  } catch (err: any) {
+    logger.error('Failed to get certificate metadata', err);
+    return res.status(500).json({ message: 'Failed to get metadata' });
+  }
+});
+
+// ============================================================================
+// SEO endpoints — used by the web tier to render SSR certificate hub pages.
+// ============================================================================
+
+function slugifyForSeo(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+function buildCertSlug(name: string | null | undefined, certNo: string | null | undefined): string {
+  const a = slugifyForSeo(name) || 'company';
+  const b = slugifyForSeo(certNo) || 'certificate';
+  return `${a}-${b}`;
+}
+
+interface SeoRecord {
+  slug: string;
+  companyName: string;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  verificationAgency: string | null;
+  certificateNumber: string | null;
+  expiryDate: string | null;
+  issueDate: string | null;
+  blobName: string | null;
+  status: 'valid' | 'expiring' | 'expired' | 'unknown';
+  updatedAt: string;
 }
 
 function isoDay(d: Date | null | undefined): string | null {
@@ -592,7 +649,24 @@ function buildSeoRecord(blob: { name: string; lastModified: Date | null }, mongo
 router.get('/seo/list', async (_req: Request, res: Response) => {
   const blobServiceClient = getBlobServiceClient();
   if (!blobServiceClient) {
-    return res.json([]);
+    // Fall back to local store
+    const local = certificateStore.list();
+    const records: SeoRecord[] = local.map((r) => ({
+      slug: buildCertSlug(r.companyName, r.id),
+      companyName: r.companyName,
+      bbbeeLevel: r.bbbeeLevel,
+      bbbeeScore: null,
+      blackOwnership: r.blackOwnership,
+      blackWomenOwnership: r.blackWomenOwnership,
+      verificationAgency: null,
+      certificateNumber: null,
+      expiryDate: r.expiryDate,
+      issueDate: null,
+      blobName: r.blobName,
+      status: r.status,
+      updatedAt: r.updatedAt.slice(0, 10),
+    }));
+    return res.json(records);
   }
 
   try {
@@ -628,6 +702,29 @@ router.get('/seo/list', async (_req: Request, res: Response) => {
 router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   const slug = (req.params.slug || '').toLowerCase();
   if (!slug) return res.status(400).json({ message: 'slug required' });
+
+  // Check local store first
+  const local = certificateStore.list();
+  for (const r of local) {
+    const candidateSlug = buildCertSlug(r.companyName, r.id);
+    if (candidateSlug === slug) {
+      return res.json({
+        slug: candidateSlug,
+        companyName: r.companyName,
+        bbbeeLevel: r.bbbeeLevel,
+        bbbeeScore: null,
+        blackOwnership: r.blackOwnership,
+        blackWomenOwnership: r.blackWomenOwnership,
+        verificationAgency: null,
+        certificateNumber: null,
+        expiryDate: r.expiryDate,
+        issueDate: null,
+        blobName: r.blobName,
+        status: r.status,
+        updatedAt: r.updatedAt.slice(0, 10),
+      });
+    }
+  }
 
   const blobServiceClient = getBlobServiceClient();
   if (!blobServiceClient) {
@@ -720,41 +817,10 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:userId', async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    if (!userId || userId.trim() === '') {
-      return res.status(400).json({ message: 'userId is required' });
-    }
-
-    const blobServiceClient = getBlobServiceClient();
-    if (!blobServiceClient) {
-      logger.error('Azure Storage connection string not configured');
-      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
-    }
-
-    const containerClient = getContainerClient(blobServiceClient);
-    const prefix = `${userId.trim()}/`;
-    const blobs: Array<{ name: string; fileName: string }> = [];
-
-    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
-      const fileName = blob.name.substring(prefix.length);
-      if (fileName) {
-        blobs.push({
-          name: blob.name,
-          fileName,
-        });
-      }
-    }
-
-    logger.info('Listed certificates', { userId, count: blobs.length });
-    return res.json(blobs);
-  } catch (err) {
-    logger.error('Failed to list certificates', err as Error);
-    return res.status(500).json({ message: 'Failed to list certificates' });
-  }
-});
-
+// ============================================================================
+// Upload — requires authentication. Accepts metadata fields alongside files.
+// Falls back to local disk + in-memory store when Azure isn't configured.
+// ============================================================================
 router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunction) => {
   upload.array('files', 100)(req, res, (err: any) => {
     if (err instanceof multer.MulterError) {
@@ -773,64 +839,142 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
   });
 }, async (req: Request, res: Response) => {
   try {
-    const blobServiceClient = getBlobServiceClient();
-    if (!blobServiceClient) {
-      logger.error('Azure Storage connection string not configured');
-      return res.status(500).json({ message: 'Azure Storage is not configured. Set AZURE_STORAGE_CONNECTION_STRING.' });
-    }
-
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       return res.status(400).json({ message: 'No files provided' });
     }
 
-    const containerClient = getContainerClient(blobServiceClient);
-    const orgId = req.session.organizationId || 'default';
+    const body = (req.body || {}) as Record<string, string>;
+    const companyName = (body.companyName || '').trim();
+    const vatNumber = (body.vatNumber || '').trim() || null;
+    const companySize = (body.companySize || '').trim() || null;
+    const blackOwnershipRaw = body.blackOwnership;
+    const blackWomenOwnershipRaw = body.blackWomenOwnership;
+    const expiryDate = (body.expiryDate || '').trim() || null;
+    const toFinite = (raw: unknown): number | null => {
+      if (raw == null || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+    };
+    const blackOwnership = toFinite(blackOwnershipRaw);
+    const blackWomenOwnership = toFinite(blackWomenOwnershipRaw);
+
+    const blobServiceClient = getBlobServiceClient();
+    const orgId = (req.session as any).organizationId || 'public';
+    const userId = (req.session as any).userId || null;
 
     const results: Array<{ fileName: string; blobName: string; status: 'uploaded' | 'error'; error?: string }> = [];
 
-    for (const file of files) {
-      try {
-        const sanitized = file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
-        const blobName = `${orgId}/${randomUUID()}-${sanitized}`;
-        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    if (blobServiceClient) {
+      // Azure path — preserves existing extraction pipeline
+      const containerClient = getContainerClient(blobServiceClient);
+      for (const file of files) {
+        try {
+          const sanitized = file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+          const blobName = `${orgId}/${randomUUID()}-${sanitized}`;
+          const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-        await blockBlobClient.uploadData(file.buffer, {
-          blobHTTPHeaders: {
-            blobContentType: file.mimetype,
-          },
-          metadata: {
-            uploadedAt: new Date().toISOString(),
-            originalName: file.originalname,
-            organizationId: orgId,
-            uploadedBy: req.session.userId || 'unknown',
-          },
+          await blockBlobClient.uploadData(file.buffer, {
+            blobHTTPHeaders: { blobContentType: file.mimetype },
+            metadata: {
+              uploadedAt: new Date().toISOString(),
+              originalName: file.originalname,
+              organizationId: orgId,
+              uploadedBy: userId || 'unknown',
+            },
+          });
+
+          // Persist metadata in Mongo when available, otherwise use local store as cache
+          if (isMongoConnected()) {
+            try {
+              await CertificateMetadataModel.findOneAndUpdate(
+                { blobName },
+                {
+                  blobName,
+                  fileName: file.originalname,
+                  supplierName: companyName || deriveCompanyName(file.originalname),
+                  vatNumber,
+                  companySize,
+                  blackOwnership,
+                  blackWomenOwnership,
+                  expiryDate: expiryDate ? new Date(expiryDate) : null,
+                  status: statusFromExpiryDate(expiryDate),
+                  uploadedByUserId: userId,
+                  updatedAt: new Date(),
+                },
+                { upsert: true, new: true },
+              );
+            } catch (mongoErr) {
+              logger.warn('Mongo upsert failed', { err: (mongoErr as Error).message });
+            }
+          } else {
+            // Mongo unavailable — cache metadata locally against the SAME Azure blobName
+            // so /list shows the rich fields without writing a duplicate blob to disk.
+            certificateStore.addMetadata({
+              blobName,
+              fileName: file.originalname,
+              mimeType: file.mimetype,
+              size: file.size,
+              companyName: companyName || deriveCompanyName(file.originalname),
+              vatNumber,
+              companySize,
+              blackOwnership,
+              blackWomenOwnership,
+              expiryDate,
+              uploadedByUserId: userId,
+              organizationId: orgId,
+            });
+          }
+
+          results.push({ fileName: file.originalname, blobName, status: 'uploaded' });
+          logger.info('Certificate uploaded (Azure)', { fileName: file.originalname, blobName });
+        } catch (uploadErr: any) {
+          results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
+          logger.error('Failed to upload certificate', { fileName: file.originalname, error: uploadErr.message });
+        }
+      }
+
+      const uploaded = results.filter(r => r.status === 'uploaded').length;
+      if (uploaded > 0) {
+        const uploadedBlobs = results.filter(r => r.status === 'uploaded').map(r => r.blobName);
+        setImmediate(async () => {
+          for (const blobName of uploadedBlobs) {
+            try {
+              await processOneCertificate(blobServiceClient, blobName, true);
+            } catch (err: any) {
+              logger.error('Background extraction failed', { blobName, error: err.message });
+            }
+          }
         });
-
-        results.push({ fileName: file.originalname, blobName, status: 'uploaded' });
-        logger.info('Certificate uploaded', { fileName: file.originalname, blobName, size: file.size, mimetype: file.mimetype, orgId });
-      } catch (uploadErr: any) {
-        results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
-        logger.error('Failed to upload certificate', { fileName: file.originalname, error: uploadErr.message });
+      }
+    } else {
+      // Local disk + in-memory store path
+      for (const file of files) {
+        try {
+          const rec = certificateStore.add({
+            fileName: file.originalname,
+            buffer: file.buffer,
+            mimeType: file.mimetype,
+            companyName: companyName || deriveCompanyName(file.originalname),
+            vatNumber,
+            companySize,
+            blackOwnership,
+            blackWomenOwnership,
+            expiryDate,
+            uploadedByUserId: userId,
+            organizationId: orgId,
+          });
+          results.push({ fileName: file.originalname, blobName: rec.blobName, status: 'uploaded' });
+          logger.info('Certificate uploaded (local)', { fileName: file.originalname, id: rec.id });
+        } catch (uploadErr: any) {
+          results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
+          logger.error('Failed to upload certificate locally', { fileName: file.originalname, error: uploadErr.message });
+        }
       }
     }
 
     const uploaded = results.filter(r => r.status === 'uploaded').length;
     const failed = results.filter(r => r.status === 'error').length;
-
-    if (uploaded > 0) {
-      const uploadedBlobs = results.filter(r => r.status === 'uploaded').map(r => r.blobName);
-      setImmediate(async () => {
-        for (const blobName of uploadedBlobs) {
-          try {
-            await processOneCertificate(blobServiceClient, blobName, true);
-          } catch (err: any) {
-            logger.error('Background extraction failed for uploaded cert', { blobName, error: err.message });
-          }
-        }
-        logger.info('Background extraction complete for uploaded certs', { count: uploadedBlobs.length });
-      });
-    }
 
     return res.json({
       message: `${uploaded} file(s) uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
@@ -839,6 +983,47 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
   } catch (err: any) {
     logger.error('Certificate upload failed', err);
     return res.status(500).json({ message: 'Upload failed' });
+  }
+});
+
+router.get('/:userId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || userId.trim() === '') {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+
+    // Authorization: only the owner (or an admin) can list another user's certificates.
+    const sessionUserId = (req.session as any).userId;
+    const sessionRole = (req.session as any).userData?.role;
+    const isAdmin = sessionRole === 'admin' || sessionRole === 'super_admin';
+    if (!isAdmin && sessionUserId !== userId.trim()) {
+      return res.status(403).json({ message: 'Not allowed to list certificates for this user' });
+    }
+
+    const blobServiceClient = getBlobServiceClient();
+    if (!blobServiceClient) {
+      // Local store fallback by uploadedByUserId
+      const local = certificateStore.list().filter((r) => r.uploadedByUserId === userId.trim());
+      return res.json(local.map((r) => ({ name: r.blobName, fileName: r.fileName })));
+    }
+
+    const containerClient = getContainerClient(blobServiceClient);
+    const prefix = `${userId.trim()}/`;
+    const blobs: Array<{ name: string; fileName: string }> = [];
+
+    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+      const fileName = blob.name.substring(prefix.length);
+      if (fileName) {
+        blobs.push({ name: blob.name, fileName });
+      }
+    }
+
+    logger.info('Listed certificates', { userId, count: blobs.length });
+    return res.json(blobs);
+  } catch (err) {
+    logger.error('Failed to list certificates', err as Error);
+    return res.status(500).json({ message: 'Failed to list certificates' });
   }
 });
 
