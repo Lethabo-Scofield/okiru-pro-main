@@ -46,7 +46,7 @@ function AppRouter() {
         <GuestRoute><LandingWrapper /></GuestRoute>
       </Route>
       <Route path="/auth">
-        <GuestRoute><AuthWrapper /></GuestRoute>
+        <AuthWrapper />
       </Route>
       <Route path="/onboarding">
         <ProtectedRoute><Onboarding /></ProtectedRoute>

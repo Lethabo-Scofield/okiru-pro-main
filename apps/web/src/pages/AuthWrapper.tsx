@@ -48,5 +48,7 @@ export default function AuthWrapper() {
     })();
   }, [user, navigate, redirectTo]);
 
+  if (user) return null;
+
   return <AuthPage defaultMode={defaultMode as "register" | "login"} />;
 }
