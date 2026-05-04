@@ -1,0 +1,29 @@
+[
+  {
+    "id": "cert-test-001",
+    "blobName": "public/cert-test-001-acme-bbbee.pdf",
+    "fileName": "ACME-BBBEE-2025.pdf",
+    "filePath": "/tmp/fake.pdf",
+    "mimeType": "application/pdf",
+    "size": 1024,
+    "companyName": "Acme Manufacturing (Pty) Ltd",
+    "vatNumber": "4123456789",
+    "companySize": "QSE",
+    "blackOwnership": 51,
+    "blackWomenOwnership": 30,
+    "bbbeeLevel": 2,
+    "expiryDate": "2027-12-31",
+    "issueDate": "2026-01-15",
+    "status": "valid",
+    "uploadedByUserId": null,
+    "organizationId": "public",
+    "verified": false,
+    "verifiedBy": null,
+    "verifiedByName": null,
+    "verifiedAt": null,
+    "versions": [],
+    "reportCount": 2,
+    "createdAt": "2026-04-01T10:00:00.000Z",
+    "updatedAt": "2026-04-01T10:00:00.000Z"
+  }
+]

@@ -25,6 +25,10 @@ interface CertificateRow {
   expiryDate: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   lastModified: string | null;
+  // Phase 2 — public visibility
+  id?: string | null;
+  slug?: string | null;
+  verified?: boolean;
 }
 
 interface CertStats {
@@ -274,7 +278,7 @@ export default function CertificateHub() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return certificates.filter(c => {
+    const out = certificates.filter(c => {
       if (q) {
         const hay = `${c.companyName} ${c.vatNumber || ''} ${c.fileName}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -288,6 +292,12 @@ export default function CertificateHub() {
         if (c.blackOwnership < min || c.blackOwnership > max) return false;
       }
       return true;
+    });
+    // Verified-first sort, then most-recently uploaded.
+    return out.sort((a, b) => {
+      const av = !!a.verified, bv = !!b.verified;
+      if (av !== bv) return av ? -1 : 1;
+      return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
   }, [certificates, search, statusFilter, sizeFilter, ownershipFilter]);
 
@@ -850,8 +860,27 @@ function CertRow({
     >
       {/* Mobile: stacked. Desktop: grid columns */}
       <div className="min-w-0">
-        <div className="text-[14px] text-white font-medium leading-snug">
-          <HighlightMatch text={cert.companyName} query={searchQuery} />
+        <div className="text-[14px] text-white font-medium leading-snug flex items-center gap-1.5 flex-wrap">
+          {cert.slug ? (
+            <Link
+              href={`/certificates/${cert.slug}`}
+              className="text-white hover:text-[#a5b4fc] transition-colors"
+            >
+              <HighlightMatch text={cert.companyName} query={searchQuery} />
+            </Link>
+          ) : (
+            <HighlightMatch text={cert.companyName} query={searchQuery} />
+          )}
+          {cert.verified && (
+            <span
+              title="Verified by an administrator"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
+              style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.12)' }}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              Verified
+            </span>
+          )}
         </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}

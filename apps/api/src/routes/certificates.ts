@@ -7,9 +7,11 @@ import { createLogger } from '../logger.js';
 import { searchCertificates, isAzureSearchConfigured, getSearchClient } from '../services/azureSearch.js';
 import { requireAuth } from '../middleware/auth.js';
 import { processAllCertificates, processOneCertificate, getCertificateStats, extractDatesFromText } from '../services/certificateExtractor.js';
-import { CertificateMetadataModel } from '../../models.js';
+import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
-import { certificateStore, type CertificateRecord } from '../services/certificateStore.js';
+import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
+import { ok, fail, failWith } from '../utils/apiResponse.js';
+import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -71,6 +73,37 @@ interface CertificateRow {
   expiryDate: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   lastModified: string | null;
+  // Phase 2 — public visibility
+  id: string | null;       // stable certificate id (for /:id/* endpoints)
+  slug: string | null;     // canonical slug for /certificates/:slug
+  verified: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Lightweight TTL cache for /list and /stats. The certificates registry is
+// read-heavy and recomputing the full snapshot per request is wasteful when
+// thousands of users hit the public hub. A 60s TTL keeps results fresh while
+// absorbing burst traffic. Mutations (upload, verify, unverify) invalidate.
+// ----------------------------------------------------------------------------
+const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
+function getCached<T>(key: string): T | null {
+  const e = responseCache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+  return e.value as T;
+}
+function setCached(key: string, value: unknown, ttlMs = 60_000) {
+  responseCache.set(key, { expiresAt: Date.now() + ttlMs, value });
+}
+function invalidateListAndStatsCache() {
+  for (const k of Array.from(responseCache.keys())) {
+    if (k.startsWith('list:') || k.startsWith('stats:')) {
+      responseCache.delete(k);
+    }
+  }
 }
 
 function statusFromExpiryDate(expiry: Date | string | null | undefined): CertificateRow['status'] {
@@ -135,16 +168,21 @@ function rowFromLocal(rec: CertificateRecord): CertificateRow {
     expiryDate: rec.expiryDate,
     status: rec.status,
     lastModified: rec.updatedAt,
+    id: rec.id,
+    slug: buildCertSlug(rec.companyName, rec.id),
+    verified: !!rec.verified,
   };
 }
 
 function rowFromMongo(doc: any, blobLastModified: string | null = null, fileNameFallback?: string): CertificateRow {
   const fileName = fileNameFallback || doc.fileName || (doc.blobName?.split('/').pop() || doc.blobName);
   const expiry = doc.expiryDate ? new Date(doc.expiryDate) : null;
+  const companyName = doc.supplierName || deriveCompanyName(fileName);
+  const id = doc.id || null;
   return {
     name: doc.blobName,
     fileName,
-    companyName: doc.supplierName || deriveCompanyName(fileName),
+    companyName,
     vatNumber: doc.vatNumber || null,
     companySize: doc.companySize || null,
     blackOwnership: doc.blackOwnership ?? null,
@@ -153,6 +191,9 @@ function rowFromMongo(doc: any, blobLastModified: string | null = null, fileName
     expiryDate: expiry ? expiry.toISOString().slice(0, 10) : null,
     status: doc.status || statusFromExpiryDate(expiry),
     lastModified: blobLastModified || (doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null),
+    id,
+    slug: doc.slug || (id ? buildCertSlug(companyName, id) : null),
+    verified: !!doc.verified,
   };
 }
 
@@ -199,6 +240,9 @@ async function loadAllRows(): Promise<CertificateRow[]> {
             expiryDate: null,
             status: 'unknown',
             lastModified: b.lastModified,
+            id: null,
+            slug: null,
+            verified: false,
           });
         }
         seenBlobs.add(b.name);
@@ -269,6 +313,13 @@ router.get('/download', async (req: Request, res: Response) => {
     }
 
     const trimmed = file.trim();
+    recordEvent({
+      type: 'download',
+      metadata: { blobName: trimmed, mode: req.query.mode || null },
+      userId: req.session?.userId || null,
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
 
     // Try local store first
     const localRec = certificateStore.getByBlobName(trimmed);
@@ -356,17 +407,57 @@ router.get('/list', async (req: Request, res: Response) => {
     const size = (req.query.size as string || '').trim();
     const minOwnership = req.query.minOwnership ? Number(req.query.minOwnership) : undefined;
     const maxOwnership = req.query.maxOwnership ? Number(req.query.maxOwnership) : undefined;
+    const sort = String(req.query.sort || 'verified').toLowerCase();
+    const limitRaw = req.query.limit;
+    const offsetRaw = req.query.offset;
+    const wantsPagination = limitRaw !== undefined || offsetRaw !== undefined;
+    const limit = wantsPagination ? Math.min(Math.max(Number(limitRaw) || 50, 1), 200) : null;
+    const offset = wantsPagination ? Math.max(Number(offsetRaw) || 0, 0) : 0;
+
+    // Cache key includes every filter/sort/page parameter. Only cache the
+    // unfiltered first page heavily — fully filtered queries get cached too
+    // but with the same TTL since they're cheap to recompute on miss.
+    const cacheKey = `list:${search}|${status}|${size}|${minOwnership ?? ''}|${maxOwnership ?? ''}|${sort}|${limit ?? 'all'}|${offset}`;
+    const cached = getCached<unknown>(cacheKey);
+    if (cached) return res.json(cached);
 
     const all = await loadAllRows();
     const filtered = applyFilters(all, { search, status, size, minOwnership, maxOwnership });
 
+    // Sort. Default 'verified' surfaces verified certs first, then most-recent.
+    const sorted = [...filtered].sort((a, b) => {
+      if (sort === 'recent') {
+        return (b.lastModified || '').localeCompare(a.lastModified || '');
+      }
+      if (sort === 'expiring') {
+        if (!a.expiryDate && !b.expiryDate) return 0;
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        return a.expiryDate.localeCompare(b.expiryDate);
+      }
+      // verified-first (default) — verified, then most recent within group
+      if (a.verified !== b.verified) return a.verified ? -1 : 1;
+      return (b.lastModified || '').localeCompare(a.lastModified || '');
+    });
+
     logger.info('Listed certificates', {
       total: all.length,
-      shown: filtered.length,
+      shown: sorted.length,
       search: search || '(all)',
       status: status || '(any)',
+      sort,
+      paginated: wantsPagination,
     });
-    return res.json(filtered);
+
+    if (wantsPagination) {
+      const items = sorted.slice(offset, offset + (limit ?? sorted.length));
+      const payload = ok({ items, total: sorted.length, limit: limit ?? sorted.length, offset });
+      setCached(cacheKey, payload);
+      return res.json(payload);
+    }
+
+    setCached(cacheKey, sorted);
+    return res.json(sorted);
   } catch (err) {
     logger.error('Failed to list certificates', err as Error);
     return res.status(500).json({ message: 'Failed to list certificates' });
@@ -376,6 +467,15 @@ router.get('/list', async (req: Request, res: Response) => {
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const q = (req.query.q as string || '').trim();
+    if (q) {
+      recordEvent({
+        type: 'search',
+        query: q,
+        userId: req.session?.userId || null,
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+    }
     if (!q) {
       return res.status(400).json({ message: 'q query parameter is required' });
     }
@@ -421,6 +521,8 @@ router.get('/search', async (req: Request, res: Response) => {
 
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
+    const cached = getCached<unknown>('stats:default');
+    if (cached) return res.json(cached);
     const rows = await loadAllRows();
     const total = rows.length;
     let valid = 0, expiring = 0, expired = 0, unknown = 0;
@@ -457,7 +559,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
       }
     }
 
-    return res.json({
+    const payload = {
       total,
       valid,
       expiring,
@@ -473,7 +575,9 @@ router.get('/stats', async (_req: Request, res: Response) => {
       recentUploads30d,
       lastUploadedAt: lastUploaded > 0 ? new Date(lastUploaded).toISOString() : null,
       totalBytes: 0,
-    });
+    };
+    setCached('stats:default', payload);
+    return res.json(payload);
   } catch (err: any) {
     logger.error('Failed to get certificate stats', err);
     return res.status(500).json({ message: 'Failed to get certificate stats' });
@@ -708,6 +812,14 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   for (const r of local) {
     const candidateSlug = buildCertSlug(r.companyName, r.id);
     if (candidateSlug === slug) {
+      recordEvent({
+        type: 'view',
+        certificateId: r.id,
+        certificateSlug: candidateSlug,
+        userId: req.session?.userId || null,
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
       return res.json({
         slug: candidateSlug,
         companyName: r.companyName,
@@ -721,7 +833,12 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
         issueDate: null,
         blobName: r.blobName,
         status: r.status,
-        updatedAt: r.updatedAt.slice(0, 10),
+        updatedAt: r.updatedAt,
+        // Phase 2/3 — surface fields the public detail page needs
+        id: r.id,
+        verified: !!r.verified,
+        vatNumber: r.vatNumber,
+        companySize: r.companySize,
       });
     }
   }
@@ -756,6 +873,16 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
     if (!matchedBlob || !matchedRecord) {
       return res.status(404).json({ message: 'Certificate not found' });
     }
+
+    const matchedDoc = mongoMap.get(matchedBlob.name);
+    recordEvent({
+      type: 'view',
+      certificateId: matchedDoc?.id || null,
+      certificateSlug: matchedRecord.slug,
+      userId: req.session?.userId || null,
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
 
     const needsEnrichment =
       matchedRecord.bbbeeLevel == null ||
@@ -818,8 +945,96 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
 });
 
 // ============================================================================
+// Internal helpers shared by /upload, /:id/verify, /:id/history, /:id/reports
+// ============================================================================
+
+interface ExistingCertSummary {
+  id: string;
+  slug: string | null;
+  companyName: string;
+  vatNumber: string | null;
+  expiryDate: string | null;
+  blobName: string | null;
+  fileName: string | null;
+  verified: boolean;
+}
+
+function summarizeMongoDoc(doc: any): ExistingCertSummary {
+  return {
+    id: doc.id,
+    slug: doc.slug || null,
+    companyName: doc.supplierName || deriveCompanyName(doc.fileName || doc.blobName || ''),
+    vatNumber: doc.vatNumber || null,
+    expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
+    blobName: doc.blobName || null,
+    fileName: doc.fileName || null,
+    verified: !!doc.verified,
+  };
+}
+
+function summarizeLocalRec(rec: CertificateRecord): ExistingCertSummary {
+  return {
+    id: rec.id,
+    slug: buildCertSlug(rec.companyName, rec.id),
+    companyName: rec.companyName,
+    vatNumber: rec.vatNumber,
+    expiryDate: rec.expiryDate,
+    blobName: rec.blobName,
+    fileName: rec.fileName,
+    verified: !!rec.verified,
+  };
+}
+
+async function findCertificateByVat(vatRaw: string | null): Promise<{ source: 'mongo'; doc: any } | { source: 'local'; rec: CertificateRecord } | null> {
+  const norm = normalizeVat(vatRaw);
+  if (!norm) return null;
+  if (isMongoConnected()) {
+    try {
+      const doc = await CertificateMetadataModel.findOne({
+        $or: [
+          { vatNumberNormalized: norm },
+          // Fall back to a case/space-insensitive match for records uploaded
+          // before the normalized field was introduced.
+          { vatNumber: { $regex: new RegExp(`^\\s*${norm.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') } },
+        ],
+      }).lean();
+      if (doc) return { source: 'mongo', doc };
+    } catch {
+      // ignore — fall through to local store
+    }
+  }
+  const rec = certificateStore.getByVatNumber(norm);
+  if (rec) return { source: 'local', rec };
+  return null;
+}
+
+async function findCertificateById(id: string): Promise<{ source: 'mongo'; doc: any } | { source: 'local'; rec: CertificateRecord } | null> {
+  if (!id) return null;
+  if (isMongoConnected()) {
+    try {
+      const doc = await CertificateMetadataModel.findOne({ id }).lean();
+      if (doc) return { source: 'mongo', doc };
+    } catch {
+      // ignore
+    }
+  }
+  const rec = certificateStore.getById(id);
+  if (rec) return { source: 'local', rec };
+  return null;
+}
+
+function isAdminSession(req: Request): boolean {
+  const role = (req.session as any).userData?.role;
+  return role === 'admin' || role === 'super_admin';
+}
+
+// ============================================================================
 // Upload — requires authentication. Accepts metadata fields alongside files.
 // Falls back to local disk + in-memory store when Azure isn't configured.
+//
+// VAT dedupe (Phase 1): if `vatNumber` matches an existing certificate the
+// request is rejected with 409 unless `?action=update` is passed, in which
+// case the upload is treated as a new VERSION of the existing certificate.
 // ============================================================================
 router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunction) => {
   upload.array('files', 100)(req, res, (err: any) => {
@@ -847,6 +1062,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const body = (req.body || {}) as Record<string, string>;
     const companyName = (body.companyName || '').trim();
     const vatNumber = (body.vatNumber || '').trim() || null;
+    const vatNumberNormalized = normalizeVat(vatNumber);
     const companySize = (body.companySize || '').trim() || null;
     const blackOwnershipRaw = body.blackOwnership;
     const blackWomenOwnershipRaw = body.blackWomenOwnership;
@@ -859,12 +1075,173 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const blackOwnership = toFinite(blackOwnershipRaw);
     const blackWomenOwnership = toFinite(blackWomenOwnershipRaw);
 
+    const action = String(req.query.action || '').toLowerCase();
     const blobServiceClient = getBlobServiceClient();
     const orgId = (req.session as any).organizationId || 'public';
     const userId = (req.session as any).userId || null;
+    const userName = (req.session as any).userData?.fullName || null;
+
+    // ---- VAT dedupe ------------------------------------------------------
+    let updateExisting: { source: 'mongo'; doc: any } | { source: 'local'; rec: CertificateRecord } | null = null;
+    if (vatNumberNormalized) {
+      const existing = await findCertificateByVat(vatNumberNormalized);
+      if (existing && action !== 'update') {
+        const summary = existing.source === 'mongo'
+          ? summarizeMongoDoc(existing.doc)
+          : summarizeLocalRec(existing.rec);
+        logger.info('Upload rejected — VAT already exists', { vat: vatNumberNormalized, existingId: summary.id });
+        return res.status(409).json(failWith(
+          'A certificate with this VAT number already exists. Re-submit with ?action=update to add a new version.',
+          'VAT_EXISTS',
+          { existing: summary },
+        ));
+      }
+      if (existing && action === 'update') {
+        if (files.length !== 1) {
+          return res.status(400).json(fail(
+            'Versioned uploads (action=update) accept exactly one file at a time.',
+            'VAT_VERSIONED_SINGLE_FILE_REQUIRED',
+          ));
+        }
+        updateExisting = existing;
+      }
+    }
 
     const results: Array<{ fileName: string; blobName: string; status: 'uploaded' | 'error'; error?: string }> = [];
 
+    // ----------------------------------------------------------------------
+    // UPDATE PATH — replace the latest version on an existing certificate.
+    // ----------------------------------------------------------------------
+    if (updateExisting) {
+      const file = files[0];
+      try {
+        let newBlobName: string;
+
+        if (blobServiceClient) {
+          const containerClient = getContainerClient(blobServiceClient);
+          const sanitized = file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+          newBlobName = `${orgId}/${randomUUID()}-${sanitized}`;
+          const blockBlobClient = containerClient.getBlockBlobClient(newBlobName);
+          await blockBlobClient.uploadData(file.buffer, {
+            blobHTTPHeaders: { blobContentType: file.mimetype },
+            metadata: {
+              uploadedAt: new Date().toISOString(),
+              originalName: file.originalname,
+              organizationId: orgId,
+              uploadedBy: userId || 'unknown',
+              version: 'true',
+            },
+          });
+        } else {
+          const written = certificateStore.writeRawFile({
+            fileName: file.originalname,
+            buffer: file.buffer,
+            organizationId: orgId,
+          });
+          newBlobName = written.blobName;
+        }
+
+        if (updateExisting.source === 'mongo') {
+          const doc = updateExisting.doc;
+          const snapshot = {
+            blobName: doc.blobName,
+            fileName: doc.fileName || null,
+            expiryDate: doc.expiryDate || null,
+            issueDate: doc.issueDate || null,
+            bbbeeLevel: doc.bbbeeLevel ?? null,
+            bbbeeScore: doc.bbbeeScore ?? null,
+            blackOwnership: doc.blackOwnership ?? null,
+            blackWomenOwnership: doc.blackWomenOwnership ?? null,
+            companySize: doc.companySize || null,
+            uploadedByUserId: doc.uploadedByUserId || null,
+            uploadedAt: doc.createdAt || new Date(),
+            replacedAt: new Date(),
+          };
+          await CertificateMetadataModel.updateOne(
+            { id: doc.id },
+            {
+              $set: {
+                blobName: newBlobName,
+                fileName: file.originalname,
+                supplierName: companyName || doc.supplierName || deriveCompanyName(file.originalname),
+                vatNumber: vatNumber || doc.vatNumber,
+                vatNumberNormalized,
+                companySize: companySize || doc.companySize || null,
+                blackOwnership: blackOwnership ?? doc.blackOwnership ?? null,
+                blackWomenOwnership: blackWomenOwnership ?? doc.blackWomenOwnership ?? null,
+                expiryDate: expiryDate ? new Date(expiryDate) : (doc.expiryDate || null),
+                status: statusFromExpiryDate(expiryDate || doc.expiryDate),
+                extractionStatus: 'pending',
+                extractionError: null,
+                updatedAt: new Date(),
+              },
+              $push: { versions: snapshot },
+            },
+          );
+          results.push({ fileName: file.originalname, blobName: newBlobName, status: 'uploaded' });
+          logger.info('Certificate version added (Mongo)', { id: doc.id, blobName: newBlobName });
+
+          if (blobServiceClient) {
+            setImmediate(async () => {
+              try { await processOneCertificate(blobServiceClient, newBlobName, true); }
+              catch (err: any) { logger.error('Background extraction failed', { blobName: newBlobName, error: err.message }); }
+            });
+          }
+        } else {
+          const rec = updateExisting.rec;
+          const snapshot: CertificateVersionLite = {
+            blobName: rec.blobName,
+            fileName: rec.fileName,
+            expiryDate: rec.expiryDate,
+            bbbeeLevel: rec.bbbeeLevel,
+            blackOwnership: rec.blackOwnership,
+            blackWomenOwnership: rec.blackWomenOwnership,
+            companySize: rec.companySize,
+            uploadedByUserId: rec.uploadedByUserId,
+            uploadedAt: rec.createdAt,
+            replacedAt: new Date().toISOString(),
+          };
+          certificateStore.pushVersion(rec.id, snapshot, {
+            blobName: newBlobName,
+            fileName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            companyName: companyName || rec.companyName,
+            vatNumber: vatNumber || rec.vatNumber,
+            companySize: companySize || rec.companySize,
+            blackOwnership: blackOwnership ?? rec.blackOwnership,
+            blackWomenOwnership: blackWomenOwnership ?? rec.blackWomenOwnership,
+            expiryDate: expiryDate || rec.expiryDate,
+          });
+          results.push({ fileName: file.originalname, blobName: newBlobName, status: 'uploaded' });
+          logger.info('Certificate version added (local)', { id: rec.id, blobName: newBlobName });
+        }
+
+        const updatedId = updateExisting.source === 'mongo' ? updateExisting.doc.id : updateExisting.rec.id;
+        invalidateListAndStatsCache();
+        recordEvent({
+          type: 'upload',
+          certificateId: updatedId,
+          userId: req.session?.userId || null,
+          metadata: { action: 'updated' },
+          ipAddress: req.ip || null,
+          userAgent: req.headers['user-agent'] || null,
+        });
+        return res.json({
+          message: `Certificate updated with new version`,
+          action: 'updated' as const,
+          certificateId: updatedId,
+          results,
+        });
+      } catch (uploadErr: any) {
+        logger.error('Certificate version upload failed', { error: uploadErr.message });
+        return res.status(500).json(fail('Failed to add new version', 'VERSION_UPLOAD_FAILED'));
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // CREATE PATH — original behavior (unchanged for non-VAT or new-VAT uploads)
+    // ----------------------------------------------------------------------
     if (blobServiceClient) {
       // Azure path — preserves existing extraction pipeline
       const containerClient = getContainerClient(blobServiceClient);
@@ -894,6 +1271,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
                   fileName: file.originalname,
                   supplierName: companyName || deriveCompanyName(file.originalname),
                   vatNumber,
+                  vatNumberNormalized,
                   companySize,
                   blackOwnership,
                   blackWomenOwnership,
@@ -908,8 +1286,6 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
               logger.warn('Mongo upsert failed', { err: (mongoErr as Error).message });
             }
           } else {
-            // Mongo unavailable — cache metadata locally against the SAME Azure blobName
-            // so /list shows the rich fields without writing a duplicate blob to disk.
             certificateStore.addMetadata({
               blobName,
               fileName: file.originalname,
@@ -976,14 +1352,342 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const uploaded = results.filter(r => r.status === 'uploaded').length;
     const failed = results.filter(r => r.status === 'error').length;
 
+    if (uploaded > 0) {
+      invalidateListAndStatsCache();
+      recordEvent({
+        type: 'upload',
+        userId: req.session?.userId || null,
+        metadata: { uploadedCount: uploaded, failedCount: failed, action: 'created' },
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+    }
+
     return res.json({
       message: `${uploaded} file(s) uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
+      action: 'created' as const,
       results,
     });
   } catch (err: any) {
     logger.error('Certificate upload failed', err);
     return res.status(500).json({ message: 'Upload failed' });
   }
+});
+
+// ============================================================================
+// Phase 1 endpoints — verification, history, reports, admin reports
+// All NEW endpoints use the standard {success,data,error} envelope.
+//
+// IMPORTANT: these must be declared BEFORE the catch-all `/:userId` route
+// further down so they aren't shadowed by it.
+// ============================================================================
+
+// --- ADMIN: list all reports (place before /:id/* to avoid id collision) ---
+router.get('/admin/reports', requireAuth, async (req: Request, res: Response) => {
+  if (!isAdminSession(req)) {
+    return res.status(403).json(fail('Admin access required', 'FORBIDDEN'));
+  }
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const status = String(req.query.status || '').trim();
+
+  if (isMongoConnected()) {
+    try {
+      const filter: Record<string, unknown> = {};
+      if (status) filter.status = status;
+      const [items, total] = await Promise.all([
+        CertificateReportModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+        CertificateReportModel.countDocuments(filter),
+      ]);
+      return res.json(ok({ items, total, limit, offset }));
+    } catch (err: any) {
+      logger.warn('Mongo report list failed', { error: err.message });
+    }
+  }
+  // Local fallback
+  let items = certificateStore.listReports();
+  if (status) items = items.filter((r) => r.status === status);
+  const total = items.length;
+  return res.json(ok({ items: items.slice(offset, offset + limit), total, limit, offset }));
+});
+
+// --- ADMIN: usage analytics summary ----------------------------------------
+router.get('/admin/analytics', requireAuth, async (req: Request, res: Response) => {
+  if (!isAdminSession(req)) {
+    return res.status(403).json(fail('Admin access required', 'FORBIDDEN'));
+  }
+  try {
+    const summary = await getAnalyticsSummary();
+    return res.json(ok(summary));
+  } catch (err: any) {
+    logger.error('Failed to compute analytics', err);
+    return res.status(500).json(fail('Failed to compute analytics', 'ANALYTICS_FAILED'));
+  }
+});
+
+// --- ADMIN: duplicate clusters by VAT --------------------------------------
+// Public registry deduplicates on upload, but historical Mongo + Azure data
+// may already contain duplicates. This surfaces clusters so an admin can
+// merge or remove them.
+router.get('/admin/duplicates', requireAuth, async (req: Request, res: Response) => {
+  if (!isAdminSession(req)) {
+    return res.status(403).json(fail('Admin access required', 'FORBIDDEN'));
+  }
+  try {
+    const rows = await loadAllRows();
+    const buckets = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const vat = normalizeVat(r.vatNumber);
+      if (!vat) continue;
+      const arr = buckets.get(vat) || [];
+      arr.push(r);
+      buckets.set(vat, arr);
+    }
+    const clusters = Array.from(buckets.entries())
+      .filter(([, arr]) => arr.length > 1)
+      .map(([vat, arr]) => ({
+        vatNumber: vat,
+        count: arr.length,
+        certificates: arr.map((r) => ({
+          id: r.id,
+          slug: r.slug,
+          companyName: r.companyName,
+          fileName: r.fileName,
+          expiryDate: r.expiryDate,
+          status: r.status,
+          verified: r.verified,
+          lastModified: r.lastModified,
+        })),
+      }))
+      .sort((a, b) => b.count - a.count);
+    return res.json(ok({ clusters, totalClusters: clusters.length }));
+  } catch (err: any) {
+    logger.error('Failed to compute duplicate clusters', err);
+    return res.status(500).json(fail('Failed to compute duplicates', 'DUPLICATES_FAILED'));
+  }
+});
+
+// --- PUBLIC: certificate version history -----------------------------------
+router.get('/:id/history', async (req: Request, res: Response) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+
+  const found = await findCertificateById(id);
+  if (!found) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+
+  if (found.source === 'mongo') {
+    const doc = found.doc;
+    const versions = Array.isArray(doc.versions) ? doc.versions : [];
+    return res.json(ok({
+      certificateId: doc.id,
+      slug: doc.slug || null,
+      latest: {
+        blobName: doc.blobName,
+        fileName: doc.fileName,
+        expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
+        uploadedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
+        uploadedByUserId: doc.uploadedByUserId || null,
+      },
+      versions: versions.map((v: any) => ({
+        blobName: v.blobName,
+        fileName: v.fileName,
+        expiryDate: v.expiryDate ? new Date(v.expiryDate).toISOString().slice(0, 10) : null,
+        uploadedAt: v.uploadedAt ? new Date(v.uploadedAt).toISOString() : null,
+        replacedAt: v.replacedAt ? new Date(v.replacedAt).toISOString() : null,
+        uploadedByUserId: v.uploadedByUserId || null,
+      })),
+    }));
+  }
+
+  const rec = found.rec;
+  return res.json(ok({
+    certificateId: rec.id,
+    slug: buildCertSlug(rec.companyName, rec.id),
+    latest: {
+      blobName: rec.blobName,
+      fileName: rec.fileName,
+      expiryDate: rec.expiryDate,
+      uploadedAt: rec.updatedAt,
+      uploadedByUserId: rec.uploadedByUserId,
+    },
+    versions: (rec.versions || []).map((v) => ({
+      blobName: v.blobName,
+      fileName: v.fileName,
+      expiryDate: v.expiryDate,
+      uploadedAt: v.uploadedAt,
+      replacedAt: v.replacedAt,
+      uploadedByUserId: v.uploadedByUserId,
+    })),
+  }));
+});
+
+// --- PUBLIC: report incorrect data -----------------------------------------
+router.post('/:id/reports', async (req: Request, res: Response) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+
+  const body = (req.body || {}) as Record<string, string>;
+  const reason = String(body.reason || '').trim() as 'incorrect-data' | 'expired' | 'fraudulent' | 'duplicate' | 'other';
+  const message = String(body.message || '').trim();
+  const email = (body.email || '').trim() || null;
+
+  const validReasons = ['incorrect-data', 'expired', 'fraudulent', 'duplicate', 'other'];
+  if (!validReasons.includes(reason)) {
+    return res.status(400).json(fail('Invalid reason. Must be one of: ' + validReasons.join(', '), 'INVALID_REASON'));
+  }
+  if (!message || message.length < 10) {
+    return res.status(400).json(fail('Message must be at least 10 characters', 'INVALID_MESSAGE'));
+  }
+  if (message.length > 4000) {
+    return res.status(400).json(fail('Message too long (max 4000 characters)', 'MESSAGE_TOO_LONG'));
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json(fail('Invalid email address', 'INVALID_EMAIL'));
+  }
+
+  const found = await findCertificateById(id);
+  if (!found) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+
+  const slug = found.source === 'mongo'
+    ? (found.doc.slug || null)
+    : buildCertSlug(found.rec.companyName, found.rec.id);
+
+  const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
+  const userAgent = (req.headers['user-agent'] as string) || null;
+
+  if (isMongoConnected()) {
+    try {
+      const created = await CertificateReportModel.create({
+        certificateId: id,
+        certificateSlug: slug,
+        reason,
+        message,
+        email,
+        ipAddress,
+        userAgent,
+      });
+      // bump report count on the cert
+      try {
+        await CertificateMetadataModel.updateOne({ id }, { $inc: { reportCount: 1 } });
+      } catch { /* ignore */ }
+      recordEvent({
+        type: 'report',
+        certificateId: id,
+        certificateSlug: slug,
+        userId: req.session?.userId || null,
+        metadata: { reason, reportId: created.id },
+        ipAddress,
+        userAgent,
+      });
+      logger.info('Report submitted (Mongo)', { certificateId: id, reportId: created.id });
+      return res.status(201).json(ok({
+        id: created.id,
+        certificateId: id,
+        reason,
+        status: created.status,
+        createdAt: created.createdAt,
+      }));
+    } catch (err: any) {
+      logger.warn('Mongo report write failed, falling back to local', { error: err.message });
+    }
+  }
+
+  const rec = certificateStore.addReport({
+    certificateId: id,
+    certificateSlug: slug,
+    reason,
+    message,
+    email,
+    ipAddress,
+    userAgent,
+  });
+  certificateStore.incrementReportCount(id, 1);
+  recordEvent({
+    type: 'report',
+    certificateId: id,
+    certificateSlug: slug,
+    userId: req.session?.userId || null,
+    metadata: { reason, reportId: rec.id },
+    ipAddress,
+    userAgent,
+  });
+  logger.info('Report submitted (local)', { certificateId: id, reportId: rec.id });
+  return res.status(201).json(ok({
+    id: rec.id,
+    certificateId: id,
+    reason,
+    status: rec.status,
+    createdAt: rec.createdAt,
+  }));
+});
+
+// --- ADMIN: verify certificate ---------------------------------------------
+router.post('/:id/verify', requireAuth, async (req: Request, res: Response) => {
+  if (!isAdminSession(req)) return res.status(403).json(fail('Admin access required', 'FORBIDDEN'));
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+
+  const userId = (req.session as any).userId || null;
+  const userName = (req.session as any).userData?.fullName || null;
+  const verifiedAt = new Date();
+
+  const found = await findCertificateById(id);
+  if (!found) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+
+  if (found.source === 'mongo') {
+    await CertificateMetadataModel.updateOne(
+      { id },
+      { $set: { verified: true, verifiedBy: userId, verifiedByName: userName, verifiedAt, updatedAt: new Date() } },
+    );
+  } else {
+    certificateStore.setVerified(id, true, userId, userName);
+  }
+  invalidateListAndStatsCache();
+  recordEvent({
+    type: 'verify',
+    certificateId: id,
+    userId,
+    metadata: { verifiedByName: userName },
+    ipAddress: req.ip || null,
+    userAgent: req.headers['user-agent'] || null,
+  });
+  logger.info('Certificate verified', { id, by: userId });
+  return res.json(ok({
+    id,
+    verified: true,
+    verifiedBy: userId,
+    verifiedByName: userName,
+    verifiedAt: verifiedAt.toISOString(),
+  }));
+});
+
+// --- ADMIN: unverify certificate -------------------------------------------
+router.post('/:id/unverify', requireAuth, async (req: Request, res: Response) => {
+  if (!isAdminSession(req)) return res.status(403).json(fail('Admin access required', 'FORBIDDEN'));
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+
+  const found = await findCertificateById(id);
+  if (!found) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+
+  if (found.source === 'mongo') {
+    await CertificateMetadataModel.updateOne(
+      { id },
+      { $set: { verified: false, verifiedBy: null, verifiedByName: null, verifiedAt: null, updatedAt: new Date() } },
+    );
+  } else {
+    certificateStore.setVerified(id, false, null, null);
+  }
+  invalidateListAndStatsCache();
+  recordEvent({
+    type: 'unverify',
+    certificateId: id,
+    userId: req.session?.userId || null,
+    ipAddress: req.ip || null,
+    userAgent: req.headers['user-agent'] || null,
+  });
+  logger.info('Certificate unverified', { id });
+  return res.json(ok({ id, verified: false }));
 });
 
 router.get('/:userId', requireAuth, async (req: Request, res: Response) => {

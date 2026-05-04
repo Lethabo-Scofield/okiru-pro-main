@@ -16,6 +16,8 @@ import DocumentProcessor from "@/pages/DocumentProcessor";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
 import CertificateHub from "@/pages/CertificateHub";
+import CertificateDetail from "@/pages/CertificateDetail";
+import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Onboarding from "@/pages/Onboarding";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
@@ -64,8 +66,14 @@ function AppRouter() {
       <Route path="/certificates">
         <CertificateHub />
       </Route>
+      <Route path="/certificates/:slug">
+        {(params) => <CertificateDetail slug={params.slug} />}
+      </Route>
       <Route path="/admin/users">
         <ProtectedRoute><AdminUsers /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/certificates">
+        <ProtectedRoute><AdminCertificates /></ProtectedRoute>
       </Route>
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>

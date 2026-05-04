@@ -1,0 +1,295 @@
+Write and implement tests for both systems:
+
+1. Company Onboarding as part of signup
+2. Production-ready B-BBEE Certificates registry
+
+Do not only add placeholder tests. Tests must verify real behavior.
+
+--------------------------------------------------
+A. COMPANY ONBOARDING TESTS
+--------------------------------------------------
+
+Goal:
+Ensure onboarding is part of account creation and company data is saved correctly.
+
+Test cases:
+
+1. Signup redirects to onboarding
+- Create a new user account
+- Confirm user is redirected to /onboarding
+- Confirm onboarding form appears before accessing dashboard or upload flow
+
+2. Onboarding form renders all fields
+Verify fields exist:
+- Company Name
+- Your Role
+- BEE Level
+- Number of Employees
+- Industry
+- Annual Revenue
+- How Did You Hear About Us
+- Current Tools
+- Biggest Challenge
+
+3. Required validation works
+- Submit empty form
+- Confirm company name is required
+- Confirm required dropdowns show validation errors
+
+4. “Other” fields work
+- Select “Other” for role or industry
+- Confirm custom text input appears
+- Submit custom value
+- Confirm value is saved
+
+5. Multi-select tools work
+- Select BE123, Excel, Custom Internal System
+- Submit
+- Confirm tools_used is stored as an array
+
+6. Onboarding saves to database
+After submit, verify company_profiles record exists with:
+- user_id
+- company_name
+- role
+- bee_level
+- employee_range
+- industry
+- annual_revenue
+- acquisition_source
+- tools_used
+- biggest_challenge
+
+7. Onboarding runs once per user
+- Complete onboarding
+- Log out and log back in
+- Confirm user is not forced through onboarding again
+
+8. GET /onboarding/me works
+- Authenticated user receives their company profile
+- Unauthenticated user receives 401
+
+9. POST /onboarding works
+- Authenticated user can submit onboarding
+- Unauthenticated user cannot submit onboarding
+
+10. Redirect back to certificates upload
+- Start from /certificates
+- Click Upload Certificate while logged out
+- Sign up
+- Complete onboarding
+- Confirm user returns to /certificates and upload modal/form opens
+
+--------------------------------------------------
+B. CERTIFICATE REGISTRY TESTS
+--------------------------------------------------
+
+Goal:
+Ensure public certificates are production-ready, searchable, indexable, verified, and upload-safe.
+
+Test cases:
+
+1. Public registry access
+- Visit /certificates without login
+- Confirm page loads successfully
+- Confirm no auth redirect happens
+
+2. Upload requires login
+- Click Upload Certificate while logged out
+- Confirm redirect to signup/login
+- Confirm redirect parameter is safe and internal only
+
+3. Certificate list renders metadata
+Confirm each certificate row/card shows:
+- Company name
+- VAT number
+- Company size
+- Black ownership %
+- Black women ownership %
+- Expiry date
+- Status badge
+- View button
+- Download button
+
+4. Search works
+- Search by company name
+- Search by VAT number
+- Confirm results filter correctly
+
+5. Filters work
+Verify filters:
+- Valid
+- Expiring
+- Expired
+- Company size
+- Ownership range
+
+6. Certificate detail page works
+- Visit /certificates/:slug
+- Confirm public page loads
+- Confirm all certificate metadata appears
+- Confirm View and Download buttons exist
+
+7. SEO metadata exists
+For /certificates and /certificates/:slug, verify:
+- title tag exists
+- meta description exists
+- canonical URL exists
+- Open Graph tags exist
+- JSON-LD structured data exists
+
+8. Google indexability
+Verify:
+- /certificates does not require login
+- /certificates/:slug does not require login
+- robots.txt allows /certificates
+- sitemap.xml includes /certificates and certificate detail URLs
+
+9. Verification badge works
+- Create unverified certificate
+- Confirm UI shows Unverified
+- Admin verifies it
+- Confirm UI shows Verified badge
+- Admin unverifies it
+- Confirm UI returns to Unverified
+
+10. Admin permissions work
+- Normal user cannot verify/unverify certificates
+- Admin can verify/unverify certificates
+- Unauthenticated user cannot access admin certificate dashboard
+
+11. Duplicate VAT prevention
+- Upload certificate with VAT number
+- Upload another certificate with same VAT number
+- Confirm no duplicate public company record is created
+- Confirm user is prompted to update existing record or create new version
+
+12. Certificate versioning works
+- Upload first certificate version
+- Upload updated certificate for same VAT
+- Confirm latest version is active
+- Confirm previous version appears in certificate history
+
+13. Validation works
+Reject:
+- Empty company name
+- Invalid VAT number
+- Ownership below 0
+- Ownership above 100
+- Invalid expiry date
+- Invalid company size
+
+14. OCR extraction flow works
+- Upload PDF/image sample
+- Confirm extraction step runs
+- Confirm extracted fields pre-fill form
+- Confirm user can edit before final submit
+
+15. Report incorrect data works
+- Submit report from public certificate page
+- Confirm report is saved
+- Confirm admin can view report
+
+16. Pagination works
+- Seed many certificates
+- Confirm list respects limit and offset/cursor
+- Confirm next page loads correctly
+
+17. Caching does not break freshness
+- Load certificate list
+- Upload new certificate
+- Confirm list updates after cache invalidation or TTL
+
+18. Analytics tracking works
+Verify events are stored for:
+- certificate page view
+- search
+- upload
+- download
+
+19. API response format is consistent
+For all certificate and onboarding endpoints, verify success response:
+
+{
+  success: true,
+  data: {},
+  error: null
+}
+
+And error response:
+
+{
+  success: false,
+  data: null,
+  error: {
+    message: string,
+    code: string
+  }
+}
+
+20. Existing MVP features still work
+Confirm:
+- Public list still loads
+- Existing filters still work
+- Upload still works
+- Download still works
+- Fallback storage still works
+
+--------------------------------------------------
+C. TEST TYPES TO IMPLEMENT
+--------------------------------------------------
+
+Implement tests at these levels:
+
+1. Unit tests
+- Validation functions
+- Slug generation
+- Status calculation
+- Duplicate VAT logic
+- API response helpers
+
+2. API tests
+- Onboarding endpoints
+- Certificate list/search/detail/upload
+- Admin verify/unverify
+- Report incorrect data
+- Analytics events
+
+3. UI tests
+- Signup → onboarding → certificates flow
+- Public certificate browsing
+- Certificate detail page
+- Upload flow
+- Admin verification flow
+
+4. End-to-end tests
+Use Playwright or existing test framework.
+
+Critical E2E flow:
+Logged-out visitor → /certificates → Upload Certificate → Sign up → Company Onboarding → return to /certificates → upload certificate → certificate appears publicly.
+
+--------------------------------------------------
+D. DEFINITION OF DONE
+--------------------------------------------------
+
+Tests pass for:
+- Signup onboarding flow
+- Public certificate registry
+- SEO/indexability
+- Admin verification
+- Duplicate prevention
+- Versioning
+- Reporting
+- Analytics
+- API consistency
+
+Add test scripts to package.json:
+- npm run test
+- npm run test:api
+- npm run test:e2e
+
+Provide a short test report showing:
+- Tests added
+- Files changed
+- How to run tests
+- Any remaining gaps

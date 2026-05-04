@@ -2,6 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
+export interface CertificateVersionLite {
+  blobName: string;
+  fileName: string | null;
+  expiryDate: string | null;
+  bbbeeLevel: number | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  companySize: string | null;
+  uploadedByUserId: string | null;
+  uploadedAt: string;
+  replacedAt: string;
+}
+
 export interface CertificateRecord {
   id: string;
   blobName: string;
@@ -20,8 +33,37 @@ export interface CertificateRecord {
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   uploadedByUserId: string | null;
   organizationId: string | null;
+  // Phase 1 — verification + versioning
+  verified?: boolean;
+  verifiedBy?: string | null;
+  verifiedByName?: string | null;
+  verifiedAt?: string | null;
+  versions?: CertificateVersionLite[];
+  reportCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CertificateReportRecord {
+  id: string;
+  certificateId: string;
+  certificateSlug: string | null;
+  reason: 'incorrect-data' | 'expired' | 'fraudulent' | 'duplicate' | 'other';
+  message: string;
+  email: string | null;
+  status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+export function normalizeVat(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const s = String(value).replace(/\s+/g, '').toUpperCase();
+  return s || null;
 }
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'certificates');
@@ -45,8 +87,10 @@ function statusFromExpiry(expiryDate: string | null): CertificateRecord['status'
 
 class CertificateStore {
   private records = new Map<string, CertificateRecord>();
+  private reports = new Map<string, CertificateReportRecord>();
   private loaded = false;
   private indexPath = path.join(UPLOAD_DIR, '_index.json');
+  private reportsPath = path.join(UPLOAD_DIR, '_reports.json');
 
   private load() {
     if (this.loaded) return;
@@ -58,11 +102,24 @@ class CertificateStore {
         for (const r of arr) {
           // Recompute status on load (in case time has passed)
           r.status = statusFromExpiry(r.expiryDate);
+          // Defaults for Phase 1 fields when loading older index files
+          if (typeof r.verified !== 'boolean') r.verified = false;
+          if (!Array.isArray(r.versions)) r.versions = [];
+          if (typeof r.reportCount !== 'number') r.reportCount = 0;
           this.records.set(r.id, r);
         }
       }
     } catch (err) {
       // ignore load errors — start fresh
+    }
+    try {
+      if (fs.existsSync(this.reportsPath)) {
+        const raw = fs.readFileSync(this.reportsPath, 'utf-8');
+        const arr = JSON.parse(raw) as CertificateReportRecord[];
+        for (const r of arr) this.reports.set(r.id, r);
+      }
+    } catch {
+      // ignore
     }
     this.loaded = true;
   }
@@ -75,6 +132,117 @@ class CertificateStore {
     } catch (err) {
       // best-effort persistence
     }
+  }
+
+  private persistReports() {
+    ensureUploadDir();
+    try {
+      const arr = Array.from(this.reports.values());
+      fs.writeFileSync(this.reportsPath, JSON.stringify(arr, null, 2));
+    } catch {
+      // best-effort
+    }
+  }
+
+  /**
+   * Write a raw file to disk and return its blobName/filePath without
+   * creating a metadata record. Used by the versioning path so we can attach
+   * the new file to an existing record instead of producing a duplicate.
+   */
+  writeRawFile(input: {
+    fileName: string;
+    buffer: Buffer;
+    organizationId?: string | null;
+  }): { blobName: string; filePath: string; sanitizedName: string } {
+    this.load();
+    ensureUploadDir();
+    const id = randomUUID();
+    const sanitizedName = input.fileName.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+    const orgDir = path.join(UPLOAD_DIR, input.organizationId || 'public');
+    if (!fs.existsSync(orgDir)) fs.mkdirSync(orgDir, { recursive: true });
+    const filePath = path.join(orgDir, `${id}-${sanitizedName}`);
+    fs.writeFileSync(filePath, input.buffer);
+    const blobName = `${input.organizationId || 'public'}/${id}-${sanitizedName}`;
+    return { blobName, filePath, sanitizedName };
+  }
+
+  /**
+   * Find an existing record by normalized VAT number. Used for VAT dedupe in
+   * the upload handler so we can either reject the upload or convert it into
+   * a new version of the existing certificate.
+   */
+  getByVatNumber(vat: string | null | undefined): CertificateRecord | null {
+    if (!vat) return null;
+    this.load();
+    const norm = normalizeVat(vat);
+    if (!norm) return null;
+    for (const r of this.records.values()) {
+      if (normalizeVat(r.vatNumber) === norm) return r;
+    }
+    return null;
+  }
+
+  /**
+   * Push the supplied snapshot onto the record's `versions` array and update
+   * the top-level fields with the new payload. Returns the updated record.
+   */
+  pushVersion(id: string, snapshot: CertificateVersionLite, updates: Partial<CertificateRecord>): CertificateRecord | null {
+    this.load();
+    const rec = this.records.get(id);
+    if (!rec) return null;
+    rec.versions = Array.isArray(rec.versions) ? rec.versions : [];
+    rec.versions.push(snapshot);
+    Object.assign(rec, updates, { updatedAt: new Date().toISOString() });
+    rec.status = statusFromExpiry(rec.expiryDate);
+    this.records.set(id, rec);
+    this.persist();
+    return rec;
+  }
+
+  setVerified(id: string, verified: boolean, by: string | null, byName: string | null): CertificateRecord | null {
+    this.load();
+    const rec = this.records.get(id);
+    if (!rec) return null;
+    rec.verified = verified;
+    rec.verifiedBy = verified ? by : null;
+    rec.verifiedByName = verified ? byName : null;
+    rec.verifiedAt = verified ? new Date().toISOString() : null;
+    rec.updatedAt = new Date().toISOString();
+    this.records.set(id, rec);
+    this.persist();
+    return rec;
+  }
+
+  incrementReportCount(id: string, by = 1): void {
+    this.load();
+    const rec = this.records.get(id);
+    if (!rec) return;
+    rec.reportCount = (rec.reportCount || 0) + by;
+    this.records.set(id, rec);
+    this.persist();
+  }
+
+  // ---- Reports ----------------------------------------------------------
+
+  addReport(input: Omit<CertificateReportRecord, 'id' | 'createdAt' | 'status' | 'reviewedBy' | 'reviewedAt' | 'reviewNotes'>): CertificateReportRecord {
+    this.load();
+    const rec: CertificateReportRecord = {
+      ...input,
+      id: randomUUID(),
+      status: 'open',
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNotes: null,
+      createdAt: new Date().toISOString(),
+    };
+    this.reports.set(rec.id, rec);
+    this.persistReports();
+    return rec;
+  }
+
+  listReports(): CertificateReportRecord[] {
+    this.load();
+    return Array.from(this.reports.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   add(input: {
