@@ -58,10 +58,13 @@ This is a **pnpm monorepo** with three applications:
 - `SESSION_SECRET` — express-session secret
 - `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME` — required for the Certificate Hub uploads/downloads against Azure Blob Storage container `clients-certs`. Provided in the Azure deployment environment.
 
-## Certificate Hub
-- **Bulk uploads**: Frontend chunks selections at 20 files per request up to a hard cap of 500 files. Backend multer accepts up to 100 files per chunk (`upload.array('files', 100)`) at 50 MB each. Progress bar shows `X/Y` while uploading.
-- **Display**: Both the file list and search results show only the **company name**. The name is derived from the blob filename (`deriveCompanyName` strips UUID prefix, dates, and noise suffixes like `B-BBEE`, `EME/QSE/Generic`, `Certificate`) and then upgraded with the AI-extracted `supplierName` from MongoDB metadata when available.
-- **Search**: Both `/list?search=` and `/search?q=` match against filename, derived company name, and Mongo `supplierName`, so users can search by entity even when display name and filename differ. `/search` also merges results from Azure AI Search content matching when configured.
+## Certificate Hub (Public B-BBEE Registry)
+- **Public access**: `/certificates` is a **public** route (no `ProtectedRoute`). Anonymous visitors can browse, search, filter, and download. The landing page nav exposes a "B-BBEE Certificates" link before Sign in / Get started (desktop + mobile).
+- **Auth-gated upload**: Only the upload action requires authentication. Anonymous users clicking Upload are redirected to `/auth?mode=register&redirect=/certificates`. `AuthWrapper` (`apps/web/src/pages/AuthWrapper.tsx`) honors `?redirect=<same-origin path>` and `?mode=register` query params and routes the user back after a successful login.
+- **Rich metadata schema**: `certificateMetadataSchema` (`apps/api/models.ts`) carries `supplierName`, `vatNumber`, `companySize`, `bbbeeLevel`, `blackOwnership`, `blackWomenOwnership`, `expiryDate`, `uploadedByUserId`, `uploadedAt`, `updatedAt`. The hub UI surfaces all of these per row plus a status badge (Valid / Expiring / Expired / Unknown).
+- **Storage fallback chain**: `/list`, `/stats`, `/search`, `/download`, `/upload` in `apps/api/src/routes/certificates.ts` use a 3-tier fallback — Azure Blob (`clients-certs` container) → MongoDB metadata → `apps/api/src/services/certificateStore.ts` (in-memory metadata + local disk under `apps/api/uploads/certificates/`). All endpoints return 200 even when none of Azure, Mongo, or Arango is configured.
+- **Filters**: validity status, company size (EME/QSE/Generic/Large/Specialised), and black-ownership ranges. Search matches company name, VAT number, and filename across both backends.
+- **Bulk uploads** (legacy authed flow still available): the upload modal collects metadata for a single certificate. Multer caps file size at 50 MB.
 
 **Note**: Without MongoDB and ArangoDB, the app runs with in-memory storage (data won't persist across restarts). Core UI features still work.
 
