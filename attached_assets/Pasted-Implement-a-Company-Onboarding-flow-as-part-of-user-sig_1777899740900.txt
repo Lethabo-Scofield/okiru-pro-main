@@ -1,0 +1,119 @@
+Implement a Company Onboarding flow as part of user signup.
+
+Goal:
+Capture structured company data immediately after account creation and link it to future certificate uploads.
+
+Flow:
+- Step 1: User signs up (auth system already exists)
+- Step 2: Redirect to onboarding form
+- Step 3: Save data and attach to user profile
+- Step 4: Redirect user to /certificates (and open upload if they came from there)
+
+Database:
+Create a table: company_profiles
+
+Fields:
+- id
+- user_id (foreign key)
+- company_name (required)
+- role
+- bee_level
+- employee_range
+- industry
+- annual_revenue
+- acquisition_source
+- tools_used (array)
+- biggest_challenge (text)
+- created_at
+- updated_at
+
+Form fields:
+
+1. Company Name (required)
+2. Your Role (dropdown)
+Options:
+Owner / Founder
+CEO / Managing Director
+Executive (C-Level)
+Director / Head of Department
+Manager
+Compliance / BEE Officer
+Finance
+HR / Operations
+Consultant / Advisor
+Other (text input)
+
+3. BEE Level (dropdown)
+Level 1–8
+Non-compliant / No BEE level
+Not sure
+
+4. Number of Employees (dropdown)
+1–10
+11–50
+51–100
+101–250
+251–500
+500+
+
+5. Industry (dropdown)
+Technology
+Financial Services
+Manufacturing
+Retail / E-commerce
+Healthcare
+Construction / Engineering
+Mining
+Telecommunications
+Logistics
+Education
+Professional Services
+Hospitality
+Agriculture
+Other (text input)
+
+6. Annual Revenue (dropdown)
+R0–R10M
+R10M–R50M
+R50M–R100M
+R100M+
+
+7. How did you hear about us (dropdown)
+Google
+Social Media
+Referral
+Email
+Event
+Partner
+Ads
+Other
+
+8. Current Tools (multi-select)
+BE123
+Empowered
+Excel
+Custom System
+None
+Other
+
+9. Biggest Challenge (optional textarea)
+
+Requirements:
+- Validate required fields
+- Allow “Other” to capture custom input
+- Store tools_used as array
+- Link onboarding to user_id
+- Ensure onboarding runs once per user (unless editing later)
+- Add API endpoint:
+  POST /onboarding
+- Add GET /onboarding/me
+
+UX:
+- Clean, simple form
+- Progress indicator (Step 2 of 2)
+- Clear CTA: “Continue to Certificates”
+
+Definition of done:
+- New users complete onboarding after signup
+- Data is saved and linked to user
+- System can query company data later (for analytics or linking certificates)
