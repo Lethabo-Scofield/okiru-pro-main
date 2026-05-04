@@ -14,6 +14,7 @@ const logger = createLogger("ApiRoutes");
 import healthRouter from './health.js';
 import authRouter from './auth.js';
 import profileRouter from './profile.js';
+import onboardingRouter from './onboarding.js';
 import { createClientsRouter } from './clients.js';
 import shareholdersRouter from './shareholders.js';
 import employeesRouter from './employees.js';
@@ -137,6 +138,9 @@ export async function registerRoutes(
 
   // Profile routes
   app.use('/api/profile', profileRouter);
+
+  // Onboarding routes (company profile captured after signup)
+  app.use('/api/onboarding', onboardingRouter);
 
   // Client routes — migrated to the data layer pattern. Falls back to a 503
   // if the data layer didn't initialise, instead of silently mounting the

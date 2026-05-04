@@ -17,6 +17,7 @@ import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
 import CertificateHub from "@/pages/CertificateHub";
 import DevMode from "@/pages/DevMode";
+import Onboarding from "@/pages/Onboarding";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
@@ -44,6 +45,9 @@ function AppRouter() {
       </Route>
       <Route path="/auth">
         <GuestRoute><AuthWrapper /></GuestRoute>
+      </Route>
+      <Route path="/onboarding">
+        <ProtectedRoute><Onboarding /></ProtectedRoute>
       </Route>
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
