@@ -12,6 +12,7 @@ dependencies = [
     "pytest>=9.0.2",
     "python-arango==8.0.0",
     "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.9",
     "requests==2.31.0",
     "uvicorn[standard]==0.24.0",
     "xlcalculator==0.5.0",

@@ -1,0 +1,88 @@
+Update the BBBEE certificates platform.
+
+Current issue:
+The BBBEE Certificates section must be accessible before authentication. Users should be able to browse/search certificates publicly for SEO and discovery. Authentication should only be required when a user wants to upload, manage, or edit certificate data.
+
+Required changes:
+
+1. Public BBBEE Certificates page
+- Move BBBEE Certificates before Authentication.
+- Add BBBEE Certificates to the navbar before Sign Up / Login.
+- The page must be publicly accessible without logging in.
+- The page should be SEO-friendly and indexable.
+
+2. Certificate count display
+- On the navbar or BBBEE page, show a clear count like:
+  “1.6k+ BBBEE Certificates Available”
+- This count must come from the database, not hardcoded.
+
+3. Certificate listing fields
+Do not show only the uploaded file name.
+Each certificate card/table row must show:
+- Company name
+- VAT number
+- Company size
+- Black ownership percentage
+- Black women ownership percentage
+- Expiry date
+- Certificate file link/download/view button
+
+4. Search and filtering
+Add search by:
+- Company name
+- VAT number
+
+Add filters for:
+- Expiry status: valid / expired / expiring soon
+- Company size
+- Ownership range if possible
+
+5. Upload instructions
+Add a clear section telling users they can upload their BBBEE certificates to help grow the database.
+
+Copy example:
+“Have a BBBEE certificate? Upload it to help keep the database accurate and useful for everyone.”
+
+6. Upload flow
+- Upload requires authentication.
+- If unauthenticated user clicks Upload Certificate, redirect them to Sign Up / Login.
+- After login, return them to the upload page.
+- Upload form must collect:
+  - Company name
+  - VAT number
+  - Company size
+  - Black ownership %
+  - Black women ownership %
+  - Expiry date
+  - Certificate file
+- Save metadata and file reference to the database.
+
+7. Database
+Update the certificate schema if needed to include:
+- id
+- company_name
+- vat_number
+- company_size
+- black_ownership_percentage
+- black_women_ownership_percentage
+- expiry_date
+- file_url
+- uploaded_by_user_id
+- created_at
+- updated_at
+
+8. UX
+- Use a clean table or card layout.
+- Make it easy to scan certificates.
+- Add empty state if no certificates exist.
+- Add loading and error states.
+- Make it mobile responsive.
+
+Definition of done:
+- BBBEE Certificates page is public.
+- Navbar shows BBBEE Certificates before Sign Up/Login.
+- Certificate count is shown from database.
+- Certificate listings show company data, not file names.
+- Upload instructions are visible.
+- Upload requires login.
+- New uploaded certificates appear in the public database after submission.
