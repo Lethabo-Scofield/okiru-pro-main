@@ -4,33 +4,21 @@ import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
-import { Loader2, ArrowRight, ArrowLeft, Check, Building2, User, KeyRound, Shield, ChevronDown, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, ArrowLeft, Check, User, KeyRound, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
 import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
 
-const FALLBACK_ORGANIZATIONS: OrgOption[] = [
-  { id: "okiru", name: "Okiru", emailDomain: "okiru.co.za" },
-  { id: "param-solutions", name: "Param Solutions", emailDomain: "paramsolutions.co.za" },
-];
-
 const ROLES = [
   { value: "auditor", label: "B-BBEE Auditor", description: "Conduct and manage compliance audits" },
   { value: "analyst", label: "Compliance Analyst", description: "Analyse scorecard data and reports" },
   { value: "manager", label: "Team Manager", description: "Oversee audit teams and review results" },
-  { value: "admin", label: "Administrator", description: "Full system access and user management" },
 ];
 
-const TOTAL_STEPS = 4;
-const stepLabels = ["Organization", "Your Details", "Credentials", "Role"];
-const stepIcons = [Building2, User, KeyRound, Shield];
-
-interface OrgOption {
-  id: string;
-  name: string;
-  emailDomain: string;
-}
+const TOTAL_STEPS = 3;
+const stepLabels = ["Your Details", "Credentials", "Role"];
+const stepIcons = [User, KeyRound, Shield];
 
 interface AsyncFieldStatus {
   checking: boolean;
@@ -73,61 +61,6 @@ function FieldStatus({ status }: { status: AsyncFieldStatus }) {
     );
   }
   return null;
-}
-
-function OrgPicker({ organizations, value, onChange, error }: {
-  organizations: OrgOption[];
-  value: string;
-  onChange: (v: string) => void;
-  error?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = organizations.find(o => o.id === value);
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-muted-foreground/70">Organization</Label>
-      <div className="relative">
-        <button
-          type="button"
-          data-testid="select-organization"
-          onClick={() => setOpen(p => !p)}
-          className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-transparent shadow-sm transition-colors ${
-            error ? 'border-destructive' : 'border-input hover:border-ring'
-          } focus:outline-none focus:ring-1 focus:ring-ring`}
-        >
-          {selected ? (
-            <span className="flex items-center gap-2">
-              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-              {selected.name}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Select your organization</span>
-          )}
-          <ChevronDown className={`h-4 w-4 opacity-50 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </button>
-        {open && (
-          <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 rounded-md border border-border bg-popover shadow-md overflow-hidden">
-            {organizations.map(org => (
-              <button
-                key={org.id}
-                type="button"
-                data-testid={`org-option-${org.id}`}
-                onClick={() => { onChange(org.id); setOpen(false); }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-accent hover:text-accent-foreground ${
-                  value === org.id ? 'bg-accent/50 font-medium' : ''
-                }`}
-              >
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                {org.name}
-                {value === org.id && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {error && <p className="text-[11px] text-destructive" data-testid="error-organization">{error}</p>}
-    </div>
-  );
 }
 
 function OtpInput({ value, onChange, length = 6 }: { value: string; onChange: (v: string) => void; length?: number }) {
@@ -186,7 +119,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
-  const [organizations, setOrganizations] = useState<OrgOption[]>(FALLBACK_ORGANIZATIONS);
   const { login, register, verifyOtp, resendOtp } = useAuth();
   const { toast } = useToast();
 
@@ -205,8 +137,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     confirmPassword: '',
     fullName: '',
     email: '',
-    organizationId: '',
-    subscriptionId: '',
     role: 'auditor',
   });
 
@@ -215,22 +145,12 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const defaultStatus: AsyncFieldStatus = { checking: false, available: null, message: '' };
   const [usernameStatus, setUsernameStatus] = useState<AsyncFieldStatus>(defaultStatus);
   const [emailStatus, setEmailStatus] = useState<AsyncFieldStatus>(defaultStatus);
-  const [subStatus, setSubStatus] = useState<AsyncFieldStatus>(defaultStatus);
 
   const debouncedUsername = useDebounce(form.username, 400);
   const debouncedEmail = useDebounce(form.email, 400);
-  const debouncedSubId = useDebounce(form.subscriptionId, 400);
 
   const usernameAbort = useRef<AbortController | null>(null);
   const emailAbort = useRef<AbortController | null>(null);
-  const subAbort = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/organizations`)
-      .then(r => r.ok ? r.json() : FALLBACK_ORGANIZATIONS)
-      .then((data: OrgOption[]) => setOrganizations(data?.length ? data : FALLBACK_ORGANIZATIONS))
-      .catch(() => setOrganizations(FALLBACK_ORGANIZATIONS));
-  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -290,44 +210,16 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       .catch(e => { if (e.name !== 'AbortError') setEmailStatus({ checking: false, available: null, message: '' }); });
   }, [debouncedEmail]);
 
-  useEffect(() => {
-    subAbort.current?.abort();
-    if (!form.organizationId || !debouncedSubId) {
-      setSubStatus(defaultStatus);
-      return;
-    }
-    const controller = new AbortController();
-    subAbort.current = controller;
-    setSubStatus({ checking: true, available: null, message: '' });
-    fetch(`${API_BASE}/api/auth/check-subscription`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId: form.organizationId, subscriptionId: debouncedSubId.trim() }),
-      signal: controller.signal,
-    })
-      .then(r => r.json())
-      .then(data => { if (!controller.signal.aborted) setSubStatus({ checking: false, available: data.valid ?? false, message: data.message }); })
-      .catch(e => { if (e.name !== 'AbortError') setSubStatus({ checking: false, available: null, message: '' }); });
-  }, [form.organizationId, debouncedSubId]);
-
-  const selectedOrg = organizations.find(o => o.id === form.organizationId);
-
   const validateStep = (s: number): boolean => {
     const errors: Record<string, string> = {};
     if (s === 1) {
-      if (!form.organizationId) errors.organizationId = "Please select your organization";
-      if (!form.subscriptionId.trim()) errors.subscriptionId = "Subscription ID is required";
-      else if (subStatus.checking) errors.subscriptionId = "Still verifying...";
-      else if (subStatus.available === false) errors.subscriptionId = subStatus.message;
-      else if (form.subscriptionId.trim() && subStatus.available === null) errors.subscriptionId = "Verification pending, please wait";
-    } else if (s === 2) {
       if (!form.fullName.trim()) errors.fullName = "Full name is required";
       if (!form.email.trim()) errors.email = "Email is required";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
       else if (emailStatus.checking) errors.email = "Still checking...";
       else if (emailStatus.available === false) errors.email = emailStatus.message;
       else if (form.email.trim() && emailStatus.available === null) errors.email = "Verification pending, please wait";
-    } else if (s === 3) {
+    } else if (s === 2) {
       if (!form.username.trim()) errors.username = "Username is required";
       else if (form.username.length < 3) errors.username = "At least 3 characters";
       else if (usernameStatus.checking) errors.username = "Still checking...";
@@ -336,7 +228,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       if (!form.password) errors.password = "Password is required";
       else if (form.password.length < 4) errors.password = "At least 4 characters";
       if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
-    } else if (s === 4) {
+    } else if (s === 3) {
       if (!form.role) errors.role = "Please select a role";
     }
     setFieldErrors(errors);
@@ -408,8 +300,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         password: form.password,
         fullName: form.fullName,
         email: form.email.trim().toLowerCase(),
-        organizationId: form.organizationId,
-        subscriptionId: form.subscriptionId,
         role: form.role,
       });
       if (result?.requiresVerification) {
@@ -814,51 +704,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                       <div className="space-y-4">
                         {step === 1 && (
                           <div className="space-y-4">
-                            <OrgPicker
-                              organizations={organizations}
-                              value={form.organizationId}
-                              onChange={v => {
-                                setForm({ ...form, organizationId: v });
-                                setFieldErrors(prev => ({ ...prev, organizationId: '' }));
-                                setSubStatus(defaultStatus);
-                              }}
-                              error={fieldErrors.organizationId}
-                            />
-
-                            {selectedOrg && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                className="rounded-lg border border-primary/20 bg-primary/5 p-3"
-                              >
-                                <p className="text-[11px] text-primary font-medium mb-0.5">{selectedOrg.name}</p>
-                                <p className="text-[11px] text-muted-foreground">Enter the subscription ID provided by your organization.</p>
-                              </motion.div>
-                            )}
-
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Subscription ID</Label>
-                              <Input
-                                value={form.subscriptionId}
-                                onChange={e => {
-                                  setForm({ ...form, subscriptionId: e.target.value.toUpperCase() });
-                                  setFieldErrors(prev => ({ ...prev, subscriptionId: '' }));
-                                }}
-                                placeholder="e.g. OKR-2026-001"
-                                className="h-10 font-mono text-sm tracking-wider"
-                                data-testid="input-subscription-id"
-                              />
-                              {fieldErrors.subscriptionId ? (
-                                <p className="text-[11px] text-destructive" data-testid="error-subscription">{fieldErrors.subscriptionId}</p>
-                              ) : (
-                                <FieldStatus status={subStatus} />
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {step === 2 && (
-                          <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Full Name</Label>
                               <Input
@@ -900,7 +745,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                           </div>
                         )}
 
-                        {step === 3 && (
+                        {step === 2 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Username</Label>
@@ -974,7 +819,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                           </div>
                         )}
 
-                        {step === 4 && (
+                        {step === 3 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Your Role</Label>
@@ -1014,8 +859,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                             <div className="rounded-lg border border-border/30 bg-muted/20 p-3 space-y-1.5">
                               <p className="text-[11px] font-medium text-muted-foreground">Account Summary</p>
                               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
-                                <span className="text-muted-foreground/60">Organization</span>
-                                <span className="text-foreground font-medium truncate">{selectedOrg?.name || '—'}</span>
                                 <span className="text-muted-foreground/60">Name</span>
                                 <span className="text-foreground font-medium truncate">{form.fullName || '—'}</span>
                                 <span className="text-muted-foreground/60">Email</span>
@@ -1023,6 +866,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                 <span className="text-muted-foreground/60">Username</span>
                                 <span className="text-foreground font-medium truncate">{form.username || '—'}</span>
                               </div>
+                              <p className="text-[10px] text-muted-foreground/60 pt-1">Your company details will be set up next.</p>
                             </div>
                           </div>
                         )}
