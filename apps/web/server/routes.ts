@@ -195,12 +195,11 @@ export async function registerRoutes(
   app.post("/api/auth/register", async (req, res) => {
     const start = Date.now();
     try {
-      const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
+      const { username, password, fullName, email, role } = req.body;
 
       const trimmedUsername = typeof username === 'string' ? username.trim() : '';
       const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
       const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      const trimmedSubId = typeof subscriptionId === 'string' ? subscriptionId.trim().toUpperCase() : '';
 
       if (!trimmedUsername || !password) {
         return res.status(400).json({ message: "Username and password are required" });
@@ -226,16 +225,6 @@ export async function registerRoutes(
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
         return res.status(400).json({ message: "Invalid email address" });
       }
-      if (!organizationId) {
-        return res.status(400).json({ message: "Organization is required" });
-      }
-      const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
-      if (!org) {
-        return res.status(400).json({ message: "Invalid organization selected" });
-      }
-      if (!trimmedSubId || trimmedSubId !== org.subscriptionId) {
-        return res.status(400).json({ message: "Invalid subscription ID for this organization" });
-      }
 
       const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
       const safeRole = ALLOWED_ROLES.includes(role) ? role : "auditor";
@@ -256,8 +245,8 @@ export async function registerRoutes(
           username: trimmedUsername,
           password: hashedPassword,
           fullName: trimmedFullName,
-          organizationName: org.name,
-          organizationId: org.id,
+          organizationName: null,
+          organizationId: null,
           role: safeRole,
         } as any);
       } else if (existing && !existing.isVerified) {
@@ -266,8 +255,8 @@ export async function registerRoutes(
           password: hashedPassword,
           fullName: trimmedFullName,
           email: trimmedEmail,
-          organizationName: org.name,
-          organizationId: org.id,
+          organizationName: null,
+          organizationId: null,
           role: safeRole,
         } as any);
       } else {
@@ -277,11 +266,11 @@ export async function registerRoutes(
           password: hashedPassword,
           fullName: trimmedFullName,
           email: trimmedEmail,
-          organizationName: org.name,
-          organizationId: org.id,
+          organizationName: null,
+          organizationId: null,
           role: safeRole,
           profilePicture: null,
-        });
+        } as any);
       }
 
       if (!isSmtpConfigured()) {
