@@ -18,6 +18,10 @@
     "lint:fix": "pnpm -r lint:fix",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:api": "pnpm --filter @okiru/api test",
+    "test:web": "pnpm --filter rest-express test",
+    "test:unit": "pnpm --filter @okiru/api test -- src/utils src/services",
+    "test:e2e": "echo 'No E2E suite configured. See TEST_REPORT.md for the manual E2E checklist.' && exit 0",
     "clean": "pnpm -r clean && rm -rf node_modules",
     "install:all": "pnpm install"
   },
