@@ -146,11 +146,31 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const [usernameStatus, setUsernameStatus] = useState<AsyncFieldStatus>(defaultStatus);
   const [emailStatus, setEmailStatus] = useState<AsyncFieldStatus>(defaultStatus);
 
-  const debouncedUsername = useDebounce(form.username, 400);
-  const debouncedEmail = useDebounce(form.email, 400);
+  const debouncedUsername = useDebounce(form.username, 250);
+  const debouncedEmail = useDebounce(form.email, 250);
 
   const usernameAbort = useRef<AbortController | null>(null);
   const emailAbort = useRef<AbortController | null>(null);
+  const usernamePending = useRef<Promise<void> | null>(null);
+  const emailPending = useRef<Promise<void> | null>(null);
+  const usernameStatusRef = useRef(defaultStatus);
+  const emailStatusRef = useRef(defaultStatus);
+  const debouncedUsernameRef = useRef('');
+  const debouncedEmailRef = useRef('');
+  useEffect(() => { usernameStatusRef.current = usernameStatus; }, [usernameStatus]);
+  useEffect(() => { emailStatusRef.current = emailStatus; }, [emailStatus]);
+  useEffect(() => { debouncedUsernameRef.current = debouncedUsername; }, [debouncedUsername]);
+  useEffect(() => { debouncedEmailRef.current = debouncedEmail; }, [debouncedEmail]);
+
+  const waitForStable = async (
+    isStable: () => boolean,
+    timeoutMs = 1500,
+  ) => {
+    const start = Date.now();
+    while (!isStable() && Date.now() - start < timeoutMs) {
+      await new Promise(r => setTimeout(r, 40));
+    }
+  };
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -175,7 +195,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     const controller = new AbortController();
     usernameAbort.current = controller;
     setUsernameStatus({ checking: true, available: null, message: '' });
-    fetch(`${API_BASE}/api/auth/check-username`, {
+    const p = fetch(`${API_BASE}/api/auth/check-username`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: debouncedUsername }),
@@ -184,6 +204,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       .then(r => r.json())
       .then(data => { if (!controller.signal.aborted) setUsernameStatus({ checking: false, available: data.available, message: data.message }); })
       .catch(e => { if (e.name !== 'AbortError') setUsernameStatus({ checking: false, available: null, message: '' }); });
+    usernamePending.current = p;
+    p.finally(() => { if (usernamePending.current === p) usernamePending.current = null; });
   }, [debouncedUsername]);
 
   useEffect(() => {
@@ -199,7 +221,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     const controller = new AbortController();
     emailAbort.current = controller;
     setEmailStatus({ checking: true, available: null, message: '' });
-    fetch(`${API_BASE}/api/auth/check-email`, {
+    const p = fetch(`${API_BASE}/api/auth/check-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: debouncedEmail.trim() }),
@@ -208,7 +230,37 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       .then(r => r.json())
       .then(data => { if (!controller.signal.aborted) setEmailStatus({ checking: false, available: data.available, message: data.message }); })
       .catch(e => { if (e.name !== 'AbortError') setEmailStatus({ checking: false, available: null, message: '' }); });
+    emailPending.current = p;
+    p.finally(() => { if (emailPending.current === p) emailPending.current = null; });
   }, [debouncedEmail]);
+
+  useEffect(() => {
+    if (!emailStatus.checking && emailStatus.available !== null) {
+      setFieldErrors(prev => {
+        if (prev.email === "Still checking..." || prev.email === "Verification pending, please wait") {
+          const next = { ...prev };
+          if (emailStatus.available === true) delete next.email;
+          else next.email = emailStatus.message;
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [emailStatus]);
+
+  useEffect(() => {
+    if (!usernameStatus.checking && usernameStatus.available !== null) {
+      setFieldErrors(prev => {
+        if (prev.username === "Still checking..." || prev.username === "Verification pending, please wait") {
+          const next = { ...prev };
+          if (usernameStatus.available === true) delete next.username;
+          else next.username = usernameStatus.message;
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [usernameStatus]);
 
   const validateStep = (s: number): boolean => {
     const errors: Record<string, string> = {};
@@ -235,8 +287,22 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     return Object.keys(errors).length === 0;
   };
 
-  const goToStep = (target: number) => {
+  const goToStep = async (target: number) => {
     if (target > step) {
+      if (step === 1 && form.email.trim()) {
+        await waitForStable(() =>
+          debouncedEmailRef.current === form.email &&
+          !emailStatusRef.current.checking &&
+          emailStatusRef.current.available !== null
+        );
+      }
+      if (step === 2 && form.username.trim()) {
+        await waitForStable(() =>
+          debouncedUsernameRef.current === form.username &&
+          !usernameStatusRef.current.checking &&
+          usernameStatusRef.current.available !== null
+        );
+      }
       if (!validateStep(step)) return;
       setDirection(1);
     } else {
