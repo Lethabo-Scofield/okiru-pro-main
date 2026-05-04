@@ -1,0 +1,195 @@
+Take the existing B-BBEE Certificates registry and make it production-ready and SEO-optimized so it can rank on Google and act as a public verification platform.
+
+Keep existing:
+- Public /certificates page (no login required)
+- Search and filters
+- Upload behind authentication
+- Metadata display
+- Fallback storage
+- Security fixes
+
+Now implement:
+
+---------------------------------------
+1. Public Certificate Detail Pages
+---------------------------------------
+
+Create:
+  /certificates/:slug
+
+Slug format:
+  company-name-vat-or-id
+
+Each page must include:
+- Company name
+- VAT number
+- Company size
+- Black ownership %
+- Black women ownership %
+- Expiry date
+- Status badge (Valid / Expiring / Expired)
+- Verified badge
+- Uploaded date
+- View certificate
+- Download certificate
+
+---------------------------------------
+2. SEO (Critical for Google)
+---------------------------------------
+
+For:
+- /certificates
+- /certificates/:slug
+
+Add:
+- Title tags
+- Meta descriptions
+- Open Graph tags
+- Canonical URLs
+
+Add structured data (JSON-LD):
+- Organization schema
+- Include company name, identifier (VAT), and document
+
+Ensure:
+- No auth required for these pages
+- Fast load times
+- Clean URLs
+- Sitemap.xml generation
+- robots.txt allows indexing
+
+---------------------------------------
+3. Verification System
+---------------------------------------
+
+Add fields:
+- verified (boolean)
+- verified_by
+- verified_at
+
+Admin features:
+- Verify certificate
+- Unverify certificate
+
+UI:
+- Show Verified badge
+- Default sorting: verified first
+
+---------------------------------------
+4. Duplicate Prevention (Critical)
+---------------------------------------
+
+Use VAT number as unique identifier.
+
+On upload:
+- If VAT exists:
+  - Do NOT create new record
+  - Prompt update instead
+
+---------------------------------------
+5. Certificate Versioning
+---------------------------------------
+
+Support multiple versions per VAT.
+
+Track:
+- file_url
+- uploaded_at
+- expiry_date
+- uploaded_by
+
+Only latest version is active.
+Add “View history” on detail page.
+
+---------------------------------------
+6. OCR / Data Extraction
+---------------------------------------
+
+On file upload:
+- Extract:
+  company name
+  VAT
+  expiry date
+
+Pre-fill form with extracted values.
+User confirms before submit.
+
+---------------------------------------
+7. Reporting System
+---------------------------------------
+
+Add “Report incorrect data” button.
+
+Fields:
+- reason
+- email (optional)
+- message
+
+Store in database.
+Admin can review.
+
+---------------------------------------
+8. Performance
+---------------------------------------
+
+Add:
+- Pagination (limit + offset)
+- Caching (TTL) for:
+  - certificate list
+  - stats
+
+---------------------------------------
+9. Analytics (internal)
+---------------------------------------
+
+Track:
+- page views
+- searches
+- uploads
+- downloads
+
+Store internally.
+
+---------------------------------------
+10. API Standard
+---------------------------------------
+
+All responses:
+
+Success:
+{
+  success: true,
+  data: {},
+  error: null
+}
+
+Error:
+{
+  success: false,
+  data: null,
+  error: { message, code }
+}
+
+---------------------------------------
+11. Admin Dashboard
+---------------------------------------
+
+Admin can:
+- View all certificates
+- Verify/unverify
+- View reports
+- Manage duplicates
+- View analytics
+
+---------------------------------------
+Definition of done
+---------------------------------------
+
+- Certificates are publicly accessible and indexable by Google
+- Each certificate has its own SEO page
+- VAT duplicates are prevented
+- Verification system works
+- Upload flow is clean and validated
+- Reports system exists
+- Performance is acceptable
+- API is consistent

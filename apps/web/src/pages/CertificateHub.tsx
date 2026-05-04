@@ -216,6 +216,19 @@ export default function CertificateHub() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-open upload modal when arriving with ?openUpload=1 (e.g. after onboarding)
+  useEffect(() => {
+    if (authLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openUpload') === '1' && user) {
+      setShowUpload(true);
+      params.delete('openUpload');
+      const qs = params.toString();
+      const cleanUrl = window.location.pathname + (qs ? `?${qs}` : '');
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, [user, authLoading]);
+
   const [form, setForm] = useState({
     companyName: '',
     vatNumber: '',

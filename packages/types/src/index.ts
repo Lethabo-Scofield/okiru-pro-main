@@ -267,6 +267,42 @@ export interface ExportLog {
   createdAt: string;
 }
 
+// Company Profile (Onboarding) Types
+export interface CompanyProfile {
+  id: string;
+  userId: string;
+  companyName: string;
+  role: string | null;
+  beeLevel: string | null;
+  employeeRange: string | null;
+  industry: string | null;
+  industryOther: string | null;
+  annualRevenue: string | null;
+  acquisitionSource: string | null;
+  acquisitionSourceOther: string | null;
+  toolsUsed: string[];
+  toolsUsedOther: string | null;
+  biggestChallenge: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertCompanyProfile {
+  userId: string;
+  companyName: string;
+  role?: string | null;
+  beeLevel?: string | null;
+  employeeRange?: string | null;
+  industry?: string | null;
+  industryOther?: string | null;
+  annualRevenue?: string | null;
+  acquisitionSource?: string | null;
+  acquisitionSourceOther?: string | null;
+  toolsUsed?: string[];
+  toolsUsedOther?: string | null;
+  biggestChallenge?: string | null;
+}
+
 // API Response Types
 export interface PaginatedResponse<T> {
   items: T[];

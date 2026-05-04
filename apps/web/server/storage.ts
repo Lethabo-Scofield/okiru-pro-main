@@ -2,6 +2,7 @@ import {
   UserModel,
   TemplateModel,
   CalculatorConfigModel,
+  CompanyProfileModel,
   getNextSequence,
   type Template,
   type InsertTemplate,
@@ -9,6 +10,8 @@ import {
   type InsertUser,
   type CalculatorConfig,
   type CalculatorConfigRow,
+  type CompanyProfile,
+  type InsertCompanyProfile,
 } from "../shared/schema";
 
 // Assessment types
@@ -93,6 +96,10 @@ export interface IStorage {
   createOrUpdateClient(client: Partial<Client>): Promise<Client>;
   getClientById(clientId: string): Promise<Client | undefined>;
   updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined>;
+
+  // Company profile (onboarding) methods
+  getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined>;
+  upsertCompanyProfile(profile: InsertCompanyProfile): Promise<CompanyProfile>;
 }
 
 export class MemoryStorage implements IStorage {
@@ -391,6 +398,25 @@ export class MemoryStorage implements IStorage {
     client.updatedAt = new Date();
     return client;
   }
+
+  private companyProfiles: Map<string, CompanyProfile> = new Map();
+
+  async getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined> {
+    return this.companyProfiles.get(userId);
+  }
+
+  async upsertCompanyProfile(profile: InsertCompanyProfile): Promise<CompanyProfile> {
+    const existing = this.companyProfiles.get(profile.userId);
+    const now = new Date();
+    const doc: CompanyProfile = {
+      id: existing?.id || `cp_${profile.userId}`,
+      ...profile,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    this.companyProfiles.set(profile.userId, doc);
+    return doc;
+  }
 }
 
 function toUser(doc: any): User | undefined {
@@ -673,6 +699,20 @@ export class DatabaseStorage implements IStorage {
       { new: true }
     );
     return toClient(doc);
+  }
+
+  async getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined> {
+    const doc = await CompanyProfileModel.findOne({ userId });
+    return doc ? (doc.toJSON() as CompanyProfile) : undefined;
+  }
+
+  async upsertCompanyProfile(profile: InsertCompanyProfile): Promise<CompanyProfile> {
+    const doc = await CompanyProfileModel.findOneAndUpdate(
+      { userId: profile.userId },
+      { ...profile, updatedAt: new Date() },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return doc.toJSON() as CompanyProfile;
   }
 }
 

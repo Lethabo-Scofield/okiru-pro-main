@@ -502,4 +502,55 @@ feedbackSchema.set("toJSON", {
 
 export const FeedbackModel = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
 
+const companyProfileSchema = new Schema({
+  userId: { type: String, required: true, unique: true, index: true },
+  companyName: { type: String, required: true },
+  role: { type: String, default: null },
+  beeLevel: { type: String, default: null },
+  employeeRange: { type: String, default: null },
+  industry: { type: String, default: null },
+  industryOther: { type: String, default: null },
+  annualRevenue: { type: String, default: null },
+  acquisitionSource: { type: String, default: null },
+  acquisitionSourceOther: { type: String, default: null },
+  toolsUsed: { type: [String], default: [] },
+  toolsUsedOther: { type: String, default: null },
+  biggestChallenge: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "company_profiles" });
+
+companyProfileSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret._id?.toString();
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);
+
+export interface CompanyProfile {
+  id?: string;
+  userId: string;
+  companyName: string;
+  role?: string | null;
+  beeLevel?: string | null;
+  employeeRange?: string | null;
+  industry?: string | null;
+  industryOther?: string | null;
+  annualRevenue?: string | null;
+  acquisitionSource?: string | null;
+  acquisitionSourceOther?: string | null;
+  toolsUsed?: string[];
+  toolsUsedOther?: string | null;
+  biggestChallenge?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type InsertCompanyProfile = Omit<CompanyProfile, "id" | "createdAt" | "updatedAt">;
+
 export { getNextSequence };

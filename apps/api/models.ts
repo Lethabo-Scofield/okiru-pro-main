@@ -336,3 +336,24 @@ feedbackSchema.set("toJSON", {
 });
 
 export const FeedbackModel = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
+
+const companyProfileSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  userId: { type: String, required: true, unique: true, index: true },
+  companyName: { type: String, required: true },
+  role: { type: String, default: null },
+  beeLevel: { type: String, default: null },
+  employeeRange: { type: String, default: null },
+  industry: { type: String, default: null },
+  industryOther: { type: String, default: null },
+  annualRevenue: { type: String, default: null },
+  acquisitionSource: { type: String, default: null },
+  acquisitionSourceOther: { type: String, default: null },
+  toolsUsed: { type: [String], default: [] },
+  toolsUsedOther: { type: String, default: null },
+  biggestChallenge: { type: String, default: null },
+  createdAt: { type: String, default: () => new Date().toISOString() },
+  updatedAt: { type: String, default: () => new Date().toISOString() },
+}, { collection: "company_profiles" });
+
+export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);

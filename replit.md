@@ -91,6 +91,12 @@ A pragmatic adoption of the Repository / UoW / Data Access Factory pattern from 
 - **Production error handler**: strips stack traces from 500 responses in `NODE_ENV=production`.
 - **Graceful shutdown**: SIGTERM/SIGINT close the HTTP server then mongoose, with a 10-second hard-kill safety timer.
 
+## Company Onboarding Flow
+- After signup/login, `AuthWrapper` calls `GET /api/onboarding/me`. A `404` response means the user hasn't onboarded yet, so they're routed to `/onboarding?redirect=<original-destination>`.
+- The `/onboarding` page (apps/web/src/pages/Onboarding.tsx) collects 9 fields: companyName, role, beeLevel, employeeRange, industry (+Other), annualRevenue, acquisitionSource (+Other), toolsUsed[] (+Other), biggestChallenge.
+- On submit, `POST /api/onboarding` upserts the profile (keyed by userId) and the user is redirected to the original destination. When the destination is `/certificates`, the URL becomes `/certificates?openUpload=1` and `CertificateHub` auto-opens the upload modal.
+- Endpoints exist on both the web server (apps/web/server/routes.ts, used in dev with in-memory storage) and the API server (apps/api/src/routes/onboarding.ts, used when MongoDB is available). Both implementations accept the same field set and the data model is shared via `packages/types` (`CompanyProfile` / `InsertCompanyProfile`). Persistence collection: `company_profiles`.
+
 ## Deployment
 - Build: `pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build`
 - Run: Starts API server then web server in production mode

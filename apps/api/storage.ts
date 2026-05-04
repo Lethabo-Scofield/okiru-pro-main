@@ -3,7 +3,7 @@ import {
   UserModel, OrganizationModel, ClientModel, FinancialYearModel,
   ShareholderModel, OwnershipDataModel, EmployeeModel, TrainingProgramModel,
   SupplierModel, ProcurementDataModel, EsdContributionModel, SedContributionModel,
-  ScenarioModel, ImportLogModel, ExportLogModel,
+  ScenarioModel, ImportLogModel, ExportLogModel, CompanyProfileModel,
 } from "./models.js";
 import type {
   User, InsertUser, Organization, InsertOrganization,
@@ -15,7 +15,7 @@ import type {
   SedContribution, InsertSedContribution,
   Scenario, InsertScenario, ImportLog, ExportLog, FinancialYear,
   InsertFinancialYear, InsertImportLog, InsertExportLog,
-  PaginatedResponse,
+  PaginatedResponse, CompanyProfile, InsertCompanyProfile,
 } from "./schema.js";
 
 function clean<T>(doc: unknown): T {
@@ -92,6 +92,9 @@ export interface IStorage {
 
   createExportLog(data: InsertExportLog): Promise<ExportLog>;
   getExportLogs(clientId: string): Promise<ExportLog[]>;
+
+  getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined>;
+  upsertCompanyProfile(userId: string, data: Omit<InsertCompanyProfile, 'userId'>): Promise<CompanyProfile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -373,6 +376,24 @@ export class DatabaseStorage implements IStorage {
   async getExportLogs(clientId: string): Promise<ExportLog[]> {
     const docs = await ExportLogModel.find({ clientId }).lean();
     return docs.map((d) => clean<ExportLog>(d));
+  }
+
+  async getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined> {
+    const doc = await CompanyProfileModel.findOne({ userId }).lean();
+    return doc ? clean<CompanyProfile>(doc) : undefined;
+  }
+
+  async upsertCompanyProfile(userId: string, data: Omit<InsertCompanyProfile, 'userId'>): Promise<CompanyProfile> {
+    const now = new Date().toISOString();
+    const doc = await CompanyProfileModel.findOneAndUpdate(
+      { userId },
+      {
+        $set: { ...data, updatedAt: now },
+        $setOnInsert: { id: uuid(), userId, createdAt: now },
+      },
+      { upsert: true, returnDocument: 'after', new: true }
+    ).lean();
+    return clean<CompanyProfile>(doc!);
   }
 }
 

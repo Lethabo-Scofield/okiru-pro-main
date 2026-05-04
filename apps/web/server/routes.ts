@@ -2227,6 +2227,67 @@ Respond ONLY with a valid JSON array.`;
     res.json({ ok: true });
   });
 
+  // ----- Company onboarding -----
+  app.get("/api/onboarding/me", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId as string;
+      const profile = await storage.getCompanyProfileByUserId(userId);
+      if (!profile) return res.status(404).json({ message: "No company profile found" });
+      res.json(profile);
+    } catch (err) {
+      logger.error("GET /api/onboarding/me failed", err as Error);
+      res.status(500).json({ message: "Failed to fetch onboarding profile" });
+    }
+  });
+
+  app.post("/api/onboarding", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId as string;
+      const body = req.body || {};
+
+      const trim = (v: any, max = 500): string | null => {
+        if (typeof v !== "string") return null;
+        const s = v.trim();
+        if (!s) return null;
+        return s.slice(0, max);
+      };
+
+      const companyName = trim(body.companyName, 200);
+      if (!companyName) {
+        return res.status(400).json({ message: "companyName is required" });
+      }
+
+      const toolsUsed = Array.isArray(body.toolsUsed)
+        ? body.toolsUsed
+            .filter((t: any) => typeof t === "string")
+            .map((t: string) => t.trim().slice(0, 100))
+            .filter((t: string) => t.length > 0)
+            .slice(0, 20)
+        : [];
+
+      const profile = await storage.upsertCompanyProfile({
+        userId,
+        companyName,
+        role: trim(body.role, 100),
+        beeLevel: trim(body.beeLevel, 50),
+        employeeRange: trim(body.employeeRange, 50),
+        industry: trim(body.industry, 100),
+        industryOther: trim(body.industryOther, 200),
+        annualRevenue: trim(body.annualRevenue, 50),
+        acquisitionSource: trim(body.acquisitionSource, 100),
+        acquisitionSourceOther: trim(body.acquisitionSourceOther, 200),
+        toolsUsed,
+        toolsUsedOther: trim(body.toolsUsedOther, 200),
+        biggestChallenge: trim(body.biggestChallenge, 2000),
+      });
+
+      res.status(200).json(profile);
+    } catch (err) {
+      logger.error("POST /api/onboarding failed", err as Error);
+      res.status(500).json({ message: "Failed to save onboarding profile" });
+    }
+  });
+
   logger.info("Route registration completed");
   return httpServer;
 }
