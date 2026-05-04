@@ -1,0 +1,103 @@
+Company Onboarding Form (Updated)
+1. Company Name
+Question:
+What is your company’s name?
+Type: Short text input
+2. Your Role
+Question:
+What is your role in the company?
+Type: Dropdown
+Options:
+● Owner / Founder
+● CEO / Managing Director
+● Executive (C-Level)
+● Director / Head of Department
+● Manager
+● Compliance / BEE Officer
+● Finance (CFO, Accountant, etc.)
+● HR / Operations
+● Consultant / Advisor
+● Other (please specify)
+👉 Why this matters: helps you identify decision-makers vs researchers instantly.
+3. BEE Level
+Question:
+What is your current BEE level?
+Type: Dropdown
+Options:
+● Level 1
+● Level 2
+● Level 3
+● Level 4
+● Level 5
+● Level 6
+● Level 7
+● Level 8
+● Non-compliant / No BEE level
+● Not sure
+4. Number of Employees
+Question:
+How many employees does your company have?
+Type: Dropdown
+Options:
+● 1 – 10
+● 11 – 50
+● 51 – 100
+● 101 – 250
+● 251 – 500
+● 500+
+5. Industry
+Question:
+What industry does your company operate in?
+Type: Dropdown
+Options:
+● Technology / Software
+● Financial Services
+● Manufacturing
+● Retail / E-commerce
+● Healthcare
+● Construction / Engineering
+● Mining / Resources
+● Telecommunications
+● Logistics / Transport
+● Education
+● Professional Services (Legal, Consulting, etc.)
+● Hospitality / Tourism
+● Agriculture
+● Other (please specify)
+6. Annual Revenue (ZAR)
+Question:
+What is your company’s annual revenue? (in South African Rand)
+Type: Dropdown
+Options:
+● R0 – R10 million
+● R10 million – R50 million
+● R50 million – R100 million
+● R100 million+
+7. How Did You Hear About Us?
+Question:
+How did you hear about us?
+Type: Dropdown
+Options:
+● Google Search
+● Social Media (LinkedIn, Facebook, etc.)
+● Referral / Word of Mouth
+● Email Campaign
+● Event / Webinar
+● Partner / Affiliate
+● Online Ads
+● Other (please specify)
+8. Current Tools for BEE / Compliance
+Question:
+What tools are you currently using for BEE or compliance tracking?
+Type: Multi-select
+Options:
+● BE123
+● Empowered
+● Excel / Spreadsheets
+● Custom Internal System
+● None
+● Other (please specify)
+9. Biggest Challenge (Optional)
+Question:
+What is your biggest challenge with BEE compliance right now?
+Type: Paragraph text

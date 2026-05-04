@@ -23,7 +23,7 @@ const ROLE_OPTIONS = [
   "Director / Head of Department",
   "Manager",
   "Compliance / BEE Officer",
-  "Finance",
+  "Finance (CFO, Accountant, etc.)",
   "HR / Operations",
   "Consultant / Advisor",
   "Other",
@@ -42,39 +42,92 @@ const BEE_LEVELS = [
   "Not sure",
 ];
 
-const EMPLOYEE_RANGES = ["1–10", "11–50", "51–100", "101–250", "251–500", "500+"];
+const EMPLOYEE_RANGES = ["1 – 10", "11 – 50", "51 – 100", "101 – 250", "251 – 500", "500+"];
 
 const INDUSTRIES = [
-  "Technology",
+  "Technology / Software",
   "Financial Services",
   "Manufacturing",
   "Retail / E-commerce",
   "Healthcare",
   "Construction / Engineering",
-  "Mining",
+  "Mining / Resources",
   "Telecommunications",
-  "Logistics",
+  "Logistics / Transport",
   "Education",
-  "Professional Services",
-  "Hospitality",
+  "Professional Services (Legal, Consulting, etc.)",
+  "Hospitality / Tourism",
   "Agriculture",
   "Other",
 ];
 
-const REVENUE_RANGES = ["R0–R10M", "R10M–R50M", "R50M–R100M", "R100M+"];
+const REVENUE_RANGES = [
+  "R0 – R10 million",
+  "R10 million – R50 million",
+  "R50 million – R100 million",
+  "R100 million+",
+];
 
 const ACQUISITION_SOURCES = [
-  "Google",
-  "Social Media",
-  "Referral",
-  "Email",
-  "Event",
-  "Partner",
-  "Ads",
+  "Google Search",
+  "Social Media (LinkedIn, Facebook, etc.)",
+  "Referral / Word of Mouth",
+  "Email Campaign",
+  "Event / Webinar",
+  "Partner / Affiliate",
+  "Online Ads",
   "Other",
 ];
 
-const TOOLS = ["BE123", "Empowered", "Excel", "Custom System", "None", "Other"];
+const TOOLS = [
+  "BE123",
+  "Empowered",
+  "Excel / Spreadsheets",
+  "Custom Internal System",
+  "None",
+  "Other",
+];
+
+// Map historical/short labels to current canonical option text so existing
+// company profiles prefill into the right dropdown after spec rename.
+const LEGACY_INDUSTRY: Record<string, string> = {
+  Technology: "Technology / Software",
+  Mining: "Mining / Resources",
+  Logistics: "Logistics / Transport",
+  "Professional Services": "Professional Services (Legal, Consulting, etc.)",
+  Hospitality: "Hospitality / Tourism",
+};
+const LEGACY_ROLE: Record<string, string> = {
+  Finance: "Finance (CFO, Accountant, etc.)",
+};
+const LEGACY_SOURCE: Record<string, string> = {
+  Google: "Google Search",
+  "Social Media": "Social Media (LinkedIn, Facebook, etc.)",
+  Referral: "Referral / Word of Mouth",
+  Email: "Email Campaign",
+  Event: "Event / Webinar",
+  Partner: "Partner / Affiliate",
+  Ads: "Online Ads",
+};
+const LEGACY_TOOL: Record<string, string> = {
+  Excel: "Excel / Spreadsheets",
+  "Custom System": "Custom Internal System",
+};
+const LEGACY_EMPLOYEES: Record<string, string> = {
+  "1–10": "1 – 10",
+  "11–50": "11 – 50",
+  "51–100": "51 – 100",
+  "101–250": "101 – 250",
+  "251–500": "251 – 500",
+};
+const LEGACY_REVENUE: Record<string, string> = {
+  "R0–R10M": "R0 – R10 million",
+  "R10M–R50M": "R10 million – R50 million",
+  "R50M–R100M": "R50 million – R100 million",
+  "R100M+": "R100 million+",
+};
+const normalize = (val: any, map: Record<string, string>): string =>
+  typeof val === "string" && map[val] ? map[val] : val || "";
 
 interface FormState {
   companyName: string;
@@ -86,7 +139,9 @@ interface FormState {
   industryOther: string;
   annualRevenue: string;
   acquisitionSource: string;
+  acquisitionSourceOther: string;
   toolsUsed: string[];
+  toolsOther: string;
   biggestChallenge: string;
 }
 
@@ -100,7 +155,9 @@ const EMPTY_FORM: FormState = {
   industryOther: "",
   annualRevenue: "",
   acquisitionSource: "",
+  acquisitionSourceOther: "",
   toolsUsed: [],
+  toolsOther: "",
   biggestChallenge: "",
 };
 
@@ -128,21 +185,51 @@ export default function Onboarding() {
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json().catch(() => null);
-          if (data?.profile) {
-            const p = data.profile;
+          const p = data?.profile ?? data;
+          if (p && typeof p === "object" && (p.companyName || p.role || p.industry)) {
+            // Normalize legacy/short labels to current canonical text first.
+            p.role = normalize(p.role, LEGACY_ROLE);
+            p.industry = normalize(p.industry, LEGACY_INDUSTRY);
+            p.acquisitionSource = normalize(p.acquisitionSource, LEGACY_SOURCE);
+            p.employeeRange = normalize(p.employeeRange, LEGACY_EMPLOYEES);
+            p.annualRevenue = normalize(p.annualRevenue, LEGACY_REVENUE);
             const knownRole = ROLE_OPTIONS.includes(p.role || "");
             const knownIndustry = INDUSTRIES.includes(p.industry || "");
+            const knownSource = ACQUISITION_SOURCES.includes(p.acquisitionSource || "");
+            const rawToolsRaw: string[] = Array.isArray(p.toolsUsed) ? p.toolsUsed : [];
+            const rawTools = rawToolsRaw.map((t) => normalize(t, LEGACY_TOOL));
+            const knownTools = rawTools.filter((t) => TOOLS.includes(t));
+            const unknownTools = rawTools.filter((t) => !TOOLS.includes(t));
+            // Legacy fallback: if backend stored inlined "Other" values in the
+            // main field (no dedicated *Other column), surface that text in the
+            // free-text input. Prefer the dedicated *Other field when present.
+            const industryOther = p.industryOther || (!knownIndustry && p.industry ? p.industry : "");
+            const sourceOther =
+              p.acquisitionSourceOther || (!knownSource && p.acquisitionSource ? p.acquisitionSource : "");
+            const toolsOtherText =
+              p.toolsUsedOther || (unknownTools.length ? unknownTools.join(", ") : "");
             setForm({
               companyName: p.companyName || "",
               role: knownRole ? p.role || "" : p.role ? "Other" : "",
               roleOther: knownRole ? "" : p.role || "",
               beeLevel: p.beeLevel || "",
               employeeRange: p.employeeRange || "",
-              industry: knownIndustry ? p.industry || "" : p.industry ? "Other" : "",
-              industryOther: knownIndustry ? "" : p.industry || "",
+              industry: knownIndustry ? p.industry || "" : p.industry ? "Other" : industryOther ? "Other" : "",
+              industryOther,
               annualRevenue: p.annualRevenue || "",
-              acquisitionSource: p.acquisitionSource || "",
-              toolsUsed: Array.isArray(p.toolsUsed) ? p.toolsUsed : [],
+              acquisitionSource: knownSource
+                ? p.acquisitionSource || ""
+                : p.acquisitionSource
+                  ? "Other"
+                  : sourceOther
+                    ? "Other"
+                    : "",
+              acquisitionSourceOther: sourceOther,
+              toolsUsed:
+                unknownTools.length || (toolsOtherText && !knownTools.includes("Other"))
+                  ? [...knownTools, "Other"]
+                  : knownTools,
+              toolsOther: toolsOtherText,
               biggestChallenge: p.biggestChallenge || "",
             });
           }
@@ -182,9 +269,16 @@ export default function Onboarding() {
       return;
     }
 
+    // Role has no dedicated *Other column on the backend, so we still inline.
     const finalRole = form.role === "Other" ? form.roleOther.trim() || "Other" : form.role || null;
-    const finalIndustry =
-      form.industry === "Other" ? form.industryOther.trim() || "Other" : form.industry || null;
+    // For industry/source/tools, the backend has dedicated *Other columns,
+    // so send the option literal ("Other") plus the free-text in its own field.
+    const finalIndustryOther = form.industry === "Other" ? form.industryOther.trim() || null : null;
+    const finalSourceOther =
+      form.acquisitionSource === "Other" ? form.acquisitionSourceOther.trim() || null : null;
+    const finalToolsOther = form.toolsUsed.includes("Other")
+      ? form.toolsOther.trim() || null
+      : null;
 
     setSubmitting(true);
     try {
@@ -197,10 +291,13 @@ export default function Onboarding() {
           role: finalRole,
           beeLevel: form.beeLevel || null,
           employeeRange: form.employeeRange || null,
-          industry: finalIndustry,
+          industry: form.industry || null,
+          industryOther: finalIndustryOther,
           annualRevenue: form.annualRevenue || null,
           acquisitionSource: form.acquisitionSource || null,
+          acquisitionSourceOther: finalSourceOther,
           toolsUsed: form.toolsUsed,
+          toolsUsedOther: finalToolsOther,
           biggestChallenge: form.biggestChallenge.trim() || null,
         }),
       });
@@ -234,41 +331,48 @@ export default function Onboarding() {
 
   if (checking) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-foreground">
-      <div className="mx-auto max-w-3xl px-6 py-12">
-        <div className="mb-10">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-primary" />
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center px-4 py-8 sm:py-12">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="onboarding-title"
+          className="w-full max-w-2xl rounded-2xl border border-border/60 bg-card shadow-2xl shadow-black/50"
+          data-testid="onboarding-popup"
+        >
+          <div className="px-6 sm:px-8 py-6 border-b border-border/40">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Step 2 of 2 — Company onboarding
+                </p>
+                <h1 id="onboarding-title" className="text-xl sm:text-2xl font-semibold truncate">
+                  Tell us about{user?.fullName ? ` ${user.fullName}'s` : " your"} company
+                </h1>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Step 2 of 2 — Company onboarding
-              </p>
-              <h1 className="text-2xl font-semibold">
-                Tell us about{user?.fullName ? ` ${user.fullName}'s` : " your"} company
-              </h1>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-primary" />
+              <div className="h-1.5 flex-1 rounded-full bg-primary" />
             </div>
+            <p className="mt-3 text-[13px] text-muted-foreground">
+              This helps us tailor your B-BBEE scorecards, link future certificates, and surface the
+              right insights for your team.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 flex-1 rounded-full bg-primary" />
-            <div className="h-1.5 flex-1 rounded-full bg-primary" />
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            This helps us tailor your B-BBEE scorecards, link future certificates, and surface the
-            right insights for your team.
-          </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6" data-testid="onboarding-form">
-          <div className="rounded-xl border border-border bg-card/50 p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="px-6 sm:px-8 py-6 space-y-6" data-testid="onboarding-form">
+          <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="companyName">
                 Company Name <span className="text-destructive">*</span>
@@ -408,6 +512,15 @@ export default function Onboarding() {
                     ))}
                   </SelectContent>
                 </Select>
+                {form.acquisitionSource === "Other" && (
+                  <Input
+                    value={form.acquisitionSourceOther}
+                    onChange={(e) => setField("acquisitionSourceOther", e.target.value)}
+                    placeholder="Please specify"
+                    maxLength={120}
+                    data-testid="input-source-other"
+                  />
+                )}
               </div>
             </div>
 
@@ -438,6 +551,15 @@ export default function Onboarding() {
                   );
                 })}
               </div>
+              {form.toolsUsed.includes("Other") && (
+                <Input
+                  value={form.toolsOther}
+                  onChange={(e) => setField("toolsOther", e.target.value)}
+                  placeholder="Please specify other tools"
+                  maxLength={200}
+                  data-testid="input-tools-other"
+                />
+              )}
             </div>
 
             <div className="space-y-2">
@@ -454,8 +576,8 @@ export default function Onboarding() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border/40">
+            <p className="text-[11px] text-muted-foreground">
               You can update these details later from your profile.
             </p>
             <Button
@@ -477,6 +599,7 @@ export default function Onboarding() {
             </Button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
