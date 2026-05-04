@@ -311,6 +311,95 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+// Standard envelope for new API endpoints
+export interface ApiEnvelopeSuccess<T> {
+  success: true;
+  data: T;
+  error: null;
+}
+
+export interface ApiEnvelopeFailure<D = null> {
+  success: false;
+  data: D;
+  error: { message: string; code: string };
+}
+
+export type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
+
+// Certificate Types
+export type CertificateStatus = 'valid' | 'expiring' | 'expired' | 'unknown';
+
+export interface CertificateVersion {
+  blobName: string;
+  fileName: string | null;
+  expiryDate: string | null;
+  issueDate: string | null;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  companySize: string | null;
+  uploadedByUserId: string | null;
+  uploadedAt: string;
+  replacedAt: string;
+}
+
+export interface Certificate {
+  id: string;
+  slug: string | null;
+  blobName: string;
+  fileName: string;
+  companyName: string;
+  vatNumber: string | null;
+  companySize: string | null;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  verificationAgency: string | null;
+  certificateNumber: string | null;
+  expiryDate: string | null;
+  issueDate: string | null;
+  status: CertificateStatus;
+  verified: boolean;
+  verifiedBy: string | null;
+  verifiedByName: string | null;
+  verifiedAt: string | null;
+  reportCount: number;
+  versions: CertificateVersion[];
+  uploadedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CertificateReportReason = 'incorrect-data' | 'expired' | 'fraudulent' | 'duplicate' | 'other';
+export type CertificateReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
+
+export interface CertificateReport {
+  id: string;
+  certificateId: string;
+  certificateSlug: string | null;
+  reason: CertificateReportReason;
+  message: string;
+  email: string | null;
+  status: CertificateReportStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+  createdAt: string;
+}
+
+export interface CertificateListResponse {
+  items: Array<Pick<Certificate,
+    | 'id' | 'slug' | 'blobName' | 'fileName' | 'companyName'
+    | 'vatNumber' | 'companySize' | 'bbbeeLevel' | 'blackOwnership'
+    | 'blackWomenOwnership' | 'expiryDate' | 'status' | 'verified'
+  > & { lastModified: string | null }>;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // Auth Types
 export interface AuthSession {
   userId: string;

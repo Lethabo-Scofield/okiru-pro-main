@@ -1,0 +1,41 @@
+[
+  {
+    "id": "92996e19-79ab-4d7f-bbb9-00e6acd45599",
+    "type": "view",
+    "certificateId": "cert-test-001",
+    "certificateSlug": "acme-manufacturing-pty-ltd-cert-test-001",
+    "userId": null,
+    "query": null,
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "curl/8.14.1",
+    "createdAt": "2026-05-04T13:37:23.163Z"
+  },
+  {
+    "id": "59e2d38c-358a-4ae3-9ea4-9f52e5745b51",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "acme",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "curl/8.14.1",
+    "createdAt": "2026-05-04T13:37:23.258Z"
+  },
+  {
+    "id": "8544f14d-de98-40fc-86c9-9cede4b9cf81",
+    "type": "report",
+    "certificateId": "cert-test-001",
+    "certificateSlug": "acme-manufacturing-pty-ltd-cert-test-001",
+    "userId": null,
+    "query": null,
+    "metadata": {
+      "reason": "incorrect-data",
+      "reportId": "d99d5be6-207c-47fe-a0e6-c589c248db12"
+    },
+    "ipAddress": "34.24.49.21",
+    "userAgent": "curl/8.14.1",
+    "createdAt": "2026-05-04T13:40:00.026Z"
+  }
+]

@@ -302,6 +302,33 @@ const certificateMetadataSchema = new Schema({
   extractionError: { type: String, default: null },
   processedAt: { type: Date, default: null },
   uploadedByUserId: { type: String, default: null, index: true },
+  // Verification (Phase 1 — production readiness)
+  verified: { type: Boolean, default: false, index: true },
+  verifiedBy: { type: String, default: null },
+  verifiedByName: { type: String, default: null },
+  verifiedAt: { type: Date, default: null },
+  // VAT dedupe + versioning. The top-level fields above represent the LATEST
+  // active version; older versions are appended here on update.
+  vatNumberNormalized: { type: String, default: null, index: true },
+  versions: {
+    type: [{
+      _id: false,
+      blobName: { type: String, required: true },
+      fileName: { type: String, default: null },
+      expiryDate: { type: Date, default: null },
+      issueDate: { type: Date, default: null },
+      bbbeeLevel: { type: Number, default: null },
+      bbbeeScore: { type: Number, default: null },
+      blackOwnership: { type: Number, default: null },
+      blackWomenOwnership: { type: Number, default: null },
+      companySize: { type: String, default: null },
+      uploadedByUserId: { type: String, default: null },
+      uploadedAt: { type: Date, default: Date.now },
+      replacedAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+  reportCount: { type: Number, default: 0, index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { collection: "certificate_metadata" });
@@ -309,8 +336,78 @@ const certificateMetadataSchema = new Schema({
 certificateMetadataSchema.index({ expiryDate: 1 });
 certificateMetadataSchema.index({ status: 1 });
 certificateMetadataSchema.index({ bbbeeLevel: 1 });
+certificateMetadataSchema.index({ verified: 1, updatedAt: -1 });
 
 export const CertificateMetadataModel = mongoose.models.CertificateMetadata || mongoose.model("CertificateMetadata", certificateMetadataSchema);
+
+// ---------------------------------------------------------------------------
+// Certificate reports — the "report incorrect data" workflow
+// ---------------------------------------------------------------------------
+const certificateReportSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  certificateId: { type: String, required: true, index: true },
+  certificateSlug: { type: String, default: null, index: true },
+  reason: {
+    type: String,
+    enum: ['incorrect-data', 'expired', 'fraudulent', 'duplicate', 'other'],
+    required: true,
+  },
+  message: { type: String, required: true },
+  email: { type: String, default: null },
+  status: {
+    type: String,
+    enum: ['open', 'reviewing', 'resolved', 'dismissed'],
+    default: 'open',
+    index: true,
+  },
+  reviewedBy: { type: String, default: null },
+  reviewedAt: { type: Date, default: null },
+  reviewNotes: { type: String, default: null },
+  ipAddress: { type: String, default: null },
+  userAgent: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now, index: true },
+}, { collection: "certificate_reports" });
+
+certificateReportSchema.set("toJSON", {
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const CertificateReportModel = mongoose.models.CertificateReport || mongoose.model("CertificateReport", certificateReportSchema);
+
+// ---------------------------------------------------------------------------
+// Certificate analytics events — internal usage tracking (Phase 3)
+// ---------------------------------------------------------------------------
+const certificateEventSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  type: {
+    type: String,
+    enum: ['view', 'search', 'upload', 'download', 'verify', 'unverify', 'report'],
+    required: true,
+    index: true,
+  },
+  certificateId: { type: String, default: null, index: true },
+  certificateSlug: { type: String, default: null },
+  userId: { type: String, default: null, index: true },
+  query: { type: String, default: null },
+  metadata: { type: Schema.Types.Mixed, default: null },
+  ipAddress: { type: String, default: null },
+  userAgent: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now, index: true },
+}, { collection: "certificate_events" });
+
+certificateEventSchema.set("toJSON", {
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const CertificateEventModel = mongoose.models.CertificateEvent || mongoose.model("CertificateEvent", certificateEventSchema);
 
 const feedbackSchema = new Schema({
   id: { type: String, default: uuid, unique: true },

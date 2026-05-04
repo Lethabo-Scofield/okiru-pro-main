@@ -1,0 +1,32 @@
+[
+  {
+    "certificateId": "cert-test-001",
+    "certificateSlug": "acme-manufacturing-pty-ltd-cert-test-001",
+    "reason": "incorrect-data",
+    "message": "VAT number on certificate looks wrong",
+    "email": "reporter@example.com",
+    "ipAddress": "34.24.49.21",
+    "userAgent": "curl/8.14.1",
+    "id": "bff695b7-e48d-42ab-b04c-d97d9d52208e",
+    "status": "open",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "reviewNotes": null,
+    "createdAt": "2026-05-04T13:29:01.700Z"
+  },
+  {
+    "certificateId": "cert-test-001",
+    "certificateSlug": "acme-manufacturing-pty-ltd-cert-test-001",
+    "reason": "incorrect-data",
+    "message": "This BBBEE level looks wrong, should be reviewed.",
+    "email": "test@example.com",
+    "ipAddress": "34.24.49.21",
+    "userAgent": "curl/8.14.1",
+    "id": "d99d5be6-207c-47fe-a0e6-c589c248db12",
+    "status": "open",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "reviewNotes": null,
+    "createdAt": "2026-05-04T13:40:00.025Z"
+  }
+]
