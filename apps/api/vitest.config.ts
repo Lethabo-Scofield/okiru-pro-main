@@ -6,10 +6,7 @@ export default defineConfig({
     environment: 'node',
     include: [
       'pipeline/__tests__/**/*.test.ts',
-      'src/data-layer/__tests__/**/*.test.ts',
-      'src/routes/__tests__/**/*.test.ts',
-      'src/utils/__tests__/**/*.test.ts',
-      'src/services/__tests__/**/*.test.ts',
+      '__tests__/**/*.test.ts',
     ],
     exclude: ['node_modules', 'dist'],
     coverage: {

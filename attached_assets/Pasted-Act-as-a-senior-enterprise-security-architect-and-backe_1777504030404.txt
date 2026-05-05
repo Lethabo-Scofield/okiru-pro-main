@@ -1,0 +1,120 @@
+Act as a senior enterprise security architect and backend engineer.
+
+We need to upgrade this codebase so it is enterprise-ready for security review. Do not just add surface-level UI features. Review the full architecture and make code changes where needed.
+
+Core requirements:
+
+1. Role-Based Access Control
+Implement proper RBAC beyond admin vs user.
+
+Required:
+- Roles must be configurable.
+- Permissions must be action-based, for example:
+  - document.read
+  - document.write
+  - document.delete
+  - user.invite
+  - user.manage
+  - billing.view
+  - audit.read
+  - settings.manage
+- Permissions must be scoped by:
+  - organization / tenant
+  - team / workspace
+  - data type
+  - action
+- Every protected API route must enforce authorization on the backend.
+- Do not rely only on frontend hiding buttons.
+- Add middleware such as requireAuth and requirePermission.
+- Add database models/tables for roles, permissions, role assignments, teams/workspaces, and tenant membership if missing.
+- Add tests proving users cannot access resources outside their role or tenant.
+
+2. Audit Logging
+Implement a proper audit log system.
+
+Required:
+- Log security and business-critical events:
+  - login
+  - logout
+  - failed login
+  - user invited
+  - role changed
+  - permission denied
+  - document uploaded
+  - document viewed
+  - document deleted
+  - export/download
+  - settings changed
+  - API key created/revoked
+- Each audit event must include:
+  - actor user ID
+  - tenant/organization ID
+  - action
+  - resource type
+  - resource ID
+  - timestamp
+  - IP address
+  - user agent
+  - request ID
+  - result: success/failure
+  - metadata
+- Audit logs must be append-only.
+- Audit logs must be queryable by tenant, actor, action, resource, and date range.
+- Audit logs must be stored separately from normal app data where possible, or at least in a dedicated collection/table with strict write-only behavior.
+- Normal users must not be able to edit or delete audit logs.
+- Add an admin/security endpoint to query audit logs.
+- Add tests proving audit logs are created and cannot be modified through normal application paths.
+
+3. Tenant and Data Isolation
+Ensure customer data is isolated at architecture level.
+
+Required:
+- Every tenant-owned record must include tenantId / organizationId.
+- Every database query must be scoped by tenantId unless it is explicitly a global admin operation.
+- No API route may fetch data only by ID without validating tenant ownership.
+- Add helper methods/repository functions that automatically enforce tenant scoping.
+- Prevent cross-tenant access even if a user guesses another resource ID.
+- Add tests for cross-tenant access attempts.
+- If using MongoDB, create indexes on tenantId and resource IDs.
+- If using SQL, add indexes and consider row-level security patterns.
+- Document the current isolation model and any remaining limitations.
+
+4. Request Security Foundation
+Add or verify:
+- request ID generation per request
+- centralized error handling
+- structured logs
+- authentication middleware
+- authorization middleware
+- input validation
+- rate limiting on auth and sensitive endpoints
+- secure headers
+- CORS restricted to approved domains
+- secrets only from environment variables
+
+5. Deliverables
+Make the necessary code changes directly in the project.
+
+Then produce a short technical report called:
+
+ENTERPRISE_SECURITY_REVIEW.md
+
+The report must include:
+- What was missing
+- What was added
+- Files changed
+- RBAC model summary
+- Audit log model summary
+- Tenant isolation strategy
+- Security tests added
+- Remaining risks or assumptions
+- How to run tests
+
+Important rules:
+- Do not break existing functionality.
+- Do not remove current features.
+- Do not fake compliance.
+- If something cannot be fully implemented due to missing context, add a clear TODO with explanation.
+- Prefer clean reusable middleware and repository-level enforcement over scattered checks.
+- Write production-quality code.
+- Add tests wherever possible.
