@@ -3,10 +3,31 @@ import { Router, type Request as ExpressRequest, type Response } from 'express';
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
+import { recordAudit, validateBody } from '../security/index.js';
 
 const logger = createLogger("Auth");
+
+// Schemas for inbound bodies. Kept loose on optional/legacy fields to
+// preserve backwards compatibility with the existing web client.
+const registerSchema = z.object({
+  username: z.string().min(3).max(50),
+  password: z.string().min(8),
+  fullName: z.string().min(1).max(200).optional(),
+  email: z.string().email().optional().nullable(),
+  organizationName: z.string().min(1).max(200).optional(),
+}).passthrough();
+
+const loginSchema = z.object({
+  username: z.string().optional(),
+  email: z.string().optional(),
+  password: z.string().min(1),
+}).passthrough().refine(
+  (b) => Boolean(b.username || b.email),
+  { message: "Username or email is required", path: ["username"] },
+);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -100,22 +121,22 @@ router.post('/check-email', checkLimiter, async (req: Request, res: Response) =>
   }
 });
 
-router.post('/register', authLimiter, async (req: Request, res: Response) => {
+router.post('/register', authLimiter, validateBody(registerSchema), async (req: Request, res: Response) => {
   const start = Date.now();
   try {
     const { username, password, fullName, email, organizationName } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required" });
-    }
-    if (password.length < 8) {
-      return res.status(400).json({ message: "Password must be at least 8 characters" });
-    }
-    if (username.length < 3 || username.length > 50) {
-      return res.status(400).json({ message: "Username must be 3-50 characters" });
-    }
 
     const existing = await storage.getUserByUsername(username);
     if (existing) {
+      await recordAudit(req, {
+        action: "user.register",
+        resourceType: "user",
+        resourceId: null,
+        result: "failure",
+        actorUserId: null,
+        organizationId: null,
+        metadata: { reason: "username_taken", username },
+      });
       return res.status(409).json({ message: "Username already taken" });
     }
 
@@ -134,37 +155,58 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
 
     logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
 
+    await recordAudit(req, {
+      action: "user.register",
+      resourceType: "user",
+      resourceId: user.id,
+      result: "success",
+      actorUserId: user.id,
+      organizationId: org.id,
+      metadata: { username, organizationId: org.id },
+    });
+
     return res.json({
       user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: org.id, profilePicture: user.profilePicture },
       organization: org,
     });
   } catch (error: unknown) {
     logger.error('Register error', error);
+    await recordAudit(req, {
+      action: "user.register",
+      resourceType: "user",
+      result: "failure",
+      actorUserId: null,
+      organizationId: null,
+      metadata: { reason: "exception" },
+    });
     return res.status(500).json({ message: "Registration failed" });
   }
 });
 
-router.post('/login', authLimiter, async (req: Request, res: Response) => {
+router.post('/login', authLimiter, validateBody(loginSchema), async (req: Request, res: Response) => {
   const start = Date.now();
   try {
     const { username, email, password } = req.body;
     logger.info('Login attempt', { username, email, ip: req.ip });
-    
-    if ((!username && !email) || !password) {
-      logger.info('Login rejected: missing credentials');
-      return res.status(400).json({ message: "Username/email and password are required" });
-    }
 
     // Support both username and email login
     const loginIdentifier = username || email;
     logger.debug('Looking up user', { loginIdentifier });
-    
+
     // Use getUserByUsernameOrEmail if available, otherwise fall back to getUserByUsername
     const getUserFn = storage.getUserByUsernameOrEmail || storage.getUserByUsername;
     const user = await getUserFn(loginIdentifier);
-    
+
     if (!user) {
       logger.info('Login failed: user not found', { loginIdentifier });
+      await recordAudit(req, {
+        action: "user.login.failed",
+        resourceType: "user",
+        result: "failure",
+        actorUserId: null,
+        organizationId: null,
+        metadata: { reason: "user_not_found", loginIdentifier },
+      });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -172,6 +214,15 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       logger.info('Login failed: password mismatch', { loginIdentifier });
+      await recordAudit(req, {
+        action: "user.login.failed",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "failure",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { reason: "password_mismatch" },
+      });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -179,6 +230,15 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     req.session.userId = user.id;
     req.session.organizationId = user.organizationId || '';
     logger.debug('Session set', { userId: req.session.userId, organizationId: req.session.organizationId });
+
+    await recordAudit(req, {
+      action: "user.login",
+      resourceType: "user",
+      resourceId: user.id,
+      result: "success",
+      actorUserId: user.id,
+      organizationId: user.organizationId ?? null,
+    });
 
     return res.json({
       user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: user.organizationId, profilePicture: user.profilePicture },
@@ -190,8 +250,18 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 });
 
 router.post('/logout', (req: Request, res: Response) => {
+  const userId = req.session.userId ?? null;
+  const orgId = req.session.organizationId ?? null;
   req.session.destroy(() => {
     res.clearCookie('okiru.sid');
+    void recordAudit(req, {
+      action: "user.logout",
+      resourceType: "user",
+      resourceId: userId,
+      result: "success",
+      actorUserId: userId,
+      organizationId: orgId,
+    });
     res.json({ message: "Logged out" });
   });
 });

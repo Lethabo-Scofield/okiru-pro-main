@@ -1,10 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-// Validate environment FIRST — fail fast on bad config before opening sockets,
-// loading models, or printing anything sensitive.
-import { env, isProd } from "./src/env.js";
-
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import compression from "compression";
@@ -15,13 +11,13 @@ import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
 import { createLogger, requestContext } from "./src/logger.js";
-import { buildDataLayer } from "./src/data-layer/index.js";
 import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
 
 const app = express();
 const httpServer = createServer(app);
+const isProd = process.env.NODE_ENV === "production";
 
 declare module "http" {
   interface IncomingMessage {
@@ -35,22 +31,25 @@ app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 
-// CORS — origins come from CORS_ORIGIN (validated as required in production
-// by env.ts). In development we ship a localhost allowlist so the workflow
-// preview iframe and the Vite dev server work out of the box.
-const corsEnv = env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean);
-const allowedOrigins =
-  corsEnv && corsEnv.length > 0
-    ? corsEnv
-    : [
-        "http://localhost:3000",
-        "http://localhost:5000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5000",
-        "http://127.0.0.1:5173",
-      ];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// CORS — strict allowlist. Unknown origins are rejected and logged so operators
+// can see probe attempts. Same-origin / non-browser requests (no Origin header)
+// are allowed through (cors() default behavior when callback is used).
+const corsEnv = process.env.CORS_ORIGIN?.split(",").map(s => s.trim()).filter(Boolean);
+const allowedOrigins = (corsEnv && corsEnv.length > 0)
+  ? corsEnv
+  : (isProd
+    ? ["https://okiru.20.164.101.114.nip.io", "https://okiru-pro.com", "https://www.okiru-pro.com"]
+    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
+const corsLogger = createLogger("Cors");
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true); // same-origin / curl / health checks
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    corsLogger.warn("Rejected request from disallowed origin", { origin, allowed: allowedOrigins });
+    return callback(new Error("Origin not allowed"));
+  },
+  credentials: true,
+}));
 
 // Body parser - increased for large session payloads with full entity arrays
 app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
@@ -83,53 +82,8 @@ app.use((req, res, next) => {
 
 process.on("uncaughtException", (err) => logger.error("Uncaught Exception", err));
 process.on("unhandledRejection", (reason) => logger.error("Unhandled Rejection", reason as Error));
-
-/**
- * Graceful shutdown: stop accepting new connections, drain in-flight requests,
- * close MongoDB, then exit. Uses a hard-kill timer so the process cannot hang
- * indefinitely if a request handler is wedged.
- */
-let shuttingDown = false;
-async function shutdown(signal: string) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  logger.info(`Received ${signal} — starting graceful shutdown`);
-
-  // Hard-kill safety net (prevents hung requests from blocking pod replacement)
-  const hardKillMs = 10_000;
-  const hardKill = setTimeout(() => {
-    logger.error(`Graceful shutdown timed out after ${hardKillMs}ms — forcing exit`);
-    process.exit(1);
-  }, hardKillMs);
-  hardKill.unref();
-
-  try {
-    // 1. Stop accepting new connections; existing ones drain naturally.
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((err) => (err ? reject(err) : resolve()));
-    });
-    logger.info("HTTP server closed");
-
-    // 2. Close mongoose connection (best-effort, non-fatal if already closed).
-    try {
-      const mongoose = (await import("mongoose")).default;
-      if (mongoose.connection.readyState !== 0) {
-        await mongoose.connection.close();
-        logger.info("Mongoose connection closed");
-      }
-    } catch (err) {
-      logger.warn("Mongoose close failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
-    }
-
-    logger.info("Shutdown complete");
-    process.exit(0);
-  } catch (err) {
-    logger.error("Error during shutdown", err as Error);
-    process.exit(1);
-  }
-}
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => { logger.info("Received SIGTERM — shutting down"); process.exit(0); });
+process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); process.exit(0); });
 
 (async () => {
   logger.info("Initializing API server...");
@@ -163,11 +117,6 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
     logger.warn("Skipping ontology seeding — ArangoDB not connected");
   }
 
-  logger.debug("Building data layer...");
-  const dataLayer = buildDataLayer();
-  app.locals.dataLayer = dataLayer;
-  logger.info("Data layer built", { provider: dataLayer.provider });
-
   logger.debug("Registering routes...");
   await registerRoutes(httpServer, app);
   logger.info("Routes registered");
@@ -185,7 +134,7 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
     return res.status(status).json({ message });
   });
 
-  const port = env.API_PORT ?? env.PORT ?? 3000;
+  const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
 
