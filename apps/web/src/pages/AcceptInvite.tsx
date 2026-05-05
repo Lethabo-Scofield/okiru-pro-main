@@ -22,8 +22,19 @@ export default function AcceptInvite() {
   const [, params] = useRoute("/invite/:token");
   const token = params?.token || "";
   const [, navigate] = useLocation();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const { toast } = useToast();
+
+  const ROLE_LABEL: Record<string, string> = {
+    owner: "Owner",
+    collaborator: "Editor",
+    viewer: "Viewer",
+  };
+  const ROLE_DESCRIPTION: Record<string, string> = {
+    owner: "Full access — can manage people and settings.",
+    collaborator: "Can view and edit team work.",
+    viewer: "Can view everything but can't make changes.",
+  };
 
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +75,7 @@ export default function AcceptInvite() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Could not accept invite");
-      toast({ title: "Welcome to the workspace!" });
+      toast({ title: "You're in — welcome to the team!" });
       navigate("/workspace");
     } catch (err: any) {
       toast({ title: "Could not accept", description: err.message, variant: "destructive" });
@@ -112,13 +123,17 @@ export default function AcceptInvite() {
           <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
             <Building2 className="h-6 w-6 text-primary" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <h1 className="text-lg font-semibold tracking-tight">
-              Join {invite.workspaceName || "workspace"}
+              You're invited to join {invite.workspaceName || "a team"}
             </h1>
             <p className="text-[13px] text-muted-foreground">
-              You've been invited as a{" "}
-              <span className="text-foreground font-medium">{invite.role}</span>.
+              You'll join as{" "}
+              <span className="text-foreground font-medium">
+                {ROLE_LABEL[invite.role] || invite.role}
+              </span>
+              {" — "}
+              {ROLE_DESCRIPTION[invite.role] || ""}
             </p>
           </div>
 
@@ -146,20 +161,10 @@ export default function AcceptInvite() {
           ) : !user ? (
             <div className="space-y-2">
               <p className="text-[12px] text-muted-foreground">
-                Sign in or create an account with{" "}
-                <span className="text-foreground font-medium">{invite.email}</span> to accept.
+                To join, sign in or create an account using{" "}
+                <span className="text-foreground font-medium">{invite.email}</span>.
               </p>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() =>
-                    navigate(`/auth?redirect=${encodeURIComponent(`/invite/${token}`)}`)
-                  }
-                  data-testid="btn-invite-sign-in"
-                >
-                  Sign in
-                </Button>
                 <Button
                   className="flex-1"
                   onClick={() =>
@@ -169,20 +174,40 @@ export default function AcceptInvite() {
                 >
                   Create account
                 </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() =>
+                    navigate(`/auth?redirect=${encodeURIComponent(`/invite/${token}`)}`)
+                  }
+                  data-testid="btn-invite-sign-in"
+                >
+                  I have an account
+                </Button>
               </div>
+              <p className="text-[11px] text-muted-foreground/70 pt-1">
+                Use the same email address the invite was sent to, otherwise we won't be able to
+                add you.
+              </p>
             </div>
           ) : emailMismatch ? (
             <div className="space-y-2">
               <p className="text-[12px] text-destructive">
                 This invite was sent to <span className="font-medium">{invite.email}</span>, but
-                you're signed in as <span className="font-medium">{user.email}</span>.
+                you're signed in as <span className="font-medium">{user.email}</span>. Sign out and
+                sign back in with <span className="font-medium">{invite.email}</span> to accept.
               </p>
               <Button
                 variant="outline"
-                onClick={() => navigate("/auth")}
+                onClick={async () => {
+                  try {
+                    await logout();
+                  } catch {}
+                  navigate(`/auth?redirect=${encodeURIComponent(`/invite/${token}`)}`);
+                }}
                 data-testid="btn-invite-switch-account"
               >
-                Switch account
+                Sign out and switch
               </Button>
             </div>
           ) : (

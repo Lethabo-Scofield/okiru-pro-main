@@ -17,7 +17,7 @@ const ROLES = [
 ];
 
 const TOTAL_STEPS = 4;
-const stepLabels = ["Company", "Your Details", "Credentials", "Role"];
+const stepLabels = ["Your company", "About you", "Sign-in details", "Your role"];
 const stepIcons = [Building2, User, KeyRound, Shield];
 
 interface AsyncFieldStatus {
@@ -788,7 +788,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               {fieldErrors.companyName ? (
                                 <p className="text-[11px] text-destructive" data-testid="error-company-name">{fieldErrors.companyName}</p>
                               ) : (
-                                <p className="text-[11px] text-muted-foreground/60">This becomes your workspace. You can invite teammates and rename it later.</p>
+                                <p className="text-[11px] text-muted-foreground/60">We'll create a team space with this name. You can invite people and rename it any time.</p>
                               )}
                             </div>
                           </div>

@@ -124,11 +124,13 @@ export default function HubLanding() {
             </button>
             <button
               onClick={() => navigate('/workspace')}
-              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Workspace"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
+              title="Your team — invite people to collaborate"
+              aria-label="Your team — invite people to collaborate"
               data-testid="btn-workspace"
             >
-              <Building2 className="h-4 w-4" />
+              <Building2 className="h-3.5 w-3.5" />
+              <span className="text-[12px] font-medium">Team</span>
             </button>
             {user?.role === 'admin' && (
               <button

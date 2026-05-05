@@ -363,10 +363,10 @@ export default function Onboarding() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Step 2 of 2 — Company onboarding
+                  Welcome — last quick step
                 </p>
                 <h1 id="onboarding-title" className="text-xl sm:text-2xl font-semibold truncate">
-                  Tell us about{user?.fullName ? ` ${user.fullName}'s` : " your"} company
+                  A few things about your company
                 </h1>
               </div>
             </div>
@@ -375,8 +375,8 @@ export default function Onboarding() {
               <div className="h-1.5 flex-1 rounded-full bg-primary" />
             </div>
             <p className="mt-3 text-[13px] text-muted-foreground">
-              This helps us tailor your B-BBEE scorecards, link future certificates, and surface the
-              right insights for your team.
+              This helps us tailor your B-BBEE scorecards and recommendations. Only the company name
+              is required — the rest is optional and you can change it later from your profile.
             </p>
           </div>
 
@@ -587,7 +587,7 @@ export default function Onboarding() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border/40">
             <p className="text-[11px] text-muted-foreground">
-              You can update these details later from your profile.
+              You can update these details any time from your profile.
             </p>
             <Button
               type="submit"
@@ -602,7 +602,7 @@ export default function Onboarding() {
                 </>
               ) : (
                 <>
-                  Continue to Certificates <ArrowRight className="h-4 w-4 ml-2" />
+                  Save and continue <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               )}
             </Button>
