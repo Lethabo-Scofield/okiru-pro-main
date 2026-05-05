@@ -2469,6 +2469,12 @@ Respond ONLY with a valid JSON array.`;
   app.post("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any).userId as string;
+      // Throttle invite creation to deter spam: 10 per IP per minute and
+      // 10 per user per minute (whichever is hit first).
+      if (!rateLimitCheck(`invite-create:ip:${req.ip || 'unknown'}`, 10, 60_000) ||
+          !rateLimitCheck(`invite-create:user:${userId}`, 10, 60_000)) {
+        return res.status(429).json({ message: "Too many invites, try again shortly" });
+      }
       const { workspaceId } = req.params;
       const me = await storage.getMember(workspaceId, userId);
       if (!me || (me.role !== "owner" && me.role !== "collaborator")) {
@@ -2513,6 +2519,10 @@ Respond ONLY with a valid JSON array.`;
   // Public: look up an invite by token (no auth needed, used by accept page)
   app.get("/api/invites/:token", async (req, res) => {
     try {
+      // Throttle public invite lookups to deter token-guessing.
+      if (!rateLimitCheck(`invite-lookup:${req.ip || 'unknown'}`, 30, 60_000)) {
+        return res.status(429).json({ message: "Too many requests, try again shortly" });
+      }
       const { token } = req.params;
       const inv = await storage.getInviteByToken(token);
       if (!inv) return res.status(404).json({ message: "Invite not found" });
@@ -2540,6 +2550,11 @@ Respond ONLY with a valid JSON array.`;
   app.post("/api/invites/:token/accept", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any).userId as string;
+      // Throttle accept attempts so a hijacked session can't brute-force tokens.
+      if (!rateLimitCheck(`invite-accept:ip:${req.ip || 'unknown'}`, 20, 60_000) ||
+          !rateLimitCheck(`invite-accept:user:${userId}`, 10, 60_000)) {
+        return res.status(429).json({ message: "Too many requests, try again shortly" });
+      }
       const { token } = req.params;
       const inv = await storage.getInviteByToken(token);
       if (!inv) return res.status(404).json({ message: "Invite not found" });

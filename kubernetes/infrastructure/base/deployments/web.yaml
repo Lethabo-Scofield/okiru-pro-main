@@ -152,6 +152,18 @@ spec:
                   name: external-api-keys
                   key: SMTP_PASS
                   optional: true
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: SMTP_FROM
+                  optional: true
+            - name: APP_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_BASE_URL
+                  optional: true
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp

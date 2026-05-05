@@ -99,7 +99,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
   logger.debug("Sending password reset email", { to: toEmail });
 
   const displayName = userName || toEmail;
-  const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/auth?mode=reset&token=${resetToken}`;
+  const resetUrl = `${process.env.APP_BASE_URL || process.env.APP_URL || 'http://localhost:5000'}/auth?mode=reset&token=${resetToken}`;
 
   try {
     await t.sendMail({
