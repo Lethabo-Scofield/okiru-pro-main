@@ -2,6 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ENV NO_COLOR=1 PNPM_NO_PROGRESS=1
+
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
 RUN npm install -g pnpm@10.26.1
@@ -11,7 +13,7 @@ COPY packages/types/package.json packages/types/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
 
-RUN pnpm install --no-frozen-lockfile \
+RUN pnpm install --no-frozen-lockfile --reporter=append-only \
     && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
