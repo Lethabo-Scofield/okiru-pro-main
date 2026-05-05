@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@toolkit/lib/queryClient";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
@@ -96,6 +96,12 @@ function AppRouter() {
   );
 }
 
+function GlobalFeedbackWidget() {
+  const [location] = useLocation();
+  if (location === "/onboarding") return null;
+  return <FeedbackWidget />;
+}
+
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
@@ -104,7 +110,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <AppRouter />
-            <FeedbackWidget />
+            <GlobalFeedbackWidget />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
