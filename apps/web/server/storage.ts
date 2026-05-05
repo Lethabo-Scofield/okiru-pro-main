@@ -1128,6 +1128,17 @@ if (!useDatabase) {
     });
     storageLogger.info("Seeded demo user company profile", { userId: demoUser.id });
 
+    try {
+      const demoWorkspace = await storage.createWorkspace("Okiru Demo", demoUser.id);
+      await storage.updateUser(demoUser.id, { organizationId: demoWorkspace.id } as any);
+      storageLogger.info("Seeded demo user workspace", {
+        userId: demoUser.id,
+        workspaceId: demoWorkspace.id,
+      });
+    } catch (wsErr) {
+      storageLogger.error("Failed to seed demo workspace", wsErr as Error);
+    }
+
     const { starterTemplates } = await import("../src/data/starterTemplates");
     for (const t of starterTemplates) {
       await storage.createTemplate({
