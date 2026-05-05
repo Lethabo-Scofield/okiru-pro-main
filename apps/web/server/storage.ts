@@ -1102,7 +1102,7 @@ if (!useDatabase) {
   (async () => {
     const bcrypt = await import("bcryptjs");
     const hashedPassword = await bcrypt.hash("demo", 8);
-    await storage.createUser({
+    const demoUser = await storage.createUser({
       username: "demo",
       password: hashedPassword,
       fullName: "Demo User",
@@ -1113,6 +1113,20 @@ if (!useDatabase) {
       profilePicture: null,
     });
     storageLogger.info("Seeded demo user", { username: "demo" });
+
+    await storage.upsertCompanyProfile({
+      userId: demoUser.id,
+      companyName: "Okiru Demo",
+      role: "admin",
+      beeLevel: "Level 4",
+      employeeRange: "11-50",
+      industry: "Technology",
+      annualRevenue: "R10M - R50M",
+      acquisitionSource: "demo",
+      toolsUsed: [],
+      biggestChallenge: "Demo account — onboarding pre-completed",
+    });
+    storageLogger.info("Seeded demo user company profile", { userId: demoUser.id });
 
     const { starterTemplates } = await import("../src/data/starterTemplates");
     for (const t of starterTemplates) {
