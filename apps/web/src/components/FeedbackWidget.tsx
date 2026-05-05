@@ -97,7 +97,7 @@ export function FeedbackWidget() {
       setMessage('');
       toast({
         title: 'Feedback saved',
-        description: 'Thanks — the dev team will see it in DevMode.',
+        description: 'Thanks - the dev team will see it in DevMode.',
       });
       setTimeout(() => {
         setOpen(false);

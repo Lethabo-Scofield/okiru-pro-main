@@ -246,7 +246,7 @@
   .stagger-9 { animation-delay: 0.27s; }
   .stagger-10 { animation-delay: 0.30s; }
 
-  /* Card entrance — slightly larger travel + softer easing than fade-in */
+  /* Card entrance - slightly larger travel + softer easing than fade-in */
   .card-rise {
     opacity: 0;
     animation: cardRise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -256,7 +256,7 @@
     to   { opacity: 1; transform: translateY(0)    scale(1); }
   }
 
-  /* Soft pulsing dot — for "Live" indicators. Subtle, not distracting. */
+  /* Soft pulsing dot - for "Live" indicators. Subtle, not distracting. */
   .pulse-soft {
     animation: pulseSoft 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
@@ -265,7 +265,7 @@
     50%      { opacity: 0.55; transform: scale(0.92); }
   }
 
-  /* Halo around a live dot — soft outward bloom */
+  /* Halo around a live dot - soft outward bloom */
   .pulse-halo {
     position: relative;
   }
@@ -294,7 +294,7 @@
     50%      { transform: translate(-50%, 18px) scale(1.04); }
   }
 
-  /* Indeterminate top progress bar — used while initial page data loads */
+  /* Indeterminate top progress bar - used while initial page data loads */
   .top-progress {
     position: fixed;
     top: 0; left: 0; right: 0;

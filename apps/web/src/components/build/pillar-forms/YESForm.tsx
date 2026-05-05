@@ -135,7 +135,7 @@ export function YESForm({ data, onChange, totalEmployees, className }: YESFormPr
     });
   };
 
-  const tierLabel = result.yesTierAchieved === 'None' ? '—' : result.yesTierAchieved;
+  const tierLabel = result.yesTierAchieved === 'None' ? '-' : result.yesTierAchieved;
   const targetMet = data.candidates.length >= headcountTarget;
 
   return (

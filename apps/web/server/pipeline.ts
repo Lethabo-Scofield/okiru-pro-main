@@ -2,7 +2,7 @@
  * Pipeline Adapter
  *
  * Re-exports the B-BBEE pipeline from apps/api/pipeline so the web
- * server uses the same — more sophisticated — extraction engine.
+ * server uses the same - more sophisticated - extraction engine.
  */
 
 // Entity manifest

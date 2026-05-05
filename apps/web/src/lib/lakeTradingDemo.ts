@@ -1,5 +1,5 @@
 /**
- * Silver Lake Trading 447 — demo dataset aligned to
+ * Silver Lake Trading 447 - demo dataset aligned to
  * `Lake Trading  Toolkit (RCOGP).xlsx` / SCORECARD_GROUND_TRUTH.md (§7).
  *
  * Expected (Excel): total ~63.56, Level 7, discounted Level 8.
@@ -151,7 +151,7 @@ const lakeTradingEsdContributions = [
   {
     id: 'lake-sd-1',
     beneficiary: 'SD beneficiary (EME)',
-    description: 'Direct cost — supplier development',
+    description: 'Direct cost - supplier development',
     type: 'direct_cost' as const,
     amount: 250_000,
     category: 'supplier_development' as const,
@@ -161,7 +161,7 @@ const lakeTradingEsdContributions = [
   {
     id: 'lake-ed-1',
     beneficiary: 'ED beneficiary (EME)',
-    description: 'Direct cost — enterprise development',
+    description: 'Direct cost - enterprise development',
     type: 'direct_cost' as const,
     amount: 160_000,
     category: 'enterprise_development' as const,

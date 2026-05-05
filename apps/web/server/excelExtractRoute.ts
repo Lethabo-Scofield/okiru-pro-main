@@ -323,7 +323,7 @@ export function registerExcelExtractRoute(app: Express): void {
                 return res.status(400).json({ error: 'Invalid base64 encoding' });
             }
 
-            // ── Step 2: PRIMARY — Row/column structured extraction ───────────────
+            // ── Step 2: PRIMARY - Row/column structured extraction ───────────────
             const { parseExcelBuffer } = await import('../../api/pipeline/excelParser.js');
             const structured = parseExcelBuffer(fileBuffer, fileName);
 
@@ -379,7 +379,7 @@ export function registerExcelExtractRoute(app: Express): void {
                 }
             }
 
-            // ── Step 5: SECONDARY — LLM entity extraction ───────────────────────
+            // ── Step 5: SECONDARY - LLM entity extraction ───────────────────────
             let llmExtractions: any[] = [];
 
             if (process.env.GROQ_API_KEY && entitiesToExtract.length > 0 && sheetChunks.length > 0) {
@@ -393,7 +393,7 @@ export function registerExcelExtractRoute(app: Express): void {
                     llmExtractions = [];
                 }
             } else if (!process.env.GROQ_API_KEY) {
-                logger.warn("GROQ_API_KEY not set — skipping LLM extraction, using structured only");
+                logger.warn("GROQ_API_KEY not set - skipping LLM extraction, using structured only");
             }
 
             // ── Step 6: Merge structured + LLM results ───────────────────────────

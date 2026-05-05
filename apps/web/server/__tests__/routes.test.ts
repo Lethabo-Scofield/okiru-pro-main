@@ -73,8 +73,8 @@ async function getOtpFromDb(email: string): Promise<string | null> {
   }
 }
 
-describe('Auth API — unauthenticated', () => {
-  it('GET /api/auth/me — unauthenticated returns 401', async () => {
+describe('Auth API - unauthenticated', () => {
+  it('GET /api/auth/me - unauthenticated returns 401', async () => {
     const { status, body } = await client.withoutSession(() =>
       client.request('/api/auth/me')
     );
@@ -84,7 +84,7 @@ describe('Auth API — unauthenticated', () => {
   });
 });
 
-describe('Auth API — registration validation', () => {
+describe('Auth API - registration validation', () => {
   it('rejects missing username', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
@@ -115,7 +115,7 @@ describe('Auth API — registration validation', () => {
   });
 });
 
-describe('Auth API — registration + OTP flow', () => {
+describe('Auth API - registration + OTP flow', () => {
   it('creates a new user and sends OTP', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
@@ -180,7 +180,7 @@ describe('Auth API — registration + OTP flow', () => {
   });
 });
 
-describe('Auth API — login', () => {
+describe('Auth API - login', () => {
   it('rejects invalid credentials', async () => {
     const { status } = await client.request('/api/auth/login', {
       method: 'POST',

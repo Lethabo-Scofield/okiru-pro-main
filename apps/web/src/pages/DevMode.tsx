@@ -92,7 +92,7 @@ export default function DevMode() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    document.title = 'DevMode — Feedback Report | Okiru';
+    document.title = 'DevMode - Feedback Report | Okiru';
   }, []);
 
   const listQuery = useQuery<FeedbackListResponse>({
@@ -178,7 +178,7 @@ export default function DevMode() {
             </Link>
             <span className="text-zinc-700">/</span>
             <h1 className="text-sm font-semibold tracking-wide text-white">
-              DevMode <span className="text-zinc-500">— Feedback Report</span>
+              DevMode <span className="text-zinc-500">- Feedback Report</span>
             </h1>
           </div>
           <button
@@ -367,7 +367,7 @@ function StatCard({
     <div className="rounded-lg border border-white/5 bg-black/20 p-4">
       <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
       <div className={`mt-1 text-2xl font-semibold ${accentClass}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-        {loading ? '—' : value}
+        {loading ? '-' : value}
       </div>
     </div>
   );

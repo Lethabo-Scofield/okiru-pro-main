@@ -668,7 +668,7 @@ export default function Dashboard() {
               <div className="rounded-2xl bg-[#1c1c1e] p-5 opacity-0 fade-in stagger-1">
                 <div className="text-[10px] text-[#98989f] font-semibold uppercase tracking-wider">Industries</div>
                 <div className="text-[32px] font-bold mt-1 tracking-[-0.03em] text-white" data-testid="stat-industries">
-                  {loadingSessions ? '—' : stats.industries}
+                  {loadingSessions ? '-' : stats.industries}
                 </div>
                 <div className="text-[10px] text-[#636366] mt-2">{stats.industryList || 'No sessions yet'}</div>
               </div>

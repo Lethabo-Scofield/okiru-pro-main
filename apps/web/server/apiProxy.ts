@@ -102,7 +102,7 @@ function proxyRequest(req: Request, res: Response): void {
     return;
   }
 
-  // Multipart / binary uploads must stream — never send JSON.stringify(req.body)
+  // Multipart / binary uploads must stream - never send JSON.stringify(req.body)
   if (ct.includes("multipart/form-data") || ct.includes("application/octet-stream")) {
     req.pipe(proxyReq, { end: true });
     return;

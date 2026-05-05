@@ -285,7 +285,7 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
             </div>
           </div>
 
-          {/* Score Breakdown — use calculator sub-lines (correct max per row, incl. Net Value 8) */}
+          {/* Score Breakdown - use calculator sub-lines (correct max per row, incl. Net Value 8) */}
           <div className="mt-4 pt-4 border-t border-border/60 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
             {scoreResult.subLines.map((line) => (
               <div key={line.name}>

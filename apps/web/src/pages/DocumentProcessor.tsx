@@ -47,7 +47,7 @@ interface StoredTemplate {
   entities: { label: string; definition: string; synonyms?: string[]; zones?: string[]; keywords?: any; pattern?: string; positives?: string[]; negatives?: string[] }[];
   createdAt: string;
   updatedAt: string;
-  /** Toolkit / sector manifest — drives hybrid extraction sector + type. */
+  /** Toolkit / sector manifest - drives hybrid extraction sector + type. */
   sectorCode?: string;
   scorecardType?: 'Generic' | 'QSE' | 'EME';
 }
@@ -1177,7 +1177,7 @@ export default function DocumentProcessor() {
   const [activeReviewDoc, setActiveReviewDoc] = useState(0);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'by-page'>('all');
   const [reviewTab, setReviewTab] = useState<'structured' | 'raw'>('structured');
-  // All pillars always expanded — no collapse
+  // All pillars always expanded - no collapse
   const [activeReviewPage, setActiveReviewPage] = useState(0);
   const [editingEntity, setEditingEntity] = useState<{ docIdx: number; entityIdx: number; draft: string } | null>(null);
   const [editingField, setEditingField] = useState<{ pillar: string; field: string; rowIndex?: number } | null>(null);
@@ -1412,7 +1412,7 @@ export default function DocumentProcessor() {
     });
   }, [location]);
 
-  // Auto-restore build flow on hard refresh — skip when ?new=true is in URL
+  // Auto-restore build flow on hard refresh - skip when ?new=true is in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const isNew = params.get('new') === 'true';
@@ -1729,7 +1729,7 @@ export default function DocumentProcessor() {
     const ci = foundationData.clientInfo;
     const sectorCode = ci?.sectorCode;
     if (!sectorCode) {
-      console.warn('[DocumentProcessor] No sectorCode set — skipping config load');
+      console.warn('[DocumentProcessor] No sectorCode set - skipping config load');
       return;
     }
     const { scorecardType } = determineScorecardType(sectorCode, String(ci?.annualTurnover ?? 0));
@@ -1975,15 +1975,15 @@ export default function DocumentProcessor() {
   };
 
   const extractXlsxText = async (file: File): Promise<string> => {
-    // Skip preview for files > 50MB — parsing very large files on the main thread freezes the browser
+    // Skip preview for files > 50MB - parsing very large files on the main thread freezes the browser
     if (file.size > 50 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      return `[Excel file: ${file.name} (${sizeMB} MB) — preview skipped for large files. Full data will be extracted server-side.]`;
+      return `[Excel file: ${file.name} (${sizeMB} MB) - preview skipped for large files. Full data will be extracted server-side.]`;
     }
     try {
       const XLSX = await import('xlsx');
       const arrayBuffer = await file.arrayBuffer();
-      // Limit to 100 rows per sheet for preview — prevents main thread freeze
+      // Limit to 100 rows per sheet for preview - prevents main thread freeze
       const workbook = XLSX.read(arrayBuffer, { type: 'array', sheetRows: 100 });
       const sheets: string[] = [];
       const maxSheets = 6;
@@ -2044,7 +2044,7 @@ export default function DocumentProcessor() {
               const uploadData = await uploadRes.json();
               documentId = uploadData.documentId?.toString();
             }
-          } catch { /* non-blocking — file still usable from memory */ }
+          } catch { /* non-blocking - file still usable from memory */ }
           setUploadedFiles(prev =>
             prev.map(f =>
               f.id === newFile.id
@@ -2088,7 +2088,7 @@ export default function DocumentProcessor() {
     const pct = (n: number) => `${fmt(n)}%`;
     const rand = (n: number) => `R ${fmt(Math.round(n))}`;
 
-    // — Ownership —
+    // - Ownership -
     const totalShares = parsed.shareholders.reduce((s, sh) => s + (sh.shares || 0), 0);
     const blackShares = parsed.shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackOwnership || 0), 0);
     const blackWomenShares = parsed.shareholders.reduce((s, sh) => s + (sh.shares || 0) * Math.min(1, sh.blackWomenOwnership || 0), 0);
@@ -2101,14 +2101,14 @@ export default function DocumentProcessor() {
       entities.push({ name: 'BlackWomenEconomicInterest', value: pct(blackWomenPct), confidence: 0.95, status: 'approved', pillar: 'Ownership' });
       parsed.shareholders.forEach(sh => {
         entities.push({
-          name: `Shareholder — ${sh.name}`,
+          name: `Shareholder - ${sh.name}`,
           value: `${pct((sh.blackOwnership || 0) * 100)} black, ${sh.shares || 0} shares`,
           confidence: 0.95, status: 'approved', pillar: 'Ownership',
         });
       });
     }
 
-    // — Management Control —
+    // - Management Control -
     const byDesig = (d: string) => parsed.employees.filter(e => e.designation === d);
     const blackPct = (arr: any[]) => arr.length > 0 ? (arr.filter(e => BLACK_RACES.includes(e.race)).length / arr.length) * 100 : 0;
     if (parsed.employees.length > 0) {
@@ -2120,7 +2120,7 @@ export default function DocumentProcessor() {
       entities.push({ name: 'TotalEmployees', value: `${parsed.employees.length}`, confidence: 0.95, status: 'approved', pillar: 'Management Control' });
     }
 
-    // — Skills Development —
+    // - Skills Development -
     const leviable = parsed.financials.leviableAmount || 0;
     const blackTraining = parsed.trainingPrograms.filter(t => t.isBlack).reduce((s, t) => s + (t.cost || 0), 0);
     const skillsPct = leviable > 0 ? (blackTraining / leviable) * 100 : 0;
@@ -2131,7 +2131,7 @@ export default function DocumentProcessor() {
       entities.push({ name: 'BlackLearnerships', value: `${parsed.trainingPrograms.filter(t => t.isBlack && t.category === 'learnership').length}`, confidence: 0.95, status: 'approved', pillar: 'Skills Development' });
     }
 
-    // — Preferential Procurement —
+    // - Preferential Procurement -
     const allSpend = parsed.suppliers.reduce((s, sup) => s + (sup.spend || 0), 0);
     const tmps = (parsed.financials.tmps || 0) > 0 ? parsed.financials.tmps : allSpend;
     const LEVEL_W: Record<number, number> = { 1: 1, 2: 0.9, 3: 0.8, 4: 0.6, 5: 0.5, 6: 0.4, 7: 0.3, 8: 0.1 };
@@ -2144,14 +2144,14 @@ export default function DocumentProcessor() {
       entities.push({ name: 'TotalSuppliers', value: `${parsed.suppliers.length}`, confidence: 0.95, status: 'approved', pillar: 'Preferential Procurement' });
       parsed.suppliers.forEach(sup => {
         entities.push({
-          name: `Supplier — ${sup.name}`,
+          name: `Supplier - ${sup.name}`,
           value: `Level ${sup.beeLevel}, ${rand(sup.spend || 0)}`,
           confidence: 0.95, status: 'approved', pillar: 'Preferential Procurement',
         });
       });
     }
 
-    // — ESD & SED —
+    // - ESD & SED -
     const npat = parsed.financials.npat || 0;
     const esdTotal = parsed.esdContributions.reduce((s, c) => s + c.amount, 0);
     const sedTotal = parsed.sedContributions.reduce((s, c) => s + c.amount, 0);
@@ -3874,7 +3874,7 @@ export default function DocumentProcessor() {
                     Next <ChevronRight className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Extraction summary — show what data was found */}
+                  {/* Extraction summary - show what data was found */}
                   {allSaved && !isSubmitted && (() => {
                     const tbl: Record<string, number> = {};
                     for (const doc of extractionResults) {
@@ -3896,7 +3896,7 @@ export default function DocumentProcessor() {
                     );
                   })()}
 
-                  {/* Submit button — only enabled once all docs are saved */}
+                  {/* Submit button - only enabled once all docs are saved */}
                   <button onClick={handleSubmit} disabled={!allSaved || isSubmitted || isSavingSession}
                     title={!allSaved ? `Save all ${extractionResults.length} document${extractionResults.length > 1 ? 's' : ''} before submitting` : undefined}
                     className={`px-4 py-2 rounded-[10px] font-semibold text-[13px] smooth press-sm flex items-center gap-1.5 transition-colors
@@ -4641,7 +4641,7 @@ export default function DocumentProcessor() {
                                     <p className="text-[14px] text-white leading-snug break-words">{entity.value}</p>
                                   ) : entity.status === 'not_found' ? (
                                     <p className="text-[13px] text-[#48484a] italic flex items-center gap-1.5">
-                                      Not found in document — click to add manually
+                                      Not found in document - click to add manually
                                     </p>
                                   ) : (
                                     <p className="text-[13px] text-[#3a3a3c] italic flex items-center gap-1.5">
@@ -4947,7 +4947,7 @@ export default function DocumentProcessor() {
                   criteria: p.criteria || [],
                 }));
             } else if (sc) {
-              // Legacy flat format — targets read from scorecard data (not hardcoded)
+              // Legacy flat format - targets read from scorecard data (not hardcoded)
               const LEGACY_PILLARS = [
                 { key: 'ownership', label: 'Ownership' },
                 { key: 'managementControl', label: 'Management Control' },
@@ -5292,7 +5292,7 @@ export default function DocumentProcessor() {
       {/* Development Mode Indicator */}
       <DevModeBadge />
 
-      {/* Admin: Lake Trading test data floating button — review page only */}
+      {/* Admin: Lake Trading test data floating button - review page only */}
       {user?.role === 'admin' && currentPage === 'review' && extractionResults.length > 0 && (
         <div className="fixed z-50 bottom-6 right-6">
           <button

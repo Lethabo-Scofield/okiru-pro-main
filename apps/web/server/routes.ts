@@ -36,7 +36,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
-  logger.warn("GROQ_API_KEY is not set — AI endpoints will return errors");
+  logger.warn("GROQ_API_KEY is not set - AI endpoints will return errors");
 }
 const groq = new Groq({ apiKey: groqApiKey || "not-set" });
 
@@ -106,7 +106,7 @@ export async function registerRoutes(
       touchAfter: 24 * 3600,
     });
   } else {
-    logger.warn("Using in-memory session store (MONGODB_URI not set) — sessions will not persist across restarts");
+    logger.warn("Using in-memory session store (MONGODB_URI not set) - sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -141,7 +141,7 @@ export async function registerRoutes(
     return entry.count <= limit;
   }
 
-  // Feedback routes (DevMode widget) — public POST, authenticated read/manage
+  // Feedback routes (DevMode widget) - public POST, authenticated read/manage
   registerFeedbackRoutes(app, requireAuth);
 
   app.post("/api/auth/check-username", async (req, res) => {
@@ -280,7 +280,7 @@ export async function registerRoutes(
       }
 
       // Ensure the user has a workspace (don't create duplicates on resend/verify-then-recreate flows).
-      // Workspace provisioning is required for the signup objective — fail the request if it errors.
+      // Workspace provisioning is required for the signup objective - fail the request if it errors.
       try {
         const existingWorkspaces = await storage.listWorkspacesForUser(user.id);
         if (existingWorkspaces.length === 0) {
@@ -809,7 +809,7 @@ export async function registerRoutes(
             return res.status(400).json({ message: "Email already in use" });
           }
           updates.email = trimmed;
-          // Changing email invalidates verification — must re-verify before email-gated actions (e.g. invite accept).
+          // Changing email invalidates verification - must re-verify before email-gated actions (e.g. invite accept).
           updates.isVerified = false;
         }
       }
@@ -1272,21 +1272,21 @@ export async function registerRoutes(
 
 Your job: read the user's natural language description (it may be a single word, a phrase, or a full sentence) and deeply understand WHAT data they are trying to extract from documents. Then generate exactly ONE perfectly-configured entity definition.
 
-CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices — all in a South African business context.
+CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices - all in a South African business context.
 
 INSTRUCTIONS:
-1. Parse the user's intent — even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
+1. Parse the user's intent - even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
 2. Infer the data type: date, monetary amount (Rand), percentage, name/organisation, identifier/reference, level/status, count, address, etc.
 3. Generate a label in PascalCase that is specific and descriptive (2-3 words is fine, e.g. "BBBEELevel", "CertificateExpiryDate", "BlackOwnership")
 4. Write a professional definition that explains exactly what the entity represents and when it appears in documents
 5. Synonyms: realistic alternative names as they appear in actual B-BBEE documents
 6. Positives: realistic South African examples of actual values (use Rand amounts like R1,200,000, percentages like 51%, dates like 31 March 2025, levels like "Level 2 Contributor")
-7. Negatives: common false positives — values that look similar but are NOT this entity
+7. Negatives: common false positives - values that look similar but are NOT this entity
 8. Zones: where in documents this typically appears (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
 9. Keywords: actual words that appear near this value in documents (must = required co-occurrence, nice = helpful, neg = words that rule it out)
 10. Pattern: a precise regex if the value has a predictable format, otherwise ""
 
-RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation — raw JSON only.
+RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation - raw JSON only.
 
 Schema:
 {
@@ -1541,7 +1541,7 @@ Respond ONLY with a valid JSON array.`;
           const streamSystemPrompt = hasRealContent
             ? `You are a document entity extraction engine. You are given the actual text content of a document named "${fileName}". Your job is to find and extract the requested entities from the document text.
 
-CRITICAL RULES — READ CAREFULLY:
+CRITICAL RULES - READ CAREFULLY:
 1. ALWAYS search the ENTIRE document text thoroughly, word by word if needed.
 2. Matching is CASE-INSENSITIVE. "nationality" matches "Nationality", "NATIONALITY", etc.
 3. Look for the entity label itself, its synonyms, related words, and ANY mention that relates to the entity concept.

@@ -17,7 +17,7 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
-    logger.debug("SMTP not configured — email transport unavailable", { host: !!host, user: !!user, pass: !!pass });
+    logger.debug("SMTP not configured - email transport unavailable", { host: !!host, user: !!user, pass: !!pass });
     return null;
   }
 
@@ -52,7 +52,7 @@ export function getMaxOtpAttempts(): number {
 export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: string | null) {
   const t = getTransporter();
   if (!t) {
-    logger.warn("SMTP not configured — skipping OTP email", { to: toEmail });
+    logger.warn("SMTP not configured - skipping OTP email", { to: toEmail });
     return false;
   }
 
@@ -64,7 +64,7 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
     await t.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: toEmail,
-      subject: `${otpCode} — Your Okiru Verification Code`,
+      subject: `${otpCode} - Your Okiru Verification Code`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="background: #1a1a2e; border-radius: 12px; padding: 32px; color: #ffffff; text-align: center;">
@@ -76,7 +76,7 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
             <p style="margin: 0 0 4px; font-size: 12px; color: #9ca3af;">This code expires in <strong style="color: #ffffff;">${expiryMinutes} minutes</strong>.</p>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">If you didn't request this code, please ignore this email.</p>
             <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #2d2d4a;">
-              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru — B-BBEE Compliance Platform</p>
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru - B-BBEE Compliance Platform</p>
             </div>
           </div>
         </div>
@@ -93,7 +93,7 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
 export async function sendPasswordResetEmail(toEmail: string, resetToken: string, userName?: string | null) {
   const t = getTransporter();
   if (!t) {
-    logger.warn("SMTP not configured — skipping password reset email", { to: toEmail });
+    logger.warn("SMTP not configured - skipping password reset email", { to: toEmail });
     return false;
   }
   logger.debug("Sending password reset email", { to: toEmail });
@@ -105,7 +105,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
     await t.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: toEmail,
-      subject: `Password Reset — Okiru Pro`,
+      subject: `Password Reset - Okiru Pro`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="background: #1a1a2e; border-radius: 12px; padding: 32px; color: #ffffff; text-align: center;">
@@ -117,7 +117,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
             <p style="margin: 0 0 4px; font-size: 12px; color: #9ca3af;">This code expires in <strong style="color: #ffffff;">15 minutes</strong>.</p>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">If you didn't request a password reset, please ignore this email.</p>
             <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #2d2d4a;">
-              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru — B-BBEE Compliance Platform</p>
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru - B-BBEE Compliance Platform</p>
             </div>
           </div>
         </div>
@@ -138,7 +138,7 @@ export function isSmtpConfigured(): boolean {
 export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
   const t = getTransporter();
   if (!t) {
-    logger.debug("SMTP not configured — skipping login notification", { user: userEmail });
+    logger.debug("SMTP not configured - skipping login notification", { user: userEmail });
     return;
   }
   logger.debug("Sending login notification", { user: userEmail, org: orgName });
@@ -151,7 +151,7 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
     await t.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: ADMIN_EMAIL,
-      subject: `Staff Login — ${displayName}`,
+      subject: `Staff Login - ${displayName}`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; color: #ffffff;">
@@ -175,7 +175,7 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
               </tr>
             </table>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #2d2d4a;">
-              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru Pro — B-BBEE Compliance Platform</p>
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">Sent by Okiru Pro - B-BBEE Compliance Platform</p>
             </div>
           </div>
         </div>

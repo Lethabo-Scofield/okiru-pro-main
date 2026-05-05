@@ -41,8 +41,8 @@ export function serveStatic(app: Express) {
   // Serve remaining static files
   app.use(express.static(distPath));
 
-  // SPA fallback — any unmatched route returns index.html
-  // Note: Express 5 requires named wildcard — "/*path" not "*"
+  // SPA fallback - any unmatched route returns index.html
+  // Note: Express 5 requires named wildcard - "/*path" not "*"
   app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(distPath!, "index.html"));
   });

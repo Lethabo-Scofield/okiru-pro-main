@@ -50,7 +50,7 @@ interface HistoryPayload {
 }
 
 function formatDate(d: string | null | undefined): string {
-  if (!d) return '—';
+  if (!d) return '-';
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return d;
   return dt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -270,16 +270,16 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-10">
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber || '—'} />
-              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize || '—'} />
-              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : '—'} />
-              <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : '—'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : '—'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : '—'} />
+              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber || '-'} />
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize || '-'} />
+              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : '-'} />
+              <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : '-'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : '-'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : '-'} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Issue date" value={formatDate(data.issueDate)} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={formatDate(data.expiryDate)} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || '—'} />
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber || '—'} />
+              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || '-'} />
+              <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber || '-'} />
             </div>
 
             <div className="flex items-center gap-2 flex-wrap mb-10">
@@ -333,7 +333,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             <div className="p-5 space-y-3 max-h-[60vh] overflow-y-auto">
               <div className="rounded-lg p-3 bg-[#1c1c1e] border border-[#2c2c2e]">
                 <div className="text-[12px] text-[#22d3ee] uppercase tracking-wide mb-1">Current</div>
-                <div className="text-[13px] text-white">{history.latest.fileName || '—'}</div>
+                <div className="text-[13px] text-white">{history.latest.fileName || '-'}</div>
                 <div className="text-[12px] text-[#8e8e93]">
                   Uploaded {formatDate(history.latest.uploadedAt)}
                   {history.latest.expiryDate && ` · expires ${formatDate(history.latest.expiryDate)}`}
@@ -345,7 +345,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               {history.versions.slice().reverse().map((v, idx) => (
                 <div key={idx} className="rounded-lg p-3 bg-[#0d0d10] border border-[#1c1c1e]">
                   <div className="text-[12px] text-[#636366] uppercase tracking-wide mb-1">Previous</div>
-                  <div className="text-[13px] text-[#a1a1aa]">{v.fileName || '—'}</div>
+                  <div className="text-[13px] text-[#a1a1aa]">{v.fileName || '-'}</div>
                   <div className="text-[12px] text-[#636366]">
                     Replaced {formatDate(v.replacedAt)}
                     {v.expiryDate && ` · expired ${formatDate(v.expiryDate)}`}

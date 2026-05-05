@@ -13,7 +13,7 @@ export async function connectDB(): Promise<typeof mongoose> {
     if (process.env.NODE_ENV === "production") {
       throw new Error("MONGODB_URI must be set in production.");
     }
-    logger.warn("MONGODB_URI is not set — database features will be unavailable");
+    logger.warn("MONGODB_URI is not set - database features will be unavailable");
     return mongoose;
   }
 

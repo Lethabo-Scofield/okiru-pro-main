@@ -25,7 +25,7 @@ interface CertificateRow {
   expiryDate: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   lastModified: string | null;
-  // Phase 2 — public visibility
+  // Phase 2 - public visibility
   id?: string | null;
   slug?: string | null;
   verified?: boolean;
@@ -45,14 +45,14 @@ interface CertStats {
 }
 
 function formatExpiry(dateStr: string | null): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '—';
+  if (isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function formatPct(n: number | null): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   return `${n.toFixed(n < 10 ? 1 : 0)}%`;
 }
 
@@ -491,7 +491,7 @@ export default function CertificateHub() {
             <em style={{ color: '#a5b4fc' }}>available to the public.</em>
           </h1>
           <p className="mt-4 text-[14px] text-[#a1a1aa] max-w-[640px] leading-relaxed">
-            Search and verify South African B-BBEE compliance certificates. Filter by company size, ownership, and validity. Anyone can browse — sign in to add your own certificate to the registry.
+            Search and verify South African B-BBEE compliance certificates. Filter by company size, ownership, and validity. Anyone can browse - sign in to add your own certificate to the registry.
           </p>
         </div>
 
@@ -746,7 +746,7 @@ export default function CertificateHub() {
                     onChange={e => setForm({ ...form, companySize: e.target.value as CompanySize | '' })}
                     className="ok-cert-input"
                   >
-                    <option value="">— Select —</option>
+                    <option value="">- Select -</option>
                     {COMPANY_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
@@ -892,10 +892,10 @@ function CertRow({
       </div>
 
       <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
-        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">—</span>}
+        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">-</span>}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
-        {cert.companySize || <span className="text-[#48484a]">—</span>}
+        {cert.companySize || <span className="text-[#48484a]">-</span>}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
         {cert.blackOwnership != null ? (
@@ -906,7 +906,7 @@ function CertRow({
             )}
           </span>
         ) : (
-          <span className="text-[#48484a]">—</span>
+          <span className="text-[#48484a]">-</span>
         )}
       </div>
       <div className="hidden md:flex items-center gap-2 text-[13px] text-[#a1a1aa]">

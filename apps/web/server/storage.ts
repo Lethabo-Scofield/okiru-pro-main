@@ -1098,7 +1098,7 @@ import { createLogger } from "./logger";
 const storageLogger = createLogger("Storage");
 
 if (!useDatabase) {
-  storageLogger.warn("Using in-memory storage (MONGODB_URI not set) — data will not persist across restarts");
+  storageLogger.warn("Using in-memory storage (MONGODB_URI not set) - data will not persist across restarts");
   (async () => {
     const bcrypt = await import("bcryptjs");
     const hashedPassword = await bcrypt.hash("demo", 8);
@@ -1124,7 +1124,7 @@ if (!useDatabase) {
       annualRevenue: "R10M - R50M",
       acquisitionSource: "demo",
       toolsUsed: [],
-      biggestChallenge: "Demo account — onboarding pre-completed",
+      biggestChallenge: "Demo account - onboarding pre-completed",
     });
     storageLogger.info("Seeded demo user company profile", { userId: demoUser.id });
 

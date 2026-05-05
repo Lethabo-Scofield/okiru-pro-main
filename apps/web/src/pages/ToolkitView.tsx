@@ -66,7 +66,7 @@ async function hydrateStoreFromSession(session: any) {
     calculatorConfig: null,
   });
 
-  // Always load config and recalculate — never use stale saved results
+  // Always load config and recalculate - never use stale saved results
   const sectorCode = ci.sectorCode || 'RCOGP';
   const turnover = ci.annualTurnover ?? fin.totalRevenue ?? 0;
   const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
@@ -101,7 +101,7 @@ export default function ToolkitView() {
         (storeState.activeClientId === uploadId || storeState.activeClientId === sessionId);
 
       if (alreadyHydrated) {
-        // Store already has valid data from DocumentProcessor — don't overwrite
+        // Store already has valid data from DocumentProcessor - don't overwrite
         localStorage.setItem("okiru-pro-active-client", storeState.activeClientId!);
         setSessionLoading(false);
         return;

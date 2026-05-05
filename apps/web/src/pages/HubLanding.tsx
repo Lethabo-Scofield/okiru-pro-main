@@ -128,7 +128,7 @@ export default function HubLanding() {
       id: 'bbbee-scorecard',
       title: 'B-BBEE Scorecard Calculator',
       description:
-        'Model your scorecard across all five elements — Ownership, Management Control, Skills Development, Enterprise Development, and Socio-Economic Development.',
+        'Model your scorecard across all five elements - Ownership, Management Control, Skills Development, Enterprise Development, and Socio-Economic Development.',
       tag: 'B-BBEE',
       aiBadge: 'AI-Scored',
       icon: <BarChart3 className="w-5 h-5" />,
@@ -201,7 +201,7 @@ export default function HubLanding() {
       className="font-sans min-h-screen bg-black relative overflow-x-hidden"
       style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}
     >
-      {/* Single, very subtle purple wash — quiet brand signal, nothing more */}
+      {/* Single, very subtle purple wash - quiet brand signal, nothing more */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft"
@@ -211,7 +211,7 @@ export default function HubLanding() {
         }}
       />
 
-      {/* Top progress bar — visible while initial profile/stats are loading */}
+      {/* Top progress bar - visible while initial profile/stats are loading */}
       {(profileLoading || statsLoading || authLoading) && (
         <div className="top-progress" aria-hidden data-testid="top-progress" />
       )}
@@ -251,8 +251,8 @@ export default function HubLanding() {
             <button
               onClick={() => navigate('/workspace')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Your team — invite people to collaborate"
-              aria-label="Your team — invite people to collaborate"
+              title="Your team - invite people to collaborate"
+              aria-label="Your team - invite people to collaborate"
               data-testid="btn-workspace"
             >
               <Building2 className="h-3.5 w-3.5" />
@@ -322,7 +322,7 @@ export default function HubLanding() {
       )}
 
       <main className="relative max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
-        {/* HERO — personalized */}
+        {/* HERO - personalized */}
         <section className="mb-10 fade-in" data-testid="hero-welcome">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[#8e8e93] text-[10.5px] font-semibold tracking-[0.14em] uppercase mb-5">
             <span className="w-1.5 h-1.5 rounded-full bg-white/60"></span>
@@ -384,7 +384,7 @@ export default function HubLanding() {
           />
           <StatTile
             label="B-BBEE level"
-            value={profileLoading ? null : (beeLevel || '—')}
+            value={profileLoading ? null : (beeLevel || '-')}
             sub={profileLoading ? '' : (beeLevel ? 'Current rating' : 'Set in onboarding')}
             loading={profileLoading}
             accent
