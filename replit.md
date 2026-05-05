@@ -3,6 +3,12 @@
 ## Project Overview
 A comprehensive B-BBEE (Broad-Based Black Economic Empowerment) Compliance and Scorecard Management Platform. It automates extraction of data from compliance documents (Excel toolkits, PDF certificates) and performs deterministic score calculations across multiple industry sectors.
 
+## Recent Changes
+- **Hub redesign (May 2026)**: `apps/web/src/pages/HubLanding.tsx` redesigned for a less generic, more personalized feel. Adds time-of-day greeting + company name pulled from `/api/onboarding/me` (with skeleton loaders), a 4-tile live stats strip (toolkits, team members, pending invites, B-BBEE level) backed by `/api/workspaces/:id/members` and `/invites`, a featured/secondary bento layout for active toolkits with a brand sky+emerald gradient, a compact "On the roadmap" row for upcoming toolkits, ambient brand orbs in the hero, sticky glass header with ⌘K search shortcut, and skeleton loaders throughout while data loads.
+- **Demo seed**: `apps/web/server/storage.ts` (in-memory branch) seeds `demoUser` (username `demo`, password `demo`) plus a CompanyProfile and a "Okiru Demo" Workspace assigning the user as Owner, so `/onboarding` is skipped and `/workspace` shows the Invite card.
+- **FeedbackWidget**: hidden on `/onboarding` via the `GlobalFeedbackWidget` wrapper in `apps/web/src/App.tsx`.
+- **Hub tour removed**: `OnboardingWelcome`, `OnboardingTour`, the `useOnboarding` hook, and the "Take a tour" button were removed from `HubLanding.tsx`.
+
 ## Architecture
 
 This is a **pnpm monorepo** with three applications:
