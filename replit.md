@@ -1,149 +1,118 @@
-# Okiru Pro - B-BBEE Compliance Platform
+# Okiru Pro — B-BBEE Compliance & Scorecard Management Platform
 
-## Project Overview
-A comprehensive B-BBEE (Broad-Based Black Economic Empowerment) Compliance and Scorecard Management Platform. It automates extraction of data from compliance documents (Excel toolkits, PDF certificates) and performs deterministic score calculations across multiple industry sectors.
+## Overview
+Okiru Pro is a comprehensive platform for automating B-BBEE (Broad-Based Black Economic Empowerment) compliance calculations, scorecard management, and reporting for South African businesses.
 
-## Recent Changes
-- **Hub redesign (May 2026)**: `apps/web/src/pages/HubLanding.tsx` redesigned for a less generic, more personalized feel. Adds time-of-day greeting + company name pulled from `/api/onboarding/me` (with skeleton loaders), a 4-tile live stats strip (toolkits, team members, pending invites, B-BBEE level) backed by `/api/workspaces/:id/members` and `/invites`, a featured/secondary bento layout for active toolkits, a compact "On the roadmap" row for upcoming toolkits, sticky glass header with ⌘K search shortcut, and skeleton loaders throughout while data loads.
-- **Hub palette toned down (May 2026)**: User feedback "too much color, overwhelming". Stripped sky/emerald/amber accents from HubLanding. Now: black background, white as the dominant text/UI color, with **purple (violet) used sparingly** as the only accent — the FeaturedCard icon, the B-BBEE level stat value, and a single subtle violet ambient wash behind the hero. All "Live" dots, focus rings, hero badge, and stat values are neutral white.
-- **Hub motion + loaders (May 2026)**: Added a layer of subtle motion to HubLanding — a fixed top progress bar (violet+white gradient) shows whenever auth/profile/stats are loading, the ambient orb drifts via `.float-soft`, all cards (`StatTile`, `FeaturedCard`, `ActiveCard`, `UpcomingCard`) accept a `staggerClass` and use `.card-rise` + `.stagger-N` for an entrance lift, "Live" dots gently breathe via `.pulse-soft`, featured/active card icons lift on hover via `.icon-rise`, and stat values play `.bounce-in` on resolve. Skeleton placeholders inside HubLanding were swapped for `.skel` shimmer-on-dark spans for a more polished loading state. New utilities live in `apps/web/src/index.css` and are all gated by `@media (prefers-reduced-motion: reduce)`.
-- **Demo seed**: `apps/web/server/storage.ts` (in-memory branch) seeds `demoUser` (username `demo`, password `demo`) plus a CompanyProfile and a "Okiru Demo" Workspace assigning the user as Owner, so `/onboarding` is skipped and `/workspace` shows the Invite card.
-- **FeedbackWidget**: hidden on `/onboarding` via the `GlobalFeedbackWidget` wrapper in `apps/web/src/App.tsx`.
-- **Hub tour removed**: `OnboardingWelcome`, `OnboardingTour`, the `useOnboarding` hook, and the "Take a tour" button were removed from `HubLanding.tsx`.
+## Design System
+The UI follows the **Sim Design Language** (tokens defined in `apps/web/src/index.css` and `apps/web/Toolkit/src/index.css`). The brand color palette is preserved (Toolkit purple primary `265 84% 58%`, app dark/slate primary `220 14% 28%`); only structural tokens were aligned to Sim DL.
+
+**Tokens applied:**
+- **Typography**: Season font with system fallbacks; body 15px/24px (weight 450); h1–h6 follow the Sim modular scale (36/30/27/22/18/15px).
+- **Radius scale**: `--radius-sm: 4px`, `--radius-md: 8px`, `--radius-lg: 12px`, `--radius-xl: 16px`. Base `--radius` = `0.5rem`.
+- **Status colors** (semantic, defined in both light + dark): `--status-success`, `--status-warning`, `--status-error`, `--status-info` plus `-bg` variants. Exposed via Tailwind utilities like `bg-status-success-bg` / `text-status-error`.
+- **Elevation**: `--shadow-elev-1/2/4/6` and `.elev-1`–`.elev-6` utility classes.
+- **Motion**: `--motion-duration-xs/sm/base/md` (100/150/200/300ms) and `--motion-easing-standard/spring/out`.
+- **Buttons**: default `min-h-10`, sm `min-h-8`, lg `min-h-12`, icon `h-10 w-10` (Sim DL sizing).
+- **Typography utilities**: `.text-display`, `.text-body-md`, `.text-body-sm`, `.text-caption`, `.text-mono`.
 
 ## Architecture
+This is a **pnpm monorepo** with three services:
 
-This is a **pnpm monorepo** with three applications:
+### Services
+| Service | Path | Port | Tech |
+|---|---|---|---|
+| Web App | `apps/web` | 5000 | React 19, Vite, Express (SSR/proxy) |
+| API Server | `apps/api` | 3000 | Node.js, Express 5, TypeScript |
+| Computation Engine | `apps/Computation-Engine` | 8000 | Python 3, FastAPI, uvicorn |
 
-### 1. Web App (`apps/web`) — Port 5000
-- **React 19** frontend with **Vite**, **Tailwind CSS**, **Radix UI / shadcn**
-- **Express** server that serves both API routes and the Vite dev server (middleware mode)
-- Proxy routes forward `/api/*` to the API server on port 3000
-- Entry point: `apps/web/server/index.ts`
-- Start: `cd apps/web && pnpm dev`
+### Shared Packages
+- `packages/types` — Shared TypeScript type definitions
 
-### 2. API Server (`apps/api`) — Port 3000
-- **Node.js / Express** backend with TypeScript
-- Contains scoring engine, extraction pipeline, document processing
-- Integrates with ArangoDB (graph data) and MongoDB (application state)
-- Uses OpenAI / Azure OpenAI and Tesseract.js for OCR
-- Entry point: `apps/api/index.ts`
-- Start: `cd apps/api && pnpm dev`
+## Workflows
+- **Start application** — runs `apps/web` (React frontend + Express server on port 5000)
+- **API Server** — runs `apps/api` (backend API on port 3000)
+- **Computation Engine** — runs `apps/Computation-Engine` (Python FastAPI on port 8000)
 
-### 3. Computation Engine (`apps/Computation-Engine`) — Port 8000
-- **Python / FastAPI** service
-- Compiles Excel-based scorecard models into dependency graphs using `xlcalculator` and `networkx`
-- Evaluates B-BBEE formulas without needing Excel at runtime
-- Entry point: `apps/Computation-Engine/run_server.py`
-- Start: `cd apps/Computation-Engine && python run_server.py`
+## Tech Stack
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Radix UI, TanStack Query, Wouter
+- **Backend (Node)**: Express 5, tsx, MongoDB/Mongoose, ArangoDB, Redis
+- **Backend (Python)**: FastAPI, uvicorn, python-arango, networkx, openpyxl
+- **AI/LLM**: OpenAI (Azure), Google Generative AI, Groq
+- **Auth**: Passport.js (local strategy), express-session
 
-## Key Technologies
-- **Frontend**: React 19, Vite, Tailwind CSS v4, Radix UI, Wouter (routing), TanStack Query, Zustand, Recharts
-- **Backend**: Express v5, TypeScript, tsx, esbuild
-- **Database**: ArangoDB (graph), MongoDB (documents), Redis (caching)
-- **AI/ML**: OpenAI, Azure OpenAI, Tesseract.js, Groq
-- **Python**: FastAPI, uvicorn, xlcalculator, networkx, python-arango
-- **Package Manager**: pnpm 10 (workspaces)
+## Key Features
+1. **B-BBEE Scorecard Management** — pillar-by-pillar data entry (Ownership, Management Control, Skills Development, ESD, SED, YES)
+2. **Document Extraction** — AI-powered parsing of PDFs and Excel toolkits
+3. **Formula Graph Engine** — dependency-aware B-BBEE calculation pipeline
+4. **Reporting** — PDF (Certificate + Verification Report), Excel, and PPTX scorecard exports. All exports use dynamic pillar targets from `state.scorecard.<pillar>.target` (RCOGP Generic defaults: Ownership 25, Management 19, Skills 25, Procurement 29, SD 10, ED 7, SED 5, YES 3, Total 120). Skills programs use schema-aware field names (`programName`/`totalCost`/`categoryCode`/`race`-derived `isBlack`) with legacy fallbacks.
+5. **What-If Modeling** — scenario planning for scorecard optimization
 
-## Workflows (Replit)
-- **Project** (parallel): Runs all three services together
-- **Start application**: Web frontend + Express server on port 5000
-- **API Server**: API backend on port 3000
-- **Computation Engine**: Python FastAPI service on port 8000
+## Certificate Hub — KPI Dashboard & Supplier Registry
+The Certificate Hub (`/certificates`) features:
+1. **KPI Dashboard** — 6 glassmorphic metric cards: Total Suppliers, Valid Certificates, Expiring Soon, Expired, Avg B-BBEE Level, Empowering Suppliers. All KPIs compute client-side from supplier chunk data. Clicking a card filters the registry table below.
+2. **Supplier Certificate Registry** — sortable, filterable table of suppliers with B-BBEE level badges, status indicators, expiry dates, and CSV export.
+3. **Certificate Files** — full-text PDF content search powered by Azure AI Search (tab-based view).
+4. **Certificate Upload** — drag-and-drop upload modal (header button) supporting PDF, PNG, JPG, XLS, DOC up to 50MB, multi-file (up to 20). Uploads go to Azure Blob Storage via `POST /api/certificates/upload` (auth-protected, multer, UUID-prefixed blob names scoped by org). File list auto-refreshes after upload.
+5. **Expiry Date Extraction** — `POST /api/certificates/extract` reads each certificate PDF/image from Azure Blob, extracts text via pdfjs-dist (text layer) or Tesseract OCR (scanned), and uses regex NER to find expiry dates (patterns: "Valid until", "Expiry Date", "Expires", etc.). Results stored in MongoDB `certificate_metadata` collection. `GET /api/certificates/stats` returns live KPI counts computed from extracted expiry dates. Frontend shows "Extract Dates" button with SSE progress when metadata is missing.
+6. **API Endpoint** — `GET/POST /api/supplier-certificates` (auth-protected, validated, in-memory).
 
-## Ports
-- `5000` → External port 80 (main web app)
-- `3000` → External port 3000 (API server)
-- `8000` → External port 8000 (computation engine)
-- `24679` → External port 3001 (Vite HMR websocket)
+## Certificate Hub — Full-Text Search (Azure AI Search)
+The Certificate Hub has been upgraded with full-text PDF content search powered by Azure AI Search.
 
-## Environment Variables (Required for full functionality)
-- `MONGODB_URI` / `MONGO_URI` — MongoDB connection string
-- `ARANGO_URL` — ArangoDB URL (defaults to cloud instance)
-- `ARANGO_DB`, `ARANGO_USER`, `ARANGO_PASSWORD` — ArangoDB credentials
-- `OPENAI_API_KEY` or Azure OpenAI variables — for AI extraction features
-- `GROQ_API_KEY` — for AI chat/extraction endpoints
-- `SESSION_SECRET` — express-session secret
-- `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME` — required for the Certificate Hub uploads/downloads against Azure Blob Storage container `clients-certs`. Provided in the Azure deployment environment.
+### How It Works
+1. **Ingestion Script** (`apps/api/scripts/ingestCertificates.ts`) — reads PDFs from Azure Blob Storage, extracts text via pdfjs-dist (text PDFs) or Tesseract OCR (scanned/image PDFs), chunks text (~1000 chars), and uploads to an Azure AI Search index.
+2. **Search API** (`GET /api/certificates/search?q=<query>&userId=<userId>`) — combines filename matches from Blob Storage with full-text content matches from Azure AI Search, returns results grouped by document with text snippets.
+3. **Frontend** (`apps/web/src/pages/CertificateHub.tsx`) — debounced search bar queries the new API; falls back to original filename-based browsing when no search query is active.
+4. **OCR Support** — uses `tesseract.js` + `pdftoppm` to extract text from scanned/image PDFs that have no text layer.
 
-## Certificate Hub (Public B-BBEE Registry)
-- **Public access**: `/certificates` is a **public** route (no `ProtectedRoute`). Anonymous visitors can browse, search, filter, and download. The landing page nav exposes a "B-BBEE Certificates" link before Sign in / Get started (desktop + mobile).
-- **Auth-gated upload**: Only the upload action requires authentication. Anonymous users clicking Upload are redirected to `/auth?mode=register&redirect=/certificates`. `AuthWrapper` (`apps/web/src/pages/AuthWrapper.tsx`) honors `?redirect=<same-origin path>` and `?mode=register` query params and routes the user back after a successful login.
-- **Rich metadata schema**: `certificateMetadataSchema` (`apps/api/models.ts`) carries `supplierName`, `vatNumber`, `companySize`, `bbbeeLevel`, `blackOwnership`, `blackWomenOwnership`, `expiryDate`, `uploadedByUserId`, `uploadedAt`, `updatedAt`. The hub UI surfaces all of these per row plus a status badge (Valid / Expiring / Expired / Unknown).
-- **Storage fallback chain**: `/list`, `/stats`, `/search`, `/download`, `/upload` in `apps/api/src/routes/certificates.ts` use a 3-tier fallback — Azure Blob (`clients-certs` container) → MongoDB metadata → `apps/api/src/services/certificateStore.ts` (in-memory metadata + local disk under `apps/api/uploads/certificates/`). All endpoints return 200 even when none of Azure, Mongo, or Arango is configured.
-- **Filters**: validity status, company size (EME/QSE/Generic/Large/Specialised), and black-ownership ranges. Search matches company name, VAT number, and filename across both backends.
-- **Bulk uploads** (legacy authed flow still available): the upload modal collects metadata for a single certificate. Multer caps file size at 50 MB.
+### Running the Ingestion
+```bash
+cd apps/api && pnpm ingest:certificates
+```
 
-**Note**: Without MongoDB and ArangoDB, the app runs with in-memory storage (data won't persist across restarts). Core UI features still work.
+### Key Files
+- `apps/api/src/services/azureSearch.ts` — Azure AI Search client, index management, search logic
+- `apps/api/scripts/ingestCertificates.ts` — One-time ingestion script
+- `apps/api/src/routes/certificates.ts` — Search endpoint (with fallback to filename search)
 
-## Shared Packages
-- `packages/types` (`@okiru/types`) — shared TypeScript types used by both web and API
-- `packages/data-layer` (`@okiru/data-layer`) — implementation-free abstractions for the centralized data access layer (Repository, Unit of Work, Data Access Factory, Provider Registry). Provides a `/testing` subpath export with `FakeUnitOfWork` and `FakeDataAccessFactory` so route handlers can be unit-tested without any database. See `packages/data-layer/README.md`.
+## External Dependencies (require configuration)
+- **MongoDB** — set `MONGODB_URI` environment variable
+- **ArangoDB** — set `ARANGO_URL`, `ARANGO_USER`, `ARANGO_PASSWORD`, `ARANGO_DB`
+- **Azure AI Search** — set `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`
+- **Azure Blob Storage** — set `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME`
+- **OpenAI/Azure OpenAI** — set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT`
+- **Groq** — set `GROQ_API_KEY`
+- **Redis** — set `REDIS_URL`
 
-## Centralized Data Layer (apps/api/src/data-layer)
-A pragmatic adoption of the Repository / UoW / Data Access Factory pattern from the architecture docs in `attached_assets/`:
+## Running Without External Services
+The app gracefully degrades when external services are unavailable:
+- Falls back to **in-memory storage** when MongoDB is not connected
+- Computation Engine uses **in-memory DB mode** when ArangoDB is unavailable
+- AI endpoints return errors when API keys are not set
 
-- **Domain interfaces** in `domain/` (e.g. `IUserRepository`/`UserView`, `IClientRepository`/`ClientView`) describe what the app needs from storage in framework-agnostic terms.
-- **Mongo provider** in `mongo/` implements those interfaces using the existing `mongoose` models. `MongoUnitOfWork` exposes one repo per migrated entity (`users`, `clients`, ...) and shares a single Mongoose session across all of them so cross-repository writes participate in the same transaction (when the topology supports it).
-- **`buildDataLayer()`** (`data-layer/index.ts`) wires the provider into an `InMemoryProviderRegistry` keyed by the `DATA_PROVIDER` env var (defaults to `mongo`). Returns `{ provider, factory }`. The factory is stored on `app.locals.dataLayer` from `apps/api/index.ts`.
-- **`attachUow(factory)` middleware** opens a fresh Unit of Work per request and exposes it as `req.uow`. The companion `withUowErrorHandler()` rolls back any UoW that's still open if the route throws.
-- **Production route**: `/api/clients` is fully migrated. `createClientsRouter(factory)` mounts under the data layer; GET/POST/PATCH/logo all flow through `req.uow.clients.*`. Strict zod schemas reject unknown fields on create/update so attackers cannot mass-assign `organizationId`, `id`, or `createdAt`. DELETE and `GET /:id/data` still call `storage.ts` for cross-entity work that depends on entities not yet migrated.
-- **POC route**: `GET /api/data-layer-demo/users/by-username/:username` — minimal reference for adding new entities.
-- **Testing**: `apps/api/src/data-layer/__tests__/data-layer.test.ts` (21 tests) and `apps/api/src/routes/__tests__/clients.test.ts` (9 tests) cover the §9 fake pattern, the IClientRepository contract, mass-assignment guards, and UoW rollback on error.
-- **Migration playbook**: `docs/architecture/DATA-LAYER-MIGRATION-PLAYBOOK.md` documents the 6-step recipe and lists which entities are still on `storage.ts`.
+## Production Deployment
+- **Replit**: Build command builds both `apps/api` and `apps/web`; `scripts/start-production.sh` starts both servers
+- **Docker/K8s**: Separate Dockerfiles for each service (`apps/api/Dockerfile`, `apps/web/Dockerfile`, `apps/Computation-Engine/Dockerfile`)
+- The web server proxies `/api/certificates` (and other API routes) to the API server — both must be running
 
-## Production Hardening
-- **Env validation** (`apps/api/src/env.ts`): zod-validated config; refuses to boot in production without a strong `SESSION_SECRET`, `MONGO_URI`, and `CORS_ORIGIN`.
-- **Session store**: fails closed in production — refuses to boot if MongoDB is unavailable rather than silently using `MemoryStore`.
-- **Security middleware**: helmet, compression, CORS allowlist, body limits (50 MB), per-request id logging, global 120 req/min rate limit, stricter 10 req/min limiter on `/api/auth`.
-- **Production error handler**: strips stack traces from 500 responses in `NODE_ENV=production`.
-- **Graceful shutdown**: SIGTERM/SIGINT close the HTTP server then mongoose, with a 10-second hard-kill safety timer.
+## Development
+```bash
+# Install all packages
+pnpm install
 
-## Company Onboarding Flow
-- After signup/login, `AuthWrapper` calls `GET /api/onboarding/me`. A `404` response means the user hasn't onboarded yet, so they're routed to `/onboarding?redirect=<original-destination>`. The fetch is **retried up to 3× with backoff** to cover the brief post-register window where the new SameSite=None session cookie may not yet be attached; persistent failures default to `needs-onboarding` (safer for fresh signups than skipping). The handled-once guard is **keyed by `user.id`** so logout-then-register on the same mount still triggers a fresh redirect.
-- The `/onboarding` page (apps/web/src/pages/Onboarding.tsx) collects 9 fields: companyName, role, beeLevel, employeeRange, industry (+Other), annualRevenue, acquisitionSource (+Other), toolsUsed[] (+Other), biggestChallenge.
-- On submit, `POST /api/onboarding` upserts the profile (keyed by userId) and the user is redirected to the original destination. When the destination is `/certificates`, the URL becomes `/certificates?openUpload=1` and `CertificateHub` auto-opens the upload modal.
-- Endpoints exist on both the web server (apps/web/server/routes.ts, used in dev with in-memory storage) and the API server (apps/api/src/routes/onboarding.ts, used when MongoDB is available). Both implementations accept the same field set and the data model is shared via `packages/types` (`CompanyProfile` / `InsertCompanyProfile`). Persistence collection: `company_profiles`.
+# Run all services in parallel
+pnpm dev
 
-## Workspaces, Members & Invites
-- Each user gets an owner workspace at signup using the company name collected on AuthPage step 1 (Company → Your Details → Credentials → Role). The register handler calls `storage.createWorkspace(name, userId)` and persists `organizationId` on the user. Workspace creation is required — the request returns 500 if it fails (no silent partial registration).
-- Roles: `owner`, `collaborator`, `viewer`. Owners can rename the workspace, invite/revoke, change roles (collaborator↔viewer only), and remove members. Collaborators can invite. Viewers are read-only.
-- `PATCH /api/workspaces/:id/members/:userId` only accepts `collaborator|viewer`; the owner is immutable (no ownership transfer endpoint yet).
-- Invites: 14-day TTL, base64url 24-byte tokens. Public lookup at `GET /api/invites/:token` returns workspace name + invitee email (capability token model). Accepting requires the signed-in account to have a verified email matching the invite — `PATCH /api/profile` clears `isVerified` whenever the email is changed and rejects duplicates, blocking the email-swap bypass. Accepting when already a member preserves the existing role (no silent downgrade).
-- Frontend pages: `/workspace` (Workspace.tsx) and `/invite/:token` (AcceptInvite.tsx). HubLanding header has a Building2 button → `/workspace`.
-- Mongo models live in `apps/web/shared/schema.ts`: `workspaces`, `workspace_members` (unique on `{workspaceId, userId}`), `workspace_invites` (unique on `token`).
+# Run individual services
+pnpm dev:web   # Web app
+pnpm dev:api   # API server
+```
 
-## Deployment
-- Build: `pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build`
-- Run: Starts API server then web server in production mode
-- Target: `autoscale` (Replit). Production target is **Azure AKS** via Kustomize at `kubernetes/infrastructure/overlays/prod`.
+## Enterprise Security (Apr 2026)
+The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 
-## Production Secrets (Azure AKS)
-The K8s template at `kubernetes/infrastructure/overlays/prod/secrets/secrets.yaml` is populated by GitHub Actions from these GitHub Secrets (and the same values can be loaded into Azure Key Vault when using `external-secrets`):
-
-**Required to boot:**
-- `SESSION_SECRET` (≥32 random chars, not a placeholder), `JWT_SECRET`, `API_INTERNAL_KEY`
-- `MONGODB_URI` (Cosmos for MongoDB API or Mongo replica set), `MONGODB_DB_NAME`, `MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD`
-- `ARANGO_URL`, `ARANGO_DB_NAME`, `ARANGO_ROOT_PASSWORD`
-- `CORS_ORIGIN` (configmap, must match the public host)
-
-**Required for verified signup + invite emails:**
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (Azure Communication Services Email, SendGrid, SES, etc.)
-- `APP_BASE_URL` (configmap, used for invite links in emails)
-
-**LLM / extraction:**
-- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_FAST_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
-- `GROQ_API_KEY` (optional fallback)
-
-**Certificate Hub:**
-- `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME` (container `clients-certs`)
-- `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`
-
-**Backups + ACR:**
-- `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` (backup-sync sidecar)
-- `ACR_PULL_SECRET` (created directly by GHA via `kubectl create secret docker-registry`)
-
-**Optional / Redis:**
-- `REDIS_URL`, `REDIS_PASSWORD`
-
-A copy-pasteable template lives at `deploy/.env.production.template`.
+- **RBAC** — action-based permissions catalogue (`apps/api/src/security/permissions.ts`) with default role mappings (`auditor`, `analyst`, `manager`, `admin`, legacy `user`). Tenant-scoped overrides via Mongoose `rbacRoles`/`rbacRoleAssignments`. Use `requirePermission(PERMISSIONS.X)` middleware on routes.
+- **Audit log** — append-only `auditLogs` MongoDB collection. Schema-level pre-hooks block update/delete. `recordAudit(req, event)` is fire-and-log (best-effort). Admin query at `GET /api/admin/audit-logs` (requires `audit.read`, hard-pinned to caller's session org). The web server writes to the same collection via `apps/web/server/securityAudit.ts`.
+- **Tenant isolation** — `requireTenantOwnership({ resourceType, loader })` and `assertSameTenant(...)` in `apps/api/src/security/tenant.ts`. Cross-tenant attempts return 403 and are audited.
+- **Request security** — strict CORS allowlist with rejection logging in `apps/api/index.ts`; zod-backed `validateBody` / `validateQuery` middleware in `apps/api/src/security/validate.ts` (applied to register, login, audit query).
+- **Tests** — `apps/api/__tests__/security/*.test.ts` (55 tests, all passing). Run with `pnpm --filter @okiru/api exec vitest run __tests__/security`.

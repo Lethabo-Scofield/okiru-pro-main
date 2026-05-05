@@ -9,7 +9,7 @@ import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOt
 import { ProcessorSessionModel, ClientModel } from "../shared/schema";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
-import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { recordAudit } from "./securityAudit.js";
 
 const logger = createLogger("Routes");
 
@@ -36,7 +36,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
-  logger.warn("GROQ_API_KEY is not set - AI endpoints will return errors");
+  logger.warn("GROQ_API_KEY is not set — AI endpoints will return errors");
 }
 const groq = new Groq({ apiKey: groqApiKey || "not-set" });
 
@@ -106,7 +106,7 @@ export async function registerRoutes(
       touchAfter: 24 * 3600,
     });
   } else {
-    logger.warn("Using in-memory session store (MONGODB_URI not set) - sessions will not persist across restarts");
+    logger.warn("Using in-memory session store (MONGODB_URI not set) — sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -140,9 +140,6 @@ export async function registerRoutes(
     entry.count++;
     return entry.count <= limit;
   }
-
-  // Feedback routes (DevMode widget) - public POST, authenticated read/manage
-  registerFeedbackRoutes(app, requireAuth);
 
   app.post("/api/auth/check-username", async (req, res) => {
     try {
@@ -195,14 +192,12 @@ export async function registerRoutes(
   app.post("/api/auth/register", async (req, res) => {
     const start = Date.now();
     try {
-      const { username, password, fullName, email, role, organizationName, companyName } = req.body;
+      const { username, password, fullName, email, organizationId, subscriptionId, role } = req.body;
 
       const trimmedUsername = typeof username === 'string' ? username.trim() : '';
       const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
       const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      const trimmedCompany = typeof (companyName ?? organizationName) === 'string'
-        ? (companyName ?? organizationName).trim().slice(0, 200)
-        : '';
+      const trimmedSubId = typeof subscriptionId === 'string' ? subscriptionId.trim().toUpperCase() : '';
 
       if (!trimmedUsername || !password) {
         return res.status(400).json({ message: "Username and password are required" });
@@ -228,8 +223,15 @@ export async function registerRoutes(
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
         return res.status(400).json({ message: "Invalid email address" });
       }
-      if (!trimmedCompany) {
-        return res.status(400).json({ message: "Company name is required" });
+      if (!organizationId) {
+        return res.status(400).json({ message: "Organization is required" });
+      }
+      const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
+      if (!org) {
+        return res.status(400).json({ message: "Invalid organization selected" });
+      }
+      if (!trimmedSubId || trimmedSubId !== org.subscriptionId) {
+        return res.status(400).json({ message: "Invalid subscription ID for this organization" });
       }
 
       const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
@@ -251,8 +253,8 @@ export async function registerRoutes(
           username: trimmedUsername,
           password: hashedPassword,
           fullName: trimmedFullName,
-          organizationName: trimmedCompany,
-          organizationId: null,
+          organizationName: org.name,
+          organizationId: org.id,
           role: safeRole,
         } as any);
       } else if (existing && !existing.isVerified) {
@@ -261,8 +263,8 @@ export async function registerRoutes(
           password: hashedPassword,
           fullName: trimmedFullName,
           email: trimmedEmail,
-          organizationName: trimmedCompany,
-          organizationId: null,
+          organizationName: org.name,
+          organizationId: org.id,
           role: safeRole,
         } as any);
       } else {
@@ -272,29 +274,10 @@ export async function registerRoutes(
           password: hashedPassword,
           fullName: trimmedFullName,
           email: trimmedEmail,
-          organizationName: trimmedCompany,
-          organizationId: null,
+          organizationName: org.name,
+          organizationId: org.id,
           role: safeRole,
           profilePicture: null,
-        } as any);
-      }
-
-      // Ensure the user has a workspace (don't create duplicates on resend/verify-then-recreate flows).
-      // Workspace provisioning is required for the signup objective - fail the request if it errors.
-      try {
-        const existingWorkspaces = await storage.listWorkspacesForUser(user.id);
-        if (existingWorkspaces.length === 0) {
-          const ws = await storage.createWorkspace(trimmedCompany, user.id);
-          await storage.updateUser(user.id, { organizationId: ws.id } as any);
-          (user as any).organizationId = ws.id;
-        } else if (!user.organizationId) {
-          await storage.updateUser(user.id, { organizationId: existingWorkspaces[0].id } as any);
-          (user as any).organizationId = existingWorkspaces[0].id;
-        }
-      } catch (wsErr) {
-        logger.error("Failed to ensure workspace for new user", wsErr as Error, { userId: user.id });
-        return res.status(500).json({
-          message: "We couldn't set up your workspace. Please try registering again.",
         });
       }
 
@@ -778,13 +761,44 @@ export async function registerRoutes(
       const { role } = req.body;
       const ALLOWED_ROLES = ["auditor", "analyst", "manager", "admin"];
       if (!role || !ALLOWED_ROLES.includes(role)) {
+        await recordAudit(req, {
+          action: "user.role.change",
+          resourceType: "user",
+          resourceId: userId,
+          result: "failure",
+          metadata: { reason: "invalid_role", attempted: role },
+        });
         return res.status(400).json({ message: "Invalid role" });
       }
+      const before = await storage.getUserById(userId);
       const updated = await storage.updateUser(userId, { role } as any);
-      if (!updated) return res.status(404).json({ message: "User not found" });
+      if (!updated) {
+        await recordAudit(req, {
+          action: "user.role.change",
+          resourceType: "user",
+          resourceId: userId,
+          result: "failure",
+          metadata: { reason: "user_not_found", attempted: role },
+        });
+        return res.status(404).json({ message: "User not found" });
+      }
+      await recordAudit(req, {
+        action: "user.role.change",
+        resourceType: "user",
+        resourceId: userId,
+        result: "success",
+        metadata: { from: before?.role ?? null, to: role },
+      });
       res.json({ user: sanitizeUser(updated), message: `Role updated to ${role}` });
     } catch (error: any) {
       logger.error("Admin role update failed", error);
+      await recordAudit(req, {
+        action: "user.role.change",
+        resourceType: "user",
+        resourceId: req.params.userId,
+        result: "failure",
+        metadata: { reason: "exception" },
+      });
       res.status(500).json({ message: "Failed to update role" });
     }
   });
@@ -794,26 +808,10 @@ export async function registerRoutes(
       const userId = (req.session as any)?.userId;
       if (!userId) return res.status(401).json({ message: "Not authenticated" });
       const { fullName, email } = req.body;
-      const updates: Record<string, any> = {};
-      if (fullName !== undefined) updates.fullName = fullName;
-      if (email !== undefined) {
-        const trimmed = typeof email === "string" ? email.trim() : "";
-        if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-          return res.status(400).json({ message: "Invalid email address" });
-        }
-        const me = await storage.getUserById(userId);
-        const isChanging = !me?.email || me.email.toLowerCase() !== trimmed.toLowerCase();
-        if (isChanging) {
-          const taken = await storage.getUserByUsernameOrEmail(trimmed);
-          if (taken && taken.id !== userId) {
-            return res.status(400).json({ message: "Email already in use" });
-          }
-          updates.email = trimmed;
-          // Changing email invalidates verification - must re-verify before email-gated actions (e.g. invite accept).
-          updates.isVerified = false;
-        }
-      }
-      const user = await storage.updateUser(userId, updates as any);
+      const user = await storage.updateUser(userId, {
+        ...(fullName !== undefined && { fullName }),
+        ...(email !== undefined && { email }),
+      });
       if (!user) return res.status(404).json({ message: "User not found" });
       const safeUser = sanitizeUser(user);
       (req.session as any).userData = safeUser;
@@ -1272,21 +1270,21 @@ export async function registerRoutes(
 
 Your job: read the user's natural language description (it may be a single word, a phrase, or a full sentence) and deeply understand WHAT data they are trying to extract from documents. Then generate exactly ONE perfectly-configured entity definition.
 
-CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices - all in a South African business context.
+CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices — all in a South African business context.
 
 INSTRUCTIONS:
-1. Parse the user's intent - even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
+1. Parse the user's intent — even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
 2. Infer the data type: date, monetary amount (Rand), percentage, name/organisation, identifier/reference, level/status, count, address, etc.
 3. Generate a label in PascalCase that is specific and descriptive (2-3 words is fine, e.g. "BBBEELevel", "CertificateExpiryDate", "BlackOwnership")
 4. Write a professional definition that explains exactly what the entity represents and when it appears in documents
 5. Synonyms: realistic alternative names as they appear in actual B-BBEE documents
 6. Positives: realistic South African examples of actual values (use Rand amounts like R1,200,000, percentages like 51%, dates like 31 March 2025, levels like "Level 2 Contributor")
-7. Negatives: common false positives - values that look similar but are NOT this entity
+7. Negatives: common false positives — values that look similar but are NOT this entity
 8. Zones: where in documents this typically appears (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
 9. Keywords: actual words that appear near this value in documents (must = required co-occurrence, nice = helpful, neg = words that rule it out)
 10. Pattern: a precise regex if the value has a predictable format, otherwise ""
 
-RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation - raw JSON only.
+RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation — raw JSON only.
 
 Schema:
 {
@@ -1541,7 +1539,7 @@ Respond ONLY with a valid JSON array.`;
           const streamSystemPrompt = hasRealContent
             ? `You are a document entity extraction engine. You are given the actual text content of a document named "${fileName}". Your job is to find and extract the requested entities from the document text.
 
-CRITICAL RULES - READ CAREFULLY:
+CRITICAL RULES — READ CAREFULLY:
 1. ALWAYS search the ENTIRE document text thoroughly, word by word if needed.
 2. Matching is CASE-INSENSITIVE. "nationality" matches "Nationality", "NATIONALITY", etc.
 3. Look for the entity label itself, its synonyms, related words, and ANY mention that relates to the entity concept.
@@ -2255,346 +2253,6 @@ Respond ONLY with a valid JSON array.`;
     const { message, stack, componentStack, url, timestamp } = req.body || {};
     logger.error("Client-side error", undefined, { clientError: true, message, stack: stack?.slice(0, 500), url, timestamp });
     res.json({ ok: true });
-  });
-
-  // ----- Company onboarding -----
-  app.get("/api/onboarding/me", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any)?.userId as string;
-      const profile = await storage.getCompanyProfileByUserId(userId);
-      if (!profile) return res.status(404).json({ message: "No company profile found" });
-      res.json(profile);
-    } catch (err) {
-      logger.error("GET /api/onboarding/me failed", err as Error);
-      res.status(500).json({ message: "Failed to fetch onboarding profile" });
-    }
-  });
-
-  app.post("/api/onboarding", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any)?.userId as string;
-      const body = req.body || {};
-
-      const trim = (v: any, max = 500): string | null => {
-        if (typeof v !== "string") return null;
-        const s = v.trim();
-        if (!s) return null;
-        return s.slice(0, max);
-      };
-
-      const companyName = trim(body.companyName, 200);
-      if (!companyName) {
-        return res.status(400).json({ message: "companyName is required" });
-      }
-
-      const toolsUsed = Array.isArray(body.toolsUsed)
-        ? body.toolsUsed
-            .filter((t: any) => typeof t === "string")
-            .map((t: string) => t.trim().slice(0, 100))
-            .filter((t: string) => t.length > 0)
-            .slice(0, 20)
-        : [];
-
-      const profile = await storage.upsertCompanyProfile({
-        userId,
-        companyName,
-        role: trim(body.role, 100),
-        beeLevel: trim(body.beeLevel, 50),
-        employeeRange: trim(body.employeeRange, 50),
-        industry: trim(body.industry, 100),
-        industryOther: trim(body.industryOther, 200),
-        annualRevenue: trim(body.annualRevenue, 50),
-        acquisitionSource: trim(body.acquisitionSource, 100),
-        acquisitionSourceOther: trim(body.acquisitionSourceOther, 200),
-        toolsUsed,
-        toolsUsedOther: trim(body.toolsUsedOther, 200),
-        biggestChallenge: trim(body.biggestChallenge, 2000),
-      });
-
-      res.status(200).json(profile);
-    } catch (err) {
-      logger.error("POST /api/onboarding failed", err as Error);
-      res.status(500).json({ message: "Failed to save onboarding profile" });
-    }
-  });
-
-  // ----- Workspaces -----
-  function sanitizeEmail(v: any): string | null {
-    if (typeof v !== "string") return null;
-    const s = v.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return null;
-    return s.slice(0, 200);
-  }
-
-  app.get("/api/workspaces", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const list = await storage.listWorkspacesForUser(userId);
-      res.json({ workspaces: list });
-    } catch (err) {
-      logger.error("GET /api/workspaces failed", err as Error);
-      res.status(500).json({ message: "Failed to load workspaces" });
-    }
-  });
-
-  app.get("/api/workspaces/:workspaceId", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId } = req.params;
-      const member = await storage.getMember(workspaceId, userId);
-      if (!member) return res.status(403).json({ message: "Not a member of this workspace" });
-      const ws = await storage.getWorkspaceById(workspaceId);
-      if (!ws) return res.status(404).json({ message: "Workspace not found" });
-      res.json({ workspace: { ...ws, role: member.role } });
-    } catch (err) {
-      logger.error("GET /api/workspaces/:id failed", err as Error);
-      res.status(500).json({ message: "Failed to load workspace" });
-    }
-  });
-
-  app.patch("/api/workspaces/:workspaceId", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId } = req.params;
-      const member = await storage.getMember(workspaceId, userId);
-      if (!member || member.role !== "owner") {
-        return res.status(403).json({ message: "Only the workspace owner can rename it" });
-      }
-      const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 200) : "";
-      if (!name) return res.status(400).json({ message: "Workspace name is required" });
-      const ws = await storage.renameWorkspace(workspaceId, name);
-      res.json({ workspace: ws });
-    } catch (err) {
-      logger.error("PATCH /api/workspaces/:id failed", err as Error);
-      res.status(500).json({ message: "Failed to rename workspace" });
-    }
-  });
-
-  app.get("/api/workspaces/:workspaceId/members", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId } = req.params;
-      const member = await storage.getMember(workspaceId, userId);
-      if (!member) return res.status(403).json({ message: "Not a member of this workspace" });
-      const members = await storage.listMembers(workspaceId);
-      const enriched = await Promise.all(
-        members.map(async (m) => {
-          const u = await storage.getUserById(m.userId);
-          return {
-            id: m.id,
-            userId: m.userId,
-            role: m.role,
-            joinedAt: m.joinedAt,
-            username: u?.username || null,
-            fullName: u?.fullName || null,
-            email: u?.email || null,
-          };
-        })
-      );
-      res.json({ members: enriched });
-    } catch (err) {
-      logger.error("GET /api/workspaces/:id/members failed", err as Error);
-      res.status(500).json({ message: "Failed to load members" });
-    }
-  });
-
-  app.patch("/api/workspaces/:workspaceId/members/:memberUserId", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId, memberUserId } = req.params;
-      const me = await storage.getMember(workspaceId, userId);
-      if (!me || me.role !== "owner") {
-        return res.status(403).json({ message: "Only the workspace owner can change roles" });
-      }
-      const newRole = req.body?.role;
-      if (!["collaborator", "viewer"].includes(newRole)) {
-        return res.status(400).json({ message: "Role must be 'collaborator' or 'viewer'" });
-      }
-      if (memberUserId === userId) {
-        return res.status(400).json({ message: "You cannot change your own role" });
-      }
-      const target = await storage.getMember(workspaceId, memberUserId);
-      if (!target) return res.status(404).json({ message: "Member not found" });
-      if (target.role === "owner") {
-        return res.status(400).json({ message: "Cannot change the workspace owner's role" });
-      }
-      const updated = await storage.updateMemberRole(workspaceId, memberUserId, newRole);
-      if (!updated) return res.status(404).json({ message: "Member not found" });
-      res.json({ member: updated });
-    } catch (err) {
-      logger.error("PATCH member role failed", err as Error);
-      res.status(500).json({ message: "Failed to update role" });
-    }
-  });
-
-  app.delete("/api/workspaces/:workspaceId/members/:memberUserId", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId, memberUserId } = req.params;
-      const me = await storage.getMember(workspaceId, userId);
-      if (!me) return res.status(403).json({ message: "Not a member of this workspace" });
-      // Allow self-leave for non-owners; owner removal requires owner role
-      if (memberUserId !== userId && me.role !== "owner") {
-        return res.status(403).json({ message: "Only the workspace owner can remove members" });
-      }
-      const target = await storage.getMember(workspaceId, memberUserId);
-      if (!target) return res.status(404).json({ message: "Member not found" });
-      if (target.role === "owner") {
-        return res.status(400).json({ message: "Cannot remove the workspace owner" });
-      }
-      const ok = await storage.removeMember(workspaceId, memberUserId);
-      res.json({ success: ok });
-    } catch (err) {
-      logger.error("DELETE member failed", err as Error);
-      res.status(500).json({ message: "Failed to remove member" });
-    }
-  });
-
-  app.get("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId } = req.params;
-      const me = await storage.getMember(workspaceId, userId);
-      if (!me || (me.role !== "owner" && me.role !== "collaborator")) {
-        return res.status(403).json({ message: "Not allowed" });
-      }
-      const invites = await storage.listInvites(workspaceId);
-      res.json({ invites });
-    } catch (err) {
-      logger.error("GET invites failed", err as Error);
-      res.status(500).json({ message: "Failed to load invites" });
-    }
-  });
-
-  app.post("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      // Throttle invite creation to deter spam: 10 per IP per minute and
-      // 10 per user per minute (whichever is hit first).
-      if (!rateLimitCheck(`invite-create:ip:${req.ip || 'unknown'}`, 10, 60_000) ||
-          !rateLimitCheck(`invite-create:user:${userId}`, 10, 60_000)) {
-        return res.status(429).json({ message: "Too many invites, try again shortly" });
-      }
-      const { workspaceId } = req.params;
-      const me = await storage.getMember(workspaceId, userId);
-      if (!me || (me.role !== "owner" && me.role !== "collaborator")) {
-        return res.status(403).json({ message: "Only owners or collaborators can invite" });
-      }
-      const email = sanitizeEmail(req.body?.email);
-      const role = req.body?.role;
-      if (!email) return res.status(400).json({ message: "Valid email is required" });
-      if (!["collaborator", "viewer"].includes(role)) {
-        return res.status(400).json({ message: "Role must be 'collaborator' or 'viewer'" });
-      }
-      const invite = await storage.createInvite({
-        workspaceId,
-        email,
-        role,
-        invitedByUserId: userId,
-      });
-      res.status(201).json({ invite });
-    } catch (err) {
-      logger.error("POST invite failed", err as Error);
-      res.status(500).json({ message: "Failed to create invite" });
-    }
-  });
-
-  app.delete("/api/workspaces/:workspaceId/invites/:inviteId", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      const { workspaceId, inviteId } = req.params;
-      const me = await storage.getMember(workspaceId, userId);
-      if (!me || (me.role !== "owner" && me.role !== "collaborator")) {
-        return res.status(403).json({ message: "Not allowed" });
-      }
-      const ok = await storage.revokeInvite(workspaceId, inviteId);
-      if (!ok) return res.status(404).json({ message: "Invite not found" });
-      res.json({ success: true });
-    } catch (err) {
-      logger.error("DELETE invite failed", err as Error);
-      res.status(500).json({ message: "Failed to revoke invite" });
-    }
-  });
-
-  // Public: look up an invite by token (no auth needed, used by accept page)
-  app.get("/api/invites/:token", async (req, res) => {
-    try {
-      // Throttle public invite lookups to deter token-guessing.
-      if (!rateLimitCheck(`invite-lookup:${req.ip || 'unknown'}`, 30, 60_000)) {
-        return res.status(429).json({ message: "Too many requests, try again shortly" });
-      }
-      const { token } = req.params;
-      const inv = await storage.getInviteByToken(token);
-      if (!inv) return res.status(404).json({ message: "Invite not found" });
-      const ws = await storage.getWorkspaceById(inv.workspaceId);
-      const expired = inv.expiresAt && new Date(inv.expiresAt).getTime() < Date.now();
-      res.json({
-        invite: {
-          id: inv.id,
-          email: inv.email,
-          role: inv.role,
-          workspaceId: inv.workspaceId,
-          workspaceName: ws?.name || null,
-          expiresAt: inv.expiresAt,
-          acceptedAt: inv.acceptedAt,
-          revokedAt: inv.revokedAt,
-          status: inv.revokedAt ? "revoked" : inv.acceptedAt ? "accepted" : expired ? "expired" : "pending",
-        },
-      });
-    } catch (err) {
-      logger.error("GET /api/invites/:token failed", err as Error);
-      res.status(500).json({ message: "Failed to load invite" });
-    }
-  });
-
-  app.post("/api/invites/:token/accept", requireAuth, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId as string;
-      // Throttle accept attempts so a hijacked session can't brute-force tokens.
-      if (!rateLimitCheck(`invite-accept:ip:${req.ip || 'unknown'}`, 20, 60_000) ||
-          !rateLimitCheck(`invite-accept:user:${userId}`, 10, 60_000)) {
-        return res.status(429).json({ message: "Too many requests, try again shortly" });
-      }
-      const { token } = req.params;
-      const inv = await storage.getInviteByToken(token);
-      if (!inv) return res.status(404).json({ message: "Invite not found" });
-      if (inv.revokedAt) return res.status(400).json({ message: "This invite has been revoked" });
-      if (inv.acceptedAt) return res.status(400).json({ message: "This invite has already been accepted" });
-      if (new Date(inv.expiresAt).getTime() < Date.now()) {
-        return res.status(400).json({ message: "This invite has expired" });
-      }
-      const me = await storage.getUserById(userId);
-      if (!me) return res.status(401).json({ message: "Not authenticated" });
-      // Require a verified email so the invite can only be claimed by the
-      // intended recipient (defends against profile email tampering).
-      if (!me.email) {
-        return res.status(403).json({
-          message: "Add an email to your account before accepting an invite.",
-        });
-      }
-      if (!me.isVerified) {
-        return res.status(403).json({
-          message: "Verify your email before accepting an invite.",
-        });
-      }
-      if (me.email.toLowerCase() !== inv.email.toLowerCase()) {
-        return res.status(403).json({
-          message: `This invite was sent to ${inv.email}. Please sign in with that email.`,
-        });
-      }
-      // Don't overwrite an existing membership role (e.g. avoid downgrading an owner).
-      const existingMember = await storage.getMember(inv.workspaceId, userId);
-      if (existingMember) {
-        await storage.acceptInvite(token);
-        return res.json({ success: true, workspaceId: inv.workspaceId, role: existingMember.role, alreadyMember: true });
-      }
-      await storage.addMember(inv.workspaceId, userId, inv.role);
-      await storage.acceptInvite(token);
-      res.json({ success: true, workspaceId: inv.workspaceId, role: inv.role });
-    } catch (err) {
-      logger.error("POST accept invite failed", err as Error);
-      res.status(500).json({ message: "Failed to accept invite" });
-    }
   });
 
   logger.info("Route registration completed");
