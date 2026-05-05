@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   LogOut, ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
@@ -205,9 +204,17 @@ export default function HubLanding() {
       {/* Single, very subtle purple wash — quiet brand signal, nothing more */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px]"
-        style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(168,85,247,0) 70%)' }}
+        className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft"
+        style={{
+          background: 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(168,85,247,0) 70%)',
+          transform: 'translate(-50%, 0)',
+        }}
       />
+
+      {/* Top progress bar — visible while initial profile/stats are loading */}
+      {(profileLoading || statsLoading || authLoading) && (
+        <div className="top-progress" aria-hidden data-testid="top-progress" />
+      )}
 
       <header
         className="h-14 shrink-0 z-20 sticky top-0 backdrop-blur-xl bg-black/70"
@@ -269,7 +276,7 @@ export default function HubLanding() {
                 {authLoading ? '·' : userInitial}
               </span>
               <span className="text-[12px] text-[#d1d1d6] font-medium pr-1">
-                {authLoading ? <Skeleton className="inline-block h-3 w-16" /> : displayName}
+                {authLoading ? <span className="skel inline-block h-3 w-16 align-middle" /> : displayName}
               </span>
             </div>
             <button
@@ -327,29 +334,29 @@ export default function HubLanding() {
           >
             {greeting()},{' '}
             {authLoading ? (
-              <Skeleton className="inline-block h-[42px] w-40 align-middle bg-white/[0.06]" />
+              <span className="skel inline-block h-[36px] w-40 align-middle rounded-md" />
             ) : (
               <span className="text-white" data-testid="text-greeting-name">{displayName}</span>
             )}
             <span className="text-[#5a5a60]">.</span>
           </h1>
-          <p className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-xl">
+          <div className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-xl">
             {profileLoading ? (
               <span className="inline-flex flex-col gap-1.5">
-                <Skeleton className="h-3.5 w-72 bg-white/[0.05]" />
-                <Skeleton className="h-3.5 w-56 bg-white/[0.05]" />
+                <span className="skel h-3.5 w-72 block" />
+                <span className="skel h-3.5 w-56 block" />
               </span>
             ) : companyName ? (
               <>You're signed in to <span className="text-[#d1d1d6] font-medium">{companyName}</span>. Pick up where you left off, or jump into a new toolkit below.</>
             ) : (
               <>Pick up where you left off, or jump into a new toolkit below.</>
             )}
-          </p>
+          </div>
         </section>
 
         {/* STATS STRIP */}
         <section
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10 fade-in stagger-1"
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10"
           data-testid="stats-strip"
         >
           <StatTile
@@ -357,6 +364,7 @@ export default function HubLanding() {
             value={active.length}
             sub="Of 6 in the suite"
             loading={false}
+            staggerClass="card-rise stagger-1"
           />
           <StatTile
             label="Team members"
@@ -364,6 +372,7 @@ export default function HubLanding() {
             sub={statsLoading ? '' : (stats && stats.teamCount > 1 ? 'Collaborating' : 'Invite to collaborate')}
             loading={statsLoading}
             onClick={() => navigate('/workspace')}
+            staggerClass="card-rise stagger-2"
           />
           <StatTile
             label="Pending invites"
@@ -371,6 +380,7 @@ export default function HubLanding() {
             sub={statsLoading ? '' : (stats?.pendingInvites ? 'Awaiting acceptance' : 'None waiting')}
             loading={statsLoading}
             onClick={() => navigate('/workspace')}
+            staggerClass="card-rise stagger-3"
           />
           <StatTile
             label="B-BBEE level"
@@ -378,19 +388,20 @@ export default function HubLanding() {
             sub={profileLoading ? '' : (beeLevel ? 'Current rating' : 'Set in onboarding')}
             loading={profileLoading}
             accent
+            staggerClass="card-rise stagger-4"
           />
         </section>
 
         {/* FEATURED + ACTIVE TOOLKITS */}
-        <section className="mb-12 fade-in stagger-2">
+        <section className="mb-12">
           <SectionHeader title="Available now" count={filteredActive.length} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {featured && (
-              <FeaturedCard toolkit={featured} />
+              <FeaturedCard toolkit={featured} staggerClass="card-rise stagger-5" />
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-              {otherActive.map((t) => (
-                <ActiveCard key={t.id} toolkit={t} />
+              {otherActive.map((t, i) => (
+                <ActiveCard key={t.id} toolkit={t} staggerClass={`card-rise stagger-${6 + i}`} />
               ))}
               {otherActive.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/[0.06] p-6 text-center text-[12px] text-[#5a5a60] flex items-center justify-center min-h-[180px]">
@@ -402,11 +413,15 @@ export default function HubLanding() {
         </section>
 
         {/* COMING SOON */}
-        <section className="fade-in stagger-3">
+        <section>
           <SectionHeader title="On the roadmap" count={filteredUpcoming.length} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {filteredUpcoming.map((t) => (
-              <UpcomingCard key={t.id} toolkit={t} />
+            {filteredUpcoming.map((t, i) => (
+              <UpcomingCard
+                key={t.id}
+                toolkit={t}
+                staggerClass={`card-rise stagger-${7 + Math.min(i, 3)}`}
+              />
             ))}
           </div>
         </section>
@@ -438,13 +453,13 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
 }
 
 function StatTile({
-  label, value, sub, loading, onClick, accent,
+  label, value, sub, loading, onClick, accent, staggerClass,
 }: {
   label: string; value: string | number | null; sub: string;
-  loading: boolean; onClick?: () => void; accent?: boolean;
+  loading: boolean; onClick?: () => void; accent?: boolean; staggerClass?: string;
 }) {
   const interactive = !!onClick;
-  const sharedClass = `text-left relative rounded-2xl p-4 bg-white/[0.02] ring-1 ring-inset ring-white/[0.05] hover:ring-white/[0.12] smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${interactive ? 'press-sm cursor-pointer hover:bg-white/[0.04]' : ''}`;
+  const sharedClass = `${staggerClass || ''} text-left relative rounded-2xl p-4 bg-white/[0.02] ring-1 ring-inset ring-white/[0.05] hover:ring-white/[0.12] smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${interactive ? 'press-sm cursor-pointer hover:bg-white/[0.04]' : ''}`;
   const valueColor = accent ? 'text-violet-300' : 'text-white';
   const testId = `stat-${label.toLowerCase().replace(/\s+/g, '-')}`;
   const inner = (
@@ -452,15 +467,19 @@ function StatTile({
       <p className="text-[10.5px] font-semibold tracking-[0.14em] uppercase text-[#8e8e93]">{label}</p>
       <div className="mt-1.5 flex items-baseline gap-2 min-h-[28px]">
         {loading || value === null ? (
-          <Skeleton className="h-6 w-12 bg-white/[0.06]" />
+          <span className="skel h-6 w-12 inline-block rounded-md" />
         ) : (
-          <span className={`text-[24px] font-semibold tracking-tight ${valueColor}`} style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+          <span
+            key={String(value)}
+            className={`text-[24px] font-semibold tracking-tight ${valueColor} bounce-in`}
+            style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}
+          >
             {value}
           </span>
         )}
       </div>
       <div className="mt-1 text-[11px] text-[#636366] min-h-[14px]">
-        {loading ? <Skeleton className="h-2.5 w-20 bg-white/[0.05] inline-block" /> : sub}
+        {loading ? <span className="skel h-2.5 w-20 inline-block align-middle" /> : sub}
       </div>
     </>
   );
@@ -478,19 +497,19 @@ function StatTile({
   );
 }
 
-function FeaturedCard({ toolkit }: { toolkit: any }) {
+function FeaturedCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: string }) {
   return (
     <Link
       href={toolkit.link}
-      className="lg:col-span-2 group relative block rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[260px]
+      className={`${staggerClass || ''} lg:col-span-2 group relative block rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[260px]
         bg-white/[0.025] border border-white/[0.07] hover:border-white/[0.16] transition-all duration-300
-        hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]"
+        hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]`}
       data-testid={`card-featured-${toolkit.id}`}
     >
       <div className="relative flex flex-col h-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/[0.12] border border-violet-400/20 text-violet-300 flex items-center justify-center">
+            <div className="icon-rise w-10 h-10 rounded-xl bg-violet-500/[0.12] border border-violet-400/20 text-violet-300 flex items-center justify-center">
               {toolkit.icon}
             </div>
             <div className="flex items-center gap-1.5">
@@ -502,8 +521,8 @@ function FeaturedCard({ toolkit }: { toolkit: any }) {
               </span>
             </div>
           </div>
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10.5px] font-medium text-[#a1a1a6]">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
+          <span className="hidden sm:inline-flex items-center gap-1.5 text-[10.5px] font-medium text-[#a1a1a6]">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/70 pulse-soft"></span>
             Live
           </span>
         </div>
@@ -536,17 +555,17 @@ function FeaturedCard({ toolkit }: { toolkit: any }) {
   );
 }
 
-function ActiveCard({ toolkit }: { toolkit: any }) {
+function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: string }) {
   return (
     <Link
       href={toolkit.link}
-      className="group relative block rounded-2xl p-5 bg-white/[0.025] border border-white/[0.06]
+      className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-white/[0.025] border border-white/[0.06]
         hover:border-white/[0.14] hover:bg-white/[0.04] transition-all duration-200
-        hover:-translate-y-0.5 min-h-[180px] flex flex-col"
+        hover:-translate-y-0.5 min-h-[180px] flex flex-col`}
       data-testid={`card-toolkit-${toolkit.id}`}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#d1d1d6] flex items-center justify-center group-hover:bg-white/[0.08] group-hover:border-white/[0.14] group-hover:text-white smooth">
+        <div className="icon-rise w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#d1d1d6] flex items-center justify-center group-hover:bg-white/[0.08] group-hover:border-white/[0.14] group-hover:text-white smooth">
           {toolkit.icon}
         </div>
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#8e8e93] border border-white/[0.08] bg-white/[0.03] tracking-wider">
@@ -558,8 +577,8 @@ function ActiveCard({ toolkit }: { toolkit: any }) {
         {toolkit.description}
       </p>
       <div className="mt-auto pt-4 flex items-center justify-between">
-        <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[#a1a1a6]">
-          <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span> Live
+        <span className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-[#a1a1a6]">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/70 pulse-soft"></span> Live
         </span>
         <ChevronRight className="w-4 h-4 text-[#636366] group-hover:text-white group-hover:translate-x-0.5 smooth" />
       </div>
@@ -567,12 +586,12 @@ function ActiveCard({ toolkit }: { toolkit: any }) {
   );
 }
 
-function UpcomingCard({ toolkit }: { toolkit: any }) {
+function UpcomingCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: string }) {
   return (
     <button
       onClick={toolkit.action}
-      className="text-left group relative rounded-xl p-4 bg-white/[0.015] border border-white/[0.04]
-        hover:bg-white/[0.03] hover:border-white/[0.08] transition-all duration-200 min-h-[130px] flex flex-col"
+      className={`${staggerClass || ''} text-left group relative rounded-xl p-4 bg-white/[0.015] border border-white/[0.04]
+        hover:bg-white/[0.03] hover:border-white/[0.08] transition-all duration-200 min-h-[130px] flex flex-col`}
       data-testid={`card-toolkit-${toolkit.id}`}
     >
       <div className="flex items-start justify-between mb-3">
