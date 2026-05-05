@@ -6,10 +6,12 @@ RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
 
 ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet \
-    && pnpm install --no-frozen-lockfile --reporter=default 2>&1 | cat \
+    && pnpm install --no-frozen-lockfile \
     && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
