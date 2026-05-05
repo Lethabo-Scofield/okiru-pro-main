@@ -5,6 +5,7 @@ RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
+COPY packages/data-layer/package.json packages/data-layer/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
