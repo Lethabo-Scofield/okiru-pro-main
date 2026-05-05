@@ -7,8 +7,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
+ENV NO_COLOR=1 PNPM_NO_PROGRESS=1
 RUN npm install -g pnpm@10.26.1 \
-    && pnpm install --no-frozen-lockfile \
+    && pnpm install --no-frozen-lockfile --reporter=append-only \
     && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
