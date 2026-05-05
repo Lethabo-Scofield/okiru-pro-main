@@ -4,16 +4,14 @@ import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
-  LogOut, HelpCircle, ChevronRight, Search, Sparkles, X,
+  LogOut, ChevronRight, Search, Sparkles, X,
   BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck, Lock, Building2
 } from 'lucide-react';
-import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 
 export default function HubLanding() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { needsOnboarding, showTour, startTour, completeTour, dismissTour } = useOnboarding(user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -93,12 +91,6 @@ export default function HubLanding() {
 
   return (
     <div className="font-sans min-h-screen bg-black" style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}>
-      
-      {needsOnboarding && !showTour && (
-        <OnboardingWelcome onStart={startTour} onSkip={completeTour} userName={user?.fullName} />
-      )}
-      {showTour && <OnboardingTour onComplete={completeTour} onDismiss={dismissTour} />}
-
       <header className="h-14 shrink-0 z-20 bg-black sticky top-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -113,14 +105,6 @@ export default function HubLanding() {
               data-testid="btn-search-toolkits"
             >
               <Search className="h-4 w-4" />
-            </button>
-            <button
-              onClick={startTour}
-              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Take a tour"
-              data-testid="btn-tour"
-            >
-              <HelpCircle className="h-4 w-4" />
             </button>
             <button
               onClick={() => navigate('/workspace')}
