@@ -237,14 +237,14 @@ export default function Onboarding() {
             });
           }
         }
-        // No saved profile yet — pre-fill company name from the user's workspace.
+        // No saved profile yet - pre-fill company name from the user's workspace.
         if ((user as any)?.organizationName) {
           setForm(prev =>
             prev.companyName ? prev : { ...prev, companyName: (user as any).organizationName }
           );
         }
       } catch {
-        // ignore — fresh form
+        // ignore - fresh form
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -316,7 +316,7 @@ export default function Onboarding() {
       }
       toast({
         title: "Profile saved",
-        description: "Welcome aboard — let's continue.",
+        description: "Welcome aboard - let's continue.",
       });
 
       const dest = redirectTo || "/certificates";
@@ -363,7 +363,7 @@ export default function Onboarding() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Welcome — last quick step
+                  Welcome - last quick step
                 </p>
                 <h1 id="onboarding-title" className="text-xl sm:text-2xl font-semibold truncate">
                   A few things about your company
@@ -376,7 +376,7 @@ export default function Onboarding() {
             </div>
             <p className="mt-3 text-[13px] text-muted-foreground">
               This helps us tailor your B-BBEE scorecards and recommendations. Only the company name
-              is required — the rest is optional and you can change it later from your profile.
+              is required - the rest is optional and you can change it later from your profile.
             </p>
           </div>
 

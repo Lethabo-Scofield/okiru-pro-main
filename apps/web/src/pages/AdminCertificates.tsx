@@ -60,14 +60,14 @@ interface Analytics {
 }
 
 function fmtDate(s: string | null): string {
-  if (!s) return '—';
+  if (!s) return '-';
   const d = new Date(s);
   if (isNaN(d.getTime())) return s;
   return d.toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function fmtDateTime(s: string | null): string {
-  if (!s) return '—';
+  if (!s) return '-';
   const d = new Date(s);
   if (isNaN(d.getTime())) return s;
   return d.toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' });

@@ -176,7 +176,7 @@ export default function WorkspacePage() {
       });
       toast({
         title: "Invite link ready",
-        description: `Copy the link below and send it to ${email} — they'll sign up and join your team.`,
+        description: `Copy the link below and send it to ${email} - they'll sign up and join your team.`,
       });
       setInviteEmail("");
       setInvites((prev) => [data.invite, ...prev]);
@@ -450,7 +450,7 @@ export default function WorkspacePage() {
                       <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[12px] text-muted-foreground">
                         <span className="text-foreground font-medium">How it works:</span> enter
                         their email, choose what they can do, then click <span className="text-foreground font-medium">Create invite link</span>.
-                        We'll generate a link below — copy it and send it to them by email,
+                        We'll generate a link below - copy it and send it to them by email,
                         WhatsApp, or any chat. They sign up with the same email and join your team.
                       </div>
                       <div className="space-y-2">
@@ -471,8 +471,8 @@ export default function WorkspacePage() {
                             className="h-10 rounded-md border border-border/50 bg-background px-3 text-[13px]"
                             data-testid="select-invite-role"
                           >
-                            <option value="collaborator">Editor — can view and edit</option>
-                            <option value="viewer">Viewer — view only</option>
+                            <option value="collaborator">Editor - can view and edit</option>
+                            <option value="viewer">Viewer - view only</option>
                           </select>
                           <Button onClick={sendInvite} disabled={busy} data-testid="btn-send-invite">
                             {busy ? (
@@ -491,7 +491,7 @@ export default function WorkspacePage() {
                       {invites.length > 0 && (
                         <div className="space-y-2 pt-2">
                           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                            Pending invite links — copy and send
+                            Pending invite links - copy and send
                           </p>
                           {invites.map((inv) => {
                             const status = inviteStatus(inv);

@@ -26,7 +26,7 @@ const steps: TourStep[] = [
   },
   {
     title: "Entity Templates",
-    description: "Start by creating entity templates — these define what data to extract from your compliance documents. Use AI to generate entities or build them manually.",
+    description: "Start by creating entity templates - these define what data to extract from your compliance documents. Use AI to generate entities or build them manually.",
     icon: Sparkles,
     iconColor: "text-[#d1d1d6]",
     iconBg: "bg-white/[0.08]",
@@ -34,7 +34,7 @@ const steps: TourStep[] = [
   },
   {
     title: "Document Processor",
-    description: "Upload PDFs, images, and other documents. Okiru will extract the data you need using your entity templates — no manual data entry required.",
+    description: "Upload PDFs, images, and other documents. Okiru will extract the data you need using your entity templates - no manual data entry required.",
     icon: FileText,
     iconColor: "text-blue-400",
     iconBg: "bg-blue-500/15",
@@ -42,7 +42,7 @@ const steps: TourStep[] = [
   },
   {
     title: "Scorecards",
-    description: "View your clients' B-BBEE scorecards, track compliance status, and drill into each pillar — Ownership, Skills, Procurement, and more.",
+    description: "View your clients' B-BBEE scorecards, track compliance status, and drill into each pillar - Ownership, Skills, Procurement, and more.",
     icon: Building2,
     iconColor: "text-emerald-400",
     iconBg: "bg-emerald-500/15",

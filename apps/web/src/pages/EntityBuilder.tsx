@@ -232,8 +232,8 @@ export default function EntityBuilder() {
     toast({
       title: "Template loaded",
       description: template.isOntology
-        ? `"${template.name}" — ${loadedEntities.length} entities across ${template.pillarPacks?.length || '?'} pillars`
-        : `"${template.name}" — ${loadedEntities.length} entities`,
+        ? `"${template.name}" - ${loadedEntities.length} entities across ${template.pillarPacks?.length || '?'} pillars`
+        : `"${template.name}" - ${loadedEntities.length} entities`,
     });
   };
 
@@ -300,7 +300,7 @@ export default function EntityBuilder() {
       const pillarCount = manifest.pillarPacks?.length || 0;
       toast({
         title: "Sector preset loaded",
-        description: `"${config.name}" — ${loadedEntities.length} entities across ${pillarCount} pillars`,
+        description: `"${config.name}" - ${loadedEntities.length} entities across ${pillarCount} pillars`,
       });
     } catch (err) {
       toast({ title: "Failed to load sector", description: String(err), variant: "destructive" });
@@ -509,7 +509,7 @@ export default function EntityBuilder() {
     const updated = [draft, ...savedDrafts.filter(d => d.name !== projectName || d.entities.length !== entities.length)].slice(0, 5);
     setSavedDrafts(updated);
     localStorage.setItem('okiru-entity-drafts', JSON.stringify(updated));
-    toast({ title: "Draft saved", description: `"${projectName}" — ${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}` });
+    toast({ title: "Draft saved", description: `"${projectName}" - ${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}` });
   };
 
   const deleteDraft = (id: string) => {
@@ -528,7 +528,7 @@ export default function EntityBuilder() {
     setSelectedEntityId(loaded.length > 0 ? loaded[0].id : null);
     setLeftTab('entities');
     deleteDraft(draft.id);
-    toast({ title: "Draft resumed", description: `"${draft.name}" — ${draftEntities.length} ${draftEntities.length === 1 ? 'entity' : 'entities'}` });
+    toast({ title: "Draft resumed", description: `"${draft.name}" - ${draftEntities.length} ${draftEntities.length === 1 ? 'entity' : 'entities'}` });
   };
 
   const relativeTime = (iso: string) => {
@@ -1064,7 +1064,7 @@ export default function EntityBuilder() {
                   }}
                   className="flex-1 min-w-0 bg-transparent text-white text-[13px] leading-relaxed focus:outline-none placeholder-[#3a3a3c] resize-none"
                   style={{ minHeight: '24px', maxHeight: '120px', overflowY: 'auto' }}
-                  placeholder="Describe the entity you want to create — e.g. 'B-BBEE contributor level from a verification certificate' or 'invoice date found in document headers'…"
+                  placeholder="Describe the entity you want to create - e.g. 'B-BBEE contributor level from a verification certificate' or 'invoice date found in document headers'…"
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !isGenerating && nlInput.trim()) {
@@ -1088,10 +1088,10 @@ export default function EntityBuilder() {
             </div>
           </div>
 
-          {/* Entity list + Detail — side by side */}
+          {/* Entity list + Detail - side by side */}
           <div className="flex gap-4 flex-1 min-h-0">
 
-            {/* Left Column — collapses to icon strip when Live Testing is active */}
+            {/* Left Column - collapses to icon strip when Live Testing is active */}
             <div
               className="shrink-0 flex flex-col rounded-2xl overflow-hidden"
               style={{
@@ -1292,7 +1292,7 @@ export default function EntityBuilder() {
             <div className="flex-1 min-w-0 flex flex-col rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
 
               {/* ═══════════════════════════════════════════════════════════
-                  IMMERSIVE LIVE TESTING MODE — shown when leftTab==='testing'
+                  IMMERSIVE LIVE TESTING MODE - shown when leftTab==='testing'
                   ═══════════════════════════════════════════════════════════ */}
               {leftTab === 'testing' && (
                 <div className="flex-1 min-h-0 flex flex-col">
@@ -1503,7 +1503,7 @@ export default function EntityBuilder() {
               )}
 
               {/* ═══════════════════════════════════════════════════════════
-                  EDITOR MODE — shown when leftTab==='entities'
+                  EDITOR MODE - shown when leftTab==='entities'
                   ═══════════════════════════════════════════════════════════ */}
               {leftTab === 'entities' && <>
 
@@ -1518,7 +1518,7 @@ export default function EntityBuilder() {
                   </p>
                   <p className="text-[13px] text-[#3a3a3c] leading-relaxed max-w-xs">
                     {entities.length === 0
-                      ? <>Type a concept above — like <span className="text-[#a0a0a5]">price</span>, <span className="text-[#a0a0a5]">date</span>, or <span className="text-[#a0a0a5]">BEE level</span> — and AI will build the entity for you.</>
+                      ? <>Type a concept above - like <span className="text-[#a0a0a5]">price</span>, <span className="text-[#a0a0a5]">date</span>, or <span className="text-[#a0a0a5]">BEE level</span> - and AI will build the entity for you.</>
                       : 'Click any entity in the list to view and edit its details.'}
                   </p>
                 </div>

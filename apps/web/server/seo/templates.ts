@@ -71,7 +71,7 @@ ${jsonLd ? `<script type="application/ld+json">${jsonLd.replace(/<\/(script)/gi,
 <body>
 <header class="site">
   <div class="inner">
-    <a class="brand" href="${escapeHtml(origin)}/">${escapeHtml(SITE_NAME)} — ${escapeHtml(BRAND_TAGLINE)}</a>
+    <a class="brand" href="${escapeHtml(origin)}/">${escapeHtml(SITE_NAME)} - ${escapeHtml(BRAND_TAGLINE)}</a>
     <nav>
       <a href="${escapeHtml(origin)}/certificates/level-1">Level 1</a>
       <a href="${escapeHtml(origin)}/certificates/level-2">Level 2</a>
@@ -87,17 +87,17 @@ ${jsonLd ? `<script type="application/ld+json">${jsonLd.replace(/<\/(script)/gi,
 }
 
 function fmtPct(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return "—";
+  if (value == null || Number.isNaN(value)) return "-";
   return `${Number(value).toFixed(1)}%`;
 }
 
 function fmtScore(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return "—";
+  if (value == null || Number.isNaN(value)) return "-";
   return `${Number(value).toFixed(1)}`;
 }
 
 function fmtDate(value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
@@ -116,7 +116,7 @@ export function renderCertificateDetail(
 ): string {
   const origin = siteOrigin(host, proto);
   const canonical = `${origin}/certificates/${cert.slug}`;
-  const levelText = cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : "Level —";
+  const levelText = cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : "Level -";
   const title = `B-BBEE Certificate – ${cert.companyName} | ${levelText} | ${SITE_NAME}`;
   const description = `View and download the B-BBEE certificate for ${cert.companyName}. ${levelText}, issued by ${cert.verificationAgency || "an accredited verification agency"}, valid until ${fmtDate(cert.expiryDate)}.`;
 
@@ -143,7 +143,7 @@ export function renderCertificateDetail(
           ${related
             .map(
               (r) => `<li>
-            <span class="badge">Level ${escapeHtml(r.bbbeeLevel ?? "—")}</span>
+            <span class="badge">Level ${escapeHtml(r.bbbeeLevel ?? "-")}</span>
             <h3><a href="${escapeHtml(origin)}/certificates/${escapeHtml(r.slug)}">${escapeHtml(r.companyName)}</a></h3>
             <p>Score: ${escapeHtml(fmtScore(r.bbbeeScore))} · Black ownership: ${escapeHtml(fmtPct(r.blackOwnership))}</p>
             <p>Valid until ${escapeHtml(fmtDate(r.expiryDate))}</p>
@@ -162,12 +162,12 @@ export function renderCertificateDetail(
     <p class="subtitle">B-BBEE compliance certificate, issued by ${escapeHtml(cert.verificationAgency || "an accredited verification agency")}.</p>
 
     <div class="meta-grid">
-      <div class="meta-item"><p class="meta-label">B-BBEE Level</p><p class="meta-value">${escapeHtml(cert.bbbeeLevel ?? "—")}</p></div>
+      <div class="meta-item"><p class="meta-label">B-BBEE Level</p><p class="meta-value">${escapeHtml(cert.bbbeeLevel ?? "-")}</p></div>
       <div class="meta-item"><p class="meta-label">B-BBEE Score</p><p class="meta-value">${escapeHtml(fmtScore(cert.bbbeeScore))}</p></div>
       <div class="meta-item"><p class="meta-label">Black Ownership</p><p class="meta-value">${escapeHtml(fmtPct(cert.blackOwnership))}</p></div>
       <div class="meta-item"><p class="meta-label">Black Women Ownership</p><p class="meta-value">${escapeHtml(fmtPct(cert.blackWomenOwnership))}</p></div>
-      <div class="meta-item"><p class="meta-label">Verification Agency</p><p class="meta-value">${escapeHtml(cert.verificationAgency || "—")}</p></div>
-      <div class="meta-item"><p class="meta-label">Certificate Number</p><p class="meta-value">${escapeHtml(cert.certificateNumber || "—")}</p></div>
+      <div class="meta-item"><p class="meta-label">Verification Agency</p><p class="meta-value">${escapeHtml(cert.verificationAgency || "-")}</p></div>
+      <div class="meta-item"><p class="meta-label">Certificate Number</p><p class="meta-value">${escapeHtml(cert.certificateNumber || "-")}</p></div>
       <div class="meta-item"><p class="meta-label">Issue Date</p><p class="meta-value">${escapeHtml(fmtDate(cert.issueDate))}</p></div>
       <div class="meta-item"><p class="meta-label">Expiry Date</p><p class="meta-value">${escapeHtml(fmtDate(cert.expiryDate))}</p></div>
     </div>
@@ -205,10 +205,10 @@ export function renderLevelPage(
     ? `<ul class="cert-list">${certs
         .map(
           (c) => `<li>
-        <span class="badge">Level ${escapeHtml(c.bbbeeLevel ?? "—")}</span>
+        <span class="badge">Level ${escapeHtml(c.bbbeeLevel ?? "-")}</span>
         <h3><a href="${escapeHtml(origin)}/certificates/${escapeHtml(c.slug)}">${escapeHtml(c.companyName)}</a></h3>
         <p>Score ${escapeHtml(fmtScore(c.bbbeeScore))} · Black ownership ${escapeHtml(fmtPct(c.blackOwnership))}</p>
-        <p>Verified by ${escapeHtml(c.verificationAgency || "—")}</p>
+        <p>Verified by ${escapeHtml(c.verificationAgency || "-")}</p>
         <p>Valid until ${escapeHtml(fmtDate(c.expiryDate))}</p>
       </li>`,
         )
@@ -244,10 +244,10 @@ export function renderBlackOwnedPage(
     ? `<ul class="cert-list">${certs
         .map(
           (c) => `<li>
-        <span class="badge">Level ${escapeHtml(c.bbbeeLevel ?? "—")}</span>
+        <span class="badge">Level ${escapeHtml(c.bbbeeLevel ?? "-")}</span>
         <h3><a href="${escapeHtml(origin)}/certificates/${escapeHtml(c.slug)}">${escapeHtml(c.companyName)}</a></h3>
         <p>Black ownership ${escapeHtml(fmtPct(c.blackOwnership))} · Black women ${escapeHtml(fmtPct(c.blackWomenOwnership))}</p>
-        <p>Verified by ${escapeHtml(c.verificationAgency || "—")}</p>
+        <p>Verified by ${escapeHtml(c.verificationAgency || "-")}</p>
         <p>Valid until ${escapeHtml(fmtDate(c.expiryDate))}</p>
       </li>`,
         )

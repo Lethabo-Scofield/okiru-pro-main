@@ -388,7 +388,7 @@ export const starterTemplates: StarterTemplate[] = [
       },
       {
         label: "EDBeneficiaryName",
-        definition: "The name of each Enterprise Development (ED) beneficiary — typically a black-owned EME or QSE.",
+        definition: "The name of each Enterprise Development (ED) beneficiary - typically a black-owned EME or QSE.",
         synonyms: ["ED Recipient", "Enterprise Beneficiary", "ED Company", "Supported Enterprise"],
         positives: ["Sizwe Catering CC", "Bongi's Cleaning Services", "Mthembu IT Solutions"],
         negatives: ["Supplier Name", "Customer Name", "Shareholder Name"],

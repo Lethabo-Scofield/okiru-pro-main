@@ -31,7 +31,7 @@ export default function AcceptInvite() {
     viewer: "Viewer",
   };
   const ROLE_DESCRIPTION: Record<string, string> = {
-    owner: "Full access — can manage people and settings.",
+    owner: "Full access - can manage people and settings.",
     collaborator: "Can view and edit team work.",
     viewer: "Can view everything but can't make changes.",
   };
@@ -75,7 +75,7 @@ export default function AcceptInvite() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Could not accept invite");
-      toast({ title: "You're in — welcome to the team!" });
+      toast({ title: "You're in - welcome to the team!" });
       navigate("/workspace");
     } catch (err: any) {
       toast({ title: "Could not accept", description: err.message, variant: "destructive" });
@@ -132,7 +132,7 @@ export default function AcceptInvite() {
               <span className="text-foreground font-medium">
                 {ROLE_LABEL[invite.role] || invite.role}
               </span>
-              {" — "}
+              {" - "}
               {ROLE_DESCRIPTION[invite.role] || ""}
             </p>
           </div>
