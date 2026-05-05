@@ -20,6 +20,8 @@ import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Onboarding from "@/pages/Onboarding";
+import Workspace from "@/pages/Workspace";
+import AcceptInvite from "@/pages/AcceptInvite";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
@@ -53,6 +55,12 @@ function AppRouter() {
       </Route>
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
+      </Route>
+      <Route path="/workspace">
+        <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
+      <Route path="/invite/:token">
+        <AcceptInvite />
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>

@@ -553,4 +553,102 @@ export interface CompanyProfile {
 
 export type InsertCompanyProfile = Omit<CompanyProfile, "id" | "createdAt" | "updatedAt">;
 
+// ----- Workspaces -----
+
+export type WorkspaceRole = "owner" | "collaborator" | "viewer";
+
+export interface Workspace {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  joinedAt: Date;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  invitedByUserId: string;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
+const workspaceSchema = new Schema({
+  workspaceId: { type: String, required: true, unique: true, index: true },
+  name: { type: String, required: true },
+  ownerUserId: { type: String, required: true, index: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "workspaces" });
+
+workspaceSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.workspaceId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+const workspaceMemberSchema = new Schema({
+  memberId: { type: String, required: true, unique: true, index: true },
+  workspaceId: { type: String, required: true, index: true },
+  userId: { type: String, required: true, index: true },
+  role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
+  joinedAt: { type: Date, default: Date.now },
+}, { collection: "workspace_members" });
+
+workspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
+
+workspaceMemberSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.memberId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+const workspaceInviteSchema = new Schema({
+  inviteId: { type: String, required: true, unique: true, index: true },
+  workspaceId: { type: String, required: true, index: true },
+  email: { type: String, required: true, lowercase: true, index: true },
+  role: { type: String, enum: ["collaborator", "viewer"], required: true },
+  token: { type: String, required: true, unique: true, index: true },
+  invitedByUserId: { type: String, required: true },
+  expiresAt: { type: Date, required: true },
+  acceptedAt: { type: Date, default: null },
+  revokedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+}, { collection: "workspace_invites" });
+
+workspaceInviteSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.inviteId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const WorkspaceModel = mongoose.models.Workspace || mongoose.model("Workspace", workspaceSchema);
+export const WorkspaceMemberModel = mongoose.models.WorkspaceMember || mongoose.model("WorkspaceMember", workspaceMemberSchema);
+export const WorkspaceInviteModel = mongoose.models.WorkspaceInvite || mongoose.model("WorkspaceInvite", workspaceInviteSchema);
+
 export { getNextSequence };

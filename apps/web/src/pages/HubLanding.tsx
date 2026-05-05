@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   LogOut, HelpCircle, ChevronRight, Search, Sparkles, X,
-  BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck, Lock
+  BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck, Lock, Building2
 } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 
@@ -121,6 +121,14 @@ export default function HubLanding() {
               data-testid="btn-tour"
             >
               <HelpCircle className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => navigate('/workspace')}
+              className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
+              title="Workspace"
+              data-testid="btn-workspace"
+            >
+              <Building2 className="h-4 w-4" />
             </button>
             {user?.role === 'admin' && (
               <button
