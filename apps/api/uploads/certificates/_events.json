@@ -37,5 +37,17 @@
     "ipAddress": "34.24.49.21",
     "userAgent": "curl/8.14.1",
     "createdAt": "2026-05-04T13:40:00.026Z"
+  },
+  {
+    "id": "079da89d-ee2e-49e9-aaff-9ff673063e63",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "Acme",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "curl/8.14.1",
+    "createdAt": "2026-05-05T02:11:01.493Z"
   }
 ]
