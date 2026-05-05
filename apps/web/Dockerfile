@@ -43,9 +43,12 @@ RUN npm install -g pnpm@10.26.1
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/packages/types/package.json packages/types/
+COPY --from=builder /app/packages/data-layer/package.json packages/data-layer/
 COPY --from=builder /app/apps/web/package.json apps/web/
 COPY --from=builder /app/apps/api/package.json apps/api/
+RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
 
+ENV NO_COLOR=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN pnpm install --no-frozen-lockfile --prod
 
 RUN apk del python3 make g++ pkgconfig
