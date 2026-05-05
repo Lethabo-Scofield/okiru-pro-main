@@ -49,14 +49,14 @@ interface WorkspaceInvite {
 
 const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner",
-  collaborator: "Collaborator",
+  collaborator: "Editor",
   viewer: "Viewer",
 };
 
 const ROLE_DESCRIPTION: Record<Role, string> = {
-  owner: "Full control. Can manage members, invites and rename the workspace.",
-  collaborator: "Can edit data and invite teammates.",
-  viewer: "Read-only access to the workspace.",
+  owner: "Full access. Can manage people, send invites and rename the team space.",
+  collaborator: "Can view and edit work, and invite new people.",
+  viewer: "Can view everything but can't make changes.",
 };
 
 export default function WorkspacePage() {
@@ -104,7 +104,7 @@ export default function WorkspacePage() {
       setWorkspaces(list);
       if (!activeId && list.length > 0) setActiveId(list[0].id);
     } catch (err: any) {
-      toast({ title: "Could not load workspaces", description: err.message, variant: "destructive" });
+      toast({ title: "Could not load your team", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ export default function WorkspacePage() {
       setMembers(m.members || []);
       setInvites(i.invites || []);
     } catch (err: any) {
-      toast({ title: "Could not load workspace", description: err.message, variant: "destructive" });
+      toast({ title: "Could not load team details", description: err.message, variant: "destructive" });
     }
   }
 
@@ -150,7 +150,7 @@ export default function WorkspacePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
       });
-      toast({ title: "Workspace renamed" });
+      toast({ title: "Team renamed" });
       setRenaming(false);
       await loadWorkspaces();
     } catch (err: any) {
@@ -175,8 +175,8 @@ export default function WorkspacePage() {
         body: JSON.stringify({ email, role: inviteRole }),
       });
       toast({
-        title: "Invite created",
-        description: `Share the link with ${email} — copy it from the list below.`,
+        title: "Invite link ready",
+        description: `Copy the link below and send it to ${email} — they'll sign up and join your team.`,
       });
       setInviteEmail("");
       setInvites((prev) => [data.invite, ...prev]);
@@ -221,7 +221,7 @@ export default function WorkspacePage() {
 
   async function removeMember(memberUserId: string) {
     if (!active) return;
-    if (!confirm("Remove this member from the workspace?")) return;
+    if (!confirm("Remove this person from your team? They'll lose access immediately.")) return;
     setBusy(true);
     try {
       await fetchJson(`/api/workspaces/${active.id}/members/${memberUserId}`, { method: "DELETE" });
@@ -280,17 +280,26 @@ export default function WorkspacePage() {
           </button>
           <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
             <Building2 className="h-4 w-4" />
-            Workspace
+            Your team
           </div>
           <div className="w-12" />
         </div>
       </header>
 
       <main className="max-w-[1100px] mx-auto px-6 py-10 space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-[22px] font-semibold tracking-tight">Your team</h1>
+          <p className="text-[13px] text-muted-foreground">
+            Invite colleagues to work together on your B-BBEE compliance. Everyone you add can sign
+            in with their own account and see the same data.
+          </p>
+        </div>
+
         {workspaces.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              You aren't a member of any workspace yet.
+              You aren't part of a team yet. Ask the person who invited you to send the invite link
+              again.
             </CardContent>
           </Card>
         ) : (
@@ -319,12 +328,12 @@ export default function WorkspacePage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <Building2 className="h-4 w-4" /> Workspace details
+                      <Building2 className="h-4 w-4" /> Team space
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-1.5">
-                      <Label className="text-[12px] text-muted-foreground/70">Name</Label>
+                      <Label className="text-[12px] text-muted-foreground/70">Team name</Label>
                       {renaming ? (
                         <div className="flex gap-2">
                           <Input
@@ -406,7 +415,7 @@ export default function WorkspacePage() {
                               className="h-8 rounded-md border border-border/50 bg-background px-2 text-[12px]"
                               data-testid={`select-role-${m.userId}`}
                             >
-                              <option value="collaborator">Collaborator</option>
+                              <option value="collaborator">Editor</option>
                               <option value="viewer">Viewer</option>
                             </select>
                           ) : (
@@ -434,39 +443,55 @@ export default function WorkspacePage() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base font-semibold flex items-center gap-2">
-                        <Mail className="h-4 w-4" /> Invite a teammate
+                        <Mail className="h-4 w-4" /> Invite someone to your team
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-2">
-                        <Input
-                          type="email"
-                          placeholder="teammate@company.com"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          data-testid="input-invite-email"
-                        />
-                        <select
-                          value={inviteRole}
-                          onChange={(e) => setInviteRole(e.target.value as Role)}
-                          className="h-10 rounded-md border border-border/50 bg-background px-3 text-[13px]"
-                          data-testid="select-invite-role"
-                        >
-                          <option value="collaborator">Collaborator</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                        <Button onClick={sendInvite} disabled={busy} data-testid="btn-send-invite">
-                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create invite"}
-                        </Button>
+                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[12px] text-muted-foreground">
+                        <span className="text-foreground font-medium">How it works:</span> enter
+                        their email, choose what they can do, then click <span className="text-foreground font-medium">Create invite link</span>.
+                        We'll generate a link below — copy it and send it to them by email,
+                        WhatsApp, or any chat. They sign up with the same email and join your team.
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {ROLE_DESCRIPTION[inviteRole]}
-                      </p>
+                      <div className="space-y-2">
+                        <Label className="text-[12px] text-muted-foreground/70">
+                          Their email address
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-2">
+                          <Input
+                            type="email"
+                            placeholder="colleague@yourcompany.com"
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                            data-testid="input-invite-email"
+                          />
+                          <select
+                            value={inviteRole}
+                            onChange={(e) => setInviteRole(e.target.value as Role)}
+                            className="h-10 rounded-md border border-border/50 bg-background px-3 text-[13px]"
+                            data-testid="select-invite-role"
+                          >
+                            <option value="collaborator">Editor — can view and edit</option>
+                            <option value="viewer">Viewer — view only</option>
+                          </select>
+                          <Button onClick={sendInvite} disabled={busy} data-testid="btn-send-invite">
+                            {busy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Create invite link"
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          <span className="text-foreground font-medium">{ROLE_LABEL[inviteRole]}:</span>{" "}
+                          {ROLE_DESCRIPTION[inviteRole]}
+                        </p>
+                      </div>
 
                       {invites.length > 0 && (
                         <div className="space-y-2 pt-2">
                           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                            Outstanding invites
+                            Pending invite links — copy and send
                           </p>
                           {invites.map((inv) => {
                             const status = inviteStatus(inv);
