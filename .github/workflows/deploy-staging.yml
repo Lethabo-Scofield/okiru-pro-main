@@ -131,12 +131,18 @@ jobs:
             --from-literal=MONGODB_DB_NAME="${{ secrets.STAGING_MONGODB_DB_NAME }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-          # Create arangodb-credentials secret
+          # Create arangodb-credentials secret. Keys must match every
+          # `secretKeyRef` in base/deployments/{web,api,compute}.yaml,
+          # otherwise the deployment fails with CreateContainerConfigError.
           kubectl create secret generic arangodb-credentials \
             --namespace=${{ env.NAMESPACE }} \
             --from-literal=ARANGO_ROOT_PASSWORD="${{ secrets.STAGING_ARANGO_ROOT_PASSWORD }}" \
+            --from-literal=ARANGO_PASSWORD="${{ secrets.STAGING_ARANGO_ROOT_PASSWORD }}" \
             --from-literal=ARANGO_URL="${{ secrets.STAGING_ARANGO_URL }}" \
             --from-literal=ARANGO_DB_NAME="${{ secrets.STAGING_ARANGO_DB_NAME }}" \
+            --from-literal=ARANGO_DB="${{ secrets.STAGING_ARANGO_DB_NAME }}" \
+            --from-literal=ARANGO_USER="${{ secrets.STAGING_ARANGO_USER }}" \
+            --from-literal=ARANGO_VERIFY_SSL="${{ secrets.STAGING_ARANGO_VERIFY_SSL }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
           # Create redis-credentials secret
@@ -164,12 +170,27 @@ jobs:
               --dry-run=client -o yaml | kubectl apply -f -
           fi
 
-          # Create external API keys secret if any are provided
+          # Create external API keys secret if any are provided.
+          # Keep this list in sync with the prod workflow + base manifests.
           kubectl create secret generic external-api-keys \
             --namespace=${{ env.NAMESPACE }} \
             --from-literal=AZURE_OPENAI_API_KEY="${{ secrets.STAGING_AZURE_OPENAI_API_KEY }}" \
             --from-literal=AZURE_OPENAI_ENDPOINT="${{ secrets.STAGING_AZURE_OPENAI_ENDPOINT }}" \
+            --from-literal=AZURE_OPENAI_DEPLOYMENT="${{ secrets.STAGING_AZURE_OPENAI_DEPLOYMENT }}" \
+            --from-literal=AZURE_OPENAI_FAST_DEPLOYMENT="${{ secrets.STAGING_AZURE_OPENAI_FAST_DEPLOYMENT }}" \
+            --from-literal=AZURE_OPENAI_EMBEDDING_DEPLOYMENT="${{ secrets.STAGING_AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}" \
+            --from-literal=AZURE_OPENAI_API_VERSION="${{ secrets.STAGING_AZURE_OPENAI_API_VERSION }}" \
             --from-literal=GROQ_API_KEY="${{ secrets.STAGING_GROQ_API_KEY }}" \
+            --from-literal=SMTP_HOST="${{ secrets.STAGING_SMTP_HOST }}" \
+            --from-literal=SMTP_PORT="${{ secrets.STAGING_SMTP_PORT }}" \
+            --from-literal=SMTP_USER="${{ secrets.STAGING_SMTP_USER }}" \
+            --from-literal=SMTP_PASS="${{ secrets.STAGING_SMTP_PASS }}" \
+            --from-literal=SMTP_FROM="${{ secrets.STAGING_SMTP_FROM }}" \
+            --from-literal=AZURE_STORAGE_CONNECTION_STRING="${{ secrets.STAGING_AZURE_STORAGE_CONNECTION_STRING }}" \
+            --from-literal=AZURE_STORAGE_ACCOUNT_NAME="${{ secrets.STAGING_AZURE_STORAGE_ACCOUNT_NAME }}" \
+            --from-literal=AZURE_SEARCH_ENDPOINT="${{ secrets.STAGING_AZURE_SEARCH_ENDPOINT }}" \
+            --from-literal=AZURE_SEARCH_API_KEY="${{ secrets.STAGING_AZURE_SEARCH_API_KEY }}" \
+            --from-literal=AZURE_SEARCH_INDEX_NAME="${{ secrets.STAGING_AZURE_SEARCH_INDEX_NAME }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Label secrets for management tracking

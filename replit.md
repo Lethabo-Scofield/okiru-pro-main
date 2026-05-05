@@ -97,7 +97,45 @@ A pragmatic adoption of the Repository / UoW / Data Access Factory pattern from 
 - On submit, `POST /api/onboarding` upserts the profile (keyed by userId) and the user is redirected to the original destination. When the destination is `/certificates`, the URL becomes `/certificates?openUpload=1` and `CertificateHub` auto-opens the upload modal.
 - Endpoints exist on both the web server (apps/web/server/routes.ts, used in dev with in-memory storage) and the API server (apps/api/src/routes/onboarding.ts, used when MongoDB is available). Both implementations accept the same field set and the data model is shared via `packages/types` (`CompanyProfile` / `InsertCompanyProfile`). Persistence collection: `company_profiles`.
 
+## Workspaces, Members & Invites
+- Each user gets an owner workspace at signup using the company name collected on AuthPage step 1 (Company → Your Details → Credentials → Role). The register handler calls `storage.createWorkspace(name, userId)` and persists `organizationId` on the user. Workspace creation is required — the request returns 500 if it fails (no silent partial registration).
+- Roles: `owner`, `collaborator`, `viewer`. Owners can rename the workspace, invite/revoke, change roles (collaborator↔viewer only), and remove members. Collaborators can invite. Viewers are read-only.
+- `PATCH /api/workspaces/:id/members/:userId` only accepts `collaborator|viewer`; the owner is immutable (no ownership transfer endpoint yet).
+- Invites: 14-day TTL, base64url 24-byte tokens. Public lookup at `GET /api/invites/:token` returns workspace name + invitee email (capability token model). Accepting requires the signed-in account to have a verified email matching the invite — `PATCH /api/profile` clears `isVerified` whenever the email is changed and rejects duplicates, blocking the email-swap bypass. Accepting when already a member preserves the existing role (no silent downgrade).
+- Frontend pages: `/workspace` (Workspace.tsx) and `/invite/:token` (AcceptInvite.tsx). HubLanding header has a Building2 button → `/workspace`.
+- Mongo models live in `apps/web/shared/schema.ts`: `workspaces`, `workspace_members` (unique on `{workspaceId, userId}`), `workspace_invites` (unique on `token`).
+
 ## Deployment
 - Build: `pnpm install --frozen-lockfile=false && pnpm --filter @okiru/api build && pnpm --filter rest-express build`
 - Run: Starts API server then web server in production mode
-- Target: `autoscale`
+- Target: `autoscale` (Replit). Production target is **Azure AKS** via Kustomize at `kubernetes/infrastructure/overlays/prod`.
+
+## Production Secrets (Azure AKS)
+The K8s template at `kubernetes/infrastructure/overlays/prod/secrets/secrets.yaml` is populated by GitHub Actions from these GitHub Secrets (and the same values can be loaded into Azure Key Vault when using `external-secrets`):
+
+**Required to boot:**
+- `SESSION_SECRET` (≥32 random chars, not a placeholder), `JWT_SECRET`, `API_INTERNAL_KEY`
+- `MONGODB_URI` (Cosmos for MongoDB API or Mongo replica set), `MONGODB_DB_NAME`, `MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD`
+- `ARANGO_URL`, `ARANGO_DB_NAME`, `ARANGO_ROOT_PASSWORD`
+- `CORS_ORIGIN` (configmap, must match the public host)
+
+**Required for verified signup + invite emails:**
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (Azure Communication Services Email, SendGrid, SES, etc.)
+- `APP_BASE_URL` (configmap, used for invite links in emails)
+
+**LLM / extraction:**
+- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_FAST_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
+- `GROQ_API_KEY` (optional fallback)
+
+**Certificate Hub:**
+- `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_ACCOUNT_NAME` (container `clients-certs`)
+- `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`
+
+**Backups + ACR:**
+- `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` (backup-sync sidecar)
+- `ACR_PULL_SECRET` (created directly by GHA via `kubectl create secret docker-registry`)
+
+**Optional / Redis:**
+- `REDIS_URL`, `REDIS_PASSWORD`
+
+A copy-pasteable template lives at `deploy/.env.production.template`.

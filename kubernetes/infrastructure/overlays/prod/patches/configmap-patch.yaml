@@ -10,6 +10,7 @@ data:
   API_URL: "https://okiru.20.164.101.114.nip.io"
   NEXT_PUBLIC_API_URL: "https://okiru.20.164.101.114.nip.io"
   API_SERVER_URL: "http://api:5000"
+  APP_BASE_URL: "https://okiru.20.164.101.114.nip.io"
 ---
 apiVersion: v1
 kind: ConfigMap
