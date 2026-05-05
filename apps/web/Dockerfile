@@ -12,6 +12,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
+RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
 
 RUN pnpm install --no-frozen-lockfile --reporter=append-only \
     && npm rebuild esbuild
