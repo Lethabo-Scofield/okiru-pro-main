@@ -24,7 +24,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
-    && corepack enable && corepack prepare pnpm@10.26.1 --activate
+    && npm install -g pnpm@10.26.1
 
 COPY --from=builder /build/package.json /build/pnpm-lock.yaml /build/pnpm-workspace.yaml ./
 COPY --from=builder /build/packages/types/ packages/types/

@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
-RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
+RUN npm install -g pnpm@10.26.1
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
@@ -35,7 +35,7 @@ WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
-RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
+RUN npm install -g pnpm@10.26.1
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/packages/types/package.json packages/types/
