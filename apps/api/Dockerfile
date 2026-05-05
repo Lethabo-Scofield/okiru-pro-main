@@ -32,9 +32,13 @@ RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev
 
 COPY --from=builder /build/package.json /build/pnpm-lock.yaml /build/pnpm-workspace.yaml ./
 COPY --from=builder /build/packages/types/ packages/types/
+COPY --from=builder /build/packages/data-layer/package.json packages/data-layer/
 COPY --from=builder /build/apps/api/dist/ apps/api/dist/
 COPY --from=builder /build/apps/api/package.json apps/api/
+COPY --from=builder /build/apps/web/package.json apps/web/
+RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
 
+ENV NO_COLOR=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN pnpm install --no-frozen-lockfile --prod \
     && apk del python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
     && apk add --no-cache pixman cairo pango libjpeg-turbo giflib
