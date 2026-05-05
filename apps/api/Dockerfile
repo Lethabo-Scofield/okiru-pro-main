@@ -7,7 +7,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
-RUN corepack enable && corepack prepare pnpm@10.26.1 --activate \
+RUN npm install -g pnpm@10.26.1 \
     && pnpm install --no-frozen-lockfile \
     && npm rebuild esbuild
 
