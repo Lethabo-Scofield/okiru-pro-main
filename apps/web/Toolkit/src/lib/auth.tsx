@@ -44,7 +44,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  register: (data: RegisterData) => Promise<void>;
+  register: (data: RegisterData) => Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string }>;
   logout: () => Promise<void>;
   verifyOtp: (otp: string) => Promise<void>;
   resendOtp: () => Promise<string>;

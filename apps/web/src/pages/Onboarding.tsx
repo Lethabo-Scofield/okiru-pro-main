@@ -187,6 +187,9 @@ export default function Onboarding() {
           const data = await res.json().catch(() => null);
           const p = data?.profile ?? data;
           if (p && typeof p === "object" && (p.companyName || p.role || p.industry)) {
+            if (!p.companyName && (user as any)?.organizationName) {
+              p.companyName = (user as any).organizationName;
+            }
             // Normalize legacy/short labels to current canonical text first.
             p.role = normalize(p.role, LEGACY_ROLE);
             p.industry = normalize(p.industry, LEGACY_INDUSTRY);
@@ -233,6 +236,12 @@ export default function Onboarding() {
               biggestChallenge: p.biggestChallenge || "",
             });
           }
+        }
+        // No saved profile yet — pre-fill company name from the user's workspace.
+        if ((user as any)?.organizationName) {
+          setForm(prev =>
+            prev.companyName ? prev : { ...prev, companyName: (user as any).organizationName }
+          );
         }
       } catch {
         // ignore — fresh form

@@ -3,6 +3,9 @@ import {
   TemplateModel,
   CalculatorConfigModel,
   CompanyProfileModel,
+  WorkspaceModel,
+  WorkspaceMemberModel,
+  WorkspaceInviteModel,
   getNextSequence,
   type Template,
   type InsertTemplate,
@@ -12,7 +15,12 @@ import {
   type CalculatorConfigRow,
   type CompanyProfile,
   type InsertCompanyProfile,
+  type Workspace,
+  type WorkspaceMember,
+  type WorkspaceInvite,
+  type WorkspaceRole,
 } from "../shared/schema";
+import crypto from "crypto";
 
 // Assessment types
 export interface Assessment {
@@ -100,6 +108,23 @@ export interface IStorage {
   // Company profile (onboarding) methods
   getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined>;
   upsertCompanyProfile(profile: InsertCompanyProfile): Promise<CompanyProfile>;
+
+  // Workspace methods
+  createWorkspace(name: string, ownerUserId: string): Promise<Workspace>;
+  getWorkspaceById(workspaceId: string): Promise<Workspace | undefined>;
+  renameWorkspace(workspaceId: string, name: string): Promise<Workspace | undefined>;
+  listWorkspacesForUser(userId: string): Promise<Array<Workspace & { role: WorkspaceRole }>>;
+  getMember(workspaceId: string, userId: string): Promise<WorkspaceMember | undefined>;
+  listMembers(workspaceId: string): Promise<WorkspaceMember[]>;
+  addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember>;
+  updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined>;
+  removeMember(workspaceId: string, userId: string): Promise<boolean>;
+
+  createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite>;
+  getInviteByToken(token: string): Promise<WorkspaceInvite | undefined>;
+  listInvites(workspaceId: string): Promise<WorkspaceInvite[]>;
+  acceptInvite(token: string): Promise<WorkspaceInvite | undefined>;
+  revokeInvite(workspaceId: string, inviteId: string): Promise<boolean>;
 }
 
 export class MemoryStorage implements IStorage {
@@ -417,6 +442,126 @@ export class MemoryStorage implements IStorage {
     this.companyProfiles.set(profile.userId, doc);
     return doc;
   }
+
+  // ----- Workspace methods (in-memory) -----
+  private workspaces: Map<string, Workspace> = new Map();
+  private workspaceMembers: Map<string, WorkspaceMember> = new Map(); // key: `${wsId}:${userId}`
+  private workspaceInvites: Map<string, WorkspaceInvite> = new Map(); // key: inviteId
+
+  async createWorkspace(name: string, ownerUserId: string): Promise<Workspace> {
+    const id = `ws_${crypto.randomBytes(8).toString("hex")}`;
+    const now = new Date();
+    const ws: Workspace = { id, name, ownerUserId, createdAt: now, updatedAt: now };
+    this.workspaces.set(id, ws);
+    await this.addMember(id, ownerUserId, "owner");
+    return ws;
+  }
+
+  async getWorkspaceById(workspaceId: string): Promise<Workspace | undefined> {
+    return this.workspaces.get(workspaceId);
+  }
+
+  async renameWorkspace(workspaceId: string, name: string): Promise<Workspace | undefined> {
+    const ws = this.workspaces.get(workspaceId);
+    if (!ws) return undefined;
+    ws.name = name;
+    ws.updatedAt = new Date();
+    return ws;
+  }
+
+  async listWorkspacesForUser(userId: string): Promise<Array<Workspace & { role: WorkspaceRole }>> {
+    const out: Array<Workspace & { role: WorkspaceRole }> = [];
+    for (const m of this.workspaceMembers.values()) {
+      if (m.userId !== userId) continue;
+      const ws = this.workspaces.get(m.workspaceId);
+      if (ws) out.push({ ...ws, role: m.role });
+    }
+    return out.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  }
+
+  async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember | undefined> {
+    return this.workspaceMembers.get(`${workspaceId}:${userId}`);
+  }
+
+  async listMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+    return Array.from(this.workspaceMembers.values())
+      .filter((m) => m.workspaceId === workspaceId)
+      .sort((a, b) => +new Date(a.joinedAt) - +new Date(b.joinedAt));
+  }
+
+  async addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
+    const key = `${workspaceId}:${userId}`;
+    const existing = this.workspaceMembers.get(key);
+    if (existing) {
+      existing.role = role;
+      return existing;
+    }
+    const m: WorkspaceMember = {
+      id: `wm_${crypto.randomBytes(8).toString("hex")}`,
+      workspaceId,
+      userId,
+      role,
+      joinedAt: new Date(),
+    };
+    this.workspaceMembers.set(key, m);
+    return m;
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined> {
+    const m = this.workspaceMembers.get(`${workspaceId}:${userId}`);
+    if (!m) return undefined;
+    m.role = role;
+    return m;
+  }
+
+  async removeMember(workspaceId: string, userId: string): Promise<boolean> {
+    return this.workspaceMembers.delete(`${workspaceId}:${userId}`);
+  }
+
+  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
+    const ttlDays = invite.ttlDays ?? 14;
+    const inv: WorkspaceInvite = {
+      id: `inv_${crypto.randomBytes(8).toString("hex")}`,
+      workspaceId: invite.workspaceId,
+      email: invite.email.toLowerCase(),
+      role: invite.role,
+      token: crypto.randomBytes(24).toString("base64url"),
+      invitedByUserId: invite.invitedByUserId,
+      expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      acceptedAt: null,
+      revokedAt: null,
+      createdAt: new Date(),
+    };
+    this.workspaceInvites.set(inv.id, inv);
+    return inv;
+  }
+
+  async getInviteByToken(token: string): Promise<WorkspaceInvite | undefined> {
+    for (const inv of this.workspaceInvites.values()) {
+      if (inv.token === token) return inv;
+    }
+    return undefined;
+  }
+
+  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+    return Array.from(this.workspaceInvites.values())
+      .filter((i) => i.workspaceId === workspaceId)
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }
+
+  async acceptInvite(token: string): Promise<WorkspaceInvite | undefined> {
+    const inv = await this.getInviteByToken(token);
+    if (!inv) return undefined;
+    inv.acceptedAt = new Date();
+    return inv;
+  }
+
+  async revokeInvite(workspaceId: string, inviteId: string): Promise<boolean> {
+    const inv = this.workspaceInvites.get(inviteId);
+    if (!inv || inv.workspaceId !== workspaceId) return false;
+    inv.revokedAt = new Date();
+    return true;
+  }
 }
 
 function toUser(doc: any): User | undefined {
@@ -713,6 +858,181 @@ export class DatabaseStorage implements IStorage {
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
     return doc.toJSON() as CompanyProfile;
+  }
+
+  // ----- Workspace methods (Mongo) -----
+  async createWorkspace(name: string, ownerUserId: string): Promise<Workspace> {
+    const workspaceId = `ws_${crypto.randomBytes(8).toString("hex")}`;
+    const now = new Date();
+    const doc = await WorkspaceModel.create({
+      workspaceId,
+      name,
+      ownerUserId,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await WorkspaceMemberModel.create({
+      memberId: `wm_${crypto.randomBytes(8).toString("hex")}`,
+      workspaceId,
+      userId: ownerUserId,
+      role: "owner",
+      joinedAt: now,
+    });
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, name: obj.name, ownerUserId: obj.ownerUserId, createdAt: obj.createdAt, updatedAt: obj.updatedAt };
+  }
+
+  async getWorkspaceById(workspaceId: string): Promise<Workspace | undefined> {
+    const doc = await WorkspaceModel.findOne({ workspaceId });
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, name: obj.name, ownerUserId: obj.ownerUserId, createdAt: obj.createdAt, updatedAt: obj.updatedAt };
+  }
+
+  async renameWorkspace(workspaceId: string, name: string): Promise<Workspace | undefined> {
+    const doc = await WorkspaceModel.findOneAndUpdate(
+      { workspaceId },
+      { name, updatedAt: new Date() },
+      { new: true }
+    );
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, name: obj.name, ownerUserId: obj.ownerUserId, createdAt: obj.createdAt, updatedAt: obj.updatedAt };
+  }
+
+  async listWorkspacesForUser(userId: string): Promise<Array<Workspace & { role: WorkspaceRole }>> {
+    const memberships = await WorkspaceMemberModel.find({ userId }).lean();
+    if (memberships.length === 0) return [];
+    const ids = memberships.map((m: any) => m.workspaceId);
+    const workspaces = await WorkspaceModel.find({ workspaceId: { $in: ids } }).lean();
+    const roleByWs = new Map<string, WorkspaceRole>(memberships.map((m: any) => [m.workspaceId, m.role]));
+    return workspaces
+      .map((w: any) => ({
+        id: w.workspaceId,
+        name: w.name,
+        ownerUserId: w.ownerUserId,
+        createdAt: w.createdAt,
+        updatedAt: w.updatedAt,
+        role: roleByWs.get(w.workspaceId)!,
+      }))
+      .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  }
+
+  async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember | undefined> {
+    const doc = await WorkspaceMemberModel.findOne({ workspaceId, userId });
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+  }
+
+  async listMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+    const docs = await WorkspaceMemberModel.find({ workspaceId }).sort({ joinedAt: 1 });
+    return docs.map((d: any) => {
+      const obj = d.toJSON();
+      return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+    });
+  }
+
+  async addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
+    const doc = await WorkspaceMemberModel.findOneAndUpdate(
+      { workspaceId, userId },
+      {
+        $setOnInsert: {
+          memberId: `wm_${crypto.randomBytes(8).toString("hex")}`,
+          workspaceId,
+          userId,
+          joinedAt: new Date(),
+        },
+        $set: { role },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined> {
+    const doc = await WorkspaceMemberModel.findOneAndUpdate(
+      { workspaceId, userId },
+      { role },
+      { new: true }
+    );
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+  }
+
+  async removeMember(workspaceId: string, userId: string): Promise<boolean> {
+    const result = await WorkspaceMemberModel.deleteOne({ workspaceId, userId });
+    return (result.deletedCount || 0) > 0;
+  }
+
+  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
+    const ttlDays = invite.ttlDays ?? 14;
+    const doc = await WorkspaceInviteModel.create({
+      inviteId: `inv_${crypto.randomBytes(8).toString("hex")}`,
+      workspaceId: invite.workspaceId,
+      email: invite.email.toLowerCase(),
+      role: invite.role,
+      token: crypto.randomBytes(24).toString("base64url"),
+      invitedByUserId: invite.invitedByUserId,
+      expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      acceptedAt: null,
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+    const obj = doc.toJSON() as any;
+    return {
+      id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
+      acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
+    };
+  }
+
+  async getInviteByToken(token: string): Promise<WorkspaceInvite | undefined> {
+    const doc = await WorkspaceInviteModel.findOne({ token });
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return {
+      id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
+      acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
+    };
+  }
+
+  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+    const docs = await WorkspaceInviteModel.find({ workspaceId }).sort({ createdAt: -1 });
+    return docs.map((d: any) => {
+      const obj = d.toJSON();
+      return {
+        id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+        token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
+        acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
+      };
+    });
+  }
+
+  async acceptInvite(token: string): Promise<WorkspaceInvite | undefined> {
+    const doc = await WorkspaceInviteModel.findOneAndUpdate(
+      { token },
+      { acceptedAt: new Date() },
+      { new: true }
+    );
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return {
+      id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
+      acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
+    };
+  }
+
+  async revokeInvite(workspaceId: string, inviteId: string): Promise<boolean> {
+    const result = await WorkspaceInviteModel.findOneAndUpdate(
+      { inviteId, workspaceId },
+      { revokedAt: new Date() }
+    );
+    return !!result;
   }
 }
 

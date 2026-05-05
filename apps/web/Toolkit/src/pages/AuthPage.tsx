@@ -4,7 +4,7 @@ import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
-import { Loader2, ArrowRight, ArrowLeft, Check, User, KeyRound, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, ArrowLeft, Check, User, KeyRound, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2, Building2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
@@ -16,9 +16,9 @@ const ROLES = [
   { value: "manager", label: "Team Manager", description: "Oversee audit teams and review results" },
 ];
 
-const TOTAL_STEPS = 3;
-const stepLabels = ["Your Details", "Credentials", "Role"];
-const stepIcons = [User, KeyRound, Shield];
+const TOTAL_STEPS = 4;
+const stepLabels = ["Company", "Your Details", "Credentials", "Role"];
+const stepIcons = [Building2, User, KeyRound, Shield];
 
 interface AsyncFieldStatus {
   checking: boolean;
@@ -138,6 +138,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     fullName: '',
     email: '',
     role: 'auditor',
+    companyName: '',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -265,13 +266,17 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const validateStep = (s: number): boolean => {
     const errors: Record<string, string> = {};
     if (s === 1) {
+      if (!form.companyName.trim()) errors.companyName = "Company name is required";
+      else if (form.companyName.trim().length < 2) errors.companyName = "Please enter at least 2 characters";
+      else if (form.companyName.trim().length > 200) errors.companyName = "Must be 200 characters or fewer";
+    } else if (s === 2) {
       if (!form.fullName.trim()) errors.fullName = "Full name is required";
       if (!form.email.trim()) errors.email = "Email is required";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
       else if (emailStatus.checking) errors.email = "Still checking...";
       else if (emailStatus.available === false) errors.email = emailStatus.message;
       else if (form.email.trim() && emailStatus.available === null) errors.email = "Verification pending, please wait";
-    } else if (s === 2) {
+    } else if (s === 3) {
       if (!form.username.trim()) errors.username = "Username is required";
       else if (form.username.length < 3) errors.username = "At least 3 characters";
       else if (usernameStatus.checking) errors.username = "Still checking...";
@@ -280,7 +285,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       if (!form.password) errors.password = "Password is required";
       else if (form.password.length < 4) errors.password = "At least 4 characters";
       if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
-    } else if (s === 3) {
+    } else if (s === 4) {
       if (!form.role) errors.role = "Please select a role";
     }
     setFieldErrors(errors);
@@ -289,14 +294,14 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   const goToStep = async (target: number) => {
     if (target > step) {
-      if (step === 1 && form.email.trim()) {
+      if (step === 2 && form.email.trim()) {
         await waitForStable(() =>
           debouncedEmailRef.current === form.email &&
           !emailStatusRef.current.checking &&
           emailStatusRef.current.available !== null
         );
       }
-      if (step === 2 && form.username.trim()) {
+      if (step === 3 && form.username.trim()) {
         await waitForStable(() =>
           debouncedUsernameRef.current === form.username &&
           !usernameStatusRef.current.checking &&
@@ -367,6 +372,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         fullName: form.fullName,
         email: form.email.trim().toLowerCase(),
         role: form.role,
+        organizationName: form.companyName.trim(),
       });
       if (result?.requiresVerification) {
         setEmailHint(result.emailHint || form.email);
@@ -461,7 +467,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     exit: (dir: number) => ({ x: dir > 0 ? -40 : 40, opacity: 0 }),
   };
 
-  const pageTransition = { duration: 0.15, ease: "easeOut" };
+  const pageTransition = { duration: 0.15, ease: "easeOut" as const };
 
   const passwordStrength = useMemo(() => {
     const pw = form.password;
@@ -481,26 +487,11 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
-        className="w-full max-w-[420px]"
-      >
+      <div className="w-full max-w-[420px]">
         <div className="flex justify-center mb-8">
           <img src={okiruLogo} alt="Okiru" className="h-14 w-14 rounded-full object-contain" data-testid="img-logo-auth" />
         </div>
 
-        <AnimatePresence mode="wait" custom={direction} initial={false}>
-          <motion.div
-            key={mode === 'login' ? 'login' : mode === 'otp' ? 'otp' : mode === 'forgot' ? 'forgot' : mode === 'reset' ? 'reset' : `step-${step}`}
-            custom={direction}
-            variants={pageVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={pageTransition}
-          >
               <Card className="border border-border/50 shadow-lg bg-card overflow-hidden">
                 <div className="text-center pt-8 pb-3 px-6">
                   <h2 className="text-lg font-heading font-semibold tracking-tight" data-testid="text-auth-title">
@@ -556,6 +547,16 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
                 <CardContent className="px-6 pb-7 pt-4">
                   <form onSubmit={mode === 'forgot' ? handleForgotPassword : mode === 'reset' ? handleResetPassword : handleSubmit}>
+                    <AnimatePresence mode="wait" custom={direction} initial={false}>
+                      <motion.div
+                        key={mode === 'login' ? 'login' : mode === 'otp' ? 'otp' : mode === 'forgot' ? 'forgot' : mode === 'reset' ? 'reset' : `step-${step}`}
+                        custom={direction}
+                        variants={pageVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={pageTransition}
+                      >
                     {mode === 'otp' ? (
                       <div className="space-y-5">
                         <div className="flex justify-center">
@@ -771,6 +772,31 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         {step === 1 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
+                              <Label className="text-[12px] font-medium text-muted-foreground/70">Company Name</Label>
+                              <Input
+                                value={form.companyName}
+                                onChange={e => {
+                                  setForm(prev => ({ ...prev, companyName: e.target.value }));
+                                  setFieldErrors(prev => ({ ...prev, companyName: '' }));
+                                }}
+                                placeholder="e.g. Acme Holdings (Pty) Ltd"
+                                className="h-10"
+                                autoComplete="organization"
+                                autoFocus
+                                data-testid="input-company-name"
+                              />
+                              {fieldErrors.companyName ? (
+                                <p className="text-[11px] text-destructive" data-testid="error-company-name">{fieldErrors.companyName}</p>
+                              ) : (
+                                <p className="text-[11px] text-muted-foreground/60">This becomes your workspace. You can invite teammates and rename it later.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {step === 2 && (
+                          <div className="space-y-4">
+                            <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Full Name</Label>
                               <Input
                                 value={form.fullName}
@@ -811,7 +837,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                           </div>
                         )}
 
-                        {step === 2 && (
+                        {step === 3 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Username</Label>
@@ -885,7 +911,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                           </div>
                         )}
 
-                        {step === 3 && (
+                        {step === 4 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-[12px] font-medium text-muted-foreground/70">Your Role</Label>
@@ -925,6 +951,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                             <div className="rounded-lg border border-border/30 bg-muted/20 p-3 space-y-1.5">
                               <p className="text-[11px] font-medium text-muted-foreground">Account Summary</p>
                               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
+                                <span className="text-muted-foreground/60">Company</span>
+                                <span className="text-foreground font-medium truncate" data-testid="summary-company">{form.companyName || '—'}</span>
                                 <span className="text-muted-foreground/60">Name</span>
                                 <span className="text-foreground font-medium truncate">{form.fullName || '—'}</span>
                                 <span className="text-muted-foreground/60">Email</span>
@@ -932,7 +960,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                 <span className="text-muted-foreground/60">Username</span>
                                 <span className="text-foreground font-medium truncate">{form.username || '—'}</span>
                               </div>
-                              <p className="text-[10px] text-muted-foreground/60 pt-1">Your company details will be set up next.</p>
+                              <p className="text-[10px] text-muted-foreground/60 pt-1">You can invite teammates from your workspace once your account is created.</p>
                             </div>
                           </div>
                         )}
@@ -978,6 +1006,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         </div>
                       </div>
                     )}
+                      </motion.div>
+                    </AnimatePresence>
                   </form>
 
                   {mode !== 'otp' && (
@@ -1003,9 +1033,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
-        </AnimatePresence>
-      </motion.div>
+      </div>
     </div>
   );
 }
