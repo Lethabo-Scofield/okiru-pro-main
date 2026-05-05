@@ -202,16 +202,11 @@ export default function HubLanding() {
       className="font-sans min-h-screen bg-black relative overflow-x-hidden"
       style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}
     >
-      {/* Ambient brand orbs — subtle, signature visual */}
+      {/* Single, very subtle purple wash — quiet brand signal, nothing more */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[820px] h-[820px] rounded-full opacity-[0.18] blur-[120px]"
-        style={{ background: 'radial-gradient(circle, rgba(14,165,233,0.55) 0%, rgba(14,165,233,0) 70%)' }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-[420px] right-[-160px] w-[500px] h-[500px] rounded-full opacity-[0.10] blur-[120px]"
-        style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.55) 0%, rgba(16,185,129,0) 70%)' }}
+        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px]"
+        style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(168,85,247,0) 70%)' }}
       />
 
       <header
@@ -270,7 +265,7 @@ export default function HubLanding() {
               className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-full bg-white/[0.03] border border-white/[0.05]"
               data-testid="user-chip"
             >
-              <span className="h-6 w-6 rounded-full bg-gradient-to-br from-sky-400/30 to-emerald-400/30 text-white text-[11px] font-semibold flex items-center justify-center">
+              <span className="h-6 w-6 rounded-full bg-white/[0.10] text-white text-[11px] font-semibold flex items-center justify-center">
                 {authLoading ? '·' : userInitial}
               </span>
               <span className="text-[12px] text-[#d1d1d6] font-medium pr-1">
@@ -301,7 +296,7 @@ export default function HubLanding() {
               type="text"
               placeholder="Search toolkits..."
               autoFocus
-              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500/40 smooth placeholder:text-[#48484a]"
+              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/20 focus:border-white/[0.18] smooth placeholder:text-[#48484a]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               data-testid="input-search-toolkits"
@@ -323,7 +318,7 @@ export default function HubLanding() {
         {/* HERO — personalized */}
         <section className="mb-10 fade-in" data-testid="hero-welcome">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[#8e8e93] text-[10.5px] font-semibold tracking-[0.14em] uppercase mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 shadow-[0_0_10px_rgba(16,185,129,0.7)]"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-white/60"></span>
             Compliance Suite · ZA
           </div>
           <h1
@@ -361,14 +356,12 @@ export default function HubLanding() {
             label="Active toolkits"
             value={active.length}
             sub="Of 6 in the suite"
-            tone="sky"
             loading={false}
           />
           <StatTile
             label="Team members"
             value={statsLoading ? null : (stats?.teamCount ?? 1)}
             sub={statsLoading ? '' : (stats && stats.teamCount > 1 ? 'Collaborating' : 'Invite to collaborate')}
-            tone="violet"
             loading={statsLoading}
             onClick={() => navigate('/workspace')}
           />
@@ -376,7 +369,6 @@ export default function HubLanding() {
             label="Pending invites"
             value={statsLoading ? null : (stats?.pendingInvites ?? 0)}
             sub={statsLoading ? '' : (stats?.pendingInvites ? 'Awaiting acceptance' : 'None waiting')}
-            tone="amber"
             loading={statsLoading}
             onClick={() => navigate('/workspace')}
           />
@@ -384,8 +376,8 @@ export default function HubLanding() {
             label="B-BBEE level"
             value={profileLoading ? null : (beeLevel || '—')}
             sub={profileLoading ? '' : (beeLevel ? 'Current rating' : 'Set in onboarding')}
-            tone="emerald"
             loading={profileLoading}
+            accent
           />
         </section>
 
@@ -445,22 +437,15 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
   );
 }
 
-const TONE_MAP: Record<string, { bg: string; hoverRing: string; text: string }> = {
-  sky:     { bg: 'from-sky-500/15 to-sky-500/0',         hoverRing: 'hover:ring-sky-500/30',     text: 'text-sky-300' },
-  violet:  { bg: 'from-violet-500/15 to-violet-500/0',   hoverRing: 'hover:ring-violet-500/30',  text: 'text-violet-300' },
-  amber:   { bg: 'from-amber-500/15 to-amber-500/0',     hoverRing: 'hover:ring-amber-500/30',   text: 'text-amber-300' },
-  emerald: { bg: 'from-emerald-500/15 to-emerald-500/0', hoverRing: 'hover:ring-emerald-500/30', text: 'text-emerald-300' },
-};
-
 function StatTile({
-  label, value, sub, tone, loading, onClick,
+  label, value, sub, loading, onClick, accent,
 }: {
   label: string; value: string | number | null; sub: string;
-  tone: keyof typeof TONE_MAP; loading: boolean; onClick?: () => void;
+  loading: boolean; onClick?: () => void; accent?: boolean;
 }) {
-  const t = TONE_MAP[tone];
   const interactive = !!onClick;
-  const sharedClass = `text-left relative rounded-2xl p-4 bg-gradient-to-br ${t.bg} bg-white/[0.02] ring-1 ring-inset ring-white/[0.05] ${t.hoverRing} smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${interactive ? 'press-sm cursor-pointer hover:bg-white/[0.04]' : ''}`;
+  const sharedClass = `text-left relative rounded-2xl p-4 bg-white/[0.02] ring-1 ring-inset ring-white/[0.05] hover:ring-white/[0.12] smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${interactive ? 'press-sm cursor-pointer hover:bg-white/[0.04]' : ''}`;
+  const valueColor = accent ? 'text-violet-300' : 'text-white';
   const testId = `stat-${label.toLowerCase().replace(/\s+/g, '-')}`;
   const inner = (
     <>
@@ -469,14 +454,14 @@ function StatTile({
         {loading || value === null ? (
           <Skeleton className="h-6 w-12 bg-white/[0.06]" />
         ) : (
-          <span className={`text-[24px] font-semibold tracking-tight ${t.text}`} style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+          <span className={`text-[24px] font-semibold tracking-tight ${valueColor}`} style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
             {value}
           </span>
         )}
       </div>
-      <p className="mt-1 text-[11px] text-[#636366] min-h-[14px]">
+      <div className="mt-1 text-[11px] text-[#636366] min-h-[14px]">
         {loading ? <Skeleton className="h-2.5 w-20 bg-white/[0.05] inline-block" /> : sub}
-      </p>
+      </div>
     </>
   );
   if (interactive) {
@@ -498,33 +483,27 @@ function FeaturedCard({ toolkit }: { toolkit: any }) {
     <Link
       href={toolkit.link}
       className="lg:col-span-2 group relative block rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[260px]
-        bg-gradient-to-br from-sky-500/[0.10] via-white/[0.02] to-emerald-500/[0.06]
-        border border-white/[0.07] hover:border-sky-400/30 transition-all duration-300
-        hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(14,165,233,0.35)]"
+        bg-white/[0.025] border border-white/[0.07] hover:border-white/[0.16] transition-all duration-300
+        hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]"
       data-testid={`card-featured-${toolkit.id}`}
     >
-      <div
-        aria-hidden
-        className="absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(14,165,233,0.40), transparent 70%)' }}
-      />
       <div className="relative flex flex-col h-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/[0.12] border border-violet-400/20 text-violet-300 flex items-center justify-center">
               {toolkit.icon}
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-sky-200/80 border border-sky-400/20 bg-sky-500/10 tracking-wider">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#a1a1a6] border border-white/[0.08] bg-white/[0.03] tracking-wider">
                 {toolkit.tag}
               </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-300/90">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#a1a1a6]">
                 <Sparkles className="w-2.5 h-2.5" /> {toolkit.aiBadge}
               </span>
             </div>
           </div>
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10.5px] font-medium text-emerald-300/90">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.7)]"></span>
+          <span className="hidden sm:inline-flex items-center gap-1 text-[10.5px] font-medium text-[#a1a1a6]">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span>
             Live
           </span>
         </div>
@@ -540,7 +519,7 @@ function FeaturedCard({ toolkit }: { toolkit: any }) {
         <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
           {toolkit.features?.map((f: string, i: number) => (
             <li key={i} className="flex items-center gap-1.5 text-[12px] text-[#8e8e93]">
-              <span className="w-1 h-1 rounded-full bg-sky-400/70"></span>
+              <span className="w-1 h-1 rounded-full bg-white/40"></span>
               {f}
             </li>
           ))}
@@ -567,7 +546,7 @@ function ActiveCard({ toolkit }: { toolkit: any }) {
       data-testid={`card-toolkit-${toolkit.id}`}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#d1d1d6] flex items-center justify-center group-hover:bg-sky-500/10 group-hover:border-sky-500/20 group-hover:text-sky-300 smooth">
+        <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#d1d1d6] flex items-center justify-center group-hover:bg-white/[0.08] group-hover:border-white/[0.14] group-hover:text-white smooth">
           {toolkit.icon}
         </div>
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#8e8e93] border border-white/[0.08] bg-white/[0.03] tracking-wider">
@@ -579,8 +558,8 @@ function ActiveCard({ toolkit }: { toolkit: any }) {
         {toolkit.description}
       </p>
       <div className="mt-auto pt-4 flex items-center justify-between">
-        <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-emerald-300/90">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[#a1a1a6]">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/70"></span> Live
         </span>
         <ChevronRight className="w-4 h-4 text-[#636366] group-hover:text-white group-hover:translate-x-0.5 smooth" />
       </div>
