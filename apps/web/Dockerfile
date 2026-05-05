@@ -2,11 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-ENV NO_COLOR=1 PNPM_NO_PROGRESS=1
+ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
-RUN npm install -g pnpm@10.26.1
+RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/

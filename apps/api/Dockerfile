@@ -7,8 +7,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/types/package.json packages/types/
 COPY apps/api/package.json apps/api/
 
-ENV NO_COLOR=1 PNPM_NO_PROGRESS=1
-RUN npm install -g pnpm@10.26.1 \
+ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
+RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet \
     && pnpm install --no-frozen-lockfile --reporter=append-only \
     && npm rebuild esbuild
 
@@ -25,7 +25,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
-    && npm install -g pnpm@10.26.1
+    && npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet
 
 COPY --from=builder /build/package.json /build/pnpm-lock.yaml /build/pnpm-workspace.yaml ./
 COPY --from=builder /build/packages/types/ packages/types/
