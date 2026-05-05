@@ -32,7 +32,7 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     hmr: {
-      port: 24679,
+      port: 24680,
     },
     fs: {
       strict: false,

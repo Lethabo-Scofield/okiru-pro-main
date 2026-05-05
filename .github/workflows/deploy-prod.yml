@@ -151,12 +151,12 @@ jobs:
           if [ -z "$ARANGO_PASS" ] || echo "$ARANGO_PASS" | grep -q '^\${'; then ARANGO_PASS="3pQytTiELl7osk5XzPYW"; fi
           if [ -z "$ARANGO_USER_VAL" ] || echo "$ARANGO_USER_VAL" | grep -q '^\${'; then ARANGO_USER_VAL="root"; fi
           if [ -z "$ARANGO_URL_VAL" ] || echo "$ARANGO_URL_VAL" | grep -q '^\${'; then
-            ARANGO_URL_VAL="https://051f856d6032.arangodb.cloud:8529"
+            ARANGO_URL_VAL="http://arangodb:8529"
           fi
           if [ -z "$ARANGO_DB_VAL" ] || echo "$ARANGO_DB_VAL" | grep -q '^\${'; then
             ARANGO_DB_VAL="bbbee_db"
           fi
-          if [ -z "$ARANGO_VERIFY_SSL_VAL" ] || echo "$ARANGO_VERIFY_SSL_VAL" | grep -q '^\${'; then ARANGO_VERIFY_SSL_VAL="true"; fi
+          if [ -z "$ARANGO_VERIFY_SSL_VAL" ] || echo "$ARANGO_VERIFY_SSL_VAL" | grep -q '^\${'; then ARANGO_VERIFY_SSL_VAL="false"; fi
 
           REDIS_PASS="${{ secrets.REDIS_PASSWORD }}"
           REDIS_URL_VAL="${{ secrets.REDIS_URL }}"
