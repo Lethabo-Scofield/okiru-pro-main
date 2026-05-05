@@ -9,7 +9,7 @@ COPY apps/api/package.json apps/api/
 
 ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet \
-    && pnpm install --no-frozen-lockfile --reporter=silent \
+    && pnpm install --no-frozen-lockfile --reporter=default 2>&1 | cat \
     && npm rebuild esbuild
 
 COPY packages/types/ packages/types/
