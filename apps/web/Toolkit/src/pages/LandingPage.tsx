@@ -158,20 +158,36 @@ const GLOBAL_CSS = `
     border: 1px solid var(--rule); padding: 3px 9px; border-radius: 3px;
   }
   .okiru-root .ok-btn-ghost {
-    font-family: var(--sans); font-size: 13px; color: var(--muted);
-    background: none; border: none; cursor: pointer;
-    padding: 6px 14px; border-radius: 4px; transition: color .2s;
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.72);
+    background: transparent; border: 1px solid transparent; cursor: pointer;
+    padding: 7px 14px; border-radius: 8px;
+    transition: color .2s, background .2s, border-color .2s;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .okiru-root .ok-btn-ghost:hover { color: var(--hi); }
+  .okiru-root .ok-btn-ghost:hover {
+    color: var(--hi);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.10);
+  }
   .okiru-root .ok-btn-pur {
     font-family: var(--sans); font-size: 13px; font-weight: 500;
     color: #fff; background: var(--pur); border: none; cursor: pointer;
-    padding: 7px 20px; border-radius: 4px; letter-spacing: -0.01em;
-    transition: background .2s, transform .15s;
+    padding: 8px 18px; border-radius: 8px; letter-spacing: -0.01em;
+    transition: background .2s, transform .15s, box-shadow .2s;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.32);
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .okiru-root .ok-btn-pur:hover { background: var(--pur-d); transform: translateY(-1px); }
+  .okiru-root .ok-btn-pur:hover {
+    background: var(--pur-d); transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(99,102,241,0.42);
+  }
   .okiru-root .ok-btn-pur:active { transform: none; }
-  .okiru-root .ok-nav-actions { display: flex; align-items: center; gap: 6px; }
+  .okiru-root .ok-nav-actions { display: flex; align-items: center; gap: 4px; }
+  .okiru-root .ok-nav-divider {
+    width: 1px; height: 18px; background: rgba(255,255,255,0.12);
+    margin: 0 8px;
+  }
   .okiru-root .ok-hamburger {
     display: none; background: none; border: none; cursor: pointer; padding: 6px;
     color: var(--hi);
@@ -581,7 +597,8 @@ const GLOBAL_CSS = `
       background: linear-gradient(to bottom, rgba(10,10,15,0.88) 0%, rgba(10,10,15,0.65) 50%, rgba(10,10,15,0.92) 100%);
     }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
-    .okiru-root .ok-nav-actions .ok-btn-pur { display: none; }
+    .okiru-root .ok-nav-actions .ok-btn-pur,
+    .okiru-root .ok-nav-actions .ok-nav-divider { display: none; }
     .okiru-root .ok-hamburger { display: block; }
 
     .okiru-root .ok-w { padding: 0 20px; }
@@ -878,9 +895,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <span className="ok-nav-chip">B-BBEE Intelligence</span>
           </div>
           <div className="ok-nav-actions">
-            <button className="ok-btn-ghost" onClick={goCertificates}>B-BBEE Certificates</button>
-            <button className="ok-btn-ghost" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-btn-pur" onClick={goRegister}>Get started</button>
+            <button className="ok-btn-ghost" onClick={goCertificates} data-testid="nav-certs">B-BBEE Certs</button>
+            <button className="ok-btn-ghost" onClick={onNavigateAuth} data-testid="nav-login">Login</button>
+            <span className="ok-nav-divider" aria-hidden />
+            <button className="ok-btn-pur" onClick={goRegister} data-testid="nav-get-started">
+              Get started <ArrowRight size={14} />
+            </button>
             <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen} aria-controls="ok-mobile-nav">
               {menuOpen ? <CloseIcon /> : <MenuIcon />}
             </button>
@@ -889,8 +909,8 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       </nav>
 
       <div id="ok-mobile-nav" role="navigation" className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
-        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); goCertificates(); }}>B-BBEE Certificates</button>
-        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
+        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); goCertificates(); }}>B-BBEE Certs</button>
+        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Login</button>
         <button className="ok-btn-main" style={{ justifyContent: "center" }} onClick={() => { setMenuOpen(false); goRegister(); }}>
           Get started <span className="arr"><ArrowRight size={14} /></span>
         </button>
