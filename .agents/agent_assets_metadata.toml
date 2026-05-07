@@ -24,3 +24,9 @@ id = "OFi-yhoqCX1zWi16N-oUb"
 uri = "file://docs/predefined-templates.md"
 type = "text"
 title = "Scorecard Templates - Pillars, Criteria & Entities"
+
+[[outputs]]
+id = "lAtMC0C1w9ZOEKsiMXlWo"
+uri = "file://docs/ADDING_A_NEW_SECTOR.md"
+type = "text"
+title = "Adding a New Sector — Guide"
