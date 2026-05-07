@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@toolkit/lib/auth";
 import { useToast } from "@toolkit/hooks/use-toast";
@@ -11,12 +11,12 @@ import {
   Users,
   Mail,
   Loader2,
-  ArrowLeft,
   Trash2,
   Copy,
   CheckCircle2,
   RefreshCw,
 } from "lucide-react";
+import { AppNavBack } from "@/components/AppNavBack";
 
 type Role = "owner" | "collaborator" | "viewer";
 
@@ -77,6 +77,7 @@ export default function WorkspacePage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("collaborator");
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const inviteSectionRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(
     () => workspaces.find((w) => w.id === activeId) || null,
@@ -131,6 +132,20 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (activeId) loadDetails(activeId);
   }, [activeId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fromOnboarding") !== "1") return;
+    toast({
+      title: "Invite your team when you're ready",
+      description:
+        "Use the form below to create an invite link. You can always return here from the Hub → Your team.",
+    });
+    requestAnimationFrame(() => {
+      inviteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    window.history.replaceState({}, "", "/workspace");
+  }, [toast]);
 
   useEffect(() => {
     if (active) setNameDraft(active.name);
@@ -271,16 +286,17 @@ export default function WorkspacePage() {
         style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
         <div className="max-w-[1100px] mx-auto px-6 h-full flex items-center justify-between">
-          <button
-            onClick={() => navigate("/hub")}
-            className="inline-flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground"
+          <AppNavBack
+            href="/hub"
+            eyebrow="Suite"
+            label="Hub"
+            variant="light"
+            size="compact"
             data-testid="btn-back-hub"
-          >
-            <ArrowLeft className="h-4 w-4" /> Hub
-          </button>
+          />
           <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
             <Building2 className="h-4 w-4" />
-            Your team
+            Workspace
           </div>
           <div className="w-12" />
         </div>
@@ -440,7 +456,7 @@ export default function WorkspacePage() {
                 </Card>
 
                 {canInvite && (
-                  <Card>
+                  <Card ref={inviteSectionRef}>
                     <CardHeader>
                       <CardTitle className="text-base font-semibold flex items-center gap-2">
                         <Mail className="h-4 w-4" /> Invite someone to your team

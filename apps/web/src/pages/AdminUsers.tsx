@@ -9,7 +9,6 @@ import { Badge } from "@toolkit/components/ui/badge";
 import { Input } from "@toolkit/components/ui/input";
 import { useToast } from "@toolkit/hooks/use-toast";
 import {
-  ArrowLeft,
   Users,
   Shield,
   ShieldCheck,
@@ -20,6 +19,7 @@ import {
   Building2,
   Loader2,
 } from "lucide-react";
+import { AppNavBack } from "@/components/AppNavBack";
 
 interface AdminUser {
   id: string;
@@ -106,15 +106,7 @@ export default function AdminUsers() {
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-8">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/hub")}
-            className="shrink-0"
-            data-testid="btn-back-hub"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+          <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="light" size="compact" data-testid="btn-back-hub" />
           <div>
             <h1 className="text-2xl font-bold tracking-tight" data-testid="text-admin-title">User Management</h1>
             <p className="text-sm text-muted-foreground">View and manage all registered users</p>

@@ -25,6 +25,7 @@ import type { YESData, Client } from '@toolkit/lib/types';
 import { API_BASE } from '@toolkit/lib/config';
 // Import removed - using hybrid extraction endpoint instead of client-side parsing
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import { AppNavBack } from '@/components/AppNavBack';
 import {
   X, Home, ArrowLeft, CloudUpload, Puzzle, Cpu, SearchCheck,
   Check, AlertTriangle, PlusCircle, Loader2, Trash2, ChevronRight, ChevronLeft,
@@ -2745,10 +2746,14 @@ export default function DocumentProcessor() {
       <header className="h-12 shrink-0 z-20 sticky top-0 bg-black/95 backdrop-blur-xl" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center gap-1.5 text-[#636366] hover:text-white transition-colors group shrink-0">
-              <ChevronLeft className="h-4 w-4" />
-              <span className="text-[13px] font-medium hidden sm:inline">Dashboard</span>
-            </Link>
+            <AppNavBack
+              href="/dashboard"
+              eyebrow="Suite"
+              label="Dashboard"
+              variant="dark"
+              size="compact"
+              className="shrink-0"
+            />
             <div className="w-px h-4 bg-[#1c1c1e]"></div>
             <span className="text-[14px] font-medium text-white">Document Processor</span>
           </div>

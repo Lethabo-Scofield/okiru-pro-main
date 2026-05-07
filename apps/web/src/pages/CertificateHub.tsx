@@ -3,12 +3,13 @@ import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import {
-  ArrowLeft, Download, Loader2, AlertCircle, Search, X, ChevronDown,
+  Download, Loader2, AlertCircle, Search, X, ChevronDown,
   RefreshCw, ShieldCheck, Clock, AlertTriangle, Award,
   Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
   Building2, Hash, Users2, Percent, CalendarClock, Info,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import { AppNavBack } from '@/components/AppNavBack';
 
 const COMPANY_SIZES = ['EME', 'QSE', 'Generic', 'Large', 'Specialised'] as const;
 type CompanySize = typeof COMPANY_SIZES[number];
@@ -424,10 +425,7 @@ export default function CertificateHub() {
       <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-[1100px] mx-auto px-5 h-14 flex items-center justify-between">
           {isAuthenticated ? (
-            <Link href="/hub" className="flex items-center gap-1.5 text-[13px] text-[#8e8e93] hover:text-white transition-colors">
-              <ArrowLeft className="h-4 w-4" />
-              Hub
-            </Link>
+            <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" size="compact" />
           ) : (
             <Link
               href="/"

@@ -36,6 +36,7 @@ import sectorsRouter from './sectors.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
 import auditRouter from './audit.js';
+import onboardingRouter from './onboarding.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -105,6 +106,9 @@ export async function registerRoutes(
 
   // Profile routes
   app.use('/api/profile', profileRouter);
+
+  // Company onboarding (shared session cookie with web)
+  app.use('/api/onboarding', onboardingRouter);
 
   // Client routes
   app.use('/api/clients', clientsRouter);

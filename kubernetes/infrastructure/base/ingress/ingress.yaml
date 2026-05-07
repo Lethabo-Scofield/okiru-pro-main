@@ -52,6 +52,21 @@ spec:
                 name: api
                 port:
                   number: 5000
+          # Workspaces & invites (Mongo-backed on web — must not hit API prefix-only rule)
+          - path: /api/workspaces
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/invites
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # API backend routes (all other /api/*)
           - path: /api
             pathType: Prefix

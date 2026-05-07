@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Bug, Lightbulb, MessageSquare, ShieldCheck, Trash2,
+  Bug, Lightbulb, MessageSquare, ShieldCheck, Trash2,
   RefreshCcw, CheckCircle2, Clock, CircleAlert, Search, Loader2,
 } from 'lucide-react';
 import { apiRequest } from '@toolkit/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavBack } from '@/components/AppNavBack';
 
 type Status = 'open' | 'in-progress' | 'resolved';
 type Category = 'bug' | 'feature' | 'general' | 'compliance';
@@ -172,10 +172,14 @@ export default function DevMode() {
       <header className="border-b border-white/5 bg-black/40 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white" data-testid="link-back-home">
-              <ArrowLeft className="h-4 w-4" />
-              Home
-            </Link>
+            <AppNavBack
+              href="/hub"
+              eyebrow="Suite"
+              label="Hub"
+              variant="zinc"
+              size="compact"
+              data-testid="link-back-home"
+            />
             <span className="text-zinc-700">/</span>
             <h1 className="text-sm font-semibold tracking-wide text-white">
               DevMode <span className="text-zinc-500">- Feedback Report</span>

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@toolkit/lib/auth";
+import { fetchOnboardingStatus } from "@/lib/onboardingStatus";
 
 function FullScreenSpinner() {
   return (
@@ -31,9 +32,22 @@ export function GuestRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && user) {
-      navigate("/hub", { replace: true });
-    }
+    if (isLoading || !user) return;
+
+    let cancelled = false;
+    (async () => {
+      const status = await fetchOnboardingStatus();
+      if (cancelled) return;
+      if (status === "needs-onboarding") {
+        navigate("/onboarding", { replace: true });
+      } else {
+        navigate("/hub", { replace: true });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, isLoading, navigate]);
 
   if (user && !isLoading) return null;

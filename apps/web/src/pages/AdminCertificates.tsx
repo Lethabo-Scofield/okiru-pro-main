@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'wouter';
 import {
-  ArrowLeft, Loader2, ShieldCheck, ShieldOff, AlertTriangle, Flag,
+  Loader2, ShieldCheck, ShieldOff, AlertTriangle, Flag,
   TrendingUp, Eye, Search as SearchIcon, Upload, Download, Hash,
   CheckCircle2, Copy,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavBack } from '@/components/AppNavBack';
 
 type Tab = 'verify' | 'reports' | 'duplicates' | 'analytics';
 
@@ -157,10 +158,7 @@ export default function AdminCertificates() {
     <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-[1100px] mx-auto px-5 h-14 flex items-center justify-between">
-          <Link href="/hub" className="flex items-center gap-1.5 text-[13px] text-[#8e8e93] hover:text-white transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Hub
-          </Link>
+          <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" size="compact" />
           <span className="text-[12px] text-[#636366] tracking-wide uppercase">Admin · Certificates</span>
         </div>
       </header>
