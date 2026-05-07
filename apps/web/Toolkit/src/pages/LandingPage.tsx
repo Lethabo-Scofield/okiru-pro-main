@@ -167,16 +167,11 @@ const GLOBAL_CSS = `
   .okiru-root .ok-btn-pur {
     font-family: var(--sans); font-size: 13px; font-weight: 500;
     color: #fff; background: var(--pur); border: none; cursor: pointer;
-    padding: 8px 18px; border-radius: 8px; letter-spacing: -0.01em;
-    transition: background .2s, transform .15s, box-shadow .2s;
-    box-shadow: 0 4px 14px rgba(99,102,241,0.32);
+    padding: 8px 18px; border-radius: 6px; letter-spacing: -0.01em;
+    transition: background .2s;
     display: inline-flex; align-items: center; gap: 6px;
   }
-  .okiru-root .ok-btn-pur:hover {
-    background: var(--pur-d); transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(99,102,241,0.42);
-  }
-  .okiru-root .ok-btn-pur:active { transform: none; }
+  .okiru-root .ok-btn-pur:hover { background: var(--pur-d); }
   .okiru-root .ok-nav-actions { display: flex; align-items: center; gap: 4px; }
   .okiru-root .ok-nav-divider {
     width: 1px; height: 18px; background: rgba(255,255,255,0.12);
@@ -219,22 +214,14 @@ const GLOBAL_CSS = `
     line-height: 1.02; letter-spacing: -0.03em;
     color: #ffffff; font-weight: 500;
     padding-left: 80px; max-width: 820px;
-    text-shadow:
-      0 2px 18px rgba(0,0,0,0.55),
-      0 1px 4px rgba(0,0,0,0.45);
   }
   .okiru-root .ok-h1 em {
     font-style: italic; color: #6366f1; font-weight: 600;
-    text-shadow:
-      0 2px 18px rgba(0,0,0,0.65),
-      0 1px 3px rgba(0,0,0,0.5),
-      0 0 28px rgba(99,102,241,0.55);
   }
   .okiru-root .ok-hero-sub {
     margin-top: 28px; padding-left: 80px; max-width: 520px;
     font-size: 16px; color: rgba(255,255,255,0.96); line-height: 1.8;
     font-weight: 500;
-    text-shadow: 0 1px 8px rgba(0,0,0,0.7), 0 1px 2px rgba(0,0,0,0.5);
   }
   .okiru-root .ok-hero-btns {
     margin-top: 44px; padding-left: 80px;
@@ -243,38 +230,25 @@ const GLOBAL_CSS = `
   .okiru-root .ok-btn-main {
     display: inline-flex; align-items: center; gap: 9px;
     font-family: var(--sans); font-size: 15px; font-weight: 600;
-    color: #fff; background: #6366f1; border: 1px solid rgba(255,255,255,0.18);
+    color: #fff; background: #6366f1; border: none;
     cursor: pointer;
     padding: 14px 30px; border-radius: 6px; letter-spacing: -0.01em;
-    box-shadow:
-      0 8px 24px rgba(99,102,241,0.55),
-      0 2px 6px rgba(0,0,0,0.35),
-      inset 0 1px 0 rgba(255,255,255,0.18);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-    transition: background .2s, transform .15s, box-shadow .2s;
+    transition: background .2s;
   }
-  .okiru-root .ok-btn-main:hover {
-    background: var(--pur-d); transform: translateY(-1px);
-    box-shadow:
-      0 12px 30px rgba(99,102,241,0.70),
-      0 3px 8px rgba(0,0,0,0.40),
-      inset 0 1px 0 rgba(255,255,255,0.22);
-  }
+  .okiru-root .ok-btn-main:hover { background: var(--pur-d); }
   .okiru-root .ok-btn-main .arr { transition: transform .2s; display: inline-flex; }
   .okiru-root .ok-btn-main:hover .arr { transform: translateX(3px); }
   .okiru-root .ok-btn-sec {
     font-family: var(--sans); font-size: 14px; font-weight: 600;
     color: #ffffff;
-    background: rgba(10,10,15,0.35);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.45); cursor: pointer;
-    padding: 12px 22px; border-radius: 4px;
-    transition: color .2s, border-color .2s, background .2s;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.55); cursor: pointer;
+    padding: 12px 22px; border-radius: 6px;
+    transition: border-color .2s, background .2s;
   }
   .okiru-root .ok-btn-sec:hover {
-    color: #ffffff; border-color: rgba(255,255,255,0.85);
-    background: rgba(10,10,15,0.55);
+    border-color: #ffffff;
+    background: rgba(255,255,255,0.08);
   }
 
   /* stats */
