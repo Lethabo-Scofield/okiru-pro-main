@@ -177,6 +177,22 @@ const GLOBAL_CSS = `
     width: 1px; height: 18px; background: rgba(255,255,255,0.12);
     margin: 0 8px;
   }
+  .okiru-root .ok-btn-login {
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    color: #ffffff;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.55);
+    cursor: pointer;
+    padding: 7px 18px; border-radius: 999px;
+    margin-left: 6px;
+    transition: background .2s, border-color .2s, color .2s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .okiru-root .ok-btn-login:hover {
+    background: #ffffff;
+    color: #0a0a0f;
+    border-color: #ffffff;
+  }
   .okiru-root .ok-hamburger {
     display: none; background: none; border: none; cursor: pointer; padding: 6px;
     color: var(--hi);
@@ -597,6 +613,7 @@ const GLOBAL_CSS = `
     }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur,
+    .okiru-root .ok-nav-actions .ok-btn-login,
     .okiru-root .ok-nav-actions .ok-nav-divider { display: none; }
     .okiru-root .ok-hamburger { display: block; }
 
@@ -895,7 +912,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-nav-actions">
             <button className="ok-btn-ghost" onClick={goCertificates} data-testid="nav-certs">B-BBEE Certificates</button>
-            <button className="ok-btn-ghost" onClick={onNavigateAuth} data-testid="nav-login">Login</button>
+            <button className="ok-btn-login" onClick={onNavigateAuth} data-testid="nav-login">Login</button>
             <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen} aria-controls="ok-mobile-nav">
               {menuOpen ? <CloseIcon /> : <MenuIcon />}
             </button>
