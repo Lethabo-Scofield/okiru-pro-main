@@ -1,22 +1,17 @@
 import { useAuth } from "@toolkit/lib/auth";
-import { LogOut, ChevronLeft, LayoutDashboard } from "lucide-react";
-import { Button } from "@toolkit/components/ui/button";
-import { Link, useLocation } from "wouter";
+import { LogOut } from "lucide-react";
+import { Link } from "wouter";
 import { useBbeeStore } from "@toolkit/lib/store";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@toolkit/components/ui/tooltip";
+import { AppNavBack } from "@/components/AppNavBack";
 
 export function Topbar() {
   const { user, logout } = useAuth();
   const client = useBbeeStore(s => s.client);
-  const [, navigate] = useLocation();
-
-  const handleBackToPlatform = () => {
-    window.location.href = '/';
-  };
 
   const handleLogout = () => {
     logout();
@@ -35,17 +30,19 @@ export function Topbar() {
       <div className="flex items-center gap-2.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-all duration-200"
-              onClick={handleBackToPlatform}
-              data-testid="btn-back-platform"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <LayoutDashboard className="h-3.5 w-3.5" />
-            </button>
+            <span tabIndex={-1} className="inline-flex">
+              <AppNavBack
+                href="/hub"
+                eyebrow="Suite"
+                label="Hub"
+                variant="light"
+                size="compact"
+                data-testid="btn-back-platform"
+              />
+            </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-xs">Back to Platform</p>
+            <p className="text-xs">Back to Okiru Hub</p>
           </TooltipContent>
         </Tooltip>
         <div className="h-3.5 w-px bg-border/30" />

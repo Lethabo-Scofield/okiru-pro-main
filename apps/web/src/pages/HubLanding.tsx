@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
+import { checkOnboardingGate } from '@/lib/onboardingStatus';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   LogOut, ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
@@ -34,7 +35,7 @@ function firstName(full?: string | null, username?: string | null): string {
 export default function HubLanding() {
   const { user, logout, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -59,21 +60,31 @@ export default function HubLanding() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Load company profile (for personalized welcome).
+  // Load company profile (for personalized welcome) and force onboarding if incomplete.
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
     (async () => {
       setProfileLoading(true);
       try {
-        const res = await fetch('/api/onboarding/me', { credentials: 'include' });
+        const gate = await checkOnboardingGate();
         if (cancelled) return;
-        if (res.ok) {
-          const data = await res.json();
-          setProfile(data.profile || null);
-        } else {
-          setProfile(null);
+        if (gate.status === "needs-onboarding") {
+          const safe =
+            location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding'
+              ? location
+              : '/hub';
+          navigate(`/onboarding?redirect=${encodeURIComponent(safe)}`, { replace: true });
+          return;
         }
+        const p = gate.profile;
+        setProfile({
+          companyName: typeof p?.companyName === "string" ? p.companyName : undefined,
+          beeLevel:
+            p?.beeLevel === null || p?.beeLevel === undefined
+              ? null
+              : String(p.beeLevel),
+        });
       } catch {
         if (!cancelled) setProfile(null);
       } finally {
@@ -81,9 +92,7 @@ export default function HubLanding() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
-
-  // Load lightweight workspace stats (members + pending invites of first workspace).
+  }, [user?.id, location, navigate]);
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -173,6 +182,8 @@ export default function HubLanding() {
 
   const active = toolkits.filter((t) => 'link' in t && t.link);
   const upcoming = toolkits.filter((t) => !('link' in t) || !t.link);
+  const suiteModuleTotal = toolkits.length;
+  const suiteLiveCount = active.length;
 
   const filteredActive = searchQuery.trim()
     ? active.filter((t) =>
@@ -229,6 +240,16 @@ export default function HubLanding() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => navigate('/workspace')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/25 hover:border-violet-300/45 smooth press-sm text-violet-100 shadow-sm shadow-violet-950/20"
+              title="Workspace — invite people and manage your team"
+              aria-label="Workspace — invite people and manage your team"
+              data-testid="btn-workspace"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span className="text-[12px] font-semibold">Workspace</span>
+            </button>
+            <button
               onClick={() => setSearchOpen((s) => !s)}
               className="hidden sm:inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
               title="Search toolkits (⌘K)"
@@ -247,16 +268,6 @@ export default function HubLanding() {
               data-testid="btn-search-toolkits-mobile"
             >
               <Search className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => navigate('/workspace')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Your team - invite people to collaborate"
-              aria-label="Your team - invite people to collaborate"
-              data-testid="btn-workspace"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              <span className="text-[12px] font-medium">Team</span>
             </button>
             {user?.role === 'admin' && (
               <Link
@@ -347,9 +358,30 @@ export default function HubLanding() {
                 <span className="skel h-3.5 w-56 block" />
               </span>
             ) : companyName ? (
-              <>You're signed in to <span className="text-[#d1d1d6] font-medium">{companyName}</span>. Pick up where you left off, or jump into a new toolkit below.</>
+              <>
+                You're signed in to <span className="text-[#d1d1d6] font-medium">{companyName}</span>.{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/workspace')}
+                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
+                  data-testid="link-hero-workspace-signed-in"
+                >
+                  Invite your team in Workspace
+                </button>{' '}
+                when you're ready, or open a toolkit below.
+              </>
             ) : (
-              <>Pick up where you left off, or jump into a new toolkit below.</>
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('/workspace')}
+                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
+                  data-testid="link-hero-workspace-anon"
+                >
+                  Set up Workspace
+                </button>{' '}
+                for invites, or jump into a toolkit below.
+              </>
             )}
           </div>
         </section>
@@ -360,16 +392,16 @@ export default function HubLanding() {
           data-testid="stats-strip"
         >
           <StatTile
-            label="Active toolkits"
-            value={active.length}
-            sub="Of 6 in the suite"
+            label="Live modules"
+            value={suiteLiveCount}
+            sub={`${suiteLiveCount} of ${suiteModuleTotal} in this suite`}
             loading={false}
             staggerClass="card-rise stagger-1"
           />
           <StatTile
             label="Team members"
             value={statsLoading ? null : (stats?.teamCount ?? 1)}
-            sub={statsLoading ? '' : (stats && stats.teamCount > 1 ? 'Collaborating' : 'Invite to collaborate')}
+            sub={statsLoading ? '' : (stats && stats.teamCount > 1 ? 'Collaborating' : 'Open Workspace')}
             loading={statsLoading}
             onClick={() => navigate('/workspace')}
             staggerClass="card-rise stagger-2"

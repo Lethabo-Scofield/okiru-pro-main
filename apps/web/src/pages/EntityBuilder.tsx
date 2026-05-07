@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'wouter';
 import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavBack } from '@/components/AppNavBack';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   Upload, Loader2, Check, X, Trash2, Pencil, Download,
   Shapes, Folder, FilePlus, Copy, AlignLeft, Tags,
-  Map, Code, CheckCircle2, RefreshCw, FolderOpen, ChevronLeft, Sparkles,
+  Map, Code, CheckCircle2, RefreshCw, FolderOpen, Sparkles,
   Zap, Plus, ChevronRight, MoreHorizontal, Search, FlaskConical,
   BookOpen, Play, ChevronDown, Clock, FileText, File,
 } from 'lucide-react';
@@ -978,10 +979,14 @@ export default function EntityBuilder() {
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-          <Link href="/dashboard?tab=templates" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0" data-testid="btn-back">
-            <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
-            <span className="text-[13px] font-medium tracking-wide hidden sm:inline">Back to Templates</span>
-          </Link>
+          <AppNavBack
+            href="/dashboard?tab=templates"
+            eyebrow="Dashboard"
+            label="Templates"
+            variant="dark"
+            className="shrink-0"
+            data-testid="btn-back"
+          />
           <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block shrink-0"></div>
           <img src={logoCircle} alt="Okiru" className="h-7 w-7 rounded-[8px] shrink-0" />
           <div className="h-4 w-px bg-[#2c2c2e] shrink-0" />

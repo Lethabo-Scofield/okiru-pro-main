@@ -6,7 +6,8 @@ import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
-import { ProcessorSessionModel, ClientModel, OrganizationModel } from "../shared/schema";
+import { ProcessorSessionModel, ClientModel, OrganizationModel, UserModel } from "../shared/schema";
+import type { WorkspaceRole } from "../shared/schema";
 import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
@@ -628,6 +629,278 @@ export async function registerRoutes(
     } catch (error: any) {
       logger.error("Auth check failed", error);
       res.status(401).json({ message: "Not authenticated" });
+    }
+  });
+
+  async function ensureDefaultWorkspace(userId: string): Promise<void> {
+    const list = await storage.listWorkspacesForUser(userId);
+    if (list.length > 0) return;
+    const user = await storage.getUserById(userId);
+    const profile = await storage.getCompanyProfileByUserId(userId);
+    const name =
+      profile?.companyName?.trim() ||
+      (user as { organizationName?: string } | undefined)?.organizationName?.trim() ||
+      "My team";
+    await storage.createWorkspace(name, userId);
+  }
+
+  async function enrichWorkspaceMembers(workspaceId: string) {
+    const members = await storage.listMembers(workspaceId);
+    if (members.length === 0) return [];
+    const ids = [...new Set(members.map((m) => m.userId))];
+    const users = await UserModel.find({ id: { $in: ids } }).lean();
+    const byId = new Map(
+      (users as Array<{ id: string; username?: string; fullName?: string; email?: string }>).map((u) => [u.id, u]),
+    );
+    return members.map((m) => {
+      const u = byId.get(m.userId);
+      return {
+        id: m.id,
+        userId: m.userId,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        username: u?.username ?? null,
+        fullName: u?.fullName ?? null,
+        email: u?.email ?? null,
+      };
+    });
+  }
+
+  function publicInviteStatus(inv: {
+    acceptedAt: Date | null | undefined;
+    revokedAt: Date | null | undefined;
+    expiresAt: Date;
+  }): "pending" | "accepted" | "revoked" | "expired" {
+    if (inv.revokedAt) return "revoked";
+    if (inv.acceptedAt) return "accepted";
+    if (new Date(inv.expiresAt).getTime() < Date.now()) return "expired";
+    return "pending";
+  }
+
+  app.get("/api/workspaces", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      if (!isMongoConnected()) {
+        return res.status(503).json({ message: "Database is not available." });
+      }
+      await ensureDefaultWorkspace(userId);
+      const workspaces = await storage.listWorkspacesForUser(userId);
+      return res.json({
+        workspaces: workspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          ownerUserId: w.ownerUserId,
+          createdAt: w.createdAt,
+          updatedAt: w.updatedAt,
+          role: w.role,
+        })),
+      });
+    } catch (error: any) {
+      logger.error("GET /api/workspaces failed", error);
+      return res.status(500).json({ message: "Could not load workspaces" });
+    }
+  });
+
+  app.patch("/api/workspaces/:workspaceId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId } = req.params;
+      const member = await storage.getMember(workspaceId, userId);
+      if (!member || member.role !== "owner") {
+        return res.status(403).json({ message: "Only the owner can rename this team." });
+      }
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      if (!name) return res.status(400).json({ message: "Name is required" });
+      const updated = await storage.renameWorkspace(workspaceId, name);
+      if (!updated) return res.status(404).json({ message: "Team not found" });
+      return res.json({
+        workspace: {
+          id: updated.id,
+          name: updated.name,
+          ownerUserId: updated.ownerUserId,
+          createdAt: updated.createdAt,
+          updatedAt: updated.updatedAt,
+        },
+      });
+    } catch (error: any) {
+      logger.error("PATCH /api/workspaces/:id failed", error);
+      return res.status(500).json({ message: "Could not update team" });
+    }
+  });
+
+  app.get("/api/workspaces/:workspaceId/members", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId } = req.params;
+      const member = await storage.getMember(workspaceId, userId);
+      if (!member) return res.status(403).json({ message: "You are not a member of this team." });
+      const members = await enrichWorkspaceMembers(workspaceId);
+      return res.json({ members });
+    } catch (error: any) {
+      logger.error("GET members failed", error);
+      return res.status(500).json({ message: "Could not load members" });
+    }
+  });
+
+  app.patch("/api/workspaces/:workspaceId/members/:memberUserId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId, memberUserId } = req.params;
+      const admin = await storage.getMember(workspaceId, userId);
+      if (!admin || admin.role !== "owner") {
+        return res.status(403).json({ message: "Only the owner can change roles." });
+      }
+      if (memberUserId === userId) {
+        return res.status(400).json({ message: "Use another owner to change your role." });
+      }
+      const target = await storage.getMember(workspaceId, memberUserId);
+      if (!target) return res.status(404).json({ message: "Member not found" });
+      if (target.role === "owner") {
+        return res.status(400).json({ message: "Cannot change the owner's role here." });
+      }
+      const role = req.body?.role as WorkspaceRole;
+      if (role !== "collaborator" && role !== "viewer") {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      const updated = await storage.updateMemberRole(workspaceId, memberUserId, role);
+      if (!updated) return res.status(404).json({ message: "Member not found" });
+      return res.json({ member: updated });
+    } catch (error: any) {
+      logger.error("PATCH member role failed", error);
+      return res.status(500).json({ message: "Could not update role" });
+    }
+  });
+
+  app.delete("/api/workspaces/:workspaceId/members/:memberUserId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId, memberUserId } = req.params;
+      const admin = await storage.getMember(workspaceId, userId);
+      if (!admin || admin.role !== "owner") {
+        return res.status(403).json({ message: "Only the owner can remove members." });
+      }
+      const target = await storage.getMember(workspaceId, memberUserId);
+      if (!target) return res.status(404).json({ message: "Member not found" });
+      if (target.role === "owner") {
+        return res.status(400).json({ message: "Cannot remove the owner." });
+      }
+      await storage.removeMember(workspaceId, memberUserId);
+      return res.json({ ok: true });
+    } catch (error: any) {
+      logger.error("DELETE member failed", error);
+      return res.status(500).json({ message: "Could not remove member" });
+    }
+  });
+
+  app.get("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId } = req.params;
+      const member = await storage.getMember(workspaceId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "collaborator")) {
+        return res.status(403).json({ message: "You cannot view invites for this team." });
+      }
+      const invites = await storage.listInvites(workspaceId);
+      return res.json({ invites });
+    } catch (error: any) {
+      logger.error("GET invites failed", error);
+      return res.status(500).json({ message: "Could not load invites" });
+    }
+  });
+
+  app.post("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId } = req.params;
+      const member = await storage.getMember(workspaceId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "collaborator")) {
+        return res.status(403).json({ message: "You cannot invite people to this team." });
+      }
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      const role = req.body?.role as WorkspaceRole;
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Valid email is required" });
+      }
+      if (role !== "collaborator" && role !== "viewer") {
+        return res.status(400).json({ message: "Invalid invite role" });
+      }
+      const invite = await storage.createInvite({
+        workspaceId,
+        email,
+        role,
+        invitedByUserId: userId,
+      });
+      return res.json({ invite });
+    } catch (error: any) {
+      logger.error("POST invite failed", error);
+      return res.status(500).json({ message: "Could not create invite" });
+    }
+  });
+
+  app.delete("/api/workspaces/:workspaceId/invites/:inviteId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { workspaceId, inviteId } = req.params;
+      const member = await storage.getMember(workspaceId, userId);
+      if (!member || (member.role !== "owner" && member.role !== "collaborator")) {
+        return res.status(403).json({ message: "You cannot revoke invites for this team." });
+      }
+      const ok = await storage.revokeInvite(workspaceId, inviteId);
+      if (!ok) return res.status(404).json({ message: "Invite not found" });
+      return res.json({ ok: true });
+    } catch (error: any) {
+      logger.error("DELETE invite failed", error);
+      return res.status(500).json({ message: "Could not revoke invite" });
+    }
+  });
+
+  app.get("/api/invites/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const inv = await storage.getInviteByToken(token);
+      if (!inv) return res.status(404).json({ message: "Invite not found" });
+      const ws = await storage.getWorkspaceById(inv.workspaceId);
+      const status = publicInviteStatus(inv);
+      return res.json({
+        invite: {
+          id: inv.id,
+          email: inv.email,
+          role: inv.role,
+          workspaceId: inv.workspaceId,
+          workspaceName: ws?.name ?? null,
+          expiresAt: inv.expiresAt,
+          acceptedAt: inv.acceptedAt,
+          revokedAt: inv.revokedAt,
+          status,
+        },
+      });
+    } catch (error: any) {
+      logger.error("GET invite failed", error);
+      return res.status(500).json({ message: "Could not load invite" });
+    }
+  });
+
+  app.post("/api/invites/:token/accept", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const user = (req as any).user;
+      const { token } = req.params;
+      const inv = await storage.getInviteByToken(token);
+      if (!inv) return res.status(404).json({ message: "Invite not found" });
+      const status = publicInviteStatus(inv);
+      if (status !== "pending") {
+        return res.status(400).json({ message: "This invite is no longer valid." });
+      }
+      const email = (user.email || "").toLowerCase();
+      if (email !== inv.email.toLowerCase()) {
+        return res.status(403).json({ message: "Sign in with the email this invite was sent to." });
+      }
+      await storage.addMember(inv.workspaceId, userId, inv.role);
+      await storage.acceptInvite(token);
+      return res.json({ ok: true, workspaceId: inv.workspaceId });
+    } catch (error: any) {
+      logger.error("POST accept invite failed", error);
+      return res.status(500).json({ message: "Could not accept invite" });
     }
   });
 

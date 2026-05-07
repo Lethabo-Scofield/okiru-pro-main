@@ -3,8 +3,9 @@ import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, LogOut, Pencil, ChevronLeft, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
+import { Trash2, Loader2, LogOut, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
+import { AppNavBack } from '@/components/AppNavBack';
 import { API_BASE } from '@toolkit/lib/config';
 
 interface ProcessorSession {
@@ -358,10 +359,7 @@ export default function Dashboard() {
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/hub" className="flex items-center gap-2 text-[#98989f] hover:text-white smooth group shrink-0">
-              <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 smooth" />
-              <span className="text-[13px] font-medium tracking-wide">Back to Hub</span>
-            </Link>
+            <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" className="shrink-0" />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
             <button onClick={() => goTo('home')} className="flex items-center gap-3 press-sm" data-testid="logo-home">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
@@ -472,14 +470,14 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-4 mb-8">
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                  <AppNavBack
                     onClick={() => goTo('home')}
+                    eyebrow="Dashboard"
+                    label="Back"
+                    variant="dark"
+                    size="compact"
                     data-testid="button-back-home"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    Back
-                  </button>
+                  />
                   <span className="text-[11px] text-[#636366] font-medium">/ Entity Templates</span>
                 </div>
                 <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Entity Templates</h1>
@@ -635,14 +633,14 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-4 mb-8">
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <button
-                    className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93]"
+                  <AppNavBack
                     onClick={() => goTo('home')}
+                    eyebrow="Dashboard"
+                    label="Back"
+                    variant="dark"
+                    size="compact"
                     data-testid="button-back-home-sc"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    Back
-                  </button>
+                  />
                   <span className="text-[11px] text-[#636366] font-medium">/ Scorecards</span>
                 </div>
                 <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Company Scorecards</h1>

@@ -39,7 +39,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: api
-          image: okiruproacrde4d539b.azurecr.io/api:sector-fix
+          image: okiruproacrde4d539b.azurecr.io/okiru-pro/api:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5000

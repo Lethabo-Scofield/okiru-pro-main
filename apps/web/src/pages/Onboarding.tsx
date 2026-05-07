@@ -14,7 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@toolkit/components/ui/select";
-import { ArrowRight, Building2, Loader2 } from "lucide-react";
+import { ArrowRight, Building2, Loader2, Users } from "lucide-react";
+
+const OTHER_SPEC = "Other (please specify)";
 
 const ROLE_OPTIONS = [
   "Owner / Founder",
@@ -26,7 +28,7 @@ const ROLE_OPTIONS = [
   "Finance (CFO, Accountant, etc.)",
   "HR / Operations",
   "Consultant / Advisor",
-  "Other",
+  OTHER_SPEC,
 ];
 
 const BEE_LEVELS = [
@@ -58,7 +60,7 @@ const INDUSTRIES = [
   "Professional Services (Legal, Consulting, etc.)",
   "Hospitality / Tourism",
   "Agriculture",
-  "Other",
+  OTHER_SPEC,
 ];
 
 const REVENUE_RANGES = [
@@ -76,7 +78,7 @@ const ACQUISITION_SOURCES = [
   "Event / Webinar",
   "Partner / Affiliate",
   "Online Ads",
-  "Other",
+  OTHER_SPEC,
 ];
 
 const TOOLS = [
@@ -85,7 +87,7 @@ const TOOLS = [
   "Excel / Spreadsheets",
   "Custom Internal System",
   "None",
-  "Other",
+  OTHER_SPEC,
 ];
 
 // Map historical/short labels to current canonical option text so existing
@@ -96,9 +98,11 @@ const LEGACY_INDUSTRY: Record<string, string> = {
   Logistics: "Logistics / Transport",
   "Professional Services": "Professional Services (Legal, Consulting, etc.)",
   Hospitality: "Hospitality / Tourism",
+  Other: OTHER_SPEC,
 };
 const LEGACY_ROLE: Record<string, string> = {
   Finance: "Finance (CFO, Accountant, etc.)",
+  Other: OTHER_SPEC,
 };
 const LEGACY_SOURCE: Record<string, string> = {
   Google: "Google Search",
@@ -108,10 +112,12 @@ const LEGACY_SOURCE: Record<string, string> = {
   Event: "Event / Webinar",
   Partner: "Partner / Affiliate",
   Ads: "Online Ads",
+  Other: OTHER_SPEC,
 };
 const LEGACY_TOOL: Record<string, string> = {
   Excel: "Excel / Spreadsheets",
   "Custom System": "Custom Internal System",
+  Other: OTHER_SPEC,
 };
 const LEGACY_EMPLOYEES: Record<string, string> = {
   "1–10": "1 – 10",
@@ -176,6 +182,17 @@ export default function Onboarding() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [flowPhase, setFlowPhase] = useState<"profile" | "team">("profile");
+
+  const resolvePostOnboardingDest = useMemo(() => {
+    const dest = redirectTo || "/certificates";
+    const isCertificates = dest === "/certificates" || dest.startsWith("/certificates?");
+    return isCertificates
+      ? dest.includes("?")
+        ? `${dest}&openUpload=1`
+        : `${dest}?openUpload=1`
+      : dest;
+  }, [redirectTo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,24 +230,30 @@ export default function Onboarding() {
               p.toolsUsedOther || (unknownTools.length ? unknownTools.join(", ") : "");
             setForm({
               companyName: p.companyName || "",
-              role: knownRole ? p.role || "" : p.role ? "Other" : "",
+              role: knownRole ? p.role || "" : p.role ? OTHER_SPEC : "",
               roleOther: knownRole ? "" : p.role || "",
               beeLevel: p.beeLevel || "",
               employeeRange: p.employeeRange || "",
-              industry: knownIndustry ? p.industry || "" : p.industry ? "Other" : industryOther ? "Other" : "",
+              industry: knownIndustry
+                ? p.industry || ""
+                : p.industry
+                  ? OTHER_SPEC
+                  : industryOther
+                    ? OTHER_SPEC
+                    : "",
               industryOther,
               annualRevenue: p.annualRevenue || "",
               acquisitionSource: knownSource
                 ? p.acquisitionSource || ""
                 : p.acquisitionSource
-                  ? "Other"
+                  ? OTHER_SPEC
                   : sourceOther
-                    ? "Other"
+                    ? OTHER_SPEC
                     : "",
               acquisitionSourceOther: sourceOther,
               toolsUsed:
-                unknownTools.length || (toolsOtherText && !knownTools.includes("Other"))
-                  ? [...knownTools, "Other"]
+                unknownTools.length || (toolsOtherText && !knownTools.includes(OTHER_SPEC))
+                  ? [...knownTools, OTHER_SPEC]
                   : knownTools,
               toolsOther: toolsOtherText,
               biggestChallenge: p.biggestChallenge || "",
@@ -279,15 +302,19 @@ export default function Onboarding() {
     }
 
     // Role has no dedicated *Other column on the backend, so we still inline.
-    const finalRole = form.role === "Other" ? form.roleOther.trim() || "Other" : form.role || null;
-    // For industry/source/tools, the backend has dedicated *Other columns,
-    // so send the option literal ("Other") plus the free-text in its own field.
-    const finalIndustryOther = form.industry === "Other" ? form.industryOther.trim() || null : null;
+    const finalRole =
+      form.role === OTHER_SPEC
+        ? form.roleOther.trim() || OTHER_SPEC
+        : form.role || null;
+    const finalIndustryOther =
+      form.industry === OTHER_SPEC ? form.industryOther.trim() || null : null;
     const finalSourceOther =
-      form.acquisitionSource === "Other" ? form.acquisitionSourceOther.trim() || null : null;
-    const finalToolsOther = form.toolsUsed.includes("Other")
+      form.acquisitionSource === OTHER_SPEC ? form.acquisitionSourceOther.trim() || null : null;
+    const finalToolsOther = form.toolsUsed.includes(OTHER_SPEC)
       ? form.toolsOther.trim() || null
       : null;
+
+    const toolsUsedPayload = form.toolsUsed.filter((t) => t !== OTHER_SPEC);
 
     setSubmitting(true);
     try {
@@ -305,7 +332,7 @@ export default function Onboarding() {
           annualRevenue: form.annualRevenue || null,
           acquisitionSource: form.acquisitionSource || null,
           acquisitionSourceOther: finalSourceOther,
-          toolsUsed: form.toolsUsed,
+          toolsUsed: toolsUsedPayload,
           toolsUsedOther: finalToolsOther,
           biggestChallenge: form.biggestChallenge.trim() || null,
         }),
@@ -315,18 +342,10 @@ export default function Onboarding() {
         throw new Error(data?.message || "Failed to save");
       }
       toast({
-        title: "Profile saved",
-        description: "Welcome aboard - let's continue.",
+        title: "Company profile saved",
+        description: "Next, invite teammates or jump straight into the app.",
       });
-
-      const dest = redirectTo || "/certificates";
-      const isCertificates = dest === "/certificates" || dest.startsWith("/certificates?");
-      const finalDest = isCertificates
-        ? dest.includes("?")
-          ? `${dest}&openUpload=1`
-          : `${dest}?openUpload=1`
-        : dest;
-      navigate(finalDest, { replace: true });
+      setFlowPhase("team");
     } catch (err: any) {
       toast({
         title: "Couldn't save profile",
@@ -342,6 +361,60 @@ export default function Onboarding() {
     return (
       <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
+
+  if (flowPhase === "team") {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center px-4 py-8 sm:py-12">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-step-title"
+            className="w-full max-w-lg rounded-2xl border border-border/60 bg-card shadow-2xl shadow-black/50"
+            data-testid="onboarding-team-step"
+          >
+            <div className="px-6 sm:px-8 py-8 space-y-5">
+              <div className="flex justify-center">
+                <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                  <Users className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+              <div className="text-center space-y-2">
+                <h1 id="team-step-title" className="text-xl font-semibold tracking-tight">
+                  Add a team member?
+                </h1>
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  Right after sign-up is the best time to invite a colleague—they’ll get their own login
+                  and share this workspace with you. If you prefer, skip for now; you can always add
+                  people later from the Hub under <span className="text-foreground font-medium">Your team</span>{" "}
+                  (<span className="text-foreground font-medium">/workspace</span>).
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => navigate("/workspace?fromOnboarding=1", { replace: true })}
+                  data-testid="btn-invite-team-now"
+                >
+                  Invite a team member <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => navigate(resolvePostOnboardingDest, { replace: true })}
+                  data-testid="btn-skip-team-invite"
+                >
+                  Not now — continue
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -363,20 +436,21 @@ export default function Onboarding() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Welcome - last quick step
+                  Company onboarding
                 </p>
                 <h1 id="onboarding-title" className="text-xl sm:text-2xl font-semibold truncate">
-                  A few things about your company
+                  Company Onboarding Form
                 </h1>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-1.5 flex-1 rounded-full bg-primary" />
-              <div className="h-1.5 flex-1 rounded-full bg-primary" />
+              <div className="h-1.5 flex-1 rounded-full bg-primary/40" />
             </div>
             <p className="mt-3 text-[13px] text-muted-foreground">
-              This helps us tailor your B-BBEE scorecards and recommendations. Only the company name
-              is required - the rest is optional and you can change it later from your profile.
+              Tell us about your company so we can tailor B-BBEE scorecards and recommendations. Only{" "}
+              <span className="text-foreground font-medium">company name</span> is required; everything
+              else is optional and editable later from your profile.
             </p>
           </div>
 
@@ -384,8 +458,9 @@ export default function Onboarding() {
           <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="companyName">
-                Company Name <span className="text-destructive">*</span>
+                1. Company Name <span className="text-destructive">*</span>
               </Label>
+              <p className="text-xs text-muted-foreground">What is your company’s name?</p>
               <Input
                 id="companyName"
                 value={form.companyName}
@@ -398,7 +473,11 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label>Your Role</Label>
+              <Label>2. Your Role</Label>
+              <p className="text-xs text-muted-foreground">What is your role in the company?</p>
+              <p className="text-[11px] text-muted-foreground/90 italic border-l-2 border-primary/30 pl-2">
+                Why this matters: helps you identify decision-makers vs researchers instantly.
+              </p>
               <Select value={form.role} onValueChange={(v) => setField("role", v)}>
                 <SelectTrigger data-testid="select-role">
                   <SelectValue placeholder="Select your role" />
@@ -411,7 +490,7 @@ export default function Onboarding() {
                   ))}
                 </SelectContent>
               </Select>
-              {form.role === "Other" && (
+              {form.role === OTHER_SPEC && (
                 <Input
                   value={form.roleOther}
                   onChange={(e) => setField("roleOther", e.target.value)}
@@ -424,7 +503,8 @@ export default function Onboarding() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <Label>BEE Level</Label>
+                <Label>3. BEE Level</Label>
+                <p className="text-xs text-muted-foreground">What is your current BEE level?</p>
                 <Select value={form.beeLevel} onValueChange={(v) => setField("beeLevel", v)}>
                   <SelectTrigger data-testid="select-bee-level">
                     <SelectValue placeholder="Select a BEE level" />
@@ -440,7 +520,8 @@ export default function Onboarding() {
               </div>
 
               <div className="space-y-2">
-                <Label>Number of Employees</Label>
+                <Label>4. Number of Employees</Label>
+                <p className="text-xs text-muted-foreground">How many employees does your company have?</p>
                 <Select
                   value={form.employeeRange}
                   onValueChange={(v) => setField("employeeRange", v)}
@@ -460,7 +541,8 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label>Industry</Label>
+              <Label>5. Industry</Label>
+              <p className="text-xs text-muted-foreground">What industry does your company operate in?</p>
               <Select value={form.industry} onValueChange={(v) => setField("industry", v)}>
                 <SelectTrigger data-testid="select-industry">
                   <SelectValue placeholder="Select an industry" />
@@ -473,7 +555,7 @@ export default function Onboarding() {
                   ))}
                 </SelectContent>
               </Select>
-              {form.industry === "Other" && (
+              {form.industry === OTHER_SPEC && (
                 <Input
                   value={form.industryOther}
                   onChange={(e) => setField("industryOther", e.target.value)}
@@ -486,7 +568,10 @@ export default function Onboarding() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <Label>Annual Revenue</Label>
+                <Label>6. Annual Revenue (ZAR)</Label>
+                <p className="text-xs text-muted-foreground">
+                  What is your company’s annual revenue? (in South African Rand)
+                </p>
                 <Select
                   value={form.annualRevenue}
                   onValueChange={(v) => setField("annualRevenue", v)}
@@ -505,7 +590,8 @@ export default function Onboarding() {
               </div>
 
               <div className="space-y-2">
-                <Label>How did you hear about us</Label>
+                <Label>7. How Did You Hear About Us?</Label>
+                <p className="text-xs text-muted-foreground">How did you hear about us?</p>
                 <Select
                   value={form.acquisitionSource}
                   onValueChange={(v) => setField("acquisitionSource", v)}
@@ -521,7 +607,7 @@ export default function Onboarding() {
                     ))}
                   </SelectContent>
                 </Select>
-                {form.acquisitionSource === "Other" && (
+                {form.acquisitionSource === OTHER_SPEC && (
                   <Input
                     value={form.acquisitionSourceOther}
                     onChange={(e) => setField("acquisitionSourceOther", e.target.value)}
@@ -535,8 +621,11 @@ export default function Onboarding() {
 
             <div className="space-y-3">
               <div>
-                <Label>Current Tools</Label>
-                <p className="text-xs text-muted-foreground mt-1">Select all that apply</p>
+                <Label>8. Current Tools for BEE / Compliance</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  What tools are you currently using for BEE or compliance tracking? Select all that
+                  apply.
+                </p>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {TOOLS.map((tool) => {
@@ -560,7 +649,7 @@ export default function Onboarding() {
                   );
                 })}
               </div>
-              {form.toolsUsed.includes("Other") && (
+              {form.toolsUsed.includes(OTHER_SPEC) && (
                 <Input
                   value={form.toolsOther}
                   onChange={(e) => setField("toolsOther", e.target.value)}
@@ -572,7 +661,10 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="challenge">Biggest Challenge (optional)</Label>
+              <Label htmlFor="challenge">9. Biggest Challenge (optional)</Label>
+              <p className="text-xs text-muted-foreground">
+                What is your biggest challenge with BEE compliance right now?
+              </p>
               <Textarea
                 id="challenge"
                 value={form.biggestChallenge}

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
 import {
-  ArrowLeft, Download, Loader2, ShieldCheck, AlertTriangle, Award,
+  Download, Loader2, ShieldCheck, AlertTriangle, Award,
   Building2, Hash, Users2, Percent, CalendarClock, History, Flag,
   X, CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavBack } from '@/components/AppNavBack';
 
 interface CertDetail {
   slug: string;
@@ -210,10 +211,13 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-[860px] mx-auto px-5 h-14 flex items-center justify-between">
-          <Link href="/certificates" className="flex items-center gap-1.5 text-[13px] text-[#8e8e93] hover:text-white transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            All certificates
-          </Link>
+          <AppNavBack
+            href="/certificates"
+            eyebrow="Registry"
+            label="All certificates"
+            variant="dark"
+            size="compact"
+          />
           <span className="text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate</span>
         </div>
       </header>
