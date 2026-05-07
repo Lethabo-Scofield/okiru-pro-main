@@ -223,10 +223,11 @@ const GLOBAL_CSS = `
       0 1px 4px rgba(0,0,0,0.45);
   }
   .okiru-root .ok-h1 em {
-    font-style: italic; color: #c7cdff; font-weight: 500;
+    font-style: italic; color: #6366f1; font-weight: 600;
     text-shadow:
-      0 2px 18px rgba(0,0,0,0.55),
-      0 0 24px rgba(99,102,241,0.45);
+      0 2px 18px rgba(0,0,0,0.65),
+      0 1px 3px rgba(0,0,0,0.5),
+      0 0 28px rgba(99,102,241,0.55);
   }
   .okiru-root .ok-hero-sub {
     margin-top: 28px; padding-left: 80px; max-width: 520px;
