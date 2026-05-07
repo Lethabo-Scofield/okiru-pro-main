@@ -133,23 +133,16 @@ const GLOBAL_CSS = `
     position: absolute; inset: 0;
     width: 100%; height: 100%;
     object-fit: cover; object-position: center center;
-    opacity: 0.65;
+    opacity: 1;
   }
   .okiru-root .ok-hero-bg-tint {
     position: absolute; inset: 0;
     background:
       linear-gradient(
-        to right,
-        rgba(10,10,15,0.92) 0%,
-        rgba(10,10,15,0.72) 40%,
-        rgba(10,10,15,0.40) 80%,
-        rgba(10,10,15,0.55) 100%
-      ),
-      linear-gradient(
         to bottom,
-        rgba(10,10,15,0.45) 0%,
-        rgba(10,10,15,0.15) 35%,
-        rgba(10,10,15,0.90) 100%
+        rgba(10,10,15,0.10) 0%,
+        rgba(10,10,15,0.05) 40%,
+        rgba(10,10,15,0.55) 100%
       );
   }
   .okiru-root .ok-nav-chip {
@@ -578,7 +571,7 @@ const GLOBAL_CSS = `
   /* ──── Responsive ──── */
   @media (max-width: 1024px) {
     .okiru-root .ok-sectors-grid { grid-template-columns: repeat(2, 1fr); }
-    .okiru-root .ok-hero-bg-img { opacity: 0.45; object-position: center right; }
+    .okiru-root .ok-hero-bg-img { opacity: 1; object-position: center right; }
   }
 
   @media (max-width: 900px) {
@@ -593,9 +586,9 @@ const GLOBAL_CSS = `
     .okiru-root .ok-hero-logo-wrap { padding-left: 0; }
     .okiru-root .ok-hero-logo { width: 52px; height: 52px; }
     .okiru-root .ok-multi-glow { width: 420px; height: 420px; right: -120px; top: -100px; }
-    .okiru-root .ok-hero-bg-img { opacity: 0.30; object-position: 70% center; }
+    .okiru-root .ok-hero-bg-img { opacity: 1; object-position: 70% center; }
     .okiru-root .ok-hero-bg-tint {
-      background: linear-gradient(to bottom, rgba(10,10,15,0.88) 0%, rgba(10,10,15,0.65) 50%, rgba(10,10,15,0.92) 100%);
+      background: linear-gradient(to bottom, rgba(10,10,15,0.20) 0%, rgba(10,10,15,0.10) 40%, rgba(10,10,15,0.75) 100%);
     }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur,
