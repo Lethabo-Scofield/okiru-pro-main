@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
 
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
@@ -48,9 +49,78 @@ const GLOBAL_CSS = `
     width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 48px;
     display: flex; align-items: center; justify-content: space-between;
   }
+  .okiru-root .ok-brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    text-decoration: none;
+  }
+  .okiru-root .ok-brand-mark {
+    width: 28px; height: 28px; display: block;
+    filter: drop-shadow(0 0 14px rgba(99,102,241,0.35));
+    transition: filter .35s ease, transform .35s ease;
+  }
+  .okiru-root .ok-brand:hover .ok-brand-mark {
+    filter: drop-shadow(0 0 18px rgba(244,114,182,0.45));
+    transform: rotate(8deg);
+  }
   .okiru-root .ok-wordmark {
     font-family: var(--serif); font-style: italic; font-size: 20px;
     color: var(--hi); letter-spacing: -0.01em;
+  }
+
+  /* hero logo - large glowing centerpiece */
+  .okiru-root .ok-hero-logo-wrap {
+    padding-left: 80px; margin-bottom: 22px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .okiru-root .ok-hero-logo {
+    width: 64px; height: 64px; position: relative;
+    animation: okiru-logoFloat 6s ease-in-out infinite;
+  }
+  .okiru-root .ok-hero-logo img {
+    width: 100%; height: 100%; display: block;
+    filter: drop-shadow(0 0 24px rgba(99,102,241,0.45))
+            drop-shadow(0 0 48px rgba(244,114,182,0.18));
+  }
+  .okiru-root .ok-hero-logo::after {
+    content: ''; position: absolute; inset: -22%;
+    background: conic-gradient(
+      from 0deg,
+      rgba(244,114,182,0.0) 0deg,
+      rgba(244,114,182,0.18) 60deg,
+      rgba(56,189,248,0.18) 180deg,
+      rgba(251,146,60,0.18) 300deg,
+      rgba(244,114,182,0.0) 360deg
+    );
+    border-radius: 50%; filter: blur(22px); z-index: -1;
+    animation: okiru-logoSpin 18s linear infinite;
+  }
+  @keyframes okiru-logoFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  @keyframes okiru-logoSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .okiru-root .ok-hero-logo,
+    .okiru-root .ok-hero-logo::after { animation: none !important; }
+    .okiru-root .ok-brand:hover .ok-brand-mark { transform: none; }
+  }
+  .okiru-root .ok-hero-tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: rgba(255,255,255,0.4);
+  }
+
+  /* multicolor gradient accent (matches logo palette) */
+  .okiru-root .ok-multi-glow {
+    position: absolute; pointer-events: none; z-index: 0;
+    width: 720px; height: 720px; top: -180px; right: -160px;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(251,146,60,0.10) 0%, transparent 45%),
+      radial-gradient(circle at 70% 40%, rgba(56,189,248,0.10) 0%, transparent 50%),
+      radial-gradient(circle at 50% 70%, rgba(168,85,247,0.10) 0%, transparent 50%);
+    filter: blur(40px); opacity: 0.9;
   }
   .okiru-root .ok-nav-chip {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
@@ -472,6 +542,9 @@ const GLOBAL_CSS = `
   @media (max-width: 760px) {
     .okiru-root .ok-nav-w { padding: 0 20px; }
     .okiru-root .ok-nav-chip { display: none; }
+    .okiru-root .ok-hero-logo-wrap { padding-left: 0; }
+    .okiru-root .ok-hero-logo { width: 52px; height: 52px; }
+    .okiru-root .ok-multi-glow { width: 420px; height: 420px; right: -120px; top: -100px; }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur { display: none; }
     .okiru-root .ok-hamburger { display: block; }
@@ -763,7 +836,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       <nav className="ok-nav">
         <div className="ok-nav-w">
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <span className="ok-wordmark">Okiru</span>
+            <a href="/" className="ok-brand" aria-label="Okiru home">
+              <img src={okiruLogo} alt="" className="ok-brand-mark" />
+              <span className="ok-wordmark">Okiru</span>
+            </a>
             <span className="ok-nav-chip">B-BBEE Intelligence</span>
           </div>
           <div className="ok-nav-actions">
@@ -787,9 +863,15 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
       <main>
         <section className="ok-hero">
+          <div className="ok-multi-glow" aria-hidden />
           <div className="ok-hero-line" />
-          <div className="ok-w">
-            <p className="ok-eyebrow-hero ok-anim-1">B-BBEE Compliance Platform  ·  South Africa</p>
+          <div className="ok-w" style={{ position: "relative", zIndex: 1 }}>
+            <div className="ok-hero-logo-wrap ok-anim-1">
+              <div className="ok-hero-logo">
+                <img src={okiruLogo} alt="Okiru" />
+              </div>
+              <span className="ok-hero-tag">B-BBEE Compliance Platform · South Africa</span>
+            </div>
             <h1 className="ok-h1 ok-anim-2">
               Scorecards built from<br /><em>your toolkit.</em>
             </h1>
@@ -941,7 +1023,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       <footer>
         <div className="ok-w">
           <div className="ok-foot">
-            <span className="ok-foot-wm">Okiru</span>
+            <span className="ok-foot-wm" style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <img src={okiruLogo} alt="" style={{ width: 22, height: 22, opacity: 0.85 }} />
+              Okiru
+            </span>
             <span className="ok-foot-c">&copy; {new Date().getFullYear()} Okiru Pro — B-BBEE Compliance Platform</span>
             <div className="ok-foot-links">
               <a href="/devmode" className="ok-foot-link" data-testid="link-devmode">{`{DevMode}`}</a>
