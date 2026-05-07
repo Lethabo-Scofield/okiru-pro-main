@@ -906,7 +906,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <span className="ok-nav-chip">B-BBEE Intelligence</span>
           </div>
           <div className="ok-nav-actions">
-            <button className="ok-btn-ghost" onClick={goCertificates} data-testid="nav-certs">B-BBEE Certs</button>
+            <button className="ok-btn-ghost" onClick={goCertificates} data-testid="nav-certs">B-BBEE Certificates</button>
             <button className="ok-btn-ghost" onClick={onNavigateAuth} data-testid="nav-login">Login</button>
             <span className="ok-nav-divider" aria-hidden />
             <button className="ok-btn-pur" onClick={goRegister} data-testid="nav-get-started">
@@ -920,7 +920,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       </nav>
 
       <div id="ok-mobile-nav" role="navigation" className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
-        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); goCertificates(); }}>B-BBEE Certs</button>
+        <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); goCertificates(); }}>B-BBEE Certificates</button>
         <button className="ok-btn-ghost" style={{ textAlign: "left", padding: "12px 0", fontSize: 16, color: "var(--hi)" }} onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Login</button>
         <button className="ok-btn-main" style={{ justifyContent: "center" }} onClick={() => { setMenuOpen(false); goRegister(); }}>
           Get started <span className="arr"><ArrowRight size={14} /></span>
