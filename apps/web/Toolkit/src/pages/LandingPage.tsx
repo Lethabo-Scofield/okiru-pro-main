@@ -38,13 +38,14 @@ const GLOBAL_CSS = `
     background-size: 256px;
   }
 
-  /* nav */
+  /* nav - transparent so hero image shows through */
   .okiru-root .ok-nav {
     position: fixed; top: 0; width: 100%; z-index: 200;
     height: 58px; display: flex; align-items: center;
-    border-bottom: 1px solid var(--rule);
-    background: rgba(10,10,15,0.85);
-    backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(to bottom, rgba(10,10,15,0.55) 0%, rgba(10,10,15,0.20) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
   .okiru-root .ok-nav-w {
     width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 48px;
