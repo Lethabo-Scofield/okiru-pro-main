@@ -216,13 +216,23 @@ const GLOBAL_CSS = `
     font-family: var(--serif);
     font-size: clamp(3rem, 6.2vw, 5.8rem);
     line-height: 1.02; letter-spacing: -0.03em;
-    color: var(--hi); font-weight: 400;
+    color: #ffffff; font-weight: 500;
     padding-left: 80px; max-width: 820px;
+    text-shadow:
+      0 2px 18px rgba(0,0,0,0.55),
+      0 1px 4px rgba(0,0,0,0.45);
   }
-  .okiru-root .ok-h1 em { font-style: italic; color: var(--pur-l); }
+  .okiru-root .ok-h1 em {
+    font-style: italic; color: #c7cdff; font-weight: 500;
+    text-shadow:
+      0 2px 18px rgba(0,0,0,0.55),
+      0 0 24px rgba(99,102,241,0.45);
+  }
   .okiru-root .ok-hero-sub {
     margin-top: 28px; padding-left: 80px; max-width: 520px;
-    font-size: 16px; color: var(--body); line-height: 1.8;
+    font-size: 16px; color: rgba(255,255,255,0.96); line-height: 1.8;
+    font-weight: 500;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.7), 0 1px 2px rgba(0,0,0,0.5);
   }
   .okiru-root .ok-hero-btns {
     margin-top: 44px; padding-left: 80px;
@@ -239,12 +249,19 @@ const GLOBAL_CSS = `
   .okiru-root .ok-btn-main .arr { transition: transform .2s; display: inline-flex; }
   .okiru-root .ok-btn-main:hover .arr { transform: translateX(3px); }
   .okiru-root .ok-btn-sec {
-    font-family: var(--sans); font-size: 13px; color: var(--muted);
-    background: none; border: 1px solid var(--rule); cursor: pointer;
+    font-family: var(--sans); font-size: 14px; font-weight: 600;
+    color: #ffffff;
+    background: rgba(10,10,15,0.35);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.45); cursor: pointer;
     padding: 12px 22px; border-radius: 4px;
-    transition: color .2s, border-color .2s;
+    transition: color .2s, border-color .2s, background .2s;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
   }
-  .okiru-root .ok-btn-sec:hover { color: var(--pur-l); border-color: rgba(99,102,241,.35); }
+  .okiru-root .ok-btn-sec:hover {
+    color: #ffffff; border-color: rgba(255,255,255,0.85);
+    background: rgba(10,10,15,0.55);
+  }
 
   /* stats */
   .okiru-root .ok-stats {
