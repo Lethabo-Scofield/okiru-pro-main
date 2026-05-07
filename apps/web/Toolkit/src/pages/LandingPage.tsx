@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
-import heroIllustration from "@toolkit-assets/hero_illustration.png";
+import heroBackground from "@toolkit-assets/hero_background.png";
 
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
@@ -132,24 +132,24 @@ const GLOBAL_CSS = `
   .okiru-root .ok-hero-bg-img {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
-    object-fit: cover; object-position: center right;
-    opacity: 0.55;
+    object-fit: cover; object-position: center center;
+    opacity: 0.65;
   }
   .okiru-root .ok-hero-bg-tint {
     position: absolute; inset: 0;
     background:
       linear-gradient(
         to right,
-        rgba(10,10,15,0.95) 0%,
-        rgba(10,10,15,0.78) 35%,
-        rgba(10,10,15,0.45) 70%,
+        rgba(10,10,15,0.92) 0%,
+        rgba(10,10,15,0.72) 40%,
+        rgba(10,10,15,0.40) 80%,
         rgba(10,10,15,0.55) 100%
       ),
       linear-gradient(
         to bottom,
-        rgba(10,10,15,0.55) 0%,
-        rgba(10,10,15,0.20) 40%,
-        rgba(10,10,15,0.85) 100%
+        rgba(10,10,15,0.45) 0%,
+        rgba(10,10,15,0.15) 35%,
+        rgba(10,10,15,0.90) 100%
       );
   }
   .okiru-root .ok-nav-chip {
@@ -899,7 +899,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       <main>
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <img src={heroIllustration} alt="" className="ok-hero-bg-img" />
+            <img src={heroBackground} alt="" className="ok-hero-bg-img" />
             <div className="ok-hero-bg-tint" />
           </div>
           <div className="ok-multi-glow" aria-hidden />
