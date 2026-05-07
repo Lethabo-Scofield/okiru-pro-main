@@ -488,6 +488,18 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-[420px]">
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/'; }}
+            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 -ml-2 rounded-md hover:bg-muted/50"
+            data-testid="btn-back-to-home"
+            aria-label="Back to home"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
+        </div>
         <div className="flex justify-center mb-8">
           <img src={okiruLogo} alt="Okiru" className="h-14 w-14 rounded-full object-contain" data-testid="img-logo-auth" />
         </div>
