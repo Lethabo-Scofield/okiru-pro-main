@@ -896,10 +896,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           <div className="ok-nav-actions">
             <button className="ok-btn-ghost" onClick={goCertificates} data-testid="nav-certs">B-BBEE Certificates</button>
             <button className="ok-btn-ghost" onClick={onNavigateAuth} data-testid="nav-login">Login</button>
-            <span className="ok-nav-divider" aria-hidden />
-            <button className="ok-btn-pur" onClick={goRegister} data-testid="nav-get-started">
-              Get started <ArrowRight size={14} />
-            </button>
             <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen} aria-controls="ok-mobile-nav">
               {menuOpen ? <CloseIcon /> : <MenuIcon />}
             </button>
@@ -932,7 +928,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <button className="ok-btn-main" onClick={goRegister}>
                 Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
-              <button className="ok-btn-sec" onClick={onNavigateAuth}>Sign in</button>
             </div>
           </div>
         </section>
