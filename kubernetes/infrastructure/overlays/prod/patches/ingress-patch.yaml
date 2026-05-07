@@ -1,5 +1,5 @@
-# Prod-specific ingress overrides
-# Base paths are defined in base/ingress/ingress.yaml
+# Prod ingress: TLS SANs + nginx server-alias so okiru.pro hits the same routes as the nip.io host.
+# Base paths: ../../base/ingress/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,7 +7,8 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-production"
     nginx.ingress.kubernetes.io/limit-rps: "50"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.20.164.101.114.nip.io"
+    nginx.ingress.kubernetes.io/server-alias: "okiru.pro,www.okiru.pro"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
@@ -16,4 +17,6 @@ spec:
   tls:
     - hosts:
         - okiru.20.164.101.114.nip.io
+        - okiru.pro
+        - www.okiru.pro
       secretName: okiru-pro-tls

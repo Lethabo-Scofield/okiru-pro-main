@@ -25,7 +25,7 @@ env:
   ACR_REGISTRY: okiruproacrde4d539b.azurecr.io
   IMAGE_TAG: ${{ github.sha }}
   NAMESPACE: okiru-pro
-  DOMAIN: okiru.20.164.101.114.nip.io
+  DOMAIN: okiru.pro
 
 permissions:
   contents: write  # Required to commit kustomization.yaml changes back to git
@@ -96,7 +96,7 @@ jobs:
     needs: build-and-push
     environment:
       name: production
-      url: https://okiru.20.164.101.114.nip.io
+      url: https://okiru.pro
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -6,7 +6,8 @@ import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
-import { ProcessorSessionModel, ClientModel } from "../shared/schema";
+import { ProcessorSessionModel, ClientModel, OrganizationModel } from "../shared/schema";
+import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
@@ -230,6 +231,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Company name must be between 2 and 200 characters" });
       }
 
+      if (!isMongoConnected()) {
+        return res.status(503).json({ message: "Database is not available. Please try again later." });
+      }
+
       const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
       const safeRole = ALLOWED_ROLES.includes(role) ? role : "auditor";
 
@@ -242,6 +247,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already registered" });
       }
 
+      // Org layer: same `organizations` collection as the API (Lethabo).
+      let tenantOrgId: string;
+      try {
+        const orgDoc = await OrganizationModel.create({
+          id: randomUUID(),
+          name: trimmedOrgName,
+        });
+        tenantOrgId = orgDoc.id;
+      } catch (err) {
+        logger.error("Organization create failed on register", err);
+        return res.status(500).json({ message: "Could not create organization. Please try again." });
+      }
+
       let user: any;
       if (existingEmail && !existingEmail.isVerified) {
         const hashedPassword = await bcrypt.hash(password, 8);
@@ -250,7 +268,7 @@ export async function registerRoutes(
           password: hashedPassword,
           fullName: trimmedFullName,
           organizationName: trimmedOrgName,
-          organizationId: null,
+          organizationId: tenantOrgId,
           role: safeRole,
         } as any);
       } else if (existing && !existing.isVerified) {
@@ -260,7 +278,7 @@ export async function registerRoutes(
           fullName: trimmedFullName,
           email: trimmedEmail,
           organizationName: trimmedOrgName,
-          organizationId: null,
+          organizationId: tenantOrgId,
           role: safeRole,
         } as any);
       } else {
@@ -271,7 +289,7 @@ export async function registerRoutes(
           fullName: trimmedFullName,
           email: trimmedEmail,
           organizationName: trimmedOrgName,
-          organizationId: null,
+          organizationId: tenantOrgId,
           role: safeRole,
           profilePicture: null,
         });
@@ -501,7 +519,12 @@ export async function registerRoutes(
       if (err) {
         return res.status(500).json({ message: "Logout failed" });
       }
-      res.clearCookie("connect.sid");
+      res.clearCookie("okiru.web.sid", {
+        path: "/",
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isReplit ? "none" : "lax",
+      });
       res.json({ success: true });
     });
   });
