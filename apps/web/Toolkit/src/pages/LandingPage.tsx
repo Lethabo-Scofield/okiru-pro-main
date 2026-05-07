@@ -241,12 +241,24 @@ const GLOBAL_CSS = `
   }
   .okiru-root .ok-btn-main {
     display: inline-flex; align-items: center; gap: 9px;
-    font-family: var(--sans); font-size: 14px; font-weight: 500;
-    color: #fff; background: var(--pur); border: none; cursor: pointer;
-    padding: 12px 28px; border-radius: 4px; letter-spacing: -0.01em;
-    transition: background .2s, transform .15s;
+    font-family: var(--sans); font-size: 15px; font-weight: 600;
+    color: #fff; background: #6366f1; border: 1px solid rgba(255,255,255,0.18);
+    cursor: pointer;
+    padding: 14px 30px; border-radius: 6px; letter-spacing: -0.01em;
+    box-shadow:
+      0 8px 24px rgba(99,102,241,0.55),
+      0 2px 6px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.18);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    transition: background .2s, transform .15s, box-shadow .2s;
   }
-  .okiru-root .ok-btn-main:hover { background: var(--pur-d); transform: translateY(-1px); }
+  .okiru-root .ok-btn-main:hover {
+    background: var(--pur-d); transform: translateY(-1px);
+    box-shadow:
+      0 12px 30px rgba(99,102,241,0.70),
+      0 3px 8px rgba(0,0,0,0.40),
+      inset 0 1px 0 rgba(255,255,255,0.22);
+  }
   .okiru-root .ok-btn-main .arr { transition: transform .2s; display: inline-flex; }
   .okiru-root .ok-btn-main:hover .arr { transform: translateX(3px); }
   .okiru-root .ok-btn-sec {
