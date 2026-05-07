@@ -83,6 +83,10 @@ externalPort = 8000
 localPort = 24679
 externalPort = 3001
 
+[[ports]]
+localPort = 24680
+externalPort = 3003
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "(cd apps/api && API_PORT=3000 NODE_ENV=production pnpm start &) && sleep 2 && cd apps/web && PORT=${PORT:-5000} API_SERVER_URL=http://127.0.0.1:3000 NODE_ENV=production pnpm start"]
