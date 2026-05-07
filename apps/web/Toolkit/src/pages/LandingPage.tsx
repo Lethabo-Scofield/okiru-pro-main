@@ -996,48 +996,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        <section className="ok-eb">
-          <Reveal className="ok-eb-l">
-            <p className="ok-eyebrow">Processing pipeline</p>
-            <h2 className="ok-h2">From documents<br />to <em>scored data.</em></h2>
-            <p className="ok-prod-body">Upload compliance documents alongside your toolkit. Okiru extracts structured entity data using ontology-backed templates, maps it to scorecard fields, and feeds it directly into the calculation engine.</p>
-            <ul className="ok-eb-list">
-              {[
-                "6 ontology templates with 30+ entities each",
-                "AI-powered extraction from PDFs and spreadsheets",
-                "Entities mapped to pillars, criteria, and formulas",
-                "Results feed directly into scorecard calculations",
-              ].map(item => (
-                <li key={item}><span className="ok-eb-dot" /><span>{item}</span></li>
-              ))}
-            </ul>
-          </Reveal>
-          <Reveal className="ok-eb-r" delay="ok-d1">
-            <div className="ok-pipe-card">
-              <div className="ok-pipe-hdr">
-                <span className="ok-pipe-title">ICT Generic Pipeline</span>
-                <span className="ok-pipe-badge">4 / 4 complete</span>
-              </div>
-              <div>
-                {PIPELINE_STEPS.map((step, i) => (
-                  <div key={step.name} className="ok-pipe-step">
-                    <div className="ok-pipe-num" style={{ background: step.numBg, color: step.numColor }}>{String(i + 1).padStart(2, "0")}</div>
-                    <div style={{ flex: 1 }}>
-                      <div className="ok-pipe-step-name">{step.name}</div>
-                      <div className="ok-pipe-step-meta">{step.meta}</div>
-                    </div>
-                    <span className="ok-pipe-step-status" style={{ color: step.statusColor, background: step.statusBg, border: `1px solid ${step.statusBorder}` }}>{step.status}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="ok-pipe-ftr">
-                <span>ICT Generic · v1.4</span>
-                <span>3,869 nodes mapped</span>
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
         <section className="ok-proc">
           <div className="ok-w">
             <div className="ok-proc-grid">
