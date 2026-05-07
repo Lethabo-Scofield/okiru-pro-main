@@ -205,7 +205,8 @@ const GLOBAL_CSS = `
 
   /* hero */
   .okiru-root .ok-hero {
-    padding: 156px 0 0; position: relative;
+    padding: 180px 0 140px; position: relative; min-height: 78vh;
+    display: flex; align-items: center;
     border-bottom: 1px solid var(--rule);
   }
   .okiru-root .ok-hero-line {
@@ -922,34 +923,18 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <img src={heroBackground} alt="" className="ok-hero-bg-img" />
             <div className="ok-hero-bg-tint" />
           </div>
-          <div className="ok-multi-glow" aria-hidden />
-          <div className="ok-hero-line" />
           <div className="ok-w" style={{ position: "relative", zIndex: 1 }}>
-            <div className="ok-hero-logo-wrap ok-anim-1">
-              <div className="ok-hero-logo">
-                <img src={okiruLogo} alt="Okiru" />
-              </div>
-              <span className="ok-hero-tag">B-BBEE Compliance Platform · South Africa</span>
-            </div>
             <h1 className="ok-h1 ok-anim-2">
               Scorecards built from<br /><em>your toolkit.</em>
             </h1>
             <p className="ok-hero-sub ok-anim-3">
-              Upload your sector-specific B-BBEE Excel toolkit. Okiru parses every formula, scores all five pillars, extracts compliance data from your documents, and produces audit-ready packs.
+              Upload your sector-specific B-BBEE Excel toolkit. Okiru scores all five pillars and produces audit-ready packs.
             </p>
             <div className="ok-hero-btns ok-anim-4">
               <button className="ok-btn-main" onClick={goRegister}>
                 Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
               <button className="ok-btn-sec" onClick={onNavigateAuth}>Sign in</button>
-            </div>
-            <div className="ok-stats">
-              {STATS.map((s, i) => (
-                <div key={s.l} className={`ok-stat ok-anim-${5 + i}`}>
-                  <div className="ok-stat-n">{s.n}</div>
-                  <div className="ok-stat-l">{s.l}</div>
-                </div>
-              ))}
             </div>
           </div>
         </section>
