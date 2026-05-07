@@ -124,32 +124,46 @@ const GLOBAL_CSS = `
     filter: blur(40px); opacity: 0.9;
   }
 
-  /* hero 2-col grid: copy on left, illustration on right */
-  .okiru-root .ok-hero-grid {
-    display: grid; grid-template-columns: 1.05fr 0.95fr;
-    gap: 56px; align-items: center;
+  /* hero background illustration - watermark on right, fades into dark on left */
+  .okiru-root .ok-hero-bg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    overflow: hidden;
   }
-  .okiru-root .ok-hero-illu {
-    position: relative; padding: 24px;
+  .okiru-root .ok-hero-bg-img {
+    position: absolute; top: 50%; right: -40px;
+    width: 56%; max-width: 720px; min-width: 420px;
+    transform: translateY(-46%);
+    opacity: 0.32;
+    mix-blend-mode: luminosity;
+    filter: drop-shadow(0 24px 60px rgba(99,102,241,0.25));
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0,0,0,0.25) 22%,
+      rgba(0,0,0,0.85) 55%,
+      rgba(0,0,0,1) 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0,0,0,0.25) 22%,
+      rgba(0,0,0,0.85) 55%,
+      rgba(0,0,0,1) 100%
+    );
     animation: okiru-illuFloat 8s ease-in-out infinite;
   }
-  .okiru-root .ok-hero-illu::before {
-    content: ''; position: absolute; inset: 0; z-index: 0;
+  .okiru-root .ok-hero-bg-tint {
+    position: absolute; inset: 0;
     background:
-      radial-gradient(circle at 30% 30%, rgba(99,102,241,0.18) 0%, transparent 55%),
-      radial-gradient(circle at 70% 70%, rgba(244,114,182,0.10) 0%, transparent 55%),
-      radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 70%);
-    border-radius: 50%; filter: blur(28px);
-  }
-  .okiru-root .ok-hero-illu img {
-    position: relative; z-index: 1;
-    width: 100%; height: auto; display: block;
-    filter: drop-shadow(0 24px 60px rgba(99,102,241,0.25))
-            drop-shadow(0 6px 14px rgba(0,0,0,0.4));
+      radial-gradient(ellipse at 78% 50%, rgba(99,102,241,0.10) 0%, transparent 55%),
+      linear-gradient(to right, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.55) 35%, transparent 60%);
   }
   @keyframes okiru-illuFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
+    0%, 100% { transform: translateY(-46%); }
+    50% { transform: translateY(calc(-46% - 6px)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .okiru-root .ok-hero-bg-img { animation: none !important; }
   }
   .okiru-root .ok-nav-chip {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
@@ -560,8 +574,7 @@ const GLOBAL_CSS = `
   /* ──── Responsive ──── */
   @media (max-width: 1024px) {
     .okiru-root .ok-sectors-grid { grid-template-columns: repeat(2, 1fr); }
-    .okiru-root .ok-hero-grid { grid-template-columns: 1fr; gap: 32px; }
-    .okiru-root .ok-hero-illu { max-width: 520px; margin: 0 auto; padding-left: 80px; }
+    .okiru-root .ok-hero-bg-img { width: 70%; opacity: 0.22; }
   }
 
   @media (max-width: 900px) {
@@ -576,7 +589,10 @@ const GLOBAL_CSS = `
     .okiru-root .ok-hero-logo-wrap { padding-left: 0; }
     .okiru-root .ok-hero-logo { width: 52px; height: 52px; }
     .okiru-root .ok-multi-glow { width: 420px; height: 420px; right: -120px; top: -100px; }
-    .okiru-root .ok-hero-illu { padding-left: 0; max-width: 100%; }
+    .okiru-root .ok-hero-bg-img { opacity: 0.14; width: 90%; right: -80px; }
+    .okiru-root .ok-hero-bg-tint {
+      background: linear-gradient(to bottom, rgba(10,10,15,0.85) 0%, rgba(10,10,15,0.55) 60%, rgba(10,10,15,0.85) 100%);
+    }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur { display: none; }
     .okiru-root .ok-hamburger { display: block; }
@@ -895,33 +911,30 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
       <main>
         <section className="ok-hero">
+          <div className="ok-hero-bg" aria-hidden>
+            <img src={heroIllustration} alt="" className="ok-hero-bg-img" />
+            <div className="ok-hero-bg-tint" />
+          </div>
           <div className="ok-multi-glow" aria-hidden />
           <div className="ok-hero-line" />
           <div className="ok-w" style={{ position: "relative", zIndex: 1 }}>
-            <div className="ok-hero-grid">
-              <div>
-                <div className="ok-hero-logo-wrap ok-anim-1">
-                  <div className="ok-hero-logo">
-                    <img src={okiruLogo} alt="Okiru" />
-                  </div>
-                  <span className="ok-hero-tag">B-BBEE Compliance Platform · South Africa</span>
-                </div>
-                <h1 className="ok-h1 ok-anim-2">
-                  Scorecards built from<br /><em>your toolkit.</em>
-                </h1>
-                <p className="ok-hero-sub ok-anim-3">
-                  Upload your sector-specific B-BBEE Excel toolkit. Okiru parses every formula, scores all five pillars, extracts compliance data from your documents, and produces audit-ready packs.
-                </p>
-                <div className="ok-hero-btns ok-anim-4">
-                  <button className="ok-btn-main" onClick={goRegister}>
-                    Get started <span className="arr"><ArrowRight size={14} /></span>
-                  </button>
-                  <button className="ok-btn-sec" onClick={onNavigateAuth}>Sign in</button>
-                </div>
+            <div className="ok-hero-logo-wrap ok-anim-1">
+              <div className="ok-hero-logo">
+                <img src={okiruLogo} alt="Okiru" />
               </div>
-              <div className="ok-hero-illu ok-anim-3" aria-hidden>
-                <img src={heroIllustration} alt="" />
-              </div>
+              <span className="ok-hero-tag">B-BBEE Compliance Platform · South Africa</span>
+            </div>
+            <h1 className="ok-h1 ok-anim-2">
+              Scorecards built from<br /><em>your toolkit.</em>
+            </h1>
+            <p className="ok-hero-sub ok-anim-3">
+              Upload your sector-specific B-BBEE Excel toolkit. Okiru parses every formula, scores all five pillars, extracts compliance data from your documents, and produces audit-ready packs.
+            </p>
+            <div className="ok-hero-btns ok-anim-4">
+              <button className="ok-btn-main" onClick={goRegister}>
+                Get started <span className="arr"><ArrowRight size={14} /></span>
+              </button>
+              <button className="ok-btn-sec" onClick={onNavigateAuth}>Sign in</button>
             </div>
             <div className="ok-stats">
               {STATS.map((s, i) => (
