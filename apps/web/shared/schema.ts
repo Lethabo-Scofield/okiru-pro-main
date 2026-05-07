@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import crypto from "crypto";
 
 export interface TemplateEntity {
   label: string;
@@ -217,30 +218,55 @@ export interface Message {
   createdAt: Date;
 }
 
-const userSchema = new Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  fullName: { type: String, default: null },
-  email: { type: String, default: null },
-  role: { type: String, default: "user" },
-  organizationId: { type: String, default: null },
-  organizationName: { type: String, default: null },
-  profilePicture: { type: String, default: null },
-  isVerified: { type: Boolean, default: false },
-  twofaEnabled: { type: Boolean, default: false },
-  otpCode: { type: String, default: null },
-  otpExpiry: { type: Date, default: null },
-  otpAttempts: { type: Number, default: 0 },
-  lastLogin: { type: Date, default: null },
-  resetToken: { type: String, default: null },
-  resetTokenExpiry: { type: Date, default: null },
-  createdAt: { type: Date, default: Date.now },
+/** Same collection/shape as API `organizations` — created on web sign-up for tenant isolation. */
+const organizationSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    createdAt: { type: String, default: () => new Date().toISOString() },
+  },
+  { collection: "organizations" }
+);
+
+organizationSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    if (ret._id) {
+      delete ret._id;
+    }
+    delete ret.__v;
+  },
 });
+
+const userSchema = new Schema(
+  {
+    // Persisted UUID for shared `users` collection with API. `id: false` disables Mongoose's default `id` virtual so this path is stored.
+    id: { type: String, default: () => crypto.randomUUID(), unique: true },
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    fullName: { type: String, default: null },
+    email: { type: String, default: null },
+    role: { type: String, default: "user" },
+    organizationId: { type: String, default: null },
+    organizationName: { type: String, default: null },
+    profilePicture: { type: String, default: null },
+    isVerified: { type: Boolean, default: false },
+    twofaEnabled: { type: Boolean, default: false },
+    otpCode: { type: String, default: null },
+    otpExpiry: { type: Date, default: null },
+    otpAttempts: { type: Number, default: 0 },
+    lastLogin: { type: Date, default: null },
+    resetToken: { type: String, default: null },
+    resetTokenExpiry: { type: Date, default: null },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { id: false }
+);
 
 userSchema.set("toJSON", {
   virtuals: true,
   transform: (_doc: any, ret: any) => {
-    ret.id = ret._id.toString();
+    ret.id = ret.id || ret._id?.toString();
     delete ret._id;
     delete ret.__v;
     return ret;
@@ -467,6 +493,8 @@ clientSchema.set("toJSON", {
   },
 });
 
+export const OrganizationModel =
+  mongoose.models.Organization || mongoose.model("Organization", organizationSchema);
 export const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 export const TemplateModel = mongoose.models.Template || mongoose.model("Template", templateSchema);
 export const CalculatorConfigModel = mongoose.models.CalculatorConfig || mongoose.model("CalculatorConfig", calculatorConfigSchema);

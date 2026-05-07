@@ -10,14 +10,19 @@ import { recordAudit, validateBody } from '../security/index.js';
 
 const logger = createLogger("Auth");
 
-// Schemas for inbound bodies. Kept loose on optional/legacy fields to
-// preserve backwards compatibility with the existing web client.
+// Sign-up always creates an Organization row, then the User (org / tenant layer). — Lethabo
 const registerSchema = z.object({
-  username: z.string().min(3).max(50),
+  username: z.string().trim().min(3).max(50),
   password: z.string().min(8),
-  fullName: z.string().min(1).max(200).optional(),
-  email: z.string().email().optional().nullable(),
-  organizationName: z.string().min(1).max(200).optional(),
+  fullName: z.string().trim().min(1).max(200).optional(),
+  email: z.preprocess(
+    (v) => {
+      if (v === null || v === undefined || v === "") return undefined;
+      return String(v).trim().toLowerCase();
+    },
+    z.string().email().optional(),
+  ),
+  organizationName: z.string().trim().min(2).max(200),
 }).passthrough();
 
 const loginSchema = z.object({
@@ -141,7 +146,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req: 
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const org = await storage.createOrganization({ name: organizationName || `${username}'s Organization` });
+    const org = await storage.createOrganization({ name: organizationName });
     const user = await storage.createUser({
       username,
       password: hashedPassword,
@@ -253,7 +258,12 @@ router.post('/logout', (req: Request, res: Response) => {
   const userId = req.session.userId ?? null;
   const orgId = req.session.organizationId ?? null;
   req.session.destroy(() => {
-    res.clearCookie('okiru.sid');
+    res.clearCookie('okiru.web.sid', {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
     void recordAudit(req, {
       action: "user.logout",
       resourceType: "user",

@@ -21,6 +21,16 @@ import {
   type WorkspaceRole,
 } from "../shared/schema";
 import crypto from "crypto";
+import mongoose from "mongoose";
+
+/** Match user by API-style UUID `id` or legacy MongoDB `_id` string. */
+function userByKeyFilter(key: string): mongoose.RootFilterQuery<Record<string, unknown>> {
+  const parts: mongoose.RootFilterQuery<Record<string, unknown>>[] = [{ id: key }];
+  if (/^[a-f0-9]{24}$/i.test(key)) {
+    parts.push({ _id: new mongoose.Types.ObjectId(key) });
+  }
+  return parts.length > 1 ? { $or: parts } : { id: key };
+}
 
 // Assessment types
 export interface Assessment {
@@ -685,40 +695,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserById(id: string): Promise<User | undefined> {
-    const doc = await UserModel.findById(id);
+    const doc = await UserModel.findOne(userByKeyFilter(id));
     return toUser(doc);
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const doc = await UserModel.create(user);
+    const doc = await UserModel.create({
+      id: crypto.randomUUID(),
+      ...user,
+    });
     return toUser(doc)!;
   }
 
   async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {
-    const doc = await UserModel.findByIdAndUpdate(id, data, { new: true });
+    const doc = await UserModel.findOneAndUpdate(userByKeyFilter(id), data, { new: true });
     return toUser(doc);
   }
 
   async setUserOtp(id: string, otpCode: string, otpExpiry: Date): Promise<void> {
-    await UserModel.findByIdAndUpdate(id, { otpCode, otpExpiry, otpAttempts: 0 });
+    await UserModel.findOneAndUpdate(userByKeyFilter(id), { otpCode, otpExpiry, otpAttempts: 0 });
   }
 
   async clearUserOtp(id: string): Promise<void> {
-    await UserModel.findByIdAndUpdate(id, { otpCode: null, otpExpiry: null, otpAttempts: 0 });
+    await UserModel.findOneAndUpdate(userByKeyFilter(id), {
+      otpCode: null,
+      otpExpiry: null,
+      otpAttempts: 0,
+    });
   }
 
   async incrementOtpAttempts(id: string): Promise<number> {
-    const doc = await UserModel.findByIdAndUpdate(id, { $inc: { otpAttempts: 1 } }, { new: true });
+    const doc = await UserModel.findOneAndUpdate(userByKeyFilter(id), { $inc: { otpAttempts: 1 } }, { new: true });
     return doc?.otpAttempts || 0;
   }
 
   async setTwofaEnabled(id: string, enabled: boolean): Promise<User | undefined> {
-    const doc = await UserModel.findByIdAndUpdate(id, { twofaEnabled: enabled }, { new: true });
+    const doc = await UserModel.findOneAndUpdate(userByKeyFilter(id), { twofaEnabled: enabled }, { new: true });
     return toUser(doc);
   }
 
   async setLastLogin(id: string): Promise<void> {
-    await UserModel.findByIdAndUpdate(id, { lastLogin: new Date() });
+    await UserModel.findOneAndUpdate(userByKeyFilter(id), { lastLogin: new Date() });
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -754,20 +771,20 @@ export class DatabaseStorage implements IStorage {
   }
   
   async setPasswordResetToken(userId: string, token: string, expiry: Date): Promise<void> {
-    await UserModel.findByIdAndUpdate(userId, {
+    await UserModel.findOneAndUpdate(userByKeyFilter(userId), {
       resetToken: token,
       resetTokenExpiry: expiry,
     });
   }
 
   async getPasswordResetToken(userId: string): Promise<{ token: string; expiry: Date } | null> {
-    const doc = await UserModel.findById(userId);
+    const doc = await UserModel.findOne(userByKeyFilter(userId));
     if (!doc || !doc.resetToken || !doc.resetTokenExpiry) return null;
     return { token: doc.resetToken, expiry: doc.resetTokenExpiry };
   }
 
   async clearPasswordResetToken(userId: string): Promise<void> {
-    await UserModel.findByIdAndUpdate(userId, {
+    await UserModel.findOneAndUpdate(userByKeyFilter(userId), {
       resetToken: null,
       resetTokenExpiry: null,
     });

@@ -784,7 +784,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         {step === 1 && (
                           <div className="space-y-4">
                             <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Company Name</Label>
+                              <Label className="text-[12px] font-medium text-muted-foreground/70">Company name</Label>
                               <Input
                                 value={form.companyName}
                                 onChange={e => {
@@ -800,7 +800,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               {fieldErrors.companyName ? (
                                 <p className="text-[11px] text-destructive" data-testid="error-company-name">{fieldErrors.companyName}</p>
                               ) : (
-                                <p className="text-[11px] text-muted-foreground/60">We'll create a team space with this name. You can invite people and rename it any time.</p>
+                                <p className="text-[11px] text-muted-foreground/60">Creates your organization in Okiru so teammates and clients stay isolated to this workspace.</p>
                               )}
                             </div>
                           </div>
@@ -964,7 +964,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               <p className="text-[11px] font-medium text-muted-foreground">Account Summary</p>
                               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
                                 <span className="text-muted-foreground/60">Company</span>
-                                <span className="text-foreground font-medium truncate" data-testid="summary-company">{form.companyName || '—'}</span>
+                                <span className="text-foreground font-medium truncate" data-testid="summary-company">{form.companyName || "—"}</span>
                                 <span className="text-muted-foreground/60">Name</span>
                                 <span className="text-foreground font-medium truncate">{form.fullName || '—'}</span>
                                 <span className="text-muted-foreground/60">Email</span>
