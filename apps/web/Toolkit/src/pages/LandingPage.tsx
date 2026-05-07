@@ -124,46 +124,33 @@ const GLOBAL_CSS = `
     filter: blur(40px); opacity: 0.9;
   }
 
-  /* hero background illustration - watermark on right, fades into dark on left */
+  /* hero full-bleed background image */
   .okiru-root .ok-hero-bg {
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
     overflow: hidden;
   }
   .okiru-root .ok-hero-bg-img {
-    position: absolute; top: 50%; right: -40px;
-    width: 56%; max-width: 720px; min-width: 420px;
-    transform: translateY(-46%);
-    opacity: 0.32;
-    mix-blend-mode: luminosity;
-    filter: drop-shadow(0 24px 60px rgba(99,102,241,0.25));
-    -webkit-mask-image: linear-gradient(
-      to right,
-      transparent 0%,
-      rgba(0,0,0,0.25) 22%,
-      rgba(0,0,0,0.85) 55%,
-      rgba(0,0,0,1) 100%
-    );
-    mask-image: linear-gradient(
-      to right,
-      transparent 0%,
-      rgba(0,0,0,0.25) 22%,
-      rgba(0,0,0,0.85) 55%,
-      rgba(0,0,0,1) 100%
-    );
-    animation: okiru-illuFloat 8s ease-in-out infinite;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center right;
+    opacity: 0.55;
   }
   .okiru-root .ok-hero-bg-tint {
     position: absolute; inset: 0;
     background:
-      radial-gradient(ellipse at 78% 50%, rgba(99,102,241,0.10) 0%, transparent 55%),
-      linear-gradient(to right, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.55) 35%, transparent 60%);
-  }
-  @keyframes okiru-illuFloat {
-    0%, 100% { transform: translateY(-46%); }
-    50% { transform: translateY(calc(-46% - 6px)); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .okiru-root .ok-hero-bg-img { animation: none !important; }
+      linear-gradient(
+        to right,
+        rgba(10,10,15,0.95) 0%,
+        rgba(10,10,15,0.78) 35%,
+        rgba(10,10,15,0.45) 70%,
+        rgba(10,10,15,0.55) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(10,10,15,0.55) 0%,
+        rgba(10,10,15,0.20) 40%,
+        rgba(10,10,15,0.85) 100%
+      );
   }
   .okiru-root .ok-nav-chip {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
@@ -574,7 +561,7 @@ const GLOBAL_CSS = `
   /* ──── Responsive ──── */
   @media (max-width: 1024px) {
     .okiru-root .ok-sectors-grid { grid-template-columns: repeat(2, 1fr); }
-    .okiru-root .ok-hero-bg-img { width: 70%; opacity: 0.22; }
+    .okiru-root .ok-hero-bg-img { opacity: 0.45; object-position: center right; }
   }
 
   @media (max-width: 900px) {
@@ -589,9 +576,9 @@ const GLOBAL_CSS = `
     .okiru-root .ok-hero-logo-wrap { padding-left: 0; }
     .okiru-root .ok-hero-logo { width: 52px; height: 52px; }
     .okiru-root .ok-multi-glow { width: 420px; height: 420px; right: -120px; top: -100px; }
-    .okiru-root .ok-hero-bg-img { opacity: 0.14; width: 90%; right: -80px; }
+    .okiru-root .ok-hero-bg-img { opacity: 0.30; object-position: 70% center; }
     .okiru-root .ok-hero-bg-tint {
-      background: linear-gradient(to bottom, rgba(10,10,15,0.85) 0%, rgba(10,10,15,0.55) 60%, rgba(10,10,15,0.85) 100%);
+      background: linear-gradient(to bottom, rgba(10,10,15,0.88) 0%, rgba(10,10,15,0.65) 50%, rgba(10,10,15,0.92) 100%);
     }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur { display: none; }
