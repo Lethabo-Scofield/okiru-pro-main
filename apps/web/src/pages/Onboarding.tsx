@@ -14,7 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@toolkit/components/ui/select";
-import { ArrowRight, Building2, Loader2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, Loader2, Users } from "lucide-react";
+import { Card, CardContent } from "@toolkit/components/ui/card";
+import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
+import { isCompleteOnboardingProfile } from "@/lib/onboardingStatus";
+import { PENDING_TEAM_INVITE_KEY } from "@toolkit/lib/authFlowFlags";
+
+function clearPendingTeamInviteFlag() {
+  try {
+    sessionStorage.removeItem(PENDING_TEAM_INVITE_KEY);
+  } catch {
+    /* empty */
+  }
+}
 
 const OTHER_SPEC = "Other (please specify)";
 
@@ -167,17 +179,26 @@ const EMPTY_FORM: FormState = {
   biggestChallenge: "",
 };
 
-export default function Onboarding() {
+export interface OnboardingProps {
+  /** When set (including `null`), preferred over `?redirect=` (e.g. AuthWrapper passes parsed query). */
+  redirectProp?: string | null;
+  /** Embedded on `/auth`: use parent navigation so SPA state stays on auth route. */
+  onFullyDone?: (path: string) => void;
+}
+
+export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProps = {}) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const { redirectTo } = useMemo(() => {
+  const { redirectTo: redirectFromQuery } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("redirect") || "";
     const safe = raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
     return { redirectTo: safe };
   }, []);
+
+  const effectiveRedirect = redirectProp !== undefined ? redirectProp : redirectFromQuery;
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -185,14 +206,19 @@ export default function Onboarding() {
   const [flowPhase, setFlowPhase] = useState<"profile" | "team">("profile");
 
   const resolvePostOnboardingDest = useMemo(() => {
-    const dest = redirectTo || "/certificates";
+    const dest = effectiveRedirect || "/certificates";
     const isCertificates = dest === "/certificates" || dest.startsWith("/certificates?");
     return isCertificates
       ? dest.includes("?")
         ? `${dest}&openUpload=1`
         : `${dest}?openUpload=1`
       : dest;
-  }, [redirectTo]);
+  }, [effectiveRedirect]);
+
+  const goTo = (path: string) => {
+    if (onFullyDone) onFullyDone(path);
+    else navigate(path, { replace: true });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -203,6 +229,13 @@ export default function Onboarding() {
         if (res.ok) {
           const data = await res.json().catch(() => null);
           const p = data?.profile ?? data;
+          const pendingTeamInvite =
+            typeof sessionStorage !== "undefined" &&
+            sessionStorage.getItem(PENDING_TEAM_INVITE_KEY) === "1";
+          if (p && typeof p === "object" && isCompleteOnboardingProfile(p) && pendingTeamInvite) {
+            setFlowPhase("team");
+            return;
+          }
           if (p && typeof p === "object" && (p.companyName || p.role || p.industry)) {
             if (!p.companyName && (user as any)?.organizationName) {
               p.companyName = (user as any).organizationName;
@@ -275,7 +308,7 @@ export default function Onboarding() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -345,6 +378,11 @@ export default function Onboarding() {
         title: "Company profile saved",
         description: "Next, invite teammates or jump straight into the app.",
       });
+      try {
+        sessionStorage.setItem(PENDING_TEAM_INVITE_KEY, "1");
+      } catch {
+        /* empty */
+      }
       setFlowPhase("team");
     } catch (err: any) {
       toast({
@@ -359,102 +397,110 @@ export default function Onboarding() {
 
   if (checking) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
       </div>
     );
   }
 
-  if (flowPhase === "team") {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto">
-        <div className="min-h-full flex items-start justify-center px-4 py-8 sm:py-12">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="team-step-title"
-            className="w-full max-w-lg rounded-2xl border border-border/60 bg-card shadow-2xl shadow-black/50"
-            data-testid="onboarding-team-step"
+  const authShell = (card: React.ReactNode) => (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-2xl">
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => {
+              goTo("/");
+            }}
+            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 -ml-2 rounded-md hover:bg-muted/50"
+            data-testid="btn-onboarding-back-home"
+            aria-label="Back to home"
           >
-            <div className="px-6 sm:px-8 py-8 space-y-5">
-              <div className="flex justify-center">
-                <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <div className="text-center space-y-2">
-                <h1 id="team-step-title" className="text-xl font-semibold tracking-tight">
-                  Add a team member?
-                </h1>
-                <p className="text-[13px] text-muted-foreground leading-relaxed">
-                  Right after sign-up is the best time to invite a colleague—they’ll get their own login
-                  and share this workspace with you. If you prefer, skip for now; you can always add
-                  people later from the Hub under <span className="text-foreground font-medium">Your team</span>{" "}
-                  (<span className="text-foreground font-medium">/workspace</span>).
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <Button
-                  size="lg"
-                  className="flex-1"
-                  onClick={() => navigate("/workspace?fromOnboarding=1", { replace: true })}
-                  data-testid="btn-invite-team-now"
-                >
-                  Invite a team member <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => navigate(resolvePostOnboardingDest, { replace: true })}
-                  data-testid="btn-skip-team-invite"
-                >
-                  Not now — continue
-                </Button>
-              </div>
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
+        </div>
+        <div className="flex justify-center mb-8">
+          <img src={okiruLogo} alt="Okiru" className="h-14 w-14 rounded-full object-contain" data-testid="img-onboarding-logo" />
+        </div>
+        {card}
+      </div>
+    </div>
+  );
+
+  if (flowPhase === "team") {
+    return authShell(
+      <Card className="border border-border/50 shadow-lg bg-card overflow-hidden" data-testid="onboarding-team-step">
+        <CardContent className="px-6 sm:px-8 py-8 space-y-5">
+          <div className="flex justify-center">
+            <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+              <Users className="h-6 w-6 text-primary" />
             </div>
           </div>
-        </div>
-      </div>
+          <div className="text-center space-y-2">
+            <h1 id="team-step-title" className="text-xl font-semibold tracking-tight">
+              Add a team member?
+            </h1>
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
+              Right after sign-up is the best time to invite a colleague—they’ll get their own login and share
+              this workspace with you. If you prefer, skip for now; you can always add people later from the Hub
+              under <span className="text-foreground font-medium">Your team</span>{" "}
+              (<span className="text-foreground font-medium">/workspace</span>).
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Button
+              size="lg"
+              className="flex-1"
+              onClick={() => {
+                clearPendingTeamInviteFlag();
+                goTo("/workspace?fromOnboarding=1");
+              }}
+              data-testid="btn-invite-team-now"
+            >
+              Invite a team member <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                clearPendingTeamInviteFlag();
+                goTo(resolvePostOnboardingDest);
+              }}
+              data-testid="btn-skip-team-invite"
+            >
+              Not now — continue
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="min-h-full flex items-start justify-center px-4 py-8 sm:py-12">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="onboarding-title"
-          className="w-full max-w-2xl rounded-2xl border border-border/60 bg-card shadow-2xl shadow-black/50"
-          data-testid="onboarding-popup"
-        >
-          <div className="px-6 sm:px-8 py-6 border-b border-border/40">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Company onboarding
-                </p>
-                <h1 id="onboarding-title" className="text-xl sm:text-2xl font-semibold truncate">
-                  Company Onboarding Form
-                </h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-primary" />
-              <div className="h-1.5 flex-1 rounded-full bg-primary/40" />
-            </div>
-            <p className="mt-3 text-[13px] text-muted-foreground">
-              Tell us about your company so we can tailor B-BBEE scorecards and recommendations. Only{" "}
-              <span className="text-foreground font-medium">company name</span> is required; everything
-              else is optional and editable later from your profile.
-            </p>
-          </div>
+  return authShell(
+    <Card className="border border-border/50 shadow-lg bg-card overflow-hidden" data-testid="onboarding-popup">
+      <div className="text-center pt-8 pb-3 px-6 border-b border-border/40">
+        <h2 className="text-lg font-heading font-semibold tracking-tight" id="onboarding-title" data-testid="text-onboarding-title">
+          Company profile
+        </h2>
+        <p className="text-[13px] text-muted-foreground/60 mt-1 flex items-center justify-center gap-1.5">
+          <Building2 className="h-3.5 w-3.5" />
+          Final step after sign-up — tell us about your company
+        </p>
+        <div className="flex items-center gap-1 mt-4 max-w-xs mx-auto">
+          <div className="h-1.5 flex-1 rounded-full bg-primary" />
+          <div className="h-1.5 flex-1 rounded-full bg-primary/40" />
+        </div>
+        <p className="mt-3 text-[13px] text-muted-foreground text-left">
+          We use this to tailor B-BBEE scorecards and recommendations. Only{" "}
+          <span className="text-foreground font-medium">company name</span> is required; everything else is optional
+          and editable later from your profile.
+        </p>
+      </div>
 
-        <form onSubmit={handleSubmit} className="px-6 sm:px-8 py-6 space-y-6" data-testid="onboarding-form">
+      <CardContent className="px-6 pb-7 pt-4">
+        <form onSubmit={handleSubmit} className="space-y-6" data-testid="onboarding-form">
           <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="companyName">
@@ -700,8 +746,7 @@ export default function Onboarding() {
             </Button>
           </div>
         </form>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
