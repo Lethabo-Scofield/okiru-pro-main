@@ -17,6 +17,14 @@ import express from 'express';
 import http from 'http';
 import type { AddressInfo } from 'net';
 
+vi.mock('../../../db.js', () => ({
+  mongoose: {
+    connection: {
+      readyState: 1,
+    },
+  },
+}));
+
 // In-memory storage stub — exposed so tests can reset state.
 const profiles = new Map<string, any>();
 
@@ -158,9 +166,9 @@ describe('Onboarding API — happy path + idempotency', () => {
     });
   });
 
-  it('GET /me returns 404-style payload when no profile exists yet', async () => {
+  it('GET /me returns 200 with null profile when no profile exists yet', async () => {
     const r = await call('GET', '/api/onboarding/me', { userId: 'user-no-profile' });
-    expect(r.status).toBe(404);
+    expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ profile: null });
   });
 
