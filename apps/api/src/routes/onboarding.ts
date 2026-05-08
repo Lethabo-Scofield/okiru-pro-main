@@ -1,9 +1,10 @@
-import { Router, type Request as ExpressRequest, type Response } from 'express';
+import { Router, type Request as ExpressRequest, type Response, type NextFunction } from 'express';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import { storage } from '../../storage.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createLogger } from '../logger.js';
+import { mongoose } from '../../db.js';
 
 const logger = createLogger("Onboarding");
 const router = Router();
@@ -27,7 +28,15 @@ function sanitizeArr(v: unknown): string[] {
     .map((x) => x.slice(0, MAX_LEN));
 }
 
-router.get('/me', requireAuth, async (req: Request, res: Response) => {
+function requireMongo(_req: Request, res: Response, next: NextFunction) {
+  if (mongoose.connection.readyState !== 1) {
+    logger.warn("Onboarding: MongoDB not ready", { readyState: mongoose.connection.readyState });
+    return res.status(503).json({ message: "Database temporarily unavailable. Try again in a moment." });
+  }
+  next();
+}
+
+router.get('/me', requireAuth, requireMongo, async (req: Request, res: Response) => {
   try {
     const userId = String(req.session.userId!);
     const profile = await storage.getCompanyProfileByUserId(userId);
@@ -35,12 +44,16 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     if (!profile) return res.status(200).json({ profile: null, message: "Onboarding not completed" });
     return res.json({ profile });
   } catch (error: unknown) {
-    logger.error('GET /me error', error);
-    return res.status(500).json({ message: "Failed to load onboarding profile" });
+    logger.error("GET /me error", error);
+    const rid = res.getHeader("x-request-id");
+    return res.status(500).json({
+      message: "Failed to load onboarding profile",
+      ...(typeof rid === "string" ? { requestId: rid } : {}),
+    });
   }
 });
 
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', requireAuth, requireMongo, async (req: Request, res: Response) => {
   try {
     const userId = String(req.session.userId!);
     const body = req.body ?? {};
@@ -69,8 +82,12 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     logger.info('Onboarding saved', { userId, companyName: profile.companyName });
     return res.json({ profile });
   } catch (error: unknown) {
-    logger.error('POST / error', error);
-    return res.status(500).json({ message: "Failed to save onboarding profile" });
+    logger.error("POST / error", error);
+    const rid = res.getHeader("x-request-id");
+    return res.status(500).json({
+      message: "Failed to save onboarding profile",
+      ...(typeof rid === "string" ? { requestId: rid } : {}),
+    });
   }
 });
 
