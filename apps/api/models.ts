@@ -435,6 +435,8 @@ feedbackSchema.set("toJSON", {
 export const FeedbackModel = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
 
 const companyProfileSchema = new Schema({
+  /** Stable business id for legacy DB unique index `id_1` (avoids dup key { id: null }). */
+  id: { type: String, sparse: true, unique: true },
   userId: { type: String, required: true, unique: true, index: true },
   companyName: { type: String, required: true },
   role: { type: String, default: null },

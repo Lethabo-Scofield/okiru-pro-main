@@ -869,11 +869,51 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertCompanyProfile(profile: InsertCompanyProfile): Promise<CompanyProfile> {
-    const doc = await CompanyProfileModel.findOneAndUpdate(
-      { userId: profile.userId },
-      { ...profile, updatedAt: new Date() },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
+    const now = new Date();
+    const uid = String(profile.userId);
+    const filter = { userId: uid };
+    const newDocId = `cp_${crypto.randomBytes(8).toString("hex")}`;
+    const $set = {
+      companyName: profile.companyName,
+      role: profile.role ?? null,
+      beeLevel: profile.beeLevel ?? null,
+      employeeRange: profile.employeeRange ?? null,
+      industry: profile.industry ?? null,
+      industryOther: profile.industryOther ?? null,
+      annualRevenue: profile.annualRevenue ?? null,
+      acquisitionSource: profile.acquisitionSource ?? null,
+      acquisitionSourceOther: profile.acquisitionSourceOther ?? null,
+      toolsUsed: Array.isArray(profile.toolsUsed) ? profile.toolsUsed : [],
+      toolsUsedOther: profile.toolsUsedOther ?? null,
+      biggestChallenge: profile.biggestChallenge ?? null,
+      updatedAt: now,
+    };
+    try {
+      await CompanyProfileModel.updateOne(
+        filter,
+        { $set, $setOnInsert: { userId: uid, id: newDocId, createdAt: now } },
+        { upsert: true },
+      );
+    } catch (err: unknown) {
+      const code = err && typeof err === "object" && "code" in err ? (err as { code: number }).code : 0;
+      if (code === 11000) {
+        await CompanyProfileModel.updateOne(filter, { $set });
+      } else {
+        throw err;
+      }
+    }
+    let doc = await CompanyProfileModel.findOne(filter);
+    if (!doc) {
+      throw new Error("CompanyProfile upsert: document missing after write");
+    }
+    if (!(doc as { id?: string }).id) {
+      const fixId = `cp_${crypto.randomBytes(8).toString("hex")}`;
+      await CompanyProfileModel.updateOne(filter, { $set: { id: fixId } });
+      doc = await CompanyProfileModel.findOne(filter);
+    }
+    if (!doc) {
+      throw new Error("CompanyProfile upsert: document missing after repair");
+    }
     return doc.toJSON() as CompanyProfile;
   }
 

@@ -52,6 +52,21 @@ spec:
                 name: api
                 port:
                   number: 5000
+          # Company onboarding (Mongo — must hit API; web also registered these for legacy dev)
+          - path: /api/onboarding/me
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/onboarding
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
           # Workspaces & invites (Mongo-backed on web — must not hit API prefix-only rule)
           - path: /api/workspaces
             pathType: Prefix

@@ -11,6 +11,10 @@ const router = Router();
 
 const MAX_LEN = 500;
 
+/** Saved when user skips company onboarding so gating treats them as “complete”. */
+export const ONBOARDING_SKIPPED_COMPANY_NAME =
+  "— Company profile skipped (add details anytime in Settings)";
+
 function sanitizeStr(v: unknown, max = MAX_LEN): string | null {
   if (typeof v !== 'string') return null;
   const s = v.trim();
@@ -48,6 +52,35 @@ router.get('/me', requireAuth, requireMongo, async (req: Request, res: Response)
     const rid = res.getHeader("x-request-id");
     return res.status(500).json({
       message: "Failed to load onboarding profile",
+      ...(typeof rid === "string" ? { requestId: rid } : {}),
+    });
+  }
+});
+
+router.post('/skip', requireAuth, requireMongo, async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.session.userId!);
+    const profile = await storage.upsertCompanyProfile(userId, {
+      companyName: ONBOARDING_SKIPPED_COMPANY_NAME,
+      role: null,
+      beeLevel: null,
+      employeeRange: null,
+      industry: null,
+      industryOther: null,
+      annualRevenue: null,
+      acquisitionSource: null,
+      acquisitionSourceOther: null,
+      toolsUsed: [],
+      toolsUsedOther: null,
+      biggestChallenge: null,
+    });
+    logger.info("Onboarding skipped", { userId });
+    return res.json({ profile, skipped: true });
+  } catch (error: unknown) {
+    logger.error("POST /skip error", error);
+    const rid = res.getHeader("x-request-id");
+    return res.status(500).json({
+      message: "Failed to skip onboarding",
       ...(typeof rid === "string" ? { requestId: rid } : {}),
     });
   }

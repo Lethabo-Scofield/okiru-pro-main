@@ -395,6 +395,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const uid = String(userId);
     const filter = { userId: uid };
+    const businessId = `cp_${uuid().replace(/-/g, "").slice(0, 16)}`;
     const $set = {
       companyName: data.companyName,
       role: data.role ?? null,
@@ -413,7 +414,7 @@ export class DatabaseStorage implements IStorage {
     try {
       await CompanyProfileModel.updateOne(
         filter,
-        { $set, $setOnInsert: { userId: uid, createdAt: now } },
+        { $set, $setOnInsert: { userId: uid, id: businessId, createdAt: now } },
         { upsert: true }
       );
     } catch (err: unknown) {
@@ -428,9 +429,17 @@ export class DatabaseStorage implements IStorage {
     if (!doc) {
       throw new Error("CompanyProfile upsert: document missing after write");
     }
+    if ((doc as { id?: string | null }).id == null || (doc as { id?: string | null }).id === "") {
+      const fixId = `cp_${uuid().replace(/-/g, "").slice(0, 16)}`;
+      await CompanyProfileModel.updateOne(filter, { $set: { id: fixId } });
+    }
+    const docFinal = await CompanyProfileModel.findOne(filter).lean();
+    if (!docFinal) {
+      throw new Error("CompanyProfile upsert: document missing after id repair");
+    }
     const idFallback =
-      doc._id != null ? String(doc._id) : (doc as { id?: string }).id;
-    const profile = clean<CompanyProfile>(doc);
+      docFinal._id != null ? String(docFinal._id) : (docFinal as { id?: string }).id;
+    const profile = clean<CompanyProfile>(docFinal);
     if (profile.id == null && idFallback) {
       (profile as { id: string }).id = idFallback;
     }
