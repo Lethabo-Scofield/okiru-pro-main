@@ -451,6 +451,6 @@ const companyProfileSchema = new Schema({
   /** Align with web `shared/schema` (`apps/web`) — same collection `company_profiles`. */
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-}, { collection: "company_profiles" });
+}, { collection: "company_profiles", strict: false });
 
 export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);
