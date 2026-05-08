@@ -632,6 +632,97 @@ export async function registerRoutes(
     }
   });
 
+  /** Company profile / onboarding — served on web so /api/onboarding hits the same session as sign-up (fixes 404 when ingress sends /api traffic to web). */
+  const ONBOARD_MAX = 500;
+  const onboardSanitizeStr = (v: unknown, max = ONBOARD_MAX): string | null => {
+    if (typeof v !== "string") return null;
+    const s = v.trim();
+    if (!s) return null;
+    return s.slice(0, max);
+  };
+  const onboardSanitizeArr = (v: unknown): string[] => {
+    if (!Array.isArray(v)) return [];
+    return v
+      .filter((x): x is string => typeof x === "string")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+      .slice(0, 50)
+      .map((x) => x.slice(0, ONBOARD_MAX));
+  };
+
+  app.get("/api/onboarding/me", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId as string;
+      const profile = await storage.getCompanyProfileByUserId(userId);
+      if (!profile) {
+        return res.status(200).json({ message: "Onboarding not completed", profile: null });
+      }
+      return res.json({ profile });
+    } catch (error: any) {
+      logger.error("GET /api/onboarding/me failed", error);
+      return res.status(500).json({ message: "Failed to load onboarding profile" });
+    }
+  });
+
+  app.post("/api/onboarding", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId as string;
+      const body = req.body ?? {};
+      const companyName = onboardSanitizeStr(body.companyName);
+      if (!companyName) {
+        return res.status(400).json({ message: "Company name is required" });
+      }
+      const data = {
+        userId,
+        companyName,
+        role: onboardSanitizeStr(body.role),
+        beeLevel: onboardSanitizeStr(body.beeLevel),
+        employeeRange: onboardSanitizeStr(body.employeeRange),
+        industry: onboardSanitizeStr(body.industry),
+        industryOther: onboardSanitizeStr(body.industryOther),
+        annualRevenue: onboardSanitizeStr(body.annualRevenue),
+        acquisitionSource: onboardSanitizeStr(body.acquisitionSource),
+        acquisitionSourceOther: onboardSanitizeStr(body.acquisitionSourceOther),
+        toolsUsed: onboardSanitizeArr(body.toolsUsed),
+        toolsUsedOther: onboardSanitizeStr(body.toolsUsedOther),
+        biggestChallenge: onboardSanitizeStr(body.biggestChallenge, 2000),
+      };
+      const profile = await storage.upsertCompanyProfile(data);
+      return res.json({ profile });
+    } catch (error: any) {
+      logger.error("POST /api/onboarding failed", error);
+      return res.status(500).json({ message: "Failed to save onboarding profile" });
+    }
+  });
+
+  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
+    "— Company profile skipped (add details anytime in Settings)";
+
+  app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId as string;
+      const profile = await storage.upsertCompanyProfile({
+        userId,
+        companyName: ONBOARDING_SKIPPED_COMPANY_NAME_WEB,
+        role: null,
+        beeLevel: null,
+        employeeRange: null,
+        industry: null,
+        industryOther: null,
+        annualRevenue: null,
+        acquisitionSource: null,
+        acquisitionSourceOther: null,
+        toolsUsed: [],
+        toolsUsedOther: null,
+        biggestChallenge: null,
+      });
+      return res.json({ profile, skipped: true });
+    } catch (error: any) {
+      logger.error("POST /api/onboarding/skip failed", error);
+      return res.status(500).json({ message: "Failed to skip onboarding" });
+    }
+  });
+
   async function ensureDefaultWorkspace(userId: string): Promise<void> {
     const list = await storage.listWorkspacesForUser(userId);
     if (list.length > 0) return;

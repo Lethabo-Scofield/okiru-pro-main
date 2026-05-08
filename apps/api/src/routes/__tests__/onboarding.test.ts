@@ -99,6 +99,11 @@ describe('Onboarding API — auth gating', () => {
     const r = await call('POST', '/api/onboarding', { body: { companyName: 'Acme' } });
     expect(r.status).toBe(401);
   });
+
+  it('POST /skip returns 401 when unauthenticated', async () => {
+    const r = await call('POST', '/api/onboarding/skip');
+    expect(r.status).toBe(401);
+  });
 });
 
 describe('Onboarding API — validation', () => {
@@ -121,6 +126,16 @@ describe('Onboarding API — validation', () => {
 });
 
 describe('Onboarding API — happy path + idempotency', () => {
+  it('POST /skip persists placeholder company name', async () => {
+    const r = await call('POST', '/api/onboarding/skip', { userId: 'user-skip-placeholder' });
+    expect(r.status).toBe(200);
+    expect(r.body.skipped).toBe(true);
+    expect(String(r.body.profile.companyName)).toMatch(/skipped/i);
+    const me = await call('GET', '/api/onboarding/me', { userId: 'user-skip-placeholder' });
+    expect(me.status).toBe(200);
+    expect(String(me.body.profile?.companyName)).toMatch(/skipped/i);
+  });
+
   it('POST persists every supported field including toolsUsed array', async () => {
     const userId = 'user-happy-1';
     const payload = {

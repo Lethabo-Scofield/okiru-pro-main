@@ -395,6 +395,39 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
     }
   };
 
+  const handleSkipProfile = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/onboarding/skip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || "Failed to skip");
+      }
+      toast({
+        title: "Profile skipped",
+        description: "You can add company details anytime from your profile. Next, invite teammates or continue.",
+      });
+      try {
+        sessionStorage.setItem(PENDING_TEAM_INVITE_KEY, "1");
+      } catch {
+        /* empty */
+      }
+      setFlowPhase("team");
+    } catch (err: any) {
+      toast({
+        title: "Could not skip",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (checking) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -724,26 +757,39 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border/40">
-            <p className="text-[11px] text-muted-foreground">
-              You can update these details any time from your profile.
-            </p>
             <Button
-              type="submit"
-              size="lg"
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground self-start sm:self-auto"
               disabled={submitting}
-              data-testid="btn-continue"
-              className="min-w-[220px]"
+              onClick={handleSkipProfile}
+              data-testid="btn-skip-company-profile"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  Save and continue <ArrowRight className="h-4 w-4 ml-2" />
-                </>
-              )}
+              Skip for now — I&apos;ll add this later
             </Button>
+            <div className="flex flex-col sm:items-end gap-2">
+              <p className="text-[11px] text-muted-foreground sm:text-right">
+                You can update these details any time from your profile.
+              </p>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={submitting}
+                data-testid="btn-continue"
+                className="min-w-[220px]"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  <>
+                    Save and continue <ArrowRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>
