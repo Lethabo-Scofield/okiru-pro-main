@@ -19,7 +19,7 @@ patchesStrategicMerge:
 # Images - updated during deployment
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newTag: 3609481c-202605081518
+  newTag: dcc58e4e-202605081558
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
   newTag: 3609481c-202605081518
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
