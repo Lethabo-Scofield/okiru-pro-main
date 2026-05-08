@@ -435,7 +435,6 @@ feedbackSchema.set("toJSON", {
 export const FeedbackModel = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
 
 const companyProfileSchema = new Schema({
-  id: { type: String, default: uuid, unique: true },
   userId: { type: String, required: true, unique: true, index: true },
   companyName: { type: String, required: true },
   role: { type: String, default: null },
@@ -449,8 +448,9 @@ const companyProfileSchema = new Schema({
   toolsUsed: { type: [String], default: [] },
   toolsUsedOther: { type: String, default: null },
   biggestChallenge: { type: String, default: null },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-  updatedAt: { type: String, default: () => new Date().toISOString() },
+  /** Align with web `shared/schema` (`apps/web`) — same collection `company_profiles`. */
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 }, { collection: "company_profiles" });
 
 export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);

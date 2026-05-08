@@ -379,21 +379,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined> {
-    const doc = await CompanyProfileModel.findOne({ userId }).lean();
-    return doc ? clean<CompanyProfile>(doc) : undefined;
+    const uid = String(userId);
+    const doc = await CompanyProfileModel.findOne({ userId: uid }).lean();
+    if (!doc) return undefined;
+    const idFallback =
+      doc._id != null ? String(doc._id) : (doc as { id?: string }).id;
+    const profile = clean<CompanyProfile>(doc);
+    if (profile.id == null && idFallback) {
+      (profile as { id: string }).id = idFallback;
+    }
+    return profile;
   }
 
   async upsertCompanyProfile(userId: string, data: Omit<InsertCompanyProfile, 'userId'>): Promise<CompanyProfile> {
-    const now = new Date().toISOString();
-    const doc = await CompanyProfileModel.findOneAndUpdate(
-      { userId },
-      {
-        $set: { ...data, updatedAt: now },
-        $setOnInsert: { id: uuid(), userId, createdAt: now },
-      },
-      { upsert: true, returnDocument: 'after', new: true }
-    ).lean();
-    return clean<CompanyProfile>(doc!);
+    const now = new Date();
+    const uid = String(userId);
+    const filter = { userId: uid };
+    const $set = {
+      companyName: data.companyName,
+      role: data.role ?? null,
+      beeLevel: data.beeLevel ?? null,
+      employeeRange: data.employeeRange ?? null,
+      industry: data.industry ?? null,
+      industryOther: data.industryOther ?? null,
+      annualRevenue: data.annualRevenue ?? null,
+      acquisitionSource: data.acquisitionSource ?? null,
+      acquisitionSourceOther: data.acquisitionSourceOther ?? null,
+      toolsUsed: Array.isArray(data.toolsUsed) ? data.toolsUsed : [],
+      toolsUsedOther: data.toolsUsedOther ?? null,
+      biggestChallenge: data.biggestChallenge ?? null,
+      updatedAt: now,
+    };
+    try {
+      await CompanyProfileModel.updateOne(
+        filter,
+        { $set, $setOnInsert: { userId: uid, createdAt: now } },
+        { upsert: true }
+      );
+    } catch (err: unknown) {
+      const code = err && typeof err === "object" && "code" in err ? (err as { code: number }).code : 0;
+      if (code === 11000) {
+        await CompanyProfileModel.updateOne(filter, { $set });
+      } else {
+        throw err;
+      }
+    }
+    const doc = await CompanyProfileModel.findOne(filter).lean();
+    if (!doc) {
+      throw new Error("CompanyProfile upsert: document missing after write");
+    }
+    const idFallback =
+      doc._id != null ? String(doc._id) : (doc as { id?: string }).id;
+    const profile = clean<CompanyProfile>(doc);
+    if (profile.id == null && idFallback) {
+      (profile as { id: string }).id = idFallback;
+    }
+    return profile;
   }
 }
 

@@ -29,9 +29,10 @@ function sanitizeArr(v: unknown): string[] {
 
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   try {
-    const userId = req.session.userId!;
+    const userId = String(req.session.userId!);
     const profile = await storage.getCompanyProfileByUserId(userId);
-    if (!profile) return res.status(404).json({ message: "Onboarding not completed", profile: null });
+    // 200 + profile:null avoids browser console "404 Not Found" noise; clients treat empty profile as incomplete.
+    if (!profile) return res.status(200).json({ profile: null, message: "Onboarding not completed" });
     return res.json({ profile });
   } catch (error: unknown) {
     logger.error('GET /me error', error);
@@ -41,7 +42,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const userId = req.session.userId!;
+    const userId = String(req.session.userId!);
     const body = req.body ?? {};
 
     const companyName = sanitizeStr(body.companyName);
