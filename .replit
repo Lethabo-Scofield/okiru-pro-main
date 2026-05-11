@@ -60,7 +60,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd apps/Computation-Engine && python run_server.py"
+args = "cd apps/Computation-Engine && uv run python run_server.py"
 waitForPort = 8000
 
 [[ports]]
@@ -78,10 +78,6 @@ externalPort = 80
 [[ports]]
 localPort = 8000
 externalPort = 8000
-
-[[ports]]
-localPort = 24679
-externalPort = 3001
 
 [[ports]]
 localPort = 24680
