@@ -1157,18 +1157,18 @@ if (!useDatabase) {
     const demoUser = await storage.createUser({
       username: "demo",
       password: hashedPassword,
-      fullName: "Demo User",
+      fullName: "Netbank",
       email: "demo@okiru.pro",
       role: "admin",
       organizationId: null,
-      organizationName: "Okiru Demo",
+      organizationName: "Netbank",
       profilePicture: null,
     });
     storageLogger.info("Seeded demo user", { username: "demo" });
 
     await storage.upsertCompanyProfile({
       userId: demoUser.id,
-      companyName: "Okiru Demo",
+      companyName: "Netbank",
       role: "admin",
       beeLevel: "Level 4",
       employeeRange: "11-50",
@@ -1181,7 +1181,7 @@ if (!useDatabase) {
     storageLogger.info("Seeded demo user company profile", { userId: demoUser.id });
 
     try {
-      const demoWorkspace = await storage.createWorkspace("Okiru Demo", demoUser.id);
+      const demoWorkspace = await storage.createWorkspace("Netbank", demoUser.id);
       await storage.updateUser(demoUser.id, { organizationId: demoWorkspace.id } as any);
       storageLogger.info("Seeded demo user workspace", {
         userId: demoUser.id,
