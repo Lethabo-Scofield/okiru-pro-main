@@ -131,6 +131,152 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
   }
 }
 
+export interface WorkspaceInviteEmailContext {
+  inviteeEmail: string;
+  inviterName: string;
+  inviterEmail: string | null;
+  inviterCompany: string | null;
+  workspaceName: string;
+  role: "owner" | "collaborator" | "viewer";
+  acceptUrl: string;
+  expiresAt: Date | string;
+}
+
+const ROLE_COPY: Record<string, { label: string; description: string }> = {
+  owner: { label: "Owner", description: "Full access — can manage people and settings." },
+  collaborator: { label: "Editor", description: "Can view and edit team work." },
+  viewer: { label: "Viewer", description: "Can view everything but can't make changes." },
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function buildWorkspaceInviteEmail(ctx: WorkspaceInviteEmailContext): {
+  subject: string;
+  html: string;
+  text: string;
+  fromName: string;
+} {
+  const role = ROLE_COPY[ctx.role] || ROLE_COPY.viewer;
+  const inviter = (ctx.inviterName || ctx.inviterEmail || "A teammate").trim();
+  const company = (ctx.inviterCompany || "").trim();
+  const workspace = ctx.workspaceName.trim() || "a workspace";
+  const expiry = new Date(ctx.expiresAt);
+  const expiryStr = expiry.toLocaleDateString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  // Display name on the From header makes it look inviter-initiated, e.g. "Jane Doe (via Okiru)".
+  const fromName = `${inviter}${company ? ` · ${company}` : ""} (via Okiru)`;
+  const subject = `${inviter} invited you to “${workspace}” on Okiru`;
+
+  const inviterLine = company
+    ? `${escapeHtml(inviter)} from <strong>${escapeHtml(company)}</strong>`
+    : `<strong>${escapeHtml(inviter)}</strong>`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #1f2937;">
+      <p style="margin: 0 0 16px; font-size: 14px; color: #6b7280;">${escapeHtml(inviter)} shared a project with you</p>
+      <h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 600; line-height: 1.3;">
+        Join “${escapeHtml(workspace)}” on Okiru
+      </h1>
+      <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.55; color: #374151;">
+        ${inviterLine} added you to <strong>${escapeHtml(workspace)}</strong> as a
+        <strong>${escapeHtml(role.label)}</strong>. ${escapeHtml(role.description)}
+      </p>
+      <div style="margin: 0 0 24px;">
+        <a href="${escapeHtml(ctx.acceptUrl)}" style="display: inline-block; background: #4f46e5; color: #ffffff; text-decoration: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+          Open project
+        </a>
+      </div>
+      <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; margin: 0 0 20px; font-size: 13px; color: #4b5563;">
+        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+          <span style="color: #6b7280;">Project</span>
+          <span style="color: #111827; font-weight: 500;">${escapeHtml(workspace)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+          <span style="color: #6b7280;">Invited by</span>
+          <span style="color: #111827; font-weight: 500;">${escapeHtml(inviter)}${company ? ` · ${escapeHtml(company)}` : ""}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+          <span style="color: #6b7280;">Role</span>
+          <span style="color: #111827; font-weight: 500;">${escapeHtml(role.label)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+          <span style="color: #6b7280;">Sent to</span>
+          <span style="color: #111827; font-weight: 500;">${escapeHtml(ctx.inviteeEmail)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+          <span style="color: #6b7280;">Expires</span>
+          <span style="color: #111827; font-weight: 500;">${escapeHtml(expiryStr)}</span>
+        </div>
+      </div>
+      <p style="margin: 0 0 6px; font-size: 12px; color: #6b7280;">
+        If the button doesn't work, paste this link into your browser:
+      </p>
+      <p style="margin: 0 0 24px; font-size: 12px; color: #4f46e5; word-break: break-all;">
+        ${escapeHtml(ctx.acceptUrl)}
+      </p>
+      <p style="margin: 0; font-size: 11px; color: #9ca3af; line-height: 1.5;">
+        You're receiving this because ${escapeHtml(inviter)} invited you on Okiru. If you don't recognise this invitation, you can safely ignore it. The invitation expires on ${escapeHtml(expiryStr)}.
+      </p>
+    </div>
+  `;
+
+  const text = [
+    `${inviter} invited you to "${workspace}" on Okiru`,
+    "",
+    `${inviter}${company ? ` from ${company}` : ""} added you as ${role.label}.`,
+    role.description,
+    "",
+    `Open project: ${ctx.acceptUrl}`,
+    "",
+    `Sent to: ${ctx.inviteeEmail}`,
+    `Expires: ${expiryStr}`,
+  ].join("\n");
+
+  return { subject, html, text, fromName };
+}
+
+export async function sendWorkspaceInviteEmail(ctx: WorkspaceInviteEmailContext): Promise<boolean> {
+  const t = getTransporter();
+  if (!t) {
+    logger.warn("SMTP not configured - skipping workspace invite email", { to: ctx.inviteeEmail });
+    return false;
+  }
+  const { subject, html, text, fromName } = buildWorkspaceInviteEmail(ctx);
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER!;
+
+  try {
+    await t.sendMail({
+      from: { name: fromName, address: fromAddress },
+      to: ctx.inviteeEmail,
+      replyTo: ctx.inviterEmail || undefined,
+      subject,
+      html,
+      text,
+    });
+    logger.info("Workspace invite email sent", {
+      to: ctx.inviteeEmail,
+      workspace: ctx.workspaceName,
+      inviter: ctx.inviterName,
+    });
+    return true;
+  } catch (err: any) {
+    logger.error("Failed to send workspace invite email", err, { to: ctx.inviteeEmail });
+    return false;
+  }
+}
+
 export function isSmtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }

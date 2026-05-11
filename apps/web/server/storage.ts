@@ -133,6 +133,7 @@ export interface IStorage {
   createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite>;
   getInviteByToken(token: string): Promise<WorkspaceInvite | undefined>;
   listInvites(workspaceId: string): Promise<WorkspaceInvite[]>;
+  findActivePendingInvite(workspaceId: string, email: string): Promise<WorkspaceInvite | undefined>;
   acceptInvite(token: string): Promise<WorkspaceInvite | undefined>;
   revokeInvite(workspaceId: string, inviteId: string): Promise<boolean>;
 }
@@ -557,6 +558,23 @@ export class MemoryStorage implements IStorage {
     return Array.from(this.workspaceInvites.values())
       .filter((i) => i.workspaceId === workspaceId)
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }
+
+  async findActivePendingInvite(workspaceId: string, email: string): Promise<WorkspaceInvite | undefined> {
+    const target = email.toLowerCase();
+    const now = Date.now();
+    for (const inv of this.workspaceInvites.values()) {
+      if (
+        inv.workspaceId === workspaceId &&
+        inv.email.toLowerCase() === target &&
+        !inv.acceptedAt &&
+        !inv.revokedAt &&
+        new Date(inv.expiresAt).getTime() > now
+      ) {
+        return inv;
+      }
+    }
+    return undefined;
   }
 
   async acceptInvite(token: string): Promise<WorkspaceInvite | undefined> {
@@ -1027,6 +1045,23 @@ export class DatabaseStorage implements IStorage {
         acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
       };
     });
+  }
+
+  async findActivePendingInvite(workspaceId: string, email: string): Promise<WorkspaceInvite | undefined> {
+    const doc = await WorkspaceInviteModel.findOne({
+      workspaceId,
+      email: email.toLowerCase(),
+      acceptedAt: null,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!doc) return undefined;
+    const obj = doc.toJSON() as any;
+    return {
+      id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
+      acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
+    };
   }
 
   async acceptInvite(token: string): Promise<WorkspaceInvite | undefined> {
