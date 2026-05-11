@@ -108,6 +108,16 @@ pnpm dev:web   # Web app
 pnpm dev:api   # API server
 ```
 
+## Onboarding & Team Invitations (May 2026)
+The team invitation system was hardened to feel collaborative (Google Drive style), not like a generic platform email.
+
+- **Inviter-branded email** — `sendWorkspaceInviteEmail()` in `apps/web/server/email.ts` sends from `"<Inviter Name> · <Company> (via Okiru)"` with `Reply-To` set to the inviter, so replies go to a real person. Subject reads `"<Inviter> invited you to "<Project>" on Okiru"` and the body lists inviter, company, project, role, recipient, expiry, and a single Open Project CTA. Pure builder `buildWorkspaceInviteEmail()` is exported for unit tests; user-supplied fields are HTML-escaped.
+- **Invite create route** (`POST /api/workspaces/:workspaceId/invites`) now blocks self-invites, blocks inviting an existing member of the workspace, blocks duplicate active pending invites for the same email (`storage.findActivePendingInvite`), sends the invite email best-effort, and writes a `workspace.invite.create` audit log on every outcome. The list endpoint strips raw tokens — only the email recipient ever sees the token.
+- **Accept route** validates the invite is `pending`, that the signed-in user's email matches the invite email, is idempotent if the user is already a member, and writes `workspace.invite.accept` audit logs (success + each failure reason: `not_found`, `expired`/`accepted`/`revoked`, `email_mismatch`).
+- **Revoke route** is tenant-scoped (`(inviteId, workspaceId)` match enforced in storage) and audit-logged.
+- **Tokens & expiry** — 24-byte `crypto.randomBytes` base64url tokens, default 14-day expiry. `publicInviteStatus()` derives `pending|accepted|revoked|expired`.
+- **Tests** — `apps/web/server/__tests__/invites.test.ts` (15 tests, all passing) covers token entropy/uniqueness, expiry math, accept/revoke semantics, tenant isolation on revoke and `findActivePendingInvite`, the email template content, HTML escaping, and missing-company fallback. Run with `pnpm --filter rest-express vitest run server/__tests__/invites.test.ts`.
+
 ## Enterprise Security (Apr 2026)
 The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 
