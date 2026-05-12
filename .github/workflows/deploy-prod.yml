@@ -221,6 +221,16 @@ jobs:
           # External API keys (optional — empty values are fine here).
           # Keep this list in sync with kubernetes/infrastructure/overlays/prod/secrets/secrets.yaml
           # and the env-var blocks in base/deployments/{web,api,compute}.yaml.
+
+          # Construct AZURE_STORAGE_CONNECTION_STRING from account+key if not provided directly.
+          AZURE_CONN_STR="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}"
+          AZURE_ACCT_NAME="${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}"
+          if [ -z "$AZURE_ACCT_NAME" ]; then AZURE_ACCT_NAME="${{ secrets.AZURE_STORAGE_ACCOUNT }}"; fi
+          AZURE_ACCT_KEY="${{ secrets.AZURE_STORAGE_KEY }}"
+          if [ -z "$AZURE_CONN_STR" ] && [ -n "$AZURE_ACCT_NAME" ] && [ -n "$AZURE_ACCT_KEY" ]; then
+            AZURE_CONN_STR="DefaultEndpointsProtocol=https;AccountName=${AZURE_ACCT_NAME};AccountKey=${AZURE_ACCT_KEY};EndpointSuffix=core.windows.net"
+          fi
+
           kubectl create secret generic external-api-keys \
             --namespace="$NS" \
             --from-literal=AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
@@ -235,8 +245,8 @@ jobs:
             --from-literal=SMTP_USER="${{ secrets.SMTP_USER }}" \
             --from-literal=SMTP_PASS="${{ secrets.SMTP_PASS }}" \
             --from-literal=SMTP_FROM="${{ secrets.SMTP_FROM }}" \
-            --from-literal=AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-            --from-literal=AZURE_STORAGE_ACCOUNT_NAME="${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}" \
+            --from-literal=AZURE_STORAGE_ACCOUNT_NAME="${AZURE_ACCT_NAME}" \
+            --from-literal=AZURE_STORAGE_CONNECTION_STRING="${AZURE_CONN_STR}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Label secrets for management tracking
