@@ -31,6 +31,7 @@ import type { FinancialsData } from "./FinancialsForm";
 import { AutoFillButton, type AutoFillTarget } from "@/components/AutoFillButton";
 import { getLakeTradingPillarData } from "@/lib/lakeTradingDemo";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { BUILD_PILLAR_ID_MAP, expandScopeToVisibleIds } from "@/lib/pillarScopeUi";
 
 // ============================================================================
 // Pillar config
@@ -77,17 +78,7 @@ const PILLAR_METADATA: Record<string, { name: string; description: string; icon:
 };
 
 // Normalize API pillar keys to short IDs used by renderPillarForm/hasData/getPillarScore
-const PILLAR_ID_MAP: Record<string, string> = {
-  managementControl: 'management',
-  skillsDevelopment: 'skills',
-  preferentialProcurement: 'procurement',
-  socioEconomicDevelopment: 'sed',
-  yesInitiative: 'yes',
-  // These already match:
-  ownership: 'ownership',
-  supplierDevelopment: 'supplierDevelopment',
-  enterpriseDevelopment: 'enterpriseDevelopment',
-};
+const PILLAR_ID_MAP = BUILD_PILLAR_ID_MAP;
 
 // Generate dynamic pillar config from calculatorConfig
 function usePillarConfig(): PillarConfig[] {
@@ -156,6 +147,10 @@ interface BuildPillarsStepProps {
   sessionId: string;
   clientInfo?: ClientInformationData;
   financials?: FinancialsData;
+  /** Server workspace pillar scopes (non-empty = restrict sidebar to these pillars only). */
+  pillarScopeFilter?: string[] | null;
+  /** When true, forms and calculate are disabled (e.g. viewer role). */
+  pillarFormsLocked?: boolean;
 }
 
 // ============================================================================
@@ -163,11 +158,26 @@ interface BuildPillarsStepProps {
 // ============================================================================
 
 export function BuildPillarsStep({
-  data, onChange, onNext, onBack, className, sessionId, clientInfo, financials
+  data, onChange, onNext, onBack, className, sessionId, clientInfo, financials,
+  pillarScopeFilter = null,
+  pillarFormsLocked = false,
 }: BuildPillarsStepProps) {
   const [activePillar, setActivePillar] = useState<string>('ownership');
   const { syncToStore } = useFoundationSync(sessionId);
   const PILLARS = usePillarConfig();
+
+  const visiblePillars = useMemo(() => {
+    if (!pillarScopeFilter?.length) return PILLARS;
+    const allow = expandScopeToVisibleIds(pillarScopeFilter);
+    return PILLARS.filter((p) => allow.has(p.id));
+  }, [PILLARS, pillarScopeFilter]);
+
+  useEffect(() => {
+    if (visiblePillars.length === 0) return;
+    if (!visiblePillars.some((p) => p.id === activePillar)) {
+      setActivePillar(visiblePillars[0].id);
+    }
+  }, [visiblePillars, activePillar]);
 
   useEffect(() => {
     if (clientInfo && financials) {
@@ -245,15 +255,21 @@ export function BuildPillarsStep({
   }, [data, eapProvince, skillsLive, procLive, esdLive, npatForEsd]);
 
   const getPillarScore = useCallback(
-    (id: string): number => (pillarScores as Record<string, number>)[id] ?? 0,
+    (id: string): number => {
+      if (id === 'employmentEquity') {
+        return (pillarScores as Record<string, number>).management ?? 0;
+      }
+      return (pillarScores as Record<string, number>)[id] ?? 0;
+    },
     [pillarScores],
   );
 
   const hasData = useCallback((id: string): boolean => {
     switch (id) {
       case 'ownership':               return data.ownership.shareholders.length > 0;
-      case 'management':              return data.management.employees.length > 0;
-      // Issue 1: employmentEquity case removed (merged with management)
+      case 'management':
+      case 'employmentEquity':
+        return data.management.employees.length > 0;
       case 'skills':                  return data.skills.trainingPrograms.length > 0;
       case 'procurement':             return data.procurement.suppliers.length > 0 || data.procurement.tmps > 0;
       case 'supplierDevelopment':     return data.esd.contributions.some(c => c.category === 'supplier_development');
@@ -266,16 +282,16 @@ export function BuildPillarsStep({
     }
   }, [data]);
 
-  const completedCount = PILLARS.filter(p => hasData(p.id)).length;
-  const completionPct = Math.round((completedCount / PILLARS.length) * 100);
-  const totalScore = PILLARS.filter(p => p.includeInGrandTotal).reduce((sum, p) => sum + getPillarScore(p.id), 0);
+  const completedCount = visiblePillars.filter(p => hasData(p.id)).length;
+  const completionPct = visiblePillars.length ? Math.round((completedCount / visiblePillars.length) * 100) : 0;
+  const totalScore = visiblePillars.filter(p => p.includeInGrandTotal).reduce((sum, p) => sum + getPillarScore(p.id), 0);
 
   // Use calculatorConfig.totalMaxPoints (verified Excel value) instead of calculating
   // This handles sector-specific totals correctly (e.g., RCOGP 120, ICT 140, AGRI 132)
-  const totalMax = calculatorConfig?.totalMaxPoints ?? PILLARS.reduce((s, p) => s + p.maxPoints, 0);
+  const totalMax = calculatorConfig?.totalMaxPoints ?? visiblePillars.reduce((s, p) => s + p.maxPoints, 0);
 
   // Sub-minimum enforcement gate
-  const failedSubMinimums = PILLARS.filter(p => {
+  const failedSubMinimums = visiblePillars.filter(p => {
     const config = calculatorConfig?.pillarConfigs?.[p.id as keyof typeof calculatorConfig.pillarConfigs];
     const hasSubMin = config && 'subMinimumPercent' in config ? (config.subMinimumPercent ?? 0) > 0 : p.hasSubMinimum;
     if (!hasSubMin || !hasData(p.id)) return false;
@@ -289,7 +305,7 @@ export function BuildPillarsStep({
   }).map(p => p.name);
   const hasFailedSubMinimums = failedSubMinimums.length > 0;
 
-  const activePillarConfig = PILLARS.find(p => p.id === activePillar) || PILLARS[0];
+  const activePillarConfig = visiblePillars.find(p => p.id === activePillar) || visiblePillars[0];
 
   // Auto-fill handler - receives optionId to know exactly what was filled
   // Issue 1: Removed employmentEquity from management autofill (merged pillars)
@@ -323,7 +339,14 @@ export function BuildPillarsStep({
             eapProvince={eapProvince}
           />
         );
-      // Issue 1: employmentEquity case removed (merged with management)
+      case 'employmentEquity':
+        return (
+          <ManagementForm
+            data={data.management}
+            onChange={(d) => onChange({ ...data, management: d })}
+            eapProvince={eapProvince}
+          />
+        );
       case 'skills':
         return (
           <SkillsForm
@@ -370,6 +393,21 @@ export function BuildPillarsStep({
     }
   };
 
+  if (visiblePillars.length === 0) {
+    return (
+      <div className={cn("space-y-4", className)}>
+        <p className="text-sm text-muted-foreground">
+          No pillars are available for your account on this assessment. Ask the team owner to assign pillar access,
+          or open an assessment you have been given access to.
+        </p>
+        <Button variant="outline" onClick={onBack} className="gap-2">
+          <ChevronLeft className="h-4 w-4" />
+          Back to Foundation
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-4", className)}>
       {/* Header */}
@@ -379,6 +417,16 @@ export function BuildPillarsStep({
           <p className="text-sm text-muted-foreground mt-0.5">
             Enter data for each B-BBEE pillar to build your scorecard
           </p>
+          {pillarScopeFilter && pillarScopeFilter.length > 0 && (
+            <p className="text-xs text-amber-600/90 mt-2">
+              You are working on a subset of pillars assigned by your team owner. Other pillars are hidden until access is updated.
+            </p>
+          )}
+          {pillarFormsLocked && (
+            <p className="text-xs text-muted-foreground mt-2">
+              View-only access: you can review this pillar data but cannot calculate or save changes here.
+            </p>
+          )}
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold tabular-nums">{totalScore.toFixed(1)}</div>
@@ -390,7 +438,7 @@ export function BuildPillarsStep({
       <div className="flex items-center gap-3">
         <Progress value={completionPct} className="flex-1 h-1.5" />
         <span className="text-xs text-muted-foreground shrink-0">
-          {completedCount}/{PILLARS.length} pillars with data
+          {completedCount}/{visiblePillars.length} pillars with data
         </span>
       </div>
 
@@ -401,7 +449,7 @@ export function BuildPillarsStep({
         <div className="border border-border/60 rounded-lg overflow-hidden bg-transparent min-w-[260px]">
           <ScrollArea className="h-full">
             <div className="p-2 space-y-0.5">
-              {PILLARS.map((p) => {
+              {visiblePillars.map((p) => {
                 const Icon = p.icon;
                 const score = getPillarScore(p.id);
                 const active = activePillar === p.id;
@@ -418,10 +466,13 @@ export function BuildPillarsStep({
                 return (
                   <button
                     key={p.id}
-                    onClick={() => setActivePillar(p.id)}
+                    type="button"
+                    disabled={pillarFormsLocked}
+                    onClick={() => !pillarFormsLocked && setActivePillar(p.id)}
                     className={cn(
                       "w-full px-3 py-2.5 rounded-md text-left transition-colors border border-transparent",
-                      active ? "bg-muted/80 text-foreground border-border/50" : "hover:bg-muted/40"
+                      active ? "bg-muted/80 text-foreground border-border/50" : "hover:bg-muted/40",
+                      pillarFormsLocked && "opacity-80 cursor-default",
                     )}
                   >
                     <div className="flex items-center gap-2.5">
@@ -495,9 +546,11 @@ export function BuildPillarsStep({
 
           {/* Scrollable form content */}
           <ScrollArea className="flex-1">
-            <div className="p-5">
-              {renderPillarForm()}
-            </div>
+            <fieldset disabled={pillarFormsLocked} className="min-h-0 border-0 p-0 m-0 disabled:opacity-90">
+              <div className="p-5">
+                {renderPillarForm()}
+              </div>
+            </fieldset>
           </ScrollArea>
         </div>
       </div>
@@ -531,6 +584,7 @@ export function BuildPillarsStep({
             <Switch
               id="ignore-subminimum"
               checked={ignoreSubMinimum}
+              disabled={pillarFormsLocked}
               onCheckedChange={setIgnoreSubMinimum}
             />
             <Label htmlFor="ignore-subminimum" className="text-sm text-muted-foreground cursor-pointer">
@@ -539,9 +593,19 @@ export function BuildPillarsStep({
           </div>
           <Button
             onClick={onNext}
-            disabled={completedCount === 0 || (hasFailedSubMinimums && !ignoreSubMinimum)}
+            disabled={
+              pillarFormsLocked ||
+              completedCount === 0 ||
+              (hasFailedSubMinimums && !ignoreSubMinimum)
+            }
             className="gap-2"
-            title={hasFailedSubMinimums && !ignoreSubMinimum ? 'Sub-minimum requirements not met' : ''}
+            title={
+              pillarFormsLocked
+                ? 'View-only access'
+                : hasFailedSubMinimums && !ignoreSubMinimum
+                  ? 'Sub-minimum requirements not met'
+                  : ''
+            }
           >
             Calculate Scorecard
             <ArrowRight className="h-4 w-4" />
@@ -550,6 +614,7 @@ export function BuildPillarsStep({
       </div>
 
       {/* Auto-fill */}
+      {!pillarFormsLocked && (
       <AutoFillButton
         target={
           activePillar === 'supplierDevelopment' || activePillar === 'enterpriseDevelopment'
@@ -560,6 +625,7 @@ export function BuildPillarsStep({
         }
         onFill={handleAutoFill}
       />
+      )}
     </div>
   );
 }

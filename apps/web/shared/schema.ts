@@ -369,8 +369,11 @@ messageSchema.set("toJSON", {
 
 const processorSessionSchema = new Schema({
   sessionId: { type: String, required: true, unique: true, index: true },
+  assessmentId: { type: String, default: null, index: true, sparse: true },
   organizationId: { type: String, default: null, index: true },
   createdByUserId: { type: String, default: null },
+  /** Assessment owner (matches Assessment.createdBy in storage layer). */
+  createdBy: { type: String, default: null, index: true },
   companyInfo: {
     name: { type: String, required: true },
     registrationNumber: { type: String, default: '' },
@@ -394,6 +397,14 @@ const processorSessionSchema = new Schema({
   isComplete: { type: Boolean, default: false },
   scorecardResult: { type: Schema.Types.Mixed, default: null },
   toolkitClientId: { type: String, default: null },
+  clientId: { type: String, default: null },
+  clientInfo: { type: Schema.Types.Mixed, default: null },
+  financials: { type: Schema.Types.Mixed, default: null },
+  pillars: { type: Schema.Types.Mixed, default: null },
+  status: { type: String, default: "draft" },
+  workspaceId: { type: String, default: null, index: true },
+  pillarActivity: { type: Schema.Types.Mixed, default: {} },
+  scorecardSnapshots: { type: [Schema.Types.Mixed], default: [] },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -600,6 +611,8 @@ export interface WorkspaceMember {
   workspaceId: string;
   userId: string;
   role: WorkspaceRole;
+  /** When set for collaborators, limits which scorecard pillars they may view or edit. Empty/absent = all pillars. */
+  pillarScopes?: string[];
   joinedAt: Date;
 }
 
@@ -639,6 +652,7 @@ const workspaceMemberSchema = new Schema({
   workspaceId: { type: String, required: true, index: true },
   userId: { type: String, required: true, index: true },
   role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
+  pillarScopes: { type: [String], default: undefined },
   joinedAt: { type: Date, default: Date.now },
 }, { collection: "workspace_members" });
 

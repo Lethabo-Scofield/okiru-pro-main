@@ -216,7 +216,7 @@ export default function Onboarding({
 
   const resolvePostOnboardingDest = useMemo(() => {
     if (mode === "edit") return returnTo;
-    const dest = effectiveRedirect || "/certificates";
+    const dest = effectiveRedirect || "/hub";
     const isCertificates = dest === "/certificates" || dest.startsWith("/certificates?");
     return isCertificates
       ? dest.includes("?")

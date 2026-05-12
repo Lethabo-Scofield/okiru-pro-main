@@ -33,6 +33,15 @@ function userByKeyFilter(key: string): mongoose.RootFilterQuery<Record<string, u
 }
 
 // Assessment types
+export interface ScorecardSnapshotRecord {
+  snapshotId: string;
+  label?: string;
+  pillars: unknown;
+  scorecardResult?: unknown;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface Assessment {
   id?: string;
   assessmentId: string;
@@ -43,7 +52,13 @@ export interface Assessment {
   pillars?: any;
   scorecardResult?: any;
   status: string;
+  /** @deprecated use createdBy — kept for legacy payloads */
+  userId?: string;
   createdBy?: string;
+  workspaceId?: string | null;
+  pillarActivity?: Record<string, { at: string; userId: string }>;
+  scorecardSnapshots?: ScorecardSnapshotRecord[];
+  organizationId?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -128,6 +143,11 @@ export interface IStorage {
   listMembers(workspaceId: string): Promise<WorkspaceMember[]>;
   addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember>;
   updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined>;
+  updateWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+  ): Promise<WorkspaceMember | undefined>;
   removeMember(workspaceId: string, userId: string): Promise<boolean>;
 
   createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite>;
@@ -361,13 +381,16 @@ export class MemoryStorage implements IStorage {
       id: existing?.id || (++this.assessmentSeq).toString(),
       assessmentId: assessment.assessmentId || `assessment-${Date.now()}`,
       sessionId: assessment.sessionId || existing?.sessionId || '',
-      clientId: assessment.clientId || existing?.clientId,
-      clientInfo: assessment.clientInfo || existing?.clientInfo,
-      financials: assessment.financials || existing?.financials,
-      pillars: assessment.pillars || existing?.pillars,
-      scorecardResult: assessment.scorecardResult || existing?.scorecardResult,
+      clientId: assessment.clientId ?? existing?.clientId,
+      clientInfo: assessment.clientInfo ?? existing?.clientInfo,
+      financials: assessment.financials ?? existing?.financials,
+      pillars: assessment.pillars !== undefined ? assessment.pillars : existing?.pillars,
+      scorecardResult: assessment.scorecardResult !== undefined ? assessment.scorecardResult : existing?.scorecardResult,
       status: assessment.status || existing?.status || 'draft',
-      createdBy: assessment.createdBy || existing?.createdBy,
+      createdBy: assessment.createdBy || assessment.userId || existing?.createdBy,
+      workspaceId: assessment.workspaceId !== undefined ? assessment.workspaceId : existing?.workspaceId,
+      pillarActivity: assessment.pillarActivity !== undefined ? assessment.pillarActivity : existing?.pillarActivity,
+      scorecardSnapshots: assessment.scorecardSnapshots !== undefined ? assessment.scorecardSnapshots : existing?.scorecardSnapshots,
       createdAt: existing?.createdAt || new Date(),
       updatedAt: new Date(),
     };
@@ -380,9 +403,22 @@ export class MemoryStorage implements IStorage {
     return this.assessments.get(assessmentId);
   }
   
+  private workspaceIdsForUser(userId: string): Set<string> {
+    const s = new Set<string>();
+    for (const m of this.workspaceMembers.values()) {
+      if (m.userId === userId) s.add(m.workspaceId);
+    }
+    return s;
+  }
+
   async getUserAssessments(userId: string): Promise<Assessment[]> {
+    const wsIds = this.workspaceIdsForUser(userId);
     return Array.from(this.assessments.values())
-      .filter(a => a.createdBy === userId)
+      .filter(
+        (a) =>
+          a.createdBy === userId ||
+          (a.workspaceId != null && a.workspaceId !== "" && wsIds.has(String(a.workspaceId))),
+      )
       .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
   
@@ -519,9 +555,19 @@ export class MemoryStorage implements IStorage {
   }
 
   async updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined> {
+    return this.updateWorkspaceMember(workspaceId, userId, { role });
+  }
+
+  async updateWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+  ): Promise<WorkspaceMember | undefined> {
     const m = this.workspaceMembers.get(`${workspaceId}:${userId}`);
     if (!m) return undefined;
-    m.role = role;
+    if (patch.role !== undefined) m.role = patch.role;
+    if (patch.pillarScopes === null) delete m.pillarScopes;
+    else if (patch.pillarScopes !== undefined) m.pillarScopes = patch.pillarScopes;
     return m;
   }
 
@@ -811,37 +857,131 @@ export class DatabaseStorage implements IStorage {
   // Assessment methods - using ProcessorSessionModel as base
   async createOrUpdateAssessment(assessment: Partial<Assessment>): Promise<Assessment> {
     const { ProcessorSessionModel } = await import("../shared/schema");
-    
-    const updateData = {
-      ...assessment,
+
+    const aid = assessment.assessmentId;
+    if (!aid) {
+      return {
+        assessmentId: "",
+        sessionId: assessment.sessionId || "",
+        status: assessment.status || "draft",
+        updatedAt: new Date(),
+      };
+    }
+
+    const sidCandidate = assessment.sessionId || aid;
+    const existingDoc = await ProcessorSessionModel.findOne({
+      $or: [{ assessmentId: aid }, { sessionId: sidCandidate }, { sessionId: aid }],
+    }).lean();
+
+    const prev = (existingDoc || {}) as Record<string, unknown>;
+    const sessionId =
+      (typeof assessment.sessionId === "string" && assessment.sessionId
+        ? assessment.sessionId
+        : typeof prev.sessionId === "string" && prev.sessionId
+          ? prev.sessionId
+          : sidCandidate) || aid;
+
+    const createdBy =
+      assessment.createdBy ||
+      assessment.userId ||
+      (typeof prev.createdBy === "string" ? prev.createdBy : null) ||
+      (typeof prev.createdByUserId === "string" ? prev.createdByUserId : null) ||
+      undefined;
+
+    const $set: Record<string, unknown> = {
+      sessionId,
+      assessmentId: aid,
       updatedAt: new Date(),
     };
-    
-    const doc = await ProcessorSessionModel.findOneAndUpdate(
-      { assessmentId: assessment.assessmentId },
-      updateData,
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-    
+
+    if (createdBy !== undefined) {
+      $set.createdBy = createdBy;
+      $set.createdByUserId = createdBy;
+    }
+
+    const assignIfIncoming = (key: keyof Assessment) => {
+      const v = assessment[key];
+      if (v !== undefined) $set[key as string] = v;
+    };
+
+    assignIfIncoming("clientId");
+    assignIfIncoming("clientInfo");
+    assignIfIncoming("financials");
+    assignIfIncoming("pillars");
+    assignIfIncoming("scorecardResult");
+    assignIfIncoming("workspaceId");
+    assignIfIncoming("pillarActivity");
+    assignIfIncoming("scorecardSnapshots");
+
+    if (assessment.status !== undefined) $set.status = assessment.status;
+    else if (prev.status !== undefined) $set.status = prev.status;
+    else $set.status = "draft";
+
+    if (assessment.pillars === undefined && prev.pillars !== undefined) $set.pillars = prev.pillars;
+    if (assessment.scorecardResult === undefined && prev.scorecardResult !== undefined)
+      $set.scorecardResult = prev.scorecardResult;
+    if (assessment.clientInfo === undefined && prev.clientInfo !== undefined) $set.clientInfo = prev.clientInfo;
+    if (assessment.financials === undefined && prev.financials !== undefined) $set.financials = prev.financials;
+    if (assessment.workspaceId === undefined && prev.workspaceId !== undefined) $set.workspaceId = prev.workspaceId;
+    if (assessment.pillarActivity === undefined && prev.pillarActivity !== undefined)
+      $set.pillarActivity = prev.pillarActivity;
+    if (assessment.scorecardSnapshots === undefined && prev.scorecardSnapshots !== undefined)
+      $set.scorecardSnapshots = prev.scorecardSnapshots;
+
+    if (!existingDoc) {
+      if ($set.companyInfo === undefined) {
+        $set.companyInfo = {
+          name: "Assessment",
+          registrationNumber: "",
+          sector: "",
+          annualTurnover: "",
+          employees: "",
+          financialYearEnd: "",
+          address: "",
+          contactName: "",
+          contactEmail: "",
+          contactPhone: "",
+          currentBBEELevel: "",
+          notes: "",
+          logo: "",
+        };
+      }
+    }
+
+    if (!prev.createdAt) {
+      $set.createdAt = assessment.createdAt || new Date();
+    }
+
+    const doc = await ProcessorSessionModel.findOneAndUpdate({ sessionId }, { $set }, { new: true, upsert: true, setDefaultsOnInsert: true });
+
     return toAssessment(doc) || {
-      assessmentId: assessment.assessmentId || '',
-      sessionId: assessment.sessionId || '',
-      status: assessment.status || 'draft',
+      assessmentId: aid,
+      sessionId,
+      status: (assessment.status as string) || "draft",
       updatedAt: new Date(),
     };
   }
-  
+
   async getAssessment(assessmentId: string): Promise<Assessment | undefined> {
     const { ProcessorSessionModel } = await import("../shared/schema");
-    const doc = await ProcessorSessionModel.findOne({ assessmentId });
+    const doc = await ProcessorSessionModel.findOne({
+      $or: [{ assessmentId: assessmentId }, { sessionId: assessmentId }],
+    });
     return toAssessment(doc);
   }
-  
+
   async getUserAssessments(userId: string): Promise<Assessment[]> {
     const { ProcessorSessionModel } = await import("../shared/schema");
-    const docs = await ProcessorSessionModel.find({ createdBy: userId })
-      .sort({ updatedAt: -1 });
-    return docs.map(d => toAssessment(d)!).filter(Boolean);
+    const memberships = await WorkspaceMemberModel.find({ userId }).select("workspaceId").lean();
+    const wsIds = memberships.map((m: { workspaceId: string }) => m.workspaceId).filter(Boolean);
+
+    const orClause: Record<string, unknown>[] = [{ createdBy: userId }, { createdByUserId: userId }];
+    if (wsIds.length > 0) {
+      orClause.push({ workspaceId: { $in: wsIds } });
+    }
+
+    const docs = await ProcessorSessionModel.find({ $or: orClause }).sort({ updatedAt: -1 });
+    return docs.map((d) => toAssessment(d)!).filter(Boolean);
   }
   
   // Client methods - also using ProcessorSessionModel with client data
@@ -997,14 +1137,28 @@ export class DatabaseStorage implements IStorage {
     const doc = await WorkspaceMemberModel.findOne({ workspaceId, userId });
     if (!doc) return undefined;
     const obj = doc.toJSON() as any;
-    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+    return {
+      id: obj.id,
+      workspaceId: obj.workspaceId,
+      userId: obj.userId,
+      role: obj.role,
+      pillarScopes: Array.isArray(obj.pillarScopes) ? obj.pillarScopes : undefined,
+      joinedAt: obj.joinedAt,
+    };
   }
 
   async listMembers(workspaceId: string): Promise<WorkspaceMember[]> {
     const docs = await WorkspaceMemberModel.find({ workspaceId }).sort({ joinedAt: 1 });
     return docs.map((d: any) => {
       const obj = d.toJSON();
-      return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+      return {
+        id: obj.id,
+        workspaceId: obj.workspaceId,
+        userId: obj.userId,
+        role: obj.role,
+        pillarScopes: Array.isArray(obj.pillarScopes) ? obj.pillarScopes : undefined,
+        joinedAt: obj.joinedAt,
+      };
     });
   }
 
@@ -1027,14 +1181,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined> {
-    const doc = await WorkspaceMemberModel.findOneAndUpdate(
-      { workspaceId, userId },
-      { role },
-      { new: true }
-    );
+    return this.updateWorkspaceMember(workspaceId, userId, { role });
+  }
+
+  async updateWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+  ): Promise<WorkspaceMember | undefined> {
+    const $set: Record<string, unknown> = {};
+    const $unset: Record<string, 1> = {};
+    if (patch.role !== undefined) $set.role = patch.role;
+    if (patch.pillarScopes === null) $unset.pillarScopes = 1;
+    else if (patch.pillarScopes !== undefined) $set.pillarScopes = patch.pillarScopes;
+
+    const updatePayload: Record<string, unknown> = {};
+    if (Object.keys($set).length) updatePayload.$set = $set;
+    if (Object.keys($unset).length) updatePayload.$unset = $unset;
+    if (!updatePayload.$set && !updatePayload.$unset) {
+      return this.getMember(workspaceId, userId);
+    }
+
+    const doc = await WorkspaceMemberModel.findOneAndUpdate({ workspaceId, userId }, updatePayload, { new: true });
     if (!doc) return undefined;
     const obj = doc.toJSON() as any;
-    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+    return {
+      id: obj.id,
+      workspaceId: obj.workspaceId,
+      userId: obj.userId,
+      role: obj.role,
+      pillarScopes: Array.isArray(obj.pillarScopes) ? obj.pillarScopes : undefined,
+      joinedAt: obj.joinedAt,
+    };
   }
 
   async removeMember(workspaceId: string, userId: string): Promise<boolean> {
@@ -1132,6 +1310,9 @@ export class DatabaseStorage implements IStorage {
 function toAssessment(doc: any): Assessment | undefined {
   if (!doc) return undefined;
   const obj = doc.toJSON ? doc.toJSON() : doc;
+  const snaps = Array.isArray(obj.scorecardSnapshots) ? obj.scorecardSnapshots : [];
+  const activity =
+    obj.pillarActivity && typeof obj.pillarActivity === "object" ? obj.pillarActivity : {};
   return {
     id: obj.id || obj._id?.toString(),
     assessmentId: obj.assessmentId || obj.sessionId,
@@ -1142,7 +1323,10 @@ function toAssessment(doc: any): Assessment | undefined {
     pillars: obj.pillars,
     scorecardResult: obj.scorecardResult,
     status: obj.status || 'draft',
-    createdBy: obj.createdBy || obj.userId,
+    createdBy: obj.createdBy || obj.userId || obj.createdByUserId,
+    workspaceId: obj.workspaceId ?? null,
+    pillarActivity: activity,
+    scorecardSnapshots: snaps,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
   };

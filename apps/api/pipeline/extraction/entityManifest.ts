@@ -298,8 +298,8 @@ const CLIENT_INFO_ENTITIES: EntityField[] = [
     'B-BBEE sector code applicable to the measured entity.', {
       aliases: ['sector', 'industry code', 'BBEE sector'],
       zones: ['client info', 'cover page'],
-      positiveExamples: ['RCOGP', 'ICT', 'FSC', 'AGRI'],
-      enumValues: ['RCOGP', 'ICT', 'FSC', 'AGRI'],
+      positiveExamples: ['RCOGP', 'ICT', 'FSC', 'AGRI', 'TRANSPORT'],
+      enumValues: ['RCOGP', 'ICT', 'FSC', 'AGRI', 'TRANSPORT'],
       mustHave: ['sector'], niceToHave: ['code'], exclude: ['SIC'],
       inputType: 'select', group: 'client_info',
     }),

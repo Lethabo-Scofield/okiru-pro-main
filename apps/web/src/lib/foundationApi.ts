@@ -26,6 +26,7 @@ import type {
 } from '@toolkit/lib/types';
 import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import type { CalculatorConfig } from '@shared/schema';
+import { validateScorecardCriticalInputs } from '@/lib/scorecardCriticalValidation';
 
 // ============================================================================
 // Types
@@ -36,6 +37,8 @@ export interface FoundationSaveRequest {
   clientInfo: ClientInformationData;
   financials: FinancialsData;
   assessmentId?: string;
+  /** Team workspace to attach this assessment to (optional). Falls back to local preference. */
+  workspaceId?: string;
 }
 
 export interface FoundationSaveResponse {
@@ -61,6 +64,38 @@ export interface AssessmentLoadResponse {
   foundation: FoundationData;
   pillars: BuildPillarsData;
   scorecard?: any;
+  pillarActivity?: Record<string, { at: string; userId: string }>;
+  collaboration?: {
+    mode: string;
+    pillarScopes: string[] | null;
+    canWritePillars: boolean;
+    canRestoreScorecard: boolean;
+  };
+}
+
+// ============================================================================
+// Workspace context (team-linked assessments)
+// ============================================================================
+
+const ACTIVE_WS_STORAGE_KEY = 'okiru_active_workspace_id';
+
+/** Last team space selected on the Workspace page; used when saving assessments. */
+export function getPreferredWorkspaceId(): string | undefined {
+  try {
+    const id = localStorage.getItem(ACTIVE_WS_STORAGE_KEY);
+    return id && id.trim() ? id.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setPreferredWorkspaceId(workspaceId: string | null): void {
+  try {
+    if (!workspaceId) localStorage.removeItem(ACTIVE_WS_STORAGE_KEY);
+    else localStorage.setItem(ACTIVE_WS_STORAGE_KEY, workspaceId);
+  } catch {
+    /* ignore */
+  }
 }
 
 // ============================================================================
@@ -357,10 +392,11 @@ export async function saveFoundationData(
   request: FoundationSaveRequest
 ): Promise<FoundationSaveResponse> {
   try {
+    const workspaceId = request.workspaceId ?? getPreferredWorkspaceId();
     const response = await fetch(`${API_BASE}/assessments/foundation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
+      body: JSON.stringify({ ...request, workspaceId }),
     });
     
     if (!response.ok) {
@@ -413,7 +449,9 @@ export async function loadAssessmentData(
   assessmentId: string
 ): Promise<AssessmentLoadResponse | null> {
   try {
-    const response = await fetch(`${API_BASE}/assessments/${assessmentId}`);
+    const response = await fetch(`${API_BASE}/assessments/${assessmentId}`, {
+      credentials: 'include',
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -539,6 +577,8 @@ export interface PopulateAndScoreInput {
   sectorCode: string;
   /** Scorecard type: Generic, QSE, or EME */
   scorecardType?: 'Generic' | 'QSE' | 'EME';
+  /** When set (team editor pillar scopes), validation only requires ownership if ownership-related pillars are in scope */
+  pillarScopeFilter?: string[] | null;
 }
 
 export interface PopulateAndScoreResult {
@@ -551,47 +591,14 @@ export interface PopulateAndScoreResult {
 }
 
 /**
- * Critical entities required for a valid scorecard.
- * If these are missing/empty, we reject scorecard generation.
- */
-const CRITICAL_ENTITIES = [
-  'total_revenue',
-  'npat', // or deemed_npat
-];
-
-/**
  * Validate that minimum required data is present for scorecard generation.
  */
 function validateCriticalEntities(
   foundation: FoundationData,
-  pillars: BuildPillarsData
+  pillars: BuildPillarsData,
+  pillarScopeFilter?: string[] | null,
 ): string[] {
-  const errors: string[] = [];
-  
-  // Check financials
-  const financials = foundation.financials;
-  const hasRevenue = (financials.totalRevenue || 0) > 0;
-  const hasNpat = (financials.npat || 0) > 0 || (financials.deemedNpat || 0) > 0;
-  
-  if (!hasRevenue) {
-    errors.push('Total Revenue is required for scorecard calculation');
-  }
-  if (!hasNpat) {
-    errors.push('NPAT (or Deemed NPAT) is required for scorecard calculation');
-  }
-  
-  // Check at least one ownership entity
-  const ownership = pillars.ownership;
-  const hasOwnershipData = 
-    (ownership.shareholders?.length ?? 0) > 0 ||
-    (ownership.ownershipScorePoints || 0) > 0 ||
-    (ownership.ownershipScorePercent || 0) > 0;
-  
-  if (!hasOwnershipData) {
-    errors.push('Ownership data is required (at least one ownership entity)');
-  }
-  
-  return errors;
+  return validateScorecardCriticalInputs(foundation, pillars, pillarScopeFilter);
 }
 
 /**
@@ -607,9 +614,9 @@ function validateCriticalEntities(
 export async function populateAndScore(
   input: PopulateAndScoreInput
 ): Promise<PopulateAndScoreResult> {
-  const { pillars, foundation, sectorCode, scorecardType = 'Generic' } = input;
+  const { pillars, foundation, sectorCode, scorecardType = 'Generic', pillarScopeFilter } = input;
   
-  const validationErrors = validateCriticalEntities(foundation, pillars);
+  const validationErrors = validateCriticalEntities(foundation, pillars, pillarScopeFilter);
   if (validationErrors.length > 0) {
     return {
       success: false,
