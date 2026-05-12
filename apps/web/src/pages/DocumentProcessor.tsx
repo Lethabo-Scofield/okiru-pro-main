@@ -2744,7 +2744,7 @@ export default function DocumentProcessor() {
     <div className="bg-black text-white font-sans h-screen overflow-hidden flex flex-col" style={{ letterSpacing: '-0.011em' }}>
 
       <header className="h-12 shrink-0 z-20 sticky top-0 bg-black/95 backdrop-blur-xl" style={{ borderBottom: '1px solid #1c1c1e' }}>
-        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <AppNavBack
               href="/dashboard"
@@ -2781,7 +2781,7 @@ export default function DocumentProcessor() {
       </header>
 
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
-        <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {(() => {
             // Build mode has its own step flow
             const isBuildFlow = flowMode === 'build' || currentPage === 'build-foundation' || currentPage === 'build-pillars';

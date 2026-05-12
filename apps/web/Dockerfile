@@ -2,7 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
+# Native addon builds (e.g. canvas) — serial compile reduces peak RAM on ACR agents
+ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false \
+    MAKEFLAGS=-j1
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
 
@@ -48,7 +50,7 @@ COPY --from=builder /app/apps/web/package.json apps/web/
 COPY --from=builder /app/apps/api/package.json apps/api/
 RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
 
-ENV NO_COLOR=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NO_COLOR=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false MAKEFLAGS=-j1
 RUN pnpm install --no-frozen-lockfile --prod
 
 RUN apk del python3 make g++ pkgconfig

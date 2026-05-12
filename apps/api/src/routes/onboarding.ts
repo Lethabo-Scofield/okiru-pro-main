@@ -13,7 +13,7 @@ const MAX_LEN = 500;
 
 /** Saved when user skips company onboarding so gating treats them as “complete”. */
 export const ONBOARDING_SKIPPED_COMPANY_NAME =
-  "— Company profile skipped (add details anytime in Settings)";
+  "— Company profile skipped (add details anytime — open the menu under your name)";
 
 function sanitizeStr(v: unknown, max = MAX_LEN): string | null {
   if (typeof v !== 'string') return null;

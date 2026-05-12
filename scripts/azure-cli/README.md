@@ -2,6 +2,29 @@
 
 This directory contains PowerShell and Bash scripts for managing the Okiru PRO deployment on Azure Kubernetes Service (AKS) using Azure CLI.
 
+## ACR cloud build (no local Docker, no GitHub Actions)
+
+Build all three images **inside Azure** with `az acr build` (ACR Tasks), then roll out to AKS:
+
+```powershell
+cd scripts\azure-cli
+.\acr-cloud-build-deploy.ps1
+```
+
+Build only (no `kubectl`):
+
+```powershell
+.\acr-cloud-build-deploy.ps1 -SkipDeploy
+```
+
+Bash equivalent (API context must be repo root — see `03-acr-cloud-build.sh`):
+
+```bash
+cd scripts/azure-cli
+bash 03-acr-cloud-build.sh
+bash 04-deploy-aks.sh <tag-printed-by-build>
+```
+
 ## Quick Start
 
 ### Full Pipeline (Cleanup → Rebuild → Deploy)

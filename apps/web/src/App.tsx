@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
+import { Loader2 } from "lucide-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@toolkit/lib/queryClient";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
@@ -19,12 +20,26 @@ import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
-import Onboarding from "@/pages/Onboarding";
 import Workspace from "@/pages/Workspace";
+import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+
+/** Old links to `/onboarding` continue to work — company profile now lives on `/auth`. */
+function LegacyOnboardingRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    const q = window.location.search;
+    navigate(`/auth${q}`, { replace: true });
+  }, [navigate]);
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function ToolkitLoader() {
   return (
@@ -51,13 +66,16 @@ function AppRouter() {
         <AuthWrapper />
       </Route>
       <Route path="/onboarding">
-        <ProtectedRoute><Onboarding /></ProtectedRoute>
+        <ProtectedRoute><LegacyOnboardingRedirect /></ProtectedRoute>
       </Route>
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
       </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
+      <Route path="/company-profile">
+        <ProtectedRoute><CompanyProfilePage /></ProtectedRoute>
       </Route>
       <Route path="/invite/:token">
         <AcceptInvite />
@@ -98,7 +116,7 @@ function AppRouter() {
 
 function GlobalFeedbackWidget() {
   const [location] = useLocation();
-  if (location === "/onboarding") return null;
+  if (location === "/onboarding" || location.startsWith("/auth") || location.startsWith("/company-profile")) return null;
   return <FeedbackWidget />;
 }
 

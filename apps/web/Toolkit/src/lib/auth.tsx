@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "./config";
+import { clearAuthFlowSessionFlags } from "./authFlowFlags";
 
 interface AuthUser {
   id: string;
@@ -193,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    clearAuthFlowSessionFlags();
     setUser(null);
     queryClient.clear();
   }, [queryClient]);

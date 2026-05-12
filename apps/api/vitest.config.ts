@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       'pipeline/__tests__/**/*.test.ts',
       '__tests__/**/*.test.ts',
+      'src/**/__tests__/**/*.test.ts',
     ],
     exclude: ['node_modules', 'dist'],
     coverage: {

@@ -1,6 +1,7 @@
 /**
- * Company onboarding is stored in Mongo (API GET /api/onboarding/me).
- * We only treat the user as "onboarded" when the API returns JSON with a non-empty companyName.
+ * Company onboarding is stored in Mongo (GET /api/onboarding/me).
+ * We only treat the user as "onboarded" when the response is JSON with a non-empty companyName.
+ * Prefer 200 + `{ profile: null }` when incomplete (avoids misleading browser 404 logs); legacy 404 is still accepted.
  * A bare 200 (e.g. HTML fallback) must NOT skip onboarding.
  */
 
@@ -35,6 +36,7 @@ export async function checkOnboardingGate(): Promise<OnboardingGateResult> {
       }
 
       if (res.status === 200 && ct.includes("application/json")) {
+        // Handles both completed profiles and `{ profile: null }` for not-started onboarding.
         const data = (await res.json().catch(() => null)) as { profile?: unknown } | null;
         const profile = data?.profile;
         if (isCompleteOnboardingProfile(profile)) {

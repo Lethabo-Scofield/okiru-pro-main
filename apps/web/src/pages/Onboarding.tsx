@@ -184,9 +184,18 @@ export interface OnboardingProps {
   redirectProp?: string | null;
   /** Embedded on `/auth`: use parent navigation so SPA state stays on auth route. */
   onFullyDone?: (path: string) => void;
+  /** Logged-in profile editor from `/company-profile` — no team-invite step, returns to `returnTo`. */
+  mode?: "default" | "edit";
+  /** Used with `mode="edit"` after save or back. */
+  returnTo?: string;
 }
 
-export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProps = {}) {
+export default function Onboarding({
+  redirectProp,
+  onFullyDone,
+  mode = "default",
+  returnTo = "/hub",
+}: OnboardingProps = {}) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -206,6 +215,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
   const [flowPhase, setFlowPhase] = useState<"profile" | "team">("profile");
 
   const resolvePostOnboardingDest = useMemo(() => {
+    if (mode === "edit") return returnTo;
     const dest = effectiveRedirect || "/certificates";
     const isCertificates = dest === "/certificates" || dest.startsWith("/certificates?");
     return isCertificates
@@ -213,7 +223,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
         ? `${dest}&openUpload=1`
         : `${dest}?openUpload=1`
       : dest;
-  }, [effectiveRedirect]);
+  }, [effectiveRedirect, mode, returnTo]);
 
   const goTo = (path: string) => {
     if (onFullyDone) onFullyDone(path);
@@ -230,6 +240,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
           const data = await res.json().catch(() => null);
           const p = data?.profile ?? data;
           const pendingTeamInvite =
+            mode !== "edit" &&
             typeof sessionStorage !== "undefined" &&
             sessionStorage.getItem(PENDING_TEAM_INVITE_KEY) === "1";
           if (p && typeof p === "object" && isCompleteOnboardingProfile(p) && pendingTeamInvite) {
@@ -308,7 +319,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, mode]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -375,9 +386,16 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
         throw new Error(data?.message || "Failed to save");
       }
       toast({
-        title: "Company profile saved",
-        description: "Next, invite teammates or jump straight into the app.",
+        title: mode === "edit" ? "Profile updated" : "Company profile saved",
+        description:
+          mode === "edit"
+            ? "Your hub and scorecard views will use these details."
+            : "Next, invite teammates or jump straight into the app.",
       });
+      if (mode === "edit") {
+        goTo(returnTo);
+        return;
+      }
       try {
         sessionStorage.setItem(PENDING_TEAM_INVITE_KEY, "1");
       } catch {
@@ -396,6 +414,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
   };
 
   const handleSkipProfile = async () => {
+    if (mode === "edit") return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/onboarding/skip", {
@@ -409,7 +428,7 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
       }
       toast({
         title: "Profile skipped",
-        description: "You can add company details anytime from your profile. Next, invite teammates or continue.",
+        description: "Add company details anytime from the menu under your name.",
       });
       try {
         sessionStorage.setItem(PENDING_TEAM_INVITE_KEY, "1");
@@ -438,19 +457,19 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
 
   const authShell = (card: React.ReactNode) => (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-4xl">
         <div className="mb-4">
           <button
             type="button"
             onClick={() => {
-              goTo("/");
+              goTo(mode === "edit" ? returnTo : "/");
             }}
             className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 -ml-2 rounded-md hover:bg-muted/50"
             data-testid="btn-onboarding-back-home"
-            aria-label="Back to home"
+            aria-label={mode === "edit" ? "Back to app" : "Back to home"}
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back</span>
+            <span>{mode === "edit" ? "Back" : "Back"}</span>
           </button>
         </div>
         <div className="flex justify-center mb-8">
@@ -515,20 +534,31 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
     <Card className="border border-border/50 shadow-lg bg-card overflow-hidden" data-testid="onboarding-popup">
       <div className="text-center pt-8 pb-3 px-6 border-b border-border/40">
         <h2 className="text-lg font-heading font-semibold tracking-tight" id="onboarding-title" data-testid="text-onboarding-title">
-          Company profile
+          {mode === "edit" ? "Company & B-BBEE profile" : "Company profile"}
         </h2>
         <p className="text-[13px] text-muted-foreground/60 mt-1 flex items-center justify-center gap-1.5">
           <Building2 className="h-3.5 w-3.5" />
-          Final step after sign-up — tell us about your company
+          {mode === "edit"
+            ? "Update your company details — same as onboarding"
+            : "Final step after sign-up — tell us about your company"}
         </p>
         <div className="flex items-center gap-1 mt-4 max-w-xs mx-auto">
           <div className="h-1.5 flex-1 rounded-full bg-primary" />
           <div className="h-1.5 flex-1 rounded-full bg-primary/40" />
         </div>
         <p className="mt-3 text-[13px] text-muted-foreground text-left">
-          We use this to tailor B-BBEE scorecards and recommendations. Only{" "}
-          <span className="text-foreground font-medium">company name</span> is required; everything else is optional
-          and editable later from your profile.
+          {mode === "edit" ? (
+            <>
+              Changes apply across the hub and scorecard tools. Only{" "}
+              <span className="text-foreground font-medium">company name</span> is required.
+            </>
+          ) : (
+            <>
+              We use this to tailor B-BBEE scorecards and recommendations. Only{" "}
+              <span className="text-foreground font-medium">company name</span> is required; everything else is optional
+              and editable later from your profile.
+            </>
+          )}
         </p>
       </div>
 
@@ -757,20 +787,26 @@ export default function Onboarding({ redirectProp, onFullyDone }: OnboardingProp
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border/40">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground self-start sm:self-auto"
-              disabled={submitting}
-              onClick={handleSkipProfile}
-              data-testid="btn-skip-company-profile"
-            >
-              Skip for now — I&apos;ll add this later
-            </Button>
+            {mode !== "edit" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground self-start sm:self-auto"
+                disabled={submitting}
+                onClick={handleSkipProfile}
+                data-testid="btn-skip-company-profile"
+              >
+                Skip for now — I&apos;ll add this later
+              </Button>
+            ) : (
+              <div />
+            )}
             <div className="flex flex-col sm:items-end gap-2">
               <p className="text-[11px] text-muted-foreground sm:text-right">
-                You can update these details any time from your profile.
+                {mode === "edit"
+                  ? "This screen is the same flow as after sign-up — without a separate Settings page."
+                  : "You can update these details any time from the menu under your name."}
               </p>
               <Button
                 type="submit"

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@toolkit/lib/auth";
 import { fetchOnboardingStatus } from "@/lib/onboardingStatus";
@@ -30,27 +30,37 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export function GuestRoute({ children }: { children: React.ReactNode }) {
   const [, navigate] = useLocation();
   const { user, isLoading } = useAuth();
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
-    if (isLoading || !user) return;
+    if (isLoading) return;
+    if (!user) {
+      setResolved(true);
+      return;
+    }
 
+    setResolved(false);
     let cancelled = false;
     (async () => {
       const status = await fetchOnboardingStatus();
       if (cancelled) return;
-      if (status === "needs-onboarding") {
-        navigate("/onboarding", { replace: true });
-      } else {
+      if (status === "onboarded") {
         navigate("/hub", { replace: true });
+        return;
       }
+      // Incomplete company profile: keep them on the marketing site (e.g. Back from /auth/onboarding).
+      // Hub and /auth still gate completion where needed.
+      setResolved(true);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [user, isLoading, navigate]);
+  }, [user?.id, isLoading, navigate]);
 
-  if (user && !isLoading) return null;
+  if (isLoading || (user && !resolved)) {
+    return <FullScreenSpinner />;
+  }
 
   return <>{children}</>;
 }

@@ -3,9 +3,10 @@ import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, LogOut, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
+import { Trash2, Loader2, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 import { AppNavBack } from '@/components/AppNavBack';
+import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { API_BASE } from '@toolkit/lib/config';
 
 interface ProcessorSession {
@@ -138,7 +139,7 @@ export default function Dashboard() {
   const [page, setPage] = useState<Page>(initialTab && ['home', 'templates', 'scorecards'].includes(initialTab) ? initialTab : 'home');
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [templateSearch, setTemplateSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<number | string | null>(null);
@@ -357,7 +358,7 @@ export default function Dashboard() {
       )}
 
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" className="shrink-0" />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
@@ -377,20 +378,7 @@ export default function Dashboard() {
             >
               <HelpCircle className="h-4 w-4" />
             </button>
-            <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px]" data-testid="user-menu">
-              <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.12] items-center justify-center text-white font-semibold text-[9px]">
-                {(user?.fullName || user?.username || 'U').charAt(0).toUpperCase()}
-              </span>
-              <span className="text-[#d1d1d6] font-medium">{user?.fullName || user?.username || ''}</span>
-            </div>
-            <button
-              onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] text-[12px] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
-              data-testid="button-sign-out"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+            <UserAccountMenu variant="dashboard" />
           </div>
         </div>
       </header>

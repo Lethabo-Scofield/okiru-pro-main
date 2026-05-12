@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAuth } from "@toolkit/lib/auth";
+import { markAuthSessionJustCompleted } from "@toolkit/lib/authFlowFlags";
 import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
@@ -9,6 +10,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
 import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
+import { AppNavBack } from "@/components/AppNavBack";
 
 const ROLES = [
   { value: "auditor", label: "B-BBEE Auditor", description: "Conduct and manage compliance audits" },
@@ -121,6 +123,14 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const [direction, setDirection] = useState(1);
   const { login, register, verifyOtp, resendOtp } = useAuth();
   const { toast } = useToast();
+
+  /** Keep register vs login aligned with URL when AuthWrapper remounts or query updates without full remount. */
+  useEffect(() => {
+    setMode((prev) => {
+      if (prev === "otp" || prev === "forgot" || prev === "reset") return prev;
+      return defaultMode;
+    });
+  }, [defaultMode]);
 
   const [otpValue, setOtpValue] = useState('');
   const [emailHint, setEmailHint] = useState('');
@@ -327,6 +337,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       setIsLoading(true);
       try {
         await verifyOtp(otpValue);
+        markAuthSessionJustCompleted();
       } catch (error: any) {
         toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
         setOtpValue('');
@@ -354,6 +365,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
           setDirection(1);
           setMode('otp');
           toast({ title: "Verification Required", description: result.message || "Check your email for the code." });
+        } else {
+          markAuthSessionJustCompleted();
         }
       } catch (error: any) {
         toast({ title: "Login Failed", description: error.message, variant: "destructive" });
@@ -379,6 +392,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         setMode('otp');
         setOtpValue('');
         toast({ title: "Verify Your Email", description: result.message || "Check your email for the code." });
+      } else {
+        markAuthSessionJustCompleted();
       }
     } catch (error: any) {
       toast({ title: "Registration Failed", description: error.message, variant: "destructive" });
@@ -485,21 +500,35 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     return { label: "Very Strong", color: "bg-emerald-500", width: "w-full" };
   }, [form.password]);
 
+  const headerEyebrow =
+    mode === "login"
+      ? "Sign in"
+      : mode === "register"
+        ? "Create account"
+        : mode === "otp"
+          ? "Verification"
+          : mode === "forgot"
+            ? "Password help"
+            : "Reset password";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-[420px]">
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={() => { window.location.href = '/'; }}
-            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 -ml-2 rounded-md hover:bg-muted/50"
-            data-testid="btn-back-to-home"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back</span>
-          </button>
+    <div
+      className="min-h-screen flex flex-col bg-black text-white"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}
+    >
+      <header
+        className="sticky top-0 z-20 shrink-0 bg-black/90 backdrop-blur-md"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+          <AppNavBack href="/" label="Home" variant="dark" size="compact" data-testid="btn-back-to-home" />
+          <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase">{headerEyebrow}</span>
+          <div className="w-12 shrink-0" aria-hidden />
         </div>
+      </header>
+
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-[420px]">
         <div className="flex justify-center mb-8">
           <img src={okiruLogo} alt="Okiru" className="h-14 w-14 rounded-full object-contain" data-testid="img-logo-auth" />
         </div>
@@ -1045,7 +1074,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                   )}
                 </CardContent>
               </Card>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
