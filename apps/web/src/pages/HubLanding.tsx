@@ -3,12 +3,15 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
+import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
-  LogOut, ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
+  ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
   BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
+import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
 interface CompanyProfile {
   companyName?: string;
@@ -33,7 +36,7 @@ function firstName(full?: string | null, username?: string | null): string {
 }
 
 export default function HubLanding() {
-  const { user, logout, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
 
@@ -71,10 +74,10 @@ export default function HubLanding() {
         if (cancelled) return;
         if (gate.status === "needs-onboarding") {
           const safe =
-            location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding'
+            location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding' && location !== '/auth'
               ? location
               : '/hub';
-          navigate(`/onboarding?redirect=${encodeURIComponent(safe)}`, { replace: true });
+          navigate(gatedAuthPath({ redirect: safe }), { replace: true });
           return;
         }
         const p = gate.profile;
@@ -202,10 +205,17 @@ export default function HubLanding() {
   const featured = filteredActive.find((t: any) => t.featured) || filteredActive[0];
   const otherActive = filteredActive.filter((t) => t.id !== featured?.id);
 
-  const userInitial = (user?.fullName || user?.username || 'U').charAt(0).toUpperCase();
   const displayName = firstName(user?.fullName, user?.username);
   const companyName = profile?.companyName || user?.organizationName || null;
+  const companyNameFriendly =
+    companyName && isSkippedCompanyProfileName(companyName)
+      ? "Your company (add details anytime)"
+      : companyName;
   const beeLevel = profile?.beeLevel || null;
+  const beeLevelSub =
+    profileLoading ? '' : beeLevel
+      ? 'Current rating'
+      : 'Add from your profile';
 
   return (
     <div
@@ -231,7 +241,7 @@ export default function HubLanding() {
         className="h-14 shrink-0 z-20 sticky top-0 backdrop-blur-xl bg-black/70"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
-        <div className="max-w-[1280px] mx-auto w-full px-6 h-full flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
             <span className="text-[15px] font-semibold tracking-tight text-white border-l border-white/[0.07] pl-3">
@@ -279,33 +289,14 @@ export default function HubLanding() {
                 Admin
               </Link>
             )}
-            <div
-              className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-full bg-white/[0.03] border border-white/[0.05]"
-              data-testid="user-chip"
-            >
-              <span className="h-6 w-6 rounded-full bg-white/[0.10] text-white text-[11px] font-semibold flex items-center justify-center">
-                {authLoading ? '·' : userInitial}
-              </span>
-              <span className="text-[12px] text-[#d1d1d6] font-medium pr-1">
-                {authLoading ? <span className="skel inline-block h-3 w-16 align-middle" /> : displayName}
-              </span>
-            </div>
-            <button
-              onClick={async () => { await logout(); navigate('/auth'); }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-[12px] smooth press-sm text-[#8e8e93] hover:text-white"
-              data-testid="btn-sign-out"
-              title="Sign out"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Sign Out</span>
-            </button>
+            {user?.id && !authLoading ? <UserAccountMenu variant="hub" /> : null}
           </div>
         </div>
       </header>
 
       {searchOpen && (
         <div
-          className="max-w-[1280px] mx-auto w-full px-6 py-3 bg-black/60 backdrop-blur-md"
+          className="w-full px-4 sm:px-6 lg:px-8 py-3 bg-black/60 backdrop-blur-md"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
         >
           <div className="relative max-w-lg mx-auto">
@@ -347,11 +338,18 @@ export default function HubLanding() {
             {authLoading ? (
               <span className="skel inline-block h-[36px] w-40 align-middle rounded-md" />
             ) : (
-              <span className="text-white" data-testid="text-greeting-name">{displayName}</span>
+              <button
+                type="button"
+                onClick={() => navigate(companyProfilePath('/hub'))}
+                className="text-white border-b border-dashed border-white/35 hover:border-violet-300/80 hover:text-violet-100 transition-colors pb-0.5"
+                data-testid="text-greeting-name"
+              >
+                {displayName}
+              </button>
             )}
             <span className="text-[#5a5a60]">.</span>
           </h1>
-          <div className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-xl">
+          <div className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-2xl lg:max-w-3xl">
             {profileLoading ? (
               <span className="inline-flex flex-col gap-1.5">
                 <span className="skel h-3.5 w-72 block" />
@@ -359,7 +357,8 @@ export default function HubLanding() {
               </span>
             ) : companyName ? (
               <>
-                You're signed in to <span className="text-[#d1d1d6] font-medium">{companyName}</span>.{' '}
+                You&apos;re signed in to{' '}
+                <span className="text-[#d1d1d6] font-medium">{companyNameFriendly}</span>.{' '}
                 <button
                   type="button"
                   onClick={() => navigate('/workspace')}
@@ -368,7 +367,7 @@ export default function HubLanding() {
                 >
                   Invite your team in Workspace
                 </button>{' '}
-                when you're ready, or open a toolkit below.
+                when you&apos;re ready, or open a toolkit below.
               </>
             ) : (
               <>
@@ -416,10 +415,15 @@ export default function HubLanding() {
           />
           <StatTile
             label="B-BBEE level"
-            value={profileLoading ? null : (beeLevel || '-')}
-            sub={profileLoading ? '' : (beeLevel ? 'Current rating' : 'Set in onboarding')}
+            value={profileLoading ? null : (beeLevel || '—')}
+            sub={beeLevelSub}
             loading={profileLoading}
             accent
+            onClick={
+              !profileLoading && !beeLevel
+                ? () => navigate(companyProfilePath('/hub'))
+                : undefined
+            }
             staggerClass="card-rise stagger-4"
           />
         </section>
@@ -559,12 +563,12 @@ function FeaturedCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: 
           </span>
         </div>
         <h3
-          className="mt-6 text-[26px] sm:text-[32px] font-semibold leading-[1.08] tracking-tight text-white max-w-md"
+          className="mt-6 text-[26px] sm:text-[32px] font-semibold leading-[1.08] tracking-tight text-white max-w-2xl"
           style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
           {toolkit.title}
         </h3>
-        <p className="mt-3 text-[13.5px] text-[#a1a1a6] leading-relaxed max-w-xl">
+        <p className="mt-3 text-[13.5px] text-[#a1a1a6] leading-relaxed max-w-2xl">
           {toolkit.description}
         </p>
         <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2">

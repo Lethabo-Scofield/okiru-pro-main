@@ -977,7 +977,7 @@ export default function EntityBuilder() {
       )}
 
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
-        <div className="max-w-[1400px] mx-auto w-full px-6 h-full flex items-center justify-between gap-4">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
           <AppNavBack
             href="/dashboard?tab=templates"

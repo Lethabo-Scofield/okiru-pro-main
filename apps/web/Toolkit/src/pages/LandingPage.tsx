@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
-import heroBackground from "@toolkit-assets/hero_background.png";
 
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
@@ -38,7 +37,7 @@ const GLOBAL_CSS = `
     background-size: 256px;
   }
 
-  /* nav - transparent so hero image shows through */
+  /* nav */
   .okiru-root .ok-nav {
     position: fixed; top: 0; width: 100%; z-index: 200;
     height: 58px; display: flex; align-items: center;
@@ -48,7 +47,7 @@ const GLOBAL_CSS = `
     -webkit-backdrop-filter: blur(10px);
   }
   .okiru-root .ok-nav-w {
-    width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 48px;
+    width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 48px;
     display: flex; align-items: center; justify-content: space-between;
   }
   .okiru-root .ok-brand {
@@ -71,7 +70,7 @@ const GLOBAL_CSS = `
 
   /* hero logo - large glowing centerpiece */
   .okiru-root .ok-hero-logo-wrap {
-    padding-left: 80px; margin-bottom: 22px;
+    padding-left: 48px; margin-bottom: 22px;
     display: flex; align-items: center; gap: 14px;
   }
   .okiru-root .ok-hero-logo {
@@ -125,25 +124,23 @@ const GLOBAL_CSS = `
     filter: blur(40px); opacity: 0.9;
   }
 
-  /* hero full-bleed background image */
+  /* hero background (gradient only — no full-bleed photo) */
   .okiru-root .ok-hero-bg {
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
     overflow: hidden;
-  }
-  .okiru-root .ok-hero-bg-img {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover; object-position: center center;
-    opacity: 1;
+    background:
+      radial-gradient(ellipse 100% 80% at 75% 20%, rgba(99,102,241,0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 60% at 15% 60%, rgba(244,114,182,0.08) 0%, transparent 50%),
+      linear-gradient(to bottom, #121118 0%, var(--ink) 100%);
   }
   .okiru-root .ok-hero-bg-tint {
     position: absolute; inset: 0;
     background:
       linear-gradient(
         to bottom,
-        rgba(10,10,15,0.10) 0%,
-        rgba(10,10,15,0.05) 40%,
-        rgba(10,10,15,0.55) 100%
+        rgba(10,10,15,0.35) 0%,
+        rgba(10,10,15,0.12) 45%,
+        rgba(10,10,15,0.65) 100%
       );
   }
   .okiru-root .ok-nav-chip {
@@ -206,7 +203,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-mobile-menu.ok-menu-open { display: flex; }
 
   /* container */
-  .okiru-root .ok-w { max-width: 1100px; margin: 0 auto; padding: 0 48px; }
+  .okiru-root .ok-w { max-width: 1280px; margin: 0 auto; padding: 0 48px; }
 
   /* hero */
   .okiru-root .ok-hero {
@@ -222,25 +219,25 @@ const GLOBAL_CSS = `
   .okiru-root .ok-eyebrow-hero {
     font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
     text-transform: uppercase; color: var(--pur-l);
-    margin-bottom: 28px; padding-left: 80px;
+    margin-bottom: 28px; padding-left: 48px;
   }
   .okiru-root .ok-h1 {
     font-family: var(--serif);
     font-size: clamp(3rem, 6.2vw, 5.8rem);
     line-height: 1.02; letter-spacing: -0.03em;
     color: #ffffff; font-weight: 500;
-    padding-left: 80px; max-width: 820px;
+    padding-left: 48px; max-width: min(62rem, 100%);
   }
   .okiru-root .ok-h1 em {
     font-style: italic; color: #6366f1; font-weight: 600;
   }
   .okiru-root .ok-hero-sub {
-    margin-top: 28px; padding-left: 80px; max-width: 520px;
+    margin-top: 28px; padding-left: 48px; max-width: min(42rem, 100%);
     font-size: 16px; color: rgba(255,255,255,0.96); line-height: 1.8;
     font-weight: 500;
   }
   .okiru-root .ok-hero-btns {
-    margin-top: 44px; padding-left: 80px;
+    margin-top: 44px; padding-left: 48px;
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   }
   .okiru-root .ok-btn-main {
@@ -309,7 +306,7 @@ const GLOBAL_CSS = `
     line-height: 1.08; margin-bottom: 18px;
   }
   .okiru-root .ok-h2 em { font-style: italic; color: var(--pur-l); }
-  .okiru-root .ok-prod-body { font-size: 15px; color: var(--body); line-height: 1.8; max-width: 380px; }
+  .okiru-root .ok-prod-body { font-size: 15px; color: var(--body); line-height: 1.8; max-width: min(28rem, 100%); }
 
   /* scorecard widget */
   .okiru-root .ok-sc {
@@ -592,7 +589,6 @@ const GLOBAL_CSS = `
   /* ──── Responsive ──── */
   @media (max-width: 1024px) {
     .okiru-root .ok-sectors-grid { grid-template-columns: repeat(2, 1fr); }
-    .okiru-root .ok-hero-bg-img { opacity: 1; object-position: center right; }
   }
 
   @media (max-width: 900px) {
@@ -607,10 +603,6 @@ const GLOBAL_CSS = `
     .okiru-root .ok-hero-logo-wrap { padding-left: 0; }
     .okiru-root .ok-hero-logo { width: 52px; height: 52px; }
     .okiru-root .ok-multi-glow { width: 420px; height: 420px; right: -120px; top: -100px; }
-    .okiru-root .ok-hero-bg-img { opacity: 1; object-position: 70% center; }
-    .okiru-root .ok-hero-bg-tint {
-      background: linear-gradient(to bottom, rgba(10,10,15,0.20) 0%, rgba(10,10,15,0.10) 40%, rgba(10,10,15,0.75) 100%);
-    }
     .okiru-root .ok-nav-actions .ok-btn-ghost,
     .okiru-root .ok-nav-actions .ok-btn-pur,
     .okiru-root .ok-nav-actions .ok-btn-login,
@@ -931,7 +923,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       <main>
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <img src={heroBackground} alt="" className="ok-hero-bg-img" />
             <div className="ok-hero-bg-tint" />
           </div>
           <div className="ok-w" style={{ position: "relative", zIndex: 1 }}>
@@ -975,7 +966,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <Reveal className="ok-sectors-hdr">
               <p className="ok-eyebrow" style={{ textAlign: "center" }}>Sector coverage</p>
               <h2 className="ok-h2" style={{ textAlign: "center" }}>Four sectors.<br /><em>Six scorecard templates.</em></h2>
-              <p className="ok-prod-body" style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }}>
+              <p className="ok-prod-body" style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
                 Each template is backed by a formula graph extracted directly from the official B-BBEE toolkit Excel workbooks, with thousands of interconnected nodes and edges.
               </p>
             </Reveal>

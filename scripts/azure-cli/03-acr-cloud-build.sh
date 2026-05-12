@@ -43,13 +43,14 @@ az acr build \
 # Build API image
 echo ""
 echo "=== Building API Image (Cloud) ==="
+# API Dockerfile expects monorepo root (root package.json, packages/types, etc.)
 az acr build \
     --registry "$ACR_NAME" \
     --image "$REPO_PREFIX/api:$IMAGE_TAG" \
     --image "$REPO_PREFIX/api:latest" \
     --file apps/api/Dockerfile \
     --timeout 600 \
-    ./apps/api
+    .
 
 # Build Compute image
 echo ""

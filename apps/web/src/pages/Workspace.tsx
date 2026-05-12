@@ -285,7 +285,7 @@ export default function WorkspacePage() {
         className="h-14 sticky top-0 z-20 bg-background"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
-        <div className="max-w-[1100px] mx-auto px-6 h-full flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <AppNavBack
             href="/hub"
             eyebrow="Suite"

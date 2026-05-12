@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
+import { UserAccountMenu } from '@/components/UserAccountMenu';
+import { gatedAuthPath } from '@/lib/authRoutes';
 
 const COMPANY_SIZES = ['EME', 'QSE', 'Generic', 'Large', 'Specialised'] as const;
 type CompanySize = typeof COMPANY_SIZES[number];
@@ -316,7 +318,7 @@ export default function CertificateHub() {
       setShowUpload(true);
       return;
     }
-    navigate('/auth?mode=register&redirect=' + encodeURIComponent('/certificates'));
+    navigate(gatedAuthPath({ mode: 'register', redirect: '/certificates' }));
   }, [user, navigate]);
 
   const handleFileSelected = useCallback((files: FileList | File[]) => {
@@ -376,7 +378,7 @@ export default function CertificateHub() {
       if (!res.ok) {
         if (res.status === 401) {
           toast({ title: 'Sign in required', description: 'Please sign in to upload certificates.', variant: 'destructive' });
-          navigate('/auth?mode=register&redirect=' + encodeURIComponent('/certificates'));
+          navigate(gatedAuthPath({ mode: 'register', redirect: '/certificates' }));
           return;
         }
         throw new Error(data.message || `Upload failed (${res.status})`);
@@ -423,9 +425,9 @@ export default function CertificateHub() {
 
       {/* ─── Header ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-[1100px] mx-auto px-5 h-14 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {isAuthenticated ? (
-            <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" size="compact" />
+            <AppNavBack href="/" label="Home" variant="dark" size="compact" />
           ) : (
             <Link
               href="/"
@@ -445,6 +447,9 @@ export default function CertificateHub() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
+            {isAuthenticated && (
+              <UserAccountMenu variant="certificate" />
+            )}
             {isAuthenticated ? (
               <button
                 onClick={requireLoginToUpload}
@@ -456,13 +461,13 @@ export default function CertificateHub() {
             ) : (
               <>
                 <Link
-                  href="/auth"
+                  href={gatedAuthPath({ redirect: '/certificates' })}
                   className="text-[13px] text-[#8e8e93] hover:text-white transition-colors px-3 py-1.5"
                 >
                   Sign in
                 </Link>
                 <Link
-                  href="/auth?mode=register"
+                  href={gatedAuthPath({ mode: 'register', redirect: '/certificates' })}
                   className="inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
                 >
                   Get started

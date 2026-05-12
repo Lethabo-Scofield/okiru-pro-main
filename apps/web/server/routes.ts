@@ -696,7 +696,7 @@ export async function registerRoutes(
   });
 
   const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
-    "— Company profile skipped (add details anytime in Settings)";
+    "— Company profile skipped (add details anytime — open the menu under your name)";
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
