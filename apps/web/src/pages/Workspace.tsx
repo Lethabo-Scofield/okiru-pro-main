@@ -72,7 +72,7 @@ const PILLAR_SCOPE_OPTIONS: { key: string; label: string }[] = [
   { key: "enterpriseDevelopment", label: "Enterprise development" },
   { key: "employmentEquity", label: "Employment equity" },
   { key: "sed", label: "Socio-economic development" },
-  { key: "yes", label: "Youth employment" },
+  // YES Initiative is a level boost, not a scored pillar — not included as assignable scope
 ];
 
 export default function WorkspacePage() {

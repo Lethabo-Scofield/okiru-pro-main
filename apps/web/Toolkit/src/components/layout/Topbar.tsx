@@ -32,7 +32,7 @@ export function Topbar() {
           <TooltipTrigger asChild>
             <span tabIndex={-1} className="inline-flex">
               <AppNavBack
-                href="/hub"
+                onClick={() => { window.location.href = '/hub'; }}
                 eyebrow="Suite"
                 label="Hub"
                 variant="light"

@@ -19,7 +19,9 @@
     "ingest:certificates": "tsx scripts/ingestCertificates.ts"
   },
   "dependencies": {
+    "@azure/ai-form-recognizer": "^5.0.0",
     "@azure/storage-blob": "^12.31.0",
+    "chromadb": "^3.0.0",
     "@okiru/data-layer": "workspace:*",
     "@okiru/types": "workspace:*",
     "@types/bcrypt": "^6.0.0",

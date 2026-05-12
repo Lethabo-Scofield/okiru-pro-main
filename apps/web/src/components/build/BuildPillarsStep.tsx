@@ -8,7 +8,7 @@ import { Switch } from "@toolkit/components/ui/switch";
 import { Label } from "@toolkit/components/ui/label";
 import {
   Users, Building2, GraduationCap, ShoppingCart, Handshake, Heart,
-  TrendingUp, Briefcase, CheckCircle2, AlertCircle, ChevronLeft, ArrowRight,
+  TrendingUp, Briefcase, CheckCircle2, AlertCircle, ChevronLeft, ArrowRight, Lock,
 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 
@@ -48,18 +48,19 @@ interface PillarConfig {
   subMinimumThreshold: number;
   /** If false, score is not added to header total (RCOGP Generic: EE mirrors MC). */
   includeInGrandTotal: boolean;
+  /** False when the pillar exists in the standard set but is not applicable for the selected sector. */
+  isApplicable: boolean;
 }
 
 // Default pillar config (used when calculatorConfig not loaded yet)
 const DEFAULT_PILLARS: PillarConfig[] = [
-  { id: 'ownership',              code: 'OWN',    name: 'Ownership',                    description: 'Voting rights, economic interest, net value',     icon: Building2,     maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
-  { id: 'management',             code: 'MC+EE',  name: 'Management Control & Employment Equity', description: 'Board, executive, EAP senior/middle/junior, EE levels', icon: Briefcase,     maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  { id: 'skills',                 code: 'SKILLS', name: 'Skills Development',           description: 'Training spend, bursaries, LAI, absorption',        icon: GraduationCap, maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
-  { id: 'procurement',            code: 'PROC',   name: 'Preferential Procurement',     description: 'TMPS-based BEE procurement',                     icon: ShoppingCart,  maxPoints: 29, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
-  { id: 'supplierDevelopment',    code: 'SD',     name: 'Supplier Development',         description: 'SD contributions (2% NPAT target, max 10)',       icon: Handshake,     maxPoints: 10, hasSubMinimum: true,  subMinimumThreshold: 40,  includeInGrandTotal: true },
-  { id: 'enterpriseDevelopment',  code: 'ED',     name: 'Enterprise Development',       description: 'ED contributions (1% NPAT + bonuses, max 7)',     icon: Handshake,     maxPoints: 7,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  { id: 'sed',                    code: 'SED',    name: 'Socio-Economic Development',   description: 'SED as % of NPAT',                                icon: Heart,         maxPoints: 5,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
-  { id: 'yes',                    code: 'YES',    name: 'YES Initiative',               description: 'Youth placement tiers (included in scorecard total)', icon: TrendingUp, maxPoints: 3,  hasSubMinimum: false, subMinimumThreshold: 0,   includeInGrandTotal: true },
+  { id: 'ownership',             code: 'OWN',    name: 'Ownership',                             description: 'Voting rights, economic interest, net value',              icon: Building2,     maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40, includeInGrandTotal: true, isApplicable: true },
+  { id: 'management',            code: 'MC+EE',  name: 'Management Control & Employment Equity', description: 'Board, executive, EAP senior/middle/junior, EE levels',    icon: Briefcase,     maxPoints: 19, hasSubMinimum: false, subMinimumThreshold: 0,  includeInGrandTotal: true, isApplicable: true },
+  { id: 'skills',                code: 'SKILLS', name: 'Skills Development',                    description: 'Training spend, bursaries, LAI, absorption',               icon: GraduationCap, maxPoints: 25, hasSubMinimum: true,  subMinimumThreshold: 40, includeInGrandTotal: true, isApplicable: true },
+  { id: 'procurement',           code: 'PROC',   name: 'Preferential Procurement',              description: 'TMPS-based BEE procurement',                              icon: ShoppingCart,  maxPoints: 29, hasSubMinimum: true,  subMinimumThreshold: 40, includeInGrandTotal: true, isApplicable: true },
+  { id: 'supplierDevelopment',   code: 'SD',     name: 'Supplier Development',                  description: 'SD contributions (2% NPAT target, max 10)',               icon: Handshake,     maxPoints: 10, hasSubMinimum: true,  subMinimumThreshold: 40, includeInGrandTotal: true, isApplicable: true },
+  { id: 'enterpriseDevelopment', code: 'ED',     name: 'Enterprise Development',                description: 'ED contributions (1% NPAT + bonuses, max 7)',             icon: Handshake,     maxPoints: 7,  hasSubMinimum: false, subMinimumThreshold: 0,  includeInGrandTotal: true, isApplicable: true },
+  { id: 'sed',                   code: 'SED',    name: 'Socio-Economic Development',            description: 'SED as % of NPAT',                                        icon: Heart,         maxPoints: 5,  hasSubMinimum: false, subMinimumThreshold: 0,  includeInGrandTotal: true, isApplicable: true },
 ];
 
 // Map calculatorConfig pillar codes to UI metadata
@@ -80,7 +81,10 @@ const PILLAR_METADATA: Record<string, { name: string; description: string; icon:
 // Normalize API pillar keys to short IDs used by renderPillarForm/hasData/getPillarScore
 const PILLAR_ID_MAP = BUILD_PILLAR_ID_MAP;
 
-// Generate dynamic pillar config from calculatorConfig
+// Generate dynamic pillar config from calculatorConfig.
+// Pillars with maxPoints === 0 are included but marked isApplicable: false so they
+// render as greyed-out / locked in the sidebar, making it clear they are not
+// available for the selected sector.
 function usePillarConfig(): PillarConfig[] {
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
 
@@ -90,12 +94,11 @@ function usePillarConfig(): PillarConfig[] {
 
   const pc = calculatorConfig.pillarConfigs;
   const pillars: PillarConfig[] = [];
-  let displayOrder = 0;
 
-  // Build pillars dynamically from calculatorConfig.pillarConfigs
   for (const [key, config] of Object.entries(pc)) {
-    if (!config || config.maxPoints === 0) continue; // Skip empty/zero pillars
+    if (!config) continue;
 
+    const applicable = config.maxPoints > 0;
     const meta = PILLAR_METADATA[key] || { name: key, description: '', icon: Building2 };
     const shortId = PILLAR_ID_MAP[key] || key;
 
@@ -108,10 +111,9 @@ function usePillarConfig(): PillarConfig[] {
       maxPoints: config.maxPoints,
       hasSubMinimum: config.hasSubMinimum ?? false,
       subMinimumThreshold: config.subMinimumPercent ?? 0,
-      includeInGrandTotal: true,
+      includeInGrandTotal: applicable,
+      isApplicable: applicable,
     });
-
-    displayOrder++;
   }
 
   return pillars.length > 0 ? pillars : DEFAULT_PILLARS;
@@ -166,11 +168,19 @@ export function BuildPillarsStep({
   const { syncToStore } = useFoundationSync(sessionId);
   const PILLARS = usePillarConfig();
 
+  // Applicable pillars (scored for this sector) respecting scope filter
   const visiblePillars = useMemo(() => {
-    if (!pillarScopeFilter?.length) return PILLARS;
+    const applicable = PILLARS.filter((p) => p.isApplicable);
+    if (!pillarScopeFilter?.length) return applicable;
     const allow = expandScopeToVisibleIds(pillarScopeFilter);
-    return PILLARS.filter((p) => allow.has(p.id));
+    return applicable.filter((p) => allow.has(p.id));
   }, [PILLARS, pillarScopeFilter]);
+
+  // Pillars that exist in the standard set but are not available for the selected sector
+  const notApplicablePillars = useMemo(
+    () => PILLARS.filter((p) => !p.isApplicable),
+    [PILLARS],
+  );
 
   useEffect(() => {
     if (visiblePillars.length === 0) return;
@@ -493,6 +503,43 @@ export function BuildPillarsStep({
                   </button>
                 );
               })}
+
+              {/* Not-applicable pillars — greyed out / locked, non-interactive */}
+              {notApplicablePillars.length > 0 && (
+                <>
+                  {visiblePillars.length > 0 && (
+                    <div className="mx-2 my-1.5 border-t border-border/40" />
+                  )}
+                  {notApplicablePillars.map((p) => {
+                    const Icon = p.icon;
+                    return (
+                      <div
+                        key={p.id}
+                        title="Not applicable for this sector"
+                        className={cn(
+                          "w-full px-3 py-2.5 rounded-md border border-transparent",
+                          "opacity-40 cursor-not-allowed select-none",
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <span className="text-xs font-medium leading-tight text-muted-foreground [overflow-wrap:anywhere]">
+                                {p.name}
+                              </span>
+                              <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                            </div>
+                            <div className="text-[10px] mt-0.5 text-muted-foreground">
+                              Not applicable
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </ScrollArea>
         </div>
