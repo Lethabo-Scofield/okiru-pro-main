@@ -1,0 +1,114 @@
+We need to append the Construction Sector Codes into the existing computation engine so it works like the other sector scorecards.
+
+Context:
+We already have a working computation engine for scorecards. I uploaded Construction Sector Codes and Construction QSE Scorecard documents. Please inspect the existing computation engine structure first, then add Construction as a supported sector without breaking existing sectors.
+
+Tasks:
+
+1. Identify the current scorecard computation pattern
+- Find how existing sectors define elements, indicators, weights, targets, bonus points, and totals.
+- Find how scores are calculated, validated, and returned to the frontend.
+- Reuse the existing architecture instead of creating a separate system.
+
+2. Add Construction sector support
+Add Construction as a new sector/category in the computation engine.
+
+It must support:
+- Contractor scorecard
+- BEP scorecard
+- Construction QSE scorecard
+
+3. Implement Construction elements
+Add the following elements:
+- Ownership
+- Management Control
+- Skills Development
+- Enterprise and Supplier Development
+- Socio-Economic Development
+
+For each indicator, store:
+- element name
+- indicator name
+- description
+- weight
+- target
+- actual value
+- calculated score
+- evidence requirement
+- pass/fail or gap status where relevant
+
+4. Handle Contractor vs BEP differences
+The Construction Sector Codes have different weights and targets for Contractor and BEP entities. Add logic so the user/company profile selects:
+- construction_contractor
+- construction_bep
+- construction_qse
+
+The computation engine must then load the correct scorecard rules.
+
+5. Add calculation logic
+Implement calculations for:
+- percentage-based targets
+- NPAT-based targets
+- procurement spend targets
+- ownership voting rights
+- economic interest
+- black women ownership
+- black new entrants/designated groups
+- skills development as percentage of leviable amount
+- procurement as percentage of total measured procurement spend
+- supplier development as percentage of NPAT
+- SED as percentage of NPAT
+- bonus points
+
+6. Add validation and missing-data handling
+If required input data is missing, the engine must:
+- not crash
+- return score as 0 for that indicator
+- mark status as "missing_data"
+- list required missing fields
+- explain what is needed
+
+7. Add output format
+Return the same output structure used by existing scorecards, including:
+- total score
+- score per element
+- indicator-level breakdown
+- achieved points
+- available points
+- target
+- actual value
+- gap
+- missing evidence
+- recommendations
+
+8. Add tests
+Create tests for:
+- Contractor scorecard loads correctly
+- BEP scorecard loads correctly
+- QSE scorecard loads correctly
+- percentage calculations
+- NPAT calculations
+- procurement calculations
+- bonus point calculations
+- missing data handling
+- existing sectors still pass
+
+9. Update frontend/API integration
+Where required:
+- Add Construction to sector dropdown
+- Add entity type selector for Contractor / BEP / QSE
+- Ensure frontend can display Construction score breakdown like other sectors
+- Ensure API accepts construction sector payloads
+
+10. Documentation
+Update README or internal docs explaining:
+- how Construction sector scoring works
+- required input fields
+- supported entity types
+- test command
+- known assumptions
+
+Important:
+Do not hard-code messy logic inside routes. Keep rules/config separate from computation logic.
+Use reusable helper functions where possible.
+Preserve existing computation engine behavior for all other sectors.
