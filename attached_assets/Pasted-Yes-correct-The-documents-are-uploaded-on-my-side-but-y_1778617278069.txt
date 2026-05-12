@@ -1,0 +1,71 @@
+Yes, correct. The documents are uploaded on my side, but you may not have direct access to them in Replit.
+
+For now, use the attached/pasted source data I will provide below.
+
+We need Construction support for:
+
+1. Construction QSE Scorecard
+2. Construction Sector Codes:
+   - Contractor
+   - BEP / Built Environment Professional
+
+Core elements:
+- Ownership
+- Management Control
+- Skills Development
+- Enterprise and Supplier Development
+- Socio-Economic Development
+
+Important totals from the source documents:
+
+Construction QSE:
+- Ownership: 30 points
+- Management Control: 20 points
+- Skills Development: 26 points
+- ESD: 29 points
+- SED: 5 points
+
+Construction Sector Codes:
+Contractor:
+- Ownership: 31 points
+- Management Control: 22 points
+- Skills Development: 26 points
+- ESD / Preferential Procurement / Supplier Development: 38 points
+- SED: 6 points
+
+BEP:
+- Ownership: 31 points
+- Management Control: 22 points
+- Skills Development: 34 points
+- ESD / Preferential Procurement / Supplier Development: 30 points
+- SED: 6 points
+
+Implementation instruction:
+Please do not make up any values. First create the Construction sector config structure using these totals and element names. Then add indicator-level configs based on the tables I will paste/upload next. Use TODO comments only where a value is missing from the source.
+
+Architecture requirement:
+Follow the existing computation engine pattern. Add Construction as a sector config, not as hard-coded route logic.
+
+Supported construction entity types:
+- construction_qse
+- construction_contractor
+- construction_bep
+
+Expected output should match the existing scorecard output format:
+- totalScore
+- elementScores
+- indicators
+- achievedPoints
+- availablePoints
+- target
+- actual
+- gap
+- status
+- missingFields
+- recommendations
+
+Also add tests to confirm:
+- each construction type loads
+- totals match expected sector totals
+- missing data does not crash
+- existing sectors still pass

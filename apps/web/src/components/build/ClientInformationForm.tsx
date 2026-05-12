@@ -70,6 +70,7 @@ const FALLBACK_SECTOR_OPTIONS: SectorOption[] = [
   { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
   { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
   { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
+  { value: 'CONSTRUCTION', label: 'Construction Sector Code', code: 'CONSTRUCTION', hasQSE: true, availableTypes: ['Contractor', 'BEP', 'QSE'] },
 ];
 
 const INDUSTRY_OPTIONS = [

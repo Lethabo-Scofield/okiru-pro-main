@@ -118,6 +118,38 @@ The team invitation system was hardened to feel collaborative (Google Drive styl
 - **Tokens & expiry** — 24-byte `crypto.randomBytes` base64url tokens, default 14-day expiry. `publicInviteStatus()` derives `pending|accepted|revoked|expired`.
 - **Tests** — `apps/web/server/__tests__/invites.test.ts` (15 tests, all passing) covers token entropy/uniqueness, expiry math, accept/revoke semantics, tenant isolation on revoke and `findActivePendingInvite`, the email template content, HTML escaping, and missing-company fallback. Run with `pnpm --filter rest-express vitest run server/__tests__/invites.test.ts`.
 
+## Construction Sector (May 2026)
+The Construction Sector Code is supported as a first-class sector with three entity-type variants. All scoring is indicator-level and computed from a declarative matrix — no hardcoded route logic.
+
+### Files
+- `apps/api/pipeline/constructionIndicators.ts` — indicator matrices for all three entity types (source of truth, sourced from the Construction QSE and Construction Sector Codes documents in `attached_assets/`).
+- `apps/api/pipeline/constructionScoring.ts` — pure scoring engine. Reads the matrix, returns the standard scorecard shape (`totalScore`, `elementScores`, `indicators[]` with `achievedPoints`/`availablePoints`/`target`/`actual`/`gap`/`status`/`missingFields`/`recommendation`).
+- `apps/api/src/routes/construction.ts` — API routes (mounted at `/api/construction`).
+- `apps/api/__tests__/construction.test.ts` — 22 tests, all passing. Run: `pnpm --filter @okiru/api exec vitest run __tests__/construction.test.ts`.
+
+### Entity Types & Element Totals
+| Entity | Code | Ownership | MC | Skills | ESD | SED | Total |
+|---|---|---|---|---|---|---|---|
+| Construction QSE | `construction_qse` | 30 | 20 | 26 | 29 | 5 | **110** |
+| Construction Contractor | `construction_contractor` | 31 | 22 | 26 | 38 | 6 | **123** |
+| Construction BEP | `construction_bep` | 31 | 22 | 34 | 30 | 6 | **123** |
+
+BEP intentionally has no Junior Management row in MC (per source). Bonus indicators sit inside their parent element and are capped at the element max.
+
+### API
+- `GET /api/construction/entity-types` — list of supported entities.
+- `GET /api/construction/template/:entityType` — full indicator matrix for an entity (used by the data-entry UI).
+- `POST /api/construction/evaluate` — body `{ entityType, indicators: { <inputKey>: value }, financials: { npat, leviableAmount, totalMeasuredProcurementSpend }, africanEapPercent? }` → returns the scorecard.
+
+Missing data is handled gracefully — indicators with no input or with missing dependent financials return `status: "missing_data"` with `missingFields` populated, never throw.
+
+### Frontend
+The sector dropdown (`apps/web/src/components/build/ClientInformationForm.tsx`) and the `/api/sectors/options` fallback both include `CONSTRUCTION` with `availableTypes: ['Contractor', 'BEP', 'QSE']`.
+
+### Caveats / TODOs in source
+- QSE skills second-tier indicator (`qse.skills.spend_black_secondary`) — the source docx target appears as 25%; verify against the gazetted scorecard before relying on it for production verification.
+- Construction-specific level thresholds were not in the supplied source documents; the engine returns total points only and lets the existing level threshold layer (or a Construction-specific extension) translate scores to a B-BBEE level.
+
 ## Enterprise Security (Apr 2026)
 The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 

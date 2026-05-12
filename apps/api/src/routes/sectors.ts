@@ -296,6 +296,24 @@ function getFallbackSectors() {
       type: 'Generic',
       totalPoints: 132,
     },
+    {
+      code: 'CONSTRUCTION',
+      name: 'Construction Sector Code (Contractor)',
+      type: 'Contractor',
+      totalPoints: 123,
+    },
+    {
+      code: 'CONSTRUCTION',
+      name: 'Construction Sector Code (Built Environment Professional)',
+      type: 'BEP',
+      totalPoints: 123,
+    },
+    {
+      code: 'CONSTRUCTION',
+      name: 'Construction Sector Code (QSE)',
+      type: 'QSE',
+      totalPoints: 110,
+    },
   ];
 }
 
@@ -305,6 +323,7 @@ function getFallbackSectorOptions() {
     { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
     { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
     { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
+    { value: 'CONSTRUCTION', label: 'Construction Sector Code', code: 'CONSTRUCTION', hasQSE: true, availableTypes: ['Contractor', 'BEP', 'QSE'] },
   ];
 }
 
