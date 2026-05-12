@@ -11,6 +11,7 @@ import { connectDB } from "./db.js";
 import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
 import { createLogger, requestContext } from "./src/logger.js";
+import { ensureSearchIndex } from "./src/services/mongoSearch.js";
 import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
@@ -96,6 +97,15 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
 
   logger.debug("Connecting to MongoDB...");
   await connectDB();
+
+  // Ensure MongoDB text search index exists for certificate search
+  try {
+    logger.debug("Ensuring MongoDB search indexes...");
+    await ensureSearchIndex();
+    logger.info("MongoDB search indexes ready");
+  } catch (err) {
+    logger.warn("Failed to ensure search indexes (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+  }
 
   logger.debug("Connecting to ArangoDB...");
   const arangoDB = await connectArango();

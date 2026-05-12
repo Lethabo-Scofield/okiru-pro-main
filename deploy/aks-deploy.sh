@@ -83,11 +83,11 @@ create_aks() {
     az aks create \
         --resource-group $RESOURCE_GROUP \
         --name $AKS_CLUSTER_NAME \
-        --node-count 2 \
-        --node-vm-size Standard_B2s \
+        --node-count 1 \
+        --node-vm-size Standard_B4ms_v2 \
         --enable-cluster-autoscaler \
-        --min-count 2 \
-        --max-count 4 \
+        --min-count 1 \
+        --max-count 2 \
         --enable-managed-identity \
         --attach-acr $ACR_NAME \
         --generate-ssh-keys \

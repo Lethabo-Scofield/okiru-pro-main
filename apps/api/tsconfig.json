@@ -9,19 +9,16 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "rootDir": ".",
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "@okiru/data-layer": ["../../packages/data-layer/src/index.ts"]
+    },
     "types": ["node"]
   },
   "include": [
-    "index.ts",
-    "db.ts",
-    "models.ts",
-    "routes.ts",
-    "schema.ts",
-    "storage.ts",
-    "pipeline/**/*.ts",
-    "arango/**/*.ts",
-    "src/**/*.ts"
+    "./**/*.ts",
+    "../../packages/data-layer/src/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "vite.ts"]
+  "exclude": ["node_modules", "dist", "vite.ts", "**/__tests__/**"]
 }

@@ -67,7 +67,17 @@ interface CalculateRequest {
   suppliers?: SupplierInput[];
   contributions?: ContributionInput[];
   trainingPrograms?: TrainingProgramInput[];
-  financials?: { revenue: number; npat: number; leviableAmount: number; tmps: number; headcount: number };
+  financials?: {
+    revenue: number;
+    npat: number;
+    leviableAmount: number;
+    tmps: number;
+    headcount: number;
+    companyValue?: number;
+    outstandingDebt?: number;
+    yearsHeld?: number;
+    totalRevenue?: number;
+  };
   npat?: number;
   tmps?: number;
   leviableAmount?: number;
@@ -425,7 +435,7 @@ router.post('/calculate-from-extraction', async (req, res) => {
         assessmentId,
         sectorCode,
         scorecardType,
-        triggeredBy: 'upload_extraction',
+        triggeredBy: 'extraction',
         totalPoints: result.totalPoints,
         maxPoints: result.maxPoints,
         overallPercentage: result.overallPercentage,
@@ -507,19 +517,22 @@ router.post('/assessments', async (req, res) => {
     if (clientInfo.companyName) {
       try {
         const { ClientModel } = await import('../../models.js');
-        const userId = (req.session as any)?.userId;
         const existing = clientId ? await ClientModel.findOne({ id: clientId }) : null;
         if (existing) {
           savedClient = existing;
         } else {
+          const orgId = (req.session as any)?.organizationId;
+          if (!orgId) {
+            throw new Error('organizationId required in session to create client');
+          }
           savedClient = await ClientModel.create({
+            organizationId: orgId,
             name: clientInfo.companyName,
-            industry: clientInfo.industry || sectorCode,
-            registrationNumber: clientInfo.registrationNumber || '',
-            annualTurnover: financials?.totalRevenue || 0,
-            bbeLevel: scorecardResult?.finalLevel || scorecardResult?.achievedLevel || 0,
-            status: 'complete',
-            createdByUserId: userId || null,
+            financialYear: clientInfo.financialYear || String(new Date().getFullYear()),
+            revenue: financials?.totalRevenue ?? financials?.revenue ?? 0,
+            npat: financials?.npat ?? 0,
+            leviableAmount: financials?.leviableAmount ?? 0,
+            industrySector: typeof clientInfo.industry === 'string' ? clientInfo.industry : sectorCode,
           });
         }
       } catch (clientErr) {

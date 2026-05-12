@@ -9,7 +9,7 @@
  * PillarPack that contains the CriterionEntity scorecard lines it feeds.
  */
 
-import { getSectorConfig, type SectorConfig } from '../sectorConfig.js';
+import { getSectorConfig, type SectorConfig, STANDARD_RECOGNITION_TABLE } from '../sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 import { createLogger } from '../../src/logger.js';
 
@@ -1829,7 +1829,7 @@ function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['ge
       pillarConfigs[key] = {
         maxPoints: spc.maxPoints,
         hasSubMinimum: spc.hasSubMinimum,
-        subMinimumPercent: spc.subMinimumThreshold ?? spc.subMinimumPercent ?? 0,
+        subMinimumPercent: spc.subMinimumThreshold,
       };
     }
   }
@@ -1859,6 +1859,9 @@ function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['ge
     industryNorms: (stored.industryNorms || []).map((ind: any) => ({
       industry: ind.industry, normPercent: ind.normPercent, quarterThresholdPercent: ind.quarterThresholdPercent,
     })),
+    recognitionTable: stored.recognitionTable?.length
+      ? (stored.recognitionTable as SectorConfig['recognitionTable'])
+      : STANDARD_RECOGNITION_TABLE,
   };
 }
 

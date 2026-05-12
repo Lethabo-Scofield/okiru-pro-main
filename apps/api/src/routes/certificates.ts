@@ -4,9 +4,14 @@ import multer from 'multer';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import { createLogger } from '../logger.js';
-import { searchCertificates, isAzureSearchConfigured, getSearchClient } from '../services/azureSearch.js';
+import {
+  searchCertificatesMongo,
+  hybridSearchCertificates,
+  ensureSearchIndex,
+  type SearchResult as MongoSearchResult,
+} from '../services/mongoSearch.js';
 import { requireAuth } from '../middleware/auth.js';
-import { processAllCertificates, processOneCertificate, getCertificateStats, extractDatesFromText } from '../services/certificateExtractor.js';
+import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
 import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
@@ -17,6 +22,12 @@ const logger = createLogger("Certificates");
 const router = Router();
 
 const CONTAINER_NAME = 'clients-certs';
+
+/** Express may surface path/query values as `string | string[]`; normalize to a single string. */
+function singleRouteParam(value: string | string[] | undefined): string {
+  if (value == null) return '';
+  return Array.isArray(value) ? String(value[0] ?? '') : String(value);
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -464,6 +475,17 @@ router.get('/list', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Search certificates using MongoDB full-text search (replaces Azure AI Search).
+ *
+ * Query params:
+ * - q: search query (required)
+ * - status: filter by status (valid|expiring|expired|unknown|all)
+ * - size: filter by company size (EME|QSE|Generic|Large)
+ * - verified: 'true' to show only verified certificates
+ * - limit: max results (default 50)
+ * - skip: pagination offset
+ */
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const q = (req.query.q as string || '').trim();
@@ -480,42 +502,61 @@ router.get('/search', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'q query parameter is required' });
     }
 
-    const all = await loadAllRows();
-    const filtered = applyFilters(all, { search: q });
+    // Parse filters
+    const filters = {
+      status: req.query.status as any,
+      companySize: req.query.size as string,
+      verifiedOnly: req.query.verified === 'true',
+    };
 
-    const results = filtered.map((r) => ({
+    // Parse pagination
+    const options = {
+      limit: Math.min(parseInt(req.query.limit as string) || 50, 100),
+      skip: parseInt(req.query.skip as string) || 0,
+      sortBy: (req.query.sort as 'relevance' | 'expiryDate' | 'companyName') || 'relevance',
+    };
+
+    // Use hybrid search: MongoDB $text + fuzzy fallback
+    const { results, total } = await hybridSearchCertificates(q, filters, options);
+
+    // Transform to API response format
+    const apiResults = results.map((r) => ({
+      id: r.id,
       file_name: r.fileName,
+      blob_name: r.blobName,
       company_name: r.companyName,
       vat_number: r.vatNumber,
       company_size: r.companySize,
       black_ownership: r.blackOwnership,
-      file_url: r.name,
-      snippet: r.vatNumber
-        ? `${r.companyName} · VAT ${r.vatNumber}`
-        : `${r.companyName}`,
+      black_women_ownership: r.blackWomenOwnership,
+      bbbee_level: r.bbbeeLevel,
+      expiry_date: r.expiryDate,
+      status: r.status,
+      verified: r.verified,
+      score: r.score,
+      snippet: r.snippet,
     }));
 
-    // Optional: enrich with Azure AI Search snippets if available
-    if (isAzureSearchConfigured()) {
-      try {
-        const aiResults = await searchCertificates(q);
-        const byUrl = new Map(results.map((r) => [r.file_url, r]));
-        for (const ai of aiResults) {
-          const existing = byUrl.get(ai.file_url);
-          if (existing) {
-            existing.snippet = ai.snippet || existing.snippet;
-          }
-        }
-      } catch (searchErr) {
-        logger.warn('Azure AI Search enrichment failed', { err: (searchErr as Error).message });
-      }
-    }
+    logger.info('Search completed', {
+      query: q,
+      results: apiResults.length,
+      total,
+      filters,
+    });
 
-    logger.info('Search completed', { query: q, count: results.length });
-    return res.json(results);
+    return res.json({
+      results: apiResults,
+      total,
+      query: q,
+      pagination: {
+        limit: options.limit,
+        skip: options.skip,
+        hasMore: total > options.skip + apiResults.length,
+      },
+    });
   } catch (err) {
     logger.error('Search failed', err as Error);
-    return res.status(500).json({ message: 'Search failed' });
+    return res.status(500).json({ message: 'Search failed', error: (err as Error).message });
   }
 });
 
@@ -650,62 +691,28 @@ function statusFromExpiry(expiry: Date | null): 'valid' | 'expiring' | 'expired'
 }
 
 function parseFromContent(content: string, fileName: string) {
-  const extracted = extractDatesFromText(content || '', fileName);
-
-  const ownershipPatterns: Array<{ key: 'blackOwnership' | 'blackWomenOwnership'; re: RegExp }> = [
-    { key: 'blackWomenOwnership', re: /black\s*women[^%]{0,40}?(\d{1,3}(?:[.,]\d+)?)\s*%/i },
-    { key: 'blackOwnership', re: /black\s*(?:economic\s*interest|ownership|shareholding)[^%]{0,40}?(\d{1,3}(?:[.,]\d+)?)\s*%/i },
-  ];
-  const ownership: Record<string, number | null> = { blackOwnership: null, blackWomenOwnership: null };
-  for (const p of ownershipPatterns) {
-    const m = p.re.exec(content || '');
-    if (m) {
-      const v = parseFloat(m[1].replace(',', '.'));
-      if (Number.isFinite(v) && v >= 0 && v <= 100) ownership[p.key] = v;
-    }
-  }
-
-  const scoreMatch = /(?:overall\s*score|total\s*score|bbbee\s*score|score\s*achieved)[:\s]*(\d{1,3}(?:[.,]\d+)?)/i.exec(content || '');
-  const score = scoreMatch ? parseFloat(scoreMatch[1].replace(',', '.')) : null;
-
-  const agencyMatch = /(?:verification\s*agency|verified\s*by|issued\s*by|verification\s*by)[:\s]+([A-Z][A-Za-z&.\- ]{2,80})/i.exec(content || '');
-  const agency = agencyMatch ? agencyMatch[1].replace(/\s{2,}/g, ' ').trim() : null;
-
-  const certNoMatch = /(?:certificate\s*(?:no|number|#)|cert\s*no)[:\s.#-]*([A-Z0-9][A-Z0-9\-_/]{3,30})/i.exec(content || '');
-  const certNumber = certNoMatch ? certNoMatch[1].toUpperCase().replace(/[_/]/g, '-') : null;
-
+  const e = extractCertificateData(content || '', fileName);
   return {
-    expiryDate: extracted.expiryDate,
-    issueDate: extracted.issueDate,
-    bbbeeLevel: extracted.bbbeeLevel,
-    supplierName: extracted.supplierName,
-    bbbeeScore: score && score >= 0 && score <= 130 ? score : null,
-    blackOwnership: ownership.blackOwnership,
-    blackWomenOwnership: ownership.blackWomenOwnership,
-    verificationAgency: agency,
-    certificateNumber: certNumber,
+    expiryDate: e.expiryDate,
+    issueDate: e.issueDate,
+    bbbeeLevel: e.bbbeeLevel,
+    supplierName: e.supplierName,
+    bbbeeScore: e.bbbeeScore,
+    blackOwnership: e.blackOwnership,
+    blackWomenOwnership: e.blackWomenOwnership,
+    verificationAgency: e.verificationAgency,
+    certificateNumber: e.certificateNumber,
   };
 }
 
 async function lookupSearchContent(blobName: string): Promise<string> {
-  if (!isAzureSearchConfigured()) return '';
-  const client = getSearchClient();
-  if (!client) return '';
+  if (!isMongoConnected()) return '';
   try {
-    const escaped = blobName.replace(/'/g, "''");
-    const results = await client.search('*', {
-      filter: `document_id eq '${escaped}'`,
-      top: 5,
-      includeTotalCount: false,
-    });
-    const chunks: string[] = [];
-    for await (const r of results.results) {
-      const c = (r.document as any)?.content;
-      if (c) chunks.push(String(c));
-    }
-    return chunks.join('\n').slice(0, 20000);
-  } catch (err: any) {
-    logger.warn('Azure Search lookup failed for blob', { blobName, error: err?.message });
+    const doc = await CertificateMetadataModel.findOne({ blobName }).lean();
+    const text = doc && 'extractedText' in doc ? (doc as { extractedText?: string }).extractedText : undefined;
+    return text ? String(text).slice(0, 20000) : '';
+  } catch (err: unknown) {
+    logger.warn('Mongo certificate text lookup failed for blob', { blobName, error: err instanceof Error ? err.message : String(err) });
     return '';
   }
 }
@@ -804,7 +811,7 @@ router.get('/seo/list', async (_req: Request, res: Response) => {
 });
 
 router.get('/by-slug/:slug', async (req: Request, res: Response) => {
-  const slug = (req.params.slug || '').toLowerCase();
+  const slug = singleRouteParam(req.params.slug).toLowerCase();
   if (!slug) return res.status(400).json({ message: 'slug required' });
 
   // Check local store first
@@ -1107,7 +1114,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
       }
     }
 
-    const results: Array<{ fileName: string; blobName: string; status: 'uploaded' | 'error'; error?: string }> = [];
+    const results: Array<{ fileName: string; blobName: string; status: 'uploaded' | 'error'; certificateId?: string | null; error?: string }> = [];
 
     // ----------------------------------------------------------------------
     // UPDATE PATH — replace the latest version on an existing certificate.
@@ -1262,9 +1269,10 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
           });
 
           // Persist metadata in Mongo when available, otherwise use local store as cache
+          let mongoCertId: string | null = null;
           if (isMongoConnected()) {
             try {
-              await CertificateMetadataModel.findOneAndUpdate(
+              const saved = await CertificateMetadataModel.findOneAndUpdate(
                 { blobName },
                 {
                   blobName,
@@ -1282,6 +1290,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
                 },
                 { upsert: true, new: true },
               );
+              mongoCertId = (saved as any)?.id ?? null;
             } catch (mongoErr) {
               logger.warn('Mongo upsert failed', { err: (mongoErr as Error).message });
             }
@@ -1302,7 +1311,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
             });
           }
 
-          results.push({ fileName: file.originalname, blobName, status: 'uploaded' });
+          results.push({ fileName: file.originalname, blobName, status: 'uploaded', certificateId: mongoCertId });
           logger.info('Certificate uploaded (Azure)', { fileName: file.originalname, blobName });
         } catch (uploadErr: any) {
           results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
@@ -1690,9 +1699,177 @@ router.post('/:id/unverify', requireAuth, async (req: Request, res: Response) =>
   return res.json(ok({ id, verified: false }));
 });
 
+// --- COMPANY: list own certificates ----------------------------------------
+router.get('/mine', requireAuth, async (req: Request, res: Response) => {
+  const sessionUserId = (req.session as any).userId as string;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const skip = Math.max(Number(req.query.skip) || 0, 0);
+  const status = String(req.query.status || '').trim() || null;
+
+  if (isMongoConnected()) {
+    try {
+      const filter: Record<string, unknown> = { uploadedByUserId: sessionUserId };
+      if (status) filter.status = status;
+      const [docs, total] = await Promise.all([
+        CertificateMetadataModel.find(filter, { extractedText: 0 })
+          .sort({ updatedAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        CertificateMetadataModel.countDocuments(filter),
+      ]);
+      return res.json(ok({
+        items: (docs as any[]).map((d) => ({
+          id: d.id,
+          blobName: d.blobName,
+          fileName: d.fileName,
+          supplierName: d.supplierName || null,
+          vatNumber: d.vatNumber || null,
+          companySize: d.companySize || null,
+          bbbeeLevel: d.bbbeeLevel ?? null,
+          bbbeeScore: d.bbbeeScore ?? null,
+          blackOwnership: d.blackOwnership ?? null,
+          blackWomenOwnership: d.blackWomenOwnership ?? null,
+          verificationAgency: d.verificationAgency || null,
+          certificateNumber: d.certificateNumber || null,
+          expiryDate: d.expiryDate ? new Date(d.expiryDate).toISOString().slice(0, 10) : null,
+          issueDate: d.issueDate ? new Date(d.issueDate).toISOString().slice(0, 10) : null,
+          status: d.status || 'unknown',
+          extractionStatus: d.extractionStatus || 'pending',
+          slug: d.slug || null,
+          verified: d.verified ?? false,
+          updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : null,
+        })),
+        total,
+        limit,
+        skip,
+      }));
+    } catch (err: any) {
+      logger.error('Failed to list own certificates', err);
+      return res.status(500).json(fail('Failed to list certificates', 'DB_ERROR'));
+    }
+  }
+
+  // Local fallback
+  let recs = certificateStore.list().filter((r) => r.uploadedByUserId === sessionUserId);
+  if (status) recs = recs.filter((r) => r.status === status);
+  const total = recs.length;
+  const sliced = recs.slice(skip, skip + limit).map((r) => ({
+    id: r.id,
+    blobName: r.blobName,
+    fileName: r.fileName,
+    supplierName: r.companyName,
+    vatNumber: r.vatNumber ?? null,
+    companySize: r.companySize ?? null,
+    bbbeeLevel: r.bbbeeLevel ?? null,
+    bbbeeScore: null,
+    blackOwnership: r.blackOwnership ?? null,
+    blackWomenOwnership: r.blackWomenOwnership ?? null,
+    verificationAgency: null,
+    certificateNumber: null,
+    expiryDate: r.expiryDate ?? null,
+    issueDate: null,
+    status: r.status,
+    extractionStatus: 'completed' as const,
+    slug: buildCertSlug(r.companyName, r.id),
+    verified: r.verified ?? false,
+    updatedAt: r.updatedAt ?? null,
+  }));
+  return res.json(ok({ items: sliced, total, limit, skip }));
+});
+
+// --- COMPANY / ADMIN: correct certificate metadata -------------------------
+router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+
+  const sessionUserId = (req.session as any).userId as string | undefined;
+  const sessionRole = (req.session as any).userData?.role as string | undefined;
+  const isAdmin = sessionRole === 'admin' || sessionRole === 'super_admin';
+
+  const PATCHABLE = [
+    'supplierName', 'vatNumber', 'companySize',
+    'blackOwnership', 'blackWomenOwnership',
+    'verificationAgency', 'certificateNumber',
+    'bbbeeLevel', 'bbbeeScore',
+    'issueDate', 'expiryDate',
+  ] as const;
+
+  const body = (req.body || {}) as Record<string, unknown>;
+  const updates: Record<string, unknown> = {};
+
+  for (const key of PATCHABLE) {
+    if (!(key in body)) continue;
+    const v = body[key];
+    if (key === 'issueDate' || key === 'expiryDate') {
+      if (v == null || v === '') { updates[key] = null; }
+      else { const d = new Date(String(v)); if (!isNaN(d.getTime())) updates[key] = d; }
+    } else if (['blackOwnership', 'blackWomenOwnership', 'bbbeeLevel', 'bbbeeScore'].includes(key)) {
+      if (v == null || v === '') { updates[key] = null; }
+      else { const n = Number(v); if (Number.isFinite(n) && n >= 0) updates[key] = n; }
+    } else {
+      updates[key] = (v == null || v === '') ? null : String(v).trim() || null;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json(fail('No valid patchable fields provided', 'INVALID_INPUT'));
+  }
+
+  if (isMongoConnected()) {
+    try {
+      const doc = await CertificateMetadataModel.findOne({ id }).lean() as any;
+      if (!doc) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+      if (!isAdmin && doc.uploadedByUserId !== sessionUserId) {
+        return res.status(403).json(fail('Not authorised to edit this certificate', 'FORBIDDEN'));
+      }
+      if ('vatNumber' in updates) {
+        updates['vatNumberNormalized'] = normalizeVat(updates['vatNumber'] as string | null);
+      }
+      if ('expiryDate' in updates) {
+        const exp = updates['expiryDate'] as Date | null;
+        if (!exp) { updates['status'] = 'unknown'; }
+        else {
+          const now = Date.now(), sixtyDays = now + 60 * 24 * 60 * 60 * 1000;
+          updates['status'] = exp.getTime() < now ? 'expired' : exp.getTime() <= sixtyDays ? 'expiring' : 'valid';
+        }
+      }
+      updates['updatedAt'] = new Date();
+      await CertificateMetadataModel.updateOne({ id }, { $set: updates });
+      invalidateListAndStatsCache();
+      logger.info('Certificate patched', { id, fields: Object.keys(updates) });
+      const returnedFields = Object.keys(updates).filter((k) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(k));
+      return res.json(ok({ id, updated: returnedFields }));
+    } catch (err: any) {
+      logger.error('Failed to patch certificate', err);
+      return res.status(500).json(fail('Failed to update certificate', 'DB_ERROR'));
+    }
+  }
+
+  // Local fallback
+  const rec = certificateStore.list().find((r) => r.id === id) ?? null;
+  if (!rec) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+  if (!isAdmin && rec.uploadedByUserId !== sessionUserId) {
+    return res.status(403).json(fail('Not authorised to edit this certificate', 'FORBIDDEN'));
+  }
+  const localPatch: Record<string, unknown> = {};
+  if ('supplierName' in updates) localPatch['companyName'] = updates['supplierName'];
+  if ('vatNumber' in updates) localPatch['vatNumber'] = updates['vatNumber'];
+  if ('companySize' in updates) localPatch['companySize'] = updates['companySize'];
+  if ('blackOwnership' in updates) localPatch['blackOwnership'] = updates['blackOwnership'];
+  if ('blackWomenOwnership' in updates) localPatch['blackWomenOwnership'] = updates['blackWomenOwnership'];
+  if ('expiryDate' in updates) {
+    const exp = updates['expiryDate'];
+    localPatch['expiryDate'] = exp instanceof Date ? exp.toISOString().slice(0, 10) : null;
+  }
+  certificateStore.patchRecord(id, localPatch as any);
+  invalidateListAndStatsCache();
+  return res.json(ok({ id, updated: Object.keys(localPatch) }));
+});
+
 router.get('/:userId', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = singleRouteParam(req.params.userId).trim();
     if (!userId || userId.trim() === '') {
       return res.status(400).json({ message: 'userId is required' });
     }

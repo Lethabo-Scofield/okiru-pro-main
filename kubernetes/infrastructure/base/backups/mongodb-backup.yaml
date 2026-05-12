@@ -104,9 +104,6 @@ spec:
                   set -e
                   echo "Starting Azure Blob Storage sync at $(date)"
 
-                  # Install necessary tools
-                  apk add --no-cache findutils coreutils
-
                   # Find the most recent backup directory
                   BACKUP_DIR=$(find /backup -type d -name "20*" | sort | tail -1)
 

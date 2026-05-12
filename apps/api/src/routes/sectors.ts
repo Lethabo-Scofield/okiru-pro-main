@@ -17,6 +17,11 @@ import { SectorRuleRepository } from '../../arango/repositories/sectorRuleReposi
 
 const router = Router();
 
+function routeParam(v: string | string[] | undefined): string {
+  if (v == null) return '';
+  return Array.isArray(v) ? String(v[0] ?? '') : String(v);
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/sectors - List all available sectors from ArangoDB
 // ---------------------------------------------------------------------------
@@ -162,7 +167,8 @@ router.get('/options', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
-    const { sectorCode, scorecardType } = req.params;
+    const sectorCode = routeParam(req.params.sectorCode);
+    const scorecardType = routeParam(req.params.scorecardType);
 
     if (!isArangoConnected()) {
       return res.status(503).json({
@@ -208,8 +214,8 @@ router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
   try {
-    const { sectorCode } = req.params;
-    const scorecardType = (req.query.type as string) || 'Generic';
+    const sectorCode = routeParam(req.params.sectorCode);
+    const scorecardType = routeParam(req.query.type as string | string[] | undefined) || 'Generic';
 
     const { buildManifest } = await import('../../pipeline/extraction/entityManifest.js');
     const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);

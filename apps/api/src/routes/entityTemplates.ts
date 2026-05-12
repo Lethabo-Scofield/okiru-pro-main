@@ -77,7 +77,7 @@ router.get('/', async (_req: Request, res: Response) => {
           name: c.name,
           target: c.target,
           maxPoints: c.maxPoints,
-          formula: c.formula,
+          formulaId: c.formulaId,
           inputEntities: c.inputEntities,
         })),
         entities: p.entities.map(e => ({

@@ -237,7 +237,7 @@ const FSC_LEVELS = [
 // Reference: B-BBEE Act, Schedule 4
 // ---------------------------------------------------------------------------
 
-const STANDARD_RECOGNITION_TABLE: RecognitionLevel[] = [
+export const STANDARD_RECOGNITION_TABLE: RecognitionLevel[] = [
   { beeLevel: 1, recognitionPercent: 135, multiplier: 1.35 },
   { beeLevel: 2, recognitionPercent: 125, multiplier: 1.25 },
   { beeLevel: 3, recognitionPercent: 110, multiplier: 1.10 },

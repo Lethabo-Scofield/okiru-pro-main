@@ -118,16 +118,16 @@ async function runTests() {
   });
 
   // Test 2: Max Points
-  await test('RCOGP Generic has 116 max points', () => {
-    const manifest = buildManifest('RCOGP', 'Generic');
-    const totalMax = manifest.pillarPacks.reduce((sum, p) => sum + p.maxPoints, 0);
+  await test('RCOGP Generic has 116 max points', async () => {
+    const manifest = await buildManifest('RCOGP', 'Generic');
+    const totalMax = manifest.pillarPacks.reduce((sum: number, p) => sum + p.maxPoints, 0);
     expect(totalMax).toBe(116);
   });
 
   // Test 3: Criteria Count
-  await test('RCOGP Generic has 33 criteria', () => {
-    const manifest = buildManifest('RCOGP', 'Generic');
-    const criteriaCount = manifest.pillarPacks.reduce((sum, p) => sum + p.criteria.length, 0);
+  await test('RCOGP Generic has 33 criteria', async () => {
+    const manifest = await buildManifest('RCOGP', 'Generic');
+    const criteriaCount = manifest.pillarPacks.reduce((sum: number, p) => sum + p.criteria.length, 0);
     expect(criteriaCount).toBe(33);
   });
 
@@ -160,9 +160,9 @@ async function runTests() {
   ];
 
   for (const sector of sectors) {
-    await test(`${sector.code} ${sector.type} has ${sector.maxPoints} max points`, () => {
-      const manifest = buildManifest(sector.code, sector.type);
-      const totalMax = manifest.pillarPacks.reduce((sum, p) => sum + p.maxPoints, 0);
+    await test(`${sector.code} ${sector.type} has ${sector.maxPoints} max points`, async () => {
+      const manifest = await buildManifest(sector.code, sector.type);
+      const totalMax = manifest.pillarPacks.reduce((sum: number, p) => sum + p.maxPoints, 0);
       expect(totalMax).toBe(sector.maxPoints);
     });
   }

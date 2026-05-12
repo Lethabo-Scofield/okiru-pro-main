@@ -14,6 +14,7 @@ import { aql } from 'arangojs';
 import { getArangoDB } from './connection.js';
 import { COLLECTIONS } from './collections.js';
 import { GraphRepository } from './repositories/graphRepository.js';
+import type { CellNode } from '../pipeline/formulaGraphBuilder.js';
 import type { EntityField } from '../pipeline/extraction/entityManifest.js';
 
 export interface CellMatch {
@@ -142,7 +143,7 @@ export async function buildEntityCellMapping(
 }
 
 interface MatchResult {
-  cell: { sheet: string; address: string; semanticTag: Record<string, unknown> };
+  cell: CellNode;
   sheet: string;
   address: string;
   confidence: number;
@@ -272,12 +273,13 @@ function fuzzyMatchScore(entity: EntityField, cellDescription: string): { score:
  */
 function findMatchingCells(
   entity: EntityField,
-  cells: Array<{ sheet: string; address: string; semanticTag: Record<string, unknown> }>,
+  cells: CellNode[],
 ): MatchResult[] {
   const matches: MatchResult[] = [];
 
   for (const cell of cells) {
-    const tag = cell.semanticTag;
+    if (!cell.semanticTag) continue;
+    const tag = cell.semanticTag as Record<string, unknown>;
     let confidence = 0;
     const reasons: string[] = [];
 

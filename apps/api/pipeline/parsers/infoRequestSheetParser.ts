@@ -32,7 +32,7 @@ export interface InfoRequestEntity {
 }
 
 export interface InfoRequestListItem {
-  [key: string]: string | number | null;
+  [key: string]: string | number | boolean | null;
 }
 
 export interface InfoRequestSheetData {
@@ -60,6 +60,8 @@ export interface ParsedInfoRequestSheet {
   ownership: {
     blackOwnershipPercentage?: number;
     blackWomenOwnershipPercentage?: number;
+    blackEconomicInterest?: number;
+    blackWomenEconomicInterest?: number;
     shareholders?: Array<{
       name: string;
       percentage: number;
@@ -651,7 +653,9 @@ function findField(row: InfoRequestListItem, possibleNames: string[]): string | 
     const keyLower = key.toLowerCase();
     for (const name of possibleNames) {
       if (keyLower.includes(name.toLowerCase())) {
-        return row[key];
+        const v = row[key];
+        if (typeof v === 'boolean') return v ? 1 : 0;
+        return v as string | number | null;
       }
     }
   }

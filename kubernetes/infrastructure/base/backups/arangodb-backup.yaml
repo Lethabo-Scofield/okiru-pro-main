@@ -107,8 +107,6 @@ spec:
                   set -e
                   echo "Starting Azure Blob Storage sync for ArangoDB at $(date)"
 
-                  apk add --no-cache findutils coreutils
-
                   BACKUP_DIR=$(find /backup -type d -name "20*" | sort | tail -1)
 
                   if [ -z "$BACKUP_DIR" ]; then

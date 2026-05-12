@@ -19,7 +19,6 @@
     "ingest:certificates": "tsx scripts/ingestCertificates.ts"
   },
   "dependencies": {
-    "@azure/search-documents": "^12.2.0",
     "@azure/storage-blob": "^12.31.0",
     "@okiru/data-layer": "workspace:*",
     "@okiru/types": "workspace:*",

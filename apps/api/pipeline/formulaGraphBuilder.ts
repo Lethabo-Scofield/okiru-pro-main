@@ -365,7 +365,7 @@ function tagCell(sheetName: string, cellAddress: string, value: unknown, neighbo
 
   // Tag numeric input cells in scorecard sheets even without explicit pillar
   if (isNumericInput && /score|element|indicator/i.test(sheetName)) {
-    return { role: 'input', description };
+    return { pillar: 'uncategorized', indicator: context.substring(0, 60).trim(), role: 'input', description };
   }
 
   return null;

@@ -10,7 +10,7 @@
  * edge-case handling mirrors the verified frontend calculators.
  */
 
-import type { SectorConfig } from '../sectorConfig.js';
+import type { SectorConfig, PillarConfig } from '../sectorConfig.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (from frontend shared.ts)

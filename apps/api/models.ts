@@ -265,9 +265,8 @@ const sessionBlobSchema = new Schema({
 
 sessionBlobSchema.index({ sessionId: 1, field: 1 }, { unique: true });
 
-sessionBlobSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
+sessionBlobSchema.pre('save', function() {
+  (this as mongoose.Document & { updatedAt?: Date }).updatedAt = new Date();
 });
 
 sessionBlobSchema.set("toJSON", {

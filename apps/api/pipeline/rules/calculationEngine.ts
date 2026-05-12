@@ -51,7 +51,7 @@ export type { TransportQseMeasuredElement } from './pillarCalculators.js';
 export interface EntityValue {
   entityId: string;
   value: number | string | boolean;
-  source: 'extraction' | 'manual' | 'default' | 'calculation';
+  source: 'extraction' | 'manual' | 'default' | 'calculation' | 'financials';
   confidence?: number;
 }
 
