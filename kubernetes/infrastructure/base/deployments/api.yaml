@@ -156,6 +156,24 @@ spec:
                   name: external-api-keys
                   key: AZURE_STORAGE_ACCOUNT_NAME
                   optional: true
+            - name: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
+                  optional: true
+            - name: AZURE_DOCUMENT_INTELLIGENCE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_DOCUMENT_INTELLIGENCE_KEY
+                  optional: true
+            - name: CHROMA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CHROMA_URL
+                  optional: true
             - name: NODE_OPTIONS
               value: "--max-old-space-size=1792"
           volumeMounts:

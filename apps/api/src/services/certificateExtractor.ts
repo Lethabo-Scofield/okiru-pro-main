@@ -9,6 +9,9 @@ import Tesseract from 'tesseract.js';
 import { CertificateMetadataModel } from '../../models.js';
 import { createLogger } from '../logger.js';
 import { normalizeVat } from './certificateStore.js';
+import { extractTextWithDocIntelligence, isDocumentIntelligenceConfigured } from './documentIntelligence.js';
+import { extractCertificateWithLLM } from './llmExtractor.js';
+import { indexCertificate, isChromaConfigured } from './chromaStore.js';
 
 const logger = createLogger('CertExtractor');
 const CONTAINER_NAME = 'clients-certs';
@@ -381,13 +384,27 @@ export async function processOneCertificate(
     const downloaded = await blobClient.downloadToBuffer();
 
     if (ext === 'pdf') {
-      text = await extractTextFromPdf(downloaded.buffer as ArrayBuffer);
+      if (isDocumentIntelligenceConfigured()) {
+        // Stage 1a: Azure Document Intelligence (prebuilt-read) — best OCR quality
+        text = await extractTextWithDocIntelligence(downloaded, fileName);
+      }
       if (!text.trim()) {
-        logger.info('PDF has no text layer, trying OCR', { fileName });
+        // Stage 1b: pdfjs selectable-text extraction
+        text = await extractTextFromPdf(downloaded.buffer as ArrayBuffer);
+      }
+      if (!text.trim()) {
+        // Stage 1c: Tesseract OCR fallback for fully scanned PDFs
+        logger.info('PDF has no text layer, trying Tesseract OCR', { fileName });
         text = await ocrPdf(downloaded, fileName);
       }
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
-      text = await ocrImage(downloaded);
+      if (isDocumentIntelligenceConfigured()) {
+        // Azure DI handles images too
+        text = await extractTextWithDocIntelligence(downloaded, fileName);
+      }
+      if (!text.trim()) {
+        text = await ocrImage(downloaded);
+      }
     }
   } catch (err: any) {
     logger.error('Failed to download/extract', { blobName, error: err.message });
@@ -399,7 +416,8 @@ export async function processOneCertificate(
     return { blobName, status: 'error', expiryDate: null };
   }
 
-  const extracted = extractCertificateData(text, fileName);
+  // Stage 2: LLM extraction (GPT-4o-mini) → regex fallback
+  const extracted = await extractCertificateWithLLM(text, fileName);
   const certStatus = computeStatus(extracted.expiryDate);
   const vatNumberNormalized = normalizeVat(extracted.vatNumber);
 
@@ -431,12 +449,24 @@ export async function processOneCertificate(
 
   logger.info('Processed certificate', {
     fileName,
-    expiryDate: extracted.expiryDate?.toISOString() || null,
+    expiryDate: extracted.expiryDate?.toISOString() ?? null,
     bbbeeLevel: extracted.bbbeeLevel,
     vatNumber: extracted.vatNumber,
     companySize: extracted.companySize,
     status: certStatus,
   });
+
+  // Stage 3: ChromaDB semantic index — fire-and-forget, never blocks the response
+  if (isChromaConfigured() && text.trim()) {
+    void indexCertificate(blobName, text, {
+      supplierName: extracted.supplierName ?? '',
+      vatNumber: extracted.vatNumber ?? '',
+      bbbeeLevel: extracted.bbbeeLevel ?? '',
+      companySize: extracted.companySize ?? '',
+      status: certStatus,
+      expiryDate: extracted.expiryDate?.toISOString() ?? '',
+    });
+  }
 
   return { blobName, status: certStatus, expiryDate: extracted.expiryDate };
 }

@@ -2,6 +2,9 @@
  * MongoDB Search Service — Replaces Azure AI Search
  *
  * Uses MongoDB $text search with BM25-like ranking via textScore.
+ * When ChromaDB is available, hybridSearchCertificates merges MongoDB BM25 results
+ * with ChromaDB semantic-similarity results using Reciprocal Rank Fusion (RRF).
+ *
  * Supports:
  * - Full-text search across company name, VAT number, filename, extracted text
  * - Filter by status, company size, B-BBEE level
@@ -12,6 +15,8 @@
 import type { PipelineStage } from 'mongoose';
 import { CertificateMetadataModel } from '../../models.js';
 import { createLogger } from '../logger.js';
+import { searchSimilar, isChromaConfigured } from './chromaStore.js';
+import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 
 const logger = createLogger('MongoSearch');
 
@@ -288,38 +293,105 @@ export async function fuzzySearchCertificates(
 }
 
 /**
- * Hybrid search: Try $text search first, fall back to fuzzy if needed.
- * This provides the best of both worlds: speed + accuracy.
+ * Hybrid search combining three ranked lists via Reciprocal Rank Fusion (RRF):
+ *   1. MongoDB $text search (BM25-weighted textScore)
+ *   2. In-memory BM25 re-score of the MongoDB candidates on their extractedText
+ *   3. ChromaDB semantic similarity search (when CHROMA_URL is configured)
+ *
+ * Falls back gracefully: if ChromaDB is unavailable the function returns the
+ * MongoDB $text results (with optional fuzzy supplement), just like before.
  */
 export async function hybridSearchCertificates(
   query: string,
   filters?: SearchFilters,
   options?: { limit?: number; skip?: number }
 ): Promise<{ results: SearchResult[]; total: number }> {
-  // First try text search
-  const textResult = await searchCertificatesMongo(query, filters, options);
+  const limit = options?.limit ?? 50;
+  const skip = options?.skip ?? 0;
 
-  // If text search returns few results, supplement with fuzzy search
-  if (textResult.results.length < 5 && query.length > 2) {
-    const fuzzyResult = await fuzzySearchCertificates(query, filters, {
-      ...options,
-      limit: (options?.limit || 50) - textResult.results.length,
-    });
+  // --- List 1: MongoDB $text (BM25-weighted) --------------------------------
+  const textResult = await searchCertificatesMongo(query, filters, { ...options, limit: limit * 2 });
 
-    // Merge results, avoiding duplicates
-    const seen = new Set(textResult.results.map((r) => r.id));
-    const merged = [
-      ...textResult.results,
-      ...fuzzyResult.results.filter((r) => !seen.has(r.id)),
-    ];
-
-    return {
-      results: merged,
-      total: textResult.total + fuzzyResult.total,
-    };
+  // Supplement with fuzzy when $text returns few results
+  let mongoResults = textResult.results;
+  if (mongoResults.length < 5 && query.length > 2) {
+    const fuzzy = await fuzzySearchCertificates(query, filters, { limit: limit * 2 });
+    const seen = new Set(mongoResults.map((r) => r.id));
+    mongoResults = [...mongoResults, ...fuzzy.results.filter((r) => !seen.has(r.id))];
   }
 
-  return textResult;
+  // --- List 2: BM25 re-rank of the MongoDB candidates -----------------------
+  const bm25 = new BM25Index();
+  for (const r of mongoResults) {
+    if (r.extractedText) bm25.addPage(r.id, r.extractedText);
+  }
+  bm25.build();
+  const bm25Ranked = bm25.search(query, limit * 2).map((sr) => sr.pageId);
+
+  // --- List 3: ChromaDB semantic similarity (optional) ----------------------
+  const chromaIds = isChromaConfigured() ? await searchSimilar(query, limit * 2) : [];
+
+  // --- RRF merge ------------------------------------------------------------
+  const ranked = reciprocalRankFusion(
+    [mongoResults.map((r) => r.id), bm25Ranked, chromaIds],
+    60,
+  );
+
+  // Sort all known results by fused RRF score, then paginate
+  const idToResult = new Map(mongoResults.map((r) => [r.id, r]));
+  const merged = [...ranked.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => idToResult.get(id))
+    .filter((r): r is SearchResult => r !== undefined);
+
+  return {
+    results: merged.slice(skip, skip + limit),
+    total: textResult.total,
+  };
+}
+
+/**
+ * Compute a BM25 score for a single document against a query.
+ * Useful for reranking a small candidate set without building a full BM25Index.
+ * k1 = 1.5, b = 0.75, avgDocLen = 500 words (tuned for B-BBEE certificate snippets).
+ */
+export function bm25Score(
+  extractedText: string | null,
+  queryTerms: string[],
+  avgDocLen = 500,
+): number {
+  if (!extractedText || queryTerms.length === 0) return 0;
+
+  const k1 = 1.5;
+  const b = 0.75;
+  const words = extractedText.toLowerCase().split(/\W+/);
+  const docLen = words.length;
+  const tf = new Map<string, number>();
+  for (const w of words) tf.set(w, (tf.get(w) ?? 0) + 1);
+
+  let score = 0;
+  for (const term of queryTerms) {
+    const termFreq = tf.get(term.toLowerCase()) ?? 0;
+    if (termFreq === 0) continue;
+    score += (termFreq * (k1 + 1)) / (termFreq + k1 * (1 - b + (b * docLen) / avgDocLen));
+  }
+  return score;
+}
+
+/**
+ * Reciprocal Rank Fusion.
+ * Given N ranked lists of IDs, returns a Map<id, fusedScore> where
+ *   fusedScore = Σ  1 / (k + rank)   for each list that contains the ID.
+ * k = 60 is the standard RRF parameter.
+ */
+function reciprocalRankFusion(lists: string[][], k = 60): Map<string, number> {
+  const scores = new Map<string, number>();
+  for (const list of lists) {
+    list.forEach((id, zeroBasedRank) => {
+      scores.set(id, (scores.get(id) ?? 0) + 1 / (k + zeroBasedRank + 1));
+    });
+  }
+  return scores;
 }
 
 /**

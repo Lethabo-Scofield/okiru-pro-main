@@ -2769,7 +2769,7 @@ export default function DocumentProcessor() {
     } as any;
     if (populatingClientIdRef.current) {
       await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult, pillarData: sessionPillarData });
-      navigate(`/toolkit/${populatingClientIdRef.current}/scorecard`);
+      navigate('/toolkit/scorecard');
     } else {
       await persistSession('scorecard', { results: extractionResults, complete: true, scorecardResult, pillarData: sessionPillarData });
       setCurrentPage('scorecard');
@@ -5367,11 +5367,12 @@ export default function DocumentProcessor() {
                               const storeClientId = storeState.activeClientId;
                               const isSyntheticId = storeClientId?.startsWith('build-') || storeClientId?.startsWith('session-');
                               if (storeClientId && !isSyntheticId) {
-                                navigate(`/toolkit/${storeClientId}/scorecard`);
+                                localStorage.setItem('okiru-pro-active-client', storeClientId);
+                                navigate('/toolkit/scorecard');
                               } else if (storeState.isLoaded && storeClientId) {
-                                navigate(`/toolkit/${storeClientId}/scorecard`);
+                                navigate('/toolkit/scorecard');
                               } else if (sessionId) {
-                                navigate(`/toolkit/session?session=${sessionId}`);
+                                navigate(`/toolkit?session=${sessionId}`);
                               } else {
                                 navigate('/toolkit');
                               }
@@ -5388,14 +5389,14 @@ export default function DocumentProcessor() {
                             onClick={() => {
                               if (toolkitClientId) {
                                 localStorage.setItem(getActiveClientStorageKey(user?.id), toolkitClientId);
-                                navigate(`/toolkit/${toolkitClientId}/scorecard`);
+                                navigate('/toolkit/scorecard');
                               } else {
                                 // Prefer Zustand's activeClientId (upload-*) which already has hydrated data
                                 const storeId = useBbeeStore.getState().activeClientId;
                                 if (storeId && useBbeeStore.getState().isLoaded) {
-                                  navigate(`/toolkit/session?session=${sessionId || storeId}`);
+                                  navigate('/toolkit/scorecard');
                                 } else if (sessionId) {
-                                  navigate(`/toolkit/session?session=${sessionId}`);
+                                  navigate(`/toolkit?session=${sessionId}`);
                                 } else {
                                   setCurrentPage('summary');
                                 }

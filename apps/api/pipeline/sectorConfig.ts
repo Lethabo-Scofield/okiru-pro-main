@@ -213,10 +213,10 @@ const TRANSPORT_LARGE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognit
   recognition,
 }));
 
-// Transport Sector QSE — cap 107 (legacy pick-four methodology not modeled; weights proportional to sheet2)
+// Transport Sector QSE — 4 × 25-point pillars = 100 total (docs/Transport Codes.xlsx sheet2)
 const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognition }) => ({
   level,
-  minPoints: Math.round((minPoints * 107) / 120 * 100) / 100,
+  minPoints: Math.round((minPoints * 100) / 120 * 100) / 100,
   recognition,
 }));
 
@@ -869,25 +869,26 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // Transport Sector — QSE (docs/Transport Codes.xlsx sheet2)
-// Seven element totals (28+27+27+25+25+25+25 = 182); entities measure exactly FOUR elements per code — max points depend on which four (default quartet below = 107).
-// Pass transportQseMeasuredElements (length 4) into calculateAllPillars to override the default measured set.
+// Entities measure exactly FOUR elements. The four equal-weight elements (each 25 pts)
+// are Skills Development, Preferential Procurement, Enterprise Development and SED = 100 total.
+// Ownership / MC / EE and YES are not measured in this scorecard type.
 // ---------------------------------------------------------------------------
 
 export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
   sectorName: 'Transport Sector Code (QSE)',
   scorecardType: 'QSE',
-  totalMaxPoints: 107,
+  totalMaxPoints: 100, // 4 × 25 (Skills + PP + ED + SED); ownership/MC/EE not measured
   pillarConfigs: {
-    ownership: { maxPoints: 28, hasSubMinimum: false, subMinimumPercent: 0 },
-    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },          // Not measured (QSE pick-4)
+    managementControl: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },   // Not measured
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },    // Not measured
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
     preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not applicable
     enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },       // Not applicable for Transport
   },
   targets: {
     ownership: {
@@ -943,7 +944,7 @@ export const TRANSPORT_QSE: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// Default measured four (Ownership + MC + EE + Skills) = 28+27+27+25 = 107. Other valid combinations use lower totals (e.g. four × 25 = 100).
+// Verified: 4 equal-weight pillars × 25 = 100 (Skills + PP + ED + SED). Ownership/MC/EE/YES not measured.
 
 // ---------------------------------------------------------------------------
 // Lookup

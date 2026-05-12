@@ -879,14 +879,17 @@ export default function Dashboard() {
                                   </div>
                                   {c.isComplete ? (
                                     c.toolkitClientId ? (
-                                      <Link
-                                        href={`/toolkit/${c.toolkitClientId}`}
+                                      <button
+                                        onClick={() => {
+                                          localStorage.setItem('okiru-pro-active-client', c.toolkitClientId!);
+                                          navigate('/toolkit/scorecard');
+                                        }}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
                                         data-testid={`button-toolkit-${c.id}`}
                                       >
                                         <ExternalLink className="h-3 w-3" />
                                         View in Toolkit
-                                      </Link>
+                                      </button>
                                     ) : (
                                       <Link
                                         href={`/toolkit?session=${c.sessionId}`}
