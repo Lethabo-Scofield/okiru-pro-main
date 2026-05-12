@@ -200,10 +200,17 @@ async function seedSector(
     // Get sector config and manifest
     const config = getSectorConfig(sectorCode, scorecardType);
     let manifest: EntityManifest | null = null;
-    try {
-      manifest = await buildManifest(sectorCode, scorecardType);
-    } catch {
-      // Manifest build failed — continue with sector rule only
+    // Construction uses its own indicator-matrix engine (constructionScoring.ts)
+    // and does NOT use the legacy criteria/entityField extraction layer. Skip
+    // manifest building so we don't write meaningless zero-target criteria
+    // rows derived from the stubbed legacy targets.
+    const isConstruction = sectorCode.toUpperCase() === 'CONSTRUCTION';
+    if (!isConstruction) {
+      try {
+        manifest = await buildManifest(sectorCode, scorecardType);
+      } catch {
+        // Manifest build failed — continue with sector rule only
+      }
     }
 
     // Get all manifests for pillar config building

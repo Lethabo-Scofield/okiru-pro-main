@@ -146,6 +146,19 @@ Missing data is handled gracefully — indicators with no input or with missing 
 ### Frontend
 The sector dropdown (`apps/web/src/components/build/ClientInformationForm.tsx`) and the `/api/sectors/options` fallback both include `CONSTRUCTION` with `availableTypes: ['Contractor', 'BEP', 'QSE']`.
 
+### ArangoDB Sector Registry Integration
+Construction is a first-class member of the ArangoDB-backed sector registry, alongside RCOGP, ICT, FSC and AGRI.
+
+- **Single source of truth** — three Construction `SectorConfig` entries (`CONSTRUCTION_QSE`, `CONSTRUCTION_CONTRACTOR`, `CONSTRUCTION_BEP`) live in `apps/api/pipeline/sectorConfig.ts` and are registered in `ALL_CONFIGS`. Both the Arango seed (`seedOntology`) and the `/api/sectors` fallback derive from the same `listSectorConfigs()` registry, so there is no duplicate registration between paths.
+- **What gets stored in Arango** — for each Construction entity type, `sector_rules` gets a row with the correct element weights (Ownership/MC/Skills/SED, plus Construction's combined ESD mapped into the seed's `enterpriseSupplierDevelopment` slot via `supplierDevelopment.maxPoints`). The legacy `targets` shape (votingRightsTarget etc.) is stubbed with zeros — Construction does NOT use it.
+- **Scoring source of truth stays unchanged** — `/api/construction/evaluate` continues to use the indicator-matrix engine (`constructionScoring.ts`). The Arango entry is purely for sector discovery (dropdowns, listings, pillar weights). `buildManifest` will be skipped silently for Construction (the seed wraps it in try/catch).
+- **Auto-seeding** — `GET /api/sectors` auto-seeds when the `sector_rules` collection is empty. To force a re-seed (e.g. after editing weights), run from `apps/api`:
+  ```bash
+  pnpm exec tsx pipeline/seedOntology.ts --force
+  ```
+- **Migration on existing deployments** — for environments seeded before May 2026, the new Construction rows must be added. Either drop the collection and let auto-seed repopulate, or run `seedOntology({ force: true })` to upsert all sectors including the three new Construction entries.
+- **Frontend resolution** — `apps/web/src/components/build/ClientInformationForm.tsx` reads `/api/sectors/options`, which now serves Construction with `availableTypes: ['QSE', 'Contractor', 'BEP']` directly from the registry. The hardcoded fallback in the component is retained only as a safety net for when the API itself is unreachable.
+
 ### Caveats / TODOs in source
 - QSE skills second-tier indicator (`qse.skills.spend_black_secondary`) — the source docx target appears as 25%; verify against the gazetted scorecard before relying on it for production verification.
 - Construction-specific level thresholds were not in the supplied source documents; the engine returns total points only and lets the existing level threshold layer (or a Construction-specific extension) translate scores to a B-BBEE level.

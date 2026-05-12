@@ -257,74 +257,46 @@ router.post('/seed', async (_req: Request, res: Response) => {
 // Fallback helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Fallback helpers — derived from `sectorConfig.ts` (single source of truth).
+//
+// Both the ArangoDB-backed code paths above and these fallbacks read from the
+// same `listSectorConfigs()` registry, which guarantees no duplicate or
+// drifting sector entries between the two paths. Adding a new sector to
+// `ALL_CONFIGS` in sectorConfig.ts automatically surfaces it here too.
+// ---------------------------------------------------------------------------
+
 function getFallbackSectors() {
-  // Based on hardcoded sectorConfig.ts
-  return [
-    {
-      code: 'RCOGP',
-      name: 'Revised Codes of Good Practice (RCOGP)',
-      type: 'Generic',
-      totalPoints: 120,
-    },
-    {
-      code: 'RCOGP',
-      name: 'Revised Codes (QSE)',
-      type: 'QSE',
-      totalPoints: 108,
-    },
-    {
-      code: 'ICT',
-      name: 'ICT Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 140,
-    },
-    {
-      code: 'ICT',
-      name: 'ICT Sector Code (QSE)',
-      type: 'QSE',
-      totalPoints: 116,
-    },
-    {
-      code: 'FSC',
-      name: 'Financial Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 120,
-    },
-    {
-      code: 'AGRI',
-      name: 'AgriBEE Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 132,
-    },
-    {
-      code: 'CONSTRUCTION',
-      name: 'Construction Sector Code (Contractor)',
-      type: 'Contractor',
-      totalPoints: 123,
-    },
-    {
-      code: 'CONSTRUCTION',
-      name: 'Construction Sector Code (Built Environment Professional)',
-      type: 'BEP',
-      totalPoints: 123,
-    },
-    {
-      code: 'CONSTRUCTION',
-      name: 'Construction Sector Code (QSE)',
-      type: 'QSE',
-      totalPoints: 110,
-    },
-  ];
+  return listSectorConfigs().map(c => ({
+    code: c.code,
+    name: c.name,
+    type: c.type,
+    totalPoints: c.totalPoints,
+  }));
 }
 
 function getFallbackSectorOptions() {
-  return [
-    { value: 'RCOGP', label: 'Revised Codes of Good Practice (RCOGP)', code: 'RCOGP', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
-    { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
-    { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
-    { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
-    { value: 'CONSTRUCTION', label: 'Construction Sector Code', code: 'CONSTRUCTION', hasQSE: true, availableTypes: ['Contractor', 'BEP', 'QSE'] },
-  ];
+  // Group registry rows by sectorCode → dropdown option with availableTypes.
+  const grouped = new Map<string, { code: string; name: string; types: string[] }>();
+  for (const c of listSectorConfigs()) {
+    const existing = grouped.get(c.code);
+    if (existing) {
+      existing.types.push(c.type);
+    } else {
+      // Strip parenthesised scorecard type from the display name for the
+      // grouped dropdown label (e.g. "Construction Sector Code (QSE)" →
+      // "Construction Sector Code").
+      const baseName = c.name.replace(/\s*\([^)]*\)\s*$/, '');
+      grouped.set(c.code, { code: c.code, name: baseName, types: [c.type] });
+    }
+  }
+  return Array.from(grouped.values()).map(g => ({
+    value: g.code,
+    label: g.name,
+    code: g.code,
+    hasQSE: g.types.includes('QSE'),
+    availableTypes: g.types,
+  }));
 }
 
 export default router;

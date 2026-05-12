@@ -106,7 +106,7 @@ export interface PillarPack {
 export interface RootContext {
   sector: string;
   sectorCodeVersion: string;
-  scorecardType: 'Generic' | 'QSE' | 'EME';
+  scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
   companySize: 'EME' | 'QSE' | 'Generic';
   financialYearEnd?: string;
   verificationDate?: string;
@@ -1843,7 +1843,7 @@ function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['ge
   return {
     sectorCode: stored.sectorCode,
     sectorName: stored.sectorName,
-    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
+    scorecardType: stored.scorecardType,
     totalMaxPoints,
     pillarConfigs,
     targets: (stored.targets as SectorConfig['targets']) || {},
@@ -1895,7 +1895,10 @@ export async function buildManifest(sectorCode: string, scorecardType: string): 
     sector: upper,
     sectorCodeVersion: 'v1',
     scorecardType: cfg.scorecardType,
-    companySize: cfg.scorecardType,
+    // RootContext.companySize is typed narrowly (EME|QSE|Generic). Map
+    // sector-specific scorecard types (Contractor, BEP) to Generic for the
+    // purposes of size-tier checks.
+    companySize: (cfg.scorecardType === 'QSE' || cfg.scorecardType === 'EME') ? cfg.scorecardType : 'Generic',
   };
 
   const isQSE = cfg.scorecardType === 'QSE';

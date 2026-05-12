@@ -141,7 +141,7 @@ export interface SedTargets {
 export interface SectorConfig {
   sectorCode: string;
   sectorName: string;
-  scorecardType: 'Generic' | 'QSE' | 'EME';
+  scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
   totalMaxPoints: number; // Total points including YES if applicable
   pillarConfigs: {
     ownership: PillarConfig;
@@ -766,11 +766,160 @@ export const ICT_QSE: SectorConfig = {
 // ICT QSE uses same ICT level scale as ICT Generic
 
 // ---------------------------------------------------------------------------
+// Construction Sector configs (May 2026)
+//
+// Construction uses an indicator-level scoring engine — see
+// `pipeline/constructionIndicators.ts` and `pipeline/constructionScoring.ts`.
+// The legacy SectorConfig.targets shape (votingRightsTarget, boardBlackTarget,
+// etc.) does NOT apply to Construction. We therefore stub `targets` with the
+// required nested shape but zero values, and rely on the dedicated
+// `/api/construction/evaluate` endpoint for actual scoring.
+//
+// What this entry IS used for: ArangoDB sector_rules row, sector discovery
+// (/api/sectors, /api/sectors/options), the dropdown in the frontend, and the
+// element-level pillar weights (so the dashboard can render the correct pillar
+// caps per entity type).
+//
+// What this entry is NOT used for: indicator-level scoring (handled by the
+// construction engine, which reads its own indicator matrix directly).
+// ---------------------------------------------------------------------------
+
+const ZERO_OWNERSHIP_TARGETS: OwnershipTargets = {
+  votingRightsTarget: 0, votingRightsMaxPts: 0,
+  womenVotingTarget: 0, womenVotingMaxPts: 0,
+  economicInterestTarget: 0, economicInterestMaxPts: 0,
+  womenEITarget: 0, womenEIMaxPts: 0,
+  netValueMaxPts: 0, newEntrantsMaxPts: 0,
+};
+const ZERO_MC_TARGETS: MCTargets = {
+  boardBlackTarget: 0, boardBlackMaxPts: 0,
+  boardBWTarget: 0, boardBWMaxPts: 0,
+  execBlackTarget: 0, execBlackMaxPts: 0,
+  execBWTarget: 0, execBWMaxPts: 0,
+  otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+  otherExecBWTarget: 0, otherExecBWMaxPts: 0,
+  seniorMaxPts: 0, seniorBWMaxPts: 0,
+  middleMaxPts: 0, middleBWMaxPts: 0,
+  juniorMaxPts: 0, juniorBWMaxPts: 0,
+};
+const ZERO_EE_TARGETS: EETargets = {
+  seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+  disabledMaxPts: 0, disabledTarget: 0,
+};
+const ZERO_SKILLS_TARGETS: SkillsTargets = {
+  learningProgrammesMaxPts: 0, bursaryMaxPts: 0, disabledLearningMaxPts: 0,
+  learnershipsMaxPts: 0, absorptionMaxPts: 0,
+  overallSpendPercent: 0, bursarySpendPercent: 0, disabledSpendPercent: 0,
+  learnershipTargetPercent: 0, absorptionTargetPercent: 0,
+};
+const ZERO_PROC_TARGETS: ProcurementTargets = {
+  allSuppliersTarget: 0, allSuppliersMaxPts: 0,
+  qseTarget: 0, qseMaxPts: 0, emeTarget: 0, emeMaxPts: 0,
+  bo51Target: 0, bo51MaxPts: 0, bwo30Target: 0, bwo30MaxPts: 0,
+  dgTarget: 0, dgMaxPts: 0,
+};
+const ZERO_ESD_TARGETS: EsdTargets = {
+  sdPercent: 0, sdMaxPts: 0, edPercent: 0, edMaxPts: 0,
+  edGraduationBonus: 0, edJobsBonus: 0,
+};
+
+// TODO(verify): Construction-specific level thresholds were not present in the
+// supplied source documents (Construction QSE Scorecard + Construction Sector
+// Codes docx). Using STANDARD_LEVELS as a placeholder; the Construction engine
+// returns total points and lets the caller translate to a B-BBEE level.
+const CONSTRUCTION_LEVELS_PLACEHOLDER = STANDARD_LEVELS;
+
+export const CONSTRUCTION_QSE: SectorConfig = {
+  sectorCode: 'CONSTRUCTION',
+  sectorName: 'Construction Sector Code (QSE)',
+  scorecardType: 'QSE',
+  totalMaxPoints: 110, // 30 + 20 + 26 + 29 + 5
+  pillarConfigs: {
+    ownership: { maxPoints: 30, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 26, hasSubMinimum: false, subMinimumPercent: 0 },
+    preferentialProcurement: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 29, hasSubMinimum: false, subMinimumPercent: 0 }, // Construction ESD (combined)
+    enterpriseDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: ZERO_OWNERSHIP_TARGETS, managementControl: ZERO_MC_TARGETS,
+    employmentEquity: ZERO_EE_TARGETS, skills: ZERO_SKILLS_TARGETS,
+    procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
+    sed: { spendPercent: 0, maxPts: 5 },
+  },
+  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+
+export const CONSTRUCTION_CONTRACTOR: SectorConfig = {
+  sectorCode: 'CONSTRUCTION',
+  sectorName: 'Construction Sector Code (Contractor)',
+  scorecardType: 'Contractor',
+  totalMaxPoints: 123, // 31 + 22 + 26 + 38 + 6
+  pillarConfigs: {
+    ownership: { maxPoints: 31, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 26, hasSubMinimum: false, subMinimumPercent: 0 },
+    preferentialProcurement: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 38, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 6, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: ZERO_OWNERSHIP_TARGETS, managementControl: ZERO_MC_TARGETS,
+    employmentEquity: ZERO_EE_TARGETS, skills: ZERO_SKILLS_TARGETS,
+    procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
+    sed: { spendPercent: 0, maxPts: 6 },
+  },
+  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+
+export const CONSTRUCTION_BEP: SectorConfig = {
+  sectorCode: 'CONSTRUCTION',
+  sectorName: 'Construction Sector Code (Built Environment Professional)',
+  scorecardType: 'BEP',
+  totalMaxPoints: 123, // 31 + 22 + 34 + 30 + 6
+  pillarConfigs: {
+    ownership: { maxPoints: 31, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 34, hasSubMinimum: false, subMinimumPercent: 0 },
+    preferentialProcurement: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    supplierDevelopment: { maxPoints: 30, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 6, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: ZERO_OWNERSHIP_TARGETS, managementControl: ZERO_MC_TARGETS,
+    employmentEquity: ZERO_EE_TARGETS, skills: ZERO_SKILLS_TARGETS,
+    procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
+    sed: { spendPercent: 0, maxPts: 6 },
+  },
+  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+
+// ---------------------------------------------------------------------------
 // Lookup
 // ---------------------------------------------------------------------------
 
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, AGRI_GENERIC, RCOGP_QSE, ICT_QSE,
+  CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
 ];
 
 export function getSectorConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
@@ -800,11 +949,21 @@ export function detectSectorFromName(nameOrSector: string): SectorConfig {
   if (hasICT) return ICT_GENERIC;
   if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return FSC_GENERIC;
   if (/agri|agriculture|farming|agribee/i.test(lower)) return AGRI_GENERIC;
+  if (/construction|contractor|built\s*environment|builder/i.test(lower)) {
+    if (/bep|built\s*environment\s*professional/i.test(lower)) return CONSTRUCTION_BEP;
+    if (hasQSE) return CONSTRUCTION_QSE;
+    return CONSTRUCTION_CONTRACTOR;
+  }
   if (hasQSE) return RCOGP_QSE;
   logger.warn('No sector match — defaulting to RCOGP Generic', { input: nameOrSector });
   return RCOGP_GENERIC;
 }
 
-export function listSectorConfigs(): Array<{ code: string; name: string; type: string }> {
-  return ALL_CONFIGS.map(c => ({ code: c.sectorCode, name: c.sectorName, type: c.scorecardType }));
+export function listSectorConfigs(): Array<{ code: string; name: string; type: string; totalPoints: number }> {
+  return ALL_CONFIGS.map(c => ({
+    code: c.sectorCode,
+    name: c.sectorName,
+    type: c.scorecardType,
+    totalPoints: c.totalMaxPoints,
+  }));
 }
