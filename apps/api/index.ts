@@ -58,9 +58,9 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parser - increased for large session payloads with full entity arrays
-app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
-app.use(express.urlencoded({ extended: false, limit: "50mb" }));
+// Body parser - limit matches nginx proxy-body-size (100m) to prevent 413 errors
+app.use(express.json({ limit: "100mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.urlencoded({ extended: false, limit: "100mb" }));
 
 
 // Request context + logging middleware

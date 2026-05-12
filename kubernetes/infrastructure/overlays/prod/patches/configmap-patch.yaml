@@ -6,11 +6,11 @@ data:
   LOG_LEVEL: "warn"
   RATE_LIMIT_WINDOW_MS: "900000"
   RATE_LIMIT_MAX_REQUESTS: "200"
-  CORS_ORIGIN: "https://okiru.20.164.101.114.nip.io"
-  API_URL: "https://okiru.20.164.101.114.nip.io"
-  NEXT_PUBLIC_API_URL: "https://okiru.20.164.101.114.nip.io"
+  CORS_ORIGIN: "https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io"
+  API_URL: "https://okiru.pro"
+  NEXT_PUBLIC_API_URL: "https://okiru.pro"
   API_SERVER_URL: "http://api:5000"
-  APP_BASE_URL: "https://okiru.20.164.101.114.nip.io"
+  APP_BASE_URL: "https://okiru.pro"
 ---
 apiVersion: v1
 kind: ConfigMap
