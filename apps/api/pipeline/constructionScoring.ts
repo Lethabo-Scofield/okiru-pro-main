@@ -12,6 +12,44 @@
  *   - Bonus indicators contribute to their parent element total but the element
  *     total is capped at the element's max points.
  *   - Existing sector pipelines are untouched.
+ *
+ * --------------------------------------------------------------------------
+ * Developer quick-reference
+ * --------------------------------------------------------------------------
+ * Supported entityType values (POST /api/construction/evaluate):
+ *   - "construction_qse"         (110 pts: O30 / MC20 / S26 / ESD29 / SED5)
+ *   - "construction_contractor"  (123 pts: O31 / MC22 / S26 / ESD38 / SED6)
+ *   - "construction_bep"         (123 pts: O31 / MC22 / S34 / ESD30 / SED6)
+ *
+ * Calculation kinds (handled in scoreIndicator() switch below):
+ *   - percentage              — actual % vs target %, prorated up to weight
+ *   - percentage_of_npat      — actual ZAR ÷ npat × 100, vs target %
+ *   - percentage_of_leviable  — actual ZAR ÷ leviableAmount × 100
+ *   - percentage_of_tmps      — actual ZAR ÷ totalMeasuredProcurementSpend × 100
+ *   - bonus_threshold         — full weight if actual ≥ target, else 0
+ *   - evidence                — full weight if true, else 0
+ *   - net_value               — weight × realisation factor (0–1)
+ *   - eap_percentage          — actual % vs (africanEapPercent × target)
+ *
+ * Required input field naming convention (request body):
+ *   - indicators: { <inputKey>: number | boolean } using the camelCase keys
+ *     declared in `constructionIndicators.ts` (e.g. votingRightsBlackPercent,
+ *     skillsSpendBlackOverall, mentorshipProgrammeImplemented).
+ *   - financials: { npat?, leviableAmount?, totalMeasuredProcurementSpend? }
+ *     in ZAR. Optional individually — the engine downgrades only the
+ *     indicators that depend on the missing field.
+ *   - africanEapPercent: number — Stats SA EAP %, optional (only used by
+ *     `eap_percentage` indicators; defaults to a sane fallback when absent).
+ *
+ * Missing-data return contract:
+ *   - If the indicator's `inputKey` is absent → status: "missing_data",
+ *     achievedPoints: 0, actual: null, missingFields: [<inputKey>].
+ *   - If a required financial is absent → status: "missing_data",
+ *     missingFields: ["financials.npat"] (or .leviableAmount / .tmps).
+ *   - The scorecard's top-level `missingFieldSummary` aggregates the unique
+ *     missing fields across every indicator so the UI can list them once.
+ *   - Engine never throws on missing data; only `validateConstructionPayload`
+ *     returns shape errors (rejects the request with HTTP 400).
  */
 
 import {
