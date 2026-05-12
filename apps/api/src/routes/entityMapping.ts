@@ -26,6 +26,11 @@ import { COLLECTIONS } from '../../arango/collections.js';
 
 const router = Router();
 
+function routeParam(v: string | string[] | undefined): string {
+  if (v == null) return '';
+  return Array.isArray(v) ? String(v[0] ?? '') : String(v);
+}
+
 /**
  * Find the latest formula graph for a sector code and scorecard type
  */
@@ -51,7 +56,8 @@ async function findGraphForSector(sectorCode: string, scorecardType: string): Pr
  */
 router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
-    const { sectorCode, scorecardType } = req.params;
+    const sectorCode = routeParam(req.params.sectorCode);
+    const scorecardType = routeParam(req.params.scorecardType);
     let { graphKey } = req.body;
 
     // Auto-lookup graph key if not provided
@@ -164,7 +170,8 @@ router.post('/build-all', async (_req: Request, res: Response) => {
  */
 router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
-    const { sectorCode, scorecardType } = req.params;
+    const sectorCode = routeParam(req.params.sectorCode);
+    const scorecardType = routeParam(req.params.scorecardType);
 
     const mapping = await getEntityCellMapping(
       sectorCode.toUpperCase(),
@@ -250,7 +257,8 @@ router.post('/apply', async (req: Request, res: Response) => {
  */
 router.get('/:sectorCode/:scorecardType/unmapped', async (req: Request, res: Response) => {
   try {
-    const { sectorCode, scorecardType } = req.params;
+    const sectorCode = routeParam(req.params.sectorCode);
+    const scorecardType = routeParam(req.params.scorecardType);
 
     const mapping = await getEntityCellMapping(
       sectorCode.toUpperCase(),

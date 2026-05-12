@@ -63,19 +63,20 @@ vi.mock('../../services/certificateExtractor.js', () => ({
   getCertificateStats: vi.fn(async () => ({
     total: 0, valid: 0, expiring: 0, expired: 0, unknown: 0,
   })),
-  extractDatesFromText: vi.fn(() => ({ issueDate: null, expiryDate: null })),
+  extractCertificateData: vi.fn(() => ({
+    issueDate: null,
+    expiryDate: null,
+    bbbeeLevel: null,
+    supplierName: null,
+    vatNumber: null,
+    companySize: null,
+    blackOwnership: null,
+    blackWomenOwnership: null,
+    verificationAgency: null,
+    certificateNumber: null,
+    bbbeeScore: null,
+  })),
 }));
-
-vi.mock('../../services/azureSearch.js', () => ({
-  searchCertificates: vi.fn(async () => []),
-  isAzureSearchConfigured: () => false,
-  getSearchClient: () => null,
-  getSearchIndexClient: () => null,
-  ensureIndex: vi.fn(async () => {}),
-  uploadDocuments: vi.fn(async () => {}),
-}));
-
-// ---- Test harness ----------------------------------------------------------
 
 let server: http.Server;
 let port: number;

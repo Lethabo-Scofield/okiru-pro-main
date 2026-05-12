@@ -222,6 +222,17 @@ class CertificateStore {
     this.persist();
   }
 
+  patchRecord(id: string, fields: Partial<CertificateRecord>): CertificateRecord | null {
+    this.load();
+    const rec = this.records.get(id);
+    if (!rec) return null;
+    Object.assign(rec, fields, { updatedAt: new Date().toISOString() });
+    if ('expiryDate' in fields) rec.status = statusFromExpiry(rec.expiryDate);
+    this.records.set(id, rec);
+    this.persist();
+    return rec;
+  }
+
   // ---- Reports ----------------------------------------------------------
 
   addReport(input: Omit<CertificateReportRecord, 'id' | 'createdAt' | 'status' | 'reviewedBy' | 'reviewedAt' | 'reviewNotes'>): CertificateReportRecord {

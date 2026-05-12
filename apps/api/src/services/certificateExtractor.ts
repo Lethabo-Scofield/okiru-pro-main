@@ -8,6 +8,7 @@ import { tmpdir } from 'os';
 import Tesseract from 'tesseract.js';
 import { CertificateMetadataModel } from '../../models.js';
 import { createLogger } from '../logger.js';
+import { normalizeVat } from './certificateStore.js';
 
 const logger = createLogger('CertExtractor');
 const CONTAINER_NAME = 'clients-certs';
@@ -54,18 +55,91 @@ function parseDate(dateStr: string): Date | null {
   return null;
 }
 
-interface ExtractedDates {
+export interface ExtractedCertificateData {
   expiryDate: Date | null;
   issueDate: Date | null;
   bbbeeLevel: number | null;
   supplierName: string | null;
+  vatNumber: string | null;
+  companySize: string | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  verificationAgency: string | null;
+  certificateNumber: string | null;
+  bbbeeScore: number | null;
 }
 
-export function extractDatesFromText(text: string, fileName: string): ExtractedDates {
-  const result: ExtractedDates = { expiryDate: null, issueDate: null, bbbeeLevel: null, supplierName: null };
-  if (!text) return result;
+/** @deprecated Prefer extractCertificateData — kept for call sites that only need date/level/name fields. */
+export type ExtractedDates = Pick<
+  ExtractedCertificateData,
+  'expiryDate' | 'issueDate' | 'bbbeeLevel' | 'supplierName'
+>;
 
-  const normalised = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+function extractCompanySizeFromFileName(fileName: string): string | null {
+  const base = fileName.replace(/\.[^/.]+$/, '');
+  const m = /\s*-\s*(EME|QSE|Generic(?:\s+Enterprise)?|Large(?:\s+Enterprise)?)\s*$/i.exec(base);
+  if (!m) return null;
+  const raw = m[1].replace(/\s+/g, ' ').trim();
+  const u = raw.toUpperCase();
+  if (u === 'EME') return 'EME';
+  if (u === 'QSE') return 'QSE';
+  if (/^GENERIC/i.test(raw)) return 'Generic Enterprise';
+  if (/^LARGE/i.test(raw)) return 'Large Enterprise';
+  return raw;
+}
+
+function extractCompanySizeFromText(normalised: string): string | null {
+  if (/\bLarge\s+Enterprise\b/i.test(normalised)) return 'Large Enterprise';
+  if (/\bGeneric\s+Enterprise\b/i.test(normalised)) return 'Generic Enterprise';
+  if (/\bQualifying\s+Small(?:\s+Enterprise)?\b/i.test(normalised) || /(?:^|[^\w])QSE(?:[^\w]|$)/i.test(normalised)) {
+    return 'QSE';
+  }
+  if (/\bExempt\s+Micro(?:\s+Enterprise)?\b/i.test(normalised) || /(?:^|[^\w])EME(?:[^\w]|$)/i.test(normalised)) {
+    return 'EME';
+  }
+
+  const entLine = /enterprise\s*classification[:\s]+([^\n]{3,80})/i.exec(normalised);
+  if (entLine) {
+    const fragment = entLine[1];
+    if (/\bEME\b/i.test(fragment)) return 'EME';
+    if (/\bQSE\b/i.test(fragment)) return 'QSE';
+    if (/Generic/i.test(fragment)) return 'Generic Enterprise';
+    if (/Large/i.test(fragment)) return 'Large Enterprise';
+  }
+  return null;
+}
+
+function parsePercentGroup(m: RegExpExecArray | null): number | null {
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(',', '.'));
+  if (!Number.isFinite(v) || v < 0 || v > 100) return null;
+  return v;
+}
+
+function trimAgencyLabel(raw: string): string {
+  return raw
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[.,;:]+$/g, '')
+    .trim()
+    .slice(0, 120);
+}
+
+export function extractCertificateData(text: string, fileName: string): ExtractedCertificateData {
+  const result: ExtractedCertificateData = {
+    expiryDate: null,
+    issueDate: null,
+    bbbeeLevel: null,
+    supplierName: null,
+    vatNumber: null,
+    companySize: null,
+    blackOwnership: null,
+    blackWomenOwnership: null,
+    verificationAgency: null,
+    certificateNumber: null,
+    bbbeeScore: null,
+  };
+
+  const normalised = (text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   const expiryPatterns = [
     /(?:expir(?:y|es|ation)\s*(?:date)?|valid\s*(?:until|to|through|till)|date\s*of\s*expir(?:y|ation)|certificate\s*expires?|validity\s*(?:period\s*)?(?:ends?|to|until)|end\s*date|not\s*valid\s*after)[:\s]*([^\n]{6,40})/gi,
@@ -123,16 +197,96 @@ export function extractDatesFromText(text: string, fileName: string): ExtractedD
 
   const levelMatch = /(?:b-?bbee|bee|broad.?based)\s*(?:status\s*)?level\s*[:\s]*(\d)/i.exec(normalised);
   if (levelMatch) {
-    const level = parseInt(levelMatch[1]);
+    const level = parseInt(levelMatch[1], 10);
     if (level >= 1 && level <= 8) result.bbbeeLevel = level;
   }
 
-  const nameFromFile = fileName.replace(/^\d{4}\s+\d{2}\s+\d{1,2}\s+/, '').replace(/\s*-\s*(EME|QSE|Generic|Large).*$/i, '').trim();
-  if (nameFromFile && nameFromFile !== fileName) {
-    result.supplierName = nameFromFile;
+  const shortName = fileName.includes('/') ? fileName.split('/').pop()! : fileName;
+  const nameFromFile = shortName
+    .replace(/^\d{4}\s+\d{2}\s+\d{1,2}\s+/, '')
+    .replace(/\s*-\s*(EME|QSE|Generic|Large).*$/i, '')
+    .trim();
+  if (nameFromFile && nameFromFile !== shortName) {
+    result.supplierName = nameFromFile.replace(/\.[^/.]+$/, '');
+  }
+
+  result.companySize = extractCompanySizeFromText(normalised) || extractCompanySizeFromFileName(shortName);
+
+  const vatMatch =
+    /(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(\d{4}\s*\d{3}\s*\d{3}|\d{10})/i.exec(
+      normalised,
+    ) || /\b(?:vat|tin)\s*[#:]?\s*(\d{4}\s*\d{3}\s*\d{3}|\d{10})\b/i.exec(normalised);
+  if (vatMatch) {
+    const digits = vatMatch[1].replace(/\D/g, '');
+    if (digits.length >= 9 && digits.length <= 12) {
+      result.vatNumber = digits;
+    }
+  }
+
+  const womenPct =
+    parsePercentGroup(/black\s*wom(?:en|an)[^\d%]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i.exec(normalised)) ??
+    parsePercentGroup(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*black\s*wom(?:en|an)/i.exec(normalised));
+  if (womenPct !== null) result.blackWomenOwnership = womenPct;
+
+  const blackPct =
+    parsePercentGroup(
+      /black\s*(?:economic\s*interest|ownership|shareholding)[^\d%]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i.exec(
+        normalised,
+      ),
+    ) ??
+    parsePercentGroup(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*black\s*own(?:ed|ership)?/i.exec(normalised)) ??
+    parsePercentGroup(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*b(?:l)?ack\s*owned\b/i.exec(normalised));
+  if (blackPct !== null) result.blackOwnership = blackPct;
+
+  const scoreMatch = /(?:overall\s*score|total\s*score|bbbee\s*score|score\s*achieved)[:\s]*(\d{1,3}(?:[.,]\d+)?)/i.exec(
+    normalised,
+  );
+  if (scoreMatch) {
+    const score = parseFloat(scoreMatch[1].replace(',', '.'));
+    if (Number.isFinite(score) && score >= 0 && score <= 130) result.bbbeeScore = score;
+  }
+
+  let agency: string | null = null;
+  const agencyMatch1 =
+    /(?:verification\s*agency|verified\s*by|issued\s*by|verification\s*by)[:\s]+([A-Za-z0-9][A-Za-z0-9&.,'\- ]{2,80})/i.exec(
+      normalised,
+    );
+  if (agencyMatch1) agency = trimAgencyLabel(agencyMatch1[1]);
+
+  if (!agency) {
+    const named = /\b((?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*){1,4}\s+(?:Verification|Analytics|Consulting|Services)(?:\s+(?:\(Pty\)|Pty|Ltd|Limited|Inc)\.?)?)\b/.exec(
+      normalised,
+    );
+    if (named) agency = trimAgencyLabel(named[1]);
+  }
+  if (!agency) {
+    const sanas2 = /\bSANAS\b[^\n]{0,100}?\b([A-Za-z][A-Za-z&.\- ]{3,60}(?:accredited|verification|agency))\b/i.exec(
+      normalised,
+    );
+    if (sanas2) agency = trimAgencyLabel(sanas2[1]);
+  }
+  result.verificationAgency = agency;
+
+  const certSlash = /(?:certificate\s*(?:no|number|#)|cert\s*no)[:\s.#-]*(\d{4}\/\d{2,8})/i.exec(normalised);
+  const certWide =
+    /(?:certificate\s*(?:no|number|#)|cert\s*no)[:\s.#-]*([A-Z0-9][A-Z0-9\-_/]{3,30})/i.exec(normalised);
+  const rawCert = certSlash?.[1] || certWide?.[1] || null;
+  if (rawCert) {
+    result.certificateNumber = rawCert.toUpperCase().replace(/_/g, '-');
   }
 
   return result;
+}
+
+/** Backward-compatible subset used by older imports and tests. */
+export function extractDatesFromText(text: string, fileName: string): ExtractedDates {
+  const e = extractCertificateData(text, fileName);
+  return {
+    expiryDate: e.expiryDate,
+    issueDate: e.issueDate,
+    bbbeeLevel: e.bbbeeLevel,
+    supplierName: e.supplierName,
+  };
 }
 
 async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
@@ -245,8 +399,9 @@ export async function processOneCertificate(
     return { blobName, status: 'error', expiryDate: null };
   }
 
-  const extracted = extractDatesFromText(text, fileName);
+  const extracted = extractCertificateData(text, fileName);
   const certStatus = computeStatus(extracted.expiryDate);
+  const vatNumberNormalized = normalizeVat(extracted.vatNumber);
 
   await CertificateMetadataModel.findOneAndUpdate(
     { blobName },
@@ -256,9 +411,17 @@ export async function processOneCertificate(
       expiryDate: extracted.expiryDate,
       issueDate: extracted.issueDate,
       supplierName: extracted.supplierName,
+      vatNumber: extracted.vatNumber,
+      vatNumberNormalized,
+      companySize: extracted.companySize,
       bbbeeLevel: extracted.bbbeeLevel,
+      bbbeeScore: extracted.bbbeeScore,
+      blackOwnership: extracted.blackOwnership,
+      blackWomenOwnership: extracted.blackWomenOwnership,
+      verificationAgency: extracted.verificationAgency,
+      certificateNumber: extracted.certificateNumber,
       status: certStatus,
-      extractedText: text.substring(0, 2000),
+      extractedText: text.substring(0, 4000),
       extractionStatus: 'completed',
       extractionError: null,
       processedAt: new Date(),
@@ -270,6 +433,8 @@ export async function processOneCertificate(
     fileName,
     expiryDate: extracted.expiryDate?.toISOString() || null,
     bbbeeLevel: extracted.bbbeeLevel,
+    vatNumber: extracted.vatNumber,
+    companySize: extracted.companySize,
     status: certStatus,
   });
 

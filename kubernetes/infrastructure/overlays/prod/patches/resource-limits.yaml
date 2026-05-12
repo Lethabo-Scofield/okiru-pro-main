@@ -1,3 +1,6 @@
+# Resource limits for single Standard_B4ms_v2 node (4 vCPU, 16 GB RAM).
+# Total requests intentionally well under 14 GB usable so there is headroom
+# for the OS, kubelet, and certificate-extraction burst workloads.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,11 +12,11 @@ spec:
         - name: api
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "400Mi"
+              cpu: "200m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "1536Mi"
+              cpu: "1000m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -26,10 +29,10 @@ spec:
         - name: web
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "300Mi"
+              cpu: "150m"
             limits:
-              memory: "512Mi"
+              memory: "768Mi"
               cpu: "500m"
 ---
 apiVersion: apps/v1
@@ -43,11 +46,11 @@ spec:
         - name: compute
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "300Mi"
+              cpu: "200m"
             limits:
-              memory: "1Gi"
-              cpu: "1000m"
+              memory: "2Gi"
+              cpu: "1500m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -60,11 +63,11 @@ spec:
         - name: mongodb
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "512Mi"
+              cpu: "200m"
             limits:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "3Gi"
+              cpu: "1000m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -77,8 +80,8 @@ spec:
         - name: arangodb
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "384Mi"
+              cpu: "150m"
             limits:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "1536Mi"
+              cpu: "800m"

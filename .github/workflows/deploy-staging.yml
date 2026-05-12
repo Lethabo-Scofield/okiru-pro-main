@@ -188,9 +188,6 @@ jobs:
             --from-literal=SMTP_FROM="${{ secrets.STAGING_SMTP_FROM }}" \
             --from-literal=AZURE_STORAGE_CONNECTION_STRING="${{ secrets.STAGING_AZURE_STORAGE_CONNECTION_STRING }}" \
             --from-literal=AZURE_STORAGE_ACCOUNT_NAME="${{ secrets.STAGING_AZURE_STORAGE_ACCOUNT_NAME }}" \
-            --from-literal=AZURE_SEARCH_ENDPOINT="${{ secrets.STAGING_AZURE_SEARCH_ENDPOINT }}" \
-            --from-literal=AZURE_SEARCH_API_KEY="${{ secrets.STAGING_AZURE_SEARCH_API_KEY }}" \
-            --from-literal=AZURE_SEARCH_INDEX_NAME="${{ secrets.STAGING_AZURE_SEARCH_INDEX_NAME }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Label secrets for management tracking

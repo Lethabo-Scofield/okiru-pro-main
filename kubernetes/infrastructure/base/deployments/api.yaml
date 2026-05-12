@@ -149,6 +149,8 @@ spec:
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp
+            - name: uploads-vol
+              mountPath: /app/apps/api/uploads
           resources:
             requests:
               memory: "512Mi"
@@ -197,3 +199,6 @@ spec:
         - name: tmp-vol
           emptyDir:
             sizeLimit: 200Mi
+        - name: uploads-vol
+          emptyDir:
+            sizeLimit: 500Mi

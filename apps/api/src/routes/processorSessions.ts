@@ -5,6 +5,11 @@ import { ProcessorSessionModel, SessionBlobModel } from '../../models.js';
 
 const logger = createLogger("ProcessorSessions");
 
+function routeParam(v: string | string[] | undefined): string {
+  if (v == null) return '';
+  return Array.isArray(v) ? String(v[0] ?? '') : String(v);
+}
+
 /**
  * Strip file content/buffers from filesData to prevent bloating sessions.
  * Only metadata (name, size, type, id, status) is kept.
@@ -170,7 +175,7 @@ export function createProcessorSessionsRouter(): Router {
     }
 
     try {
-      const { sessionId } = req.params;
+      const sessionId = routeParam(req.params.sessionId);
       const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean();
 
       if (!doc) {
@@ -289,7 +294,7 @@ export function createProcessorSessionsRouter(): Router {
     }
 
     try {
-      const { sessionId } = req.params;
+      const sessionId = routeParam(req.params.sessionId);
       const allowedSmallFields = ['currentStep', 'isComplete', 'toolkitClientId', 'flowMode'];
       const blobFields = ['scorecardResult', 'foundationData', 'pillarData', 'extractionResults'];
       const patch: any = { updatedAt: new Date() };
@@ -354,7 +359,7 @@ export function createProcessorSessionsRouter(): Router {
     }
 
     try {
-      const { sessionId } = req.params;
+      const sessionId = routeParam(req.params.sessionId);
       
       // Delete main doc and blobs in parallel
       const [result] = await Promise.all([

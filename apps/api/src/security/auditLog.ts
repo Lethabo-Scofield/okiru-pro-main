@@ -67,14 +67,18 @@ function blockMutation(this: { getQuery?: () => unknown }, next: (err?: Error) =
   next(err);
 }
 
-auditLogSchema.pre("updateOne", blockMutation);
-auditLogSchema.pre("updateMany", blockMutation);
-auditLogSchema.pre("findOneAndUpdate", blockMutation);
-auditLogSchema.pre("replaceOne", blockMutation);
-auditLogSchema.pre("deleteOne", blockMutation);
-auditLogSchema.pre("deleteMany", blockMutation);
-auditLogSchema.pre("findOneAndDelete", blockMutation);
-auditLogSchema.pre("findOneAndRemove" as "findOneAndDelete", blockMutation);
+for (const method of [
+  'updateOne',
+  'updateMany',
+  'findOneAndUpdate',
+  'replaceOne',
+  'deleteOne',
+  'deleteMany',
+  'findOneAndDelete',
+  'findOneAndRemove',
+] as const) {
+  (auditLogSchema as mongoose.Schema).pre(method as any, blockMutation);
+}
 
 export const AuditLogModel =
   mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema);

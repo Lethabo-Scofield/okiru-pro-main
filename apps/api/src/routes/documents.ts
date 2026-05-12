@@ -217,11 +217,11 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       documentId: doc._id,
       chunkIndex: index,
       text: chunk.text,
-      pageNumber: chunk.metadata?.pageNumber || null,
-      sheetName: chunk.metadata?.sheetName || null,
-      sectionPath: chunk.metadata?.sectionPath || '',
-      chunkType: chunk.metadata?.chunkType || 'text',
-      metadata: chunk.metadata || {},
+      pageNumber: chunk.pageId ? (Number.parseInt(String(chunk.pageId), 10) || null) : null,
+      sheetName: null,
+      sectionPath: Array.isArray(chunk.sectionPath) ? chunk.sectionPath.join(' > ') : '',
+      chunkType: chunk.locationType || 'text',
+      metadata: { ...chunk.metadata, pageId: chunk.pageId, sectionPath: chunk.sectionPath, locationType: chunk.locationType },
       tokenCount: chunk.text.length / 4, // Rough approximation
     }));
 

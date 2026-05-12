@@ -89,7 +89,7 @@ function formatExtractedValue(
   return String(value);
 }
 
-import { DocumentChunker, type TextChunk } from '../../pipeline/extraction/documentChunker.js';
+import { DocumentChunker } from '../../pipeline/extraction/documentChunker.js';
 import { BM25Index } from '../../pipeline/extraction/bm25Index.js';
 import { EntityIndex } from '../../pipeline/extraction/entityIndex.js';
 import { HybridRetriever } from '../../pipeline/extraction/hybridRetriever.js';
@@ -123,6 +123,14 @@ import {
   type VisionExtractionResult,
   type VisionTableResult,
 } from '../../pipeline/extraction/visionPdfExtractor.js';
+
+/** Chunk shape used by hybrid extraction (DB-derived or DocumentChunker). */
+type HybridTextChunk = {
+  chunkId: string;
+  pageId: string;
+  text: string;
+  metadata?: Record<string, unknown>;
+};
 
 const router = Router();
 
@@ -666,7 +674,7 @@ router.post(
         });
       }
 
-      let chunks: TextChunk[] = [];
+      let chunks: HybridTextChunk[] = [];
       let sourceDocumentId: string = '';
       let parsedPages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
@@ -688,7 +696,7 @@ router.post(
           return res.status(400).json({ error: 'Document has no chunks. Please upload the file again.' });
         }
 
-        // Convert DB chunks to TextChunk format
+        // Convert DB chunks to HybridTextChunk format
         chunks = dbChunks.map((dbChunk, index) => ({
           chunkId: `chunk_${doc._id}_${index}`,
           pageId: dbChunk.pageNumber ? `page_${dbChunk.pageNumber}` : `chunk_${index}`,
@@ -725,7 +733,7 @@ router.post(
         const chunkStart = Date.now();
         const chunker = new DocumentChunker();
         sourceDocumentId = `doc_${Date.now()}`;
-        chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), sourceDocumentId);
+        chunks = chunker.chunkPages(pages.map(p => ({ pageId: p.pageId, text: p.text })), sourceDocumentId) as HybridTextChunk[];
         chunkTime = Date.now() - chunkStart;
         logger.info('Chunks created', { chunkCount: chunks.length, durationMs: chunkTime });
 
@@ -802,11 +810,13 @@ router.post(
       // Natural language chunks are indexed and searched for all entity types
       const extractStart = Date.now();
       const llmExtractor = new LLMExtractor();
-      const provenanceTracker = new ProvenanceTracker();
+      const provenanceTracker = new ProvenanceTracker(
+        file?.originalname ?? (documentId ? String(documentId) : 'hybrid-extraction'),
+      );
       const extractionResults: ExtractionResult[] = [];
 
       // Build chunk lookup map for O(1) access instead of O(n) find()
-      const chunkMap = new Map<string, TextChunk>();
+      const chunkMap = new Map<string, HybridTextChunk>();
       for (const chunk of chunks) {
         chunkMap.set(chunk.chunkId, chunk);
         chunkMap.set(chunk.pageId, chunk);
@@ -832,9 +842,9 @@ router.post(
 
       // ── Zone-boosted retrieval helper ──
       // Checks if a chunk's pageId or sheet metadata matches any of the entity's zones
-      function chunkMatchesZone(chunk: TextChunk, zones: string[]): boolean {
+      function chunkMatchesZone(chunk: HybridTextChunk, zones: string[]): boolean {
         if (zones.length === 0) return true;
-        const id = (chunk.metadata?.sheetName || chunk.pageId || '').toLowerCase();
+        const id = String(chunk.metadata?.sheetName ?? chunk.pageId ?? '').toLowerCase();
         return zones.some(z => id.includes(z.toLowerCase()));
       }
 
@@ -905,7 +915,7 @@ router.post(
               }
 
               const topResult = retrievalResults[0];
-              const contextChunks: TextChunk[] = [];
+              const contextChunks: HybridTextChunk[] = [];
               for (let ci = 0; ci < Math.min(TOP_K_CONTEXT, retrievalResults.length); ci++) {
                 const chunk = chunkMap.get(retrievalResults[ci].pageId);
                 if (chunk) contextChunks.push(chunk);
@@ -1105,7 +1115,7 @@ router.post(
 
       if (sheetChunks.size > 0) {
         const { tables: aiTables, classifications } = await smartExtractTables(sheetChunks);
-        extractedTables = aiTables;
+        extractedTables = aiTables as ExtractedTables;
 
         logger.info('AI sheet classification complete', {
           sheetCount: classifications.length,
