@@ -5,7 +5,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
-import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
+import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, sendWorkspaceInviteEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel, OrganizationModel, UserModel } from "../shared/schema";
 import type { WorkspaceRole } from "../shared/schema";
 import { randomUUID } from "crypto";
@@ -892,7 +892,20 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You cannot view invites for this team." });
       }
       const invites = await storage.listInvites(workspaceId);
-      return res.json({ invites });
+      // Strip tokens from the listing — only the email recipient should ever see the raw token.
+      const safe = invites.map((inv) => ({
+        id: inv.id,
+        workspaceId: inv.workspaceId,
+        email: inv.email,
+        role: inv.role,
+        invitedByUserId: inv.invitedByUserId,
+        expiresAt: inv.expiresAt,
+        acceptedAt: inv.acceptedAt,
+        revokedAt: inv.revokedAt,
+        createdAt: inv.createdAt,
+        status: publicInviteStatus(inv),
+      }));
+      return res.json({ invites: safe });
     } catch (error: any) {
       logger.error("GET invites failed", error);
       return res.status(500).json({ message: "Could not load invites" });
@@ -901,29 +914,147 @@ export async function registerRoutes(
 
   app.post("/api/workspaces/:workspaceId/invites", requireAuth, async (req, res) => {
     try {
-      const userId = (req as any).user.id;
+      const inviter = (req as any).user;
+      const inviterId = inviter.id;
       const { workspaceId } = req.params;
-      const member = await storage.getMember(workspaceId, userId);
+      const member = await storage.getMember(workspaceId, inviterId);
       if (!member || (member.role !== "owner" && member.role !== "collaborator")) {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: workspaceId,
+          result: "failure",
+          metadata: { reason: "forbidden", workspaceId },
+        });
         return res.status(403).json({ message: "You cannot invite people to this team." });
       }
       const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
       const role = req.body?.role as WorkspaceRole;
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: workspaceId,
+          result: "failure",
+          metadata: { reason: "invalid_email", workspaceId },
+        });
         return res.status(400).json({ message: "Valid email is required" });
       }
       if (role !== "collaborator" && role !== "viewer") {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: workspaceId,
+          result: "failure",
+          metadata: { reason: "invalid_role", workspaceId, role: String(role) },
+        });
         return res.status(400).json({ message: "Invalid invite role" });
       }
+
+      // Block self-invite
+      if (inviter.email && inviter.email.toLowerCase() === email) {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: workspaceId,
+          result: "failure",
+          metadata: { reason: "self_invite", workspaceId, email },
+        });
+        return res.status(400).json({ message: "You cannot invite yourself." });
+      }
+
+      // Block inviting an existing member of this workspace
+      const existingUser = await storage.getUserByUsernameOrEmail(email);
+      if (existingUser) {
+        const existingMember = await storage.getMember(workspaceId, existingUser.id);
+        if (existingMember) {
+          await recordAudit(req, {
+            action: "workspace.invite.create",
+            resourceType: "workspace_invite",
+            resourceId: workspaceId,
+            result: "failure",
+            metadata: { reason: "already_member", workspaceId, email },
+          });
+          return res.status(409).json({ message: "That person is already on this team." });
+        }
+      }
+
+      // Block duplicate active pending invite
+      const dup = await storage.findActivePendingInvite(workspaceId, email);
+      if (dup) {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: dup.id,
+          result: "failure",
+          metadata: { reason: "duplicate_pending", workspaceId, email },
+        });
+        return res.status(409).json({
+          message: "An active invite for this email already exists.",
+          inviteId: dup.id,
+        });
+      }
+
       const invite = await storage.createInvite({
         workspaceId,
         email,
         role,
-        invitedByUserId: userId,
+        invitedByUserId: inviterId,
       });
-      return res.json({ invite });
+
+      // Resolve workspace + inviter context for the email
+      const workspace = await storage.getWorkspaceById(workspaceId);
+      const acceptUrl = `${process.env.APP_BASE_URL || process.env.APP_URL || `${req.protocol}://${req.get("host")}`}/invite/${invite.token}`;
+
+      // Send email best-effort (do not fail the API call if email fails)
+      sendWorkspaceInviteEmail({
+        inviteeEmail: email,
+        inviterName: inviter.fullName || inviter.username || "A teammate",
+        inviterEmail: inviter.email || null,
+        inviterCompany: inviter.organizationName || null,
+        workspaceName: workspace?.name || "your team",
+        role,
+        acceptUrl,
+        expiresAt: invite.expiresAt,
+      }).catch((err) => logger.error("Invite email send failed", err, { inviteId: invite.id }));
+
+      await recordAudit(req, {
+        action: "workspace.invite.create",
+        resourceType: "workspace_invite",
+        resourceId: invite.id,
+        result: "success",
+        metadata: {
+          workspaceId,
+          email,
+          role,
+          invitedByUserId: inviterId,
+          expiresAt: invite.expiresAt,
+        },
+      });
+
+      // Never echo the raw token in the listing payload — clients use the email link.
+      return res.json({
+        invite: {
+          id: invite.id,
+          workspaceId: invite.workspaceId,
+          email: invite.email,
+          role: invite.role,
+          invitedByUserId: invite.invitedByUserId,
+          expiresAt: invite.expiresAt,
+          acceptedAt: invite.acceptedAt,
+          revokedAt: invite.revokedAt,
+          createdAt: invite.createdAt,
+        },
+      });
     } catch (error: any) {
       logger.error("POST invite failed", error);
+      await recordAudit(req, {
+        action: "workspace.invite.create",
+        resourceType: "workspace_invite",
+        resourceId: req.params.workspaceId,
+        result: "failure",
+        metadata: { reason: "exception", error: String(error?.message || error) },
+      });
       return res.status(500).json({ message: "Could not create invite" });
     }
   });
@@ -934,10 +1065,35 @@ export async function registerRoutes(
       const { workspaceId, inviteId } = req.params;
       const member = await storage.getMember(workspaceId, userId);
       if (!member || (member.role !== "owner" && member.role !== "collaborator")) {
+        await recordAudit(req, {
+          action: "workspace.invite.revoke",
+          resourceType: "workspace_invite",
+          resourceId: inviteId,
+          result: "failure",
+          metadata: { reason: "forbidden", workspaceId },
+        });
         return res.status(403).json({ message: "You cannot revoke invites for this team." });
       }
+      // Tenant-scoped revoke: storage.revokeInvite enforces (inviteId, workspaceId) match,
+      // so a caller cannot revoke an invite belonging to a different workspace.
       const ok = await storage.revokeInvite(workspaceId, inviteId);
-      if (!ok) return res.status(404).json({ message: "Invite not found" });
+      if (!ok) {
+        await recordAudit(req, {
+          action: "workspace.invite.revoke",
+          resourceType: "workspace_invite",
+          resourceId: inviteId,
+          result: "failure",
+          metadata: { reason: "not_found_or_cross_tenant", workspaceId },
+        });
+        return res.status(404).json({ message: "Invite not found" });
+      }
+      await recordAudit(req, {
+        action: "workspace.invite.revoke",
+        resourceType: "workspace_invite",
+        resourceId: inviteId,
+        result: "success",
+        metadata: { workspaceId },
+      });
       return res.json({ ok: true });
     } catch (error: any) {
       logger.error("DELETE invite failed", error);
@@ -977,17 +1133,59 @@ export async function registerRoutes(
       const user = (req as any).user;
       const { token } = req.params;
       const inv = await storage.getInviteByToken(token);
-      if (!inv) return res.status(404).json({ message: "Invite not found" });
+      if (!inv) {
+        await recordAudit(req, {
+          action: "workspace.invite.accept",
+          resourceType: "workspace_invite",
+          resourceId: null,
+          result: "failure",
+          metadata: { reason: "not_found" },
+        });
+        return res.status(404).json({ message: "Invite not found" });
+      }
       const status = publicInviteStatus(inv);
       if (status !== "pending") {
+        await recordAudit(req, {
+          action: "workspace.invite.accept",
+          resourceType: "workspace_invite",
+          resourceId: inv.id,
+          result: "failure",
+          metadata: { reason: status, workspaceId: inv.workspaceId },
+        });
         return res.status(400).json({ message: "This invite is no longer valid." });
       }
       const email = (user.email || "").toLowerCase();
       if (email !== inv.email.toLowerCase()) {
+        await recordAudit(req, {
+          action: "workspace.invite.accept",
+          resourceType: "workspace_invite",
+          resourceId: inv.id,
+          result: "failure",
+          metadata: {
+            reason: "email_mismatch",
+            workspaceId: inv.workspaceId,
+            inviteEmail: inv.email,
+          },
+        });
         return res.status(403).json({ message: "Sign in with the email this invite was sent to." });
       }
-      await storage.addMember(inv.workspaceId, userId, inv.role);
+      // Idempotent: if already a member, just mark accepted.
+      const existing = await storage.getMember(inv.workspaceId, userId);
+      if (!existing) {
+        await storage.addMember(inv.workspaceId, userId, inv.role);
+      }
       await storage.acceptInvite(token);
+      await recordAudit(req, {
+        action: "workspace.invite.accept",
+        resourceType: "workspace_invite",
+        resourceId: inv.id,
+        result: "success",
+        metadata: {
+          workspaceId: inv.workspaceId,
+          role: inv.role,
+          alreadyMember: !!existing,
+        },
+      });
       return res.json({ ok: true, workspaceId: inv.workspaceId });
     } catch (error: any) {
       logger.error("POST accept invite failed", error);
