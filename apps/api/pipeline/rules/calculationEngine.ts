@@ -38,9 +38,11 @@ import { SectorRuleRepository } from '../../arango/repositories/sectorRuleReposi
 import {
   calculateAllPillars,
   type PillarScore,
-  type AllPillarScores,
   type TrainingProgramInput as PillarTrainingInput,
+  type TransportQseMeasuredElement,
 } from './pillarCalculators.js';
+
+export type { TransportQseMeasuredElement } from './pillarCalculators.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1235,6 +1237,8 @@ export interface CalculationOptions {
   trainingPrograms?: any[];
   financials?: FinancialsInput;
   province?: string;
+  /** Transport QSE: exactly four measured elements (sheet2); see TransportQseMeasuredElement. */
+  transportQseMeasuredElements?: TransportQseMeasuredElement[];
 }
 
 export async function createCalculationEngine(options: CalculationOptions): Promise<CalculationEngine> {
@@ -1489,17 +1493,23 @@ export async function calculateScorecard(
     graduationBonus: hasGradBonus,
     jobsCreatedBonus: hasJobsBonus,
     province: options.province,
+    transportQseMeasuredElements: options.transportQseMeasuredElements,
   });
 
   const pillarResults: PillarResult[] = [
     toPillarResult('ownership', 'Ownership', result.ownership),
     toPillarResult('managementControl', 'Management Control', result.managementControl),
+  ];
+  if (result.employmentEquity.maxPoints > 0) {
+    pillarResults.push(toPillarResult('employmentEquity', 'Employment Equity', result.employmentEquity));
+  }
+  pillarResults.push(
     toPillarResult('skillsDevelopment', 'Skills Development', result.skillsDevelopment),
     toPillarResult('preferentialProcurement', 'Preferential Procurement', result.procurement),
     toPillarResult('supplierDevelopment', 'Supplier Development', result.supplierDevelopment),
     toPillarResult('enterpriseDevelopment', 'Enterprise Development', result.enterpriseDevelopment),
     toPillarResult('socioEconomicDevelopment', 'Socio-Economic Development', result.socioEconomicDevelopment),
-  ];
+  );
 
   const subMinimums: Record<string, boolean> = {};
   for (const p of pillarResults) subMinimums[p.pillarCode] = p.subMinimumMet;

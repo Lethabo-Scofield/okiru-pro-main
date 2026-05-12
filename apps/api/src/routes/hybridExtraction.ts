@@ -643,7 +643,7 @@ router.post(
       }
 
       // Validate sector code
-      const validSectors = ['RCOGP', 'ICT', 'FSC', 'AGRI'];
+      const validSectors = ['RCOGP', 'ICT', 'FSC', 'AGRI', 'TRANSPORT'];
       if (!validSectors.includes(sectorCode.toUpperCase())) {
         return res.status(400).json({
           error: `Invalid sectorCode: ${sectorCode}. Must be one of: ${validSectors.join(', ')}`,
@@ -659,7 +659,7 @@ router.post(
       }
 
       // Check if sector supports QSE
-      const sectorsWithQSE = ['RCOGP', 'ICT'];
+      const sectorsWithQSE = ['RCOGP', 'ICT', 'TRANSPORT'];
       if (scorecardType === 'QSE' && !sectorsWithQSE.includes(sectorCode.toUpperCase())) {
         return res.status(400).json({
           error: `${sectorCode} does not have a QSE variant. Use Generic instead.`,

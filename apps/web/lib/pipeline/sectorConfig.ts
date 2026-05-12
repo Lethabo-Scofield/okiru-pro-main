@@ -47,13 +47,29 @@ export const ICT_QSE: SectorConfig = {
   scorecardTypes: ['qse'],
 };
 
+export const TRANSPORT_GENERIC: SectorConfig = {
+  code: 'TRANSPORT_GENERIC',
+  name: 'Transport Sector Code (Large Enterprise)',
+  description: 'Large-enterprise Transport Sector scorecard (Integrated Transport)',
+  scorecardTypes: ['generic'],
+};
+
+export const TRANSPORT_QSE: SectorConfig = {
+  code: 'TRANSPORT_QSE',
+  name: 'Transport Sector Code (QSE)',
+  description: 'QSE Transport — sheet2 element weights; exactly four elements measured per assessment (engine default quartet caps at 107 pts)',
+  scorecardTypes: ['qse'],
+};
+
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC,
   ICT_GENERIC,
   FSC_GENERIC,
   AGRI_GENERIC,
+  TRANSPORT_GENERIC,
   RCOGP_QSE,
   ICT_QSE,
+  TRANSPORT_QSE,
 ];
 
 export function getSectorConfig(code: string): SectorConfig | undefined {
@@ -70,6 +86,9 @@ export function detectSectorFromName(name: string): SectorConfig | undefined {
   }
   if (lower.includes('agri')) {
     return AGRI_GENERIC;
+  }
+  if (lower.includes('transport') || lower.includes('freight') || lower.includes('logistics')) {
+    return TRANSPORT_GENERIC;
   }
   return RCOGP_GENERIC;
 }

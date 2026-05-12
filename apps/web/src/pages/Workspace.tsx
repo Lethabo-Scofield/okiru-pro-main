@@ -17,6 +17,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { AppNavBack } from "@/components/AppNavBack";
+import { Checkbox } from "@toolkit/components/ui/checkbox";
+import { setPreferredWorkspaceId } from "@/lib/foundationApi";
 
 type Role = "owner" | "collaborator" | "viewer";
 
@@ -31,6 +33,7 @@ interface WorkspaceMember {
   userId: string;
   role: Role;
   joinedAt: string;
+  pillarScopes: string[] | null;
   username: string | null;
   fullName: string | null;
   email: string | null;
@@ -55,9 +58,22 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const ROLE_DESCRIPTION: Record<Role, string> = {
   owner: "Full access. Can manage people, send invites and rename the team space.",
-  collaborator: "Can view and edit work, and invite new people.",
+  collaborator: "Can view and edit work (pillar access can be limited by the owner).",
   viewer: "Can view everything but can't make changes.",
 };
+
+/** Keys must match server scorecardCollaboration SCORECARD_PILLAR_KEYS */
+const PILLAR_SCOPE_OPTIONS: { key: string; label: string }[] = [
+  { key: "ownership", label: "Ownership" },
+  { key: "management", label: "Management control" },
+  { key: "skills", label: "Skills development" },
+  { key: "procurement", label: "Preferential procurement" },
+  { key: "supplierDevelopment", label: "Supplier development" },
+  { key: "enterpriseDevelopment", label: "Enterprise development" },
+  { key: "employmentEquity", label: "Employment equity" },
+  { key: "sed", label: "Socio-economic development" },
+  { key: "yes", label: "Youth employment" },
+];
 
 export default function WorkspacePage() {
   const [, navigate] = useLocation();
@@ -130,7 +146,10 @@ export default function WorkspacePage() {
   }, []);
 
   useEffect(() => {
-    if (activeId) loadDetails(activeId);
+    if (activeId) {
+      setPreferredWorkspaceId(activeId);
+      loadDetails(activeId);
+    }
   }, [activeId]);
 
   useEffect(() => {
@@ -232,6 +251,33 @@ export default function WorkspacePage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function setMemberPillarScopes(memberUserId: string, scopes: string[]) {
+    if (!active) return;
+    setBusy(true);
+    try {
+      await fetchJson(`/api/workspaces/${active.id}/members/${memberUserId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pillarScopes: scopes }),
+      });
+      await loadDetails(active.id);
+      toast({ title: "Editor pillar access updated" });
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onPillarScopeToggle(memberUserId: string, pillarKey: string, checked: boolean) {
+    const m = members.find((x) => x.userId === memberUserId);
+    if (!m || m.role !== "collaborator") return;
+    const cur = new Set(m.pillarScopes ?? []);
+    if (checked) cur.add(pillarKey);
+    else cur.delete(pillarKey);
+    void setMemberPillarScopes(memberUserId, Array.from(cur));
   }
 
   async function removeMember(memberUserId: string) {
@@ -408,48 +454,82 @@ export default function WorkspacePage() {
                     {members.map((m) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between rounded-lg border border-border/40 p-3 gap-3"
+                        className="rounded-lg border border-border/40 p-3 gap-2 flex flex-col"
                         data-testid={`member-row-${m.userId}`}
                       >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {m.fullName || m.username || m.email || m.userId}
-                            {m.userId === user?.id && (
-                              <span className="text-[11px] text-muted-foreground ml-2">(you)</span>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {m.fullName || m.username || m.email || m.userId}
+                              {m.userId === user?.id && (
+                                <span className="text-[11px] text-muted-foreground ml-2">(you)</span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {m.email || m.username}
+                              {m.role === "collaborator" && (m.pillarScopes?.length ?? 0) > 0 && (
+                                <span className="text-amber-500/90 ml-1">
+                                  · Limited to {m.pillarScopes!.length}{" "}
+                                  pillar{m.pillarScopes!.length === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isOwner && m.role !== "owner" ? (
+                              <select
+                                value={m.role}
+                                onChange={(e) => changeRole(m.userId, e.target.value as Role)}
+                                disabled={busy}
+                                className="h-8 rounded-md border border-border/50 bg-background px-2 text-[12px]"
+                                data-testid={`select-role-${m.userId}`}
+                              >
+                                <option value="collaborator">Editor</option>
+                                <option value="viewer">Viewer</option>
+                              </select>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground px-2 py-1 rounded-full border border-border/40">
+                                {ROLE_LABEL[m.role]}
+                              </span>
                             )}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {m.email || m.username}
-                          </p>
+                            {isOwner && m.role !== "owner" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeMember(m.userId)}
+                                data-testid={`btn-remove-${m.userId}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isOwner && m.role !== "owner" ? (
-                            <select
-                              value={m.role}
-                              onChange={(e) => changeRole(m.userId, e.target.value as Role)}
-                              disabled={busy}
-                              className="h-8 rounded-md border border-border/50 bg-background px-2 text-[12px]"
-                              data-testid={`select-role-${m.userId}`}
-                            >
-                              <option value="collaborator">Editor</option>
-                              <option value="viewer">Viewer</option>
-                            </select>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground px-2 py-1 rounded-full border border-border/40">
-                              {ROLE_LABEL[m.role]}
-                            </span>
-                          )}
-                          {isOwner && m.role !== "owner" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeMember(m.userId)}
-                              data-testid={`btn-remove-${m.userId}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
+                        {isOwner && m.role === "collaborator" && (
+                          <div className="pt-2 mt-1 border-t border-border/30 space-y-2">
+                            <p className="text-[11px] text-muted-foreground leading-snug">
+                              <span className="text-foreground font-medium">Scorecard pillars:</span>{" "}
+                              leave all unchecked so this editor can work on the full scorecard.
+                              Check specific pillars to restrict what they can see and edit.
+                            </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-2">
+                              {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
+                                <label
+                                  key={key}
+                                  className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                >
+                                  <Checkbox
+                                    checked={(m.pillarScopes ?? []).includes(key)}
+                                    disabled={busy}
+                                    onCheckedChange={(c) =>
+                                      onPillarScopeToggle(m.userId, key, c === true)
+                                    }
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </CardContent>

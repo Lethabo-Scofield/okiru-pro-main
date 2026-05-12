@@ -130,6 +130,8 @@ export interface YesResult {
 export interface AllPillarScores {
   ownership: PillarScore;
   managementControl: PillarScore;
+  /** Separate EE pillar when configured (e.g. Transport QSE sheet2); otherwise zeros. */
+  employmentEquity: PillarScore;
   skillsDevelopment: PillarScore;
   procurement: PillarScore;
   supplierDevelopment: PillarScore;
@@ -142,6 +144,168 @@ export interface AllPillarScores {
   recognitionLevel: number;
   isDiscounted: boolean;
   discountedLevel: number;
+}
+
+/** Which Transport QSE scorecard elements are measured (exactly four). Maps to toolkit sheet2 elements. */
+export type TransportQseMeasuredElement =
+  | 'ownership'
+  | 'managementControl'
+  | 'employmentEquity'
+  | 'skillsDevelopment'
+  | 'preferentialProcurement'
+  | 'enterpriseDevelopment'
+  | 'socioEconomicDevelopment';
+
+const TRANSPORT_QSE_DEFAULT_MEASURED: TransportQseMeasuredElement[] = [
+  'ownership',
+  'managementControl',
+  'employmentEquity',
+  'skillsDevelopment',
+];
+
+const TRANSPORT_QSE_LEVEL_CAP = 107;
+
+function isTransportQseCfg(cfg: SectorConfig): boolean {
+  return cfg.sectorCode === 'TRANSPORT' && cfg.scorecardType === 'QSE';
+}
+
+/** Sheet2 lists seven elements; QSE entities measure exactly four — others score as max 0 for this assessment. */
+function applyTransportQseMeasuredElements(
+  cfg: SectorConfig,
+  measured?: TransportQseMeasuredElement[],
+): SectorConfig {
+  const eeBase = cfg.pillarConfigs.employmentEquity ?? {
+    maxPoints: 0,
+    hasSubMinimum: false,
+    subMinimumPercent: 0,
+  };
+
+  const active = new Set<TransportQseMeasuredElement>(
+    measured && measured.length === 4 ? measured : TRANSPORT_QSE_DEFAULT_MEASURED,
+  );
+
+  let activeSum = 0;
+  if (active.has('ownership')) activeSum += cfg.pillarConfigs.ownership.maxPoints;
+  if (active.has('managementControl')) activeSum += cfg.pillarConfigs.managementControl.maxPoints;
+  if (active.has('employmentEquity')) activeSum += eeBase.maxPoints;
+  if (active.has('skillsDevelopment')) activeSum += cfg.pillarConfigs.skillsDevelopment.maxPoints;
+  if (active.has('preferentialProcurement')) activeSum += cfg.pillarConfigs.preferentialProcurement.maxPoints;
+  if (active.has('enterpriseDevelopment')) activeSum += cfg.pillarConfigs.enterpriseDevelopment.maxPoints;
+  if (active.has('socioEconomicDevelopment')) activeSum += cfg.pillarConfigs.socioEconomicDevelopment.maxPoints;
+
+  const pin = (key: TransportQseMeasuredElement, pc: PillarConfig): PillarConfig => ({
+    ...pc,
+    maxPoints: active.has(key) ? pc.maxPoints : 0,
+  });
+
+  return {
+    ...cfg,
+    totalMaxPoints: activeSum,
+    pillarConfigs: {
+      ...cfg.pillarConfigs,
+      ownership: pin('ownership', cfg.pillarConfigs.ownership),
+      managementControl: pin('managementControl', cfg.pillarConfigs.managementControl),
+      employmentEquity: pin('employmentEquity', eeBase),
+      skillsDevelopment: pin('skillsDevelopment', cfg.pillarConfigs.skillsDevelopment),
+      preferentialProcurement: pin('preferentialProcurement', cfg.pillarConfigs.preferentialProcurement),
+      supplierDevelopment: { ...cfg.pillarConfigs.supplierDevelopment, maxPoints: 0 },
+      enterpriseDevelopment: pin('enterpriseDevelopment', cfg.pillarConfigs.enterpriseDevelopment),
+      socioEconomicDevelopment: pin('socioEconomicDevelopment', cfg.pillarConfigs.socioEconomicDevelopment),
+    },
+  };
+}
+
+function calcTransportQseManagement(employees: EmployeeInput[], cfg: SectorConfig): PillarScore {
+  const maxTotal = cfg.pillarConfigs.managementControl.maxPoints;
+  if (maxTotal <= 0) return { score: 0, maxPoints: 0, subMinimumMet: true };
+
+  const grouped: Record<string, EmployeeInput[]> = {};
+  for (const emp of employees) {
+    if (emp.isForeign) continue;
+    (grouped[emp.designation] ??= []).push(emp);
+  }
+  const countB = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race)).length;
+  const countBW = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const pct = (emps: EmployeeInput[], fn: (e: EmployeeInput[]) => number) =>
+    emps.length > 0 ? fn(emps) / emps.length : 0;
+
+  const topMgmt = [
+    ...(grouped['Board'] || []),
+    ...(grouped['Executive'] || []),
+    ...(grouped['Executive Director'] || []),
+    ...(grouped['Other Executive Management'] || []),
+    ...(grouped['Senior'] || []),
+  ];
+
+  const blackPct = pct(topMgmt, countB);
+  const bwPct = pct(topMgmt, countBW);
+  let s = clampScore(safeRatio(blackPct, 0.501, 25), 25);
+  s += clampScore(safeRatio(bwPct, 0.25, 2), 2);
+
+  return { score: r2(clampScore(s, maxTotal)), maxPoints: maxTotal, subMinimumMet: true };
+}
+
+function calcTransportQseEmploymentEquity(
+  employees: EmployeeInput[],
+  cfg: SectorConfig,
+  province?: string,
+): PillarScore {
+  const maxTotal = cfg.pillarConfigs.employmentEquity?.maxPoints ?? 0;
+  if (maxTotal <= 0) return { score: 0, maxPoints: 0, subMinimumMet: true };
+
+  const grouped: Record<string, EmployeeInput[]> = {};
+  for (const emp of employees) {
+    if (emp.isForeign) continue;
+    (grouped[emp.designation] ??= []).push(emp);
+  }
+  const countB = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race)).length;
+  const countBW = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const pct = (emps: EmployeeInput[], fn: (e: EmployeeInput[]) => number) =>
+    emps.length > 0 ? fn(emps) / emps.length : 0;
+
+  const all = employees.filter(e => !e.isForeign);
+  const mgmtDesignations = new Set([
+    'Board',
+    'Executive',
+    'Executive Director',
+    'Other Executive Management',
+    'Senior',
+    'Middle',
+    'Junior',
+  ]);
+  const mgmt = all.filter(e => mgmtDesignations.has(e.designation));
+  const juniorAll = [
+    ...(grouped['Junior'] || []),
+    ...(grouped['Semi-skilled'] || []),
+    ...(grouped['Unskilled'] || []),
+  ].filter(e => !e.isForeign);
+
+  const senior = grouped['Senior']?.filter(e => !e.isForeign) || [];
+  const middle = grouped['Middle']?.filter(e => !e.isForeign) || [];
+
+  const seniorEAP = getEAP(province || 'national', 'Senior');
+  const middleEAP = getEAP(province || 'national', 'Middle');
+  const juniorEAP = getEAP(province || 'national', 'Junior');
+
+  let s = 0;
+  s += clampScore(safeRatio(pct(mgmt, countB), 0.4, 7.5), 7.5);
+  s += clampScore(safeRatio(pct(mgmt, countBW), 0.2, 7.5), 7.5);
+  s += clampScore(safeRatio(pct(all, countB), 0.6, 5), 5);
+  s += clampScore(safeRatio(pct(all, countBW), 0.3, 5), 5);
+
+  const bonus =
+    pct(senior, countB) >= seniorEAP.blackTarget &&
+    pct(senior, countBW) >= seniorEAP.blackWomenTarget &&
+    pct(middle, countB) >= middleEAP.blackTarget &&
+    pct(middle, countBW) >= middleEAP.blackWomenTarget &&
+    (juniorAll.length === 0 ||
+      (pct(juniorAll, countB) >= juniorEAP.blackTarget &&
+        pct(juniorAll, countBW) >= juniorEAP.blackWomenTarget))
+      ? 2
+      : 0;
+  s += bonus;
+
+  return { score: r2(clampScore(s, maxTotal)), maxPoints: maxTotal, subMinimumMet: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +833,232 @@ function calcYes(
 }
 
 // ===========================================================================================
+// Transport Sector — Large Enterprise (docs/Transport Codes.xlsx sheet1)
+// ===========================================================================================
+
+function isTransportLargeGeneric(cfg: SectorConfig): boolean {
+  return cfg.sectorCode === 'TRANSPORT' && cfg.scorecardType === 'Generic';
+}
+
+function calcTransportLargeOwnership(
+  shareholders: ShareholderInput[],
+  financials: FinancialsInput,
+  cfg: SectorConfig,
+): PillarScore {
+  const ot = cfg.targets.ownership;
+  const maxTotal = cfg.pillarConfigs.ownership.maxPoints;
+  const companyValue = financials.companyValue ?? 0;
+  const outstandingDebt = financials.outstandingDebt ?? 0;
+
+  const totalShares = shareholders.reduce((sum, sh) => sum + sh.shares, 0);
+  const hasShares = totalShares > 0;
+
+  let totalBlackVoting = 0, totalBlackWomenVoting = 0;
+  let totalEI = 0, totalEIBWO = 0, totalDG = 0;
+  let netValueAgg = 0;
+  let hasNewEntrant = false;
+
+  for (const sh of shareholders) {
+    const pct = hasShares ? sh.shares / totalShares : (shareholders.length > 0 ? 1 / shareholders.length : 0);
+    totalBlackVoting += pct * sh.blackOwnership;
+    totalBlackWomenVoting += pct * sh.blackWomenOwnership;
+    totalEI += pct * sh.blackOwnership;
+    totalEIBWO += pct * sh.blackWomenOwnership;
+    if (sh.isDesignatedGroup && sh.blackOwnership > 0) totalDG += pct * sh.blackOwnership;
+    if (sh.blackNewEntrant) hasNewEntrant = true;
+
+    if (sh.shareValue > 0 && sh.blackOwnership > 0) {
+      const debtAttr = outstandingDebt * pct;
+      const carrying = sh.shareValue * pct;
+      const allocated = companyValue * pct;
+      const deemed = (allocated - debtAttr) / carrying;
+      netValueAgg += Math.max(0, deemed) * sh.blackOwnership;
+    }
+  }
+
+  const fullOwnership = totalBlackVoting >= ot.votingRightsTarget && hasShares;
+
+  const vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
+  const vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
+  const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
+  const eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
+
+  const dgTarget = ot.economicInterestDesignatedGroupTarget ?? 0.025;
+  const dgMax = ot.economicInterestDesignatedGroupMaxPts ?? 0;
+  const dgPts = dgMax > 0 ? clampScore(safeRatio(totalDG, dgTarget, dgMax), dgMax) : 0;
+
+  let nv = 0;
+  const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
+  if (hasNetValue) {
+    nv = clampScore(netValueAgg, ot.netValueMaxPts);
+  } else {
+    nv = totalBlackVoting >= 1.0
+      ? ot.netValueMaxPts
+      : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+  }
+
+  const fulfil = totalBlackVoting >= ot.votingRightsTarget && totalEI >= ot.economicInterestTarget ? 1 : 0;
+  const nePts = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
+
+  const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dgPts + nv + fulfil + nePts, maxTotal);
+
+  const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
+  const subMinimumMet = cfg.pillarConfigs.ownership.subMinimumPercent <= 0
+    ? true
+    : (fullOwnership || nv >= netValueSubMinThreshold);
+
+  return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
+}
+
+function calcTransportLargeManagementAndEE(employees: EmployeeInput[], cfg: SectorConfig): PillarScore {
+  const maxTotal = cfg.pillarConfigs.managementControl.maxPoints;
+  const eeCfg = cfg.targets.employmentEquity;
+
+  const grouped: Record<string, EmployeeInput[]> = {};
+  for (const emp of employees) {
+    if (emp.isForeign) continue;
+    (grouped[emp.designation] ??= []).push(emp);
+  }
+
+  const countB = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race)).length;
+  const countBW = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const pct = (emps: EmployeeInput[], fn: (e: EmployeeInput[]) => number) =>
+    emps.length > 0 ? fn(emps) / emps.length : 0;
+
+  const board = grouped['Board'] || [];
+  const exec = [...(grouped['Executive'] || []), ...(grouped['Executive Director'] || [])];
+  const senior = grouped['Senior'] || [];
+  const middle = grouped['Middle'] || [];
+  const junior = grouped['Junior'] || [];
+  const semiSkilled = grouped['Semi-skilled'] || [];
+  const unskilled = grouped['Unskilled'] || [];
+  const allNonForeign = employees.filter(e => !e.isForeign);
+
+  let mc = 0;
+  mc += clampScore(safeRatio(pct(board, countB), 0.5, 1.5), 1.5);
+  mc += clampScore(safeRatio(pct(board, countBW), 0.25, 1.5), 1.5);
+  mc += clampScore(safeRatio(pct(exec, countB), 0.5, 1), 1);
+  mc += clampScore(safeRatio(pct(exec, countBW), 0.25, 1), 1);
+  mc += clampScore(safeRatio(pct(senior, countB), 0.4, 1.5), 1.5);
+  mc += clampScore(safeRatio(pct(senior, countBW), 0.2, 1.5), 1.5);
+  mc += clampScore(safeRatio(pct(middle, countB), 0.4, 1), 1);
+  mc += clampScore(safeRatio(pct(middle, countBW), 0.2, 1), 1);
+  mc += clampScore(safeRatio(pct(board, countB), 0.4, 1), 1);
+
+  let ee = 0;
+  ee += clampScore(safeRatio(pct(senior, countB), 0.43, 2.5), 2.5);
+  ee += clampScore(safeRatio(pct(senior, countBW), 0.22, 2.5), 2.5);
+  ee += clampScore(safeRatio(pct(middle, countB), 0.63, 1.5), 1.5);
+  ee += clampScore(safeRatio(pct(middle, countBW), 0.32, 1.5), 1.5);
+  ee += clampScore(safeRatio(pct(junior, countB), 0.68, 1.5), 1.5);
+  ee += clampScore(safeRatio(pct(junior, countBW), 0.34, 1.5), 1.5);
+
+  const semiPool = [...semiSkilled, ...unskilled];
+  const semiBw = semiPool.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const semiBwPctTotal = allNonForeign.length > 0 ? semiBw / allNonForeign.length : 0;
+  ee += clampScore(safeRatio(semiBwPctTotal, 0.15, 2), 2);
+
+  const blackDisabledPct = allNonForeign.length > 0 ? countB(allNonForeign.filter(e => e.isDisabled)) / allNonForeign.length : 0;
+  ee += clampScore(safeRatio(blackDisabledPct, eeCfg.disabledTarget, eeCfg.disabledMaxPts), eeCfg.disabledMaxPts);
+
+  const bwDisabledPct = allNonForeign.length > 0
+    ? allNonForeign.filter(e => e.isDisabled && isBlack(e.race) && e.gender === 'Female').length / allNonForeign.length
+    : 0;
+  const dwMax = eeCfg.disabledWomenMaxPts ?? 0;
+  const dwT = eeCfg.disabledWomenTarget ?? 0.01;
+  if (dwMax > 0) {
+    ee += clampScore(safeRatio(bwDisabledPct, dwT, dwMax), dwMax);
+  }
+
+  const bonusEE =
+    pct(senior, countB) >= 0.43 && pct(senior, countBW) >= 0.22 &&
+    pct(middle, countB) >= 0.63 && pct(middle, countBW) >= 0.32 &&
+    pct(junior, countB) >= 0.68 && pct(junior, countBW) >= 0.34
+    ? 3
+    : 0;
+  ee += bonusEE;
+
+  const total = clampScore(mc + ee, maxTotal);
+  return { score: r2(total), maxPoints: maxTotal, subMinimumMet: true };
+}
+
+function calcTransportLargeSkills(
+  programs: TrainingProgramInput[],
+  leviableAmount: number,
+  headcount: number,
+  cfg: SectorConfig,
+): PillarScore {
+  const sk = cfg.targets.skills;
+  const maxPoints = cfg.pillarConfigs.skillsDevelopment.maxPoints;
+
+  const overallTarget = leviableAmount * (sk.overallSpendPercent / 100);
+  const bursaryTarget = leviableAmount * (sk.bursarySpendPercent / 100);
+  const disabledTarget = leviableAmount * (sk.disabledSpendPercent / 100);
+
+  let bursarySpend = 0, disabledSpend = 0;
+  const byCategory: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 };
+
+  let bcBlack = 0, bcWomen = 0;
+  for (const tp of programs) {
+    if (!tp.isBlack) continue;
+    const cost = tp.cost ?? 0;
+    const catCode = tp.categoryCode || mapCategory(tp.category);
+    byCategory[catCode] = (byCategory[catCode] || 0) + cost;
+    if (catCode === 'A' || tp.category === 'bursary') bursarySpend += cost;
+    if (tp.isDisabled) disabledSpend += cost;
+    if (['B', 'C', 'D'].includes(catCode)) {
+      bcBlack++;
+      if (tp.gender === 'Female') bcWomen++;
+    }
+  }
+
+  const uncappedTotal = Object.values(byCategory).reduce((a, b) => a + b, 0);
+  let totalRecognised = 0;
+  for (const code of ['A', 'B', 'C', 'D', 'E', 'F'] as const) {
+    let spend = byCategory[code] || 0;
+    if (code === 'E' && uncappedTotal > 0) spend = Math.min(spend, uncappedTotal * 0.25);
+    if (code === 'F' && uncappedTotal > 0) spend = Math.min(spend, uncappedTotal * 0.15);
+    totalRecognised += spend;
+  }
+
+  const learningScore = clampScore(safeRatio(totalRecognised, overallTarget, sk.learningProgrammesMaxPts), sk.learningProgrammesMaxPts);
+  const bursaryScore = clampScore(safeRatio(bursarySpend, bursaryTarget, sk.bursaryMaxPts), sk.bursaryMaxPts);
+  const disabledScore = clampScore(safeRatio(disabledSpend, disabledTarget, sk.disabledLearningMaxPts), sk.disabledLearningMaxPts);
+
+  const hc = Math.max(headcount, 1);
+  const progBlackTarget = sk.learnershipTargetPercent / 100;
+  const progWomenTarget = sk.absorptionTargetPercent / 100;
+  const learnershipScore = clampScore(safeRatio(bcBlack / hc, progBlackTarget, sk.learnershipsMaxPts), sk.learnershipsMaxPts);
+  const womenProgScore = clampScore(safeRatio(bcWomen / hc, progWomenTarget, sk.absorptionMaxPts), sk.absorptionMaxPts);
+
+  const total = clampScore(learningScore + bursaryScore + disabledScore + learnershipScore + womenProgScore, maxPoints);
+  return { score: r2(total), maxPoints, subMinimumMet: true };
+}
+
+function calcTransportLargeProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorConfig): PillarScore {
+  const pc = cfg.targets.procurement;
+  const maxPoints = cfg.pillarConfigs.preferentialProcurement.maxPoints;
+
+  let empoweringSpend = 0, qseEmeSpend = 0, bo51Spend = 0, bwo30Spend = 0;
+
+  for (const sup of suppliers) {
+    if (sup.isForeignSupplier) continue;
+    if (sup.beeLevel >= 1 && sup.beeLevel <= 8) empoweringSpend += sup.spend || 0;
+    if (sup.enterpriseType === 'qse' || sup.enterpriseType === 'eme') qseEmeSpend += sup.spend || 0;
+    if (sup.blackOwnership >= 0.51) bo51Spend += sup.spend || 0;
+    if (sup.blackWomenOwnership >= 0.30) bwo30Spend += sup.spend || 0;
+  }
+
+  const empScore = clampScore(safeRatio(empoweringSpend, tmps * pc.allSuppliersTarget, pc.allSuppliersMaxPts), pc.allSuppliersMaxPts);
+  const qemScore = clampScore(safeRatio(qseEmeSpend, tmps * pc.qseTarget, pc.qseMaxPts), pc.qseMaxPts);
+  const bo51Score = clampScore(safeRatio(bo51Spend, tmps * pc.bo51Target, pc.bo51MaxPts), pc.bo51MaxPts);
+  const bwo30Score = clampScore(safeRatio(bwo30Spend, tmps * pc.bwo30Target, pc.bwo30MaxPts), pc.bwo30MaxPts);
+
+  const total = clampScore(empScore + qemScore + bo51Score + bwo30Score, maxPoints);
+  return { score: r2(total), maxPoints, subMinimumMet: true };
+}
+
+// ===========================================================================================
 // Deemed NPAT — for loss-making entities
 // ===========================================================================================
 
@@ -697,31 +1087,73 @@ export function calculateAllPillars(
     graduationBonus?: boolean;
     jobsCreatedBonus?: boolean;
     province?: string;
+    /** Transport QSE: exactly four elements from sheet2; omit uses default quartet (Ownership, MC, EE, Skills) = 107 pts max. */
+    transportQseMeasuredElements?: TransportQseMeasuredElement[];
   },
 ): AllPillarScores {
   const { employees, shareholders, suppliers, contributions, trainingPrograms, financials } = inputs;
 
+  const cfgEffective = isTransportQseCfg(config)
+    ? applyTransportQseMeasuredElements(config, inputs.transportQseMeasuredElements)
+    : config;
+
   const effectiveNpat = financials.npat > 0
     ? financials.npat
-    : resolveDeemedNpat(financials.revenue, config);
+    : resolveDeemedNpat(financials.revenue, cfgEffective);
 
-  const ownership = calcOwnership(shareholders, financials, config);
-  const management = calcManagement(employees, config, inputs.province);
-  const skills = calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config);
-  const procurement = calcProcurement(suppliers, financials.tmps, config);
-  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, config);
-  const sed = calcSed(contributions, effectiveNpat, config);
+  let ownership: PillarScore;
+  let management: PillarScore;
+  let employmentEquity: PillarScore;
+  let skills: PillarScore;
+  let procurement: PillarScore;
+
+  if (isTransportQseCfg(config)) {
+    ownership = calcOwnership(shareholders, financials, cfgEffective);
+    management = calcTransportQseManagement(employees, cfgEffective);
+    employmentEquity = calcTransportQseEmploymentEquity(employees, cfgEffective, inputs.province);
+    skills = calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, cfgEffective);
+    procurement = calcProcurement(suppliers, financials.tmps, cfgEffective);
+  } else {
+    ownership = isTransportLargeGeneric(config)
+      ? calcTransportLargeOwnership(shareholders, financials, config)
+      : calcOwnership(shareholders, financials, config);
+    management = isTransportLargeGeneric(config)
+      ? calcTransportLargeManagementAndEE(employees, config)
+      : calcManagement(employees, config, inputs.province);
+    employmentEquity = {
+      score: 0,
+      maxPoints: config.pillarConfigs.employmentEquity?.maxPoints ?? 0,
+      subMinimumMet: true,
+    };
+    skills = isTransportLargeGeneric(config)
+      ? calcTransportLargeSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config)
+      : calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config);
+    procurement = isTransportLargeGeneric(config)
+      ? calcTransportLargeProcurement(suppliers, financials.tmps, config)
+      : calcProcurement(suppliers, financials.tmps, config);
+  }
+
+  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, cfgEffective);
+  const sed = calcSed(contributions, effectiveNpat, cfgEffective);
   const yes = calcYes(trainingPrograms, employees.length);
 
-  const totalPoints = ownership.score + management.score + skills.score + procurement.score +
+  const totalPoints = ownership.score + management.score + employmentEquity.score + skills.score + procurement.score +
     sd.score + ed.score + sed.score + yes.bonusPoints;
 
-  const maxPoints = config.totalMaxPoints;
+  const maxPoints = cfgEffective.totalMaxPoints;
+
+  let levelThresholds = cfgEffective.levelThresholds;
+  if (isTransportQseCfg(config) && cfgEffective.totalMaxPoints !== TRANSPORT_QSE_LEVEL_CAP) {
+    levelThresholds = config.levelThresholds.map(t => ({
+      ...t,
+      minPoints: Math.round((t.minPoints * cfgEffective.totalMaxPoints / TRANSPORT_QSE_LEVEL_CAP) * 100) / 100,
+    }));
+  }
 
   const anySubMinFailed = !ownership.subMinimumMet || !skills.subMinimumMet ||
     !procurement.subMinimumMet || !sd.subMinimumMet || !ed.subMinimumMet;
 
-  const baseLevel = findLevel(totalPoints, config.levelThresholds);
+  const baseLevel = findLevel(totalPoints, levelThresholds);
   const isDiscounted = baseLevel.level < 9 && anySubMinFailed;
   let discountedLevel = isDiscounted ? Math.min(baseLevel.level + 1, 8) : baseLevel.level;
 
@@ -729,7 +1161,7 @@ export function calculateAllPillars(
     discountedLevel = Math.max(discountedLevel - yes.levelBoost, 1);
   }
 
-  const discountedLevelConfig = config.levelThresholds.find(t => t.level === discountedLevel);
+  const discountedLevelConfig = levelThresholds.find(t => t.level === discountedLevel);
   const finalRecognition = (isDiscounted || yes.levelBoost > 0)
     ? (discountedLevelConfig?.recognition ?? 0)
     : baseLevel.recognition;
@@ -737,6 +1169,7 @@ export function calculateAllPillars(
   return {
     ownership,
     managementControl: management,
+    employmentEquity,
     skillsDevelopment: skills,
     procurement,
     supplierDevelopment: sd,

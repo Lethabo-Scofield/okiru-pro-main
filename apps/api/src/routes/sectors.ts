@@ -296,6 +296,18 @@ function getFallbackSectors() {
       type: 'Generic',
       totalPoints: 132,
     },
+    {
+      code: 'TRANSPORT',
+      name: 'Transport Sector Code (Large Enterprise)',
+      type: 'Generic',
+      totalPoints: 108,
+    },
+    {
+      code: 'TRANSPORT',
+      name: 'Transport Sector Code (QSE)',
+      type: 'QSE',
+      totalPoints: 107,
+    },
   ];
 }
 
@@ -305,6 +317,7 @@ function getFallbackSectorOptions() {
     { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
     { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
     { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
+    { value: 'TRANSPORT', label: 'Transport Sector Code', code: 'TRANSPORT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
   ];
 }
 

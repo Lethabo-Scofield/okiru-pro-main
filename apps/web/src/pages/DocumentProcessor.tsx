@@ -13,7 +13,9 @@ import { FoundationStep, FoundationData } from '@/components/build/FoundationSte
 import { ClientInformationData, EMPTY_CLIENT_INFO, determineCompanySize, hasQSEVariant } from '@/components/build/ClientInformationForm';
 import { FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from '@/components/build/FinancialsForm';
 import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPillarsStep';
-import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore } from '@/lib/foundationApi';
+import { AssessmentSnapshotsPanel } from '@/components/AssessmentSnapshotsPanel';
+import { filterScorecardPillarRows, filterSubMinimumsByScope, sumPillarRows } from '@/lib/pillarScopeUi';
+import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore, getPreferredWorkspaceId, loadAssessmentData } from '@/lib/foundationApi';
 import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import {
@@ -99,7 +101,7 @@ interface ProcessorSession {
   flowMode?: 'upload' | 'build';
 }
 
-const VALID_SECTOR_CODES = new Set(['RCOGP', 'ICT', 'FSC', 'AGRI']);
+const VALID_SECTOR_CODES = new Set(['RCOGP', 'ICT', 'FSC', 'AGRI', 'TRANSPORT']);
 
 function normalizeSectorCodeForExtraction(raw: string): string {
   const t = (raw || '').trim().toUpperCase();
@@ -331,6 +333,7 @@ export const BBEE_SECTORS_FALLBACK: SectorOption[] = [
   { code: 'ICT', label: 'ICT Sector Code', description: 'Information & Communications Technology', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
   { code: 'FSC', label: 'Financial Sector Code (FSC)', description: 'Banks, insurers, investment firms', hasQSE: false, availableTypes: ['Generic'] },
   { code: 'AGRI', label: 'AgriBEE Sector Code', description: 'Agriculture and farming enterprises', hasQSE: false, availableTypes: ['Generic'] },
+  { code: 'TRANSPORT', label: 'Transport Sector Code', description: 'Integrated Transport — road, rail, maritime, aviation', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
 ];
 
 // Global state for sectors (populated from API)
@@ -380,6 +383,8 @@ export function getSectorTotal(sectorCode: string, isQSE: boolean = false): numb
       return 105; // FSC has different weightings
     case 'AGRI':
       return 100; // AgriBEE has 100 points
+    case 'TRANSPORT':
+      return isQSE ? 107 : 108;
     default:
       return 120; // Default to RCOGP Generic
   }
@@ -1235,6 +1240,18 @@ export default function DocumentProcessor() {
     sed: null,
     yes: null,
   });
+
+  /** Workspace / assessment collaboration (pillar scopes, view-only). */
+  const [buildCollaboration, setBuildCollaboration] = useState<{
+    pillarScopes: string[] | null;
+    canWritePillars: boolean;
+    canRestoreScorecard: boolean;
+    mode: string;
+  } | null>(null);
+
+  /** Sync key so we re-read persisted assessment id after POST / restore. */
+  const [assessmentStorageSync, setAssessmentStorageSync] = useState(0);
+  const [serverAssessmentId, setServerAssessmentId] = useState<string | null>(null);
   
   // Foundation sync hook - for Toolkit store integration
   const { saveFoundation, syncToStore } = useFoundationSync(sessionId || 'temp-session');
@@ -1421,6 +1438,7 @@ export default function DocumentProcessor() {
     if (isNew) {
       useBbeeStore.getState().startNewSession();
       setFoundationData({ clientInfo: EMPTY_CLIENT_INFO, financials: EMPTY_FINANCIALS });
+      setBuildCollaboration(null);
       setPillarData({
         ownership: { id: '', clientId: '', shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 },
         management: { id: '', clientId: '', employees: [] },
@@ -1482,6 +1500,14 @@ export default function DocumentProcessor() {
           employmentEquity:
             d.pillarData.employmentEquity ?? d.pillarData.management ?? prev.employmentEquity,
         }));
+      }
+      if (d.buildCollaboration && typeof d.buildCollaboration === 'object') {
+        setBuildCollaboration({
+          pillarScopes: d.buildCollaboration.pillarScopes ?? null,
+          canWritePillars: d.buildCollaboration.canWritePillars !== false,
+          canRestoreScorecard: d.buildCollaboration.canRestoreScorecard !== false,
+          mode: String(d.buildCollaboration.mode || ''),
+        });
       }
       setCurrentPage(savedPage);
       toast({ title: 'Build session restored', description: 'Your previous progress has been recovered.' });
@@ -1701,14 +1727,99 @@ export default function DocumentProcessor() {
       try {
         sessionStorage.setItem(
           storageKey,
-          JSON.stringify({ foundationData, pillarData, currentPage }),
+          JSON.stringify({ foundationData, pillarData, currentPage, buildCollaboration }),
         );
       } catch {
         /* quota / private mode */
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [flowMode, currentPage, foundationData, pillarData, user?.id, sessionId]);
+  }, [flowMode, currentPage, foundationData, pillarData, buildCollaboration, user?.id, sessionId]);
+
+  useEffect(() => {
+    if (flowMode !== 'build' || currentPage !== 'build-pillars' || !user?.id) return;
+    let aid: string | null = null;
+    try {
+      aid = localStorage.getItem('okiru-pro-active-client');
+    } catch {
+      return;
+    }
+    if (!aid || !/^assessment-/.test(aid)) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const data = await loadAssessmentData(aid);
+      if (cancelled || !data?.success || !data.collaboration) return;
+      setBuildCollaboration({
+        pillarScopes: data.collaboration.pillarScopes,
+        canWritePillars: data.collaboration.canWritePillars !== false,
+        canRestoreScorecard: data.collaboration.canRestoreScorecard === true,
+        mode: data.collaboration.mode,
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [flowMode, currentPage, user?.id]);
+
+  useEffect(() => {
+    if (currentPage !== 'scorecard') return;
+    try {
+      const id = localStorage.getItem('okiru-pro-active-client');
+      setServerAssessmentId(id && /^assessment-/.test(id) ? id : null);
+    } catch {
+      setServerAssessmentId(null);
+    }
+  }, [currentPage, assessmentStorageSync, user?.id]);
+
+  const refreshAssessmentFromServer = useCallback(async () => {
+    let aid: string | null = null;
+    try {
+      aid = localStorage.getItem('okiru-pro-active-client');
+    } catch {
+      return;
+    }
+    if (!aid || !/^assessment-/.test(aid)) return;
+    const data = await loadAssessmentData(aid);
+    if (!data?.success) return;
+
+    setFoundationData(data.foundation);
+    syncToStore(data.foundation);
+
+    setPillarData(prev => {
+      const next = { ...prev, ...(data.pillars as Partial<BuildPillarsData>) };
+      const skillsWithYes = mergeYesIntoSkills(next.skills, next.yes);
+      useBbeeStore.setState({
+        ownership: next.ownership ?? useBbeeStore.getState().ownership,
+        management: next.management ?? useBbeeStore.getState().management,
+        skills: skillsWithYes ?? useBbeeStore.getState().skills,
+        procurement: next.procurement ?? useBbeeStore.getState().procurement,
+        esd: next.esd ?? useBbeeStore.getState().esd,
+        sed: next.sed ?? useBbeeStore.getState().sed,
+      });
+      return next;
+    });
+
+    if (data.scorecard != null) {
+      setScorecardResult(data.scorecard);
+    }
+
+    if (data.collaboration) {
+      setBuildCollaboration({
+        pillarScopes: data.collaboration.pillarScopes,
+        canWritePillars: data.collaboration.canWritePillars !== false,
+        canRestoreScorecard: data.collaboration.canRestoreScorecard === true,
+        mode: data.collaboration.mode,
+      });
+    } else {
+      setBuildCollaboration(null);
+    }
+
+    setAssessmentStorageSync(n => n + 1);
+  }, [syncToStore]);
 
   const handleBuildValueChange = useCallback((entityId: string, value: unknown) => {
     setBuildValues(prev => ({ ...prev, [entityId]: value }));
@@ -1774,6 +1885,7 @@ export default function DocumentProcessor() {
         foundation: foundationData,
         sectorCode,
         scorecardType: scorecardTypeResult.scorecardType || 'Generic',
+        pillarScopeFilter: buildCollaboration?.pillarScopes ?? null,
       });
 
       if (!result.success) {
@@ -1833,6 +1945,7 @@ export default function DocumentProcessor() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sessionId: sessionId || `session-${Date.now()}`,
+            workspaceId: getPreferredWorkspaceId(),
             clientInfo: {
               companyName: ci.companyName,
               registrationNumber: ci.registrationNumber,
@@ -1867,6 +1980,7 @@ export default function DocumentProcessor() {
           if (dbResult.success && dbResult.assessment?.clientId) {
             const realClientId = dbResult.assessment.clientId;
             localStorage.setItem(getActiveClientStorageKey(user?.id), realClientId);
+            setAssessmentStorageSync(n => n + 1);
             useBbeeStore.setState({
               activeClientId: realClientId,
               client: { ...useBbeeStore.getState().client!, id: realClientId },
@@ -1907,7 +2021,7 @@ export default function DocumentProcessor() {
     } finally {
       setIsSavingSession(false);
     }
-  }, [pillarData, foundationData, sessionId, toast]);
+  }, [pillarData, foundationData, sessionId, toast, buildCollaboration]);
 
   const activePillar = useMemo(() => {
     if (!manifest || !manifest.pillarPacks) return null;
@@ -3146,6 +3260,8 @@ export default function DocumentProcessor() {
                 sessionId={sessionId || 'temp-session'}
                 clientInfo={foundationData.clientInfo}
                 financials={foundationData.financials}
+                pillarScopeFilter={buildCollaboration?.pillarScopes ?? null}
+                pillarFormsLocked={!!buildCollaboration && buildCollaboration.canWritePillars === false}
               />
             </div>
           )}
@@ -4985,6 +5101,14 @@ export default function DocumentProcessor() {
               });
             }
 
+            const scopeKeys = buildCollaboration?.pillarScopes ?? undefined;
+            const pillarRowsDisplay = filterScorecardPillarRows(pillarRows, scopeKeys);
+            const scopedTotals = scopeKeys?.length ? sumPillarRows(pillarRowsDisplay) : null;
+            const subMinimumsForUi =
+              isHierarchical && sc.subMinimums
+                ? filterSubMinimumsByScope(sc.subMinimums as Record<string, boolean>, scopeKeys)
+                : undefined;
+
             const levelColors: Record<number, string> = {
               1: '#22c55e', 2: '#4ade80', 3: '#86efac', 4: '#fbbf24',
               5: '#f59e0b', 6: '#fb923c', 7: '#f87171', 8: '#ef4444', 9: '#6b7280'
@@ -5016,6 +5140,15 @@ export default function DocumentProcessor() {
                     </button>
                   </div>
                 </div>
+
+                {scopeKeys?.length ? (
+                  <div
+                    className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-5 py-3 text-[13px] text-amber-200/90"
+                    data-testid="scorecard-scope-banner"
+                  >
+                    Pillar breakdown and sub-minimums are limited to your workspace assignment. Header totals reflect the full assessment; the breakdown footer sums visible pillars only.
+                  </div>
+                ) : null}
 
                 {isSavingSession ? (
                   <div className="flex flex-col items-center justify-center py-20 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
@@ -5049,12 +5182,21 @@ export default function DocumentProcessor() {
                       </div>
                     </div>
 
+                    {user?.id ? (
+                      <AssessmentSnapshotsPanel
+                        assessmentId={serverAssessmentId}
+                        canSave={!buildCollaboration || buildCollaboration.canWritePillars}
+                        canRestore={!buildCollaboration || buildCollaboration.canRestoreScorecard}
+                        onRestored={refreshAssessmentFromServer}
+                      />
+                    ) : null}
+
                     {/* Sub-minimum summary (for hierarchical results) */}
-                    {isHierarchical && sc.subMinimums && (
+                    {isHierarchical && subMinimumsForUi && Object.keys(subMinimumsForUi).length > 0 && (
                       <div className="bg-[#1c1c1e] rounded-2xl p-5 border border-[#2c2c2e]">
                         <h3 className="text-xs font-semibold text-[#8e8e93] uppercase tracking-wider mb-3">Sub-Minimum Requirements</h3>
                         <div className="flex flex-wrap gap-3">
-                          {Object.entries(sc.subMinimums as Record<string, boolean>).map(([pillarCode, met]) => (
+                          {Object.entries(subMinimumsForUi).map(([pillarCode, met]) => (
                             <div key={pillarCode} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
                               <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-amber-400'}`}>
                                 {met ? '✓' : '⚠'} {pillarCode.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
@@ -5071,7 +5213,7 @@ export default function DocumentProcessor() {
                         <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Pillar Breakdown</h3>
                       </div>
                       <div className="divide-y divide-[#2c2c2e]">
-                        {pillarRows.map(pillar => {
+                        {pillarRowsDisplay.map(pillar => {
                           const pct = pillar.maxPoints > 0 ? Math.min(100, (pillar.score / pillar.maxPoints) * 100) : 0;
                           const hasCriteria = pillar.criteria && pillar.criteria.length > 0;
                           const isExpanded = expandedPillarCode === pillar.code;
@@ -5145,7 +5287,11 @@ export default function DocumentProcessor() {
                       </div>
                       <div className="px-6 py-4 bg-[#141414] border-t border-[#2c2c2e] flex items-center justify-between">
                         <span className="text-sm font-semibold text-[#d1d1d6]">TOTAL</span>
-                        <span className="text-sm font-bold text-white" data-testid="scorecard-total-row">{totalScore} / {totalTarget}</span>
+                        <span className="text-sm font-bold text-white" data-testid="scorecard-total-row">
+                          {scopedTotals
+                            ? `${Math.round(scopedTotals.score * 100) / 100} / ${Math.round(scopedTotals.maxPoints * 100) / 100}`
+                            : `${totalScore} / ${totalTarget}`}
+                        </span>
                       </div>
                     </div>
 

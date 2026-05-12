@@ -5,6 +5,15 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import {
+  resolveAssessmentAccess,
+  filterPillarsForAccess,
+  filterPillarActivityForAccess,
+  mergeScopedPillarPatch,
+  canWritePillars,
+  canRestoreScorecard,
+  normalizePillarScopes,
+} from "./scorecardCollaboration";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, sendWorkspaceInviteEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel, OrganizationModel, UserModel } from "../shared/schema";
 import type { WorkspaceRole } from "../shared/schema";
@@ -749,6 +758,7 @@ export async function registerRoutes(
         id: m.id,
         userId: m.userId,
         role: m.role,
+        pillarScopes: m.pillarScopes ?? null,
         joinedAt: m.joinedAt,
         username: u?.username ?? null,
         fullName: u?.fullName ?? null,
@@ -849,11 +859,41 @@ export async function registerRoutes(
       if (target.role === "owner") {
         return res.status(400).json({ message: "Cannot change the owner's role here." });
       }
-      const role = req.body?.role as WorkspaceRole;
-      if (role !== "collaborator" && role !== "viewer") {
-        return res.status(400).json({ message: "Invalid role" });
+
+      const role = req.body?.role as WorkspaceRole | undefined;
+      const pillarScopesBody = req.body?.pillarScopes;
+
+      if (role === undefined && pillarScopesBody === undefined) {
+        return res.status(400).json({ message: "Nothing to update" });
       }
-      const updated = await storage.updateMemberRole(workspaceId, memberUserId, role);
+
+      const patch: { role?: WorkspaceRole; pillarScopes?: string[] | null } = {};
+
+      if (role !== undefined) {
+        if (role !== "collaborator" && role !== "viewer") {
+          return res.status(400).json({ message: "Invalid role" });
+        }
+        patch.role = role;
+      }
+
+      if (pillarScopesBody !== undefined) {
+        if (!Array.isArray(pillarScopesBody)) {
+          return res.status(400).json({ message: "pillarScopes must be an array of pillar keys" });
+        }
+        const normalized = normalizePillarScopes(pillarScopesBody);
+        patch.pillarScopes = normalized.length === 0 ? null : normalized;
+      }
+
+      const effectiveRole = patch.role ?? target.role;
+      if (patch.pillarScopes !== undefined && effectiveRole !== "collaborator") {
+        return res.status(400).json({ message: "Pillar access applies only to editors." });
+      }
+
+      if (patch.role === "viewer") {
+        patch.pillarScopes = null;
+      }
+
+      const updated = await storage.updateWorkspaceMember(workspaceId, memberUserId, patch);
       if (!updated) return res.status(404).json({ message: "Member not found" });
       return res.json({ member: updated });
     } catch (error: any) {
@@ -2520,7 +2560,7 @@ Respond ONLY with a valid JSON array.`;
   app.post("/api/assessments/foundation", requireAuth, async (req, res) => {
     const start = Date.now();
     try {
-      const { sessionId, clientInfo, financials, assessmentId } = req.body;
+      const { sessionId, clientInfo, financials, assessmentId, workspaceId } = req.body;
       const userId = (req.session as any)?.userId;
       
       // Generate or use provided assessment ID
@@ -2579,6 +2619,7 @@ Respond ONLY with a valid JSON array.`;
         status: 'foundation_complete',
         updatedAt: new Date(),
         createdBy: userId,
+        workspaceId: typeof workspaceId === "string" && workspaceId.trim() ? workspaceId.trim() : undefined,
       });
       
       logger.info('Foundation data saved', { assessmentId: finalAssessmentId, durationMs: Date.now() - start });
@@ -2604,22 +2645,48 @@ Respond ONLY with a valid JSON array.`;
     try {
       const { sessionId, assessmentId, pillars } = req.body;
       const userId = (req.session as any)?.userId;
-      
-      // Update assessment with pillar data
+
+      const existingAssessment = await storage.getAssessment(assessmentId);
+      if (!existingAssessment) {
+        return res.status(404).json({ success: false, error: "Assessment not found" });
+      }
+
+      const access = await resolveAssessmentAccess(storage, userId, existingAssessment);
+      if (!access.ok) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+      if (!canWritePillars(access)) {
+        return res.status(403).json({ success: false, error: "View-only access" });
+      }
+
+      const patch =
+        pillars && typeof pillars === "object" ? (pillars as Record<string, unknown>) : {};
+      const { merged, touchedKeys } = mergeScopedPillarPatch(
+        existingAssessment.pillars as Record<string, unknown> | undefined,
+        patch,
+        access,
+      );
+
+      const pillarActivity = { ...(existingAssessment.pillarActivity || {}) };
+      const nowIso = new Date().toISOString();
+      for (const k of touchedKeys) {
+        pillarActivity[k] = { at: nowIso, userId };
+      }
+
       await storage.createOrUpdateAssessment({
         assessmentId,
-        sessionId,
-        pillars,
+        sessionId: sessionId || existingAssessment.sessionId,
+        pillars: merged,
+        pillarActivity,
         status: 'pillars_in_progress',
         updatedAt: new Date(),
       });
-      
-      // If client exists, update client with pillar data
+
       const assessment = await storage.getAssessment(assessmentId);
       if (assessment?.clientId) {
-        await storage.updateClientPillarData(assessment.clientId, pillars);
+        await storage.updateClientPillarData(assessment.clientId, merged);
       }
-      
+
       res.json({
         success: true,
         message: 'Pillar data saved successfully',
@@ -2634,6 +2701,114 @@ Respond ONLY with a valid JSON array.`;
     }
   });
   
+  const MAX_SCORECARD_SNAPSHOTS = 50;
+
+  app.get("/api/assessments/:assessmentId/snapshots", requireAuth, async (req, res) => {
+    try {
+      const { assessmentId } = req.params;
+      const userId = (req.session as any)?.userId;
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ success: false, error: "Assessment not found" });
+      }
+      const access = await resolveAssessmentAccess(storage, userId, assessment);
+      if (!access.ok) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+      const raw = assessment.scorecardSnapshots || [];
+      const snapshots = raw.map((s: any) => ({
+        snapshotId: s.snapshotId,
+        label: s.label || "",
+        createdAt: s.createdAt,
+        createdBy: s.createdBy,
+      }));
+      return res.json({ success: true, snapshots });
+    } catch (error: any) {
+      logger.error("Error listing snapshots", error);
+      return res.status(500).json({ success: false, error: "Failed to list snapshots", message: error.message });
+    }
+  });
+
+  app.post("/api/assessments/:assessmentId/snapshots", requireAuth, async (req, res) => {
+    try {
+      const { assessmentId } = req.params;
+      const userId = (req.session as any)?.userId;
+      const label = typeof req.body?.label === "string" ? req.body.label.trim().slice(0, 120) : "";
+
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ success: false, error: "Assessment not found" });
+      }
+      const access = await resolveAssessmentAccess(storage, userId, assessment);
+      if (!access.ok || !canWritePillars(access)) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const snapshotId = `snap_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
+      const entry = {
+        snapshotId,
+        label,
+        pillars: assessment.pillars ?? {},
+        scorecardResult: assessment.scorecardResult ?? null,
+        createdAt: new Date().toISOString(),
+        createdBy: userId,
+      };
+      const next = [...(assessment.scorecardSnapshots || []), entry];
+      while (next.length > MAX_SCORECARD_SNAPSHOTS) next.shift();
+
+      await storage.createOrUpdateAssessment({
+        assessmentId,
+        sessionId: assessment.sessionId,
+        scorecardSnapshots: next as any,
+      });
+
+      return res.status(201).json({ success: true, snapshot: entry });
+    } catch (error: any) {
+      logger.error("Error creating snapshot", error);
+      return res.status(500).json({ success: false, error: "Failed to create snapshot", message: error.message });
+    }
+  });
+
+  app.post("/api/assessments/:assessmentId/snapshots/:snapshotId/restore", requireAuth, async (req, res) => {
+    try {
+      const { assessmentId, snapshotId } = req.params;
+      const userId = (req.session as any)?.userId;
+
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ success: false, error: "Assessment not found" });
+      }
+      const access = await resolveAssessmentAccess(storage, userId, assessment);
+      if (!access.ok || !canRestoreScorecard(access)) {
+        return res.status(403).json({ success: false, error: "Only the owner or an unrestricted editor can restore versions." });
+      }
+
+      const snaps = assessment.scorecardSnapshots || [];
+      const snap = snaps.find((s: any) => s.snapshotId === snapshotId);
+      if (!snap) {
+        return res.status(404).json({ success: false, error: "Snapshot not found" });
+      }
+
+      await storage.createOrUpdateAssessment({
+        assessmentId,
+        sessionId: assessment.sessionId,
+        pillars: snap.pillars,
+        scorecardResult: snap.scorecardResult ?? null,
+        status: assessment.status,
+      });
+
+      const updated = await storage.getAssessment(assessmentId);
+      if (updated?.clientId) {
+        await storage.updateClientPillarData(updated.clientId, snap.pillars);
+      }
+
+      return res.json({ success: true, message: "Scorecard restored" });
+    } catch (error: any) {
+      logger.error("Error restoring snapshot", error);
+      return res.status(500).json({ success: false, error: "Failed to restore snapshot", message: error.message });
+    }
+  });
+
   // Load assessment data
   app.get("/api/assessments/:assessmentId", requireAuth, async (req, res) => {
     try {
@@ -2648,13 +2823,19 @@ Respond ONLY with a valid JSON array.`;
         });
       }
       
-      // Verify ownership
-      if (assessment.createdBy !== userId) {
+      const access = await resolveAssessmentAccess(storage, userId, assessment);
+      if (!access.ok) {
         return res.status(403).json({ 
           success: false,
           error: "Access denied" 
         });
       }
+
+      const pillars = filterPillarsForAccess(
+        assessment.pillars as Record<string, unknown> | undefined,
+        access,
+      );
+      const pillarActivity = filterPillarActivityForAccess(assessment.pillarActivity, access);
       
       res.json({
         success: true,
@@ -2662,8 +2843,17 @@ Respond ONLY with a valid JSON array.`;
           clientInfo: assessment.clientInfo,
           financials: assessment.financials,
         },
-        pillars: assessment.pillars || {},
+        pillars,
         scorecard: assessment.scorecardResult,
+        pillarActivity,
+        collaboration: access.ok
+          ? {
+              mode: access.mode,
+              pillarScopes: access.mode === "scoped" ? access.scopes : null,
+              canWritePillars: canWritePillars(access),
+              canRestoreScorecard: canRestoreScorecard(access),
+            }
+          : null,
       });
     } catch (error: any) {
       logger.error("Error loading assessment", error);
@@ -2711,7 +2901,8 @@ Respond ONLY with a valid JSON array.`;
         clientInfo, 
         financials, 
         pillars, 
-        scorecardResult 
+        scorecardResult,
+        workspaceId,
       } = req.body;
 
       // Generate server-backed clientId for Toolkit handoff
@@ -2719,10 +2910,16 @@ Respond ONLY with a valid JSON array.`;
       const randomSuffix = Math.random().toString(36).substring(2, 8);
       const clientId = `assessment-${userId}-${timestamp}-${randomSuffix}`;
 
+      const ws =
+        typeof workspaceId === "string" && workspaceId.trim().length > 0 ? workspaceId.trim() : undefined;
+
       // Create assessment in storage using existing method
       const assessment = await storage.createOrUpdateAssessment({
         assessmentId: clientId,
+        sessionId: sessionId || clientId,
         userId,
+        createdBy: userId,
+        workspaceId: ws,
         status: 'complete',
         clientInfo: {
           companyName: clientInfo?.companyName || clientInfo?.name || 'Unnamed Client',
