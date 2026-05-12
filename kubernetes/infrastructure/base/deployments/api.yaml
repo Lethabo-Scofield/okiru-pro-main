@@ -144,6 +144,18 @@ spec:
                   name: external-api-keys
                   key: GROQ_API_KEY
                   optional: true
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_STORAGE_CONNECTION_STRING
+                  optional: true
+            - name: AZURE_STORAGE_ACCOUNT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_STORAGE_ACCOUNT_NAME
+                  optional: true
             - name: NODE_OPTIONS
               value: "--max-old-space-size=1792"
           volumeMounts:
