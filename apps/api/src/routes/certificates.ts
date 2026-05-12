@@ -913,6 +913,57 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// Internal admin endpoint — authenticated via x-api-key header.
+// Triggers bulk certificate extraction from Azure Blob → MongoDB.
+// Callable from within the cluster without a user session:
+//   wget -q -O- --post-data='{"force":true}' \
+//     --header='Content-Type: application/json' \
+//     --header="x-api-key: $API_INTERNAL_KEY" \
+//     http://127.0.0.1:5000/api/certificates/process
+// ============================================================================
+router.post('/process', async (req: Request, res: Response) => {
+  const providedKey = req.headers['x-api-key'] as string | undefined;
+  const expectedKey = process.env.API_INTERNAL_KEY;
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    return res.status(401).json({ message: 'Invalid or missing x-api-key header' });
+  }
+
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
+    return res.status(500).json({ message: 'Azure Storage is not configured.' });
+  }
+
+  const force = req.body?.force === true;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  const sendEvent = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  sendEvent({ type: 'start', message: `Starting bulk certificate extraction (force=${force})...` });
+
+  try {
+    const result = await processAllCertificates(blobServiceClient, force, (done, total) => {
+      if (done % 10 === 0 || done === total) {
+        sendEvent({ type: 'progress', done, total });
+      }
+    });
+    sendEvent({ type: 'complete', ...result });
+    invalidateListAndStatsCache();
+  } catch (err: any) {
+    logger.error('Bulk certificate extraction failed', err);
+    sendEvent({ type: 'error', message: err.message });
+  }
+
+  res.end();
+});
+
 router.post('/extract', requireAuth, async (req: Request, res: Response) => {
   try {
     const blobServiceClient = getBlobServiceClient();

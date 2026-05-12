@@ -1799,6 +1799,8 @@ const SCORECARD_TYPES = [
   { sectorCode: 'RCOGP', scorecardType: 'QSE' },
   { sectorCode: 'FSC', scorecardType: 'Generic' },
   { sectorCode: 'AGRI', scorecardType: 'Generic' },
+  { sectorCode: 'TRANSPORT', scorecardType: 'Generic' },
+  { sectorCode: 'TRANSPORT', scorecardType: 'QSE' },
 ] as const;
 
 /**
