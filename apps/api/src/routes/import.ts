@@ -3,6 +3,8 @@ import { Router, type Request as ExpressRequest, type Response } from 'express';
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
+import fs from 'fs/promises';
+import os from 'os';
 import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 
@@ -19,8 +21,13 @@ const uploadLimiter = rateLimit({
 });
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, file, cb) => {
+      cb(null, `import-${Date.now()}-${file.originalname}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -90,11 +97,24 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
 
     const excelFile = files.find(f => /\.(xlsx?|csv)$/i.test(f.originalname));
     if (!excelFile) {
+      await Promise.all(files.map(f => fs.unlink(f.path).catch(() => {})));
       return res.status(400).json({ ...emptyPipeline, extractionSummary: { ...emptyPipeline.extractionSummary, errors: ['No Excel file found in upload.'] }, logs: [{ message: 'No Excel file in upload batch', type: 'error', timestamp: new Date().toISOString() }] });
     }
 
-    const parseResult = parseExcelBuffer(excelFile.buffer, excelFile.originalname);
+    const fileBuffer = await fs.readFile(excelFile.path);
+
+    const parseResult = await new Promise<ReturnType<typeof parseExcelBuffer>>((resolve, reject) => {
+      setImmediate(() => {
+        try {
+          resolve(parseExcelBuffer(fileBuffer, excelFile.originalname));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
     const pipelineResult = buildPipelineResult(parseResult, excelFile.originalname);
+
+    await Promise.all(files.map(f => fs.unlink(f.path).catch(() => {})));
 
     if (req.session.userId) {
       try {
@@ -116,6 +136,8 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
     return res.json(pipelineResult);
   } catch (error: unknown) {
     logger.error('Import error', error);
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (files) await Promise.all(files.map(f => fs.unlink(f.path).catch(() => {})));
     const message = isProd ? 'An unexpected error occurred during import.' : (error instanceof Error ? error.message : 'An unexpected error occurred during import.');
     return res.status(500).json({
       status: 'failed',
