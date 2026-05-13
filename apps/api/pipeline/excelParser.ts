@@ -261,7 +261,15 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
         if (amt) { client.leviableAmount = amt; addLog(logs, `Extracted Leviable Amount: R${amt.toLocaleString()}`, 'success'); }
       }
       if (!client.financialYear && /year|fy|financial\s*year|period|year\s*end|financial\s*year\s*end/i.test(label)) {
-        const yr = String(value).trim();
+        const rawYr = value;
+        let yr = String(rawYr).trim();
+        // Excel stores dates as serial integers (days since 1900-01-00).
+        // Values roughly between 36526 (2000-01-01) and 54789 (2050-01-01) are likely date serials.
+        const serialNum = typeof rawYr === 'number' ? rawYr : Number(yr);
+        if (!isNaN(serialNum) && serialNum > 36526 && serialNum < 54789) {
+          const date = new Date((serialNum - 25569) * 86400 * 1000);
+          yr = date.toISOString().split('T')[0];
+        }
         if (yr.length >= 4) {
           client.financialYear = yr;
           addLog(logs, `Extracted Financial Year: ${yr}`, 'success');

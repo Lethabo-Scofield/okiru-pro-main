@@ -5,12 +5,34 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import fs from 'fs/promises';
 import os from 'os';
+import path from 'path';
+import { Worker } from 'worker_threads';
 import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger("Import");
 import { requireAuth } from '../middleware/auth.js';
-import { parseExcelBuffer, buildPipelineResult } from '../../pipeline/index.js';
+import type { PipelineResult } from '../../pipeline/index.js';
+
+// __dirname is available in the CJS bundle produced by esbuild.
+// The worker is bundled as dist/excelParseWorker.cjs alongside dist/index.cjs.
+const WORKER_PATH = path.resolve(__dirname, 'excelParseWorker.cjs');
+
+function runParseInWorker(buffer: Buffer, filename: string): Promise<PipelineResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(WORKER_PATH, {
+      workerData: { bufferArray: Array.from(buffer), filename },
+    });
+    worker.once('message', (msg: { ok: boolean; result?: PipelineResult; error?: string }) => {
+      if (msg.ok) resolve(msg.result!);
+      else reject(new Error(msg.error ?? 'Worker parse error'));
+    });
+    worker.once('error', reject);
+    worker.once('exit', (code) => {
+      if (code !== 0) reject(new Error(`Worker exited with code ${code}`));
+    });
+  });
+}
 
 const uploadLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
@@ -103,16 +125,9 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
 
     const fileBuffer = await fs.readFile(excelFile.path);
 
-    const parseResult = await new Promise<ReturnType<typeof parseExcelBuffer>>((resolve, reject) => {
-      setImmediate(() => {
-        try {
-          resolve(parseExcelBuffer(fileBuffer, excelFile.originalname));
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-    const pipelineResult = buildPipelineResult(parseResult, excelFile.originalname);
+    // Run CPU-bound Excel parsing in a worker thread so the main event loop
+    // (and health-check endpoint) stays responsive for large files.
+    const pipelineResult = await runParseInWorker(fileBuffer, excelFile.originalname);
 
     await Promise.all(files.map(f => fs.unlink(f.path).catch(() => {})));
 

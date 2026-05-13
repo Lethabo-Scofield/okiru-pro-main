@@ -195,8 +195,8 @@ spec:
               scheme: HTTP
             initialDelaySeconds: 45
             periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 5
+            timeoutSeconds: 10
+            failureThreshold: 20
             successThreshold: 1
           readinessProbe:
             httpGet:
