@@ -2,8 +2,8 @@ import { workerData, parentPort } from 'worker_threads';
 import { parseExcelBuffer } from '../../pipeline/excelParser.js';
 import { buildPipelineResult } from '../../pipeline/buildResult.js';
 
-const { bufferArray, filename } = workerData as { bufferArray: number[]; filename: string };
-const buffer = Buffer.from(bufferArray);
+const { buffer: uint8, filename } = workerData as { buffer: Uint8Array; filename: string };
+const buffer = Buffer.from(uint8);
 
 try {
   const parseResult = parseExcelBuffer(buffer, filename);

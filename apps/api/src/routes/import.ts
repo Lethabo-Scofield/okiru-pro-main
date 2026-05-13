@@ -21,7 +21,7 @@ const WORKER_PATH = path.resolve(__dirname, 'excelParseWorker.cjs');
 function runParseInWorker(buffer: Buffer, filename: string): Promise<PipelineResult> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_PATH, {
-      workerData: { bufferArray: Array.from(buffer), filename },
+      workerData: { buffer: new Uint8Array(buffer), filename },
     });
     worker.once('message', (msg: { ok: boolean; result?: PipelineResult; error?: string }) => {
       if (msg.ok) resolve(msg.result!);

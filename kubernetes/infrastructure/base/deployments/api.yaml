@@ -37,6 +37,7 @@ spec:
                       values:
                         - api
                 topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 300
       containers:
         - name: api
           image: okiruproacrde4d539b.azurecr.io/okiru-pro/api:latest
