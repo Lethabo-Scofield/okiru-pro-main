@@ -60,7 +60,7 @@ export async function extractTextWithDocIntelligence(
   return '';
 }
 
-async function extractWithAzureFormRecognizer(buffer: Buffer, fileName: string): Promise<string> {
+async function extractWithAzureFormRecognizer(buffer: Buffer, _fileName: string): Promise<string> {
   // Dynamic import so startup never fails when the package is absent
   const { DocumentAnalysisClient, AzureKeyCredential } = (await import(
     '@azure/ai-form-recognizer'
@@ -71,15 +71,8 @@ async function extractWithAzureFormRecognizer(buffer: Buffer, fileName: string):
     new AzureKeyCredential(AZURE_DI_KEY),
   );
 
-  const ext = (fileName.split('.').pop() ?? '').toLowerCase();
-  const contentType =
-    ext === 'pdf'
-      ? 'application/pdf'
-      : ext === 'png'
-        ? 'image/png'
-        : 'image/jpeg';
-
-  const poller = await client.beginAnalyzeDocument('prebuilt-read', buffer, { contentType });
+  // The SDK infers content type from the binary stream automatically
+  const poller = await client.beginAnalyzeDocument('prebuilt-read', buffer);
   const result = await poller.pollUntilDone();
 
   // result.content contains the full text with layout preserved (preferred)

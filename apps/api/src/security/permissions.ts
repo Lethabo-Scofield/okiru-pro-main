@@ -80,6 +80,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   // Tenant administrator — full control within an organization.
   admin: ALL_PERMISSIONS,
 
+  // Platform super-admin — full control across all organizations.
+  // Assigned manually in MongoDB; cannot be self-assigned.
+  super_admin: ALL_PERMISSIONS,
+
   // Legacy default — kept for backwards compatibility with existing users
   // whose `role` field defaulted to `"user"`. Maps to analyst-equivalent.
   user: [

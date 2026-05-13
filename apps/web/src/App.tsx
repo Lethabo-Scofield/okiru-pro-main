@@ -7,7 +7,7 @@ import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { AuthProvider } from "@toolkit/lib/auth";
 import { Toaster } from "@toolkit/components/ui/toaster";
 import { TooltipProvider } from "@toolkit/components/ui/tooltip";
-import { ProtectedRoute, GuestRoute } from "@/components/RouteGuards";
+import { ProtectedRoute, GuestRoute, SuperAdminRoute } from "@/components/RouteGuards";
 import LandingWrapper from "@/pages/LandingWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";

@@ -64,3 +64,25 @@ export function GuestRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+/** Redirects to /hub unless the current user's role is super_admin. */
+export function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const [, navigate] = useLocation();
+  const { user, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      navigate("/auth", { replace: true });
+      return;
+    }
+    if (user.role !== "super_admin") {
+      navigate("/hub", { replace: true });
+    }
+  }, [user, isLoading, navigate]);
+
+  if (isLoading) return <FullScreenSpinner />;
+  if (!user || user.role !== "super_admin") return null;
+
+  return <>{children}</>;
+}
