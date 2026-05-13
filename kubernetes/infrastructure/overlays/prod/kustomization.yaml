@@ -19,11 +19,11 @@ patchesStrategicMerge:
 # Images - updated during deployment
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newTag: 4f03315e-202605130709
+  newTag: af55ebf6-202605130842
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-  newTag: 4f03315e-202605130709
+  newTag: af55ebf6-202605130842
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newTag: af55ebf6-202605130826
+  newTag: 286d970b-202605130858
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
@@ -39,3 +39,4 @@ configMapGenerator:
   - LOG_LEVEL=warn
   - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io
   name: app-config
+
