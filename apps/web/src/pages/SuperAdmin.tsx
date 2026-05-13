@@ -87,36 +87,118 @@ interface Sector {
   name: string;
   type: string;
   totalPoints: number;
-  pillarConfigs?: Record<string, PillarConfig | undefined>;
+  pillarConfigs?: Record<string, PillarConfig | undefined> | StoredPillarLike[];
   targets?: Record<string, unknown>;
-  levelThresholds?: Array<{ level: number; minPoints: number; recognition: number }>;
+  levelThresholds?: Array<{ level: number; minPoints: number; recognition: number }> | unknown;
 }
 
-interface SectorsResponse {
-  success: boolean;
-  source: string;
-  sectors: Sector[];
+/** Arango / ingestion shape: pillar list rows, not a keyed record */
+interface StoredPillarLike {
+  code?: string;
+  name?: string;
+  maxPoints?: number;
+  hasSubMinimum?: boolean;
+  subMinimumPercent?: number;
+  subMinimumThreshold?: number;
 }
+
+type LevelThresholdRow = { level: number; minPoints: number; recognition: number };
 
 /** API may return `{ success, sectors }`, a bare array, or malformed bodies; normalize before `.map`. */
 function normalizeSectorsList(data: unknown): Sector[] {
   if (data == null) return [];
-  if (Array.isArray(data)) return data as Sector[];
-  if (typeof data === "object" && "sectors" in data) {
+  let raw: unknown[] | null = null;
+  if (Array.isArray(data)) {
+    raw = data;
+  } else if (typeof data === "object" && data !== null && "sectors" in data) {
     const s = (data as { sectors?: unknown }).sectors;
-    if (Array.isArray(s)) return s as Sector[];
+    if (Array.isArray(s)) raw = s;
+    else if (s && typeof s === "object" && !Array.isArray(s)) raw = Object.values(s as Record<string, unknown>);
+  }
+  if (!raw) return [];
+  return raw.filter((item): item is Sector => item != null && typeof item === "object" && !Array.isArray(item));
+}
+
+function safePillarConfigs(sector: Sector | null | undefined): Record<string, PillarConfig | undefined> {
+  if (!sector || typeof sector !== "object") return {};
+  const pc = sector.pillarConfigs as unknown;
+  if (pc && typeof pc === "object" && !Array.isArray(pc)) {
+    return pc as Record<string, PillarConfig | undefined>;
+  }
+  if (Array.isArray(pc)) {
+    const out: Record<string, PillarConfig | undefined> = {};
+    for (const item of pc as StoredPillarLike[]) {
+      if (!item || typeof item !== "object") continue;
+      const key = typeof item.code === "string" && item.code ? item.code : typeof item.name === "string" ? item.name : "";
+      if (!key) continue;
+      const maxPoints = typeof item.maxPoints === "number" ? item.maxPoints : Number(item.maxPoints) || 0;
+      const subMin =
+        typeof item.subMinimumPercent === "number"
+          ? item.subMinimumPercent
+          : typeof item.subMinimumThreshold === "number"
+            ? item.subMinimumThreshold
+            : Number(item.subMinimumThreshold) || 0;
+      out[key] = {
+        maxPoints,
+        hasSubMinimum: Boolean(item.hasSubMinimum),
+        subMinimumPercent: subMin,
+      };
+    }
+    return out;
+  }
+  return {};
+}
+
+function coerceLevelThresholdRows(lt: unknown): LevelThresholdRow[] {
+  if (lt == null) return [];
+  const toRow = (o: Record<string, unknown>, levelFallback: number): LevelThresholdRow | null => {
+    const levelRaw = o.level ?? levelFallback;
+    const level = typeof levelRaw === "number" ? levelRaw : Number(levelRaw);
+    if (!Number.isFinite(level)) return null;
+    const minRaw = o.minPoints ?? o.min ?? 0;
+    const recRaw = o.recognition ?? o.recognitionPercent ?? 0;
+    const minPoints = typeof minRaw === "number" ? minRaw : Number(minRaw);
+    const recognition = typeof recRaw === "number" ? recRaw : Number(recRaw);
+    return {
+      level,
+      minPoints: Number.isFinite(minPoints) ? minPoints : 0,
+      recognition: Number.isFinite(recognition) ? recognition : 0,
+    };
+  };
+  if (Array.isArray(lt)) {
+    const rows = lt
+      .map((entry, i) => {
+        if (!entry || typeof entry !== "object") return null;
+        return toRow(entry as Record<string, unknown>, i + 1);
+      })
+      .filter((r): r is LevelThresholdRow => r != null);
+    return [...rows].sort((a, b) => a.level - b.level);
+  }
+  if (typeof lt === "object" && !Array.isArray(lt)) {
+    const rows = Object.entries(lt as Record<string, unknown>)
+      .map(([k, v]) => {
+        const levelFromKey = Number(k);
+        if (!v || typeof v !== "object" || Array.isArray(v)) {
+          return Number.isFinite(levelFromKey) ? toRow({ level: levelFromKey, minPoints: v } as Record<string, unknown>, levelFromKey) : null;
+        }
+        const base = Number.isFinite(levelFromKey) ? levelFromKey : NaN;
+        return toRow(v as Record<string, unknown>, base);
+      })
+      .filter((r): r is LevelThresholdRow => r != null);
+    return [...rows].sort((a, b) => a.level - b.level);
   }
   return [];
 }
 
-function safePillarConfigs(sector: Sector): Record<string, PillarConfig | undefined> {
-  const pc = sector.pillarConfigs;
-  return pc && typeof pc === "object" && !Array.isArray(pc) ? pc : {};
+function safeLevelThresholds(sector: Sector | null | undefined): LevelThresholdRow[] {
+  if (!sector || typeof sector !== "object") return [];
+  return coerceLevelThresholdRows(sector.levelThresholds);
 }
 
-function safeLevelThresholds(sector: Sector): Array<{ level: number; minPoints: number; recognition: number }> {
-  const lt = sector.levelThresholds;
-  return Array.isArray(lt) ? lt : [];
+/** Guard `Object.entries` for possibly malformed records */
+function safeObjectEntriesKV(obj: unknown): [string, PillarConfig | undefined][] {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return [];
+  return Object.entries(obj as Record<string, PillarConfig | undefined>);
 }
 
 const ROLE_OPTIONS = [
@@ -179,7 +261,9 @@ const PILLAR_NAMES: Record<string, string> = {
 };
 
 function getActivePillars(pillarConfigs: Record<string, PillarConfig | undefined>): { name: string; maxPoints: number }[] {
-  return Object.entries(pillarConfigs)
+  const pc =
+    pillarConfigs && typeof pillarConfigs === "object" && !Array.isArray(pillarConfigs) ? pillarConfigs : {};
+  return Object.entries(pc)
     .filter(([_, config]) => config && config.maxPoints > 0)
     .map(([key, config]) => ({
       name: PILLAR_NAMES[key] || key,
@@ -189,7 +273,9 @@ function getActivePillars(pillarConfigs: Record<string, PillarConfig | undefined
 }
 
 function getPillarCount(pillarConfigs: Record<string, PillarConfig | undefined>): number {
-  return Object.values(pillarConfigs).filter((config) => config && config.maxPoints > 0).length;
+  const pc =
+    pillarConfigs && typeof pillarConfigs === "object" && !Array.isArray(pillarConfigs) ? pillarConfigs : {};
+  return Object.values(pc).filter((config) => config && config.maxPoints > 0).length;
 }
 
 function isTransportQse(sector: Sector): boolean {
@@ -272,7 +358,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Object.entries(pillarConfigs).map(([key, config]) => {
+                {safeObjectEntriesKV(pillarConfigs).map(([key, config]) => {
                   const isApplicable = config && config.maxPoints > 0;
                   const isTransportQsePillar = isTransportQseSector && isApplicable;
                   return (
@@ -319,7 +405,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
               Level Thresholds
             </h4>
             <div className="grid grid-cols-4 gap-2">
-              {levelThresholds.map((threshold) => (
+              {(Array.isArray(levelThresholds) ? levelThresholds : []).map((threshold) => (
                 <div
                   key={threshold.level}
                   className="p-2 border rounded text-center"
@@ -472,9 +558,9 @@ export default function SuperAdmin() {
     refetchInterval: 30_000,
   });
 
-  const { data: sectorsResp, isLoading: sectorsLoading } = useQuery<SectorsResponse>({
+  const { data: sectors = [], isLoading: sectorsLoading } = useQuery<Sector[]>({
     queryKey: ["/api/sectors"],
-    queryFn: () => apiRequest("GET", "/api/sectors").then((r) => r.json()),
+    queryFn: () => apiRequest("GET", "/api/sectors").then((r) => r.json()).then(normalizeSectorsList),
     enabled: user?.role === "super_admin",
     staleTime: 60_000,
   });
@@ -518,7 +604,7 @@ export default function SuperAdmin() {
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const users = usersResp?.users ?? [];
+  const users = Array.isArray(usersResp?.users) ? usersResp.users : [];
   const totalUsers = usersResp?.total ?? 0;
 
   const filtered = users.filter((u) => {
@@ -696,11 +782,13 @@ export default function SuperAdmin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {normalizeSectorsList(sectorsResp).map((sector) => {
+                    {sectors.map((sector) => {
                       const pillarConfigs = safePillarConfigs(sector);
                       const levelThresholds = safeLevelThresholds(sector);
                       const isTransportQseSector = isTransportQse(sector);
                       const activePillars = getActivePillars(pillarConfigs);
+                      const activePillarList = Array.isArray(activePillars) ? activePillars : [];
+                      const levelList = Array.isArray(levelThresholds) ? levelThresholds : [];
 
                       return (
                         <TableRow
@@ -734,7 +822,7 @@ export default function SuperAdmin() {
                                 {getPillarCount(pillarConfigs)} pillars
                               </p>
                               <div className="flex flex-wrap gap-1">
-                                {activePillars.slice(0, 4).map((pillar) => (
+                                {activePillarList.slice(0, 4).map((pillar) => (
                                   <Badge
                                     key={pillar.name}
                                     variant="secondary"
@@ -743,9 +831,9 @@ export default function SuperAdmin() {
                                     {pillar.name.length > 12 ? `${pillar.name.slice(0, 12)}...` : pillar.name}: {pillar.maxPoints}
                                   </Badge>
                                 ))}
-                                {activePillars.length > 4 && (
+                                {activePillarList.length > 4 && (
                                   <Badge variant="outline" className="text-[9px]">
-                                    +{activePillars.length - 4} more
+                                    +{activePillarList.length - 4} more
                                   </Badge>
                                 )}
                               </div>
@@ -753,14 +841,14 @@ export default function SuperAdmin() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1 max-w-[200px]">
-                              {levelThresholds.slice(0, 4).map((t) => (
+                              {levelList.slice(0, 4).map((t) => (
                                 <span key={t.level} className="text-[10px] text-muted-foreground">
                                   L{t.level}: {t.minPoints}
                                 </span>
                               ))}
-                              {levelThresholds.length > 4 && (
+                              {levelList.length > 4 && (
                                 <span className="text-[10px] text-muted-foreground">
-                                  +{levelThresholds.length - 4} more
+                                  +{levelList.length - 4} more
                                 </span>
                               )}
                             </div>
