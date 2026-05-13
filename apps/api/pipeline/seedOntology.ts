@@ -164,7 +164,7 @@ function toStoredSectorRule(
   return {
     sectorCode: config.sectorCode.toUpperCase(),
     sectorName: config.sectorName,
-    scorecardType: config.scorecardType,
+    scorecardType: config.scorecardType as 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP',
     version: 'v1.0',
     totalMaxPoints,
     pillarConfigs,

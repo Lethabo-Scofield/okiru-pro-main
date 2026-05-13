@@ -17,11 +17,6 @@ import { SectorRuleRepository } from '../../arango/repositories/sectorRuleReposi
 
 const router = Router();
 
-function routeParam(v: string | string[] | undefined): string {
-  if (v == null) return '';
-  return Array.isArray(v) ? String(v[0] ?? '') : String(v);
-}
-
 // ---------------------------------------------------------------------------
 // GET /api/sectors - List all available sectors from ArangoDB
 // ---------------------------------------------------------------------------
@@ -167,8 +162,8 @@ router.get('/options', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
-    const sectorCode = routeParam(req.params.sectorCode);
-    const scorecardType = routeParam(req.params.scorecardType);
+    const sectorCode = Array.isArray(req.params.sectorCode) ? req.params.sectorCode[0] : req.params.sectorCode;
+    const scorecardType = Array.isArray(req.params.scorecardType) ? req.params.scorecardType[0] : req.params.scorecardType;
 
     if (!isArangoConnected()) {
       return res.status(503).json({
@@ -214,8 +209,9 @@ router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
   try {
-    const sectorCode = routeParam(req.params.sectorCode);
-    const scorecardType = routeParam(req.query.type as string | string[] | undefined) || 'Generic';
+    const sectorCode = Array.isArray(req.params.sectorCode) ? req.params.sectorCode[0] : req.params.sectorCode;
+    const rawScorecardType = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type;
+    const scorecardType = (typeof rawScorecardType === 'string' ? rawScorecardType : 'Generic') || 'Generic';
 
     const { buildManifest } = await import('../../pipeline/extraction/entityManifest.js');
     const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
@@ -260,71 +256,45 @@ router.post('/seed', async (_req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// Fallback helpers
+// Fallback helpers — derived from `sectorConfig.ts` (single source of truth).
+//
+// Both the ArangoDB-backed code paths above and these fallbacks read from the
+// same `listSectorConfigs()` registry, which guarantees no duplicate or
+// drifting sector entries between the two paths. Adding a new sector to
+// `ALL_CONFIGS` in sectorConfig.ts automatically surfaces it here too.
 // ---------------------------------------------------------------------------
 
 function getFallbackSectors() {
-  // Based on hardcoded sectorConfig.ts
-  return [
-    {
-      code: 'RCOGP',
-      name: 'Revised Codes of Good Practice (RCOGP)',
-      type: 'Generic',
-      totalPoints: 120,
-    },
-    {
-      code: 'RCOGP',
-      name: 'Revised Codes (QSE)',
-      type: 'QSE',
-      totalPoints: 108,
-    },
-    {
-      code: 'ICT',
-      name: 'ICT Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 140,
-    },
-    {
-      code: 'ICT',
-      name: 'ICT Sector Code (QSE)',
-      type: 'QSE',
-      totalPoints: 116,
-    },
-    {
-      code: 'FSC',
-      name: 'Financial Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 120,
-    },
-    {
-      code: 'AGRI',
-      name: 'AgriBEE Sector Code (Generic)',
-      type: 'Generic',
-      totalPoints: 132,
-    },
-    {
-      code: 'TRANSPORT',
-      name: 'Transport Sector Code (Large Enterprise)',
-      type: 'Generic',
-      totalPoints: 108,
-    },
-    {
-      code: 'TRANSPORT',
-      name: 'Transport Sector Code (QSE)',
-      type: 'QSE',
-      totalPoints: 107,
-    },
-  ];
+  return listSectorConfigs().map(c => ({
+    code: c.code,
+    name: c.name,
+    type: c.type,
+    totalPoints: c.totalPoints,
+  }));
 }
 
 function getFallbackSectorOptions() {
-  return [
-    { value: 'RCOGP', label: 'Revised Codes of Good Practice (RCOGP)', code: 'RCOGP', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
-    { value: 'ICT', label: 'ICT Sector Code', code: 'ICT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
-    { value: 'FSC', label: 'Financial Sector Code (FSC)', code: 'FSC', hasQSE: false, availableTypes: ['Generic'] },
-    { value: 'AGRI', label: 'AgriBEE Sector Code', code: 'AGRI', hasQSE: false, availableTypes: ['Generic'] },
-    { value: 'TRANSPORT', label: 'Transport Sector Code', code: 'TRANSPORT', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
-  ];
+  // Group registry rows by sectorCode → dropdown option with availableTypes.
+  const grouped = new Map<string, { code: string; name: string; types: string[] }>();
+  for (const c of listSectorConfigs()) {
+    const existing = grouped.get(c.code);
+    if (existing) {
+      existing.types.push(c.type);
+    } else {
+      // Strip parenthesised scorecard type from the display name for the
+      // grouped dropdown label (e.g. "Construction Sector Code (QSE)" →
+      // "Construction Sector Code").
+      const baseName = c.name.replace(/\s*\([^)]*\)\s*$/, '');
+      grouped.set(c.code, { code: c.code, name: baseName, types: [c.type] });
+    }
+  }
+  return Array.from(grouped.values()).map(g => ({
+    value: g.code,
+    label: g.name,
+    code: g.code,
+    hasQSE: g.types.includes('QSE'),
+    availableTypes: g.types,
+  }));
 }
 
 export default router;

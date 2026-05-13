@@ -35,7 +35,7 @@ export interface StoredSectorRule {
   _key?: string;
   sectorCode: string;
   sectorName: string;
-  scorecardType: 'Generic' | 'QSE' | 'EME';
+  scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
   version: string;
   totalMaxPoints: number;
   pillarConfigs: StoredPillarConfig[];

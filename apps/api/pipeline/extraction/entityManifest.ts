@@ -106,8 +106,8 @@ export interface PillarPack {
 export interface RootContext {
   sector: string;
   sectorCodeVersion: string;
-  scorecardType: 'Generic' | 'QSE' | 'EME';
-  companySize: 'EME' | 'QSE' | 'Generic';
+  scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
+  companySize: 'EME' | 'QSE' | 'Generic' | 'Contractor' | 'BEP';
   financialYearEnd?: string;
   verificationDate?: string;
   applicableIndustryNorm?: string;
@@ -1845,7 +1845,7 @@ function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['ge
   return {
     sectorCode: stored.sectorCode,
     sectorName: stored.sectorName,
-    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
+    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP',
     totalMaxPoints,
     pillarConfigs,
     targets: (stored.targets as SectorConfig['targets']) || {},
