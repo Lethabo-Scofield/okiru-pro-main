@@ -33,6 +33,7 @@ import entityTemplatesRouter from './entityTemplates.js';
 import entityMappingRouter from './entityMapping.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
+import constructionRouter from './construction.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
 import auditRouter from './audit.js';
@@ -176,6 +177,7 @@ export async function registerRoutes(
 
   // Sectors: ArangoDB-backed sector configurations
   app.use('/api/sectors', sectorsRouter);
+  app.use('/api/construction', constructionRouter);
 
   // Processor sessions: document processing workflow persistence
   app.use('/api/processor-sessions', createProcessorSessionsRouter());
