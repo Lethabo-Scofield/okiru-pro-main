@@ -175,7 +175,7 @@ spec:
                   key: CHROMA_URL
                   optional: true
             - name: NODE_OPTIONS
-              value: "--max-old-space-size=1792"
+              value: "--max-old-space-size=1536"
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp
