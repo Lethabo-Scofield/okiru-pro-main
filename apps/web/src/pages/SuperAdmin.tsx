@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@toolkit/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@toolkit/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@toolkit/components/ui/table";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { AppNavBack } from "@/components/AppNavBack";
 import {
@@ -33,6 +35,14 @@ import {
   FileText,
   Activity,
   Crown,
+  Building,
+  Settings,
+  Layers,
+  Target,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Eye,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -64,6 +74,49 @@ interface HealthResponse {
   uptime: number;
   environment: string;
   arangodb?: { connected: boolean };
+}
+
+interface PillarConfig {
+  maxPoints: number;
+  hasSubMinimum: boolean;
+  subMinimumPercent: number;
+}
+
+interface Sector {
+  code: string;
+  name: string;
+  type: string;
+  totalPoints: number;
+  pillarConfigs?: Record<string, PillarConfig | undefined>;
+  targets?: Record<string, unknown>;
+  levelThresholds?: Array<{ level: number; minPoints: number; recognition: number }>;
+}
+
+interface SectorsResponse {
+  success: boolean;
+  source: string;
+  sectors: Sector[];
+}
+
+/** API may return `{ success, sectors }`, a bare array, or malformed bodies; normalize before `.map`. */
+function normalizeSectorsList(data: unknown): Sector[] {
+  if (data == null) return [];
+  if (Array.isArray(data)) return data as Sector[];
+  if (typeof data === "object" && "sectors" in data) {
+    const s = (data as { sectors?: unknown }).sectors;
+    if (Array.isArray(s)) return s as Sector[];
+  }
+  return [];
+}
+
+function safePillarConfigs(sector: Sector): Record<string, PillarConfig | undefined> {
+  const pc = sector.pillarConfigs;
+  return pc && typeof pc === "object" && !Array.isArray(pc) ? pc : {};
+}
+
+function safeLevelThresholds(sector: Sector): Array<{ level: number; minPoints: number; recognition: number }> {
+  const lt = sector.levelThresholds;
+  return Array.isArray(lt) ? lt : [];
 }
 
 const ROLE_OPTIONS = [
@@ -105,6 +158,182 @@ function RoleBadge({ role }: { role: string }) {
       {role === "admin" && <Shield className="h-2.5 w-2.5" />}
       {role}
     </span>
+  );
+}
+
+// ─── Sector Helpers ──────────────────────────────────────────────────────────
+
+const PILLAR_NAMES: Record<string, string> = {
+  ownership: "Ownership",
+  managementControl: "Management Control",
+  employmentEquity: "Employment Equity",
+  skillsDevelopment: "Skills Development",
+  preferentialProcurement: "Preferential Procurement",
+  supplierDevelopment: "Supplier Development",
+  enterpriseDevelopment: "Enterprise Development",
+  socioEconomicDevelopment: "Socio-Economic Development",
+  yesInitiative: "YES Initiative",
+  empowermentFinancing: "Empowerment Financing",
+  accessToFinancialServices: "Access to Financial Services",
+  consumerEducation: "Consumer Education",
+};
+
+function getActivePillars(pillarConfigs: Record<string, PillarConfig | undefined>): { name: string; maxPoints: number }[] {
+  return Object.entries(pillarConfigs)
+    .filter(([_, config]) => config && config.maxPoints > 0)
+    .map(([key, config]) => ({
+      name: PILLAR_NAMES[key] || key,
+      maxPoints: config?.maxPoints || 0,
+    }))
+    .sort((a, b) => b.maxPoints - a.maxPoints);
+}
+
+function getPillarCount(pillarConfigs: Record<string, PillarConfig | undefined>): number {
+  return Object.values(pillarConfigs).filter((config) => config && config.maxPoints > 0).length;
+}
+
+function isTransportQse(sector: Sector): boolean {
+  const code = typeof sector.code === "string" ? sector.code : "";
+  const t = typeof sector.type === "string" ? sector.type : "";
+  return code.toUpperCase() === "TRANSPORT" && t.toLowerCase() === "qse";
+}
+
+function SectorDetailsDialog({ sector }: { sector: Sector }) {
+  const pillarConfigs = safePillarConfigs(sector);
+  const activePillars = getActivePillars(pillarConfigs);
+  const isTransportQseSector = isTransportQse(sector);
+  const levelThresholds = safeLevelThresholds(sector);
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px]">
+          <Eye className="h-3 w-3 mr-1" />
+          View Details
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5 text-blue-500" />
+            {sector.name}
+            <Badge variant="outline" className="ml-2">
+              {sector.type}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Summary Card */}
+          <Card className={isTransportQseSector ? "border-amber-500/50 bg-amber-500/5" : ""}>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Code</p>
+                  <p className="font-semibold text-sm">{sector.code}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Points</p>
+                  <p className={`font-semibold text-sm ${isTransportQseSector ? "text-amber-600" : ""}`}>
+                    {sector.totalPoints}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Active Pillars</p>
+                  <p className={`font-semibold text-sm ${isTransportQseSector ? "text-amber-600" : ""}`}>
+                    {getPillarCount(pillarConfigs)}
+                  </p>
+                </div>
+              </div>
+              {isTransportQseSector && (
+                <div className="mt-3 p-2 bg-amber-500/10 rounded border border-amber-500/20">
+                  <p className="text-xs text-amber-700 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <strong>Transport QSE:</strong> Exactly 4 pillars at 25 points each = 100 total
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Pillar Configuration */}
+          <div>
+            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              Pillar Configuration
+            </h4>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Pillar</TableHead>
+                  <TableHead className="text-xs text-right">Max Points</TableHead>
+                  <TableHead className="text-xs text-center">Applicable</TableHead>
+                  <TableHead className="text-xs text-center">Sub-Minimum</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(pillarConfigs).map(([key, config]) => {
+                  const isApplicable = config && config.maxPoints > 0;
+                  const isTransportQsePillar = isTransportQseSector && isApplicable;
+                  return (
+                    <TableRow
+                      key={key}
+                      className={isTransportQsePillar ? "bg-amber-500/10" : !isApplicable ? "opacity-50" : ""}
+                    >
+                      <TableCell className="text-sm font-medium">
+                        {PILLAR_NAMES[key] || key}
+                        {isTransportQsePillar && (
+                          <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50 text-amber-700">
+                            25 pts
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-right font-mono">
+                        {config?.maxPoints || 0}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isApplicable ? (
+                          <Badge variant="default" className="text-[9px] bg-green-500/20 text-green-700 hover:bg-green-500/20">
+                            Yes
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] text-muted-foreground">
+                            No
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center text-xs">
+                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Level Thresholds */}
+          <div>
+            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Target className="h-4 w-4 text-muted-foreground" />
+              Level Thresholds
+            </h4>
+            <div className="grid grid-cols-4 gap-2">
+              {levelThresholds.map((threshold) => (
+                <div
+                  key={threshold.level}
+                  className="p-2 border rounded text-center"
+                >
+                  <p className="text-xs text-muted-foreground">Level {threshold.level}</p>
+                  <p className="font-semibold text-sm">{threshold.minPoints} pts</p>
+                  <p className="text-[10px] text-muted-foreground">{threshold.recognition}%</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -241,6 +470,22 @@ export default function SuperAdmin() {
     queryKey: ["/api/health"],
     queryFn: () => apiRequest("GET", "/api/health").then((r) => r.json()),
     refetchInterval: 30_000,
+  });
+
+  const { data: sectorsResp, isLoading: sectorsLoading } = useQuery<SectorsResponse>({
+    queryKey: ["/api/sectors"],
+    queryFn: () => apiRequest("GET", "/api/sectors").then((r) => r.json()),
+    enabled: user?.role === "super_admin",
+    staleTime: 60_000,
+  });
+
+  const seedSectorsMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/sectors/seed").then((r) => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sectors"] });
+      toast({ title: "Sectors re-seeded", description: `Total sectors: ${data.result?.totalSectors || "unknown"}` });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const seedUsersMutation = useMutation({
@@ -408,6 +653,146 @@ export default function SuperAdmin() {
               </CardContent>
             </Card>
           </div>
+        </section>
+
+        {/* ─── Sector Configuration ─── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              <Building className="h-4 w-4 text-muted-foreground" /> Sector Configuration
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => seedSectorsMutation.mutate()}
+              disabled={seedSectorsMutation.isPending}
+              className="text-xs"
+            >
+              {seedSectorsMutation.isPending ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Settings className="h-3 w-3 mr-1" />
+              )}
+              Refresh from Code
+            </Button>
+          </div>
+
+          {sectorsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Sector Code</TableHead>
+                      <TableHead className="text-xs">Type</TableHead>
+                      <TableHead className="text-xs text-right">Total Points</TableHead>
+                      <TableHead className="text-xs">Pillars</TableHead>
+                      <TableHead className="text-xs">Level Thresholds</TableHead>
+                      <TableHead className="text-xs text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {normalizeSectorsList(sectorsResp).map((sector) => {
+                      const pillarConfigs = safePillarConfigs(sector);
+                      const levelThresholds = safeLevelThresholds(sector);
+                      const isTransportQseSector = isTransportQse(sector);
+                      const activePillars = getActivePillars(pillarConfigs);
+
+                      return (
+                        <TableRow
+                          key={`${sector.code}-${sector.type}`}
+                          className={isTransportQseSector ? "bg-amber-500/10 border-l-2 border-l-amber-500" : ""}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">{sector.code}</span>
+                              {isTransportQseSector && (
+                                <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700">
+                                  <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
+                                  Verified
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">
+                              {sector.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-mono text-sm ${isTransportQseSector ? "text-amber-600 font-semibold" : ""}`}>
+                              {sector.totalPoints}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                {getPillarCount(pillarConfigs)} pillars
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {activePillars.slice(0, 4).map((pillar) => (
+                                  <Badge
+                                    key={pillar.name}
+                                    variant="secondary"
+                                    className={`text-[9px] ${isTransportQseSector ? "bg-amber-500/20 text-amber-800" : ""}`}
+                                  >
+                                    {pillar.name.length > 12 ? `${pillar.name.slice(0, 12)}...` : pillar.name}: {pillar.maxPoints}
+                                  </Badge>
+                                ))}
+                                {activePillars.length > 4 && (
+                                  <Badge variant="outline" className="text-[9px]">
+                                    +{activePillars.length - 4} more
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {levelThresholds.slice(0, 4).map((t) => (
+                                <span key={t.level} className="text-[10px] text-muted-foreground">
+                                  L{t.level}: {t.minPoints}
+                                </span>
+                              ))}
+                              {levelThresholds.length > 4 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  +{levelThresholds.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <SectorDetailsDialog sector={sector} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Transport QSE Verification Note */}
+          <Card className="mt-4 border-amber-500/30 bg-amber-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-semibold text-amber-700">Transport QSE Verification</h4>
+                  <p className="text-xs text-amber-600 mt-1">
+                    TRANSPORT QSE has exactly <strong>4 pillars</strong> at <strong>25 points each</strong>:
+                    Skills Development, Preferential Procurement, Enterprise Development, and Socio-Economic Development.
+                    Total: <strong>100 points</strong>. Ownership, Management Control, and YES are not applicable (maxPoints: 0).
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* ─── User Management ─── */}
