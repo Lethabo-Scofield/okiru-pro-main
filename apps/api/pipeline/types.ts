@@ -21,13 +21,39 @@ export interface PipelineResult {
     name: string;
     tradeName: string;
     address: string;
+    /** Postal address (if separate from physical). */
+    postalAddress?: string;
     registrationNumber: string;
     vatNumber: string;
+    /** SARS income tax number (separate from VAT). */
+    taxNumber?: string;
     financialYearEnd: string;
+    /** ISO start of measurement period. */
+    measurementPeriodStart?: string;
+    /** ISO end of measurement period. */
+    measurementPeriodEnd?: string;
     industrySector: string;
     applicableScorecard: string;
     applicableCodes: string;
+    /** Normalized sector code (RCOGP / ICT / FSC / AGRI / TRANSPORT …). */
+    sectorCode?: string;
+    /** Province used for EAP comparators. */
+    eapProvince?: string;
+    /** Total headcount (full-time-equivalent) used for sizing / EAP. */
+    numberOfEmployees?: number;
+    /** Primary contact person name. */
+    contactPerson?: string;
+    /** Primary contact email. */
+    contactEmail?: string;
+    /** Primary contact phone. */
+    contactPhone?: string;
     certificateNumber: string;
+    /** Existing B-BBEE certificate expiry (ISO). */
+    certificateExpiry?: string;
+    /** Existing B-BBEE level (1–8). */
+    certificateLevel?: number;
+    /** SANAS-accredited verification agency name. */
+    verificationAgency?: string;
   };
 
   financials: {
@@ -56,6 +82,14 @@ export interface PipelineResult {
       bwoPercent: number;
       shares: number;
       shareValue: number;
+      /** Voting rights percent (0–100). */
+      votingRightsPercent?: number;
+      /** Economic interest percent (0–100). */
+      economicInterestPercent?: number;
+      isDesignatedGroup?: boolean;
+      designatedGroupType?: 'youth' | 'orphan' | 'disabled' | 'military';
+      blackNewEntrant?: boolean;
+      yearsHeld?: number;
     }>;
   };
 
@@ -71,6 +105,10 @@ export interface PipelineResult {
       race: string;
       designation: string;
       disabled: boolean;
+      idNumber?: string;
+      isForeign?: boolean;
+      province?: string;
+      hireDate?: string;
     }>;
   };
 
@@ -86,6 +124,14 @@ export interface PipelineResult {
       cost: number;
       isBlack: boolean;
       isEmployed: boolean;
+      learnerName?: string;
+      race?: string;
+      gender?: string;
+      isDisabled?: boolean;
+      isYesEmployee?: boolean;
+      isAbsorbed?: boolean;
+      isAbet?: boolean;
+      transactionDate?: string;
     }>;
   };
 
@@ -100,6 +146,12 @@ export interface PipelineResult {
       level: number;
       spend: number;
       blackOwnership: number;
+      /** Black-women ownership percent (0–100). */
+      blackWomenOwnership?: number;
+      vatNumber?: string;
+      enterpriseType?: 'generic' | 'qse' | 'eme';
+      isEmpoweringSupplier?: boolean;
+      isDesignatedGroupSupplier?: boolean;
     }>;
   };
 
@@ -111,6 +163,10 @@ export interface PipelineResult {
       type: string;
       amount: number;
       category: string;
+      description?: string;
+      blackBenefitPercent?: number;
+      transactionDate?: string;
+      jobsCreated?: number;
     }>;
   };
 
@@ -122,6 +178,9 @@ export interface PipelineResult {
       type: string;
       amount: number;
       category: string;
+      description?: string;
+      blackBenefitPercent?: number;
+      transactionDate?: string;
     }>;
   };
 
@@ -178,4 +237,9 @@ export interface PipelineResult {
   sheetsMatched: Array<{ sheetName: string; matchedTo: string; confidence: number }>;
 
   logs: PipelineLog[];
+
+  /** True when the LLM reconciliation pass ran and improved the result. */
+  reconciliationApplied: boolean;
+  /** Human-readable notes describing what the reconciliation step corrected. */
+  reconciliationNotes: string[];
 }

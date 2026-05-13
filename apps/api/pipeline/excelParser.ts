@@ -11,28 +11,75 @@ export interface ParseLog {
 export interface ParsedClient {
   name?: string;
   tradeName?: string;
+  /** Full address (physical). */
   address?: string;
+  /** Postal address (if different from physical). */
+  postalAddress?: string;
   registrationNumber?: string;
+  /** SARS VAT registration number (digits only when possible). */
   vatNumber?: string;
+  /** SARS income tax number — separate from VAT. */
+  taxNumber?: string;
+  /** Year-end date or financial year string from the workbook. */
   financialYear?: string;
+  /** ISO start of measurement / verification period. */
+  measurementPeriodStart?: string;
+  /** ISO end of measurement / verification period. */
+  measurementPeriodEnd?: string;
   revenue?: number;
   npat?: number;
   leviableAmount?: number;
   payroll?: number;
+  /** Industry name (e.g. "ICT Services", "Construction"). */
   industrySector?: string;
+  /** Applicable scorecard variant: "Generic", "QSE", "EME". */
   applicableScorecard?: string;
+  /** Sector code (RCOGP, ICT, FSC, AGRI, TRANSPORT, …) — separate from `applicableCodes`. */
+  sectorCode?: string;
   applicableCodes?: string;
   tmps?: number;
   tmpsInclusions?: number;
   tmpsExclusions?: number;
+  /** Province used for EAP comparators in Management Control. */
+  eapProvince?: string;
+  /** Total full-time-equivalent headcount used for sizing / EAP. */
+  numberOfEmployees?: number;
+  /** Primary contact person name. */
+  contactPerson?: string;
+  /** Primary contact email. */
+  contactEmail?: string;
+  /** Primary contact phone. */
+  contactPhone?: string;
+  /** Existing B-BBEE certificate number. */
+  beeCertificateNumber?: string;
+  /** Existing B-BBEE certificate expiry (ISO). */
+  beeCertificateExpiry?: string;
+  /** Existing B-BBEE level (1–8). */
+  beeCertificateLevel?: number;
+  /** SANAS-accredited verification agency name. */
+  verificationAgency?: string;
 }
 
 export interface ParsedShareholder {
   name: string;
+  /** Black ownership share as fraction 0–1 of total. */
   blackOwnership: number;
+  /** Black-women ownership share as fraction 0–1 of total. */
   blackWomenOwnership: number;
   shares?: number;
   shareValue?: number;
+  /** Voting rights (fraction 0–1). */
+  votingRightsPercent?: number;
+  /** Economic interest (fraction 0–1). */
+  economicInterestPercent?: number;
+  /** Whether shareholder is from a designated group. */
+  isDesignatedGroup?: boolean;
+  designatedGroupType?: 'youth' | 'orphan' | 'disabled' | 'military';
+  blackNewEntrant?: boolean;
+  /** Years held — for graduation factor. */
+  yearsHeld?: number;
+  /** Modified flow-through ownership percentage (0–1). */
+  modifiedFlowThrough?: number;
 }
 
 export interface ParsedEmployee {
@@ -41,15 +88,41 @@ export interface ParsedEmployee {
   race: string;
   designation: string;
   isDisabled: boolean;
+  /** SA ID or passport number (where present). */
+  idNumber?: string;
+  /** Foreign nationals are excluded from B-BBEE calcs. */
+  isForeign?: boolean;
+  /** Province (for EAP comparison). */
+  province?: string;
+  /** ISO hire / start date. */
+  hireDate?: string;
+  /** ISO termination date (if applicable). */
+  terminationDate?: string;
 }
 
 export interface ParsedSupplier {
   name: string;
   beeLevel: number;
+  /** Black ownership fraction 0–1 of the supplier. */
   blackOwnership: number;
+  /** Black-women ownership fraction 0–1. */
   blackWomenOwnership?: number;
   enterpriseType?: 'generic' | 'qse' | 'eme';
   spend: number;
+  /** Supplier VAT number for verification. */
+  vatNumber?: string;
+  /** Black-youth ownership fraction (0–1). */
+  youthOwnership?: number;
+  /** Person-with-disability ownership fraction (0–1). */
+  disabledOwnership?: number;
+  /** Whether this supplier is recognised as an Empowering Supplier. */
+  isEmpoweringSupplier?: boolean;
+  /** Whether this supplier received supplier-development support. */
+  isSupplierDevRecipient?: boolean;
+  /** Whether the supplier holds a contract longer than 3 years. */
+  hasThreeYearContract?: boolean;
+  /** Whether the supplier qualifies as a Designated-Group supplier. */
+  isDesignatedGroupSupplier?: boolean;
 }
 
 export interface ParsedTrainingProgram {
@@ -61,6 +134,16 @@ export interface ParsedTrainingProgram {
   isBlack: boolean;
   isDisabled?: boolean;
   isAbsorbed?: boolean;
+  /** Race (African / Coloured / Indian / White). */
+  race?: string;
+  /** Gender (Male / Female). */
+  gender?: string;
+  /** Whether learner is a YES candidate. */
+  isYesEmployee?: boolean;
+  /** ABET / mandatory sectoral training flag. */
+  isAbet?: boolean;
+  /** Transaction / invoice date (ISO). */
+  transactionDate?: string;
 }
 
 export interface ParsedContribution {
@@ -68,6 +151,22 @@ export interface ParsedContribution {
   type: string;
   amount: number;
   category: string;
+  /** Optional free-text description / nature of contribution. */
+  description?: string;
+  /** % of benefit flowing to black beneficiaries (0–100). */
+  blackBenefitPercent?: number;
+  /** Transaction date (ISO). */
+  transactionDate?: string;
+  /** Jobs created (for ED jobs-bonus). */
+  jobsCreated?: number;
+}
+
+export interface SheetSnippet {
+  sheetName: string;
+  matchedTo: string | null;
+  headers: string[];
+  /** First N data rows (after the header row), trimmed to fit a token budget. */
+  rows: any[][];
 }
 
 export interface ParseResult {
@@ -91,6 +190,8 @@ export interface ParseResult {
     confidence: number;
   };
   scorecardValues?: Record<string, number>;
+  /** Compact per-sheet snippets (headers + first N rows) for LLM reconciliation. */
+  sheetSnippets?: SheetSnippet[];
 }
 
 const EXPECTED_SHEETS = [
@@ -121,8 +222,13 @@ const OWNERSHIP_FIELDS = [
   { name: 'Shareholder Name', aliases: ['name', 'shareholder', 'entity name', 'holder', 'investor', 'member', 'owner'] },
   { name: 'Black Ownership', aliases: ['bo%', 'bo', 'black %', 'black ownership %', 'black owned', 'bo percent', 'black shareholding', '% black', 'hdsa'] },
   { name: 'Black Women Ownership', aliases: ['bwo%', 'bwo', 'black women %', 'black women ownership %', 'bw%', 'women %', 'female black', 'black female'] },
-  { name: 'Shares', aliases: ['shares %', 'share %', 'shareholding', 'percentage', 'equity %', 'stake', 'voting rights', 'voting %'] },
+  { name: 'Shares', aliases: ['shares %', 'share %', 'shareholding', 'percentage', 'equity %', 'stake'] },
+  { name: 'Voting Rights', aliases: ['voting rights', 'voting %', 'voting rights %', 'voting interest', 'voting power'] },
+  { name: 'Economic Interest', aliases: ['economic interest', 'economic interest %', 'ei%', 'economic %', 'economic stake'] },
   { name: 'Share Value', aliases: ['value', 'share value', 'investment value', 'rand value', 'amount'] },
+  { name: 'Designated Group', aliases: ['designated group', 'designated', 'youth/orphan/disabled/military', 'designated status'] },
+  { name: 'New Entrant', aliases: ['black new entrant', 'new entrant', 'bne'] },
+  { name: 'Years Held', aliases: ['years held', 'holding period', 'years', 'tenure'] },
 ];
 
 const MC_FIELDS = [
@@ -131,13 +237,22 @@ const MC_FIELDS = [
   { name: 'Race', aliases: ['race group', 'population group', 'ethnicity', 'demographic', 'racial group', 'african/coloured/indian/white'] },
   { name: 'Designation', aliases: ['level', 'occupational level', 'position', 'role', 'job title', 'grade', 'category', 'management level', 'occ level', 'occupational category'] },
   { name: 'Disabled', aliases: ['disability', 'is disabled', 'pwd', 'person with disability', 'differently abled', 'disability status'] },
+  { name: 'ID Number', aliases: ['id number', 'id no', 'sa id', 'identity number', 'passport', 'national id'] },
+  { name: 'Foreign', aliases: ['foreign', 'is foreign', 'foreign national', 'nationality', 'citizen'] },
+  { name: 'Province', aliases: ['province', 'region', 'work location', 'location'] },
+  { name: 'Hire Date', aliases: ['hire date', 'start date', 'date employed', 'date of appointment', 'engagement date', 'commencement date'] },
 ];
 
 const PROCUREMENT_FIELDS = [
   { name: 'Supplier Name', aliases: ['name', 'supplier', 'vendor', 'vendor name', 'company', 'entity', 'service provider'] },
   { name: 'B-BBEE Level', aliases: ['bee level', 'level', 'bbbee level', 'b-bbee', 'compliance level', 'bee status', 'bbbee status', 'contributor level'] },
   { name: 'Black Ownership', aliases: ['bo%', 'bo', 'black owned', 'black ownership %', '% black', 'black ownership percentage'] },
+  { name: 'Black Women Ownership', aliases: ['bwo%', 'bwo', 'black women %', 'black women owned', 'bw ownership'] },
+  { name: 'Enterprise Type', aliases: ['enterprise type', 'eme/qse/generic', 'eme/qse', 'size', 'classification', 'measurement type'] },
   { name: 'Spend', aliases: ['amount', 'spend amount', 'total spend', 'procurement spend', 'value', 'rand value', 'cost', 'total', 'annual spend'] },
+  { name: 'VAT Number', aliases: ['vat number', 'vat no', 'vat reg', 'vat'] },
+  { name: 'Empowering Supplier', aliases: ['empowering supplier', 'empowering', 'is empowering', 'es'] },
+  { name: 'Designated Supplier', aliases: ['designated group supplier', 'designated supplier', 'dg supplier'] },
 ];
 
 const SKILLS_FIELDS = [
@@ -146,14 +261,24 @@ const SKILLS_FIELDS = [
   { name: 'Cost', aliases: ['amount', 'cost', 'spend', 'value', 'total cost', 'training cost', 'rand value', 'expenditure'] },
   { name: 'Learner Name', aliases: ['learner', 'name', 'employee', 'employee name', 'participant', 'student', 'trainee', 'learner name & surname'] },
   { name: 'Race', aliases: ['race', 'race group', 'population group', 'demographic'] },
+  { name: 'Gender', aliases: ['gender', 'sex'] },
+  { name: 'Disabled', aliases: ['disabled', 'disability', 'pwd'] },
   { name: 'Employed', aliases: ['employed', 'is employed', 'employment status', 'currently employed', 'status'] },
+  { name: 'YES', aliases: ['yes', 'yes initiative', 'y.e.s', 'yes candidate'] },
+  { name: 'Absorbed', aliases: ['absorbed', 'is absorbed', 'absorption'] },
+  { name: 'ABET', aliases: ['abet', 'is abet', 'adult basic education', 'mandatory sectoral'] },
+  { name: 'Transaction Date', aliases: ['transaction date', 'invoice date', 'date', 'spend date'] },
 ];
 
 const ESD_FIELDS = [
   { name: 'Beneficiary', aliases: ['name', 'beneficiary name', 'recipient', 'entity', 'company', 'supplier name', 'enterprise'] },
-  { name: 'Type', aliases: ['contribution type', 'nature', 'form', 'method', 'support type', 'description', 'type of contribution'] },
+  { name: 'Type', aliases: ['contribution type', 'nature', 'form', 'method', 'support type', 'type of contribution'] },
+  { name: 'Description', aliases: ['description', 'details', 'narrative', 'summary', 'project'] },
   { name: 'Amount', aliases: ['value', 'rand value', 'spend', 'contribution amount', 'cost', 'total', 'amount', 'monetary value'] },
   { name: 'Category', aliases: ['category', 'pillar', 'ed/sd', 'classification', 'sub-element'] },
+  { name: 'Black Benefit', aliases: ['black benefit %', 'black benefit', 'benefit %', '% black benefit', 'beneficiary %'] },
+  { name: 'Transaction Date', aliases: ['date', 'transaction date', 'invoice date', 'contribution date', 'payment date'] },
+  { name: 'Jobs Created', aliases: ['jobs created', 'jobs', '# jobs', 'employment created', 'new jobs'] },
 ];
 
 function addLog(logs: ParseLog[], message: string, type: ParseLog['type'] = 'info'): void {
@@ -228,6 +353,99 @@ function isLikelyPlaceholderSheet(data: any[][]): boolean {
   return false;
 }
 
+function coerceCellString(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return '';
+    // Excel date serial in plausible range → ISO date
+    if (v > 36526 && v < 54789 && Math.floor(v) === v) {
+      const date = new Date((v - 25569) * 86400 * 1000);
+      return date.toISOString().split('T')[0];
+    }
+    return String(v);
+  }
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  return String(v).trim();
+}
+
+function coerceIsoDate(v: any): string | undefined {
+  if (v === null || v === undefined || v === '') return undefined;
+  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().split('T')[0];
+  if (typeof v === 'number' && Number.isFinite(v) && v > 36526 && v < 54789) {
+    const d = new Date((v - 25569) * 86400 * 1000);
+    return d.toISOString().split('T')[0];
+  }
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Common SA short formats: DD/MM/YYYY or YYYY/MM/DD
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) {
+    const [, d, mo, y] = m;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // "31 December 2025" / "Dec 2025"
+  const months: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', sept: '09', oct: '10', nov: '11', dec: '12',
+  };
+  m = s.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})/i);
+  if (m) {
+    const mo = months[m[2].toLowerCase().slice(0, 4)] || months[m[2].toLowerCase().slice(0, 3)];
+    if (mo) return `${m[3]}-${mo}-${m[1].padStart(2, '0')}`;
+  }
+  return undefined;
+}
+
+function coerceProvince(s: string): string | undefined {
+  const lower = s.toLowerCase().trim();
+  if (!lower) return undefined;
+  const map: Record<string, string> = {
+    'gauteng': 'Gauteng', 'gp': 'Gauteng',
+    'western cape': 'Western Cape', 'wc': 'Western Cape', 'w cape': 'Western Cape',
+    'eastern cape': 'Eastern Cape', 'ec': 'Eastern Cape',
+    'kzn': 'KZN', 'kwazulu-natal': 'KZN', 'kwazulu natal': 'KZN',
+    'free state': 'Free State', 'fs': 'Free State',
+    'mpumalanga': 'Mpumalanga', 'mp': 'Mpumalanga',
+    'limpopo': 'Limpopo', 'lp': 'Limpopo',
+    'north west': 'North West', 'nw': 'North West',
+    'northern cape': 'Northern Cape', 'nc': 'Northern Cape',
+    'national': 'National',
+  };
+  for (const [k, v] of Object.entries(map)) {
+    if (lower === k || lower.includes(k)) return v;
+  }
+  return undefined;
+}
+
+const SECTOR_CODE_PATTERNS: Array<{ rx: RegExp; code: string }> = [
+  { rx: /\bICT\b|information.*communication|telecom/i, code: 'ICT' },
+  { rx: /\bFSC\b|financial\s*sector/i, code: 'FSC' },
+  { rx: /\bagri[\s-]*bee|agri\s*sector|agriculture\s*sector/i, code: 'AGRI' },
+  { rx: /\btransport\s*sector|transport\s*code/i, code: 'TRANSPORT' },
+  { rx: /\bconstruction\s*sector/i, code: 'CONSTRUCTION' },
+  { rx: /\btourism\s*sector/i, code: 'TOURISM' },
+  { rx: /\bmining\s*charter|mqa|mining\s*sector/i, code: 'MINING' },
+  { rx: /property\s*sector/i, code: 'PROPERTY' },
+  { rx: /chartered\s*account|cas\s*sector/i, code: 'CAS' },
+  { rx: /forestry\s*sector/i, code: 'FORESTRY' },
+  { rx: /marketing.*advertising|mac\s*charter/i, code: 'MAC' },
+  { rx: /\brcogp\b|revised\s*codes|generic\s*scorecard|amended\s*codes|gener?ic.*code/i, code: 'RCOGP' },
+];
+
+function inferSectorCode(text: string): string | undefined {
+  for (const { rx, code } of SECTOR_CODE_PATTERNS) {
+    if (rx.test(text)) return code;
+  }
+  return undefined;
+}
+
 function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
   const client: ParsedClient = {};
 
@@ -286,24 +504,130 @@ function parseClientSheet(data: any[][], logs: ParseLog[]): ParsedClient {
         const amt = extractCurrency(value);
         if (amt) { client.tmps = amt; addLog(logs, `Extracted TMPS: R${amt.toLocaleString()}`, 'success'); }
       }
-      if (!client.address && /address|physical\s*address|postal\s*address|registered\s*address|street/i.test(label) && typeof value === 'string' && value.length > 3) {
-        client.address = String(value).trim();
+      if (!client.address && /^(physical\s*address|street\s*address|address|registered\s*address|business\s*address|head\s*office\s*address)$/i.test(label) && !/postal/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v.length > 3) { client.address = v; addLog(logs, `Extracted Physical Address: "${v.slice(0, 60)}…"`, 'success'); }
       }
-      if (!client.registrationNumber && /registration|reg\s*no|reg\s*number|company\s*reg|cipc|ck\s*number|cc\s*number/i.test(label) && typeof value === 'string') {
-        client.registrationNumber = String(value).trim();
+      if (!client.postalAddress && /postal\s*address|po\s*box|p\.o\.\s*box|mailing\s*address/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v.length > 3) { client.postalAddress = v; }
       }
-      if (!client.vatNumber && /vat|vat\s*no|vat\s*number|tax\s*number/i.test(label)) {
-        client.vatNumber = String(value).trim();
+      if (!client.registrationNumber && /registration\s*(no|number|#)|reg\s*(no|number|#)|company\s*reg|cipc|ck\s*(number|no)|cc\s*(number|no)|enterprise\s*number|company\s*number/i.test(label)) {
+        const v = coerceCellString(value);
+        // Reg numbers are typically alphanumeric with slashes — must contain at least one digit
+        if (v && /\d/.test(v) && v.length >= 6 && !/^(yes|no|n\/a|null|none)$/i.test(v)) {
+          client.registrationNumber = v;
+          addLog(logs, `Extracted Registration Number: "${v}"`, 'success');
+        }
+      }
+      if (!client.vatNumber && /(^|\b)(vat|vat\s*no|vat\s*number|vat\s*reg|vat\s*registration)\b/i.test(label) && !/tax\s*number|income\s*tax/i.test(label)) {
+        const digits = coerceCellString(value).replace(/\D/g, '');
+        if (digits.length >= 9 && digits.length <= 12) {
+          client.vatNumber = digits;
+          addLog(logs, `Extracted VAT Number: ${digits}`, 'success');
+        } else if (digits.length > 0) {
+          client.vatNumber = coerceCellString(value);
+        }
+      }
+      if (!client.taxNumber && /(income\s*tax|tax\s*number|tax\s*no|tax\s*ref|income\s*tax\s*ref|sars\s*tax)/i.test(label) && !/vat/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v && /\d/.test(v)) {
+          client.taxNumber = v;
+          addLog(logs, `Extracted Tax Number: ${v}`, 'success');
+        }
       }
       if (!client.payroll && /payroll|total\s*wages|salaries\s*&?\s*wages|total\s*salary/i.test(label)) {
         const amt = extractCurrency(value);
         if (amt) { client.payroll = amt; }
       }
-      if (!client.applicableScorecard && /scorecard|applicable\s*scorecard|qse|generic|eme/i.test(label) && typeof value === 'string') {
+      if (!client.applicableScorecard && /scorecard\s*type|enterprise\s*(size|type)|eme\s*\/\s*qse|qse\s*\/\s*generic|measurement\s*classification/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v) {
+          if (/\beme\b/i.test(v)) client.applicableScorecard = 'EME';
+          else if (/\bqse\b/i.test(v)) client.applicableScorecard = 'QSE';
+          else if (/generic|large/i.test(v)) client.applicableScorecard = 'Generic';
+          else client.applicableScorecard = v;
+        }
+      } else if (!client.applicableScorecard && /scorecard|applicable\s*scorecard/i.test(label) && typeof value === 'string') {
         client.applicableScorecard = String(value).trim();
       }
-      if (!client.applicableCodes && /applicable\s*code|code|revised\s*code|sector\s*code/i.test(label) && typeof value === 'string' && /code|revised|generic|sector|transport/i.test(String(value))) {
+      if (!client.sectorCode && /sector\s*code|applicable\s*code|bee\s*sector|scorecard\s*sector|industry\s*sector\s*code/i.test(label)) {
+        const v = coerceCellString(value);
+        const inferred = inferSectorCode(v) || inferSectorCode(label + ' ' + v);
+        if (inferred) {
+          client.sectorCode = inferred;
+          addLog(logs, `Extracted Sector Code: ${inferred}`, 'success');
+        }
+      }
+      if (!client.applicableCodes && /applicable\s*code|^code$|revised\s*code|amended\s*code/i.test(label) && typeof value === 'string' && /code|revised|generic|sector|transport|amended/i.test(String(value))) {
         client.applicableCodes = String(value).trim();
+      }
+      if (!client.eapProvince && /(eap|economically\s*active\s*population|province|region)/i.test(label)) {
+        const v = coerceCellString(value);
+        const prov = coerceProvince(v);
+        if (prov) {
+          client.eapProvince = prov;
+          addLog(logs, `Extracted EAP Province: ${prov}`, 'success');
+        }
+      }
+      if (!client.numberOfEmployees && /(number\s*of\s*employees|total\s*employees|headcount|number\s*of\s*staff|fte|total\s*headcount|no\.\s*of\s*employees)/i.test(label)) {
+        const n = typeof value === 'number' ? Math.round(value) : parseInt(coerceCellString(value).replace(/[^\d]/g, ''), 10);
+        if (Number.isFinite(n) && n > 0 && n < 1_000_000) {
+          client.numberOfEmployees = n;
+          addLog(logs, `Extracted Number of Employees: ${n}`, 'success');
+        }
+      }
+      if (!client.contactPerson && /(contact\s*person|primary\s*contact|responsible\s*person|name\s*of\s*contact|contact\s*name)/i.test(label) && !/email|phone|number/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v.length > 2 && /[a-z]/i.test(v) && !/^(detail|tier|year|column|header|heading|insert|enter|please)/i.test(v)) {
+          client.contactPerson = v;
+        }
+      }
+      if (!client.contactEmail && /(e[\s-]?mail|email\s*address|contact\s*email)/i.test(label)) {
+        const v = coerceCellString(value);
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          client.contactEmail = v;
+          addLog(logs, `Extracted Contact Email: ${v}`, 'success');
+        }
+      }
+      if (!client.contactPhone && /(telephone|phone|tel\b|contact\s*number|cell|mobile|contact\s*phone)/i.test(label)) {
+        const v = coerceCellString(value);
+        const digits = v.replace(/\D/g, '');
+        if (digits.length >= 9 && digits.length <= 15) {
+          client.contactPhone = v;
+          addLog(logs, `Extracted Contact Phone: ${v}`, 'success');
+        }
+      }
+      if (!client.beeCertificateNumber && /(certificate\s*number|cert\s*no|verification\s*number|bee\s*certificate\s*no|sanas\s*(no|number)|verification\s*ref)/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v && /\d/.test(v) && v.length >= 4) {
+          client.beeCertificateNumber = v;
+        }
+      }
+      if (!client.beeCertificateExpiry && /(certificate\s*expiry|cert\s*expiry|expiry\s*date|valid\s*until|valid\s*to|certificate\s*valid\s*until)/i.test(label)) {
+        const iso = coerceIsoDate(value);
+        if (iso) client.beeCertificateExpiry = iso;
+      }
+      if (!client.beeCertificateLevel && /(bee\s*(level|status\s*level)|b[\s-]?bbee\s*level|current\s*level|contributor\s*level|previous\s*level)/i.test(label)) {
+        const n = typeof value === 'number' ? Math.round(value) : parseInt(coerceCellString(value).replace(/[^\d]/g, ''), 10);
+        if (Number.isFinite(n) && n >= 1 && n <= 8) {
+          client.beeCertificateLevel = n;
+          addLog(logs, `Extracted BEE Level: ${n}`, 'success');
+        }
+      }
+      if (!client.verificationAgency && /(verification\s*agency|verifier|verification\s*company|sanas\s*agency|issued\s*by)/i.test(label)) {
+        const v = coerceCellString(value);
+        if (v.length > 3 && /[a-z]/i.test(v)) {
+          client.verificationAgency = v;
+        }
+      }
+      if (!client.measurementPeriodStart && /(measurement\s*period\s*(start|from)|verification\s*period\s*start|period\s*start|fy\s*start|financial\s*year\s*start)/i.test(label)) {
+        const iso = coerceIsoDate(value);
+        if (iso) client.measurementPeriodStart = iso;
+      }
+      if (!client.measurementPeriodEnd && /(measurement\s*period\s*(end|to)|verification\s*period\s*end|period\s*end|fy\s*end|year\s*end)/i.test(label)) {
+        const iso = coerceIsoDate(value);
+        if (iso) client.measurementPeriodEnd = iso;
       }
       if (!client.tmpsInclusions && /tmps\s*inclus|total\s*inclus|cost\s*of\s*sales|inclus/i.test(label)) {
         const amt = extractCurrency(value);
@@ -368,6 +692,11 @@ function parseOwnershipSheet(data: any[][], logs: ParseLog[]): ParsedShareholder
       const bwoCol = matches.find(m => m.field === 'Black Women Ownership');
       const sharesCol = matches.find(m => m.field === 'Shares');
       const valueCol = matches.find(m => m.field === 'Share Value');
+      const votingCol = matches.find(m => m.field === 'Voting Rights');
+      const economicCol = matches.find(m => m.field === 'Economic Interest');
+      const designatedCol = matches.find(m => m.field === 'Designated Group');
+      const newEntrantCol = matches.find(m => m.field === 'New Entrant');
+      const yearsHeldCol = matches.find(m => m.field === 'Years Held');
 
       const shareholders: ParsedShareholder[] = [];
 
@@ -382,6 +711,17 @@ function parseOwnershipSheet(data: any[][], logs: ParseLog[]): ParsedShareholder
         const bwo = bwoCol ? extractPercentage(dRow[bwoCol.columnIndex]) : null;
         const shares = sharesCol ? extractCurrency(dRow[sharesCol.columnIndex]) : null;
         const value = valueCol ? extractCurrency(dRow[valueCol.columnIndex]) : null;
+        const voting = votingCol ? extractPercentage(dRow[votingCol.columnIndex]) : null;
+        const economic = economicCol ? extractPercentage(dRow[economicCol.columnIndex]) : null;
+        const designatedRaw = designatedCol ? String(dRow[designatedCol.columnIndex] || '').toLowerCase() : '';
+        const isDesignated = /yes|y\b|true|youth|orphan|disabled|military|designat/i.test(designatedRaw);
+        let designatedGroupType: ParsedShareholder['designatedGroupType'];
+        if (/military|veteran/i.test(designatedRaw)) designatedGroupType = 'military';
+        else if (/disab/i.test(designatedRaw)) designatedGroupType = 'disabled';
+        else if (/orphan/i.test(designatedRaw)) designatedGroupType = 'orphan';
+        else if (/youth/i.test(designatedRaw)) designatedGroupType = 'youth';
+        const newEntrant = newEntrantCol ? /yes|y\b|true|1/i.test(String(dRow[newEntrantCol.columnIndex] || '')) : false;
+        const yearsHeldNum = yearsHeldCol ? Number(dRow[yearsHeldCol.columnIndex]) : NaN;
 
         shareholders.push({
           name,
@@ -389,6 +729,12 @@ function parseOwnershipSheet(data: any[][], logs: ParseLog[]): ParsedShareholder
           blackWomenOwnership: bwo ?? 0,
           shares: shares ?? 0,
           shareValue: value ?? 0,
+          votingRightsPercent: voting ?? undefined,
+          economicInterestPercent: economic ?? undefined,
+          isDesignatedGroup: isDesignated || undefined,
+          designatedGroupType,
+          blackNewEntrant: newEntrant || undefined,
+          yearsHeld: Number.isFinite(yearsHeldNum) && yearsHeldNum >= 0 ? yearsHeldNum : undefined,
         });
       }
 
@@ -483,6 +829,10 @@ function parseMCTabular(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
       const raceCol = matches.find(m => m.field === 'Race');
       const desigCol = matches.find(m => m.field === 'Designation');
       const disCol = matches.find(m => m.field === 'Disabled');
+      const idCol = matches.find(m => m.field === 'ID Number');
+      const foreignCol = matches.find(m => m.field === 'Foreign');
+      const provinceCol = matches.find(m => m.field === 'Province');
+      const hireDateCol = matches.find(m => m.field === 'Hire Date');
 
       const employees: ParsedEmployee[] = [];
 
@@ -496,6 +846,10 @@ function parseMCTabular(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
         const genderEntity = genderCol ? extractEntity(dRow[genderCol.columnIndex]) : null;
         const raceEntity = raceCol ? extractEntity(dRow[raceCol.columnIndex]) : null;
         const desigEntity = desigCol ? extractEntity(dRow[desigCol.columnIndex]) : null;
+        const idNumber = idCol ? coerceCellString(dRow[idCol.columnIndex]) || undefined : undefined;
+        const isForeign = foreignCol ? /yes|y\b|true|1|foreign/i.test(String(dRow[foreignCol.columnIndex] || '')) : undefined;
+        const province = provinceCol ? coerceProvince(coerceCellString(dRow[provinceCol.columnIndex])) : undefined;
+        const hireDate = hireDateCol ? coerceIsoDate(dRow[hireDateCol.columnIndex]) : undefined;
 
         employees.push({
           name,
@@ -503,6 +857,10 @@ function parseMCTabular(data: any[][], logs: ParseLog[]): ParsedEmployee[] {
           race: String(raceEntity?.value ?? 'White'),
           designation: String(desigEntity?.value ?? 'Junior'),
           isDisabled: disCol ? /yes|y|true|1|disabled/i.test(String(dRow[disCol.columnIndex] || '')) : false,
+          idNumber,
+          isForeign,
+          province,
+          hireDate,
         });
       }
 
@@ -888,7 +1246,13 @@ function parseSkillsSheet(data: any[][], logs: ParseLog[]): ParsedTrainingProgra
       const costCol = matches.find(m => m.field === 'Cost');
       const learnerCol = matches.find(m => m.field === 'Learner Name');
       const raceCol = matches.find(m => m.field === 'Race');
+      const genderCol = matches.find(m => m.field === 'Gender');
       const employedCol = matches.find(m => m.field === 'Employed');
+      const yesCol = matches.find(m => m.field === 'YES');
+      const absorbedCol = matches.find(m => m.field === 'Absorbed');
+      const abetCol = matches.find(m => m.field === 'ABET');
+      const txDateCol = matches.find(m => m.field === 'Transaction Date');
+      const disabledCol = matches.find(m => m.field === 'Disabled');
 
       const programs: ParsedTrainingProgram[] = [];
 
@@ -906,6 +1270,12 @@ function parseSkillsSheet(data: any[][], logs: ParseLog[]): ParsedTrainingProgra
         const raceEntity = raceCol ? extractEntity(dRow[raceCol.columnIndex]) : null;
         const isBlack = raceEntity ? ['African', 'Coloured', 'Indian'].includes(String(raceEntity.value)) : false;
         const isEmployed = employedCol ? /yes|y|true|1|employed/i.test(String(dRow[employedCol.columnIndex] || '')) : true;
+        const genderEntity = genderCol ? extractEntity(dRow[genderCol.columnIndex]) : null;
+        const isYes = yesCol ? /yes|y\b|true|1/i.test(String(dRow[yesCol.columnIndex] || '')) : undefined;
+        const isAbsorbed = absorbedCol ? /yes|y\b|true|1|absorbed/i.test(String(dRow[absorbedCol.columnIndex] || '')) : undefined;
+        const isAbet = abetCol ? /yes|y\b|true|1|abet/i.test(String(dRow[abetCol.columnIndex] || '')) : undefined;
+        const isDisabled = disabledCol ? /yes|y\b|true|1|disabled/i.test(String(dRow[disabledCol.columnIndex] || '')) : undefined;
+        const transactionDate = txDateCol ? coerceIsoDate(dRow[txDateCol.columnIndex]) : undefined;
 
         programs.push({
           name,
@@ -914,6 +1284,13 @@ function parseSkillsSheet(data: any[][], logs: ParseLog[]): ParsedTrainingProgra
           learnerName: learnerName && !isJunkRow(learnerName) ? learnerName : undefined,
           isEmployed,
           isBlack,
+          race: raceEntity ? String(raceEntity.value) : undefined,
+          gender: genderEntity ? String(genderEntity.value) : undefined,
+          isDisabled,
+          isYesEmployee: isYes,
+          isAbsorbed,
+          isAbet,
+          transactionDate,
         });
       }
 
@@ -941,7 +1318,12 @@ function parseProcurementSheet(data: any[][], logs: ParseLog[]): ParsedSupplier[
       const nameCol = matches.find(m => m.field === 'Supplier Name');
       const levelCol = matches.find(m => m.field === 'B-BBEE Level');
       const boCol = matches.find(m => m.field === 'Black Ownership');
+      const bwoCol = matches.find(m => m.field === 'Black Women Ownership');
+      const enterpriseCol = matches.find(m => m.field === 'Enterprise Type');
       const spendCol = matches.find(m => m.field === 'Spend');
+      const vatCol = matches.find(m => m.field === 'VAT Number');
+      const empoweringCol = matches.find(m => m.field === 'Empowering Supplier');
+      const designatedCol = matches.find(m => m.field === 'Designated Supplier');
 
       const suppliers: ParsedSupplier[] = [];
 
@@ -954,13 +1336,29 @@ function parseProcurementSheet(data: any[][], logs: ParseLog[]): ParsedSupplier[
 
         const levelEntity = levelCol ? extractEntity(dRow[levelCol.columnIndex]) : null;
         const bo = boCol ? extractPercentage(dRow[boCol.columnIndex]) : null;
+        const bwo = bwoCol ? extractPercentage(dRow[bwoCol.columnIndex]) : null;
         const spend = spendCol ? extractCurrency(dRow[spendCol.columnIndex]) : null;
+        const enterpriseRaw = enterpriseCol ? String(dRow[enterpriseCol.columnIndex] || '').toLowerCase() : '';
+        let enterpriseType: ParsedSupplier['enterpriseType'];
+        if (/\beme\b/i.test(enterpriseRaw)) enterpriseType = 'eme';
+        else if (/\bqse\b/i.test(enterpriseRaw)) enterpriseType = 'qse';
+        else if (/generic|large/i.test(enterpriseRaw)) enterpriseType = 'generic';
+        const vatRaw = vatCol ? coerceCellString(dRow[vatCol.columnIndex]) : '';
+        const vatDigits = vatRaw.replace(/\D/g, '');
+        const vatNumber = vatDigits.length >= 9 && vatDigits.length <= 12 ? vatDigits : (vatRaw || undefined);
+        const isEmpowering = empoweringCol ? /yes|y\b|true|1/i.test(String(dRow[empoweringCol.columnIndex] || '')) : undefined;
+        const isDesignated = designatedCol ? /yes|y\b|true|1/i.test(String(dRow[designatedCol.columnIndex] || '')) : undefined;
 
         suppliers.push({
           name,
           beeLevel: levelEntity?.type === 'bee_level' ? (levelEntity.value as number) : (typeof dRow[levelCol?.columnIndex ?? -1] === 'number' ? Math.min(8, Math.max(0, Math.round(dRow[levelCol?.columnIndex ?? -1] as number))) : 0),
           blackOwnership: bo ?? 0,
+          blackWomenOwnership: bwo ?? undefined,
+          enterpriseType,
           spend: spend ?? 0,
+          vatNumber,
+          isEmpoweringSupplier: isEmpowering,
+          isDesignatedGroupSupplier: isDesignated,
         });
       }
 
@@ -1027,8 +1425,12 @@ function parseEsdSedSheet(data: any[][], logs: ParseLog[], category: string): Pa
 
       const nameCol = matches.find(m => m.field === 'Beneficiary');
       const typeCol = matches.find(m => m.field === 'Type');
+      const descCol = matches.find(m => m.field === 'Description');
       const amtCol = matches.find(m => m.field === 'Amount');
       const catCol = matches.find(m => m.field === 'Category');
+      const benefitCol = matches.find(m => m.field === 'Black Benefit');
+      const dateCol = matches.find(m => m.field === 'Transaction Date');
+      const jobsCol = matches.find(m => m.field === 'Jobs Created');
 
       const contributions: ParsedContribution[] = [];
 
@@ -1040,12 +1442,22 @@ function parseEsdSedSheet(data: any[][], logs: ParseLog[], category: string): Pa
         if (!name || name.length < 2 || isJunkRow(name)) continue;
 
         const amount = amtCol ? extractCurrency(dRow[amtCol.columnIndex]) : null;
+        const description = descCol ? coerceCellString(dRow[descCol.columnIndex]) || undefined : undefined;
+        const benefitPct = benefitCol ? extractPercentage(dRow[benefitCol.columnIndex]) : null;
+        const txDate = dateCol ? coerceIsoDate(dRow[dateCol.columnIndex]) : undefined;
+        const jobsRaw = jobsCol ? Number(dRow[jobsCol.columnIndex]) : NaN;
+        const jobs = Number.isFinite(jobsRaw) && jobsRaw >= 0 ? Math.round(jobsRaw) : undefined;
 
         contributions.push({
           beneficiary: name,
           type: typeCol ? String(dRow[typeCol.columnIndex] || 'grant').toLowerCase().replace(/\s+/g, '_') : 'grant',
           amount: amount ?? 0,
           category: catCol ? String(dRow[catCol.columnIndex] || category).toLowerCase().replace(/\s+/g, '_') : category,
+          description,
+          // benefitPct comes back as 0–1 from extractPercentage; surface as 0–100 for UI.
+          blackBenefitPercent: benefitPct !== null && benefitPct !== undefined ? Math.round(benefitPct * 10_000) / 100 : undefined,
+          transactionDate: txDate,
+          jobsCreated: jobs,
         });
       }
 
@@ -1376,6 +1788,54 @@ export function parseExcelBuffer(buffer: Buffer, filename: string): ParseResult 
   if (!client.revenue) { warnings.push('Revenue not detected'); addLog(logs, 'Revenue data missing', 'warning'); }
   if (client.npat === undefined) { warnings.push('NPAT not detected'); addLog(logs, 'NPAT data missing', 'warning'); }
 
+  // Last-resort sectorCode inference from sheet names, filename, and free-text scorecard/codes fields.
+  if (!client.sectorCode) {
+    const haystack = [
+      filename,
+      ...sheetNames,
+      client.industrySector || '',
+      client.applicableCodes || '',
+      client.applicableScorecard || '',
+    ].join(' ');
+    const inferred = inferSectorCode(haystack);
+    if (inferred) {
+      client.sectorCode = inferred;
+      addLog(logs, `Inferred Sector Code from workbook context: ${inferred}`, 'info');
+    }
+  }
+  if (!client.applicableScorecard) {
+    const haystack = sheetNames.concat([filename, client.applicableCodes || '']).join(' ').toLowerCase();
+    if (/\beme\b/.test(haystack)) client.applicableScorecard = 'EME';
+    else if (/\bqse\b/.test(haystack)) client.applicableScorecard = 'QSE';
+  }
+
+  // Build compact per-sheet snippets for downstream LLM reconciliation.
+  const sheetSnippets: SheetSnippet[] = [];
+  const MAX_ROWS_PER_SHEET = 12;
+  const MAX_CELL_CHARS = 80;
+  const MAX_COLS_PER_SHEET = 20;
+  for (const name of sheetNames) {
+    const data = getSheetData(workbook, name);
+    if (data.length === 0) continue;
+    const headerRow = findHeaderRow(data);
+    const headers = (headerRow.headers || []).slice(0, MAX_COLS_PER_SHEET);
+    const rows: any[][] = [];
+    for (let i = headerRow.rowIndex + 1; i < data.length && rows.length < MAX_ROWS_PER_SHEET; i++) {
+      const row = data[i];
+      if (!row) continue;
+      const nonEmpty = row.some((c: any) => c !== null && c !== undefined && String(c).trim() !== '');
+      if (!nonEmpty) continue;
+      const trimmed = row.slice(0, MAX_COLS_PER_SHEET).map((c: any) => {
+        if (c === null || c === undefined) return '';
+        const s = typeof c === 'number' ? String(c) : String(c);
+        return s.length > MAX_CELL_CHARS ? s.slice(0, MAX_CELL_CHARS) + '…' : s;
+      });
+      rows.push(trimmed);
+    }
+    const matchedTo = sheetsMatched.find((m) => m.sheetName === name)?.matchedTo ?? null;
+    sheetSnippets.push({ sheetName: name, matchedTo, headers, rows });
+  }
+
   const isTemplateWorkbook = /template/i.test(filename);
   const scorecardLooksEmpty = !scorecardValues || Object.values(scorecardValues).every(v => typeof v === 'number' && v <= 0.0001);
   if (isTemplateWorkbook && scorecardLooksEmpty) {
@@ -1430,5 +1890,6 @@ export function parseExcelBuffer(buffer: Buffer, filename: string): ParseResult 
       confidence: overallConfidence,
     },
     scorecardValues: scorecardValues || undefined,
+    sheetSnippets,
   };
 }

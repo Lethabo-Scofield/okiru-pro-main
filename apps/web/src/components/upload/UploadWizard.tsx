@@ -198,13 +198,26 @@ export interface ExtractionApiResult {
     name?: string;
     tradeName?: string;
     address?: string;
+    postalAddress?: string;
     registrationNumber?: string;
     vatNumber?: string;
+    taxNumber?: string;
     financialYearEnd?: string;
+    measurementPeriodStart?: string;
+    measurementPeriodEnd?: string;
     industrySector?: string;
     applicableScorecard?: string;
     applicableCodes?: string;
+    sectorCode?: string;
+    eapProvince?: string;
+    numberOfEmployees?: number;
+    contactPerson?: string;
+    contactEmail?: string;
+    contactPhone?: string;
     certificateNumber?: string;
+    certificateExpiry?: string;
+    certificateLevel?: number;
+    verificationAgency?: string;
   };
   financials: {
     revenue?: number;
@@ -231,6 +244,14 @@ export interface ExtractionApiResult {
       bwoPercent?: number;
       shares?: number;
       shareValue?: number;
+      /** Voting rights percent (0–100). */
+      votingRightsPercent?: number;
+      /** Economic interest percent (0–100). */
+      economicInterestPercent?: number;
+      isDesignatedGroup?: boolean;
+      designatedGroupType?: 'youth' | 'orphan' | 'disabled' | 'military';
+      blackNewEntrant?: boolean;
+      yearsHeld?: number;
     }>;
   };
   managementControl: {
@@ -242,6 +263,10 @@ export interface ExtractionApiResult {
       designation?: string;
       /** API field name is `disabled` (not `isDisabled`). */
       disabled?: boolean;
+      idNumber?: string;
+      isForeign?: boolean;
+      province?: string;
+      hireDate?: string;
     }>;
   };
   skillsDevelopment: {
@@ -256,6 +281,14 @@ export interface ExtractionApiResult {
       /** API field name is `isBlack` (boolean, not `blackParticipants` number). */
       isBlack?: boolean;
       isEmployed?: boolean;
+      learnerName?: string;
+      race?: string;
+      gender?: string;
+      isDisabled?: boolean;
+      isYesEmployee?: boolean;
+      isAbsorbed?: boolean;
+      isAbet?: boolean;
+      transactionDate?: string;
     }>;
   };
   preferentialProcurement: {
@@ -269,6 +302,11 @@ export interface ExtractionApiResult {
       spend?: number;
       /** Percent (0–100) as returned by the API. */
       blackOwnership?: number;
+      blackWomenOwnership?: number;
+      vatNumber?: string;
+      enterpriseType?: 'generic' | 'qse' | 'eme';
+      isEmpoweringSupplier?: boolean;
+      isDesignatedGroupSupplier?: boolean;
     }>;
   };
   enterpriseSupplierDevelopment: {
@@ -282,6 +320,7 @@ export interface ExtractionApiResult {
       category?: string;
       blackBenefitPercent?: number;
       transactionDate?: string;
+      jobsCreated?: number;
     }>;
   };
   socioEconomicDevelopment: {
@@ -309,6 +348,9 @@ export interface ExtractionApiResult {
     recognitionLevelPercent?: number;
     subMinimumsMet?: boolean;
   };
+  /** True when the server's LLM reconciliation pass made corrections. */
+  reconciliationApplied?: boolean;
+  reconciliationNotes?: string[];
   logs?: Array<{ message: string; type: string; timestamp: string }>;
 }
 
@@ -330,17 +372,44 @@ export function mapExtractionToFoundation(result: ExtractionApiResult): Partial<
   const c = result.client || {};
   const f = result.financials || {};
 
+  // `sectorCode` is the normalized B-BBEE sector code (RCOGP, ICT, …).
+  // The API also returns `applicableScorecard` ("EME" / "QSE" / "Generic"),
+  // which is the *measurement type*, NOT a sector code — don't conflate them.
+  const sectorCode = (c.sectorCode || '').toUpperCase()
+    || (c.applicableCodes && /\b(RCOGP|ICT|FSC|AGRI|TRANSPORT|CONSTRUCTION|TOURISM|MINING|PROPERTY|CAS|FORESTRY|MAC)\b/i.test(c.applicableCodes)
+      ? (c.applicableCodes.match(/\b(RCOGP|ICT|FSC|AGRI|TRANSPORT|CONSTRUCTION|TOURISM|MINING|PROPERTY|CAS|FORESTRY|MAC)\b/i)?.[0] || '').toUpperCase()
+      : '')
+    || (c.applicableScorecard && /^(EME|QSE|Generic|Large)$/i.test(c.applicableScorecard) ? '' : (c.applicableScorecard || ''));
+
+  // Cert level: API returns 1–8; only set if in range.
+  const certLevel = c.certificateLevel && c.certificateLevel >= 1 && c.certificateLevel <= 8
+    ? (c.certificateLevel as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8)
+    : undefined;
+
   const clientInfo = {
     ...EMPTY_CLIENT_INFO,
     companyName: c.name || '',
     tradingName: c.tradeName || '',
     registrationNumber: c.registrationNumber || '',
     vatNumber: c.vatNumber || '',
+    taxNumber: c.taxNumber || '',
     physicalAddress: c.address || '',
+    postalAddress: c.postalAddress || '',
+    contactPerson: c.contactPerson || '',
+    contactEmail: c.contactEmail || '',
+    contactPhone: c.contactPhone || '',
     financialYearEnd: excelSerialToDateString(c.financialYearEnd as any) || '',
+    measurementPeriodStart: excelSerialToDateString(c.measurementPeriodStart as any) || '',
+    measurementPeriodEnd: excelSerialToDateString(c.measurementPeriodEnd as any) || '',
     industry: c.industrySector || '',
-    sectorCode: c.applicableScorecard || '',
+    sectorCode: sectorCode || EMPTY_CLIENT_INFO.sectorCode,
+    eapProvince: (c.eapProvince as any) || EMPTY_CLIENT_INFO.eapProvince,
     annualTurnover: f.revenue ?? 0,
+    numberOfEmployees: c.numberOfEmployees ?? 0,
+    beeCertificateNumber: c.certificateNumber || '',
+    beeCertificateExpiry: excelSerialToDateString(c.certificateExpiry as any) || '',
+    beeCertificateLevel: certLevel,
+    verificationAgency: c.verificationAgency || '',
   };
 
   const financials = {
@@ -384,9 +453,14 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
         // boPercent / bwoPercent are 0-100; internal state expects 0-1 fractions.
         blackOwnership: (sh.boPercent ?? 0) / 100,
         blackWomenOwnership: (sh.bwoPercent ?? 0) / 100,
-        votingRightsPercent: sh.boPercent ?? 0,
-        economicInterestPercent: sh.boPercent ?? 0,
-        isDesignatedGroup: false,
+        // Voting / economic interest: API returns 0–100; fall back to boPercent
+        // when missing; internal state expects 0-1 fractions.
+        votingRightsPercent: (sh.votingRightsPercent ?? sh.boPercent ?? 0) / 100,
+        economicInterestPercent: (sh.economicInterestPercent ?? sh.boPercent ?? 0) / 100,
+        isDesignatedGroup: sh.isDesignatedGroup ?? false,
+        designatedGroupType: sh.designatedGroupType,
+        blackNewEntrant: sh.blackNewEntrant ?? false,
+        yearsHeld: sh.yearsHeld ?? 0,
       })) as any,
     };
   }
@@ -399,17 +473,34 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
       employees: rawEmployees.map((e, i) => ({
         id: `emp-${i}`,
         name: e.name || '',
+        idNumber: e.idNumber,
         gender: (e.gender as any) || 'Male',
         race: (e.race as any) || 'African',
         designation: (e.designation as any) || 'Junior',
         // API field is `disabled` — not `isDisabled`.
         isDisabled: e.disabled ?? false,
-        isForeign: false,
+        isForeign: e.isForeign ?? false,
+        province: (e.province as any),
+        hireDate: e.hireDate,
       })),
     };
   }
 
   const rawTrainings = result.skillsDevelopment?.trainings || [];
+  // Map API training category (bursary / learnership / apprenticeship / short course)
+  // → toolkit category code A–G used by the scoring engine.
+  const trainingCategoryCode = (cat: string | undefined): 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' => {
+    switch ((cat || '').toLowerCase()) {
+      case 'learnership': return 'B';
+      case 'apprenticeship': return 'C';
+      case 'bursary': return 'F';
+      case 'short course': return 'D';
+      default: return 'D';
+    }
+  };
+  // YES candidate count is derived from `isYesEmployee`; absorbed count from `isAbsorbed`.
+  const yesCandidates = rawTrainings.filter((t) => t.isYesEmployee).length;
+  const yesAbsorbed = rawTrainings.filter((t) => t.isAbsorbed).length;
   if (rawTrainings.length > 0 || result.skillsDevelopment?.leviableAmount) {
     out.skills = {
       id: '',
@@ -419,18 +510,19 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
         id: `tp-${i}`,
         // API field is `name` — not `programName`.
         programName: t.name || '',
-        learnerName: t.name || 'Extracted learner',
-        categoryCode: 'A' as const,
-        gender: 'Male' as const,
-        race: 'African' as const,
-        isDisabled: false,
+        learnerName: t.learnerName || t.name || 'Extracted learner',
+        categoryCode: trainingCategoryCode(t.category),
+        gender: ((t.gender as 'Male' | 'Female') || 'Male'),
+        race: ((t.race as 'African' | 'Coloured' | 'Indian' | 'White')
+          || (t.isBlack ? 'African' : 'White')),
+        isDisabled: t.isDisabled ?? false,
         isForeign: false,
         // API field `isEmployed` maps to employmentStatus.
         employmentStatus: (t.isEmployed ? 'Permanent' : 'Unemployed') as any,
-        isYesEmployee: false,
+        isYesEmployee: t.isYesEmployee ?? false,
         isCompleted: true,
-        isAbsorbed: false,
-        transactionDate: new Date().toISOString().slice(0, 10),
+        isAbsorbed: t.isAbsorbed ?? false,
+        transactionDate: t.transactionDate || new Date().toISOString().slice(0, 10),
         startDate: '',
         endDate: '',
         // API field is `cost` — not `totalCost`.
@@ -442,9 +534,10 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
         // API field is `isBlack` (boolean) — not `blackParticipants` (number).
         _isBlack: t.isBlack ?? false,
         _category: t.category,
+        isAbet: t.isAbet ?? false,
       })) as any,
-      yesCandidatesCount: 0,
-      yesAbsorbedCount: 0,
+      yesCandidatesCount: yesCandidates,
+      yesAbsorbedCount: yesAbsorbed,
     };
   }
 
@@ -458,23 +551,28 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
         id: `sup-${i}`,
         // API field is `supplierName` — not `name`.
         name: s.supplierName || '',
+        vatNumber: s.vatNumber,
         // API field is `level` — not `beeLevel`.
         beeLevel: (s.level ?? 4) as any,
-        enterpriseType: 'generic' as any,
+        enterpriseType: (s.enterpriseType ?? 'generic') as any,
         // blackOwnership from API is percent (0-100); convert to fraction.
         blackOwnership: (s.blackOwnership ?? 0) / 100,
-        blackWomenOwnership: 0,
+        blackWomenOwnership: (s.blackWomenOwnership ?? 0) / 100,
         youthOwnership: 0,
         disabledOwnership: 0,
         spend: s.spend ?? 0,
-        isEmpoweringSupplier: false,
+        isEmpoweringSupplier: s.isEmpoweringSupplier ?? false,
         isSupplierDevRecipient: false,
         hasThreeYearContract: false,
+        ...(s.isDesignatedGroupSupplier
+          ? { designatedGroupOwnership: (s.blackOwnership ?? 0) / 100 }
+          : {}),
       })),
     };
   }
 
   const rawEsd = result.enterpriseSupplierDevelopment?.esdList || [];
+  const totalJobsCreated = rawEsd.reduce((sum, c) => sum + (c.jobsCreated ?? 0), 0);
   if (rawEsd.length > 0) {
     out.esd = {
       id: '',
@@ -490,7 +588,8 @@ export function mapExtractionToPillars(result: ExtractionApiResult): Partial<Bui
         transactionDate: c.transactionDate || new Date().toISOString().slice(0, 10),
       })),
       graduationBonus: false,
-      jobsCreatedBonus: false,
+      jobsCreatedBonus: totalJobsCreated > 0,
+      jobsCreatedCount: totalJobsCreated > 0 ? totalJobsCreated : undefined,
     };
   }
 
@@ -1123,6 +1222,8 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
 
   const warnings = result.extractionSummary?.warnings || [];
   const errors = result.extractionSummary?.errors || [];
+  const reconciliationNotes = result.reconciliationNotes || [];
+  const reconciliationApplied = result.reconciliationApplied ?? false;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -1135,6 +1236,19 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
         </div>
         {toolbar}
       </div>
+
+      {reconciliationApplied && reconciliationNotes.length > 0 && (
+        <div className="rounded-xl p-3 space-y-1" style={{ background: 'rgba(94,155,255,0.06)', border: '1px solid rgba(94,155,255,0.2)' }}>
+          <p className="text-xs font-medium" style={{ color: '#5e9bff' }}>
+            AI reconciliation applied
+          </p>
+          {reconciliationNotes.slice(0, 3).map((n, i) => (
+            <p key={i} className="text-xs" style={{ color: 'rgba(94,155,255,0.8)' }}>
+              {n}
+            </p>
+          ))}
+        </div>
+      )}
 
       {errors.length > 0 && (
         <div className="rounded-xl p-3 space-y-1" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>

@@ -13,18 +13,25 @@ import { createLogger } from '../logger.js';
 const logger = createLogger("Import");
 import { requireAuth } from '../middleware/auth.js';
 import type { PipelineResult } from '../../pipeline/index.js';
+import type { SheetSnippet } from '../../pipeline/excelParser.js';
+import { reconcileExtraction } from '../services/extractionReconciler.js';
 
 // __dirname is available in the CJS bundle produced by esbuild.
 // The worker is bundled as dist/excelParseWorker.cjs alongside dist/index.cjs.
 const WORKER_PATH = path.resolve(__dirname, 'excelParseWorker.cjs');
 
-function runParseInWorker(buffer: Buffer, filename: string): Promise<PipelineResult> {
+interface WorkerParseOutput {
+  result: PipelineResult;
+  snippets: SheetSnippet[];
+}
+
+function runParseInWorker(buffer: Buffer, filename: string): Promise<WorkerParseOutput> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_PATH, {
       workerData: { buffer: new Uint8Array(buffer), filename },
     });
-    worker.once('message', (msg: { ok: boolean; result?: PipelineResult; error?: string }) => {
-      if (msg.ok) resolve(msg.result!);
+    worker.once('message', (msg: { ok: boolean; result?: PipelineResult; snippets?: SheetSnippet[]; error?: string }) => {
+      if (msg.ok) resolve({ result: msg.result!, snippets: msg.snippets ?? [] });
       else reject(new Error(msg.error ?? 'Worker parse error'));
     });
     worker.once('error', reject);
@@ -104,13 +111,15 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
       enterpriseSupplierDevelopment: { calculatedPoints: 0, totalContributions: 0, esdList: [] },
       socioEconomicDevelopment: { calculatedPoints: 0, totalSpend: 0, sedList: [] },
       yes: { qualified: false, youthCount: 0, absorbedCount: 0 },
-      scorecard: { pillars: { ownership: 0, managementControl: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
+      scorecard: { pillars: { ownership: 0, managementControl: 0, employmentEquity: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
       rawData: { financeRaw: [], ownershipRaw: [], mcRaw: [] },
       pdfCertificateData: { docNo: '', approvedBy: '', revisionNo: '', lastModified: '', verificationDate: '', analyst: '', signatory: '' },
       strategyPackSuggestions: [],
       sheetsFound: [] as string[],
       sheetsMatched: [] as unknown[],
       logs: [] as { message: string; type: string; timestamp: string }[],
+      reconciliationApplied: false,
+      reconciliationNotes: [] as string[],
     };
 
     if (!files || files.length === 0) {
@@ -127,7 +136,28 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
 
     // Run CPU-bound Excel parsing in a worker thread so the main event loop
     // (and health-check endpoint) stays responsive for large files.
-    const pipelineResult = await runParseInWorker(fileBuffer, excelFile.originalname);
+    const { result: workerResult, snippets } = await runParseInWorker(fileBuffer, excelFile.originalname);
+
+    // LLM reconciliation pass — graceful degradation when Azure OpenAI is not
+    // configured or the call fails. Always returns a PipelineResult.
+    let pipelineResult: PipelineResult;
+    try {
+      const reconciled = await reconcileExtraction(workerResult, snippets);
+      pipelineResult = {
+        ...reconciled.result,
+        reconciliationApplied: reconciled.reconciliationApplied,
+        reconciliationNotes: reconciled.reconciliationNotes,
+      };
+    } catch (reconcileErr) {
+      logger.warn('Reconciliation threw — using rule-based result', {
+        error: reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr),
+      });
+      pipelineResult = {
+        ...workerResult,
+        reconciliationApplied: false,
+        reconciliationNotes: [`Reconciliation error: ${reconcileErr instanceof Error ? reconcileErr.message : 'unknown'}`],
+      };
+    }
 
     await Promise.all(files.map(f => fs.unlink(f.path).catch(() => {})));
 
@@ -168,13 +198,15 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
       enterpriseSupplierDevelopment: { calculatedPoints: 0, totalContributions: 0, esdList: [] },
       socioEconomicDevelopment: { calculatedPoints: 0, totalSpend: 0, sedList: [] },
       yes: { qualified: false, youthCount: 0, absorbedCount: 0 },
-      scorecard: { pillars: { ownership: 0, managementControl: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
+      scorecard: { pillars: { ownership: 0, managementControl: 0, employmentEquity: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
       rawData: { financeRaw: [], ownershipRaw: [], mcRaw: [] },
       pdfCertificateData: { docNo: '', approvedBy: '', revisionNo: '', lastModified: '', verificationDate: '', analyst: '', signatory: '' },
       strategyPackSuggestions: [],
       sheetsFound: [],
       sheetsMatched: [],
       logs: [{ message: isProd ? 'Server error during import.' : `Server error: ${error instanceof Error ? error.message : 'Unknown'}`, type: 'error', timestamp: new Date().toISOString() }],
+      reconciliationApplied: false,
+      reconciliationNotes: [],
     });
   }
 });
