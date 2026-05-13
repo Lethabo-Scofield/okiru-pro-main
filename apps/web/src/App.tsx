@@ -8,6 +8,7 @@ import { AuthProvider } from "@toolkit/lib/auth";
 import { Toaster } from "@toolkit/components/ui/toaster";
 import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ProtectedRoute, GuestRoute, SuperAdminRoute } from "@/components/RouteGuards";
+import SuperAdmin from "@/pages/SuperAdmin";
 import LandingWrapper from "@/pages/LandingWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
@@ -106,6 +107,9 @@ function AppRouter() {
       </Route>
       <Route path="/devmode">
         <ProtectedRoute><DevMode /></ProtectedRoute>
+      </Route>
+      <Route path="/super-admin">
+        <SuperAdminRoute><SuperAdmin /></SuperAdminRoute>
       </Route>
       <Route>
         <NotFound />

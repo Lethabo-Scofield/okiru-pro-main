@@ -295,7 +295,62 @@ export default function SuperAdmin() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Floating Autofill Buttons - Lower Left */}
+      <div className="fixed bottom-4 left-4 z-50">
+        <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700/50 rounded-lg shadow-2xl p-3 space-y-2 min-w-[180px]">
+          <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Demo Data</p>
+          <button
+            onClick={() => seedUsersMutation.mutate()}
+            disabled={seedUsersMutation.isPending}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-zinc-200 hover:text-white bg-zinc-800/50 hover:bg-zinc-700/50 rounded-md transition-colors disabled:opacity-50"
+          >
+            {seedUsersMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <UserPlus className="h-3 w-3 text-emerald-400" />
+            )}
+            Seed Users
+          </button>
+          <button
+            onClick={() => seedSessionsMutation.mutate()}
+            disabled={seedSessionsMutation.isPending}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-zinc-200 hover:text-white bg-zinc-800/50 hover:bg-zinc-700/50 rounded-md transition-colors disabled:opacity-50"
+          >
+            {seedSessionsMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <FileText className="h-3 w-3 text-blue-400" />
+            )}
+            Seed Sessions
+          </button>
+          <button
+            onClick={() => apiRequest("POST", "/api/certificates/process", { force: true })
+              .then(() => toast({ title: "Certificate re-extraction triggered" }))
+              .catch((e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }))
+            }
+            className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-zinc-200 hover:text-white bg-zinc-800/50 hover:bg-zinc-700/50 rounded-md transition-colors"
+          >
+            <Activity className="h-3 w-3 text-violet-400" />
+            Seed Certificates
+          </button>
+          <div className="border-t border-zinc-700/50 pt-2 mt-1">
+            <button
+              onClick={() => clearDemoMutation.mutate()}
+              disabled={clearDemoMutation.isPending}
+              className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-red-300 hover:text-red-200 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors disabled:opacity-50"
+            >
+              {clearDemoMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+              Clear Demo Data
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
 
         {/* Header */}
@@ -353,71 +408,6 @@ export default function SuperAdmin() {
               </CardContent>
             </Card>
           </div>
-        </section>
-
-        {/* ─── Mock Data Autofiller ─── */}
-        <section>
-          <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
-            <Database className="h-4 w-4 text-muted-foreground" /> Mock Data Autofiller
-          </h2>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground mb-4">
-                Populate the system with realistic demo data for presentations and testing. Records tagged{" "}
-                <code className="text-[11px] bg-muted px-1 rounded">isDemo: true</code> can be cleared below.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-[12px] gap-2"
-                  disabled={seedUsersMutation.isPending}
-                  onClick={() => seedUsersMutation.mutate()}
-                >
-                  {seedUsersMutation.isPending
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <UserPlus className="h-3.5 w-3.5" />}
-                  Seed Demo Users
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-[12px] gap-2"
-                  disabled={seedSessionsMutation.isPending}
-                  onClick={() => seedSessionsMutation.mutate()}
-                >
-                  {seedSessionsMutation.isPending
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <FileText className="h-3.5 w-3.5" />}
-                  Seed Demo Sessions
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-[12px] gap-2"
-                  onClick={() => apiRequest("POST", "/api/certificates/process", { force: true })
-                    .then(() => toast({ title: "Certificate re-extraction triggered" }))
-                    .catch((e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }))
-                  }
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  Seed Demo Certificates
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="text-[12px] gap-2 ml-auto"
-                  disabled={clearDemoMutation.isPending}
-                  onClick={() => clearDemoMutation.mutate()}
-                >
-                  {clearDemoMutation.isPending
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Trash2 className="h-3.5 w-3.5" />}
-                  Clear Demo Data
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </section>
 
         {/* ─── User Management ─── */}
