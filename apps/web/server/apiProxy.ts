@@ -27,6 +27,8 @@ const PROXIED_PREFIXES = [
   "/api/sectors",
   "/api/processor-sessions",
   "/api/certificates",
+  /** Toolkit Excel import lives on the API app (`apps/api`); without this, requests hit the SPA and return HTML. */
+  "/api/import",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -62,13 +64,14 @@ function proxyRequest(req: Request, res: Response): void {
   headers["host"] = url.host;
 
   const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
+  const isLongRunning = isHybridExtract || req.path.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,
     path: url.pathname + url.search,
     method: req.method,
     headers,
-    timeout: isHybridExtract ? 600_000 : 120_000,
+    timeout: isLongRunning ? 600_000 : 120_000,
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
@@ -88,10 +91,10 @@ function proxyRequest(req: Request, res: Response): void {
 
   proxyReq.on("timeout", () => {
     logger.warn("Proxy request timed out", { method: req.method, url: req.originalUrl });
-    proxyReq.destroy();
     if (!res.headersSent) {
       res.status(504).json({ message: "API server timed out" });
     }
+    proxyReq.destroy();
   });
 
   const method = (req.method || "GET").toUpperCase();
