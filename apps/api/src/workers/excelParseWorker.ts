@@ -8,7 +8,13 @@ const buffer = Buffer.from(uint8);
 try {
   const parseResult = parseExcelBuffer(buffer, filename);
   const pipelineResult = buildPipelineResult(parseResult, filename);
-  parentPort!.postMessage({ ok: true, result: pipelineResult });
+  // Sheet snippets are forwarded to the main thread for LLM reconciliation,
+  // and stripped before the response is sent to the client.
+  parentPort!.postMessage({
+    ok: true,
+    result: pipelineResult,
+    snippets: parseResult.sheetSnippets ?? [],
+  });
 } catch (err: any) {
   parentPort!.postMessage({ ok: false, error: err?.message ?? String(err) });
 }
