@@ -37,6 +37,7 @@ import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
 import auditRouter from './audit.js';
 import onboardingRouter from './onboarding.js';
+import adminUsersRouter from './adminUsers.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -184,6 +185,10 @@ export async function registerRoutes(
 
   // Admin: append-only audit log query (RBAC-guarded inside the router)
   app.use('/api/admin/audit-logs', auditRouter);
+
+  // Admin: user management (super_admin only)
+  app.use('/api/admin/users', adminUsersRouter);
+  app.use('/api/admin', adminUsersRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

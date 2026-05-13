@@ -204,7 +204,10 @@ export default function CertificateHub() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
 
-  const [certificates, setCertificates] = useState<CertificateRow[]>([]);
+  const [featuredCerts, setFeaturedCerts] = useState<CertificateRow[]>([]);
+  const [allCerts, setAllCerts] = useState<CertificateRow[]>([]);
+  const [allCertsLoaded, setAllCertsLoaded] = useState(false);
+  const [allCertsLoading, setAllCertsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<CertStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -245,16 +248,32 @@ export default function CertificateHub() {
     expiryDate: '',
   });
 
-  const loadCertificates = useCallback(async () => {
+  const loadFeatured = useCallback(async () => {
     try {
-      const res = await fetch('/api/certificates/list');
+      const res = await fetch('/api/certificates/list?limit=10');
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: CertificateRow[] = await res.json();
-      setCertificates(data);
+      setFeaturedCerts(data);
     } catch (err: any) {
       toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     }
   }, [toast]);
+
+  const loadAllCerts = useCallback(async () => {
+    if (allCertsLoaded || allCertsLoading) return;
+    setAllCertsLoading(true);
+    try {
+      const res = await fetch('/api/certificates/list');
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const data: CertificateRow[] = await res.json();
+      setAllCerts(data);
+      setAllCertsLoaded(true);
+    } catch (err: any) {
+      toast({ title: 'Could not load all certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
+    } finally {
+      setAllCertsLoading(false);
+    }
+  }, [allCertsLoaded, allCertsLoading, toast]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -268,20 +287,30 @@ export default function CertificateHub() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadCertificates(), loadStats()]);
+      await Promise.all([loadFeatured(), loadStats()]);
       setLoading(false);
     })();
-  }, [loadCertificates, loadStats]);
+  }, [loadFeatured, loadStats]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadCertificates(), loadStats()]);
+    setAllCerts([]);
+    setAllCertsLoaded(false);
+    await Promise.all([loadFeatured(), loadStats()]);
     setRefreshing(false);
-  }, [loadCertificates, loadStats]);
+  }, [loadFeatured, loadStats]);
+
+  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || ownershipFilter);
+
+  // Lazy-load full list when user starts searching or filtering
+  useEffect(() => {
+    if (hasActiveFilters) loadAllCerts();
+  }, [hasActiveFilters, loadAllCerts]);
 
   const filtered = useMemo(() => {
+    if (!hasActiveFilters) return featuredCerts;
     const q = search.trim().toLowerCase();
-    const out = certificates.filter(c => {
+    const out = allCerts.filter(c => {
       if (q) {
         const hay = `${c.companyName} ${c.vatNumber || ''} ${c.fileName}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -302,9 +331,7 @@ export default function CertificateHub() {
       if (av !== bv) return av ? -1 : 1;
       return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
-  }, [certificates, search, statusFilter, sizeFilter, ownershipFilter]);
-
-  const hasActiveFilters = search.trim() || statusFilter || sizeFilter || ownershipFilter;
+  }, [featuredCerts, allCerts, hasActiveFilters, search, statusFilter, sizeFilter, ownershipFilter]);
 
   const clearAllFilters = () => {
     setSearch('');
@@ -385,13 +412,15 @@ export default function CertificateHub() {
       }
       toast({ title: 'Certificate uploaded', description: `${form.companyName} added to the public registry.` });
       closeUploadModal();
-      await Promise.all([loadCertificates(), loadStats()]);
+      setAllCerts([]);
+      setAllCertsLoaded(false);
+      await Promise.all([loadFeatured(), loadStats()]);
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message || 'Please try again', variant: 'destructive' });
     } finally {
       setUploading(false);
     }
-  }, [uploadFile, form, toast, closeUploadModal, loadCertificates, loadStats, navigate]);
+  }, [uploadFile, form, toast, closeUploadModal, loadFeatured, loadStats, navigate]);
 
   const downloadCertificate = useCallback(async (blobName: string) => {
     setDownloadingFile(blobName);
@@ -417,7 +446,7 @@ export default function CertificateHub() {
     }
   }, [toast]);
 
-  const headlineCount = stats?.total ?? certificates.length;
+  const headlineCount = stats?.total ?? featuredCerts.length;
   const isAuthenticated = !!user && !authLoading;
 
   return (
@@ -498,6 +527,27 @@ export default function CertificateHub() {
           </p>
         </div>
 
+        {/* ─── Hero search (primary CTA) ───────────────────── */}
+        <div className="relative mb-8">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#636366]" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by company name, VAT number, or B-BBEE level…"
+            className="w-full bg-[#1c1c1e] rounded-xl pl-12 pr-12 py-4 text-[16px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#6366f1] transition-colors shadow-sm"
+            autoComplete="off"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
         {/* ─── KPIs ───────────────────────────────────────────── */}
         {!loading && stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
@@ -531,26 +581,6 @@ export default function CertificateHub() {
             />
           </div>
         )}
-
-        {/* ─── Search ─────────────────────────────────────────── */}
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a]" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by company name or VAT number…"
-            className="w-full bg-[#1c1c1e] rounded-lg pl-10 pr-10 py-2.5 text-[14px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#48484a] transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
 
         {/* ─── Filters ────────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-6 flex-wrap">
@@ -588,14 +618,58 @@ export default function CertificateHub() {
         </div>
 
         {/* ─── List ──────────────────────────────────────────── */}
-        {loading ? (
+
+        {/* Stats bar + section header */}
+        {!loading && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div>
+              {!hasActiveFilters ? (
+                <>
+                  <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
+                    Recently Verified
+                  </h2>
+                  {stats && (
+                    <p className="text-[12px] text-[#636366]">
+                      <span className="text-[#a1a1aa]">{(stats.total).toLocaleString()} companies certified</span>
+                      {' · '}
+                      <span className="text-[#22c55e]">{stats.valid} valid</span>
+                      {' · '}
+                      <span className="text-[#f59e0b]">{stats.expiring} expiring soon</span>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[13px] text-[#8e8e93]">
+                  {allCertsLoading
+                    ? 'Searching…'
+                    : `${filtered.length.toLocaleString()} result${filtered.length !== 1 ? 's' : ''}${search.trim() ? ` for "${search.trim()}"` : ''}`
+                  }
+                </p>
+              )}
+            </div>
+
+            {/* "Add Your Certificate" inline CTA */}
+            {!hasActiveFilters && (
+              <button
+                onClick={requireLoginToUpload}
+                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white border border-[#6366f1]/50 hover:bg-[#6366f1]/10 transition-colors"
+              >
+                <Upload className="h-3.5 w-3.5 text-[#a5b4fc]" />
+                Add Your Certificate
+              </button>
+            )}
+          </div>
+        )}
+
+        {(loading || (hasActiveFilters && allCertsLoading)) ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            hasCertificates={certificates.length > 0}
-            hasActiveFilters={!!hasActiveFilters}
+            hasCertificates={hasActiveFilters ? allCerts.length > 0 : featuredCerts.length > 0}
+            hasActiveFilters={hasActiveFilters}
             onClearFilters={clearAllFilters}
             onUpload={requireLoginToUpload}
             isAuthenticated={isAuthenticated}
@@ -623,7 +697,7 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {/* ─── Upload your certificate (instructions) ─────────── */}
+        {/* ─── Upload your certificate CTA ────────────────── */}
         <section
           className="mt-12 rounded-2xl border p-6 md:p-8"
           style={{ borderColor: 'rgba(99,102,241,0.2)', background: 'linear-gradient(135deg, rgba(99,102,241,0.06), transparent 60%)' }}
@@ -637,10 +711,10 @@ export default function CertificateHub() {
                 className="text-[22px] text-white tracking-tight"
                 style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}
               >
-                Add your certificate
+                Is your company B-BBEE certified?
               </h2>
               <p className="text-[13px] text-[#a1a1aa] mt-1 max-w-[620px] leading-relaxed">
-                Make your B-BBEE status discoverable to clients, procurement teams and anyone evaluating suppliers. Uploads require a free Okiru account.
+                Join {(stats?.total ?? 1600).toLocaleString()}+ companies. Upload your certificate to get found by procurement teams and clients evaluating B-BBEE suppliers.
               </p>
             </div>
           </div>
@@ -667,7 +741,7 @@ export default function CertificateHub() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
             >
               <Upload className="h-4 w-4" />
-              {isAuthenticated ? 'Upload a certificate' : 'Sign in to upload'}
+              {isAuthenticated ? 'Add Your Certificate' : 'Sign in to upload'}
             </button>
             <span className="inline-flex items-center gap-1.5 text-[12px] text-[#636366]">
               <Info className="h-3.5 w-3.5" />
