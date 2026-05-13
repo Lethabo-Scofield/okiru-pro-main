@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
+import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
 interface CompanyProfile {
@@ -287,6 +288,16 @@ export default function HubLanding() {
               >
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Admin
+              </Link>
+            )}
+            {user?.role === 'super_admin' && (
+              <Link
+                href="/super-admin"
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 smooth press-sm text-amber-300 hover:text-amber-200 text-[12px] font-medium"
+                data-testid="link-super-admin"
+              >
+                <Crown className="h-3.5 w-3.5" />
+                Super Admin
               </Link>
             )}
             {user?.id && !authLoading ? <UserAccountMenu variant="hub" /> : null}

@@ -10,6 +10,7 @@ const userSchema = new Schema({
   role: { type: String, default: "user" },
   organizationId: { type: String, default: null },
   profilePicture: { type: String, default: null },
+  isDemo: { type: Boolean, default: false },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "users" });
 
