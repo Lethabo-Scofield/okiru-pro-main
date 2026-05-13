@@ -5,6 +5,15 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import { ModeChooser } from '@/components/processor/ModeChooser';
+import {
+  ToolkitIntegratedRequirementsSummary,
+  ToolkitExcelDropZone,
+  ToolkitStructuredReview,
+  mapExtractionToFoundation,
+  mapExtractionToPillars,
+  type ExtractionApiResult,
+} from '@/components/upload/UploadWizard';
+import { ExtractionReviewPane } from '@/components/upload/ExtractionReviewPane';
 import { PillarForm } from '@/components/builder/PillarForm';
 import { PillarSidebar } from '@/components/builder/PillarSidebar';
 import type { EntityManifest, PillarPack, ScorecardResult, EntityValue, ClientSideImportResult } from '@/components/builder/types';
@@ -14,7 +23,9 @@ import { ClientInformationData, EMPTY_CLIENT_INFO, determineCompanySize, hasQSEV
 import { FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from '@/components/build/FinancialsForm';
 import { BuildPillarsStep, BuildPillarsData } from '@/components/build/BuildPillarsStep';
 import { AssessmentSnapshotsPanel } from '@/components/AssessmentSnapshotsPanel';
-import { filterScorecardPillarRows, filterSubMinimumsByScope, sumPillarRows } from '@/lib/pillarScopeUi';
+import { filterScorecardPillarRows, filterSubMinimumsByScope, sumPillarRows, canMergeExtractedPillarForScopes } from '@/lib/pillarScopeUi';
+import { normalizeSectorCodeForExtraction } from '@/lib/bbeeSectorCodes';
+import { BuildPopulateUploadDialog } from '@/components/build/BuildPopulateUploadDialog';
 import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore, getPreferredWorkspaceId, loadAssessmentData } from '@/lib/foundationApi';
 import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
@@ -24,6 +35,7 @@ import {
 } from '@/lib/lakeTradingDemo';
 import { calculateYESScore } from '@toolkit/lib/calculators/yes';
 import type { YESData, Client } from '@toolkit/lib/types';
+import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from '@/lib/bbeeSectorsApi';
 import { API_BASE } from '@toolkit/lib/config';
 // Import removed - using hybrid extraction endpoint instead of client-side parsing
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
@@ -34,7 +46,7 @@ import {
   Circle, Zap, ListChecks, CheckCheck, CheckCircle2, FileText, FileSpreadsheet,
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
   Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send,
-  ExternalLink, Users, Briefcase, BookOpen, ShoppingCart, Heart, Wand2
+  ExternalLink, Users, Briefcase, BookOpen, ShoppingCart, Heart, Wand2, RotateCw,
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -88,7 +100,25 @@ interface ProcessorSession {
   companyInfo: CompanyInfo;
   createdAt: string;
   updatedAt: string;
-  currentStep: 'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'scorecard' | 'build-foundation' | 'build-pillars';
+  currentStep:
+    | 'company-info'
+    | 'choose-mode'
+    | 'upload'
+    | 'classify'
+    | 'extract'
+    | 'processing'
+    | 'review'
+    | 'summary'
+    | 'scorecard'
+    | 'build-foundation'
+    | 'build-pillars'
+    | 'upload-requirements'
+    | 'upload-kit-file'
+    | 'upload-kit-review';
+  /** When true, toolkit upload uses the integrated DocumentProcessor stepper (sector → review) */
+  integratedToolkitUpload?: boolean;
+  /** Large payload: toolbox extraction + previews — stored in sessionBlobs on API */
+  integratedToolkitState?: IntegratedToolkitSessionState;
   filesData: { id: number; name: string; size: string; type: string; textContent: string }[];
   fileClassifications: Record<string, number>;
   extractionResults: any[];
@@ -101,12 +131,13 @@ interface ProcessorSession {
   flowMode?: 'upload' | 'build';
 }
 
-const VALID_SECTOR_CODES = new Set(['RCOGP', 'ICT', 'FSC', 'AGRI', 'TRANSPORT']);
-
-function normalizeSectorCodeForExtraction(raw: string): string {
-  const t = (raw || '').trim().toUpperCase();
-  if (VALID_SECTOR_CODES.has(t)) return t;
-  return 'RCOGP';
+/** Persisted integrated toolkit upload progress (API stores in `sessionBlobs.integratedToolkitState`). */
+interface IntegratedToolkitSessionState {
+  sectorCode: string;
+  extractionResult?: ExtractionApiResult | null;
+  foundationPreview?: Partial<FoundationData>;
+  pillarPreview?: Partial<BuildPillarsData>;
+  importedFileMeta?: { name: string; size: number; type: string } | null;
 }
 
 function resolveExtractionFromTemplateAndCompany(
@@ -336,26 +367,7 @@ export const BBEE_SECTORS_FALLBACK: SectorOption[] = [
   { code: 'TRANSPORT', label: 'Transport Sector Code', description: 'Integrated Transport — road, rail, maritime, aviation', hasQSE: true, availableTypes: ['Generic', 'QSE'] },
 ];
 
-// Global state for sectors (populated from API)
-let cachedBBEESectors: SectorOption[] | null = null;
-
-export async function fetchBBEESectors(): Promise<SectorOption[]> {
-  if (cachedBBEESectors) return cachedBBEESectors;
-  
-  try {
-    const response = await fetch(`${API_BASE}/api/sectors/options`);
-    if (!response.ok) throw new Error('Failed to fetch sectors');
-    const result = await response.json();
-    if (result.success && result.options) {
-      cachedBBEESectors = result.options as SectorOption[];
-      return cachedBBEESectors;
-    }
-  } catch (error) {
-    console.error('[DocumentProcessor] Failed to fetch sectors:', error);
-  }
-  
-  return BBEE_SECTORS_FALLBACK;
-}
+// Reactive BBEE_SECTORS updated after sectors load — see useEffect(fetch sectors)
 
 // Reactive BBEE_SECTORS that can be updated after API fetch
 export let BBEE_SECTORS: SectorOption[] = [...BBEE_SECTORS_FALLBACK];
@@ -418,6 +430,11 @@ export function determineScorecardType(
   return { scorecardType: 'Generic', thresholdExceeded: turnoverValue > QSE_THRESHOLD };
 }
 
+function parseAnnualTurnoverValue(annualTurnoverStr: string | number): number {
+  const raw = typeof annualTurnoverStr === 'number' ? String(annualTurnoverStr) : (annualTurnoverStr ?? '0');
+  return parseFloat(raw.replace(/[^\d.]/g, '')) || 0;
+}
+
 const BBEE_LEVELS = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Non-Compliant', 'Not Verified'];
 const FYE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -476,6 +493,8 @@ async function apiSaveSession(session: ProcessorSession): Promise<ProcessorSessi
         foundationData: session.foundationData,
         pillarData: session.pillarData,
         flowMode: session.flowMode,
+        integratedToolkitUpload: session.integratedToolkitUpload,
+        integratedToolkitState: session.integratedToolkitState,
       }),
     });
     if (!res.ok) {
@@ -512,6 +531,8 @@ async function apiLoadSession(sessionId: string): Promise<ProcessorSession | nul
       foundationData: data.foundationData,
       pillarData: data.pillarData,
       flowMode: data.flowMode,
+      integratedToolkitUpload: data.integratedToolkitUpload,
+      integratedToolkitState: data.integratedToolkitState,
     };
   } catch (err) {
     console.error('[Session] Load error', { sessionId, error: err });
@@ -1164,7 +1185,23 @@ export default function DocumentProcessor() {
   const { user, logout } = useAuth();
   const entityColors = useMemo(() => getEntityColors(isDark), [isDark]);
   const storeScorecard = useBbeeStore(state => state.scorecard);
-  const [currentPage, setCurrentPage] = useState<'company-info' | 'choose-mode' | 'upload' | 'classify' | 'extract' | 'processing' | 'review' | 'summary' | 'populating' | 'scorecard' | 'build-foundation' | 'build-pillars'>('choose-mode');
+  const [currentPage, setCurrentPage] = useState<
+    | 'company-info'
+    | 'choose-mode'
+    | 'upload'
+    | 'classify'
+    | 'extract'
+    | 'processing'
+    | 'review'
+    | 'summary'
+    | 'populating'
+    | 'scorecard'
+    | 'build-foundation'
+    | 'build-pillars'
+    | 'upload-requirements'
+    | 'upload-kit-file'
+    | 'upload-kit-review'
+  >('choose-mode');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(EMPTY_COMPANY_INFO);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSavingSession, setIsSavingSession] = useState(false);
@@ -1202,6 +1239,15 @@ export default function DocumentProcessor() {
 
   // Build flow state
   const [flowMode, setFlowMode] = useState<'upload' | 'build' | null>(null);
+  /** New toolkit-upload path merges the former standalone wizard into the global timeline */
+  const [integratedToolkitUpload, setIntegratedToolkitUpload] = useState(false);
+  const [buildPopulateUploadOpen, setBuildPopulateUploadOpen] = useState(false);
+  const [buildPopulateUploadNonce, setBuildPopulateUploadNonce] = useState(0);
+  const [toolkitSectorCode, setToolkitSectorCode] = useState('');
+  const [toolkitImportedFile, setToolkitImportedFile] = useState<File | null>(null);
+  const [toolkitExtractionResult, setToolkitExtractionResult] = useState<ExtractionApiResult | null>(null);
+  const [toolkitFoundationPreview, setToolkitFoundationPreview] = useState<Partial<FoundationData>>({});
+  const [toolkitPillarPreview, setToolkitPillarPreview] = useState<Partial<BuildPillarsData>>({});
   const [manifest, setManifest] = useState<EntityManifest | null>(null);
   const [buildValues, setBuildValues] = useState<Record<string, unknown>>({});
   const [activePillarCode, setActivePillarCode] = useState<string>('');
@@ -1212,7 +1258,22 @@ export default function DocumentProcessor() {
   // Sectors state - fetched from API
   const [availableSectors, setAvailableSectors] = useState<SectorOption[]>(BBEE_SECTORS_FALLBACK);
   const [loadingSectors, setLoadingSectors] = useState(true);
+  const [sectorsBanner, setSectorsBanner] = useState<string | null>(null);
+  const [sectorsRetryNonce, setSectorsRetryNonce] = useState(0);
   const [expandedPillarCode, setExpandedPillarCode] = useState<string | null>(null);
+
+  const clientStepTurnover = useMemo(
+    () => parseAnnualTurnoverValue(companyInfo.annualTurnover),
+    [companyInfo.annualTurnover],
+  );
+  const clientStepEntityLabel = useMemo(() => {
+    if (clientStepTurnover <= 0 || !companyInfo.sector) return null;
+    const raw = determineCompanySize(clientStepTurnover);
+    const sec = availableSectors.find((s) => s.code === companyInfo.sector);
+    return raw === 'QSE' && !(sec?.hasQSE ?? false) ? 'Generic' : raw;
+  }, [clientStepTurnover, companyInfo.sector, availableSectors]);
+  const canContinueFromCompanyInfo =
+    !!companyInfo.name.trim() && !!companyInfo.sector && clientStepTurnover > 0;
   
   // Foundation Layer State - matching TOOLKIT_TAB_MAP.md Sheets 1-2
   const [foundationData, setFoundationData] = useState<FoundationData>({
@@ -1284,25 +1345,46 @@ export default function DocumentProcessor() {
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
-  // Fetch sectors from API on mount
+  // Fetch sectors from API on mount (and when user retries after a failure/offline fallback)
   useEffect(() => {
+    let cancelled = false;
+
     const fetchSectors = async () => {
       setLoadingSectors(true);
       try {
-        const sectors = await fetchBBEESectors();
+        if (sectorsRetryNonce > 0) {
+          invalidateBbeeSectorOptionsCache();
+        }
+        const result = await loadBbeeSectorOptionRows({ reload: sectorsRetryNonce > 0 });
+        if (cancelled) return;
+
+        const sectors: SectorOption[] = result.rows.map((r) => ({
+          code: r.code,
+          label: r.label,
+          description: r.label,
+          hasQSE: r.hasQSE,
+          availableTypes: r.availableTypes ?? [],
+        }));
         setAvailableSectors(sectors);
-        // Update the global BBEE_SECTORS for functions that use it
         BBEE_SECTORS.length = 0;
         BBEE_SECTORS.push(...sectors);
-      } catch (error) {
-        console.error('[DocumentProcessor] Failed to fetch sectors:', error);
-        // Fallback is already set in state
+
+        setSectorsBanner(
+          result.fromLiveApi
+            ? null
+            : (result.detail ??
+                'Could not refresh sectors from the API — using built-in sectors. Retry or confirm @okiru/api is running.'),
+        );
       } finally {
-        setLoadingSectors(false);
+        if (!cancelled) setLoadingSectors(false);
       }
     };
-    fetchSectors();
-  }, []);
+
+    void fetchSectors();
+    return () => {
+      cancelled = true;
+    };
+  }, [sectorsRetryNonce]);
 
   // Template selection: use sessionStorage preference, then auto-match to company sector, then fallback
   const getPreferredTemplate = useCallback(() => {
@@ -1409,17 +1491,53 @@ export default function DocumentProcessor() {
       if (sess.flowMode) {
         setFlowMode(sess.flowMode);
       }
+      if ((sess as any).integratedToolkitUpload) {
+        setIntegratedToolkitUpload(true);
+      }
+      const its = (sess as ProcessorSession).integratedToolkitState || (sess as any).integratedToolkitState;
+      if (its && typeof its === 'object') {
+        if (its.sectorCode) setToolkitSectorCode(its.sectorCode);
+        if (its.extractionResult) {
+          setToolkitExtractionResult(its.extractionResult as ExtractionApiResult);
+          const fdPrev = mapExtractionToFoundation(its.extractionResult as ExtractionApiResult);
+          const pdPrev = mapExtractionToPillars(its.extractionResult as ExtractionApiResult);
+          const sc = its.sectorCode ? normalizeSectorCodeForExtraction(its.sectorCode) : '';
+          if (sc) {
+            fdPrev.clientInfo = {
+              ...(fdPrev.clientInfo || EMPTY_CLIENT_INFO),
+              sectorCode: sc,
+            };
+          }
+          setToolkitFoundationPreview({ ...(its.foundationPreview || {}), ...fdPrev });
+          setToolkitPillarPreview({ ...(its.pillarPreview || {}), ...pdPrev });
+        } else {
+          if (its.foundationPreview) setToolkitFoundationPreview(its.foundationPreview);
+          if (its.pillarPreview) setToolkitPillarPreview(its.pillarPreview);
+        }
+        if (its.importedFileMeta?.name) {
+          const NativeFile = window.File as typeof globalThis.File;
+          setToolkitImportedFile(new NativeFile([], its.importedFileMeta.name, { type: its.importedFileMeta.type || 'application/octet-stream' }));
+        }
+      }
 
       // FIXED: Added 'choose-mode' to validSteps so mode selection is preserved on resume
-      const validSteps = ['choose-mode', 'company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars'];
-      const step = sess.currentStep && validSteps.includes(sess.currentStep)
-        ? sess.currentStep
-        : sess.scorecardResult ? 'scorecard'
-        : sess.flowMode === 'build' && sess.currentStep?.startsWith('build-') ? sess.currentStep
-        : sess.extractionResults && sess.extractionResults.length > 0 ? 'review'
-        : sess.filesData && sess.filesData.length > 0 ? 'classify'
-        : sess.flowMode === 'build' ? 'build-foundation'
-        : 'upload';
+      const validSteps = ['choose-mode', 'company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars', 'upload-requirements', 'upload-kit-file', 'upload-kit-review'];
+      let rawStep = sess.currentStep as string | undefined;
+      if (rawStep === 'upload-sector-template') rawStep = 'upload-requirements';
+      const step =
+        rawStep && validSteps.includes(rawStep)
+          ? rawStep
+          : sess.scorecardResult
+            ? 'scorecard'
+            : sess.flowMode === 'build' && sess.currentStep?.startsWith('build-')
+              ? sess.currentStep
+              : sess.extractionResults && sess.extractionResults.length > 0
+                ? 'review'
+                : sess.filesData && sess.filesData.length > 0
+                  ? 'classify'
+                  : sess.flowMode === 'build'
+                    ? 'build-foundation'
+                    : 'upload';
       setCurrentPage(step as any);
       if (sess.scorecardResult) setScorecardResult(sess.scorecardResult);
       if ((sess as any).toolkitClientId) {
@@ -1528,6 +1646,7 @@ export default function DocumentProcessor() {
     foundationData?: FoundationData;
     pillarData?: BuildPillarsData;
     flowMode?: 'upload' | 'build';
+    integratedToolkitState?: IntegratedToolkitSessionState | null;
   }) => {
     const sid = sessionId || generateSessionId();
     if (!sessionId) setSessionId(sid);
@@ -1549,6 +1668,27 @@ export default function DocumentProcessor() {
     if (!ci.name) {
       ci.name = 'Unnamed Assessment';
     }
+    const effectiveFlowMode = opts?.flowMode ?? flowMode;
+
+    let integratedToolkitPayload: IntegratedToolkitSessionState | undefined;
+    if (opts?.integratedToolkitState !== undefined) {
+      integratedToolkitPayload =
+        opts.integratedToolkitState === null ? undefined : opts.integratedToolkitState;
+    } else if (effectiveFlowMode === 'upload') {
+      const sc = toolkitSectorCode || ci.sector;
+      if (sc) {
+        integratedToolkitPayload = {
+          sectorCode: normalizeSectorCodeForExtraction(sc),
+          extractionResult: toolkitExtractionResult ?? undefined,
+          foundationPreview: toolkitFoundationPreview,
+          pillarPreview: toolkitPillarPreview,
+          importedFileMeta: toolkitImportedFile
+            ? { name: toolkitImportedFile.name, size: toolkitImportedFile.size, type: toolkitImportedFile.type }
+            : undefined,
+        };
+      }
+    }
+
     const sess: ProcessorSession = {
       id: sid,
       companyInfo: ci,
@@ -1560,8 +1700,7 @@ export default function DocumentProcessor() {
         name: f.name,
         size: f.size,
         type: f.type,
-        status: f.status,
-        documentId: f.documentId,
+        textContent: f.textContent ?? '',
       })),
       fileClassifications: opts?.classifications ?? fileClassifications,
       extractionResults: (opts?.results ?? extractionResults).map((r: any) => ({
@@ -1583,11 +1722,17 @@ export default function DocumentProcessor() {
       scorecardResult: opts?.scorecardResult ?? undefined,
       foundationData: opts?.foundationData ?? foundationData,
       pillarData: opts?.pillarData ?? pillarData,
-      flowMode: (opts?.flowMode ?? flowMode) || undefined,
-    };
+      flowMode: effectiveFlowMode || undefined,
+      integratedToolkitUpload: effectiveFlowMode === 'upload',
+      ...(effectiveFlowMode !== 'upload'
+        ? { integratedToolkitState: null }
+        : integratedToolkitPayload !== undefined
+          ? { integratedToolkitState: integratedToolkitPayload }
+          : {}),
+    } as ProcessorSession;
     await apiSaveSession(sess);
     return sid;
-  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses, foundationData, pillarData, flowMode]);
+  }, [sessionId, companyInfo, uploadedFiles, fileClassifications, extractionResults, docStatuses, foundationData, pillarData, flowMode, integratedToolkitUpload, toolkitSectorCode, toolkitExtractionResult, toolkitFoundationPreview, toolkitPillarPreview, toolkitImportedFile]);
 
   const lastSavedFilesRef = useRef<string>('');
   useEffect(() => {
@@ -1692,7 +1837,14 @@ export default function DocumentProcessor() {
       yes: { id: '', clientId: '', totalEmployees: 0, candidates: [], yesYouthEnrolled: 0, yesBlackYouthCount: 0, yesBlackYouthPercentage: 0, yesAbsorbedCount: 0, yesAbsorptionRate: 0, totalYesCost: 0 },
     });
 
+    setIntegratedToolkitUpload(mode === 'upload');
+
     if (mode === 'upload') {
+      setToolkitSectorCode('');
+      setToolkitImportedFile(null);
+      setToolkitExtractionResult(null);
+      setToolkitFoundationPreview({});
+      setToolkitPillarPreview({});
       setCurrentPage('company-info');
     } else {
       // FIXED: Generate sessionId early for anonymous users so they get isolated sessionStorage
@@ -2022,6 +2174,300 @@ export default function DocumentProcessor() {
       setIsSavingSession(false);
     }
   }, [pillarData, foundationData, sessionId, toast, buildCollaboration]);
+
+  const finalizeIntegratedToolkitToSummary = useCallback(async () => {
+    if (!toolkitExtractionResult) {
+      toast({
+        title: 'Nothing imported yet',
+        description: 'Extract a toolkit file before continuing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsSavingSession(true);
+    try {
+      const fd = toolkitFoundationPreview;
+      const pd = toolkitPillarPreview;
+
+      const mergedFoundation: FoundationData = {
+        clientInfo: { ...EMPTY_CLIENT_INFO, ...foundationData.clientInfo, ...(fd.clientInfo || {}) },
+        financials: { ...EMPTY_FINANCIALS, ...foundationData.financials, ...(fd.financials || {}) },
+      };
+
+      const sc = toolkitSectorCode
+        ? normalizeSectorCodeForExtraction(toolkitSectorCode)
+        : normalizeSectorCodeForExtraction(mergedFoundation.clientInfo.sectorCode || companyInfo.sector);
+      mergedFoundation.clientInfo = { ...mergedFoundation.clientInfo, sectorCode: sc };
+
+      const mergedPillarData = {
+        ownership:
+          pd.ownership ??
+          pillarData.ownership ?? {
+            id: '',
+            clientId: '',
+            shareholders: [],
+            companyValue: 0,
+            outstandingDebt: 0,
+            yearsHeld: 0,
+            ownershipScorePoints: 0,
+            ownershipScorePercent: 0,
+            netValuePoints: 0,
+            netValuePercent: 0,
+          },
+        management: pd.management ?? pillarData.management ?? { id: '', clientId: '', employees: [] },
+        employmentEquity: pillarData.employmentEquity ?? { id: '', clientId: '', employees: [] },
+        skills:
+          pd.skills ??
+          pillarData.skills ?? {
+            id: '',
+            clientId: '',
+            leviableAmount: 0,
+            trainingPrograms: [],
+            yesCandidatesCount: 0,
+            yesAbsorbedCount: 0,
+          },
+        procurement: pd.procurement ?? pillarData.procurement ?? { id: '', clientId: '', tmps: 0, suppliers: [] },
+        esd:
+          pd.esd ??
+          pillarData.esd ?? { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false },
+        sed: pd.sed ?? pillarData.sed ?? { id: '', clientId: '', contributions: [] },
+        yes: pillarData.yes ?? EMPTY_YES_DATA,
+      };
+
+      setFoundationData(mergedFoundation);
+      setPillarData(mergedPillarData);
+
+      const ci = mergedFoundation.clientInfo ?? EMPTY_CLIENT_INFO;
+      const fin = mergedFoundation.financials ?? EMPTY_FINANCIALS;
+      const sectorCode = normalizeSectorCodeForExtraction(ci.sectorCode || toolkitSectorCode || companyInfo.sector);
+      mergedFoundation.clientInfo.sectorCode = sectorCode;
+
+      const scorecardTypeResult = determineScorecardType(sectorCode, String(ci.annualTurnover ?? 0));
+
+      setCompanyInfo((prev) => ({
+        ...prev,
+        name: ci.companyName || prev.name,
+        sector: sectorCode || prev.sector,
+      }));
+
+      const result = await populateAndScore({
+        pillars: mergedPillarData,
+        foundation: mergedFoundation,
+        sectorCode,
+        scorecardType: scorecardTypeResult.scorecardType || 'Generic',
+        pillarScopeFilter: buildCollaboration?.pillarScopes ?? null,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || result.validationErrors?.join('; ') || 'Calculation failed');
+      }
+
+      const { scorecard } = useBbeeStore.getState();
+      const buildClientId = useBbeeStore.getState().activeClientId || `upload-${sessionId || Date.now()}`;
+
+      const skills = useBbeeStore.getState().skills;
+      const management = useBbeeStore.getState().management;
+      const yesCandidates =
+        skills.trainingPrograms
+          ?.filter((p) => p.isYesEmployee)
+          ?.map((p) => ({
+            id: p.id,
+            name: p.learnerName || 'YES Candidate',
+            race: p.race || 'African',
+            gender: p.gender || 'Male',
+            isDisabled: p.isDisabled || false,
+            isBlack: (p as { isBlack?: boolean }).isBlack ?? p.race !== 'White',
+            startDate: p.startDate || p.transactionDate || new Date().toISOString().slice(0, 10),
+            isAbsorbed: p.isAbsorbed || false,
+            cost:
+              typeof (p as { totalCost?: number }).totalCost === 'number'
+                ? (p as { totalCost: number }).totalCost
+                : ((p as { cost?: number }).cost ?? p.courseCost ?? 0),
+          })) ?? [];
+
+      const yesForLevel = calculateYESScore({
+        id: '',
+        clientId: buildClientId,
+        totalEmployees: management.employees?.length || 0,
+        candidates: yesCandidates,
+        yesHeadcountTarget: 0,
+        yesYouthEnrolled: yesCandidates.length,
+        yesBlackYouthCount: 0,
+        yesBlackYouthPercentage: 0,
+        yesAbsorbedCount: 0,
+        yesAbsorptionRate: 0,
+        totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
+      } as YESData);
+
+      const scorecardLegacy = normalizeUCSResult(result.apiResult!, scorecard, {
+        yesTier: yesForLevel.yesTierAchieved,
+        yesLevelIncrease: yesForLevel.yesBeeLevelIncrease || 0,
+      });
+
+      localStorage.setItem(getActiveClientStorageKey(user?.id), buildClientId);
+      useBbeeStore.setState({ activeClientId: buildClientId });
+
+      setScorecardResult(scorecardLegacy);
+
+      await persistSession('summary', {
+        foundationData: mergedFoundation,
+        pillarData: mergedPillarData,
+        flowMode: 'upload',
+        scorecardResult: scorecardLegacy,
+        complete: true,
+      });
+
+      setCurrentPage('summary');
+
+      toast({
+        title: 'Import summary ready',
+        description: `Total: ${scorecard.total.score.toFixed(2)} pts · Level ${scorecardLegacy.finalLevel}`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not calculate scorecard',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingSession(false);
+    }
+  }, [
+    toolkitExtractionResult,
+    toolkitFoundationPreview,
+    toolkitPillarPreview,
+    toolkitSectorCode,
+    foundationData,
+    pillarData,
+    companyInfo.sector,
+    sessionId,
+    toast,
+    buildCollaboration,
+    persistSession,
+  ]);
+
+  const applyToolkitExtractToManualBuild = useCallback(
+    (data: ExtractionApiResult) => {
+      const fd = mapExtractionToFoundation(data);
+      const pd = mapExtractionToPillars(data);
+      const sectorHint =
+        foundationData.clientInfo?.sectorCode || companyInfo.sector || fd.clientInfo?.sectorCode || '';
+
+      const mergedFoundation: FoundationData = {
+        clientInfo: {
+          ...EMPTY_CLIENT_INFO,
+          ...foundationData.clientInfo,
+          ...(fd.clientInfo || {}),
+        },
+        financials: {
+          ...EMPTY_FINANCIALS,
+          ...foundationData.financials,
+          ...(fd.financials || {}),
+        },
+      };
+      mergedFoundation.clientInfo.sectorCode = normalizeSectorCodeForExtraction(
+        mergedFoundation.clientInfo.sectorCode || sectorHint,
+      );
+      mergedFoundation.financials.industry =
+        mergedFoundation.clientInfo.industry || mergedFoundation.financials.industry;
+
+      const scopes = buildCollaboration?.pillarScopes ?? null;
+      const canWritePillars = !buildCollaboration || buildCollaboration.canWritePillars !== false;
+
+      const emptyOwnership = {
+        id: '',
+        clientId: '',
+        shareholders: [],
+        companyValue: 0,
+        outstandingDebt: 0,
+        yearsHeld: 0,
+        ownershipScorePoints: 0,
+        ownershipScorePercent: 0,
+        netValuePoints: 0,
+        netValuePercent: 0,
+      };
+      const emptyManagement = { id: '', clientId: '', employees: [] as any[] };
+      const emptySkills = {
+        id: '',
+        clientId: '',
+        leviableAmount: mergedFoundation.financials.leviableAmount || 0,
+        trainingPrograms: [] as any[],
+        yesCandidatesCount: 0,
+        yesAbsorbedCount: 0,
+      };
+      const emptyProcurement = {
+        id: '',
+        clientId: '',
+        tmps: mergedFoundation.financials.tmps || 0,
+        suppliers: [] as any[],
+      };
+      const emptyEsd = {
+        id: '',
+        clientId: '',
+        contributions: [] as any[],
+        graduationBonus: false,
+        jobsCreatedBonus: false,
+      };
+      const emptySed = { id: '', clientId: '', contributions: [] as any[] };
+
+      const mergedPillarData = {
+        ownership:
+          canWritePillars && canMergeExtractedPillarForScopes('ownership', scopes)
+            ? pd.ownership ?? pillarData.ownership ?? emptyOwnership
+            : pillarData.ownership ?? emptyOwnership,
+        management:
+          canWritePillars && canMergeExtractedPillarForScopes('management', scopes)
+            ? pd.management ?? pillarData.management ?? emptyManagement
+            : pillarData.management ?? emptyManagement,
+        employmentEquity:
+          pillarData.employmentEquity ?? { id: '', clientId: '', employees: [] },
+        skills:
+          canWritePillars && canMergeExtractedPillarForScopes('skills', scopes)
+            ? pd.skills ?? pillarData.skills ?? emptySkills
+            : pillarData.skills ?? emptySkills,
+        procurement:
+          canWritePillars && canMergeExtractedPillarForScopes('procurement', scopes)
+            ? pd.procurement ?? pillarData.procurement ?? emptyProcurement
+            : pillarData.procurement ?? emptyProcurement,
+        esd:
+          canWritePillars && canMergeExtractedPillarForScopes('esd', scopes)
+            ? pd.esd ?? pillarData.esd ?? emptyEsd
+            : pillarData.esd ?? emptyEsd,
+        sed:
+          canWritePillars && canMergeExtractedPillarForScopes('sed', scopes)
+            ? pd.sed ?? pillarData.sed ?? emptySed
+            : pillarData.sed ?? emptySed,
+        yes: pillarData.yes ?? EMPTY_YES_DATA,
+      };
+
+      setFoundationData(mergedFoundation);
+      setPillarData(mergedPillarData);
+
+      const ci = mergedFoundation.clientInfo;
+      setCompanyInfo((prev) => ({
+        ...prev,
+        name: ci.companyName || prev.name,
+        sector: ci.sectorCode || prev.sector,
+        registrationNumber: ci.registrationNumber || prev.registrationNumber,
+        financialYearEnd: ci.financialYearEnd || prev.financialYearEnd,
+        address: ci.physicalAddress || prev.address,
+        contactName: ci.contactPerson || prev.contactName,
+        contactEmail: ci.contactEmail || prev.contactEmail,
+        contactPhone: ci.contactPhone || prev.contactPhone,
+      }));
+
+      toast({
+        title: 'Forms updated from workbook',
+        description: 'Extracted values were merged into your manual scorecard fields.',
+      });
+    },
+    [foundationData, pillarData, companyInfo.sector, buildCollaboration, toast],
+  );
+
+  useEffect(() => {
+    if (currentPage !== 'upload-requirements') return;
+    setToolkitSectorCode((prev) => prev || companyInfo.sector || availableSectors[0]?.code || '');
+  }, [currentPage, companyInfo.sector, availableSectors]);
 
   const activePillar = useMemo(() => {
     if (!manifest || !manifest.pillarPacks) return null;
@@ -2664,13 +3110,14 @@ export default function DocumentProcessor() {
     if (!doc) return;
     if (!doc.tables) doc.tables = {};
 
-    doc.tables.shareholders = lakeTradingOwnership.shareholders.map(s => ({ ...s }));
-    doc.tables.employees = lakeTradingManagement.employees.map(e => ({ ...e }));
+    // Defensive: ensure arrays exist before mapping (test data may be partially defined)
+    doc.tables.shareholders = (lakeTradingOwnership.shareholders || []).map(s => ({ ...s }));
+    doc.tables.employees = (lakeTradingManagement.employees || []).map(e => ({ ...e }));
     doc.tables.trainingPrograms = [];
-    doc.tables.suppliers = (lakeTradingPillars.procurement.suppliers as any[]).map(s => ({ ...s }));
+    doc.tables.suppliers = ((lakeTradingPillars.procurement?.suppliers) || []).map(s => ({ ...s }));
     doc.tables.contributions = [
-      ...(lakeTradingPillars.esd.contributions as any[]).map(c => ({ ...c })),
-      ...(lakeTradingPillars.sed.contributions as any[]).map(c => ({ ...c })),
+      ...((lakeTradingPillars.esd?.contributions) || []).map(c => ({ ...c })),
+      ...((lakeTradingPillars.sed?.contributions) || []).map(c => ({ ...c })),
     ];
     doc.tables.yesCandidates = [];
 
@@ -2780,12 +3227,20 @@ export default function DocumentProcessor() {
   if (currentPage === 'populating' && populatingData) {
     const fmt = (n: number) => `R ${Math.round(n).toLocaleString('en-ZA')}`;
     const pct = (n: number) => `${Math.round(n * 100)}%`;
+    // Defensive: ensure all arrays exist (API may return undefined instead of empty arrays)
+    const shareholders = populatingData.shareholders || [];
+    const employees = populatingData.employees || [];
+    const trainingPrograms = populatingData.trainingPrograms || [];
+    const suppliers = populatingData.suppliers || [];
+    const esdContributions = populatingData.esdContributions || [];
+    const sedContributions = populatingData.sedContributions || [];
+    const financials = populatingData.financials || {};
     const populatingPillars: PopulatingPillar[] = [
       {
         label: 'Ownership',
         color: '#5e9bff',
         icon: '○',
-        entities: populatingData.shareholders.map(sh =>
+        entities: shareholders.map(sh =>
           `${sh.name}  ·  ${pct(sh.blackOwnership || 0)} Black  ·  ${pct(sh.blackWomenOwnership || 0)} Black Women  ·  ${Math.round(sh.shares || 0)} shares`
         ),
       },
@@ -2793,7 +3248,7 @@ export default function DocumentProcessor() {
         label: 'Management Control',
         color: '#34d399',
         icon: '○',
-        entities: populatingData.employees.slice(0, 10).map(e =>
+        entities: employees.slice(0, 10).map(e =>
           `${e.name}  ·  ${e.designation}  ·  ${e.race}  ·  ${e.gender}`
         ),
       },
@@ -2801,7 +3256,7 @@ export default function DocumentProcessor() {
         label: 'Skills Development',
         color: '#f59e0b',
         icon: '○',
-        entities: populatingData.trainingPrograms.slice(0, 8).map(tp =>
+        entities: trainingPrograms.slice(0, 8).map(tp =>
           `${tp.name}  ·  ${fmt(tp.cost || 0)}  ·  ${tp.category}  ·  ${tp.isBlack ? 'Black' : 'Non-Black'}`
         ),
       },
@@ -2809,7 +3264,7 @@ export default function DocumentProcessor() {
         label: 'Preferential Procurement',
         color: '#a78bfa',
         icon: '○',
-        entities: populatingData.suppliers.slice(0, 8).map(s =>
+        entities: suppliers.slice(0, 8).map(s =>
           `${s.name}  ·  Level ${s.beeLevel}  ·  ${fmt(s.spend || 0)}`
         ),
       },
@@ -2817,7 +3272,7 @@ export default function DocumentProcessor() {
         label: 'Enterprise & Supplier Development',
         color: '#38bdf8',
         icon: '○',
-        entities: populatingData.esdContributions.map(c =>
+        entities: esdContributions.map(c =>
           `${c.beneficiary}  ·  ${fmt(c.amount || 0)}  ·  ${c.category || 'enterprise_development'}`
         ),
       },
@@ -2825,7 +3280,7 @@ export default function DocumentProcessor() {
         label: 'Socio-Economic Development',
         color: '#f472b6',
         icon: '○',
-        entities: populatingData.sedContributions.map(c =>
+        entities: sedContributions.map(c =>
           `${c.beneficiary}  ·  ${fmt(c.amount || 0)}`
         ),
       },
@@ -2834,10 +3289,10 @@ export default function DocumentProcessor() {
         color: '#fb923c',
         icon: '○',
         entities: [
-          populatingData.financials.revenue > 0 ? `Revenue  ·  ${fmt(populatingData.financials.revenue)}` : null,
-          populatingData.financials.npat ? `NPAT  ·  ${fmt(populatingData.financials.npat)}` : null,
-          populatingData.financials.leviableAmount > 0 ? `Leviable Amount  ·  ${fmt(populatingData.financials.leviableAmount)}` : null,
-          populatingData.financials.tmps > 0 ? `Total Measured Procurement Spend  ·  ${fmt(populatingData.financials.tmps)}` : null,
+          financials.revenue > 0 ? `Revenue  ·  ${fmt(financials.revenue)}` : null,
+          financials.npat ? `NPAT  ·  ${fmt(financials.npat)}` : null,
+          financials.leviableAmount > 0 ? `Leviable Amount  ·  ${fmt(financials.leviableAmount)}` : null,
+          financials.tmps > 0 ? `Total Measured Procurement Spend  ·  ${fmt(financials.tmps)}` : null,
         ].filter(Boolean) as string[],
       },
     ].filter(p => p.entities.length > 0);
@@ -2897,8 +3352,13 @@ export default function DocumentProcessor() {
       <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
         <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {(() => {
-            // Build mode has its own step flow
-            const isBuildFlow = flowMode === 'build' || currentPage === 'build-foundation' || currentPage === 'build-pillars';
+            const isBuildFlow =
+              flowMode === 'build' ||
+              currentPage === 'build-foundation' ||
+              currentPage === 'build-pillars';
+            const isIntegratedUpload =
+              integratedToolkitUpload && flowMode === 'upload';
+
             const steps = isBuildFlow
               ? [
                   { label: 'Mode', page: 'choose-mode' },
@@ -2906,17 +3366,28 @@ export default function DocumentProcessor() {
                   { label: 'Pillars', page: 'build-pillars' },
                   { label: 'Scorecard', page: 'scorecard' },
                 ]
-              : [
-                  { label: 'Mode', page: 'choose-mode' },
-                  { label: 'Upload', page: 'upload' },
-                  { label: 'Template', page: 'classify' },
-                  { label: 'Extract', page: 'extract' },
-                  { label: 'Review', page: 'review' },
-                  { label: 'Summary', page: 'summary' },
-                  { label: 'Scorecard', page: 'scorecard' },
-                ];
+              : isIntegratedUpload
+                ? [
+                    { label: 'Mode', page: 'choose-mode' },
+                    { label: 'Client', page: 'company-info' },
+                    { label: 'Requirements', page: 'upload-requirements' },
+                    { label: 'Upload', page: 'upload-kit-file' },
+                    { label: 'Review', page: 'upload-kit-review' },
+                    { label: 'Summary', page: 'summary' },
+                    { label: 'Scorecard', page: 'scorecard' },
+                  ]
+                : [
+                    { label: 'Mode', page: 'choose-mode' },
+                    { label: 'Upload', page: 'upload' },
+                    { label: 'Template', page: 'classify' },
+                    { label: 'Extract', page: 'extract' },
+                    { label: 'Review', page: 'review' },
+                    { label: 'Summary', page: 'summary' },
+                    { label: 'Scorecard', page: 'scorecard' },
+                  ];
 
-            const currentStepIdx = steps.findIndex(s => s.page === currentPage);
+            let currentStepIdx = steps.findIndex((s) => s.page === currentPage);
+            if (currentStepIdx < 0) currentStepIdx = 0;
 
             return steps.map((step, idx) => {
               const isComplete = idx < currentStepIdx;
@@ -2955,8 +3426,18 @@ export default function DocumentProcessor() {
         </div>
       </div>
 
-      <main className={`flex-1 flex flex-col min-h-0 ${currentPage === 'review' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-        <div className={`${currentPage === 'review' ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1400px] mx-auto w-full'} p-6`}>
+      <main
+        className={`flex-1 flex flex-col min-h-0 ${
+          currentPage === 'review' || currentPage === 'upload-kit-review' ? 'overflow-hidden' : 'overflow-y-auto'
+        }`}
+      >
+        <div
+          className={`${
+            currentPage === 'review' || currentPage === 'upload-kit-review'
+              ? 'flex-1 min-h-0 flex flex-col'
+              : 'max-w-[1400px] mx-auto w-full'
+          } p-6`}
+        >
 
           {currentPage === 'company-info' && (
             <div>
@@ -2970,7 +3451,11 @@ export default function DocumentProcessor() {
 
                   <div className="mb-10">
                     <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">New Client Assessment</h2>
-                    <p className="text-[#8e8e93] text-[15px] mt-1.5">Enter the client company's details before uploading documents.</p>
+                    <p className="text-[#8e8e93] text-[15px] mt-1.5">
+                      {flowMode === 'upload'
+                        ? 'Enter the client profile. Next you will upload the toolkit workbook for extraction — this path is separate from the manual scorecard builder.'
+                        : 'Enter the client profile to continue.'}
+                    </p>
                   </div>
 
                   {/* ── Card ── */}
@@ -3025,6 +3510,30 @@ export default function DocumentProcessor() {
                     {/* Section: Company Details */}
                     <div className="px-6 py-5" style={{ borderBottom: '1px solid #1e1e1e' }}>
                       <p className="text-[10px] font-semibold text-[#636366] uppercase tracking-widest mb-4">Company Details</p>
+
+                      {sectorsBanner && (
+                        <div className="mb-4 rounded-xl px-4 py-3 flex flex-wrap items-start gap-3 bg-amber-500/10 border border-amber-500/25">
+                          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-[200px] text-[13px] text-[#ebebf5]">
+                            <span className="font-medium text-amber-400">Sector list fallback</span>
+                            <span className="block text-[#b4b4be] mt-1">{sectorsBanner}</span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={loadingSectors}
+                            onClick={() => setSectorsRetryNonce((n) => n + 1)}
+                            className="inline-flex items-center gap-2 shrink-0 px-3 py-2 rounded-xl bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] font-medium text-white disabled:opacity-50"
+                          >
+                            {loadingSectors ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCw className="h-4 w-4" />
+                            )}
+                            Retry
+                          </button>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="sm:col-span-2">
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Company Name <span className="text-red-400">*</span></label>
@@ -3065,11 +3574,22 @@ export default function DocumentProcessor() {
                           )}
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Annual Turnover (ZAR)</label>
+                          <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">
+                            Annual Turnover (ZAR) <span className="text-red-400">*</span>
+                          </label>
                           <input type="text" value={companyInfo.annualTurnover} onChange={(e) => setCompanyInfo(p => ({ ...p, annualTurnover: e.target.value }))}
                             placeholder="e.g. R 50,000,000"
                             className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-[#3a3a3c] focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all"
                             data-testid="input-annual-turnover" />
+                          {clientStepEntityLabel && (
+                            <p className="mt-1.5 text-[11px] text-[#8e8e93]">
+                              Entity size from turnover + sector:{' '}
+                              <span className="text-white font-medium">{clientStepEntityLabel}</span>
+                              {determineCompanySize(clientStepTurnover) === 'QSE' && !(availableSectors.find((s) => s.code === companyInfo.sector)?.hasQSE ?? false)
+                                ? ' (this sector has no QSE variant — Generic scorecard applies)'
+                                : ''}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-[11px] font-medium text-[#8e8e93] mb-1.5">Number of Employees</label>
@@ -3150,14 +3670,19 @@ export default function DocumentProcessor() {
                   {/* Submit */}
                   <button
                     onClick={async () => {
-                      if (!companyInfo.name.trim() || !companyInfo.sector) {
-                        toast({ title: "Missing information", description: "Please provide a company name and sector.", variant: "destructive" });
+                      if (!canContinueFromCompanyInfo) {
+                        toast({
+                          title: 'Missing information',
+                          description: 'Enter company name, sector, and annual turnover so we can determine entity size.',
+                          variant: 'destructive',
+                        });
                         return;
                       }
                       setIsSavingSession(true);
                       const sid = sessionId || generateSessionId();
                       if (!sessionId) { setSessionId(sid); sessionCreatedAt.current = new Date().toISOString(); }
-                      const nextPage = flowMode === 'upload' ? 'upload' : 'choose-mode';
+                      setToolkitSectorCode(normalizeSectorCodeForExtraction(companyInfo.sector));
+                      const nextPage = flowMode === 'upload' ? 'upload-requirements' : 'choose-mode';
                       await apiSaveSession({
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
@@ -3165,11 +3690,22 @@ export default function DocumentProcessor() {
                         currentStep: nextPage,
                         filesData: [], fileClassifications: {},
                         extractionResults: [], docStatuses: {}, isComplete: false,
+                        flowMode: flowMode ?? undefined,
+                        integratedToolkitUpload: flowMode === 'upload' ? true : undefined,
+                        integratedToolkitState: flowMode === 'upload'
+                          ? {
+                              sectorCode: normalizeSectorCodeForExtraction(companyInfo.sector),
+                              extractionResult: undefined,
+                              foundationPreview: undefined,
+                              pillarPreview: undefined,
+                              importedFileMeta: undefined,
+                            }
+                          : undefined,
                       });
                       setIsSavingSession(false);
                       setCurrentPage(nextPage);
                     }}
-                    disabled={!companyInfo.name.trim() || !companyInfo.sector || isSavingSession}
+                    disabled={!canContinueFromCompanyInfo || isSavingSession}
                     className="w-full mt-4 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1a1a1a] disabled:text-[#3a3a3c] text-black rounded-xl font-semibold text-[13px] transition-colors"
                     data-testid="button-next-mode"
                   >
@@ -3186,11 +3722,27 @@ export default function DocumentProcessor() {
             <ModeChooser onSelectMode={handleModeSelect} />
           )}
 
+          {flowMode === 'build' && (
+            <BuildPopulateUploadDialog
+              open={buildPopulateUploadOpen}
+              onOpenChange={setBuildPopulateUploadOpen}
+              dropzoneResetKey={buildPopulateUploadNonce}
+              sectorCodeHint={foundationData.clientInfo?.sectorCode || companyInfo.sector || ''}
+              canWritePillars={!buildCollaboration || buildCollaboration.canWritePillars !== false}
+              onApplyExtraction={applyToolkitExtractToManualBuild}
+            />
+          )}
+
           {currentPage === 'build-foundation' && (
             <div className="max-w-5xl mx-auto w-full">
               <FoundationStep
                 data={foundationData}
                 onChange={setFoundationData}
+                showPopulateFromUpload={flowMode === 'build'}
+                onPopulateFromUpload={() => {
+                  setBuildPopulateUploadNonce((n) => n + 1);
+                  setBuildPopulateUploadOpen(true);
+                }}
                 onNext={() => {
                   // Sync foundation data to companyInfo for backward compatibility
                   const clientInfo = foundationData.clientInfo;
@@ -3230,6 +3782,116 @@ export default function DocumentProcessor() {
             </div>
           )}
 
+          {currentPage === 'upload-requirements' && integratedToolkitUpload && flowMode === 'upload' && (
+            <div className="max-w-4xl mx-auto w-full space-y-6">
+              <div className="rounded-2xl p-6" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                <ToolkitIntegratedRequirementsSummary
+                  sectorCode={toolkitSectorCode || companyInfo.sector}
+                  sectorLabel={availableSectors.find((s) => s.code === (toolkitSectorCode || companyInfo.sector))?.label}
+                  pillarScopes={buildCollaboration?.pillarScopes ?? null}
+                />
+              </div>
+              <div className="flex gap-3 justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('company-info')}
+                  className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await persistSession('upload-requirements');
+                    setCurrentPage('upload-kit-file');
+                  }}
+                  className="px-5 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl text-[13px] font-semibold"
+                >
+                  Continue to workbook upload
+                </button>
+              </div>
+            </div>
+          )}
+
+          {currentPage === 'upload-kit-file' && integratedToolkitUpload && flowMode === 'upload' && (
+            <div className="max-w-3xl mx-auto w-full space-y-6">
+              <div className="rounded-2xl p-6" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                <ToolkitExcelDropZone
+                  onExtractionPayload={(data, file) => {
+                    setToolkitImportedFile(file);
+                    setToolkitExtractionResult(data);
+                    const fdPrev = mapExtractionToFoundation(data);
+                    const pdPrev = mapExtractionToPillars(data);
+                    if (toolkitSectorCode) {
+                      fdPrev.clientInfo = {
+                        ...(fdPrev.clientInfo || EMPTY_CLIENT_INFO),
+                        sectorCode: normalizeSectorCodeForExtraction(toolkitSectorCode),
+                      };
+                    }
+                    setToolkitFoundationPreview(fdPrev);
+                    setToolkitPillarPreview(pdPrev);
+                    void persistSession('upload-kit-review');
+                    setCurrentPage('upload-kit-review');
+                  }}
+                />
+              </div>
+              <div className="flex gap-3 justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('upload-requirements')}
+                  className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          )}
+
+          {currentPage === 'upload-kit-review' &&
+            toolkitExtractionResult &&
+            integratedToolkitUpload &&
+            flowMode === 'upload' && (
+              <div className="flex flex-col flex-1 min-h-0 -m-6">
+                <div className="px-6 py-3 flex items-center justify-between bg-black shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage('upload-kit-file')}
+                      className="p-2 -ml-2 text-[#8e8e93] hover:text-white hover:bg-[#1c1c1e] rounded-[10px]"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <div>
+                      <h2 className="text-[15px] font-semibold text-white leading-tight">Review extraction</h2>
+                      <p className="text-[11px] text-[#636366] truncate max-w-[280px]">
+                        {toolkitImportedFile?.name || 'Imported file'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 flex flex-col min-h-0 px-6 pb-6 pt-4">
+                  <ExtractionReviewPane file={toolkitImportedFile} title={toolkitImportedFile?.name || 'Document'} className="flex-1 min-h-0">
+                    <ToolkitStructuredReview
+                      result={toolkitExtractionResult}
+                      foundationPreview={toolkitFoundationPreview}
+                      pillarPreview={toolkitPillarPreview}
+                      toolbar={
+                        <button
+                          type="button"
+                          disabled={isSavingSession}
+                          onClick={() => void finalizeIntegratedToolkitToSummary()}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40"
+                        >
+                          <Wand2 className="w-4 h-4" />
+                          Generate summary
+                        </button>
+                      }
+                    />
+                  </ExtractionReviewPane>
+                </div>
+              </div>
+            )}
+
           {currentPage === 'build-pillars' && (
             <div className="max-w-[1600px] mx-auto w-full">
               <BuildPillarsStep
@@ -3244,16 +3906,26 @@ export default function DocumentProcessor() {
                   sed: pillarData.sed || { id: '', clientId: '', contributions: [] },
                   yes: pillarData.yes ?? EMPTY_YES_DATA,
                 }}
+                onPopulateFromUpload={
+                  flowMode === 'build'
+                    ? () => {
+                        setBuildPopulateUploadNonce((n) => n + 1);
+                        setBuildPopulateUploadOpen(true);
+                      }
+                    : undefined
+                }
                 onChange={(newData) => {
-                  setPillarData({
+                  setPillarData((prev) => ({
+                    ...prev,
                     ownership: newData.ownership,
                     management: newData.management,
+                    employmentEquity: (newData as { employmentEquity?: typeof prev.employmentEquity }).employmentEquity ?? prev.employmentEquity,
                     skills: newData.skills,
                     procurement: newData.procurement,
                     esd: newData.esd,
                     sed: newData.sed,
                     yes: newData.yes,
-                  });
+                  }));
                 }}
                 onNext={calculateFromPillarData}
                 onBack={() => setCurrentPage('build-foundation')}
@@ -3784,7 +4456,7 @@ export default function DocumentProcessor() {
                     client: {
                       ...useBbeeStore.getState().client,
                       name: ci?.companyName || companyInfo.name || useBbeeStore.getState().client.name,
-                      sectorCode: ci?.sectorCode || companyInfo.sector || useBbeeStore.getState().client.sectorCode,
+                      sectorCode: (ci?.sectorCode || companyInfo.sector || useBbeeStore.getState().client.sectorCode) as any,
                       registrationNumber: ci?.registrationNumber || companyInfo.registrationNumber || '',
                       revenue: fin.revenue || 0,
                       npat: fin.npat || 0,
@@ -3921,7 +4593,6 @@ export default function DocumentProcessor() {
                   results: extractionResults,
                   complete: true,
                   scorecardResult: normalised,
-                  dataQuality,
                   pillarData: {
                     ownership: storeSnapshot.ownership,
                     management: storeSnapshot.management,
@@ -4866,6 +5537,98 @@ export default function DocumentProcessor() {
           })()}
 
           {currentPage === 'summary' && (() => {
+            if (integratedToolkitUpload && flowMode === 'upload' && extractionResults.length === 0) {
+              const sh = pillarData.ownership?.shareholders?.length ?? 0;
+              const em = pillarData.management?.employees?.length ?? 0;
+              const tr = pillarData.skills?.trainingPrograms?.length ?? 0;
+              const su = pillarData.procurement?.suppliers?.length ?? 0;
+              const ec = pillarData.esd?.contributions?.length ?? 0;
+              const sc = pillarData.sed?.contributions?.length ?? 0;
+              const rows = [
+                { label: 'Shareholders', value: sh, color: '#5e9bff' },
+                { label: 'Employees / EE', value: em, color: '#34d399' },
+                { label: 'Training programmes', value: tr, color: '#f59e0b' },
+                { label: 'Suppliers', value: su, color: '#a78bfa' },
+                { label: 'ESD lines', value: ec, color: '#38bdf8' },
+                { label: 'SED lines', value: sc, color: '#f472b6' },
+              ].filter((r) => r.value > 0);
+
+              const ci = foundationData.clientInfo;
+              const fi = foundationData.financials;
+
+              return (
+                <div className="max-w-4xl mx-auto py-8 space-y-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-[24px] font-bold text-white tracking-tight">Toolkit import summary</h2>
+                      <p className="text-[#8e8e93] text-[14px] mt-1">
+                        Structured rows loaded from{' '}
+                        <span className="text-white font-medium">{toolkitImportedFile?.name || 'your workbook'}</span>
+                      </p>
+                      {ci.companyName ? (
+                        <p className="text-[13px] text-[#636366] mt-2">{ci.companyName}</p>
+                      ) : null}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage('scorecard')}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors shrink-0"
+                      type="button"
+                    >
+                      <ScanLine className="w-4 h-4" />
+                      View Scorecard
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl p-5 space-y-4" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                    <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Foundation highlights</p>
+                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-[#48484a]">Revenue</span>
+                        <p className="text-white font-semibold">R {(fi.totalRevenue ?? 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#48484a]">Sector</span>
+                        <p className="text-white font-semibold">{toolkitSectorCode || ci.sectorCode || companyInfo.sector || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div className="rounded-2xl p-12 text-center text-[#8e8e93] text-sm" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                      No pillar tables were populated. Adjust the workbook or rerun manual edits on the scorecard.
+                    </div>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {rows.map((r) => (
+                        <div
+                          key={r.label}
+                          className="rounded-xl p-4 flex items-center justify-between"
+                          style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full" style={{ background: r.color }} />
+                            <span className="text-[13px] text-[#d1d1d6]">{r.label}</span>
+                          </div>
+                          <span className="text-[20px] font-bold text-white tabular-nums">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage('scorecard')}
+                      className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors"
+                    >
+                      <ScanLine className="w-4 h-4" />
+                      Continue to Scorecard
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             const PILLAR_META: { key: string; label: string; color: string; icon: string }[] = [
               { key: 'Ownership', label: 'Ownership', color: '#5e9bff', icon: '○' },
               { key: 'Management Control', label: 'Management Control', color: '#34d399', icon: '○' },
