@@ -47,6 +47,35 @@ interface CertStats {
   extractionAvailable?: boolean;
 }
 
+/** Backend returns a bare array for GET /list with no limit/offset; with ?limit= it returns `{ success, data: { items, ... } }`. */
+function parseCertificateListJson(json: unknown): CertificateRow[] {
+  if (Array.isArray(json)) return json;
+  if (json && typeof json === 'object') {
+    const o = json as Record<string, unknown>;
+    const data = o.data;
+    if (data && typeof data === 'object' && Array.isArray((data as { items?: unknown }).items)) {
+      return (data as { items: CertificateRow[] }).items;
+    }
+    if (Array.isArray(o.items)) return o.items as CertificateRow[];
+  }
+  return [];
+}
+
+function parseCertStatsJson(json: unknown): CertStats | null {
+  if (!json || typeof json !== 'object') return null;
+  const o = json as Record<string, unknown>;
+  if (
+    o.success === true
+    && o.data != null
+    && typeof o.data === 'object'
+    && typeof (o.data as CertStats).total === 'number'
+  ) {
+    return o.data as CertStats;
+  }
+  if (typeof o.total === 'number') return o as unknown as CertStats;
+  return null;
+}
+
 function formatExpiry(dateStr: string | null): string {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
@@ -252,8 +281,8 @@ export default function CertificateHub() {
     try {
       const res = await fetch('/api/certificates/list?limit=10');
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data: CertificateRow[] = await res.json();
-      setFeaturedCerts(data);
+      const raw = await res.json();
+      setFeaturedCerts(parseCertificateListJson(raw));
     } catch (err: any) {
       toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     }
@@ -265,8 +294,8 @@ export default function CertificateHub() {
     try {
       const res = await fetch('/api/certificates/list');
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data: CertificateRow[] = await res.json();
-      setAllCerts(data);
+      const raw = await res.json();
+      setAllCerts(parseCertificateListJson(raw));
       setAllCertsLoaded(true);
     } catch (err: any) {
       toast({ title: 'Could not load all certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
@@ -278,7 +307,11 @@ export default function CertificateHub() {
   const loadStats = useCallback(async () => {
     try {
       const res = await fetch('/api/certificates/stats');
-      if (res.ok) setStats(await res.json());
+      if (res.ok) {
+        const raw = await res.json();
+        const next = parseCertStatsJson(raw);
+        if (next) setStats(next);
+      }
     } catch {
       // non-fatal
     }
