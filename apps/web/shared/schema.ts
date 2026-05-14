@@ -405,6 +405,12 @@ const processorSessionSchema = new Schema({
   workspaceId: { type: String, default: null, index: true },
   pillarActivity: { type: Schema.Types.Mixed, default: {} },
   scorecardSnapshots: { type: [Schema.Types.Mixed], default: [] },
+  flowMode: { type: String, default: null },
+  integratedToolkitUpload: { type: Boolean, default: false },
+  /** Large blob also stored in API `sessionBlobs.integratedToolkitState` when using apps/api */
+  integratedToolkitState: { type: Schema.Types.Mixed, default: null },
+  foundationData: { type: Schema.Types.Mixed, default: null },
+  pillarData: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

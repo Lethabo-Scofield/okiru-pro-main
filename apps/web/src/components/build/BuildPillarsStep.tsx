@@ -9,6 +9,7 @@ import { Label } from "@toolkit/components/ui/label";
 import {
   Users, Building2, GraduationCap, ShoppingCart, Handshake, Heart,
   TrendingUp, Briefcase, CheckCircle2, AlertCircle, ChevronLeft, ArrowRight, Lock,
+  Upload,
 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 
@@ -153,6 +154,8 @@ interface BuildPillarsStepProps {
   pillarScopeFilter?: string[] | null;
   /** When true, forms and calculate are disabled (e.g. viewer role). */
   pillarFormsLocked?: boolean;
+  /** Manual build: open workbook extract dialog (foundation + pillars merge). */
+  onPopulateFromUpload?: () => void;
 }
 
 // ============================================================================
@@ -163,6 +166,7 @@ export function BuildPillarsStep({
   data, onChange, onNext, onBack, className, sessionId, clientInfo, financials,
   pillarScopeFilter = null,
   pillarFormsLocked = false,
+  onPopulateFromUpload,
 }: BuildPillarsStepProps) {
   const [activePillar, setActivePillar] = useState<string>('ownership');
   const { syncToStore } = useFoundationSync(sessionId);
@@ -421,8 +425,8 @@ export function BuildPillarsStep({
   return (
     <div className={cn("space-y-4", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold">Pillar Data Entry</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Enter data for each B-BBEE pillar to build your scorecard
@@ -438,9 +442,17 @@ export function BuildPillarsStep({
             </p>
           )}
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold tabular-nums">{totalScore.toFixed(1)}</div>
-          <div className="text-xs text-muted-foreground">of {totalMax} points</div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end shrink-0">
+          {onPopulateFromUpload && (
+            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={onPopulateFromUpload}>
+              <Upload className="h-4 w-4" />
+              Populate with upload
+            </Button>
+          )}
+          <div className="text-right min-w-[4.5rem]">
+            <div className="text-2xl font-bold tabular-nums">{totalScore.toFixed(1)}</div>
+            <div className="text-xs text-muted-foreground">of {totalMax} points</div>
+          </div>
         </div>
       </div>
 
@@ -556,6 +568,12 @@ export function BuildPillarsStep({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {pillarFormsLocked && (
+                <Badge variant="outline" className="text-xs gap-1 text-muted-foreground border-muted-foreground/30">
+                  <Lock className="h-3 w-3" />
+                  Read Only
+                </Badge>
+              )}
               <Badge variant="outline" className="text-xs tabular-nums">
                 {getPillarScore(activePillar).toFixed(1)} / {activePillarConfig.maxPoints}
               </Badge>
@@ -602,17 +620,16 @@ export function BuildPillarsStep({
         </div>
       </div>
 
-      {/* Sub-minimum enforcement warning */}
-      {hasFailedSubMinimums && !ignoreSubMinimum && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm">
+      {/* Sub-minimum informational warning — no longer blocks progress */}
+      {hasFailedSubMinimums && (
+        <div className="border rounded-md p-3 text-sm" style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.3)' }}>
           <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
             <div>
-              <p className="font-medium text-red-800">Sub-minimum requirements not met</p>
-              <p className="text-red-700">
-                The following pillars have not met their sub-minimum thresholds:
-                {' '}{failedSubMinimums.join(', ')}.
-                You cannot calculate the scorecard until all sub-minimums are met.
+              <p className="font-medium" style={{ color: '#fbbf24' }}>Sub-minimum thresholds not reached</p>
+              <p style={{ color: 'rgba(251,191,36,0.75)' }}>
+                {failedSubMinimums.join(', ')} — a level-discount penalty will be applied to the final score.
+                You can still calculate the scorecard.
               </p>
             </div>
           </div>
@@ -626,33 +643,24 @@ export function BuildPillarsStep({
           Back to Foundation
         </Button>
         <div className="flex items-center gap-4">
-          {/* Toggle to calculate without sub-minimum */}
-          <div className="flex items-center gap-2">
-            <Switch
-              id="ignore-subminimum"
-              checked={ignoreSubMinimum}
-              disabled={pillarFormsLocked}
-              onCheckedChange={setIgnoreSubMinimum}
-            />
-            <Label htmlFor="ignore-subminimum" className="text-sm text-muted-foreground cursor-pointer">
-              Calculate without sub-minimum
-            </Label>
-          </div>
+          {hasFailedSubMinimums && (
+            <div className="flex items-center gap-2">
+              <Switch
+                id="ignore-subminimum"
+                checked={ignoreSubMinimum}
+                disabled={pillarFormsLocked}
+                onCheckedChange={setIgnoreSubMinimum}
+              />
+              <Label htmlFor="ignore-subminimum" className="text-xs text-muted-foreground cursor-pointer">
+                Ignore sub-minimum discount
+              </Label>
+            </div>
+          )}
           <Button
             onClick={onNext}
-            disabled={
-              pillarFormsLocked ||
-              completedCount === 0 ||
-              (hasFailedSubMinimums && !ignoreSubMinimum)
-            }
+            disabled={pillarFormsLocked || completedCount === 0}
             className="gap-2"
-            title={
-              pillarFormsLocked
-                ? 'View-only access'
-                : hasFailedSubMinimums && !ignoreSubMinimum
-                  ? 'Sub-minimum requirements not met'
-                  : ''
-            }
+            title={pillarFormsLocked ? 'View-only access' : ''}
           >
             Calculate Scorecard
             <ArrowRight className="h-4 w-4" />

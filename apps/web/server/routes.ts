@@ -2468,7 +2468,7 @@ Respond ONLY with a valid JSON array.`;
     }
     try {
       const userId = (req.session as any)?.userId;
-      const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult } = req.body;
+      const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult, flowMode, integratedToolkitUpload, foundationData, pillarData, integratedToolkitState } = req.body;
       if (!sessionId || !companyInfo?.name) {
         return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
       }
@@ -2494,6 +2494,11 @@ Respond ONLY with a valid JSON array.`;
       if (scorecardResult !== undefined) {
         updateData.scorecardResult = scorecardResult;
       }
+      if (flowMode !== undefined) updateData.flowMode = flowMode;
+      if (integratedToolkitUpload !== undefined) updateData.integratedToolkitUpload = integratedToolkitUpload;
+      if (foundationData !== undefined) updateData.foundationData = foundationData;
+      if (pillarData !== undefined) updateData.pillarData = pillarData;
+      if (integratedToolkitState !== undefined) updateData.integratedToolkitState = integratedToolkitState;
       const doc = await ProcessorSessionModel.findOneAndUpdate(
         { sessionId, createdByUserId: userId },
         updateData,

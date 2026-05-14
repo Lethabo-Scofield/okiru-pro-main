@@ -216,6 +216,8 @@ const processorSessionSchema = new Schema({
   pillarData: { type: Schema.Types.Mixed, default: null },
   _pillarCompressed: { type: Boolean, default: false },
   flowMode: { type: String, default: null },
+  integratedToolkitUpload: { type: Boolean, default: false },
+  integratedToolkitState: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 }, { collection: "processorSessions" });

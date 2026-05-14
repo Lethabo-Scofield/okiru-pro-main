@@ -2,7 +2,6 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
-import { registerExcelExtractRoute } from "./excelExtractRoute";
 import { registerApiProxy } from "./apiProxy";
 import { registerSeoRoutes } from "./seo";
 import { serveStatic } from "./static";
@@ -30,14 +29,14 @@ declare module "http" {
 
 app.use(
   express.json({
-    limit: "10mb",
+    limit: "50mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({

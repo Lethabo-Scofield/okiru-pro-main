@@ -149,9 +149,11 @@ router.get('/options', async (_req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     logger.error('Error fetching sector options', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch sector options',
+    // Respond 200 so browsers and SPA fetch() can read fallback `options` (do not rely on scraping 500 bodies).
+    return res.status(200).json({
+      success: true,
+      source: 'fallback_after_error',
+      warning: error instanceof Error ? error.message : 'Failed to fetch sector options',
       options: getFallbackSectorOptions(),
     });
   }

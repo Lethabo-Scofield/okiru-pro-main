@@ -5,6 +5,8 @@ import bcrypt from "bcryptjs";
 import mongoose, { Schema } from "mongoose";
 import { Store } from "express-session";
 import crypto from "crypto";
+import http from "http";
+import https from "https";
 
 class MongoSessionStore extends Store {
   private collection: any;
@@ -151,6 +153,11 @@ const processorSessionSchema = new Schema({
   docStatuses: { type: Schema.Types.Mixed, default: {} },
   isComplete: { type: Boolean, default: false },
   scorecardResult: { type: Schema.Types.Mixed, default: null },
+  flowMode: { type: String, default: null },
+  integratedToolkitUpload: { type: Boolean, default: false },
+  integratedToolkitState: { type: Schema.Types.Mixed, default: null },
+  foundationData: { type: Schema.Types.Mixed, default: null },
+  pillarData: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -224,8 +231,8 @@ async function getApp(): Promise<express.Express> {
       req._vercelParsedBody = req.body;
       next();
     });
-    app.use(express.json({ limit: "10mb" }));
-    app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+    app.use(express.json({ limit: "50mb" }));
+    app.use(express.urlencoded({ extended: false, limit: "50mb" }));
     app.use((req: any, _res: any, next: any) => {
       if ((!req.body || (typeof req.body === 'object' && Object.keys(req.body).length === 0)) && req._vercelParsedBody !== undefined) {
         req.body = req._vercelParsedBody;
@@ -974,7 +981,7 @@ Respond ONLY with a valid JSON array.`;
         if (!userId) return res.status(401).json({ error: "Not authenticated" });
         const user = await UserModel.findById(userId);
         const orgId = user?.organizationId || null;
-        const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult } = req.body;
+        const { sessionId, companyInfo, currentStep, filesData, fileClassifications, extractionResults, docStatuses, isComplete, scorecardResult, flowMode, integratedToolkitUpload, foundationData, pillarData, integratedToolkitState } = req.body;
         if (!sessionId || !companyInfo?.name) {
           return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
         }
@@ -994,6 +1001,11 @@ Respond ONLY with a valid JSON array.`;
         if (scorecardResult !== undefined) {
           updateData.scorecardResult = scorecardResult;
         }
+        if (flowMode !== undefined) updateData.flowMode = flowMode;
+        if (integratedToolkitUpload !== undefined) updateData.integratedToolkitUpload = integratedToolkitUpload;
+        if (foundationData !== undefined) updateData.foundationData = foundationData;
+        if (pillarData !== undefined) updateData.pillarData = pillarData;
+        if (integratedToolkitState !== undefined) updateData.integratedToolkitState = integratedToolkitState;
         const doc = await ProcessorSessionModel.findOneAndUpdate(
           { sessionId },
           updateData,
@@ -1019,6 +1031,83 @@ Respond ONLY with a valid JSON array.`;
       }
     });
 
+    const IMPORT_API_BASE = (process.env.API_SERVER_URL || "").replace(/\/$/, "");
+
+    const mountUpstreamProxy = (mountPath: string, logLabel: string) => {
+      if (!IMPORT_API_BASE) return;
+      app.use(mountPath, (req: any, res: any) => {
+        try {
+          const orig = req.originalUrl || req.url || mountPath;
+          const target = new URL(orig, IMPORT_API_BASE.endsWith("/") ? IMPORT_API_BASE : `${IMPORT_API_BASE}/`);
+          const isHttps = target.protocol === "https:";
+          const lib = isHttps ? https : http;
+          const headers: Record<string, string | string[] | undefined> = { ...req.headers };
+          delete headers.host;
+          headers.host = target.host;
+          const proxyReq = lib.request(
+            {
+              hostname: target.hostname,
+              port: target.port || (isHttps ? 443 : 80),
+              path: target.pathname + target.search,
+              method: req.method,
+              headers: headers as any,
+              timeout: 120000,
+            },
+            (proxyRes) => {
+              res.writeHead(proxyRes.statusCode || 502, proxyRes.headers as any);
+              proxyRes.pipe(res);
+            },
+          );
+          proxyReq.on("error", (err) => {
+            console.error(`${logLabel} proxy error:`, err);
+            if (!res.headersSent) {
+              res.status(502).json({ error: `${logLabel} proxy failed`, message: err.message });
+            }
+          });
+          req.pipe(proxyReq);
+        } catch (e: any) {
+          console.error(`${logLabel} proxy setup:`, e);
+          if (!res.headersSent) res.status(500).json({ error: `${logLabel} proxy failed`, message: e?.message });
+        }
+      });
+    };
+
+    mountUpstreamProxy("/api/import", "Import");
+    mountUpstreamProxy("/api/sectors", "Sectors");
+
+    const SECTORS_STUB_OPTIONS = [
+      { value: "RCOGP", label: "Revised Codes of Good Practice (RCOGP)", code: "RCOGP", hasQSE: true, availableTypes: ["Generic", "QSE"] },
+      { value: "ICT", label: "ICT Sector Code", code: "ICT", hasQSE: true, availableTypes: ["Generic", "QSE"] },
+      { value: "FSC", label: "Financial Sector Code (FSC)", code: "FSC", hasQSE: false, availableTypes: ["Generic"] },
+      { value: "AGRI", label: "AgriBEE Sector Code", code: "AGRI", hasQSE: false, availableTypes: ["Generic"] },
+      { value: "TRANSPORT", label: "Transport Sector Code", code: "TRANSPORT", hasQSE: true, availableTypes: ["Generic", "QSE"] },
+    ];
+
+    if (!IMPORT_API_BASE) {
+      app.use("/api/import", (_req: any, res: any) => {
+        res.status(503).json({
+          status: "failed",
+          message: "Excel import requires API_SERVER_URL (Okiru API / apps/api).",
+          extractionSummary: {
+            sheetsParsed: 0,
+            sheetsTotal: 0,
+            rowsExtracted: 0,
+            entitiesExtracted: 0,
+            warnings: [],
+            errors: ["Configure API_SERVER_URL so this server can proxy /api/import."],
+          },
+        });
+      });
+
+      app.use("/api/sectors", (_req: any, res: any) => {
+        res.status(503).json({
+          success: false,
+          message: "Sectors require API_SERVER_URL (Okiru API / apps/api); returning static options.",
+          options: SECTORS_STUB_OPTIONS,
+        });
+      });
+    }
+
     app.use((req: any, res: any) => {
       console.error("Vercel Express 404 — no route matched:", req.method, req.url, req.originalUrl);
       res.status(404).json({ error: "Not found", path: req.url, method: req.method });
@@ -1034,6 +1123,16 @@ Respond ONLY with a valid JSON array.`;
 
   return initPromise;
 }
+
+// Disable Vercel's built-in body parser (default 4.5 MB limit) so multipart
+// file uploads and large JSON bodies reach the handler as raw streams.
+// The express middleware inside getApp() handles parsing with a 50 MB limit.
+export const config = {
+  api: {
+    bodyParser: false,
+    responseLimit: "50mb",
+  },
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
