@@ -32,6 +32,15 @@ interface FoundationStepProps {
   onNext: () => void;
   onBack: () => void;
   className?: string;
+  /** When set, switches the session into the integrated Upload & extract toolkit path. */
+  onUploadRequest?: () => void;
+  /**
+   * Manual build mode: keep users in form entry only. Integrated toolkit is started from **Mode → Upload & extract**, not from Foundation.
+   */
+  showIntegratedToolkitShortcut?: boolean;
+  /** Manual build: optional workbook extract merged into foundation + pillar state without leaving this flow. */
+  showPopulateFromUpload?: boolean;
+  onPopulateFromUpload?: () => void;
 }
 
 type InputMode = 'manual' | 'upload' | 'extracted';
@@ -49,7 +58,17 @@ interface SectionState {
   };
 }
 
-export function FoundationStep({ data, onChange, onNext, onBack, className }: FoundationStepProps) {
+export function FoundationStep({
+  data,
+  onChange,
+  onNext,
+  onBack,
+  className,
+  onUploadRequest,
+  showIntegratedToolkitShortcut = false,
+  showPopulateFromUpload = false,
+  onPopulateFromUpload,
+}: FoundationStepProps) {
   const [activeTab, setActiveTab] = useState<'client' | 'financials'>('client');
   const [sectionState, setSectionState] = useState<SectionState>({
     clientInfo: { mode: 'manual', isComplete: false, isValid: false },
@@ -214,43 +233,85 @@ export function FoundationStep({ data, onChange, onNext, onBack, className }: Fo
         </Card>
       </div>
 
-      {/* Input Mode Toggle */}
+      {/* Input mode: manual-only in build flow; integrated toolkit is a separate entry from Mode */}
       <Card className="border-border/80 bg-card">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Switch 
-                  id="manual-mode"
-                  checked={sectionState[activeTab === 'client' ? 'clientInfo' : 'financials'].mode === 'manual'}
-                  onCheckedChange={(checked) => {
-                    setSectionState(prev => ({
-                      ...prev,
-                      [activeTab === 'client' ? 'clientInfo' : 'financials']: {
-                        ...prev[activeTab === 'client' ? 'clientInfo' : 'financials'],
-                        mode: checked ? 'manual' : 'upload'
-                      }
-                    }));
-                  }}
-                />
-                <Label htmlFor="manual-mode" className="flex items-center gap-2 cursor-pointer">
-                  <Pencil className="h-4 w-4" />
-                  Manual Entry
-                </Label>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Upload className="h-4 w-4" />
-                <span className="text-sm">Upload Document (Coming Soon)</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Pencil className="h-4 w-4 shrink-0" />
+              <div>
+                <p className="text-foreground font-medium">Manual entry</p>
+                <p className="text-xs mt-0.5">
+                  Type company and financial figures directly into the forms below.
+                </p>
               </div>
             </div>
+            {showIntegratedToolkitShortcut && onUploadRequest && (
+              <div className="flex items-center gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-border/80">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="manual-mode"
+                    checked={
+                      sectionState[activeTab === 'client' ? 'clientInfo' : 'financials'].mode === 'manual'
+                    }
+                    onCheckedChange={(checked) => {
+                      setSectionState((prev) => ({
+                        ...prev,
+                        [activeTab === 'client' ? 'clientInfo' : 'financials']: {
+                          ...prev[activeTab === 'client' ? 'clientInfo' : 'financials'],
+                          mode: checked ? 'manual' : 'upload',
+                        },
+                      }));
+                    }}
+                  />
+                  <Label htmlFor="manual-mode" className="flex items-center gap-2 cursor-pointer">
+                    <Pencil className="h-4 w-4" />
+                    Manual entry
+                  </Label>
+                </div>
+                <div className="h-4 w-px bg-border hidden sm:block" />
+                <button
+                  type="button"
+                  onClick={onUploadRequest}
+                  className="flex items-center gap-2 text-sm transition-colors hover:text-foreground text-muted-foreground"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload toolkit workbook
+                </button>
+              </div>
+            )}
             {activeTab === 'financials' && data.financials.deemedNpatUsed && (
-              <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 sm:ml-auto">
                 <Sparkles className="h-3 w-3 mr-1" />
                 Auto-calculated values active
               </Badge>
             )}
           </div>
+          {!showIntegratedToolkitShortcut && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Need the integrated <span className="text-foreground font-medium">Upload &amp; extract</span> flow? Go{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 text-foreground hover:text-primary"
+                onClick={onBack}
+              >
+                back to Mode
+              </button>{' '}
+              and choose that path — it keeps extraction, review, and the manual scorecard builder separate.
+            </p>
+          )}
+          {showPopulateFromUpload && onPopulateFromUpload && (
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 mt-4 pt-4 border-t border-border/80">
+              <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={onPopulateFromUpload}>
+                <Upload className="h-4 w-4" />
+                Populate with upload
+              </Button>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Upload a toolkit workbook — same extract as the integrated flow — to fill client info, financials, and
+                pillar tables where columns match (you stay in manual build).
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

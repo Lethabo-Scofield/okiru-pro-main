@@ -191,6 +191,7 @@ export function createProcessorSessionsRouter(): Router {
       if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
       if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
       if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
+      if (blobs.integratedToolkitState !== undefined) result.integratedToolkitState = blobs.integratedToolkitState;
 
       res.json(result);
     } catch (error: any) {
@@ -214,7 +215,8 @@ export function createProcessorSessionsRouter(): Router {
       const {
         sessionId, companyInfo, currentStep, filesData, fileClassifications,
         extractionResults, docStatuses, isComplete, scorecardResult,
-        foundationData, pillarData, flowMode,
+        foundationData, pillarData, flowMode, integratedToolkitUpload,
+        integratedToolkitState,
       } = req.body;
 
       if (!sessionId || !companyInfo?.name) {
@@ -244,6 +246,9 @@ export function createProcessorSessionsRouter(): Router {
       if (extractionResults !== undefined) {
         blobPromises.push(saveBlob(sessionId, 'extractionResults', safeExtractionResults, userId));
       }
+      if (integratedToolkitState !== undefined) {
+        blobPromises.push(saveBlob(sessionId, 'integratedToolkitState', integratedToolkitState, userId));
+      }
       await Promise.all(blobPromises);
 
       // Main document only stores metadata and small fields
@@ -260,6 +265,7 @@ export function createProcessorSessionsRouter(): Router {
       };
 
       if (flowMode !== undefined) updateData.flowMode = flowMode;
+      if (integratedToolkitUpload !== undefined) updateData.integratedToolkitUpload = integratedToolkitUpload;
 
       const doc = await ProcessorSessionModel.findOneAndUpdate(
         { sessionId, createdByUserId: userId },
@@ -274,6 +280,7 @@ export function createProcessorSessionsRouter(): Router {
       if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
       if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
       if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
+      if (blobs.integratedToolkitState !== undefined) result.integratedToolkitState = blobs.integratedToolkitState;
 
       res.json(result);
     } catch (error: any) {
@@ -295,8 +302,8 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const sessionId = routeParam(req.params.sessionId);
-      const allowedSmallFields = ['currentStep', 'isComplete', 'toolkitClientId', 'flowMode'];
-      const blobFields = ['scorecardResult', 'foundationData', 'pillarData', 'extractionResults'];
+      const allowedSmallFields = ['currentStep', 'isComplete', 'toolkitClientId', 'flowMode', 'integratedToolkitUpload'];
+      const blobFields = ['scorecardResult', 'foundationData', 'pillarData', 'extractionResults', 'integratedToolkitState'];
       const patch: any = { updatedAt: new Date() };
       const blobPromises: Promise<void>[] = [];
 
@@ -339,6 +346,7 @@ export function createProcessorSessionsRouter(): Router {
       if (blobs.foundationData !== undefined) result.foundationData = blobs.foundationData;
       if (blobs.pillarData !== undefined) result.pillarData = blobs.pillarData;
       if (blobs.extractionResults !== undefined) result.extractionResults = blobs.extractionResults;
+      if (blobs.integratedToolkitState !== undefined) result.integratedToolkitState = blobs.integratedToolkitState;
 
       res.json(result);
     } catch (error: any) {

@@ -818,7 +818,7 @@ function PDFPageCanvas({ page, entities, entityMatchers, entityColors, hoveredEn
     <div className="relative shadow-2xl rounded-lg overflow-hidden" style={{ width: page.width }}>
       <img src={page.imageUrl} alt="PDF page" className="block w-full h-auto" draggable={false} />
       <div className="absolute inset-0">
-        {page.textItems.map((item, itemIdx) => {
+        {(page.textItems || []).map((item, itemIdx) => {
           let matchedEntityIdx = -1;
           for (const matcher of entityMatchers) {
             matcher.regex.lastIndex = 0;
@@ -1121,7 +1121,7 @@ function PopulatingScreen({
 
               {/* Entity rows */}
               <div className="divide-y divide-[#1a1a1e]">
-                {pillar.entities.map((row, ri) => {
+                {(pillar.entities || []).map((row, ri) => {
                   const rowVisible = done || (pi < revealedPillar) || (pi === revealedPillar && revealedRows.includes(ri));
                   if (!rowVisible) return null;
                   return (

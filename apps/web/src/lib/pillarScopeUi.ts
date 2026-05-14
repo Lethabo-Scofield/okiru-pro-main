@@ -90,3 +90,55 @@ export function sumPillarRows<T extends { score: number; maxPoints: number }>(ro
     { score: 0, maxPoints: 0 },
   );
 }
+
+/** Loose workspace-scope match (aligned with useWorkspacePermissions.pillarInScope). */
+function pillarKeyInScopes(pillar: string, scopes: string[]): boolean {
+  if (scopes.includes(pillar)) return true;
+  if (pillar === 'management' && scopes.includes('employmentEquity')) return true;
+  if (pillar === 'employmentEquity' && scopes.includes('management')) return true;
+  if (
+    (pillar === 'supplierDevelopment' || pillar === 'enterpriseDevelopment') &&
+    scopes.includes('esd')
+  )
+    return true;
+  if (
+    pillar === 'esd' &&
+    (scopes.includes('supplierDevelopment') || scopes.includes('enterpriseDevelopment'))
+  )
+    return true;
+  return false;
+}
+
+/**
+ * Whether toolkit extraction may overwrite this manual-build pillar slice for the collaborator.
+ * Empty/null scopes → full pillar merge (same as unrestricted collaborator).
+ */
+export function canMergeExtractedPillarForScopes(
+  buildKey: 'ownership' | 'management' | 'skills' | 'procurement' | 'esd' | 'sed' | 'yes',
+  pillarScopes: string[] | null | undefined,
+): boolean {
+  if (!pillarScopes?.length) return true;
+  switch (buildKey) {
+    case 'ownership':
+      return pillarKeyInScopes('ownership', pillarScopes);
+    case 'management':
+      return pillarKeyInScopes('management', pillarScopes) || pillarKeyInScopes('employmentEquity', pillarScopes);
+    case 'skills':
+      return pillarKeyInScopes('skills', pillarScopes);
+    case 'procurement':
+      return pillarKeyInScopes('procurement', pillarScopes);
+    case 'esd':
+      return (
+        pillarKeyInScopes('esd', pillarScopes) ||
+        pillarKeyInScopes('supplierDevelopment', pillarScopes) ||
+        pillarKeyInScopes('enterpriseDevelopment', pillarScopes)
+      );
+    case 'sed':
+      return pillarKeyInScopes('sed', pillarScopes);
+    case 'yes':
+      return pillarKeyInScopes('yes', pillarScopes);
+    default:
+      return false;
+  }
+}
+

@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 import type { Client } from "@toolkit/lib/types";
-import { API_BASE } from "@toolkit/lib/config";
+import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from "@/lib/bbeeSectorsApi";
 
 // Sector option from API
 export interface SectorOption {
@@ -128,36 +128,45 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
   const [sectorOptions, setSectorOptions] = useState<SectorOption[]>(FALLBACK_SECTOR_OPTIONS);
   const [loadingSectors, setLoadingSectors] = useState(true);
   const [sectorError, setSectorError] = useState<string | null>(null);
+  const [sectorRetryNonce, setSectorRetryNonce] = useState(0);
 
-  // Fetch sectors from API on mount
   useEffect(() => {
-    const fetchSectors = async () => {
+    let cancelled = false;
+
+    const run = async () => {
+      setLoadingSectors(true);
       try {
-        setLoadingSectors(true);
-        const response = await fetch(`${API_BASE}/api/sectors/options`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch sectors: ${response.statusText}`);
+        if (sectorRetryNonce > 0) {
+          invalidateBbeeSectorOptionsCache();
         }
-        const result = await response.json();
-        if (result.success && result.options && result.options.length > 0) {
-          setSectorOptions(result.options);
-          setSectorError(null);
-        } else {
-          // API returned empty, use fallback but log it
-          console.warn('[ClientInfo] API returned empty sectors, using fallback');
-          setSectorOptions(FALLBACK_SECTOR_OPTIONS);
-        }
-      } catch (error) {
-        console.error('[ClientInfo] Error fetching sectors:', error);
-        setSectorError('Failed to load sectors from server');
-        setSectorOptions(FALLBACK_SECTOR_OPTIONS);
+        const result = await loadBbeeSectorOptionRows({ reload: sectorRetryNonce > 0 });
+        if (cancelled) return;
+
+        const mapped: SectorOption[] = result.rows.map((r) => ({
+          value: r.value,
+          code: r.code,
+          label: r.label,
+          hasQSE: r.hasQSE,
+          availableTypes: r.availableTypes ?? [],
+        }));
+        setSectorOptions(mapped.length ? mapped : FALLBACK_SECTOR_OPTIONS);
+
+        setSectorError(
+          result.fromLiveApi
+            ? null
+            : result.detail ?? "Using offline sector list — API unavailable or returned an error.",
+        );
       } finally {
-        setLoadingSectors(false);
+        if (!cancelled) setLoadingSectors(false);
       }
     };
 
-    fetchSectors();
-  }, []);
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sectorRetryNonce]);
 
   const updateField = <K extends keyof ClientInformationData>(field: K, value: ClientInformationData[K]) => {
     onChange({ ...data, [field]: value });
@@ -363,10 +372,22 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="sectorCode" className="flex items-center gap-2">
+              <Label htmlFor="sectorCode" className="flex items-center gap-2 flex-wrap">
                 Sector Code *
                 {loadingSectors && <Loader2 className="h-3 w-3 animate-spin" />}
-                {sectorError && <span className="text-xs text-amber-500" title={sectorError}>⚠️</span>}
+                {sectorError && (
+                  <>
+                    <span className="text-xs text-amber-600 dark:text-amber-500">{sectorError}</span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary underline underline-offset-2 ml-1"
+                      onClick={() => setSectorRetryNonce((n) => n + 1)}
+                      disabled={loadingSectors}
+                    >
+                      Retry
+                    </button>
+                  </>
+                )}
               </Label>
               <Select
                 value={data.sectorCode}
@@ -389,9 +410,6 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
                   ))}
                 </SelectContent>
               </Select>
-              {sectorError && (
-                <p className="text-xs text-amber-500">{sectorError}</p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="industry">Industry *</Label>

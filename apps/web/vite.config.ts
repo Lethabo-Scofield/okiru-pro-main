@@ -34,6 +34,28 @@ export default defineConfig({
     hmr: {
       port: 24680,
     },
+    proxy: {
+      // Proxy all /api/* requests to the API server when running pure Vite dev
+      // mode (i.e. without the Express wrapper in apps/web/server/index.ts).
+      // The Express wrapper already handles this via apiProxy.ts, so these
+      // entries are only active for `vite dev --port 5173` standalone runs.
+      "/api/sectors": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+      "/api/import": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+      "/api/processor-sessions": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+      "/api/assessments": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: false,
       deny: ["**/.*"],
