@@ -1,0 +1,378 @@
+Use this as the implementation prompt/specification for the developer or Replit.
+
+---
+
+Build a new feature inside the Okiru system called:
+
+# Company Information Request Flow
+
+This feature is the digital interactive version of the existing Information Request Sheet Template used during company onboarding and assessments.
+
+The goal is to remove manual spreadsheet collection workflows and replace them with a structured in-platform spreadsheet experience.
+
+The system must behave like a modern enterprise spreadsheet/data collection workflow similar to Airtable, Retool, or spreadsheet-based onboarding systems.
+
+---
+
+# Core Objective
+
+Allow users to:
+
+1. Open a company profile
+2. Fill in structured spreadsheet-style forms
+3. Work across multiple tabs/pillars
+4. Save progress automatically
+5. Re-open and edit later
+6. Download a completed Excel workbook
+7. Export data using the same structure as the original template
+
+The uploaded spreadsheet template is NOT for direct upload parsing in this phase.
+
+Instead:
+
+* The spreadsheet defines the structure
+* The platform replicates the spreadsheet digitally
+* The exported/downloaded file must match the spreadsheet structure and tabs
+
+---
+
+# High Level Flow
+
+## Step 1 — Open Company
+
+User opens a company inside Okiru.
+
+Example:
+
+* Transport Codes
+* ABC Holdings
+* Discovery
+* Client XYZ
+
+---
+
+## Step 2 — Open “Information Request” Section
+
+Inside the company profile there must be a new tab/menu item:
+
+* Information Request
+  OR
+* Assessment Workbook
+  OR
+* Company Assessment Data
+
+This becomes the main structured data collection area.
+
+---
+
+# Spreadsheet Structure
+
+The platform must replicate the workbook structure exactly.
+
+Each spreadsheet tab becomes a section/page/tab inside the application.
+
+Example structure:
+
+* Company Information
+* Financial Information
+* Ownership
+* Management Control
+* Skills Development
+* Procurement
+* Enterprise & Supplier Development
+* Socio Economic Development
+* Employees
+* Suppliers
+
+The exact tabs must match the provided spreadsheet template.
+
+---
+
+# UI Requirements
+
+The UI must feel enterprise-grade and spreadsheet-oriented.
+
+Requirements:
+
+* Grid/table style interface
+* Editable rows and columns
+* Spreadsheet-like experience
+* Add row
+* Remove row
+* Inline editing
+* Keyboard navigation
+* Tab switching
+* Sticky headers
+* Scrollable tables
+* Responsive layout
+* Fast rendering for large datasets
+
+The interface should resemble:
+
+* Airtable
+* Google Sheets
+* Excel Online
+* Retool table editors
+
+NOT basic HTML forms.
+
+---
+
+# Data Entry Modes
+
+The system must support two input methods.
+
+## Method 1 — Spreadsheet Style Editing
+
+Users manually type data directly into spreadsheet cells.
+
+Example:
+
+| Employee Name | ID Number | Race    | Gender |
+| ------------- | --------- | ------- | ------ |
+| John Doe      | 123       | African | Male   |
+
+---
+
+## Method 2 — Manual Form Entry
+
+Users can also add rows using a structured modal/form.
+
+Example:
+Click:
+“Add Employee”
+
+Then complete:
+
+* Name
+* Surname
+* ID Number
+* Race
+* Gender
+* Salary
+* Department
+
+After save:
+The row appears inside the spreadsheet table.
+
+---
+
+# Company Isolation
+
+All data must be isolated per company.
+
+Meaning:
+
+* Each company has its own workbook data
+* No shared rows between companies
+* Switching company loads that company’s workbook
+
+Example:
+
+Company A:
+
+* 200 employees
+* 40 suppliers
+
+Company B:
+
+* Different data entirely
+
+---
+
+# Persistence
+
+The system must save:
+
+* Every tab
+* Every row
+* Every field
+* User edits
+* Timestamps
+
+Support:
+
+* Auto-save
+* Manual save
+* Draft state
+* Resume later
+
+---
+
+# Validation Rules
+
+Validation must exist even before AI integration.
+
+Requirements:
+
+* Required field validation
+* Data type validation
+* Numeric validation
+* Percentage validation
+* Duplicate detection
+* Missing value warnings
+* Consistent formatting
+
+Examples:
+
+* ID numbers cannot contain letters
+* Percentages must be between 0–100
+* Revenue must be numeric
+* Required columns marked with *
+
+Validation errors should appear inline inside cells.
+
+---
+
+# Excel Export
+
+This is one of the most important parts.
+
+The system must generate downloadable Excel workbooks.
+
+Requirements:
+
+* Same workbook structure as template
+* Same tab names
+* Same column ordering
+* Same grouping structure
+* User data prefilled
+* Preserve enterprise formatting where possible
+
+Example:
+User fills data online →
+Clicks “Download Workbook” →
+Gets fully populated Excel workbook
+
+The workbook should feel like it was completed manually in Excel.
+
+---
+
+# Future AI Compatibility
+
+The architecture must be built for future AI workflows.
+
+Future phases will include:
+
+* AI extraction
+* AI validation
+* OCR parsing
+* Integrity checks
+* Auto reconciliation
+* Missing field detection
+* Compliance scoring
+
+Therefore:
+Structure the data cleanly.
+
+Avoid messy/unstructured storage.
+
+---
+
+# Recommended Architecture
+
+Frontend:
+
+* React
+* Next.js
+* AG Grid or Handsontable
+* TanStack Table if needed
+
+Backend:
+
+* Node.js / Express
+
+Database:
+
+* PostgreSQL
+
+Suggested structure:
+
+* companies
+* workbook_sections
+* workbook_rows
+* workbook_cells
+* workbook_versions
+
+OR normalized JSON storage per section.
+
+---
+
+# Suggested Backend Structure
+
+Example:
+
+Company
+
+* id
+* name
+
+WorkbookSection
+
+* id
+* company_id
+* section_name
+
+WorkbookRow
+
+* id
+* section_id
+
+WorkbookCell
+
+* row_id
+* column_name
+* value
+
+---
+
+# Important UX Requirements
+
+The experience must:
+
+* Feel fast
+* Feel modern
+* Feel enterprise-ready
+* Reduce manual work
+* Reduce onboarding stress
+* Improve structured collection accuracy
+
+This system becomes the standardized onboarding and assessment workflow for Okiru.
+
+---
+
+# Non-Goals For Current Phase
+
+Do NOT build:
+
+* OCR extraction
+* AI parsing
+* AI scoring
+* Auto mapping
+* Document intelligence
+
+Current phase focuses ONLY on:
+
+* Structured spreadsheet workflows
+* Stable data collection
+* Per-company workbook management
+* Export functionality
+
+---
+
+# Deliverables
+
+Build a working system that:
+
+1. Lets users open a company
+2. Access workbook tabs
+3. Fill spreadsheet-like structured data
+4. Save and edit later
+5. Manage rows dynamically
+6. Validate fields
+7. Export completed Excel workbook
+8. Keep data isolated per company
+9. Prepare system for future AI validation workflows
+
+The final product should feel like:
+“Enterprise spreadsheet onboarding built directly into Okiru.”
