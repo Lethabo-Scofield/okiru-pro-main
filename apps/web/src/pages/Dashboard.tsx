@@ -452,25 +452,6 @@ export default function Dashboard() {
 
               <button
                 className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-3"
-                onClick={() => navigate('/certificates')}
-                data-testid="card-certificates"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">B-BBEE Certificates</div>
-                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Manage supplier certificates and track expiry.</div>
-                  </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
-                    <ShieldCheck className="h-5 w-5 text-[#d1d1d6]" />
-                  </div>
-                </div>
-                <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                  Certificates <ChevronRight className="w-3 h-3" /> Hub
-                </div>
-              </button>
-
-              <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-3"
                 onClick={() => navigate('/information-request')}
                 data-testid="card-information-request"
               >
