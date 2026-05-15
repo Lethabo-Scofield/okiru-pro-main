@@ -24,6 +24,7 @@ import DevMode from "@/pages/DevMode";
 import Workspace from "@/pages/Workspace";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
+import InformationRequest from "@/pages/InformationRequest";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
@@ -83,6 +84,12 @@ function AppRouter() {
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/information-request/:companyId">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/information-request">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
       <Route path="/builder">
         <ProtectedRoute><EntityBuilder /></ProtectedRoute>
