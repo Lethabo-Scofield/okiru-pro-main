@@ -1,11 +1,11 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
+﻿apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: okiru-pro
 
 resources:
 - ../../base
 
-# secrets are managed directly by the CI workflow via kubectl — NOT via Kustomize
+# secrets are managed directly by the CI workflow via kubectl â€” NOT via Kustomize
 # to prevent placeholder ${VAR} values from overwriting real cluster secrets on every deploy
 
 patchesStrategicMerge:
@@ -19,11 +19,11 @@ patchesStrategicMerge:
 # Images - updated during deployment
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newTag: 6cbbee7b-202605132321
+  newTag: d8778580-202605151622
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-  newTag: 6cbbee7b-202605132321
+  newTag: d8778580-202605151622
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newTag: 6cbbee7b-202605132321
+  newTag: d8778580-202605151622
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
@@ -39,6 +39,7 @@ configMapGenerator:
   - LOG_LEVEL=warn
   - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io
   name: app-config
+
 
 
 
