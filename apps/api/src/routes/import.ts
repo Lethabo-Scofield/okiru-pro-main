@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Worker } from 'worker_threads';
+import { fileURLToPath } from 'url';
 import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 
@@ -18,7 +19,11 @@ import { reconcileExtraction } from '../services/extractionReconciler.js';
 
 // __dirname is available in the CJS bundle produced by esbuild.
 // The worker is bundled as dist/excelParseWorker.cjs alongside dist/index.cjs.
-const WORKER_PATH = path.resolve(__dirname, 'excelParseWorker.cjs');
+// In dev (tsx ESM), derive it from import.meta.url.
+const __dirname_compat = typeof __dirname !== 'undefined'
+  ? __dirname
+  : path.dirname(fileURLToPath(import.meta.url));
+const WORKER_PATH = path.resolve(__dirname_compat, 'excelParseWorker.cjs');
 
 interface WorkerParseOutput {
   result: PipelineResult;

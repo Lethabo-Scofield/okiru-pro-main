@@ -3,7 +3,7 @@ import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
+import { Trash2, Loader2, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2, ShieldCheck, ClipboardList } from 'lucide-react';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
@@ -392,7 +392,7 @@ export default function Dashboard() {
               <p className="text-[15px] text-[#98989f] mt-1">Choose what you want to do.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth"
                 onClick={() => goTo('templates')}
@@ -447,6 +447,25 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
                   Scorecards <ChevronRight className="w-3 h-3" /> Companies
+                </div>
+              </button>
+
+              <button
+                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-3"
+                onClick={() => navigate('/information-request')}
+                data-testid="card-information-request"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-[15px] font-semibold tracking-tight text-white">Information Request</div>
+                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">Spreadsheet workbook for company onboarding & assessments.</div>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
+                    <ClipboardList className="h-5 w-5 text-[#d1d1d6]" />
+                  </div>
+                </div>
+                <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
+                  Workbook <ChevronRight className="w-3 h-3" /> Companies
                 </div>
               </button>
             </div>
