@@ -701,4 +701,33 @@ export const WorkspaceModel = mongoose.models.Workspace || mongoose.model("Works
 export const WorkspaceMemberModel = mongoose.models.WorkspaceMember || mongoose.model("WorkspaceMember", workspaceMemberSchema);
 export const WorkspaceInviteModel = mongoose.models.WorkspaceInvite || mongoose.model("WorkspaceInvite", workspaceInviteSchema);
 
+// ----- Information Request Workbook -----
+
+const workbookSchema = new Schema(
+  {
+    companyId: { type: String, required: true, unique: true, index: true },
+    ownerOrganizationId: { type: String, default: null, index: true },
+    ownerUserId: { type: String, required: true, index: true },
+    sections: { type: Schema.Types.Mixed, default: {} },
+    submittedAt: { type: Date, default: null },
+    submittedByUserId: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { collection: "workbooks", minimize: false },
+);
+
+workbookSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    ret.id = ret.companyId;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const WorkbookModel =
+  mongoose.models.Workbook || mongoose.model("Workbook", workbookSchema);
+
 export { getNextSequence };
