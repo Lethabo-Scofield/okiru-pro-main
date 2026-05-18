@@ -21,6 +21,7 @@ import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
+import { registerWorkbookRoutes } from "./workbookRoutes";
 
 const logger = createLogger("Routes");
 
@@ -28,7 +29,7 @@ function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
 }
 
-async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any)?.userId;
   if (!userId) {
     return res.status(401).json({ message: "Not authenticated" });
@@ -3037,6 +3038,8 @@ Respond ONLY with a valid JSON array.`;
     logger.error("Client-side error", undefined, { clientError: true, message, stack: stack?.slice(0, 500), url, timestamp });
     res.json({ ok: true });
   });
+
+  registerWorkbookRoutes(app);
 
   logger.info("Route registration completed");
   return httpServer;
