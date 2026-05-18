@@ -26,11 +26,17 @@ type AllowedRole = typeof ALLOWED_ROLES[number];
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
+function hasAnyRole(user: any, ...roles: string[]): boolean {
+  const primary: string = user?.role ?? "";
+  const secondary: string[] = user?.secondaryRoles ?? [];
+  return roles.some(r => r === primary || secondary.includes(r));
+}
+
 /** Requires the caller to be an admin or super_admin. */
 async function requireAdminOrSuperAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
   const user = await storage.getUser(req.session.userId);
-  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
+  if (!user || !hasAnyRole(user, "admin", "super_admin")) {
     return res.status(403).json({ message: "Admin access required" });
   }
   next();
@@ -40,7 +46,7 @@ async function requireAdminOrSuperAdmin(req: Request, res: Response, next: NextF
 async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
   const user = await storage.getUser(req.session.userId);
-  if (!user || user.role !== "super_admin") {
+  if (!user || !hasAnyRole(user, "super_admin")) {
     return res.status(403).json({ message: "Super-admin access required" });
   }
   next();

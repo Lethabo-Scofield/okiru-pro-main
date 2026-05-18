@@ -8,6 +8,7 @@ const userSchema = new Schema({
   email: { type: String, default: null },
   fullName: { type: String, default: null },
   role: { type: String, default: "user" },
+  secondaryRoles: { type: [String], default: [] },
   organizationId: { type: String, default: null },
   profilePicture: { type: String, default: null },
   isDemo: { type: Boolean, default: false },
