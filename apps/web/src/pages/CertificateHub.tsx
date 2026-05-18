@@ -483,7 +483,7 @@ export default function CertificateHub() {
   const isAuthenticated = !!user && !authLoading;
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="h-screen overflow-y-auto bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
       {/* ─── Header ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
