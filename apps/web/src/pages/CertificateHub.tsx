@@ -6,7 +6,7 @@ import {
   Download, Loader2, AlertCircle, Search, X, ChevronDown,
   RefreshCw, ShieldCheck, Clock, AlertTriangle, Award,
   Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
-  Building2, Hash, Users2, Percent, CalendarClock, Info,
+  Building2, Hash, Users2, Percent, CalendarClock, Info, Eye,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
@@ -247,6 +247,7 @@ export default function CertificateHub() {
   const [ownershipFilter, setOwnershipFilter] = useState('');
 
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+  const [previewCert, setPreviewCert] = useState<CertificateRow | null>(null);
 
   // Upload modal state
   const [showUpload, setShowUpload] = useState(false);
@@ -725,6 +726,7 @@ export default function CertificateHub() {
                 isLast={idx === filtered.length - 1}
                 isDownloading={downloadingFile === cert.name}
                 onDownload={() => downloadCertificate(cert.name)}
+                onPreview={() => setPreviewCert(cert)}
               />
             ))}
           </div>
@@ -783,6 +785,11 @@ export default function CertificateHub() {
           </div>
         </section>
       </main>
+
+      {/* ─── Certificate Preview modal ──────────────────────── */}
+      {previewCert && (
+        <CertPreviewModal cert={previewCert} onClose={() => setPreviewCert(null)} />
+      )}
 
       {/* ─── Upload modal ───────────────────────────────────── */}
       {showUpload && isAuthenticated && (
@@ -955,13 +962,14 @@ function Field({ label, children }: { label: string; required?: boolean; childre
 }
 
 function CertRow({
-  cert, searchQuery, isLast, isDownloading, onDownload,
+  cert, searchQuery, isLast, isDownloading, onDownload, onPreview,
 }: {
   cert: CertificateRow;
   searchQuery: string;
   isLast: boolean;
   isDownloading: boolean;
   onDownload: () => void;
+  onPreview: () => void;
 }) {
   return (
     <div
@@ -1023,7 +1031,15 @@ function CertRow({
         <span>{formatExpiry(cert.expiryDate)}</span>
         <StatusBadge status={cert.status} expiryDate={cert.expiryDate} />
       </div>
-      <div className="hidden md:flex justify-end">
+      <div className="hidden md:flex items-center justify-end gap-1">
+        <button
+          onClick={onPreview}
+          aria-label={`Preview ${cert.companyName}`}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[12px]"
+        >
+          <Eye className="h-4 w-4" />
+          <span className="hidden lg:inline">Preview</span>
+        </button>
         <button
           onClick={onDownload}
           disabled={isDownloading}
@@ -1035,8 +1051,15 @@ function CertRow({
         </button>
       </div>
 
-      {/* Mobile download button */}
-      <div className="md:hidden mt-3">
+      {/* Mobile action buttons */}
+      <div className="md:hidden mt-3 flex items-center gap-2">
+        <button
+          onClick={onPreview}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Preview
+        </button>
         <button
           onClick={onDownload}
           disabled={isDownloading}
@@ -1046,6 +1069,133 @@ function CertRow({
           Download
         </button>
       </div>
+    </div>
+  );
+}
+
+function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: () => void }) {
+  const statusMap = {
+    valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
+    expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring Soon' },
+    expired:  { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Expired' },
+    unknown:  { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+  } as const;
+  const s = statusMap[cert.status];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#a5b4fc]" />
+            <h2 className="text-[15px] font-semibold text-white">Certificate Details</h2>
+          </div>
+          <button onClick={onClose} className="text-[#636366] hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-5 space-y-4">
+          {/* Company name + status */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] text-[#636366] uppercase tracking-wider mb-1">Company</p>
+              <p className="text-[18px] font-semibold text-white leading-snug">{cert.companyName}</p>
+            </div>
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium tracking-wide uppercase mt-1"
+              style={{ color: s.color, background: s.bg }}
+            >
+              {cert.status === 'valid' && <ShieldCheck className="h-3 w-3" />}
+              {cert.status === 'expiring' && <Clock className="h-3 w-3" />}
+              {cert.status === 'expired' && <AlertTriangle className="h-3 w-3" />}
+              {s.label}
+            </span>
+          </div>
+
+          {/* Verified badge */}
+          {cert.verified && (
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+              style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.1)' }}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Verified by administrator
+            </div>
+          )}
+
+          {/* Grid of details */}
+          <div className="grid grid-cols-2 gap-3">
+            <PreviewField label="VAT Number" value={cert.vatNumber ?? '-'} icon={<Hash className="h-3.5 w-3.5" />} />
+            <PreviewField label="Company Size" value={cert.companySize ?? '-'} icon={<Building2 className="h-3.5 w-3.5" />} />
+            <PreviewField
+              label="B-BBEE Level"
+              value={cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : '-'}
+              icon={<Award className="h-3.5 w-3.5" />}
+            />
+            <PreviewField
+              label="Expiry Date"
+              value={formatExpiry(cert.expiryDate)}
+              icon={<CalendarClock className="h-3.5 w-3.5" />}
+            />
+            <PreviewField
+              label="Black Ownership"
+              value={formatPct(cert.blackOwnership)}
+              icon={<Percent className="h-3.5 w-3.5" />}
+            />
+            <PreviewField
+              label="Black Women Ownership"
+              value={formatPct(cert.blackWomenOwnership)}
+              icon={<Users2 className="h-3.5 w-3.5" />}
+            />
+          </div>
+
+          {/* File name */}
+          <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5 flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5 text-[#636366] shrink-0" />
+            <span className="text-[12px] text-[#8e8e93] truncate">{cert.fileName || cert.name}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-5 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {cert.slug && (
+            <Link
+              href={`/certificates/${cert.slug}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#a5b4fc] hover:text-white hover:bg-white/[0.06] transition-colors"
+            >
+              View full page
+            </Link>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] text-[#636366] uppercase tracking-wider mb-1">
+        {icon}
+        {label}
+      </div>
+      <div className="text-[13px] text-white font-medium truncate">{value}</div>
     </div>
   );
 }
