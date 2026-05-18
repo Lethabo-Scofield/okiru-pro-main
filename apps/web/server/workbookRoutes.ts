@@ -1,7 +1,9 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response } from "express";
 import * as XLSX from "xlsx";
+import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { requireAuth } from "./routes";
+import { WorkbookModel, ClientModel } from "../shared/schema";
 
 const logger = createLogger("Workbook");
 
@@ -12,6 +14,8 @@ export type WorkbookData = {
   ownerOrganizationId: string | null;
   ownerUserId: string;
   sections: Record<string, WorkbookSection>;
+  submittedAt?: string | null;
+  submittedByUserId?: string | null;
   updatedAt: string;
 };
 
@@ -37,11 +41,9 @@ type DataSheetSpec = {
   sheetName: string; // <= 31 chars
   title: string;
   headers: string[];
-  /** Maps a workbook row to a value array aligned with `headers`. */
   rowToCells: (row: WorkbookRow) => unknown[];
-  /** Which workbook section keys feed this sheet (first non-empty wins, or merged). */
   sectionKeys: string[];
-  merge?: boolean; // if true, concatenate rows from all sectionKeys
+  merge?: boolean;
 };
 
 const CHECKLIST_ROWS: Array<[string, string]> = [
@@ -192,7 +194,7 @@ function s(v: unknown): string {
 function joinName(r: WorkbookRow): string {
   const name = s((r as any).name).trim();
   const surname = s((r as any).surname).trim();
-  return [name, surname].filter(Boolean).join(" ");
+  return [name, surname].filter(Boolean).join(" ") || s((r as any).fullName);
 }
 function yesNo(v: unknown): string {
   if (v === true) return "Yes";
@@ -202,6 +204,10 @@ function yesNo(v: unknown): string {
   if (["true", "yes", "y", "1"].includes(t)) return "Yes";
   if (["false", "no", "n", "0"].includes(t)) return "No";
   return s(v);
+}
+function num(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 const DATA_SHEETS: DataSheetSpec[] = [
@@ -231,7 +237,7 @@ const DATA_SHEETS: DataSheetSpec[] = [
     sectionKeys: ["skills-development"],
     rowToCells: (r) => [
       s((r as any).programName ?? (r as any).trainingProgramName),
-      s((r as any).category ?? (r as any).categoryCode),
+      s((r as any).categoryCode ?? (r as any).category),
       s((r as any).trainingProvider ?? (r as any).provider),
       s((r as any).province),
       s((r as any).municipality),
@@ -330,7 +336,19 @@ const DATA_SHEETS: DataSheetSpec[] = [
   },
 ];
 
-const workbooks = new Map<string, WorkbookData>();
+// In-memory fallback — only used in non-production when Mongo is unavailable.
+// In production we refuse to silently divert writes to memory, since switching
+// back to Mongo later would cause silent data loss.
+const memoryStore = new Map<string, WorkbookData>();
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+function mongoReady(): boolean {
+  return mongoose.connection.readyState === 1;
+}
+
+function canUseMemoryFallback(): boolean {
+  return !IS_PRODUCTION && !mongoReady();
+}
 
 function emptyWorkbook(
   companyId: string,
@@ -344,7 +362,30 @@ function emptyWorkbook(
     ownerOrganizationId,
     ownerUserId,
     sections,
+    submittedAt: null,
+    submittedByUserId: null,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeWorkbookDoc(doc: any): WorkbookData {
+  const sections: Record<string, WorkbookSection> = {};
+  const raw = (doc?.sections ?? {}) as Record<string, any>;
+  for (const key of SECTION_KEYS) {
+    const src = raw[key] ?? {};
+    sections[key] = {
+      rows: Array.isArray(src.rows) ? (src.rows as WorkbookRow[]) : [],
+      ...(src.meta && typeof src.meta === "object" ? { meta: src.meta } : {}),
+    };
+  }
+  return {
+    companyId: String(doc.companyId),
+    ownerOrganizationId: doc.ownerOrganizationId ?? null,
+    ownerUserId: String(doc.ownerUserId),
+    sections,
+    submittedAt: doc.submittedAt ? new Date(doc.submittedAt).toISOString() : null,
+    submittedByUserId: doc.submittedByUserId ?? null,
+    updatedAt: (doc.updatedAt ? new Date(doc.updatedAt) : new Date()).toISOString(),
   };
 }
 
@@ -359,6 +400,73 @@ function sanitizeRows(rows: unknown): WorkbookRow[] {
   });
 }
 
+async function loadOrCreateWorkbook(
+  companyId: string,
+  ownerOrgId: string | null,
+  ownerUserId: string,
+): Promise<WorkbookData> {
+  if (mongoReady()) {
+    const existing = await WorkbookModel.findOne({ companyId }).lean();
+    if (existing) return normalizeWorkbookDoc(existing);
+    const initial = emptyWorkbook(companyId, ownerOrgId, ownerUserId);
+    try {
+      await WorkbookModel.create({
+        companyId,
+        ownerOrganizationId: ownerOrgId,
+        ownerUserId,
+        sections: initial.sections,
+      });
+    } catch (err: any) {
+      // Race: another request created it; re-read.
+      if (err?.code === 11000) {
+        const dup = await WorkbookModel.findOne({ companyId }).lean();
+        if (dup) return normalizeWorkbookDoc(dup);
+      } else {
+        throw err;
+      }
+    }
+    return initial;
+  }
+  if (!canUseMemoryFallback()) {
+    throw new Error("DATABASE_UNAVAILABLE");
+  }
+  // Memory fallback (dev only)
+  let wb = memoryStore.get(companyId);
+  if (!wb) {
+    wb = emptyWorkbook(companyId, ownerOrgId, ownerUserId);
+    memoryStore.set(companyId, wb);
+  }
+  return wb;
+}
+
+async function persistSection(
+  wb: WorkbookData,
+  sectionKey: string,
+  section: WorkbookSection,
+): Promise<WorkbookData> {
+  if (mongoReady()) {
+    const update: Record<string, any> = {
+      [`sections.${sectionKey}`]: section,
+      updatedAt: new Date(),
+    };
+    const doc = await WorkbookModel.findOneAndUpdate(
+      { companyId: wb.companyId },
+      { $set: update },
+      { new: true, upsert: false },
+    ).lean();
+    if (!doc) throw new Error("Workbook disappeared during save");
+    return normalizeWorkbookDoc(doc);
+  }
+  if (!canUseMemoryFallback()) {
+    throw new Error("DATABASE_UNAVAILABLE");
+  }
+  // Only mutate local cache after we know we're committed to the fallback path.
+  wb.sections[sectionKey] = section;
+  wb.updatedAt = new Date().toISOString();
+  memoryStore.set(wb.companyId, wb);
+  return wb;
+}
+
 function buildChecklistSheet(wb: WorkbookData): XLSX.WorkSheet {
   const meta = (wb.sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
   const fin = (wb.sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
@@ -369,7 +477,6 @@ function buildChecklistSheet(wb: WorkbookData): XLSX.WorkSheet {
   ];
   const aoa: unknown[][] = [titleRow, ...CHECKLIST_ROWS.map((r) => [...r])];
 
-  // If financial info has been captured, append a small summary block at the bottom.
   const finKeys = Object.keys(fin).filter((k) => fin[k] !== "" && fin[k] != null);
   if (finKeys.length > 0) {
     aoa.push([""], ["Captured Financial Information", ""]);
@@ -403,37 +510,40 @@ function buildDataSheet(wb: WorkbookData, spec: DataSheetSpec): XLSX.WorkSheet {
     }
   }
 
-  // Title row spans all header columns; header row; then data rows (or empty).
   const titleRow: unknown[] = [spec.title, ...Array(spec.headers.length - 1).fill("")];
   const aoa: unknown[][] = [titleRow, spec.headers, ...rows.map((r) => spec.rowToCells(r))];
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: spec.headers.length - 1 } },
-  ];
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: spec.headers.length - 1 } }];
   ws["!cols"] = spec.headers.map((h) => ({ wch: Math.min(Math.max(h.length + 2, 14), 36) }));
   return ws;
 }
 
 export function buildXlsx(wb: WorkbookData): Buffer {
   const xwb = XLSX.utils.book_new();
-
   XLSX.utils.book_append_sheet(xwb, buildChecklistSheet(wb), "Information Request");
-
   for (const spec of DATA_SHEETS) {
     XLSX.utils.book_append_sheet(xwb, buildDataSheet(wb, spec), spec.sheetName.slice(0, 31));
   }
-
   return XLSX.write(xwb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
 /**
- * Owner check — workbook is pinned to the creating user's organization (or, if
- * the user has no org, to the user themselves). All subsequent access must come
- * from a member of the same org or the same user. Returns the workbook on
- * success, or sends a 403 and returns null if the caller is not allowed.
+ * Authorization for workbook access.
+ *
+ * Tenancy is anchored to the **client record** (not the workbook itself), so a
+ * malicious caller cannot squat an arbitrary companyId by being the first to
+ * touch it. We require:
+ *   1. The client exists.
+ *   2. The caller is the client's creator OR a member of the client's org.
+ *   3. After we know the caller is authorized for the client, we load (or
+ *      create) the workbook, and additionally enforce that the workbook owner's
+ *      tenant matches.
  */
-function authorizeWorkbookAccess(req: Request, res: Response): WorkbookData | null {
+async function authorizeWorkbookAccess(
+  req: Request,
+  res: Response,
+): Promise<WorkbookData | null> {
   const user = (req as any).user;
   const userId: string | undefined = user?.id || (req.session as any)?.userId;
   if (!userId) {
@@ -443,32 +553,246 @@ function authorizeWorkbookAccess(req: Request, res: Response): WorkbookData | nu
   const userOrgId: string | null = user?.organizationId ?? null;
   const companyId = req.params.companyId;
 
-  let wb = workbooks.get(companyId);
-  if (!wb) {
-    wb = emptyWorkbook(companyId, userOrgId, userId);
-    workbooks.set(companyId, wb);
-    return wb;
-  }
+  try {
+    if (!mongoReady() && IS_PRODUCTION) {
+      res.status(503).json({ error: "Database unavailable" });
+      return null;
+    }
 
-  const sameOrg = wb.ownerOrganizationId !== null && wb.ownerOrganizationId === userOrgId;
-  const sameUser = wb.ownerUserId === userId;
-  if (!sameOrg && !sameUser) {
-    logger.warn("Cross-tenant workbook access denied", {
-      companyId,
-      requesterUserId: userId,
-      requesterOrgId: userOrgId,
-      ownerOrgId: wb.ownerOrganizationId,
-      ownerUserId: wb.ownerUserId,
-    });
-    res.status(403).json({ message: "Forbidden" });
+    // Step 1: client-level authorization.
+    // In dev with no Mongo, we accept the caller as the de-facto owner
+    // (memory-only mode); in prod or with Mongo connected, we enforce the check.
+    let clientOrgId: string | null = null;
+    let clientCreatorId: string | null = null;
+    if (mongoReady()) {
+      const client = await ClientModel.findOne({ clientId: companyId })
+        .select({ organizationId: 1, createdByUserId: 1 })
+        .lean();
+      if (!client) {
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      clientOrgId = (client as any).organizationId ?? null;
+      clientCreatorId = (client as any).createdByUserId ?? null;
+      const clientSameOrg = clientOrgId !== null && clientOrgId === userOrgId;
+      const clientSameUser = clientCreatorId === userId;
+
+      if (!clientOrgId && !clientCreatorId) {
+        // Legacy record with no tenancy fields. Refuse access in production —
+        // operators must backfill ownership via a controlled migration before
+        // these clients can be edited. In dev we allow it for local testing.
+        if (IS_PRODUCTION) {
+          logger.warn("Refusing access to legacy client missing tenancy fields", {
+            companyId,
+            requesterUserId: userId,
+          });
+          res.status(403).json({ message: "Forbidden: client missing tenancy ownership" });
+          return null;
+        }
+      } else if (!clientSameOrg && !clientSameUser) {
+        logger.warn("Cross-tenant client access denied via workbook route", {
+          companyId,
+          requesterUserId: userId,
+          requesterOrgId: userOrgId,
+          clientOrgId,
+          clientCreatorId,
+        });
+        res.status(403).json({ message: "Forbidden" });
+        return null;
+      }
+    }
+
+    // Step 2: load (or create) workbook, pinned to the *client's* tenancy
+    // when present — not the caller's — so the first caller cannot redirect a
+    // shared client's workbook to their personal scope.
+    const workbookOrgId = clientOrgId ?? userOrgId;
+    const workbookOwnerId = clientCreatorId ?? userId;
+    const wb = await loadOrCreateWorkbook(companyId, workbookOrgId, workbookOwnerId);
+
+    const sameOrg = wb.ownerOrganizationId !== null && wb.ownerOrganizationId === userOrgId;
+    const sameUser = wb.ownerUserId === userId;
+    if (!sameOrg && !sameUser) {
+      logger.warn("Cross-tenant workbook access denied", {
+        companyId,
+        requesterUserId: userId,
+        requesterOrgId: userOrgId,
+        ownerOrgId: wb.ownerOrganizationId,
+        ownerUserId: wb.ownerUserId,
+      });
+      res.status(403).json({ message: "Forbidden" });
+      return null;
+    }
+    return wb;
+  } catch (err: any) {
+    if (err?.message === "DATABASE_UNAVAILABLE") {
+      res.status(503).json({ error: "Database unavailable" });
+      return null;
+    }
+    logger.error("Failed to load workbook", err);
+    res.status(500).json({ error: "Failed to load workbook" });
     return null;
   }
-  return wb;
+}
+
+// ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
+
+function projectWorkbookToClient(wb: WorkbookData) {
+  const sec = wb.sections;
+  const finMeta = (sec["financial-information"]?.meta ?? {}) as Record<string, unknown>;
+  const companyMeta = (sec["company-information"]?.meta ?? {}) as Record<string, unknown>;
+
+  const shareholders = (sec["ownership"]?.rows ?? []).map((r) => ({
+    name: s((r as any).shareholderName ?? (r as any).name),
+    idNumber: s((r as any).idNumber),
+    race: s((r as any).race),
+    gender: s((r as any).gender),
+    isDisabled: Boolean((r as any).isDisabled),
+    isYouth: Boolean((r as any).isYouth),
+    votingRights: num((r as any).votingRights),
+    economicInterest: num((r as any).economicInterest),
+    shareholding: num((r as any).shareholding),
+    modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
+  }));
+
+  const empSeen = new Set<string>();
+  const employees: any[] = [];
+  for (const key of ["employees", "management-control"]) {
+    for (const r of sec[key]?.rows ?? []) {
+      const id = (r as any)._id as string | undefined;
+      if (id && empSeen.has(id)) continue;
+      if (id) empSeen.add(id);
+      employees.push({
+        name: s((r as any).name),
+        surname: s((r as any).surname),
+        fullName: joinName(r as any),
+        idNumber: s((r as any).idNumber),
+        race: s((r as any).race),
+        gender: s((r as any).gender),
+        occupationalLevel: s((r as any).occupationalLevel ?? (r as any).designation),
+        designation: s((r as any).designation ?? (r as any).occupationalLevel),
+        department: s((r as any).department),
+        salary: num((r as any).salary),
+        isDisabled: Boolean((r as any).isDisabled),
+        isForeign: Boolean((r as any).isForeign),
+        votingRights: num((r as any).votingRights),
+        startDate: s((r as any).startDate),
+      });
+    }
+  }
+
+  const trainingPrograms = (sec["skills-development"]?.rows ?? []).map((r) => {
+    const total =
+      num((r as any).totalCost) ||
+      num((r as any).courseCost) +
+        num((r as any).travelCost) +
+        num((r as any).accommodationCost) +
+        num((r as any).salaryCost) +
+        num((r as any).otherCosts);
+    const absorbed = Boolean((r as any).absorbed);
+    return {
+      programName: s((r as any).programName),
+      // Alias `name` for consumers keyed on it.
+      name: s((r as any).programName),
+      categoryCode: s((r as any).categoryCode),
+      category: s((r as any).categoryCode),
+      trainingProvider: s((r as any).trainingProvider),
+      learnerName: s((r as any).learnerName),
+      idNumber: s((r as any).idNumber),
+      race: s((r as any).race),
+      gender: s((r as any).gender),
+      isBlack: ["African", "Coloured", "Indian"].includes(s((r as any).race)),
+      isDisabled: Boolean((r as any).isDisabled),
+      isForeign: Boolean((r as any).isForeign),
+      employed: Boolean((r as any).employed),
+      completed: Boolean((r as any).completed),
+      absorbed,
+      isAbsorbed: absorbed,
+      courseCost: num((r as any).courseCost),
+      travelCost: num((r as any).travelCost),
+      accommodationCost: num((r as any).accommodationCost),
+      salaryCost: num((r as any).salaryCost),
+      otherCosts: num((r as any).otherCosts),
+      totalCost: total,
+      cost: total,
+      startDate: s((r as any).startDate),
+      endDate: s((r as any).endDate),
+    };
+  });
+
+  const supSeen = new Set<string>();
+  const suppliers: any[] = [];
+  for (const key of ["procurement", "suppliers"]) {
+    for (const r of sec[key]?.rows ?? []) {
+      const id = (r as any)._id as string | undefined;
+      if (id && supSeen.has(id)) continue;
+      if (id) supSeen.add(id);
+      const blackOwn = num((r as any).currentBlackOwnership);
+      const blackFemOwn = num((r as any).currentBlackFemaleOwnership);
+      const lvl = s((r as any).bbbeeLevel);
+      suppliers.push({
+        supplierName: s((r as any).supplierName),
+        // Alias `name` for downstream consumers that key off it.
+        name: s((r as any).supplierName),
+        currentSize: s((r as any).currentSize),
+        size: s((r as any).currentSize),
+        bbbeeLevel: lvl,
+        beeLevel: lvl,
+        vatNumber: s((r as any).vatNumber),
+        measuredUnder: s((r as any).measuredUnder),
+        empoweringSupplier: Boolean((r as any).empoweringSupplier),
+        currentBlackOwnership: blackOwn,
+        blackOwnership: blackOwn,
+        currentBlackFemaleOwnership: blackFemOwn,
+        blackFemaleOwnership: blackFemOwn,
+        sdRecipient: Boolean((r as any).sdRecipient),
+        threeYearContract: Boolean((r as any).threeYearContract),
+        designated: Boolean((r as any).designated),
+        spend: num((r as any).spend),
+        amount: num((r as any).spend),
+        firstProcurementDate: s((r as any).firstProcurementDate),
+        certificateExpiryDate: s((r as any).certificateExpiryDate),
+      });
+    }
+  }
+
+  const esdContributions = (sec["esd"]?.rows ?? []).map((r) => ({
+    supplierName: s((r as any).supplierName),
+    currentBlackOwnership: num((r as any).currentBlackOwnership),
+    currentSize: s((r as any).currentSize),
+    contributionDescription: s((r as any).contributionDescription),
+    contributionType: s((r as any).contributionType),
+    amount: num((r as any).amount),
+    dateOfTransaction: s((r as any).dateOfTransaction),
+    invoiceDate: s((r as any).invoiceDate),
+    paymentDate: s((r as any).paymentDate),
+    primeRate: num((r as any).primeRate),
+    actualRate: num((r as any).actualRate),
+  }));
+
+  const sedContributions = (sec["sed"]?.rows ?? []).map((r) => ({
+    beneficiaryName: s((r as any).beneficiaryName),
+    descriptionOfSpend: s((r as any).descriptionOfSpend),
+    ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
+    contributionType: s((r as any).contributionType),
+    percentBenefitingBlack: num((r as any).percentBenefitingBlack),
+    amount: num((r as any).amount),
+    dateOfTransaction: s((r as any).dateOfTransaction),
+  }));
+
+  const financials = {
+    revenue: num(finMeta.revenue),
+    npat: num(finMeta.npat),
+    leviableAmount: num(finMeta.leviableAmount) || num(finMeta.payroll),
+    tmps: num(finMeta.tmps),
+    industrySector: s(companyMeta.industrySector) || undefined,
+  };
+
+  return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
 }
 
 export function registerWorkbookRoutes(app: Express): void {
-  app.get("/api/workbook/:companyId", requireAuth, (req: Request, res: Response) => {
-    const wb = authorizeWorkbookAccess(req, res);
+  app.get("/api/workbook/:companyId", requireAuth, async (req: Request, res: Response) => {
+    const wb = await authorizeWorkbookAccess(req, res);
     if (!wb) return;
     res.json(wb);
   });
@@ -476,30 +800,33 @@ export function registerWorkbookRoutes(app: Express): void {
   app.put(
     "/api/workbook/:companyId/section/:sectionKey",
     requireAuth,
-    (req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
       const { sectionKey } = req.params;
       if (!SECTION_KEYS.includes(sectionKey as any)) {
         return res.status(400).json({ error: "Unknown section key" });
       }
-      const wb = authorizeWorkbookAccess(req, res);
+      const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
       const rows = sanitizeRows((req.body as any)?.rows);
       const meta =
         (req.body as any)?.meta && typeof (req.body as any).meta === "object"
-          ? (req.body as any).meta
+          ? ((req.body as any).meta as Record<string, unknown>)
           : undefined;
-      wb.sections[sectionKey] = { rows, ...(meta ? { meta } : {}) };
-      wb.updatedAt = new Date().toISOString();
-      workbooks.set(wb.companyId, wb);
-      res.json({ ok: true, updatedAt: wb.updatedAt, rowCount: rows.length });
+      try {
+        const next = await persistSection(wb, sectionKey, { rows, ...(meta ? { meta } : {}) });
+        res.json({ ok: true, updatedAt: next.updatedAt, rowCount: rows.length });
+      } catch (err: any) {
+        logger.error("Failed to save workbook section", err);
+        res.status(500).json({ error: "Failed to save section" });
+      }
     },
   );
 
   app.get(
     "/api/workbook/:companyId/export.xlsx",
     requireAuth,
-    (req: Request, res: Response) => {
-      const wb = authorizeWorkbookAccess(req, res);
+    async (req: Request, res: Response) => {
+      const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
       try {
         const buf = buildXlsx(wb);
@@ -515,6 +842,91 @@ export function registerWorkbookRoutes(app: Express): void {
       } catch (err: any) {
         logger.error("Failed to build workbook export", err);
         res.status(500).json({ error: "Failed to export workbook" });
+      }
+    },
+  );
+
+  // Submit the workbook → write its contents into the associated client record
+  // so the scorecard pipeline can pick it up. Returns row counts of what was synced.
+  app.post(
+    "/api/workbook/:companyId/submit",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const wb = await authorizeWorkbookAccess(req, res);
+      if (!wb) return;
+
+      if (!mongoReady()) {
+        return res
+          .status(503)
+          .json({ error: "Database unavailable — cannot submit workbook." });
+      }
+
+      const projected = projectWorkbookToClient(wb);
+      try {
+        const client = await ClientModel.findOne({ clientId: wb.companyId });
+        if (!client) {
+          return res
+            .status(404)
+            .json({ error: "Client not found for this workbook." });
+        }
+
+        const update: Record<string, any> = {
+          updatedAt: new Date(),
+          shareholders: projected.shareholders,
+          employees: projected.employees,
+          trainingPrograms: projected.trainingPrograms,
+          suppliers: projected.suppliers,
+          esdContributions: projected.esdContributions,
+          sedContributions: projected.sedContributions,
+        };
+        const f = projected.financials;
+        if (f.revenue > 0) update.revenue = f.revenue;
+        if (typeof f.npat === "number") update.npat = f.npat;
+        if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
+        if (f.tmps > 0) update.tmps = f.tmps;
+        if (f.industrySector) update.industrySector = f.industrySector;
+
+        // Lift a handful of company-info fields into the client record too.
+        const cm = projected.companyMeta;
+        for (const key of [
+          "tradingName",
+          "registrationNumber",
+          "vatNumber",
+          "taxNumber",
+          "physicalAddress",
+          "postalAddress",
+          "contactPerson",
+          "contactEmail",
+          "contactPhone",
+        ] as const) {
+          const v = cm[key];
+          if (typeof v === "string" && v.trim()) update[key] = v.trim();
+        }
+
+        await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
+
+        const userId =
+          (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
+        await WorkbookModel.updateOne(
+          { companyId: wb.companyId },
+          { $set: { submittedAt: new Date(), submittedByUserId: userId, updatedAt: new Date() } },
+        );
+
+        res.json({
+          ok: true,
+          counts: {
+            shareholders: projected.shareholders.length,
+            employees: projected.employees.length,
+            trainingPrograms: projected.trainingPrograms.length,
+            suppliers: projected.suppliers.length,
+            esdContributions: projected.esdContributions.length,
+            sedContributions: projected.sedContributions.length,
+          },
+          submittedAt: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        logger.error("Failed to submit workbook", err);
+        res.status(500).json({ error: "Failed to submit workbook" });
       }
     },
   );
