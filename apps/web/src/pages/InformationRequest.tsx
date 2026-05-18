@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronRight, Download, Loader2, Save, Building2, Search } from "lucide-react";
+import { ChevronRight, Download, Loader2, Save, Building2, Search, Send, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
-import { SECTIONS, getSection } from "@/components/workbook/sections";
+import { SECTIONS, getSection, type ColumnDef } from "@/components/workbook/sections";
 import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
 
 type Row = Record<string, unknown> & { _id: string };
+type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
 type Workbook = {
   companyId: string;
-  sections: Record<string, { rows: Row[] }>;
+  sections: Record<string, SectionData>;
+  submittedAt?: string | null;
   updatedAt: string;
 };
 
@@ -69,7 +71,7 @@ function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
         const err = await res.json().catch(() => ({}));
         toast({
           title: "Could not create",
-          description: err.error || "Server error (MongoDB may be unavailable in dev).",
+          description: err.error || "Server error.",
           variant: "destructive",
         });
       }
@@ -160,14 +162,91 @@ function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
   );
 }
 
+// Single-record key/value editor for sections like Company Information or Financials.
+function MetaForm({
+  fields,
+  value,
+  onChange,
+}: {
+  fields: ColumnDef[];
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const setField = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {fields.map((f) => {
+        const v = value[f.key];
+        const err = f.validate ? f.validate(v) : null;
+        return (
+          <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
+            <div className="text-[12px] text-[#8e8e93] mb-1.5 flex items-center gap-1">
+              {f.label}
+              {f.required && <span className="text-status-error">*</span>}
+            </div>
+            {f.type === "select" ? (
+              <select
+                value={String(v ?? "")}
+                onChange={(e) => setField(f.key, e.target.value)}
+                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a]"
+              >
+                <option value="" className="bg-[#1c1c1e]">—</option>
+                {f.options?.map((o) => (
+                  <option key={o} value={o} className="bg-[#1c1c1e]">
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ) : f.type === "boolean" ? (
+              <div className="flex items-center h-9">
+                <input
+                  type="checkbox"
+                  checked={Boolean(v)}
+                  onChange={(e) => setField(f.key, e.target.checked)}
+                  className="h-4 w-4 accent-blue-500"
+                />
+              </div>
+            ) : (
+              <input
+                type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                value={String(v ?? "")}
+                onChange={(e) =>
+                  setField(
+                    f.key,
+                    f.type === "number" && e.target.value !== ""
+                      ? Number(e.target.value)
+                      : e.target.value,
+                  )
+                }
+                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
+                placeholder={f.required ? "Required" : ""}
+              />
+            )}
+            {err && <div className="text-[11px] text-status-error mt-1">{err}</div>}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function WorkbookView({ company, onBack }: { company: Company; onBack: () => void }) {
   const companyId = company.clientId || company.id || "";
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
-  const [activeKey, setActiveKey] = useState<string>("employees");
+  const [activeKey, setActiveKey] = useState<string>("company-information");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  // Per-section debounce timers + pending payloads so editing section B never
+  // discards a pending save for section A.
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pendingPayloads = useRef<
+    Record<string, { rows?: Row[]; meta?: Record<string, unknown> }>
+  >({});
+  const inFlight = useRef(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -179,6 +258,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         if (!cancelled && data) {
           setWorkbook(data);
           setSavedAt(data.updatedAt);
+          setSubmittedAt(data.submittedAt ?? null);
         }
       })
       .finally(() => !cancelled && setLoading(false));
@@ -188,8 +268,13 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   }, [companyId]);
 
   const saveSection = useCallback(
-    async (sectionKey: string, rows: Row[]) => {
+    async (
+      sectionKey: string,
+      body: { rows?: Row[]; meta?: Record<string, unknown> },
+    ): Promise<boolean> => {
       setSaving(true);
+      setSaveError(null);
+      inFlight.current += 1;
       try {
         const res = await fetch(
           `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/section/${sectionKey}`,
@@ -197,43 +282,105 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             method: "PUT",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rows }),
+            body: JSON.stringify({ rows: body.rows ?? [], meta: body.meta }),
           },
         );
         if (res.ok) {
           const data = await res.json();
           setSavedAt(data.updatedAt);
-        } else {
-          toast({ title: "Save failed", variant: "destructive" });
+          return true;
         }
+        const msg = `Save failed (${res.status})`;
+        setSaveError(msg);
+        toast({ title: msg, variant: "destructive" });
+        return false;
       } catch {
-        toast({ title: "Save failed", description: "Network error.", variant: "destructive" });
+        setSaveError("Network error");
+        toast({
+          title: "Save failed",
+          description: "Network error — will retry on next change.",
+          variant: "destructive",
+        });
+        return false;
       } finally {
-        setSaving(false);
+        inFlight.current -= 1;
+        if (inFlight.current <= 0) setSaving(false);
       }
     },
     [companyId, toast],
   );
 
-  const handleRowsChange = useCallback(
-    (sectionKey: string, rows: Row[]) => {
-      setWorkbook((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          sections: { ...prev.sections, [sectionKey]: { rows } },
-        };
-      });
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => saveSection(sectionKey, rows), 800);
+  const scheduleSave = useCallback(
+    (sectionKey: string, body: { rows?: Row[]; meta?: Record<string, unknown> }) => {
+      pendingPayloads.current[sectionKey] = body;
+      const existing = saveTimers.current[sectionKey];
+      if (existing) clearTimeout(existing);
+      saveTimers.current[sectionKey] = setTimeout(() => {
+        const payload = pendingPayloads.current[sectionKey];
+        delete saveTimers.current[sectionKey];
+        delete pendingPayloads.current[sectionKey];
+        if (payload) saveSection(sectionKey, payload);
+      }, 800);
     },
     [saveSection],
   );
 
+  const flushAllPending = useCallback(async (): Promise<boolean> => {
+    const keys = Object.keys(saveTimers.current);
+    let allOk = true;
+    for (const key of keys) {
+      const t = saveTimers.current[key];
+      if (t) clearTimeout(t);
+      const payload = pendingPayloads.current[key];
+      delete saveTimers.current[key];
+      delete pendingPayloads.current[key];
+      if (payload) {
+        const ok = await saveSection(key, payload);
+        if (!ok) allOk = false;
+      }
+    }
+    return allOk;
+  }, [saveSection]);
+
+  const handleRowsChange = useCallback(
+    (sectionKey: string, rows: Row[]) => {
+      setWorkbook((prev) => {
+        if (!prev) return prev;
+        const current = prev.sections[sectionKey] || { rows: [] };
+        return {
+          ...prev,
+          sections: { ...prev.sections, [sectionKey]: { ...current, rows } },
+        };
+      });
+      scheduleSave(sectionKey, { rows });
+    },
+    [scheduleSave],
+  );
+
+  const handleMetaChange = useCallback(
+    (sectionKey: string, meta: Record<string, unknown>) => {
+      setWorkbook((prev) => {
+        if (!prev) return prev;
+        const current = prev.sections[sectionKey] || { rows: [] };
+        return {
+          ...prev,
+          sections: { ...prev.sections, [sectionKey]: { ...current, meta } },
+        };
+      });
+      scheduleSave(sectionKey, { rows: [], meta });
+    },
+    [scheduleSave],
+  );
+
   const handleManualSave = useCallback(() => {
     if (!workbook) return;
-    const rows = workbook.sections[activeKey]?.rows || [];
-    saveSection(activeKey, rows);
+    const sec = workbook.sections[activeKey] || { rows: [] };
+    // Cancel any pending debounced save for this section — we're firing now.
+    const t = saveTimers.current[activeKey];
+    if (t) clearTimeout(t);
+    delete saveTimers.current[activeKey];
+    delete pendingPayloads.current[activeKey];
+    saveSection(activeKey, { rows: sec.rows, meta: sec.meta });
   }, [workbook, activeKey, saveSection]);
 
   const handleExport = useCallback(() => {
@@ -243,12 +390,101 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     );
   }, [companyId]);
 
+  // Warn on close/refresh when there's an unflushed scheduled save.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const hasPending = Object.keys(saveTimers.current).length > 0;
+      if (hasPending || inFlight.current > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  const waitForInFlight = useCallback(async () => {
+    // Spin-wait (cheap) until all in-flight section saves resolve.
+    const start = Date.now();
+    while (inFlight.current > 0 && Date.now() - start < 15000) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }, []);
+
+  const handleSubmit = useCallback(async () => {
+    if (!workbook) return;
+    setSubmitting(true);
+    try {
+      // 1. Wait for any save that is already mid-flight to land.
+      await waitForInFlight();
+      // 2. Flush every pending debounced save.
+      const ok = await flushAllPending();
+      // 3. Wait for the saves we just kicked off to actually complete.
+      await waitForInFlight();
+      // 4. Refuse to submit if any of those saves failed, or a prior save error
+      //    has not been cleared.
+      if (!ok || saveError) {
+        toast({
+          title: "Submit aborted",
+          description: "Unsaved changes failed to save — fix the save error and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const res = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/submit`,
+        { method: "POST", credentials: "include" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSubmittedAt(data.submittedAt || new Date().toISOString());
+        const c = data.counts || {};
+        toast({
+          title: "Submitted to scorecard engine",
+          description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
+        });
+      } else {
+        toast({
+          title: "Submit failed",
+          description: data.error || `Server returned ${res.status}.`,
+          variant: "destructive",
+        });
+      }
+    } catch (e) {
+      toast({ title: "Submit failed", description: "Network error.", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast]);
+
   const activeSection = getSection(activeKey);
-  const activeRows = workbook?.sections[activeKey]?.rows || [];
+  const activeData = workbook?.sections[activeKey] || { rows: [], meta: {} };
+  const activeRows = activeData.rows || [];
+  const activeMeta = (activeData.meta || {}) as Record<string, unknown>;
+
+  const sectionStatus = (key: string): "empty" | "filled" => {
+    const sec = workbook?.sections[key];
+    if (!sec) return "empty";
+    const def = getSection(key);
+    if (def?.meta) {
+      const m = (sec.meta || {}) as Record<string, unknown>;
+      const has = Object.values(m).some((v) => v !== "" && v != null);
+      return has ? "filled" : "empty";
+    }
+    return (sec.rows?.length || 0) > 0 ? "filled" : "empty";
+  };
+
+  const saveStatusText = saving
+    ? "Saving…"
+    : saveError
+      ? saveError
+      : savedAt
+        ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
+        : "";
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -263,10 +499,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             <span className="text-[14px] font-semibold text-white">{company.name}</span>
             <span className="text-[11px] text-[#636366]">{companyId}</span>
           </div>
+          {submittedAt && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-success-bg text-status-success text-[10px] font-semibold uppercase tracking-wide">
+              <CheckCircle2 className="h-3 w-3" /> Submitted
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#636366]" data-testid="save-status">
-            {saving ? "Saving…" : savedAt ? `Saved ${new Date(savedAt).toLocaleTimeString()}` : ""}
+          <span
+            className={`text-[11px] ${saveError ? "text-status-error" : "text-[#636366]"}`}
+            data-testid="save-status"
+          >
+            {saveStatusText}
           </span>
           <button
             onClick={handleManualSave}
@@ -277,10 +521,19 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           </button>
           <button
             onClick={handleExport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold smooth press-sm hover:bg-white/90"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
             data-testid="button-export"
           >
             <Download className="h-3.5 w-3.5" /> Download Excel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold smooth press-sm hover:bg-white/90 disabled:opacity-60"
+            data-testid="button-submit"
+          >
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {submittedAt ? "Re-submit" : "Submit to scorecard"}
           </button>
         </div>
       </div>
@@ -289,8 +542,16 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         <aside className="col-span-12 lg:col-span-3">
           <div className="rounded-xl bg-[#1c1c1e] p-2 sticky top-20" data-testid="workbook-tabs">
             {SECTIONS.map((s) => {
-              const count = workbook?.sections[s.key]?.rows?.length || 0;
               const isActive = s.key === activeKey;
+              const status = sectionStatus(s.key);
+              const count = workbook?.sections[s.key]?.rows?.length || 0;
+              const indicator = s.meta
+                ? status === "filled"
+                  ? "✓"
+                  : "—"
+                : count > 0
+                  ? String(count)
+                  : "—";
               return (
                 <button
                   key={s.key}
@@ -303,8 +564,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                   data-testid={`tab-${s.key}`}
                 >
                   <span className="truncate">{s.label}</span>
-                  <span className="text-[10px] text-[#636366] tabular-nums">
-                    {s.enabled ? count : "—"}
+                  <span
+                    className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
+                  >
+                    {indicator}
                   </span>
                 </button>
               );
@@ -325,7 +588,13 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               <div className="flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
               </div>
-            ) : activeSection?.enabled && activeSection.columns ? (
+            ) : activeSection?.meta ? (
+              <MetaForm
+                fields={activeSection.meta}
+                value={activeMeta}
+                onChange={(next) => handleMetaChange(activeKey, next)}
+              />
+            ) : activeSection?.columns ? (
               <SpreadsheetGrid
                 columns={activeSection.columns}
                 rows={activeRows}
@@ -333,14 +602,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               />
             ) : (
               <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center">
-                <p className="text-[14px] text-[#d1d1d6] font-medium mb-1">
-                  Coming next
-                </p>
-                <p className="text-[13px] text-[#636366] max-w-md mx-auto">
-                  This section will use the same spreadsheet experience as Employees.
-                  In Phase 1 only the Employees section is fully editable; data captured
-                  here will still appear in the Excel export with its tab name.
-                </p>
+                <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
               </div>
             )}
           </div>
