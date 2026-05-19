@@ -233,9 +233,7 @@ export default function CertificateHub() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
 
-  const [featuredCerts, setFeaturedCerts] = useState<CertificateRow[]>([]);
   const [allCerts, setAllCerts] = useState<CertificateRow[]>([]);
-  const [allCertsLoaded, setAllCertsLoaded] = useState(false);
   const [allCertsLoading, setAllCertsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<CertStats | null>(null);
@@ -278,32 +276,19 @@ export default function CertificateHub() {
     expiryDate: '',
   });
 
-  const loadFeatured = useCallback(async () => {
-    try {
-      const res = await fetch('/api/certificates/list?limit=10');
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const raw = await res.json();
-      setFeaturedCerts(parseCertificateListJson(raw));
-    } catch (err: any) {
-      toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
-    }
-  }, [toast]);
-
   const loadAllCerts = useCallback(async () => {
-    if (allCertsLoaded || allCertsLoading) return;
     setAllCertsLoading(true);
     try {
       const res = await fetch('/api/certificates/list');
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const raw = await res.json();
       setAllCerts(parseCertificateListJson(raw));
-      setAllCertsLoaded(true);
     } catch (err: any) {
-      toast({ title: 'Could not load all certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
+      toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     } finally {
       setAllCertsLoading(false);
     }
-  }, [allCertsLoaded, allCertsLoading, toast]);
+  }, [toast]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -321,28 +306,20 @@ export default function CertificateHub() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadFeatured(), loadStats()]);
+      await Promise.all([loadAllCerts(), loadStats()]);
       setLoading(false);
     })();
-  }, [loadFeatured, loadStats]);
+  }, [loadAllCerts, loadStats]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setAllCerts([]);
-    setAllCertsLoaded(false);
-    await Promise.all([loadFeatured(), loadStats()]);
+    await Promise.all([loadAllCerts(), loadStats()]);
     setRefreshing(false);
-  }, [loadFeatured, loadStats]);
+  }, [loadAllCerts, loadStats]);
 
   const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || ownershipFilter);
 
-  // Lazy-load full list when user starts searching or filtering
-  useEffect(() => {
-    if (hasActiveFilters) loadAllCerts();
-  }, [hasActiveFilters, loadAllCerts]);
-
   const filtered = useMemo(() => {
-    if (!hasActiveFilters) return featuredCerts;
     const q = search.trim().toLowerCase();
     const out = allCerts.filter(c => {
       if (q) {
@@ -365,7 +342,7 @@ export default function CertificateHub() {
       if (av !== bv) return av ? -1 : 1;
       return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
-  }, [featuredCerts, allCerts, hasActiveFilters, search, statusFilter, sizeFilter, ownershipFilter]);
+  }, [allCerts, search, statusFilter, sizeFilter, ownershipFilter]);
 
   const clearAllFilters = () => {
     setSearch('');
@@ -446,15 +423,13 @@ export default function CertificateHub() {
       }
       toast({ title: 'Certificate uploaded', description: `${form.companyName} added to the public registry.` });
       closeUploadModal();
-      setAllCerts([]);
-      setAllCertsLoaded(false);
-      await Promise.all([loadFeatured(), loadStats()]);
+      await Promise.all([loadAllCerts(), loadStats()]);
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message || 'Please try again', variant: 'destructive' });
     } finally {
       setUploading(false);
     }
-  }, [uploadFile, form, toast, closeUploadModal, loadFeatured, loadStats, navigate]);
+  }, [uploadFile, form, toast, closeUploadModal, loadAllCerts, loadStats, navigate]);
 
   const downloadCertificate = useCallback(async (blobName: string) => {
     setDownloadingFile(blobName);
@@ -480,7 +455,7 @@ export default function CertificateHub() {
     }
   }, [toast]);
 
-  const headlineCount = stats?.total ?? featuredCerts.length;
+  const headlineCount = stats?.total ?? allCerts.length;
   const isAuthenticated = !!user && !authLoading;
 
   return (
@@ -657,29 +632,30 @@ export default function CertificateHub() {
         {!loading && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
-              {!hasActiveFilters ? (
-                <>
-                  <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
-                    Recently Verified
-                  </h2>
-                  {stats && (
-                    <p className="text-[12px] text-[#636366]">
-                      <span className="text-[#a1a1aa]">{(stats.total).toLocaleString()} companies certified</span>
-                      {' · '}
-                      <span className="text-[#22c55e]">{stats.valid} valid</span>
-                      {' · '}
-                      <span className="text-[#f59e0b]">{stats.expiring} expiring soon</span>
-                    </p>
-                  )}
-                </>
-              ) : (
+              <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
+                {hasActiveFilters ? 'Search results' : 'All certificates'}
+              </h2>
+              {hasActiveFilters ? (
                 <p className="text-[13px] text-[#8e8e93]">
                   {allCertsLoading
-                    ? 'Searching…'
+                    ? 'Loading…'
                     : `${filtered.length.toLocaleString()} result${filtered.length !== 1 ? 's' : ''}${search.trim() ? ` for "${search.trim()}"` : ''}`
                   }
                 </p>
+              ) : stats ? (
+                <p className="text-[12px] text-[#636366]">
+                  <span className="text-[#a1a1aa]">{filtered.length.toLocaleString()} shown</span>
+                  {stats.total > filtered.length && (
+                    <> · <span className="text-[#a1a1aa]">{stats.total.toLocaleString()} total in registry</span></>
+                  )}
+                  {' · '}
+                  <span className="text-[#22c55e]">{stats.valid} valid</span>
+                  {' · '}
+                  <span className="text-[#f59e0b]">{stats.expiring} expiring soon</span>
+                </p>
+              ) : (
+                <p className="text-[12px] text-[#636366]">{filtered.length.toLocaleString()} certificates</p>
               )}
             </div>
 
@@ -696,13 +672,13 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {(loading || (hasActiveFilters && allCertsLoading)) ? (
+        {(loading || allCertsLoading) ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            hasCertificates={hasActiveFilters ? allCerts.length > 0 : featuredCerts.length > 0}
+            hasCertificates={allCerts.length > 0}
             hasActiveFilters={hasActiveFilters}
             onClearFilters={clearAllFilters}
             onUpload={requireLoginToUpload}
