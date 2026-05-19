@@ -177,7 +177,10 @@ function MetaForm({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {fields.map((f) => {
         const v = value[f.key];
-        const err = f.validate ? f.validate(v) : null;
+        const blank =
+          v === "" || v === undefined || v === null ||
+          (typeof v === "string" && v.trim() === "");
+        const err = f.required && blank ? "Required" : f.validate ? f.validate(v) : null;
         return (
           <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
             <div className="text-[12px] text-[#8e8e93] mb-1.5 flex items-center gap-1">
@@ -620,6 +623,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               <SpreadsheetGrid
                 columns={activeSection.columns}
                 rows={activeRows}
+                rowValidate={activeSection.rowValidate}
                 onChange={(rows) => handleRowsChange(activeKey, rows)}
               />
             ) : (
