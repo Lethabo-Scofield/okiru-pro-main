@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@toolkit/lib/auth";
 import { apiRequest, queryClient } from "@toolkit/lib/queryClient";
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@toolkit/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@toolkit/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@toolkit/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@toolkit/components/ui/table";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { AppNavBack } from "@/components/AppNavBack";
@@ -39,9 +40,12 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  BookOpen,
+  Info,
+  CheckCircle2,
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface AdminUser {
   id: string;
@@ -215,7 +219,7 @@ const ROLE_COLORS: Record<string, string> = {
   user: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function formatDate(d: string | null) {
   if (!d) return "Never";
@@ -239,7 +243,7 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-// ─── Sector Helpers ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Sector Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PILLAR_NAMES: Record<string, string> = {
   ownership: "Ownership",
@@ -278,6 +282,257 @@ function isTransportQse(sector: Sector): boolean {
   const code = typeof sector.code === "string" ? sector.code : "";
   const t = typeof sector.type === "string" ? sector.type : "";
   return code.toUpperCase() === "TRANSPORT" && t.toLowerCase() === "qse";
+}
+
+const PILLAR_ORDER = [
+  "ownership",
+  "managementControl",
+  "employmentEquity",
+  "skillsDevelopment",
+  "preferentialProcurement",
+  "supplierDevelopment",
+  "enterpriseDevelopment",
+  "socioEconomicDevelopment",
+  "yesInitiative",
+];
+
+function sectorTabId(sector: Sector): string {
+  return `${sector.code}-${sector.type}`;
+}
+
+function sectorTabLabel(sector: Sector): string {
+  const code = sector.code || "";
+  const type = sector.type || "";
+  return `${code} ${type}`.trim();
+}
+
+type TargetRow = { criteria: string; points: number; target: string; isBonus?: boolean };
+
+const PILLAR_TARGET_KEY: Record<string, string> = {
+  ownership: "ownership",
+  managementControl: "managementControl",
+  employmentEquity: "employmentEquity",
+  skillsDevelopment: "skills",
+  preferentialProcurement: "procurement",
+  supplierDevelopment: "esd",
+  enterpriseDevelopment: "esd",
+  socioEconomicDevelopment: "sed",
+};
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/MaxPts$|Bonus$|Target$|Percent$/g, "")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+}
+
+function formatTargetValue(key: string, value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "â€”";
+  if (key.includes("Percent") || key.includes("Target") || key.includes("Target")) {
+    if (value > 0 && value <= 1) return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+  }
+  return String(value);
+}
+
+function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
+  const targets = sector.targets;
+  if (!targets || typeof targets !== "object") return [];
+  const bucketKey = PILLAR_TARGET_KEY[pillarKey];
+  if (!bucketKey) return [];
+  const bucket = (targets as Record<string, unknown>)[bucketKey];
+  if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];
+
+  const rows: TargetRow[] = [];
+  for (const [k, v] of Object.entries(bucket as Record<string, unknown>)) {
+    if (typeof v !== "number" || v <= 0) continue;
+    if (!k.endsWith("MaxPts") && !k.endsWith("Bonus")) continue;
+    const targetKey = k.replace(/MaxPts$/, "Target").replace(/Bonus$/, "Target");
+    const targetVal = (bucket as Record<string, unknown>)[targetKey];
+    rows.push({
+      criteria: humanizeKey(k),
+      points: v,
+      target: formatTargetValue(targetKey, targetVal ?? (bucket as Record<string, unknown>).spendPercent),
+      isBonus: k.includes("Bonus"),
+    });
+  }
+  return rows;
+}
+
+function CrossSectorTable({ sectors }: { sectors: Sector[] }) {
+  const ordered = [...sectors].sort((a, b) => sectorTabLabel(a).localeCompare(sectorTabLabel(b)));
+
+  return (
+    <Card>
+      <CardContent className="p-0 overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs min-w-[140px]">Pillar</TableHead>
+              {ordered.map((s) => (
+                <TableHead key={sectorTabId(s)} className="text-xs text-center whitespace-nowrap">
+                  {sectorTabLabel(s)}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {PILLAR_ORDER.map((key) => (
+              <TableRow key={key}>
+                <TableCell className="text-xs font-medium">{PILLAR_NAMES[key] ?? key}</TableCell>
+                {ordered.map((s) => {
+                  const config = safePillarConfigs(s)[key];
+                  const pts = config?.maxPoints ?? 0;
+                  return (
+                    <TableCell key={sectorTabId(s)} className="text-xs text-center font-mono">
+                      {pts > 0 ? pts : "â€”"}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
+            <TableRow className="font-semibold bg-muted/30">
+              <TableCell className="text-xs">Grand Total</TableCell>
+              {ordered.map((s) => (
+                <TableCell key={sectorTabId(s)} className="text-xs text-center font-mono font-bold">
+                  {s.totalPoints}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ApiPillarCard({
+  pillarKey,
+  config,
+  sector,
+}: {
+  pillarKey: string;
+  config: PillarConfig;
+  sector: Sector;
+}) {
+  const [open, setOpen] = useState(false);
+  const targetRows = buildPillarTargetRows(sector, pillarKey);
+  const hasDetail = targetRows.length > 0 || config.hasSubMinimum;
+
+  return (
+    <Card className={config.hasSubMinimum ? "border-amber-500/40" : ""}>
+      <button
+        type="button"
+        className="w-full text-left px-4 py-3 flex items-center justify-between gap-4"
+        onClick={() => hasDetail && setOpen((v) => !v)}
+        disabled={!hasDetail}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-sm font-semibold truncate">{PILLAR_NAMES[pillarKey] ?? pillarKey}</span>
+          {config.hasSubMinimum && (
+            <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-600 shrink-0">
+              sub-min {config.subMinimumPercent}%
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="font-mono text-sm font-bold">{config.maxPoints} pts</span>
+          {hasDetail && (open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />)}
+        </div>
+      </button>
+
+      {open && hasDetail && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
+          {targetRows.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[10px]">Indicator</TableHead>
+                  <TableHead className="text-[10px] text-center w-16">Points</TableHead>
+                  <TableHead className="text-[10px] w-36">Target</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {targetRows.map((el, i) => (
+                  <TableRow key={i} className={el.isBonus ? "bg-green-500/5" : ""}>
+                    <TableCell className="text-xs">
+                      {el.criteria}
+                      {el.isBonus && (
+                        <Badge variant="outline" className="ml-2 text-[9px] border-green-500/40 text-green-600">
+                          bonus
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-center font-mono font-semibold">{el.points}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{el.target}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SectorTabView({ sector }: { sector: Sector }) {
+  const pillarConfigs = safePillarConfigs(sector);
+  const levelThresholds = safeLevelThresholds(sector);
+  const activeEntries = PILLAR_ORDER.map((key) => ({ key, config: pillarConfigs[key] })).filter(
+    (e) => e.config && e.config.maxPoints > 0,
+  );
+
+  return (
+    <div className="space-y-6 pt-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge variant="outline" className="text-xs">{sector.type}</Badge>
+        <span className="text-sm font-mono font-bold text-primary">{sector.totalPoints} total points</span>
+        {isTransportQse(sector) && (
+          <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700">
+            Transport QSE â€” measured pillars only
+          </Badge>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-start">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Pillar breakdown â€” click to expand scoring rows
+          </p>
+          {activeEntries.map(({ key, config }) => (
+            <ApiPillarCard key={key} pillarKey={key} config={config!} sector={sector} />
+          ))}
+        </div>
+
+        <div className="min-w-[220px]">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Level thresholds</p>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px]">Level</TableHead>
+                    <TableHead className="text-[10px] text-right">Min pts</TableHead>
+                    <TableHead className="text-[10px] text-right">Recognition</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {levelThresholds.map((t) => (
+                    <TableRow key={t.level} className={t.level === 1 ? "bg-green-500/10" : ""}>
+                      <TableCell className="text-xs font-semibold">Level {t.level}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">â‰¥ {t.minPoints}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">{t.recognition}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SectorDetailsDialog({ sector }: { sector: Sector }) {
@@ -385,7 +640,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                         )}
                       </TableCell>
                       <TableCell className="text-center text-xs">
-                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "—"}
+                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "â€”"}
                       </TableCell>
                     </TableRow>
                   );
@@ -419,7 +674,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
   );
 }
 
-// ─── User Row ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ User Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function UserRow({ user }: { user: AdminUser }) {
   const { toast } = useToast();
@@ -431,7 +686,7 @@ function UserRow({ user }: { user: AdminUser }) {
     },
     onSuccess: (_, role) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Role updated", description: `${user.username} → ${role}` });
+      toast({ title: "Role updated", description: `${user.username} â†’ ${role}` });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -527,7 +782,7 @@ function UserRow({ user }: { user: AdminUser }) {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function SuperAdmin() {
   const { user } = useAuth();
@@ -603,11 +858,11 @@ export default function SuperAdmin() {
               <Crown className="h-6 w-6 text-amber-400" />
               Super Admin
             </h1>
-            <p className="text-sm text-muted-foreground">Platform management — {user?.email}</p>
+            <p className="text-sm text-muted-foreground">Platform management â€” {user?.email}</p>
           </div>
         </div>
 
-        {/* ─── System Status ─── */}
+        {/* â”€â”€â”€ System Status â”€â”€â”€ */}
         <section>
           <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
             <Server className="h-4 w-4 text-muted-foreground" /> System Status
@@ -618,21 +873,21 @@ export default function SuperAdmin() {
                 <p className="text-xs text-muted-foreground mb-1">API Status</p>
                 <p className="font-semibold text-sm flex items-center gap-1">
                   <span className={`h-2 w-2 rounded-full ${health?.status === "ok" ? "bg-green-500" : "bg-red-500"}`} />
-                  {health?.status ?? "—"}
+                  {health?.status ?? "â€”"}
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Environment</p>
-                <p className="font-semibold text-sm capitalize">{health?.environment ?? "—"}</p>
+                <p className="font-semibold text-sm capitalize">{health?.environment ?? "â€”"}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Uptime</p>
                 <p className="font-semibold text-sm">
-                  {health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "—"}
+                  {health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "â€”"}
                 </p>
               </CardContent>
             </Card>
@@ -645,22 +900,22 @@ export default function SuperAdmin() {
                       <span className={`h-2 w-2 rounded-full ${health.arangodb.connected ? "bg-green-500" : "bg-red-500"}`} />
                       {health.arangodb.connected ? "Connected" : "Down"}
                     </>
-                  ) : "—"}
+                  ) : "â€”"}
                 </p>
               </CardContent>
             </Card>
           </div>
         </section>
 
-        {/* ─── B-BBEE scorecard reference (read-only, from sectorConfig via API) ─── */}
+        {/* â”€â”€â”€ B-BBEE scorecard reference (read-only, from sectorConfig via API) â”€â”€â”€ */}
         <section>
           <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
             <div>
               <h2 className="text-base font-semibold flex items-center gap-2">
-                <Building className="h-4 w-4 text-muted-foreground" /> B-BBEE Scorecard Reference
+                <BookOpen className="h-4 w-4 text-muted-foreground" /> B-BBEE Scorecard Reference
               </h2>
               <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-                Read-only reference from sector config (<span className="font-mono text-[10px]">/api/sectors</span>) — pillar weights, sub-minimums, and level thresholds.
+                Read-only reference from sector config (<span className="font-mono text-[10px]">/api/sectors</span>) â€” pillar weights, sub-minimums, and level thresholds.
               </p>
             </div>
             <Button
@@ -683,123 +938,88 @@ export default function SuperAdmin() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : sectors.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6">No sectors loaded. Use Refresh from Code to seed sector rules.</p>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Sector Code</TableHead>
-                      <TableHead className="text-xs">Type</TableHead>
-                      <TableHead className="text-xs text-right">Total Points</TableHead>
-                      <TableHead className="text-xs">Pillars</TableHead>
-                      <TableHead className="text-xs">Level Thresholds</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sectors.map((sector) => {
-                      const pillarConfigs = safePillarConfigs(sector);
-                      const levelThresholds = safeLevelThresholds(sector);
-                      const isTransportQseSector = isTransportQse(sector);
-                      const activePillars = getActivePillars(pillarConfigs);
-                      const activePillarList = Array.isArray(activePillars) ? activePillars : [];
-                      const levelList = Array.isArray(levelThresholds) ? levelThresholds : [];
+            <>
+              <div className="mb-6">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">All sectors at a glance</p>
+                <CrossSectorTable sectors={sectors} />
+              </div>
 
-                      return (
-                        <TableRow
-                          key={`${sector.code}-${sector.type}`}
-                          className={isTransportQseSector ? "bg-amber-500/10 border-l-2 border-l-amber-500" : ""}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm">{sector.code}</span>
-                              {isTransportQseSector && (
-                                <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700">
-                                  <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
-                                  Verified
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-[10px]">
-                              {sector.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={`font-mono text-sm ${isTransportQseSector ? "text-amber-600 font-semibold" : ""}`}>
-                              {sector.totalPoints}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">
-                                {getPillarCount(pillarConfigs)} pillars
-                              </p>
-                              <div className="flex flex-wrap gap-1">
-                                {activePillarList.slice(0, 4).map((pillar) => (
-                                  <Badge
-                                    key={pillar.name}
-                                    variant="secondary"
-                                    className={`text-[9px] ${isTransportQseSector ? "bg-amber-500/20 text-amber-800" : ""}`}
-                                  >
-                                    {pillar.name.length > 12 ? `${pillar.name.slice(0, 12)}...` : pillar.name}: {pillar.maxPoints}
-                                  </Badge>
-                                ))}
-                                {activePillarList.length > 4 && (
-                                  <Badge variant="outline" className="text-[9px]">
-                                    +{activePillarList.length - 4} more
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1 max-w-[200px]">
-                              {levelList.slice(0, 4).map((t) => (
-                                <span key={t.level} className="text-[10px] text-muted-foreground">
-                                  L{t.level}: {t.minPoints}
-                                </span>
-                              ))}
-                              {levelList.length > 4 && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{levelList.length - 4} more
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <SectorDetailsDialog sector={sector} />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
+              <Tabs defaultValue={sectorTabId(sectors[0])}>
+                <TabsList className="flex-wrap h-auto gap-1 mb-2">
+                  {sectors.map((s) => (
+                    <TabsTrigger key={sectorTabId(s)} value={sectorTabId(s)} className="text-xs">
+                      {sectorTabLabel(s)}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {sectors.map((s) => (
+                  <TabsContent key={sectorTabId(s)} value={sectorTabId(s)}>
+                    <SectorTabView sector={s} />
+                  </TabsContent>
+                ))}
+              </Tabs>
 
-          {/* Transport QSE Verification Note */}
-          <Card className="mt-4 border-amber-500/30 bg-amber-500/5">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
                 <div>
-                  <h4 className="text-sm font-semibold text-amber-700">Transport QSE Verification</h4>
-                  <p className="text-xs text-amber-600 mt-1">
-                    TRANSPORT QSE has exactly <strong>4 pillars</strong> at <strong>25 points each</strong>:
-                    Skills Development, Preferential Procurement, Enterprise Development, and Socio-Economic Development.
-                    Total: <strong>100 points</strong>. Ownership, Management Control, and YES are not applicable (maxPoints: 0).
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">BEE recognition levels</p>
+                  <Card>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[10px]">Level</TableHead>
+                            <TableHead className="text-[10px] text-right">Recognition</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {[
+                            { level: 1, rec: "135%" },
+                            { level: 2, rec: "125%" },
+                            { level: 3, rec: "110%" },
+                            { level: 4, rec: "100%" },
+                            { level: 5, rec: "80%" },
+                            { level: 6, rec: "60%" },
+                            { level: 7, rec: "50%" },
+                            { level: 8, rec: "10%" },
+                          ].map((r) => (
+                            <TableRow key={r.level}>
+                              <TableCell className="text-xs">Level {r.level}</TableCell>
+                              <TableCell className="text-xs text-right font-mono">{r.rec}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Company size thresholds</p>
+                  <Card>
+                    <CardContent className="p-4 space-y-3 text-[11px] text-muted-foreground">
+                      <p><strong className="text-green-600">EME</strong> — turnover under R10M</p>
+                      <p><strong className="text-blue-600">QSE</strong> — R10M to R50M</p>
+                      <p><strong className="text-violet-600">Generic</strong> — over R50M</p>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">YES initiative</p>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-[11px] text-amber-700 font-medium mb-2">Not scored — level improvement only</p>
+                      <p className="text-[11px] text-muted-foreground">Meet YES targets for level boosts per sector rules.</p>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </>
+          )}
         </section>
 
-        {/* ─── User Management ─── */}
+        {/* â”€â”€â”€ User Management â”€â”€â”€ */}
         <section>
           <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" /> User Management
@@ -879,7 +1099,7 @@ export default function SuperAdmin() {
           {totalUsers > limit && (
             <div className="flex items-center justify-between mt-4 text-sm">
               <span className="text-muted-foreground">
-                Showing {skip + 1}–{Math.min(skip + limit, totalUsers)} of {totalUsers}
+                Showing {skip + 1}â€“{Math.min(skip + limit, totalUsers)} of {totalUsers}
               </span>
               <div className="flex gap-2">
                 <Button
