@@ -22,6 +22,12 @@ export interface PillarConfig {
   maxPoints: number;
   hasSubMinimum: boolean;
   subMinimumPercent: number;
+  /**
+   * If set, this pillar belongs to a "choose one" elective group.
+   * Only the single highest-scoring pillar in the group counts toward the total.
+   * Transport QSE uses 'transport_qse_elective' for Skills Dev / PP / Enterprise Dev / SED.
+   */
+  chooseOneGroup?: string;
 }
 
 export interface OwnershipTargets {
@@ -213,10 +219,11 @@ const TRANSPORT_LARGE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognit
   recognition,
 }));
 
-// Transport Sector QSE — 4 × 25-point pillars = 100 total (docs/Transport Codes.xlsx sheet2)
+// Transport Sector QSE — 107 total (82 compulsory + 25 chosen elective)
+// Thresholds scaled proportionally from STANDARD_LEVELS (base 120) to 107.
 const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognition }) => ({
   level,
-  minPoints: Math.round((minPoints * 100) / 120 * 100) / 100,
+  minPoints: Math.round((minPoints * 107) / 120 * 100) / 100,
   recognition,
 }));
 
@@ -873,51 +880,76 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 // Verification sheet1: 24+(11+18)+15+20+15+5 = 108 (toolkit labels MC and EE separately; engine reports one management pillar max 29)
 
 // ---------------------------------------------------------------------------
-// Transport Sector — QSE (docs/Transport Codes.xlsx sheet2)
-// Entities measure exactly FOUR elements. The four equal-weight elements (each 25 pts)
-// are Skills Development, Preferential Procurement, Enterprise Development and SED = 100 total.
-// Ownership / MC / EE and YES are not measured in this scorecard type.
+// Transport Sector — QSE (docs/Transport Codes.xlsx "Road Freight QSE" sheet)
+//
+// Structure: 3 compulsory pillars (Ownership 28 + MC 27 + EE 27 = 82 pts)
+//            + choose ONE of 4 elective pillars (Skills Dev / PP / Enterprise Dev / SED, each 25 pts)
+//            = 107 total.
+//
+// NOTE: Choose ONE of the 4 elective pillars (Skills Dev, PP, Enterprise Dev, SED) —
+//       only that pillar's 25 pts count toward the 107 total. Indicated by chooseOneGroup
+//       = 'transport_qse_elective' on each elective pillar.
+//
+// Source: docs/Transport Codes.xlsx — "Road Freight QSE" sheet
+// Ownership 28: voting 6 + EI 9 + fulfilment 1 + net value 9 + bonus women 2 + bonus ESOP 1
+// MC 27: top mgmt 25 + bonus black women 2
+// EE 27: black mgmt 7.5 + black women mgmt 7.5 + black employees 5 + black women employees 5 + EAP bonus 2
 // ---------------------------------------------------------------------------
 
 export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
   sectorName: 'Transport Sector Code (QSE)',
   scorecardType: 'QSE',
-  totalMaxPoints: 100, // 4 × 25 (Skills + PP + ED + SED); ownership/MC/EE not measured
+  // 82 compulsory (Ownership 28 + MC 27 + EE 27) + 1 chosen elective of 4 × 25 = 107
+  totalMaxPoints: 107,
   pillarConfigs: {
-    ownership: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },          // Not measured (QSE pick-4)
-    managementControl: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },   // Not measured
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },    // Not measured
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not applicable
-    enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },       // Not applicable for Transport
+    // --- Compulsory pillars ---
+    ownership: { maxPoints: 28, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    // --- Elective pillars (choose ONE; only the chosen 25 pts count toward 107) ---
+    skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not a standalone elective
+    enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
+      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; fulfilment = 1 pt (newEntrants);
+      // net value 60% = 9 pts; bonus black women 10% = 2 pts; bonus ESOP/BBOS/co-ops 10% = 1 pt
+      // Total: 6+9+1+9+2+1 = 28 ✓
       votingRightsTarget: 0.25, votingRightsMaxPts: 6,
-      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,      // bonus: black women
       economicInterestTarget: 0.25, economicInterestMaxPts: 9,
-      womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      womenEITarget: 0.10, womenEIMaxPts: 1,              // bonus: ESOP/BBOS/co-ops
+      netValueMaxPts: 9,                                   // net value 60%
+      newEntrantsMaxPts: 1,                                // ownership fulfilment
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 0,
-      boardBWTarget: 0.25, boardBWMaxPts: 0,
-      execBlackTarget: 0.501, execBlackMaxPts: 0,
-      execBWTarget: 0.25, execBWMaxPts: 0,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 0,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 0,
+      // Top management black 50.1% = 25 pts; bonus black women 25% = 2 pts; Total: 27 ✓
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,               // bonus: black women at top mgmt
+      execBlackTarget: 0.501, execBlackMaxPts: 25,         // top management black 50.1%
+      execBWTarget: 0, execBWMaxPts: 0,
+      otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+      otherExecBWTarget: 0, otherExecBWMaxPts: 0,
       seniorMaxPts: 0, seniorBWMaxPts: 0,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
-      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 0, disabledTarget: 0.02,
+      // Black mgmt as % of all mgmt 40% = 7.5 pts; black women mgmt 20% = 7.5 pts
+      // Black employees as % of total 60% = 5 pts; black women employees 30% = 5 pts
+      // Bonus: meet/exceed EAP = 2 pts; Total: 7.5+7.5+5+5+2 = 27 ✓
+      seniorMaxPts: 15,      // black mgmt 7.5 + black women mgmt 7.5
+      middleMaxPts: 10,      // black employees 5 + black women employees 5
+      juniorMaxPts: 0,
+      disabledMaxPts: 2,     // EAP bonus
+      disabledTarget: 0,
     },
+    // Skills elective: 2% leviable → 12.5 pts; 1% black women → 12.5 pts
     skills: {
       learningProgrammesMaxPts: 12.5,
       bursaryMaxPts: 12.5,
@@ -930,17 +962,20 @@ export const TRANSPORT_QSE: SectorConfig = {
       learnershipTargetPercent: 0,
       absorptionTargetPercent: 0,
     },
+    // PP elective: 40% B-BBEE spend → 25 pts (single indicator)
     procurement: {
       allSuppliersTarget: 0.40, allSuppliersMaxPts: 25,
       qseTarget: 0, qseMaxPts: 0, emeTarget: 0, emeMaxPts: 0,
       bo51Target: 0, bo51MaxPts: 0, bwo30Target: 0, bwo30MaxPts: 0,
       dgTarget: 0, dgMaxPts: 0,
     },
+    // Enterprise Dev elective: 2% NPAT → 25 pts
     esd: {
       sdPercent: 0, sdMaxPts: 0,
       edPercent: 2.0, edMaxPts: 25,
       edGraduationBonus: 0, edJobsBonus: 0,
     },
+    // SED elective: 1% NPAT → 25 pts
     sed: { spendPercent: 1.0, maxPts: 25 },
   },
   levelThresholds: TRANSPORT_QSE_LEVELS,
@@ -949,7 +984,11 @@ export const TRANSPORT_QSE: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// Verified: 4 equal-weight pillars × 25 = 100 (Skills + PP + ED + SED). Ownership/MC/EE/YES not measured.
+// Verified against docs/Transport Codes.xlsx "Road Freight QSE":
+// Compulsory: Ownership 28 + MC 27 + EE 27 = 82
+// Elective (choose ONE of 4): Skills Dev 25 / PP 25 / Enterprise Dev 25 / SED 25
+// Grand total: 82 + 25 = 107 ✓
+// Level thresholds scaled: STANDARD_LEVELS × (107/120)
 
 // ---------------------------------------------------------------------------
 // Construction Sector configs (May 2026)
