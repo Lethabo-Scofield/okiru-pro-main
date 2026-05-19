@@ -47,3 +47,12 @@ export {
 } from "./tenant.js";
 
 export { validateBody, validateQuery } from "./validate.js";
+
+export {
+  getEffectiveRoles,
+  getDataScopeRoles,
+  hasAnyRole,
+  hasDataScopeRole,
+  isPlatformAdmin,
+  type RoleCarrier,
+} from "./roles.js";

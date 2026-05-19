@@ -648,6 +648,7 @@ function toUser(doc: any): User | undefined {
     fullName: obj.fullName || null,
     email: obj.email || null,
     role: obj.role || null,
+    secondaryRoles: Array.isArray(obj.secondaryRoles) ? obj.secondaryRoles : [],
     organizationId: obj.organizationId || null,
     organizationName: obj.organizationName || null,
     profilePicture: obj.profilePicture || null,

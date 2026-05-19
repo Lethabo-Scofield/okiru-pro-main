@@ -1082,8 +1082,11 @@ async function findCertificateById(id: string): Promise<{ source: 'mongo'; doc: 
 }
 
 function isAdminSession(req: Request): boolean {
-  const role = (req.session as any).userData?.role;
-  return role === 'admin' || role === 'super_admin';
+  const userData = (req.session as any).userData as { role?: string; secondaryRoles?: string[] } | undefined;
+  const roles = new Set<string>();
+  if (userData?.role) roles.add(userData.role);
+  for (const r of userData?.secondaryRoles ?? []) if (r) roles.add(r);
+  return roles.has('admin') || roles.has('super_admin');
 }
 
 // ============================================================================

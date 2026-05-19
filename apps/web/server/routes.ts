@@ -22,6 +22,8 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { buildClientVisibilityFilter } from "./roles";
 
 const logger = createLogger("Routes");
 
@@ -624,10 +626,6 @@ export async function registerRoutes(
       const userId = (req.session as any)?.userId;
       if (!userId) {
         return res.status(401).json({ message: "Not authenticated" });
-      }
-      const cached = (req.session as any)?.userData;
-      if (cached) {
-        return res.json({ user: cached });
       }
       const user = await storage.getUserById(userId);
       if (!user) {
@@ -1455,9 +1453,10 @@ export async function registerRoutes(
 
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUserById((req.session as any).userId);
-      const filter: any = {};
-      if (user?.organizationId) filter.organizationId = user.organizationId;
+      const userId = (req.session as any).userId;
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+      const filter = buildClientVisibilityFilter(userId, user);
       const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
       res.json(clients.map((c: any) => c.toJSON()));
     } catch (error: any) {
@@ -1474,6 +1473,7 @@ export async function registerRoutes(
       const user = await storage.getUserById(userId);
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
       const client = await ClientModel.create({
+        id: clientId,
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
@@ -1551,6 +1551,27 @@ export async function registerRoutes(
           industrySector: c.industrySector,
           eapProvince: c.eapProvince || "National",
           industryNorm: undefined,
+          // Extended Foundation Layer fields
+          sectorCode: c.sectorCode || 'RCOGP',
+          companySize: c.companySize || 'Generic',
+          industry: c.industry || 'Other',
+          registrationNumber: c.registrationNumber || '',
+          tradingName: c.tradingName || '',
+          vatNumber: c.vatNumber || '',
+          taxNumber: c.taxNumber || '',
+          physicalAddress: c.physicalAddress || '',
+          postalAddress: c.postalAddress || '',
+          contactPerson: c.contactPerson || '',
+          contactEmail: c.contactEmail || '',
+          contactPhone: c.contactPhone || '',
+          annualTurnover: c.annualTurnover || 0,
+          numberOfEmployees: c.numberOfEmployees || 0,
+          measurementPeriodStart: c.measurementPeriodStart || null,
+          measurementPeriodEnd: c.measurementPeriodEnd || null,
+          beeCertificateNumber: c.beeCertificateNumber || '',
+          beeCertificateExpiry: c.beeCertificateExpiry || '',
+          beeCertificateLevel: c.beeCertificateLevel || null,
+          verificationAgency: c.verificationAgency || '',
         },
         ownership: {
           id: `own-${clientId}`,
@@ -3040,6 +3061,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   registerWorkbookRoutes(app);
+  registerFeedbackRoutes(app, requireAuth);
 
   logger.info("Route registration completed");
   return httpServer;

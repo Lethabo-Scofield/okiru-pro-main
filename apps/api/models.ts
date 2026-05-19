@@ -23,6 +23,9 @@ const organizationSchema = new Schema({
 
 const clientSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
+  /** Web toolkit business id (same as `id` when created via Information Request). */
+  clientId: { type: String, default: null, index: true, sparse: true },
+  createdByUserId: { type: String, default: null, index: true },
   organizationId: { type: String, required: true, index: true },
   name: { type: String, required: true },
   financialYear: { type: String, required: true },

@@ -758,6 +758,7 @@ Respond ONLY with a valid JSON array.`;
         const user = await UserModel.findById(userId);
         const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
         const client = await ClientModel.create({
+          id: clientId,
           clientId,
           name,
           financialYear: financialYear || new Date().getFullYear().toString(),
