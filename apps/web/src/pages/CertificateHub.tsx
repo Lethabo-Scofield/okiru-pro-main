@@ -6,7 +6,7 @@ import {
   Download, Loader2, AlertCircle, Search, X, ChevronDown,
   RefreshCw, ShieldCheck, Clock, AlertTriangle, Award,
   Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
-  Building2, Hash, Users2, Percent, CalendarClock, Info, Eye,
+  Building2, Hash, Users2, Percent, CalendarClock, Info, Eye, ExternalLink,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
@@ -1073,7 +1073,48 @@ function CertRow({
   );
 }
 
+function certPreviewKind(fileName: string): 'pdf' | 'image' | 'other' {
+  if (/\.pdf$/i.test(fileName)) return 'pdf';
+  if (/\.(png|jpe?g|gif|webp)$/i.test(fileName)) return 'image';
+  return 'other';
+}
+
 function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: () => void }) {
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(true);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  const displayName = cert.fileName || cert.name;
+  const kind = certPreviewKind(displayName);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingDoc(true);
+    setDocError(null);
+    setDocUrl(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(cert.name)}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ message: 'Could not load document' }));
+          throw new Error(body.message || `Error ${res.status}`);
+        }
+        const { url } = await res.json();
+        if (!url) throw new Error('No preview URL returned');
+        if (!cancelled) setDocUrl(url);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setDocError(err instanceof Error ? err.message : 'Could not load document');
+        }
+      } finally {
+        if (!cancelled) setLoadingDoc(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [cert.name]);
+
   const statusMap = {
     valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
     expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring Soon' },
@@ -1084,104 +1125,131 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden"
+        className="w-full max-w-5xl max-h-[90vh] rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-[#a5b4fc]" />
-            <h2 className="text-[15px] font-semibold text-white">Certificate Details</h2>
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldCheck className="h-4 w-4 text-[#a5b4fc] shrink-0" />
+            <h2 className="text-[15px] font-semibold text-white truncate">{cert.companyName}</h2>
           </div>
-          <button onClick={onClose} className="text-[#636366] hover:text-white transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-5 py-5 space-y-4">
-          {/* Company name + status */}
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] text-[#636366] uppercase tracking-wider mb-1">Company</p>
-              <p className="text-[18px] font-semibold text-white leading-snug">{cert.companyName}</p>
-            </div>
-            <span
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium tracking-wide uppercase mt-1"
-              style={{ color: s.color, background: s.bg }}
-            >
-              {cert.status === 'valid' && <ShieldCheck className="h-3 w-3" />}
-              {cert.status === 'expiring' && <Clock className="h-3 w-3" />}
-              {cert.status === 'expired' && <AlertTriangle className="h-3 w-3" />}
-              {s.label}
-            </span>
-          </div>
-
-          {/* Verified badge */}
-          {cert.verified && (
-            <div
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium"
-              style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.1)' }}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Verified by administrator
-            </div>
-          )}
-
-          {/* Grid of details */}
-          <div className="grid grid-cols-2 gap-3">
-            <PreviewField label="VAT Number" value={cert.vatNumber ?? '-'} icon={<Hash className="h-3.5 w-3.5" />} />
-            <PreviewField label="Company Size" value={cert.companySize ?? '-'} icon={<Building2 className="h-3.5 w-3.5" />} />
-            <PreviewField
-              label="B-BBEE Level"
-              value={cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : '-'}
-              icon={<Award className="h-3.5 w-3.5" />}
-            />
-            <PreviewField
-              label="Expiry Date"
-              value={formatExpiry(cert.expiryDate)}
-              icon={<CalendarClock className="h-3.5 w-3.5" />}
-            />
-            <PreviewField
-              label="Black Ownership"
-              value={formatPct(cert.blackOwnership)}
-              icon={<Percent className="h-3.5 w-3.5" />}
-            />
-            <PreviewField
-              label="Black Women Ownership"
-              value={formatPct(cert.blackWomenOwnership)}
-              icon={<Users2 className="h-3.5 w-3.5" />}
-            />
-          </div>
-
-          {/* File name */}
-          <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5 flex items-center gap-2">
-            <FileText className="h-3.5 w-3.5 text-[#636366] shrink-0" />
-            <span className="text-[12px] text-[#8e8e93] truncate">{cert.fileName || cert.name}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {docUrl && (
+              <a
+                href={docUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-[#5e9bff] hover:underline"
+              >
+                Open <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+            <button onClick={onClose} className="text-[#636366] hover:text-white transition-colors">
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {cert.slug && (
-            <Link
-              href={`/certificates/${cert.slug}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#a5b4fc] hover:text-white hover:bg-white/[0.06] transition-colors"
-            >
-              View full page
-            </Link>
-          )}
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
-          >
-            Close
-          </button>
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+          <div className="flex flex-col min-h-[240px] lg:min-h-0 lg:w-1/2 shrink-0 bg-[#0d0d0d] border-b lg:border-b-0 lg:border-r border-[#2c2c2e]">
+            <div className="px-4 py-2.5 flex items-center gap-2 shrink-0 border-b border-[#2c2c2e]">
+              <FileText className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-sm font-medium text-white truncate">{displayName}</span>
+            </div>
+            <div className="flex-1 min-h-[280px] flex flex-col">
+              {loadingDoc && (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#636366]" />
+                </div>
+              )}
+              {!loadingDoc && docError && (
+                <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[#8e8e93]">
+                  {docError}
+                </div>
+              )}
+              {!loadingDoc && !docError && docUrl && kind === 'pdf' && (
+                <iframe title={displayName} src={docUrl} className="w-full flex-1 min-h-[320px] bg-[#111]" />
+              )}
+              {!loadingDoc && !docError && docUrl && kind === 'image' && (
+                <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                  <img src={docUrl} alt={displayName} className="max-w-full max-h-full object-contain" />
+                </div>
+              )}
+              {!loadingDoc && !docError && docUrl && kind === 'other' && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[#8e8e93]">
+                  <p>Inline preview isn&apos;t available for this file type.</p>
+                  <a href={docUrl} target="_blank" rel="noreferrer" className="text-[#5e9bff] font-medium hover:underline">
+                    Open or download file
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] text-[#636366] uppercase tracking-wider mb-1">Status</p>
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium tracking-wide uppercase"
+                  style={{ color: s.color, background: s.bg }}
+                >
+                  {cert.status === 'valid' && <ShieldCheck className="h-3 w-3" />}
+                  {cert.status === 'expiring' && <Clock className="h-3 w-3" />}
+                  {cert.status === 'expired' && <AlertTriangle className="h-3 w-3" />}
+                  {s.label}
+                </span>
+              </div>
+              {cert.verified && (
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium"
+                  style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.1)' }}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Verified
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <PreviewField label="VAT Number" value={cert.vatNumber ?? '-'} icon={<Hash className="h-3.5 w-3.5" />} />
+              <PreviewField label="Company Size" value={cert.companySize ?? '-'} icon={<Building2 className="h-3.5 w-3.5" />} />
+              <PreviewField
+                label="B-BBEE Level"
+                value={cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : '-'}
+                icon={<Award className="h-3.5 w-3.5" />}
+              />
+              <PreviewField
+                label="Expiry Date"
+                value={formatExpiry(cert.expiryDate)}
+                icon={<CalendarClock className="h-3.5 w-3.5" />}
+              />
+              <PreviewField
+                label="Black Ownership"
+                value={formatPct(cert.blackOwnership)}
+                icon={<Percent className="h-3.5 w-3.5" />}
+              />
+              <PreviewField
+                label="Black Women Ownership"
+                value={formatPct(cert.blackWomenOwnership)}
+                icon={<Users2 className="h-3.5 w-3.5" />}
+              />
+            </div>
+
+            {cert.slug && (
+              <Link
+                href={`/certificates/${cert.slug}`}
+                className="inline-flex items-center gap-1.5 text-[12px] text-[#a5b4fc] hover:text-white hover:underline"
+              >
+                View public certificate page
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>
