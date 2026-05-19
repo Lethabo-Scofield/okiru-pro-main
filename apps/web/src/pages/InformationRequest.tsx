@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronRight, Download, Loader2, Save, Building2, Search, Send, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Download, Loader2, Save, Building2, Search, Send, CheckCircle2, Pencil, UploadCloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
 import { AppNavBack } from "@/components/AppNavBack";
@@ -232,6 +232,7 @@ function MetaForm({
 
 function WorkbookView({ company, onBack }: { company: Company; onBack: () => void }) {
   const companyId = company.clientId || company.id || "";
+  const [, navigate] = useLocation();
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
   const [activeKey, setActiveKey] = useState<string>("company-information");
   const [loading, setLoading] = useState(true);
@@ -242,7 +243,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   // Per-section debounce timers + pending payloads so editing section B never
   // discards a pending save for section A.
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); 
   const pendingPayloads = useRef<
     Record<string, { rows?: Row[]; meta?: Record<string, unknown> }>
   >({});
@@ -537,6 +538,27 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           </button>
         </div>
       </div>
+
+      {/* Gap 5: Start Assessment shortcuts after submit */}
+      {submittedAt && (
+        <div className="flex flex-wrap items-center gap-2 px-1 pb-2 pt-0">
+          <span className="text-[11px] text-[#636366] shrink-0">Start assessment:</span>
+          <button
+            onClick={() => navigate(`/processor?new=true&client=${encodeURIComponent(companyId)}&mode=build`)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm border border-[#2c2c2e]"
+            data-testid="button-open-manual-build"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Open in Manual Build
+          </button>
+          <button
+            onClick={() => navigate(`/processor?new=true&client=${encodeURIComponent(companyId)}&mode=upload`)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm border border-[#2c2c2e]"
+            data-testid="button-open-upload-extract"
+          >
+            <UploadCloud className="h-3.5 w-3.5" /> Open in Upload &amp; Extract
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-12 gap-6">
         <aside className="col-span-12 lg:col-span-3">

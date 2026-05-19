@@ -153,6 +153,7 @@ export interface User {
   fullName: string | null;
   email: string | null;
   role: string | null;
+  secondaryRoles?: string[];
   organizationId: string | null;
   organizationName: string | null;
   profilePicture: string | null;
@@ -247,6 +248,7 @@ const userSchema = new Schema(
     fullName: { type: String, default: null },
     email: { type: String, default: null },
     role: { type: String, default: "user" },
+    secondaryRoles: { type: [String], default: [] },
     organizationId: { type: String, default: null },
     organizationName: { type: String, default: null },
     profilePicture: { type: String, default: null },
@@ -452,6 +454,8 @@ export interface InsertClient {
 }
 
 const clientSchema = new Schema({
+  /** Aligns with API `clients.id` unique index — set equal to clientId on create. */
+  id: { type: String, default: null, sparse: true, unique: true },
   clientId: { type: String, required: true, unique: true, index: true },
   name: { type: String, required: true },
   financialYear: { type: String, default: () => new Date().getFullYear().toString() },

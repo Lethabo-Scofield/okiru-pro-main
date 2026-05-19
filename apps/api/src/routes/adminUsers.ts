@@ -14,7 +14,7 @@ import { v4 as uuid } from "uuid";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { storage } from "../../storage.js";
 import { UserModel, OrganizationModel, ProcessorSessionModel } from "../../models.js";
-import { invalidatePermissionsCache, recordAudit } from "../security/index.js";
+import { invalidatePermissionsCache, recordAudit, getEffectiveRoles } from "../security/index.js";
 import { createLogger } from "../logger.js";
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
@@ -144,10 +144,24 @@ router.patch(
       if (!target) return res.status(404).json({ message: "User not found" });
 
       const previousRole = target.role;
+      const update: Record<string, unknown> = { role };
+      // Preserve prior role for data scoping when promoting to super_admin.
+      if (role === "super_admin" && previousRole && previousRole !== "super_admin") {
+        const existing = getEffectiveRoles(target as { role?: string; secondaryRoles?: string[] });
+        const secondary = new Set(
+          [...((target as { secondaryRoles?: string[] }).secondaryRoles ?? []), previousRole].filter(
+            (r) => r && r !== "super_admin",
+          ),
+        );
+        for (const r of existing) {
+          if (r !== "super_admin") secondary.add(r);
+        }
+        update.secondaryRoles = Array.from(secondary);
+      }
 
       const updated = await UserModel.findOneAndUpdate(
         { id },
-        { $set: { role } },
+        { $set: update },
         { new: true, projection: { password: 0, __v: 0, _id: 0 } },
       ).lean();
 
