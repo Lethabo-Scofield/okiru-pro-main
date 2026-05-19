@@ -254,20 +254,23 @@ export const STANDARD_RECOGNITION_TABLE: RecognitionLevel[] = [
 // Reference: Schedule 4.3 of the Codes
 // ---------------------------------------------------------------------------
 
+// ESD Benefit Factors verified against SCORECARD_GROUND_TRUTH.md Section 13
+// "ESD" columns (sdFactor/edFactor) = ESD applies to SD and ED
+// SED-specific factors differ but are handled separately in calcSed()
 const STANDARD_BENEFIT_FACTORS: BenefitFactor[] = [
-  { contributionType: 'grant', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'direct_cost', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'discounts', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'overhead_costs', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'interest_free_loan', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'standard_loan', sdFactor: 0.7, edFactor: 0.7 },
-  { contributionType: 'guarantees', sdFactor: 0.03, edFactor: 0.03 },
-  { contributionType: 'lower_interest_rate', sdFactor: 0.7, edFactor: 0.7 },
-  { contributionType: 'minority_investment', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'professional_services_free', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'professional_services_discounted', sdFactor: 0.8, edFactor: 0.8 },
-  { contributionType: 'employee_time', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'shorter_payment_periods', sdFactor: 0.7, edFactor: 0.0 },
+  { contributionType: 'grant', sdFactor: 1.0, edFactor: 1.0 },          // Grant: 100% ✓
+  { contributionType: 'direct_cost', sdFactor: 1.0, edFactor: 1.0 },    // Direct Cost: 100% ✓
+  { contributionType: 'discounts', sdFactor: 1.0, edFactor: 1.0 },      // Discounts: 100% ✓
+  { contributionType: 'overhead_costs', sdFactor: 0.7, edFactor: 0.7 }, // Overhead: 70% (ESD); SED=80% handled separately
+  { contributionType: 'interest_free_loan', sdFactor: 0.7, edFactor: 0.7 }, // Interest-free loan: 70%
+  { contributionType: 'standard_loan', sdFactor: 0.5, edFactor: 0.5 },  // Standard loan (no security): 50%
+  { contributionType: 'guarantees', sdFactor: 0.03, edFactor: 0.03 },   // Guarantees: 3% of value ✓
+  { contributionType: 'lower_interest_rate', sdFactor: 0.0, edFactor: 0.0 }, // Prime - Actual rate (variable, calculated at runtime)
+  { contributionType: 'minority_investment', sdFactor: 0.7, edFactor: 0.7 }, // Minority investment in EME/QSE: 70%
+  { contributionType: 'professional_services_free', sdFactor: 0.6, edFactor: 0.6 }, // Prof services (no cost): 60% ESD
+  { contributionType: 'professional_services_discounted', sdFactor: 0.6, edFactor: 0.6 }, // Prof services (discount): 60% ESD
+  { contributionType: 'employee_time', sdFactor: 0.6, edFactor: 0.6 },  // Employee time/secondment: 60% ESD
+  { contributionType: 'shorter_payment_periods', sdFactor: 0.15, edFactor: 0.0 }, // Shorter payment terms: 15% of invoice (SD only)
   { contributionType: 'equity_investment', sdFactor: 0.0, edFactor: 1.0 },
 ];
 
@@ -427,11 +430,12 @@ export const ICT_GENERIC: SectorConfig = {
   },
   targets: {
     ownership: {
-      votingRightsTarget: 0.25, votingRightsMaxPts: 5, // Generic uses 25% + 1 vote
+      // GROUND TRUTH Section 4: ICT voting target = 30% (not 25%)
+      votingRightsTarget: 0.30, votingRightsMaxPts: 5,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
       economicInterestTarget: 0.25, economicInterestMaxPts: 5,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3, // 2% designated group
+      netValueMaxPts: 8, newEntrantsMaxPts: 3,
     },
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3, // 50% target
@@ -512,20 +516,20 @@ export const FSC_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // FSC has different Other Exec targets: 75%/38% instead of 60%/30%
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
-      boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.50, execBlackMaxPts: 3,
-      execBWTarget: 0.25, execBWMaxPts: 1, // 25% (NOT 30%)
-      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10, // 75% (NOT 60%)
-      otherExecBWTarget: 0.38, otherExecBWMaxPts: 2, // 38% (NOT 30%)
+      // GROUND TRUTH Section 5: FSC MC breakdown: board 2+1, exec 2+1, other exec 10+4 = 20; + disabled 1 = 21
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,  // board: 2 pts black
+      boardBWTarget: 0.25, boardBWMaxPts: 1,         // board: 1 pt women
+      execBlackTarget: 0.50, execBlackMaxPts: 2,     // exec: 2 pts black
+      execBWTarget: 0.25, execBWMaxPts: 1,           // exec: 1 pt women
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10, // other exec: 10 pts (75%)
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,        // other exec: 4 pts women (38%)
       seniorMaxPts: 0, seniorBWMaxPts: 0,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 0, disabledTarget: 0.02, // 2% (NOT 3%)
+      disabledMaxPts: 1, disabledTarget: 0.02, // FSC: 1 pt disabled (NOT 0)
     },
     skills: {
       learningProgrammesMaxPts: 6,
@@ -556,7 +560,8 @@ export const FSC_GENERIC: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// FSC Generic verified from Excel: 25+21+23+24+10+9+8 = 120 (Others sub-sector)
+// FSC Generic verified: 25+21+23+24+10+9+8 = 120 (Others sub-sector) ✓
+// MC breakdown (Section 5): board 2+1, exec 2+1, other exec 10+4, disabled 1 = 21 ✓
 // FSC uses scaled level thresholds: L1=95.5, L2=90.7, ... L8=38.2
 // FSC has sub-variants: Banks, Long-Term Insurers, Short-Term Insurers, Others
 // EF is "NOT Applicable" for Others sub-sector
@@ -948,6 +953,13 @@ export const TRANSPORT_QSE: SectorConfig = {
 
 // ---------------------------------------------------------------------------
 // Construction Sector configs (May 2026)
+//
+// ⚠️  UNVERIFIED — Construction sector totals (QSE=110, Contractor=123, BEP=123)
+// are NOT present in docs/SCORECARD_GROUND_TRUTH.md and have NOT been verified
+// against any official Construction Sector Code Excel toolkit.
+// These values were derived from a Construction Sector Code document supplied
+// alongside the core toolkits but require expert verification before use.
+// Do NOT rely on these for compliance reporting until verified.
 //
 // Construction uses an indicator-level scoring engine — see
 // `pipeline/constructionIndicators.ts` and `pipeline/constructionScoring.ts`.

@@ -306,7 +306,7 @@ function sectorTabLabel(sector: Sector): string {
   return `${code} ${type}`.trim();
 }
 
-type TargetRow = { criteria: string; points: number; target: string; isBonus?: boolean };
+type TargetRow = { criteria: string; points: number; target: string; formula: string; isBonus?: boolean };
 
 const PILLAR_TARGET_KEY: Record<string, string> = {
   ownership: "ownership",
@@ -335,6 +335,60 @@ function formatTargetValue(key: string, value: unknown): string {
   return String(value);
 }
 
+// Per-pillar scoring formulas for expert reference
+const PILLAR_FORMULAS: Record<string, Record<string, string>> = {
+  ownership: {
+    votingRightsMaxPts: "min(actual Black voting % / target%, 1) × max_points",
+    womenVotingMaxPts: "min(actual Black women voting % / target%, 1) × max_points",
+    economicInterestMaxPts: "min(actual Black EI % / target%, 1) × max_points",
+    womenEIMaxPts: "min(actual Black women EI % / target%, 1) × max_points",
+    netValueMaxPts: "Year-graduated factor × Black EI% / 100% × 8 pts",
+    newEntrantsMaxPts: "Full points if any Black new entrant shareholder present",
+  },
+  managementControl: {
+    boardBlackMaxPts: "min(Black board members / total board, target%) / target% × max_points",
+    boardBWMaxPts: "min(Black women board members / total board, target%) / target% × max_points",
+    execBlackMaxPts: "min(Black exec directors / total exec, 50%) / 50% × max_points",
+    execBWMaxPts: "min(Black women exec directors / total exec, 25%) / 25% × max_points",
+    otherExecBlackMaxPts: "min(Black other exec mgmt / total other exec, target%) / target% × max_points",
+    otherExecBWMaxPts: "min(Black women other exec / total other exec, target%) / target% × max_points",
+    seniorMaxPts: "min(Black senior mgmt / total senior, EAP%) / EAP% × max_points",
+    middleMaxPts: "min(Black middle mgmt / total middle, EAP%) / EAP% × max_points",
+    juniorMaxPts: "min(Black junior mgmt / total junior, EAP%) / EAP% × max_points",
+    disabledMaxPts: "min(Black disabled employees / total employees, 2%) / 2% × max_points",
+  },
+  skills: {
+    learningProgrammesMaxPts: "min(recognised Black training spend / leviable amount, target%) / target% × max_points",
+    bursaryMaxPts: "min(Black bursary spend / leviable amount, target%) / target% × max_points",
+    disabledLearningMaxPts: "min(Black disabled training spend / leviable amount, target%) / target% × max_points",
+    learnershipsMaxPts: "min(Black learners in B/C/D programmes / headcount, target%) / target% × max_points",
+    absorptionMaxPts: "min(absorbed learners / total learners, 100%) × max_points",
+  },
+  procurement: {
+    allSuppliersMaxPts: "Σ(supplier spend × BEE recognition%) / TMPS / 80% × 5 pts",
+    qseMaxPts: "Σ(QSE spend) / TMPS / 15% × max_points",
+    emeMaxPts: "Σ(EME spend) / TMPS / 15% × max_points",
+    bo51MaxPts: "Σ(≥51% Black-owned spend) / TMPS / 50% × max_points",
+    bwo30MaxPts: "Σ(≥30% Black women-owned spend) / TMPS / 12% × max_points",
+    dgMaxPts: "Σ(designated group spend) / TMPS / 2% × max_points  [bonus row]",
+  },
+  esd: {
+    sdMaxPts: "Σ(contribution × benefit factor) / (2% of NPAT) × max_points",
+    edMaxPts: "Σ(contribution × benefit factor) / (1% of NPAT) × max_points",
+    edGraduationBonus: "+1 pt if ≥1 SD beneficiary graduated to self-sufficiency",
+    edJobsBonus: "+1 pt if ≥1 permanent job created by ED beneficiary",
+  },
+  sed: {
+    maxPts: "Σ(qualifying SED spend) / (1% of NPAT) × max_points",
+  },
+};
+
+function getPillarFormula(pillarKey: string, fieldKey: string): string {
+  const formulaKey = PILLAR_TARGET_KEY[pillarKey] ?? pillarKey;
+  const bucket = PILLAR_FORMULAS[formulaKey] ?? PILLAR_FORMULAS[pillarKey] ?? {};
+  return bucket[fieldKey] ?? "min(actual / target, 1) × max_points";
+}
+
 function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
   const targets = sector.targets;
   if (!targets || typeof targets !== "object") return [];
@@ -353,6 +407,7 @@ function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
       criteria: humanizeKey(k),
       points: v,
       target: formatTargetValue(targetKey, targetVal ?? (bucket as Record<string, unknown>).spendPercent),
+      formula: getPillarFormula(pillarKey, k),
       isBonus: k.includes("Bonus"),
     });
   }
@@ -444,31 +499,44 @@ function ApiPillarCard({
       {open && hasDetail && (
         <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
           {targetRows.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-[10px]">Indicator</TableHead>
-                  <TableHead className="text-[10px] text-center w-16">Points</TableHead>
-                  <TableHead className="text-[10px] w-36">Target</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {targetRows.map((el, i) => (
-                  <TableRow key={i} className={el.isBonus ? "bg-green-500/5" : ""}>
-                    <TableCell className="text-xs">
-                      {el.criteria}
-                      {el.isBonus && (
-                        <Badge variant="outline" className="ml-2 text-[9px] border-green-500/40 text-green-600">
-                          bonus
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-center font-mono font-semibold">{el.points}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{el.target}</TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px]">Indicator</TableHead>
+                    <TableHead className="text-[10px] text-center w-14">Points</TableHead>
+                    <TableHead className="text-[10px] w-24">Target</TableHead>
+                    <TableHead className="text-[10px]">Formula / Calculation</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {targetRows.map((el, i) => (
+                    <TableRow key={i} className={el.isBonus ? "bg-green-500/5" : ""}>
+                      <TableCell className="text-xs">
+                        {el.criteria}
+                        {el.isBonus && (
+                          <Badge variant="outline" className="ml-2 text-[9px] border-green-500/40 text-green-600">
+                            bonus
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-center font-mono font-semibold">{el.points}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{el.target}</TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground font-mono leading-relaxed">{el.formula}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {config.hasSubMinimum && (
+            <div className="flex items-start gap-2 p-2 rounded bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-700">
+              <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+              <span>
+                <strong>Sub-minimum rule:</strong> If scored points fall below {config.subMinimumPercent}% of max points,
+                the B-BBEE level is discounted by one level (e.g. Level 3 → Level 4).
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -476,9 +544,48 @@ function ApiPillarCard({
   );
 }
 
+const SECTOR_CALC_METHODS: Record<string, { levelNote: string; subMinNote: string; npatNote: string }> = {
+  "RCOGP-Generic": {
+    levelNote: "Standard scale: 100+ → L1, 95–99 → L2, 90–94 → L3, 80–89 → L4, 75–79 → L5, 70–74 → L6, 55–69 → L7, 40–54 → L8, <40 → Non-Compliant.",
+    subMinNote: "Priority pillars with sub-minimum: Ownership (40% of Net Value pts = 3.2/8), Skills (40% of 20 base pts = 8), PP (40% of 27 base pts = 10.8), SD (40% of 10 pts = 4). Failing any → level drops by 1.",
+    npatNote: "If actual NPAT < 25% of industry norm, use NPAT = industry norm% × turnover as the target base. If no valid NPAT in 5 years, use 25% of latest industry norm.",
+  },
+  "RCOGP-QSE": {
+    levelNote: "Same standard scale as RCOGP Generic (100/95/90/80/75/70/55/40). Total out of 108 pts.",
+    subMinNote: "QSE must choose SD or ESD for the sub-minimum priority check. Ownership sub-minimum still applies.",
+    npatNote: "Deemed NPAT applies same as Generic when actual NPAT is below the industry norm threshold.",
+  },
+  "ICT-Generic": {
+    levelNote: "ICT scale (140-pt total): 120+ → L1, 115–119 → L2, 110–114 → L3, 100–109 → L4, 95–99 → L5, 90–94 → L6, 75–89 → L7, 55–74 → L8, <55 → Non-Compliant.",
+    subMinNote: "Same priority element sub-minimum rules as RCOGP Generic, applied to ICT-specific max points.",
+    npatNote: "Same deemed NPAT logic as RCOGP. ICT industry norm used where applicable.",
+  },
+  "ICT-QSE": {
+    levelNote: "ICT scale applied to QSE (116-pt total): same threshold percentages as ICT Generic.",
+    subMinNote: "QSE sub-minimum: choose SD or ESD priority check.",
+    npatNote: "Deemed NPAT same as ICT Generic.",
+  },
+  "FSC-Generic": {
+    levelNote: "FSC scaled thresholds (not integers): 95.5 → L1, 90.7 → L2, 86.0 → L3, 76.4 → L4, 71.6 → L5, 66.8 → L6, 52.5 → L7, 38.2 → L8.",
+    subMinNote: "Same priority element sub-minimum rules as RCOGP, applied to FSC-specific max points per sub-sector.",
+    npatNote: "Deemed NPAT uses FSC financial sector norm (15% industry norm).",
+  },
+  "AGRI-Generic": {
+    levelNote: "Standard scale (100/95/90/80/75/70/55/40). Total out of 132 pts.",
+    subMinNote: "Same sub-minimum rules as RCOGP Generic, applied to AgriBEE max points.",
+    npatNote: "Deemed NPAT uses agriculture norm (8% industry norm).",
+  },
+};
+
+function getSectorCalcMethod(sector: Sector) {
+  const key = `${sector.code}-${sector.type}`;
+  return SECTOR_CALC_METHODS[key] ?? null;
+}
+
 function SectorTabView({ sector }: { sector: Sector }) {
   const pillarConfigs = safePillarConfigs(sector);
   const levelThresholds = safeLevelThresholds(sector);
+  const calcMethod = getSectorCalcMethod(sector);
   const activeEntries = PILLAR_ORDER.map((key) => ({ key, config: pillarConfigs[key] })).filter(
     (e) => e.config && e.config.maxPoints > 0,
   );
@@ -498,37 +605,80 @@ function SectorTabView({ sector }: { sector: Sector }) {
       <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Pillar breakdown — click to expand scoring rows
+            Pillar breakdown — click to expand scoring rows and formulas
           </p>
           {activeEntries.map(({ key, config }) => (
             <ApiPillarCard key={key} pillarKey={key} config={config!} sector={sector} />
           ))}
         </div>
 
-        <div className="min-w-[220px]">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Level thresholds</p>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px]">Level</TableHead>
-                    <TableHead className="text-[10px] text-right">Min pts</TableHead>
-                    <TableHead className="text-[10px] text-right">Recognition</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {levelThresholds.map((t) => (
-                    <TableRow key={t.level} className={t.level === 1 ? "bg-green-500/10" : ""}>
-                      <TableCell className="text-xs font-semibold">Level {t.level}</TableCell>
-                      <TableCell className="text-xs text-right font-mono">≥ {t.minPoints}</TableCell>
-                      <TableCell className="text-xs text-right font-mono">{t.recognition}%</TableCell>
+        <div className="min-w-[220px] space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Level thresholds</p>
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[10px]">Level</TableHead>
+                      <TableHead className="text-[10px] text-right">Min pts</TableHead>
+                      <TableHead className="text-[10px] text-right">Recognition</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {levelThresholds.map((t) => (
+                      <TableRow key={t.level} className={t.level === 1 ? "bg-green-500/10" : ""}>
+                        <TableCell className="text-xs font-semibold">Level {t.level}</TableCell>
+                        <TableCell className="text-xs text-right font-mono">≥ {t.minPoints}</TableCell>
+                        <TableCell className="text-xs text-right font-mono">{t.recognition}%</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+
+          {calcMethod && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Calculation method
+              </p>
+              <Card>
+                <CardContent className="p-3 space-y-3">
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase text-muted-foreground mb-1 flex items-center gap-1">
+                      <Target className="h-3 w-3" /> Level determination
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">{calcMethod.levelNote}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase text-amber-600 mb-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> Sub-minimum discount
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">{calcMethod.subMinNote}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase text-muted-foreground mb-1 flex items-center gap-1">
+                      <Info className="h-3 w-3" /> NPAT / deemed profit
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">{calcMethod.npatNote}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase text-blue-600 mb-1 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> YES initiative
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      YES is <strong>not scored</strong> — it improves the B-BBEE level after all pillars are calculated.
+                      Meeting YES target + 2.5% absorption = +1 level. Double YES + 5% absorption = +2 levels.
+                      1.5× YES + 5% absorption = +1 level plus 3 bonus points.
+                      Qualification requires meeting 40% sub-minimum on all priority elements, or 50% average.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
