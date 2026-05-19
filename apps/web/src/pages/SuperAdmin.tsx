@@ -45,7 +45,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Types ---
 
 interface AdminUser {
   id: string;
@@ -219,7 +219,7 @@ const ROLE_COLORS: Record<string, string> = {
   user: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
 };
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Helpers ---
 
 function formatDate(d: string | null) {
   if (!d) return "Never";
@@ -243,7 +243,7 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-// â”€â”€â”€ Sector Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Sector Helpers ---
 
 const PILLAR_NAMES: Record<string, string> = {
   ownership: "Ownership",
@@ -328,7 +328,7 @@ function humanizeKey(key: string): string {
 }
 
 function formatTargetValue(key: string, value: unknown): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "â€”";
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
   if (key.includes("Percent") || key.includes("Target") || key.includes("Target")) {
     if (value > 0 && value <= 1) return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
   }
@@ -385,7 +385,7 @@ function CrossSectorTable({ sectors }: { sectors: Sector[] }) {
                   const pts = config?.maxPoints ?? 0;
                   return (
                     <TableCell key={sectorTabId(s)} className="text-xs text-center font-mono">
-                      {pts > 0 ? pts : "â€”"}
+                      {pts > 0 ? pts : "—"}
                     </TableCell>
                   );
                 })}
@@ -490,7 +490,7 @@ function SectorTabView({ sector }: { sector: Sector }) {
         <span className="text-sm font-mono font-bold text-primary">{sector.totalPoints} total points</span>
         {isTransportQse(sector) && (
           <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700">
-            Transport QSE â€” measured pillars only
+            Transport QSE — measured pillars only
           </Badge>
         )}
       </div>
@@ -498,7 +498,7 @@ function SectorTabView({ sector }: { sector: Sector }) {
       <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Pillar breakdown â€” click to expand scoring rows
+            Pillar breakdown — click to expand scoring rows
           </p>
           {activeEntries.map(({ key, config }) => (
             <ApiPillarCard key={key} pillarKey={key} config={config!} sector={sector} />
@@ -521,7 +521,7 @@ function SectorTabView({ sector }: { sector: Sector }) {
                   {levelThresholds.map((t) => (
                     <TableRow key={t.level} className={t.level === 1 ? "bg-green-500/10" : ""}>
                       <TableCell className="text-xs font-semibold">Level {t.level}</TableCell>
-                      <TableCell className="text-xs text-right font-mono">â‰¥ {t.minPoints}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">≥ {t.minPoints}</TableCell>
                       <TableCell className="text-xs text-right font-mono">{t.recognition}%</TableCell>
                     </TableRow>
                   ))}
@@ -640,7 +640,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                         )}
                       </TableCell>
                       <TableCell className="text-center text-xs">
-                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "â€”"}
+                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -674,7 +674,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
   );
 }
 
-// â”€â”€â”€ User Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- User Row ---
 
 function UserRow({ user }: { user: AdminUser }) {
   const { toast } = useToast();
@@ -686,7 +686,7 @@ function UserRow({ user }: { user: AdminUser }) {
     },
     onSuccess: (_, role) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Role updated", description: `${user.username} â†’ ${role}` });
+      toast({ title: "Role updated", description: `${user.username} → ${role}` });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -782,7 +782,7 @@ function UserRow({ user }: { user: AdminUser }) {
   );
 }
 
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Main Page ---
 
 export default function SuperAdmin() {
   const { user } = useAuth();
@@ -858,11 +858,11 @@ export default function SuperAdmin() {
               <Crown className="h-6 w-6 text-amber-400" />
               Super Admin
             </h1>
-            <p className="text-sm text-muted-foreground">Platform management â€” {user?.email}</p>
+            <p className="text-sm text-muted-foreground">Platform management — {user?.email}</p>
           </div>
         </div>
 
-        {/* â”€â”€â”€ System Status â”€â”€â”€ */}
+        {/* --- System Status --- */}
         <section>
           <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
             <Server className="h-4 w-4 text-muted-foreground" /> System Status
@@ -873,21 +873,21 @@ export default function SuperAdmin() {
                 <p className="text-xs text-muted-foreground mb-1">API Status</p>
                 <p className="font-semibold text-sm flex items-center gap-1">
                   <span className={`h-2 w-2 rounded-full ${health?.status === "ok" ? "bg-green-500" : "bg-red-500"}`} />
-                  {health?.status ?? "â€”"}
+                  {health?.status ?? "—"}
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Environment</p>
-                <p className="font-semibold text-sm capitalize">{health?.environment ?? "â€”"}</p>
+                <p className="font-semibold text-sm capitalize">{health?.environment ?? "—"}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Uptime</p>
                 <p className="font-semibold text-sm">
-                  {health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "â€”"}
+                  {health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "—"}
                 </p>
               </CardContent>
             </Card>
@@ -900,14 +900,14 @@ export default function SuperAdmin() {
                       <span className={`h-2 w-2 rounded-full ${health.arangodb.connected ? "bg-green-500" : "bg-red-500"}`} />
                       {health.arangodb.connected ? "Connected" : "Down"}
                     </>
-                  ) : "â€”"}
+                  ) : "—"}
                 </p>
               </CardContent>
             </Card>
           </div>
         </section>
 
-        {/* â”€â”€â”€ B-BBEE scorecard reference (read-only, from sectorConfig via API) â”€â”€â”€ */}
+        {/* --- B-BBEE scorecard reference (read-only, from sectorConfig via API) --- */}
         <section>
           <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
             <div>
@@ -915,7 +915,7 @@ export default function SuperAdmin() {
                 <BookOpen className="h-4 w-4 text-muted-foreground" /> B-BBEE Scorecard Reference
               </h2>
               <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-                Read-only reference from sector config (<span className="font-mono text-[10px]">/api/sectors</span>) â€” pillar weights, sub-minimums, and level thresholds.
+                Read-only reference from sector config (<span className="font-mono text-[10px]">/api/sectors</span>) — pillar weights, sub-minimums, and level thresholds.
               </p>
             </div>
             <Button
@@ -1019,7 +1019,7 @@ export default function SuperAdmin() {
           )}
         </section>
 
-        {/* â”€â”€â”€ User Management â”€â”€â”€ */}
+        {/* --- User Management --- */}
         <section>
           <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" /> User Management
@@ -1099,7 +1099,7 @@ export default function SuperAdmin() {
           {totalUsers > limit && (
             <div className="flex items-center justify-between mt-4 text-sm">
               <span className="text-muted-foreground">
-                Showing {skip + 1}â€“{Math.min(skip + limit, totalUsers)} of {totalUsers}
+                Showing {skip + 1}–{Math.min(skip + limit, totalUsers)} of {totalUsers}
               </span>
               <div className="flex gap-2">
                 <Button
