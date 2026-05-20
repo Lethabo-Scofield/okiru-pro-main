@@ -503,6 +503,8 @@ const clientSchema = new Schema({
   verificationAgency: { type: String, default: null },
   financials: { type: Schema.Types.Mixed, default: null },
   pillars: { type: Schema.Types.Mixed, default: null },
+  /** Platform demo workbook (Lake Trading ground truth); visible to super_admin only. */
+  lakeTradingDemo: { type: Boolean, default: false, index: true },
 });
 
 clientSchema.set("toJSON", {

@@ -45,5 +45,8 @@ export function buildClientVisibilityFilter(
   if (user.organizationId) {
     orClause.push({ organizationId: user.organizationId });
   }
+  if (hasAnyRole(user, "super_admin")) {
+    orClause.push({ lakeTradingDemo: true });
+  }
   return { $or: orClause };
 }

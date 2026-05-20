@@ -3,6 +3,9 @@ import * as XLSX from "xlsx";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { requireAuth } from "./routes";
+import { hasAnyRole } from "./roles";
+import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
+import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
 import { WorkbookModel, ClientModel } from "../shared/schema";
 import {
   validateWorkbook,
@@ -595,15 +598,19 @@ async function authorizeWorkbookAccess(
           return null;
         }
       } else if (!clientSameOrg && !clientSameUser) {
-        logger.warn("Cross-tenant client access denied via workbook route", {
-          companyId,
-          requesterUserId: userId,
-          requesterOrgId: userOrgId,
-          clientOrgId,
-          clientCreatorId,
-        });
-        res.status(403).json({ message: "Forbidden" });
-        return null;
+        const isDemoClient = Boolean((client as any).lakeTradingDemo);
+        const superAdmin = hasAnyRole(user, "super_admin");
+        if (!(isDemoClient && superAdmin)) {
+          logger.warn("Cross-tenant client access denied via workbook route", {
+            companyId,
+            requesterUserId: userId,
+            requesterOrgId: userOrgId,
+            clientOrgId,
+            clientCreatorId,
+          });
+          res.status(403).json({ message: "Forbidden" });
+          return null;
+        }
       }
     }
 
@@ -616,7 +623,9 @@ async function authorizeWorkbookAccess(
 
     const sameOrg = wb.ownerOrganizationId !== null && wb.ownerOrganizationId === userOrgId;
     const sameUser = wb.ownerUserId === userId;
-    if (!sameOrg && !sameUser) {
+    const superAdmin = hasAnyRole(user, "super_admin");
+    const isLakeDemo = companyId === LAKE_TRADING_DEMO_CLIENT_ID;
+    if (!sameOrg && !sameUser && !(superAdmin && isLakeDemo)) {
       logger.warn("Cross-tenant workbook access denied", {
         companyId,
         requesterUserId: userId,
@@ -792,7 +801,56 @@ function projectWorkbookToClient(wb: WorkbookData) {
   return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
 }
 
+function requireSuperAdmin(req: Request, res: Response): boolean {
+  const user = (req as any).user;
+  if (!hasAnyRole(user, "super_admin")) {
+    res.status(403).json({ message: "Super-admin access required" });
+    return false;
+  }
+  return true;
+}
+
 export function registerWorkbookRoutes(app: Express): void {
+  app.get("/api/admin/demo/lake-trading", requireAuth, async (req: Request, res: Response) => {
+    if (!requireSuperAdmin(req, res)) return;
+    if (!mongoReady()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
+    const client = await ClientModel.findOne({ clientId: LAKE_TRADING_DEMO_CLIENT_ID })
+      .select({ clientId: 1, name: 1, lakeTradingDemo: 1 })
+      .lean();
+    if (!client) {
+      return res.json({ exists: false, clientId: LAKE_TRADING_DEMO_CLIENT_ID, name: null });
+    }
+    const wb = await WorkbookModel.findOne({ companyId: LAKE_TRADING_DEMO_CLIENT_ID })
+      .select({ submittedAt: 1, updatedAt: 1 })
+      .lean();
+    return res.json({
+      exists: true,
+      clientId: LAKE_TRADING_DEMO_CLIENT_ID,
+      name: (client as any).name,
+      submittedAt: wb?.submittedAt ? new Date(wb.submittedAt).toISOString() : null,
+      updatedAt: wb?.updatedAt ? new Date(wb.updatedAt).toISOString() : null,
+    });
+  });
+
+  app.post("/api/admin/demo/lake-trading", requireAuth, async (req: Request, res: Response) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const user = (req as any).user;
+    const userId: string = user?.id || (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const result = await seedLakeTradingDemo(userId, user?.organizationId ?? null);
+      return res.json({ ok: true, ...result });
+    } catch (err: any) {
+      if (err?.message === "DATABASE_UNAVAILABLE") {
+        return res.status(503).json({ error: "Database unavailable" });
+      }
+      logger.error("Lake Trading demo seed failed", err);
+      return res.status(500).json({ error: "Failed to seed Lake Trading demo" });
+    }
+  });
+
   app.get("/api/workbook/:companyId", requireAuth, async (req: Request, res: Response) => {
     const wb = await authorizeWorkbookAccess(req, res);
     if (!wb) return;

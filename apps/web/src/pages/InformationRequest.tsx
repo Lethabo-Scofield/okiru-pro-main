@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronRight, Download, Loader2, Save, Building2, Search, Send, CheckCircle2, Pencil, UploadCloud } from "lucide-react";
+import {
+  ChevronRight,
+  Download,
+  Loader2,
+  Save,
+  Building2,
+  Search,
+  Send,
+  CheckCircle2,
+  Pencil,
+  UploadCloud,
+  FlaskConical,
+} from "lucide-react";
+import { useAuth } from "@toolkit/lib/auth";
+import { isSuperAdmin } from "@/lib/roles";
+import { LAKE_TRADING_DEMO_NAME } from "@/lib/lakeTradingWorkbookFixture";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
 import { AppNavBack } from "@/components/AppNavBack";
@@ -34,13 +49,85 @@ interface Company {
   name: string;
 }
 
+function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
+  const [seeding, setSeeding] = useState(false);
+  const { toast } = useToast();
+
+  const openDemo = async () => {
+    setSeeding(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/demo/lake-trading`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: "Could not open demo",
+          description: data.error || data.message || `Server returned ${res.status}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (data.validationIssueCount > 0) {
+        toast({
+          title: "Demo loaded with validation warnings",
+          description: `${data.validationIssueCount} issue(s) — review before submit.`,
+          variant: "destructive",
+        });
+      }
+      onPick({
+        id: data.clientId,
+        clientId: data.clientId,
+        name: data.name || LAKE_TRADING_DEMO_NAME,
+      });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <FlaskConical className="h-4 w-4 text-amber-400" />
+            <h2 className="text-[15px] font-semibold text-amber-100">Lake Trading Demo Workbook</h2>
+          </div>
+          <p className="text-[13px] text-[#98989f] max-w-xl">
+            RCOGP Generic ground truth (~63.56 pts, Level 7 → 8). Pre-filled workbook — same UI,
+            validation, and submit flow as a live client.
+          </p>
+        </div>
+        <button
+          onClick={openDemo}
+          disabled={seeding}
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 text-black text-[13px] font-semibold press-sm hover:bg-amber-400 disabled:opacity-60 smooth"
+          data-testid="button-open-lake-trading-demo"
+        >
+          {seeding ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FlaskConical className="h-4 w-4" />
+          )}
+          Open Lake Trading Demo
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
+  const { user } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const { toast } = useToast();
+  const showLakeDemo = isSuperAdmin(user);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,6 +185,7 @@ function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
 
   return (
     <div className="space-y-6">
+      {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
       <div className="rounded-2xl bg-[#1c1c1e] p-6">
         <h2 className="text-[15px] font-semibold text-white mb-1">Pick a company</h2>
         <p className="text-[13px] text-[#8e8e93] mb-4">Workbook data is isolated per company.</p>

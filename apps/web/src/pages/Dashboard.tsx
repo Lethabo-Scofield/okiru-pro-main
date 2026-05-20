@@ -3,7 +3,8 @@ import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Trash2, Loader2, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Trash2, Loader2, Pencil, Search, ChevronRight, Plus, FileText, Building2, Sparkles, HelpCircle, Play, UploadCloud, ExternalLink, Wrench, CheckCircle2, ShieldCheck, ClipboardList, FlaskConical } from 'lucide-react';
+import { isSuperAdmin } from '@/lib/roles';
 import { useOnboarding, OnboardingWelcome, OnboardingTour } from '@/components/OnboardingTour';
 import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
@@ -468,6 +469,29 @@ export default function Dashboard() {
                   Workbook <ChevronRight className="w-3 h-3" /> Companies
                 </div>
               </button>
+
+              {isSuperAdmin(user) && (
+                <button
+                  className="group text-left rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-6 lift press hover:bg-amber-500/10 smooth opacity-0 fade-in stagger-4"
+                  onClick={() => navigate('/information-request')}
+                  data-testid="card-lake-trading-demo"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[15px] font-semibold tracking-tight text-amber-100">Lake Trading Demo</div>
+                      <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">
+                        Ground-truth workbook (~63.56 pts). Super admin only.
+                      </div>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-amber-500/15 grid place-items-center group-hover:bg-amber-500/25 smooth">
+                      <FlaskConical className="h-5 w-5 text-amber-400" />
+                    </div>
+                  </div>
+                  <div className="mt-5 flex items-center gap-1 text-[11px] text-amber-400/80 font-medium uppercase tracking-wider">
+                    Demo <ChevronRight className="w-3 h-3" /> Open workbook
+                  </div>
+                </button>
+              )}
             </div>
           </section>
         )}
