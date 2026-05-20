@@ -1,0 +1,943 @@
+{
+    "ruleset_id": "bbbee_information_request_template_v1",
+    "source_file": "Info Request Sheet Template(1).xlsx",
+    "purpose": "Validate and guide data entry for the B-BBEE information request workbook.",
+    "global_rules": {
+        "data_entry_start_row": 3,
+        "required_marker": "*",
+        "blank_rows_allowed": true,
+        "row_validation_rule": "Only validate a row if at least one cell in that row contains data.",
+        "date_format": "dd/mm/yyyy",
+        "currency_rule": "Currency and amount fields must be numeric and greater than or equal to 0.",
+        "percentage_rule": "Ownership and percentage fields must be numeric between 0 and 100.",
+        "boolean_values": [
+            "Yes",
+            "No"
+        ],
+        "gender_values": [
+            "Male",
+            "Female"
+        ],
+        "race_values": [
+            "African",
+            "Coloured",
+            "Indian",
+            "White"
+        ]
+    },
+    "sections": [
+        {
+            "section_id": "financial_information",
+            "sheet": "Information Request",
+            "type": "checklist_only",
+            "description": "Financial information requested in the checklist. The workbook does not provide a dedicated financial input tab.",
+            "fields": [
+                {
+                    "field": "historical_revenue",
+                    "label": "Revenue",
+                    "period": "Financial year end December 2020",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "field": "historical_npat",
+                    "label": "NPAT (Net Profit After Tax)",
+                    "period": "Financial year end December 2020",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "allow_negative": true
+                    }
+                },
+                {
+                    "field": "historical_payroll",
+                    "label": "Payroll total salary bill",
+                    "period": "January to December 2020",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "field": "forecast_revenue",
+                    "label": "Forecasted revenue",
+                    "period": "Financial year end December 2021",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "field": "forecast_npat",
+                    "label": "Forecasted NPAT",
+                    "period": "Financial year end December 2021",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "allow_negative": true
+                    }
+                },
+                {
+                    "field": "forecast_payroll",
+                    "label": "Forecasted payroll total salary bill",
+                    "period": "January to December 2021",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                }
+            ]
+        },
+        {
+            "section_id": "management_control_employees",
+            "sheet": "Management Control - Employees",
+            "type": "table",
+            "row_rule": "If any employee data is entered, all required fields for that row must be completed.",
+            "fields": [
+                {
+                    "column": "A",
+                    "field": "full_name",
+                    "label": "Full Name *",
+                    "required": true,
+                    "type": "text",
+                    "validation": {
+                        "not_blank": true
+                    }
+                },
+                {
+                    "column": "B",
+                    "field": "gender",
+                    "label": "Gender *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Male",
+                        "Female"
+                    ]
+                },
+                {
+                    "column": "C",
+                    "field": "race",
+                    "label": "Race *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "African",
+                        "Coloured",
+                        "Indian",
+                        "White"
+                    ]
+                },
+                {
+                    "column": "D",
+                    "field": "designation",
+                    "label": "Designation *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Executive Director",
+                        "Non-executive Director",
+                        "Other Executive Manager",
+                        "Senior Manager",
+                        "Middle Manager",
+                        "Junior Manager",
+                        "Semi-skilled",
+                        "Unskilled"
+                    ]
+                },
+                {
+                    "column": "E",
+                    "field": "disabled",
+                    "label": "Disabled?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "F",
+                    "field": "foreign",
+                    "label": "Foreign?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "G",
+                    "field": "id_number",
+                    "label": "ID Number",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "H",
+                    "field": "voting_rights",
+                    "label": "Voting Rights *",
+                    "required": true,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "I",
+                    "field": "employee_code",
+                    "label": "Employee Code",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "J",
+                    "field": "start_date_or_years_of_service",
+                    "label": "Start date/ years of service",
+                    "required": false,
+                    "type": "date_or_number",
+                    "date_format": "dd/mm/yyyy"
+                }
+            ]
+        },
+        {
+            "section_id": "skills_development",
+            "sheet": "Skills Development",
+            "type": "table",
+            "row_rule": "If any training record is entered, all required fields for that row must be completed.",
+            "fields": [
+                {
+                    "column": "A",
+                    "field": "training_program_name",
+                    "label": "Training Program Name *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "B",
+                    "field": "category",
+                    "label": "Category *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "C",
+                    "field": "training_provider",
+                    "label": "Training Provider",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "D",
+                    "field": "province",
+                    "label": "Province",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Gauteng",
+                        "Western Cape",
+                        "Kwazulu-Natal",
+                        "Eastern Cape",
+                        "Free State",
+                        "Limpopo",
+                        "Mpumalanga",
+                        "Northern Cape",
+                        "North West"
+                    ]
+                },
+                {
+                    "column": "E",
+                    "field": "municipality",
+                    "label": "Municipality",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "F",
+                    "field": "learner_name",
+                    "label": "Learner Name *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "G",
+                    "field": "id_number",
+                    "label": "ID Number",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "H",
+                    "field": "gender",
+                    "label": "Gender *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Male",
+                        "Female"
+                    ]
+                },
+                {
+                    "column": "I",
+                    "field": "race",
+                    "label": "Race *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "African",
+                        "Coloured",
+                        "Indian",
+                        "White"
+                    ]
+                },
+                {
+                    "column": "J",
+                    "field": "disabled",
+                    "label": "Disabled?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "K",
+                    "field": "foreign",
+                    "label": "Foreign?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "L",
+                    "field": "age",
+                    "label": "Age",
+                    "required": false,
+                    "type": "integer",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "M",
+                    "field": "employed",
+                    "label": "Employed?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "N",
+                    "field": "completed",
+                    "label": "Completed?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "O",
+                    "field": "absorbed",
+                    "label": "Absorbed?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "P",
+                    "field": "course_cost",
+                    "label": "Course Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "Q",
+                    "field": "travel_cost",
+                    "label": "Travel Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "R",
+                    "field": "accommodation_cost",
+                    "label": "Accommodation Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "S",
+                    "field": "catering_cost",
+                    "label": "Catering Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "T",
+                    "field": "stationery_cost",
+                    "label": "Stationery Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "U",
+                    "field": "training_facility_cost",
+                    "label": "Training Facility Cost",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "V",
+                    "field": "salary_cost",
+                    "label": "Salary Cost (category B,C,D only)",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0,
+                        "condition": "Only applicable for category B, C, or D."
+                    }
+                },
+                {
+                    "column": "W",
+                    "field": "other_costs",
+                    "label": "Other Costs",
+                    "required": false,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "X",
+                    "field": "start_date",
+                    "label": "Start Date (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "Y",
+                    "field": "end_date",
+                    "label": "End Date (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "Z",
+                    "field": "custom_data",
+                    "label": "Custom Data",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "AA",
+                    "field": "man_hours",
+                    "label": "Man hours",
+                    "required": false,
+                    "type": "number",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "AB",
+                    "field": "location",
+                    "label": "Location",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "AC",
+                    "field": "business_unit",
+                    "label": "Business Unit",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "AD",
+                    "field": "employee_code",
+                    "label": "Employee Code",
+                    "required": false,
+                    "type": "text"
+                }
+            ],
+            "cross_field_rules": [
+                {
+                    "rule_id": "SD_DATE_001",
+                    "description": "End date must not be before start date when both dates are supplied.",
+                    "condition": "start_date != null && end_date != null",
+                    "assert": "end_date >= start_date"
+                },
+                {
+                    "rule_id": "SD_COST_001",
+                    "description": "At least one cost or man-hours value should be supplied for a training record.",
+                    "condition": "training_program_name != null",
+                    "assert": "sum(course_cost, travel_cost, accommodation_cost, catering_cost, stationery_cost, training_facility_cost, salary_cost, other_costs, man_hours) > 0"
+                }
+            ]
+        },
+        {
+            "section_id": "preferential_procurement_suppliers",
+            "sheet": "Procurement - Suppliers",
+            "type": "table",
+            "row_rule": "If any supplier data is entered, all required fields for that row must be completed.",
+            "fields": [
+                {
+                    "column": "A",
+                    "field": "supplier_name",
+                    "label": "Supplier Name *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "B",
+                    "field": "current_company_size",
+                    "label": "Current Company Size *",
+                    "required": true,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Large",
+                        "QSE",
+                        "EME"
+                    ]
+                },
+                {
+                    "column": "C",
+                    "field": "bbbee_level",
+                    "label": "B-BBEE Level",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "5",
+                        "6",
+                        "7",
+                        "8",
+                        "Non-compliant"
+                    ]
+                },
+                {
+                    "column": "D",
+                    "field": "vat_number",
+                    "label": "VAT Number",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "E",
+                    "field": "measured_under",
+                    "label": "Measured Under (CoGP/RCoGP)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "CoGP",
+                        "RCoGP"
+                    ]
+                },
+                {
+                    "column": "F",
+                    "field": "empowering_supplier",
+                    "label": "Empowering Supplier? (Yes/No)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "G",
+                    "field": "date_of_first_procurement",
+                    "label": "Date of first procurement (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "H",
+                    "field": "size_at_first_procurement",
+                    "label": "Size at first procurement",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Large",
+                        "QSE",
+                        "EME"
+                    ]
+                },
+                {
+                    "column": "I",
+                    "field": "current_black_ownership",
+                    "label": "Current Black ownership",
+                    "required": false,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "J",
+                    "field": "current_black_female_ownership",
+                    "label": "Current Black Female ownership",
+                    "required": false,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "K",
+                    "field": "has_modified_black_ownership",
+                    "label": "Has modified Black ownership? (Yes/No)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "L",
+                    "field": "unmodified_black_ownership",
+                    "label": "Unmodified Black ownership",
+                    "required": false,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "M",
+                    "field": "supplier_development_recipient",
+                    "label": "Supplier development recipient? (Yes/No)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "N",
+                    "field": "three_year_contract_in_place",
+                    "label": "3 year contract in place? (Yes/No)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "O",
+                    "field": "designated",
+                    "label": "Designated? (Yes/No)",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "P",
+                    "field": "spend",
+                    "label": "Spend *",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "Q",
+                    "field": "location",
+                    "label": "Location",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "R",
+                    "field": "business_unit",
+                    "label": "Business Unit",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "S",
+                    "field": "certificate_expiry_date",
+                    "label": "Certificate Expiry Date (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                }
+            ],
+            "cross_field_rules": [
+                {
+                    "rule_id": "PP_CERT_001",
+                    "description": "If a B-BBEE level is supplied, a certificate expiry date should be supplied.",
+                    "condition": "bbbee_level != null",
+                    "assert": "certificate_expiry_date != null"
+                },
+                {
+                    "rule_id": "PP_OWN_001",
+                    "description": "Black female ownership cannot exceed total black ownership when both values are supplied.",
+                    "condition": "current_black_ownership != null && current_black_female_ownership != null",
+                    "assert": "current_black_female_ownership <= current_black_ownership"
+                }
+            ]
+        },
+        {
+            "section_id": "enterprise_supplier_development",
+            "sheet": "Enterprise & Supplier Developme",
+            "type": "table",
+            "row_rule": "If any enterprise or supplier development support is entered, all required fields for that row must be completed.",
+            "fields": [
+                {
+                    "column": "A",
+                    "field": "supplier_name",
+                    "label": "Supplier Name *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "B",
+                    "field": "current_black_ownership",
+                    "label": "Current black ownership *",
+                    "required": true,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "C",
+                    "field": "current_size",
+                    "label": "Current size *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "D",
+                    "field": "contribution_description",
+                    "label": "Contribution Description*",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "E",
+                    "field": "date_of_transaction",
+                    "label": "Date of Transaction (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "F",
+                    "field": "contribution_type",
+                    "label": "Contribution Type *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "G",
+                    "field": "amount",
+                    "label": "Amount *",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                },
+                {
+                    "column": "H",
+                    "field": "invoice_date",
+                    "label": "Invoice date (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "I",
+                    "field": "payment_date",
+                    "label": "Payment date (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "J",
+                    "field": "prime_rate",
+                    "label": "Prime Rate",
+                    "required": false,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "K",
+                    "field": "actual_rate",
+                    "label": "Actual Rate",
+                    "required": false,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "L",
+                    "field": "location",
+                    "label": "Location",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "M",
+                    "field": "business_unit",
+                    "label": "Business Unit",
+                    "required": false,
+                    "type": "text"
+                }
+            ],
+            "cross_field_rules": [
+                {
+                    "rule_id": "ESD_DATE_001",
+                    "description": "Payment date should not be before invoice date when both dates are supplied.",
+                    "condition": "invoice_date != null && payment_date != null",
+                    "assert": "payment_date >= invoice_date"
+                }
+            ]
+        },
+        {
+            "section_id": "socioeconomic_development",
+            "sheet": "Socioeconomic Development",
+            "type": "table",
+            "row_rule": "If any socioeconomic development spend is entered, all required fields for that row must be completed.",
+            "fields": [
+                {
+                    "column": "A",
+                    "field": "beneficiary_name",
+                    "label": "Beneficiary Name *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "B",
+                    "field": "description_of_spend",
+                    "label": "Description of Spend *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "C",
+                    "field": "ict_specific_initiative",
+                    "label": "ICT Specific Initiative?",
+                    "required": false,
+                    "type": "enum",
+                    "allowed_values": [
+                        "Yes",
+                        "No"
+                    ]
+                },
+                {
+                    "column": "D",
+                    "field": "date_of_transaction",
+                    "label": "Date of Transaction (format: dd/mm/yyyy)",
+                    "required": false,
+                    "type": "date",
+                    "date_format": "dd/mm/yyyy"
+                },
+                {
+                    "column": "E",
+                    "field": "contribution_type",
+                    "label": "Contribution Type *",
+                    "required": true,
+                    "type": "text"
+                },
+                {
+                    "column": "F",
+                    "field": "percent_spend_benefiting_black_individuals",
+                    "label": "% of Spend Benefiting Black Individuals *",
+                    "required": true,
+                    "type": "percentage",
+                    "validation": {
+                        "min": 0,
+                        "max": 100
+                    }
+                },
+                {
+                    "column": "G",
+                    "field": "location",
+                    "label": "Location",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "H",
+                    "field": "business_unit",
+                    "label": "Business Unit",
+                    "required": false,
+                    "type": "text"
+                },
+                {
+                    "column": "I",
+                    "field": "amount",
+                    "label": "Amount *",
+                    "required": true,
+                    "type": "currency",
+                    "validation": {
+                        "min": 0
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -39,7 +39,3 @@ configMapGenerator:
   - LOG_LEVEL=warn
   - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io
   name: app-config
-
-
-
-
