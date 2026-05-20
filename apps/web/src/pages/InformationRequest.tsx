@@ -8,6 +8,10 @@ import { UserAccountMenu } from "@/components/UserAccountMenu";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { SECTIONS, getSection, type ColumnDef } from "@/components/workbook/sections";
 import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
+import {
+  validateWorkbook,
+  formatWorkbookValidationSummary,
+} from "@/components/workbook/workbookValidation";
 
 type Row = Record<string, unknown> & { _id: string };
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
@@ -431,6 +435,15 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         toast({
           title: "Submit aborted",
           description: "Unsaved changes failed to save — fix the save error and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const validationIssues = validateWorkbook(workbook.sections);
+      if (validationIssues.length > 0) {
+        toast({
+          title: "Fix validation errors before submitting",
+          description: formatWorkbookValidationSummary(validationIssues, 4),
           variant: "destructive",
         });
         return;
