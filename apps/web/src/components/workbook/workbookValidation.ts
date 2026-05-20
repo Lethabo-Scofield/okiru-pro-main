@@ -1,5 +1,6 @@
 import {
   SECTIONS,
+  getScorecardTypeOptions,
   type ColumnDef,
   type SectionDef,
 } from "./sections";
@@ -119,6 +120,75 @@ function sectionHasSupplierSpend(sections: WorkbookSectionsInput): boolean {
   return false;
 }
 
+function sectionHasNonEmptyRows(sections: WorkbookSectionsInput, key: string): boolean {
+  const section = SECTIONS.find((s) => s.key === key);
+  if (!section?.columns) return false;
+  for (const row of sections[key]?.rows ?? []) {
+    if (!isRowEmpty(row as Record<string, unknown>, section.columns)) return true;
+  }
+  return false;
+}
+
+function finMetaNumber(meta: Record<string, unknown>, key: string): number | null {
+  const n = Number(meta[key]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function hasLeviableAmount(meta: Record<string, unknown>): boolean {
+  for (const key of ["forecastPayroll", "leviableAmount", "payroll"]) {
+    const n = finMetaNumber(meta, key);
+    if (n !== null && n > 0) return true;
+  }
+  return false;
+}
+
+function hasNpat(meta: Record<string, unknown>): boolean {
+  for (const key of ["forecastNpat", "npat"]) {
+    const n = finMetaNumber(meta, key);
+    if (n !== null) return true;
+  }
+  return false;
+}
+
+export function validateScorecardTypeForSector(
+  sectorCode: string,
+  scorecardType: unknown,
+): string | null {
+  if (isBlank(sectorCode)) return null;
+  if (isBlank(scorecardType)) return "Required when sector is set";
+  const allowed = getScorecardTypeOptions(String(sectorCode));
+  const value = String(scorecardType).trim();
+  if (!allowed.some((opt) => opt.toLowerCase() === value.toLowerCase())) {
+    return `Use one of: ${allowed.join(", ")} for ${String(sectorCode).toUpperCase()}`;
+  }
+  return null;
+}
+
+function validateOwnershipVotingRights(sections: WorkbookSectionsInput): WorkbookValidationIssue[] {
+  const section = SECTIONS.find((s) => s.key === "ownership");
+  if (!section?.columns) return [];
+
+  let total = 0;
+  let hasAny = false;
+  for (const row of sections["ownership"]?.rows ?? []) {
+    if (isRowEmpty(row as Record<string, unknown>, section.columns)) continue;
+    const voting = Number((row as Record<string, unknown>).votingRights);
+    if (Number.isFinite(voting) && voting > 0) {
+      total += voting;
+      hasAny = true;
+    }
+  }
+  if (!hasAny || total <= 100) return [];
+  return [
+    {
+      sectionKey: "ownership",
+      sectionLabel: "Ownership",
+      field: "votingRights",
+      message: `Total voting rights (${total.toFixed(1)}%) must not exceed 100%`,
+    },
+  ];
+}
+
 /**
  * Validates all enabled workbook sections (meta forms + grid rows).
  * Mirrors SpreadsheetGrid / MetaForm rules for submit-time enforcement.
@@ -156,10 +226,26 @@ export function validateWorkbook(
     }
   }
 
+  const companyMeta = (sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
+  const finMeta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
+  const sectorCode = String(companyMeta.industrySector ?? "").trim();
+
+  const scorecardErr = validateScorecardTypeForSector(
+    sectorCode,
+    companyMeta.scorecardType,
+  );
+  if (scorecardErr) {
+    issues.push({
+      sectionKey: "company-information",
+      sectionLabel: "Company Information",
+      field: "scorecardType",
+      message: `Scorecard Type: ${scorecardErr}`,
+    });
+  }
+
   // Scoring needs TMPS when supplier spend rows exist.
   if (sectionHasSupplierSpend(sections)) {
-    const fin = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
-    const tmps = Number(fin.tmps);
+    const tmps = Number(finMeta.tmps);
     if (!Number.isFinite(tmps) || tmps <= 0) {
       issues.push({
         sectionKey: "financial-information",
@@ -170,6 +256,30 @@ export function validateWorkbook(
       });
     }
   }
+
+  if (sectionHasNonEmptyRows(sections, "skills-development") && !hasLeviableAmount(finMeta)) {
+    issues.push({
+      sectionKey: "financial-information",
+      sectionLabel: "Financial Information",
+      field: "forecastPayroll",
+      message:
+        "Forecast payroll (or leviable amount) is required when skills development rows are present",
+    });
+  }
+
+  const needsNpat =
+    sectionHasNonEmptyRows(sections, "esd") ||
+    sectionHasNonEmptyRows(sections, "sed");
+  if (needsNpat && !hasNpat(finMeta)) {
+    issues.push({
+      sectionKey: "financial-information",
+      sectionLabel: "Financial Information",
+      field: "forecastNpat",
+      message: "Forecast NPAT is required when ESD or SED rows are present",
+    });
+  }
+
+  issues.push(...validateOwnershipVotingRights(sections));
 
   return issues;
 }

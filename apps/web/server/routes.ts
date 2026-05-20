@@ -22,6 +22,7 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { buildClientVisibilityFilter } from "./roles";
 
@@ -1469,15 +1470,27 @@ export async function registerRoutes(
     try {
       const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
+      if (industrySector) {
+        const sector = String(industrySector).trim().toUpperCase();
+        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
+          return res.status(400).json({
+            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
+          });
+        }
+      }
       const userId = (req.session as any).userId;
       const user = await storage.getUserById(userId);
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
+      const normalizedSector = industrySector
+        ? String(industrySector).trim().toUpperCase()
+        : null;
       const client = await ClientModel.create({
         id: clientId,
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
-        industrySector: industrySector || null,
+        industrySector: normalizedSector,
+        sectorCode: normalizedSector || "RCOGP",
         eapProvince: eapProvince || null,
         revenue: revenue || 0,
         npat: npat || 0,
@@ -1552,8 +1565,9 @@ export async function registerRoutes(
           eapProvince: c.eapProvince || "National",
           industryNorm: undefined,
           // Extended Foundation Layer fields
-          sectorCode: c.sectorCode || 'RCOGP',
-          companySize: c.companySize || 'Generic',
+          sectorCode: c.sectorCode || c.industrySector || 'RCOGP',
+          scorecardType: c.scorecardType || c.companySize || 'Generic',
+          companySize: c.companySize || c.scorecardType || 'Generic',
           industry: c.industry || 'Other',
           registrationNumber: c.registrationNumber || '',
           tradingName: c.tradingName || '',

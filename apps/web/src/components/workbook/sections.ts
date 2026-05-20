@@ -104,6 +104,26 @@ const SECTOR_CODE_OPTIONS = [
   "CONSTRUCTION",
 ];
 
+/** All scorecard types referenced in apps/api/pipeline/sectorConfig.ts */
+export const SCORECARD_TYPE_OPTIONS = ["Generic", "QSE", "Contractor", "BEP"] as const;
+
+/** Valid scorecard types per sector (see docs/SCORECARD_GROUND_TRUTH.md §11). */
+export function getScorecardTypeOptions(sectorCode: string): string[] {
+  switch (String(sectorCode || "").trim().toUpperCase()) {
+    case "RCOGP":
+    case "ICT":
+    case "TRANSPORT":
+      return ["Generic", "QSE"];
+    case "CONSTRUCTION":
+      return ["QSE", "Contractor", "BEP"];
+    case "FSC":
+    case "AGRI":
+      return ["Generic"];
+    default:
+      return ["Generic"];
+  }
+}
+
 const sectorCodeValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const code = String(v).trim().toUpperCase();
@@ -214,8 +234,16 @@ const COMPANY_INFO_META: ColumnDef[] = [
     key: "industrySector",
     label: "Industry / Sector Code",
     type: "select",
+    required: true,
     options: SECTOR_CODE_OPTIONS,
     validate: sectorCodeValidator,
+  },
+  {
+    key: "scorecardType",
+    label: "Scorecard Type",
+    type: "select",
+    required: true,
+    options: [...SCORECARD_TYPE_OPTIONS],
   },
   { key: "financialYearEnd", label: "Financial Year-End (yyyy-mm-dd)", type: "date", validate: dateValidator },
   { key: "physicalAddress", label: "Physical Address", type: "text" },

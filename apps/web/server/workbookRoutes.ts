@@ -8,6 +8,7 @@ import {
   validateWorkbook,
   formatWorkbookValidationSummary,
 } from "../src/components/workbook/workbookValidation";
+import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 
 const logger = createLogger("Workbook");
 
@@ -786,13 +787,7 @@ function projectWorkbookToClient(wb: WorkbookData) {
     dateOfTransaction: s((r as any).dateOfTransaction),
   }));
 
-  const financials = {
-    revenue: num(finMeta.revenue),
-    npat: num(finMeta.npat),
-    leviableAmount: num(finMeta.leviableAmount) || num(finMeta.payroll),
-    tmps: num(finMeta.tmps),
-    industrySector: s(companyMeta.industrySector) || undefined,
-  };
+  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta);
 
   return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
 }
@@ -900,9 +895,17 @@ export function registerWorkbookRoutes(app: Express): void {
         if (typeof f.npat === "number") update.npat = f.npat;
         if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
         if (f.tmps > 0) update.tmps = f.tmps;
-        if (f.industrySector) update.industrySector = f.industrySector;
+        if (f.industrySector) {
+          update.industrySector = f.industrySector;
+          update.sectorCode = f.industrySector;
+        }
+        if (f.scorecardType) {
+          update.scorecardType = f.scorecardType;
+          update.companySize = f.scorecardType;
+        }
+        if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
 
-        // Lift a handful of company-info fields into the client record too.
+        // Lift company-info fields into the client record too.
         const cm = projected.companyMeta;
         for (const key of [
           "tradingName",
@@ -914,9 +917,16 @@ export function registerWorkbookRoutes(app: Express): void {
           "contactPerson",
           "contactEmail",
           "contactPhone",
+          "financialYearEnd",
         ] as const) {
           const v = cm[key];
-          if (typeof v === "string" && v.trim()) update[key] = v.trim();
+          if (typeof v === "string" && v.trim()) {
+            if (key === "financialYearEnd") {
+              update.financialYear = v.trim();
+            } else {
+              update[key] = v.trim();
+            }
+          }
         }
 
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
