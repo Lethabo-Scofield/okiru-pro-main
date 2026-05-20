@@ -23,7 +23,8 @@ on:
 
 env:
   ACR_REGISTRY: okiruproacrde4d539b.azurecr.io
-  IMAGE_TAG: ${{ github.sha }}
+  # Immutable tag: short SHA + UTC timestamp (never :latest in production)
+  IMAGE_TAG: ${{ format('{0}-{1}', github.sha, github.run_id) }}
   NAMESPACE: okiru-pro
   DOMAIN: okiru.pro
 
@@ -333,6 +334,20 @@ jobs:
 
           echo "=== Deployment completed successfully ==="
           kubectl get pods -n ${{ env.NAMESPACE }}
+
+      - name: Verify no :latest images in app pods
+        run: |
+          echo "=== Verifying app pods use immutable image tags ==="
+          BAD=$(kubectl get pods -n ${{ env.NAMESPACE }} \
+            -l 'app in (api,web,compute)' \
+            -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.containers[0].image}{"\n"}{end}' \
+            | grep -E ':(latest)$' || true)
+          if [ -n "$BAD" ]; then
+            echo "ERROR: One or more app pods are running :latest (stale/mutable tag):"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "All app pods use immutable tags."
 
       - name: Run smoke tests
         if: ${{ !inputs.skip_tests }}

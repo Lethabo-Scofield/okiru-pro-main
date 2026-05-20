@@ -4,6 +4,10 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { requireAuth } from "./routes";
 import { WorkbookModel, ClientModel } from "../shared/schema";
+import {
+  validateWorkbook,
+  formatWorkbookValidationSummary,
+} from "../src/components/workbook/workbookValidation";
 
 const logger = createLogger("Workbook");
 
@@ -862,6 +866,15 @@ export function registerWorkbookRoutes(app: Express): void {
         return res
           .status(503)
           .json({ error: "Database unavailable — cannot submit workbook." });
+      }
+
+      const validationIssues = validateWorkbook(wb.sections);
+      if (validationIssues.length > 0) {
+        return res.status(400).json({
+          error: "Workbook validation failed",
+          issues: validationIssues,
+          summary: formatWorkbookValidationSummary(validationIssues),
+        });
       }
 
       const projected = projectWorkbookToClient(wb);

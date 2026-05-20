@@ -94,6 +94,25 @@ const SED_CONTRIBUTION_TYPES = [
 const isBlank = (v: unknown): boolean =>
   v === "" || v === undefined || v === null || (typeof v === "string" && v.trim() === "");
 
+/** Matches sector codes in apps/api/pipeline/sectorConfig.ts */
+const SECTOR_CODE_OPTIONS = [
+  "RCOGP",
+  "ICT",
+  "FSC",
+  "AGRI",
+  "TRANSPORT",
+  "CONSTRUCTION",
+];
+
+const sectorCodeValidator = (v: unknown): string | null => {
+  if (isBlank(v)) return null;
+  const code = String(v).trim().toUpperCase();
+  if (!SECTOR_CODE_OPTIONS.includes(code)) {
+    return `Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`;
+  }
+  return null;
+};
+
 const idValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const s = String(v).trim();
@@ -191,7 +210,13 @@ const COMPANY_INFO_META: ColumnDef[] = [
   { key: "registrationNumber", label: "Registration Number", type: "text" },
   { key: "vatNumber", label: "VAT Number", type: "text" },
   { key: "taxNumber", label: "Tax Number", type: "text" },
-  { key: "industrySector", label: "Industry / Sector Code", type: "text" },
+  {
+    key: "industrySector",
+    label: "Industry / Sector Code",
+    type: "select",
+    options: SECTOR_CODE_OPTIONS,
+    validate: sectorCodeValidator,
+  },
   { key: "financialYearEnd", label: "Financial Year-End (yyyy-mm-dd)", type: "date", validate: dateValidator },
   { key: "physicalAddress", label: "Physical Address", type: "text" },
   { key: "postalAddress", label: "Postal Address", type: "text" },
