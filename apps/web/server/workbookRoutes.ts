@@ -686,6 +686,9 @@ function projectWorkbookToClient(wb: WorkbookData) {
       num((r as any).courseCost) +
         num((r as any).travelCost) +
         num((r as any).accommodationCost) +
+        num((r as any).cateringCost) +
+        num((r as any).stationeryCost) +
+        num((r as any).trainingFacilityCost) +
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
     const absorbed = Boolean((r as any).absorbed);

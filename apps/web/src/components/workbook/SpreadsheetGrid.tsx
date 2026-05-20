@@ -8,6 +8,25 @@ interface Props {
   columns: ColumnDef[];
   rows: Row[];
   onChange: (rows: Row[]) => void;
+  /** Optional cross-field row validator merged into per-cell errors. */
+  rowValidate?: (row: Record<string, unknown>) => Record<string, string>;
+}
+
+// A row counts as "empty" when no cell has user-entered content. Boolean
+// columns default to `false` on row creation, so only `true` is treated as
+// user data; non-boolean cells count as data when non-blank (trimmed).
+function isRowEmpty(row: Row, columns: ColumnDef[]): boolean {
+  for (const c of columns) {
+    const v = row[c.key];
+    if (c.type === "boolean") {
+      if (v === true) return false;
+      continue;
+    }
+    if (v === undefined || v === null) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    return false;
+  }
+  return true;
 }
 
 function makeId(): string {
@@ -22,16 +41,21 @@ function emptyRow(columns: ColumnDef[]): Row {
   return r;
 }
 
-export function SpreadsheetGrid({ columns, rows, onChange }: Props) {
+export function SpreadsheetGrid({ columns, rows, onChange, rowValidate }: Props) {
   const [active, setActive] = useState<{ row: number; col: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const validateRow = useCallback(
     (row: Row): Record<string, string> => {
       const errors: Record<string, string> = {};
+      // Per ruleset global_rules: only validate a row if at least one cell has data.
+      const empty = isRowEmpty(row, columns);
       for (const col of columns) {
         const v = row[col.key];
-        if (col.required && (v === "" || v === undefined || v === null)) {
+        const blank =
+          v === "" || v === undefined || v === null ||
+          (typeof v === "string" && v.trim() === "");
+        if (!empty && col.required && blank) {
           errors[col.key] = "Required";
           continue;
         }
@@ -40,9 +64,15 @@ export function SpreadsheetGrid({ columns, rows, onChange }: Props) {
           if (err) errors[col.key] = err;
         }
       }
+      if (!empty && rowValidate) {
+        const crossErrs = rowValidate(row);
+        for (const [k, msg] of Object.entries(crossErrs)) {
+          if (!errors[k]) errors[k] = msg;
+        }
+      }
       return errors;
     },
-    [columns],
+    [columns, rowValidate],
   );
 
   const errorMap = useMemo(() => {
