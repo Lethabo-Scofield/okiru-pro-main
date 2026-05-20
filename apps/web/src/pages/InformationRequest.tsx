@@ -6,7 +6,13 @@ import { API_BASE } from "@toolkit/lib/config";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
-import { SECTIONS, getSection, type ColumnDef } from "@/components/workbook/sections";
+import {
+  SECTIONS,
+  getSection,
+  getCompanyInfoMetaFields,
+  resolveScorecardTypeForSector,
+  type ColumnDef,
+} from "@/components/workbook/sections";
 import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
 import {
   validateWorkbook,
@@ -367,17 +373,30 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
   const handleMetaChange = useCallback(
     (sectionKey: string, meta: Record<string, unknown>) => {
+      let next = meta;
+      if (sectionKey === "company-information") {
+        const prevSector = String(
+          workbook?.sections[sectionKey]?.meta?.industrySector ?? "",
+        );
+        const newSector = String(meta.industrySector ?? "");
+        if (newSector !== prevSector) {
+          next = {
+            ...meta,
+            scorecardType: resolveScorecardTypeForSector(newSector, meta.scorecardType),
+          };
+        }
+      }
       setWorkbook((prev) => {
         if (!prev) return prev;
         const current = prev.sections[sectionKey] || { rows: [] };
         return {
           ...prev,
-          sections: { ...prev.sections, [sectionKey]: { ...current, meta } },
+          sections: { ...prev.sections, [sectionKey]: { ...current, meta: next } },
         };
       });
-      scheduleSave(sectionKey, { rows: [], meta });
+      scheduleSave(sectionKey, { rows: [], meta: next });
     },
-    [scheduleSave],
+    [scheduleSave, workbook],
   );
 
   const handleManualSave = useCallback(() => {
@@ -478,6 +497,13 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const activeData = workbook?.sections[activeKey] || { rows: [], meta: {} };
   const activeRows = activeData.rows || [];
   const activeMeta = (activeData.meta || {}) as Record<string, unknown>;
+  const activeMetaFields = useMemo((): ColumnDef[] | undefined => {
+    if (!activeSection?.meta) return undefined;
+    if (activeKey === "company-information") {
+      return getCompanyInfoMetaFields(String(activeMeta.industrySector ?? ""));
+    }
+    return activeSection.meta;
+  }, [activeKey, activeSection?.meta, activeMeta.industrySector]);
 
   const sectionStatus = (key: string): "empty" | "filled" => {
     const sec = workbook?.sections[key];
@@ -626,9 +652,9 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               <div className="flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
               </div>
-            ) : activeSection?.meta ? (
+            ) : activeMetaFields ? (
               <MetaForm
-                fields={activeSection.meta}
+                fields={activeMetaFields}
                 value={activeMeta}
                 onChange={(next) => handleMetaChange(activeKey, next)}
               />

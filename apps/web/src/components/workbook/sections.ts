@@ -124,6 +124,27 @@ export function getScorecardTypeOptions(sectorCode: string): string[] {
   }
 }
 
+/** Keep current scorecard type when still valid; auto-select when only one choice. */
+export function resolveScorecardTypeForSector(
+  sectorCode: string,
+  current: unknown,
+): string {
+  const allowed = getScorecardTypeOptions(sectorCode);
+  const value = String(current ?? "").trim();
+  if (value && allowed.includes(value)) return value;
+  if (allowed.length === 1) return allowed[0];
+  return "";
+}
+
+/** Company Information meta fields with scorecardType options filtered by sector. */
+export function getCompanyInfoMetaFields(sectorCode?: string): ColumnDef[] {
+  const sector = String(sectorCode ?? "").trim();
+  const options = sector ? getScorecardTypeOptions(sector) : [];
+  return COMPANY_INFO_META.map((f) =>
+    f.key === "scorecardType" ? { ...f, options } : f,
+  );
+}
+
 const sectorCodeValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const code = String(v).trim().toUpperCase();
