@@ -490,6 +490,7 @@ const clientSchema = new Schema({
   contactEmail: { type: String, default: null },
   contactPhone: { type: String, default: null },
   sectorCode: { type: String, default: 'RCOGP' },
+  scorecardType: { type: String, default: 'Generic' },
   industry: { type: String, default: 'Other' },
   companySize: { type: String, default: 'Generic' },
   annualTurnover: { type: Number, default: 0 },
