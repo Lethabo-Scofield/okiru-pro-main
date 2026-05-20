@@ -40,6 +40,7 @@ export interface Client {
   
   // Classification (auto-computed from turnover/employees)
   companySize: 'EME' | 'QSE' | 'Generic';
+  scorecardType?: 'EME' | 'QSE' | 'Generic' | 'Contractor' | 'BEP';
   annualTurnover: number;
   numberOfEmployees: number;
   

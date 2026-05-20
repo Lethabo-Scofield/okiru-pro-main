@@ -577,6 +577,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         contactPhone: data.client.contactPhone || '',
         sectorCode: data.client.sectorCode || 'RCOGP',
         companySize: data.client.companySize || 'Generic',
+        scorecardType: data.client.scorecardType || data.client.companySize || 'Generic',
         financialYear: data.client.financialYear || '',
         revenue: data.client.revenue || 0,
         npat: data.client.npat || 0,
@@ -870,8 +871,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     try {
       const { client } = get();
       const sectorCode = client.sectorCode || 'RCOGP';
-      const turnover = client.annualTurnover || client.revenue || 0;
-      const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
+      const scorecardType = client.scorecardType || client.companySize || 'Generic';
       const res = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
       if (res.ok) {
         const data = await res.json();
