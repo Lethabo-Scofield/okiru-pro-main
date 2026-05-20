@@ -3,7 +3,10 @@ import {
   validateWorkbook,
   validateScorecardTypeForSector,
 } from "../workbookValidation";
-import { getScorecardTypeOptions } from "../sections";
+import {
+  getScorecardTypeOptions,
+  resolveScorecardTypeForSector,
+} from "../sections";
 
 const validFinancialMeta = {
   revenue: 1_000_000,
@@ -160,5 +163,22 @@ describe("validateScorecardTypeForSector", () => {
 
   it("rejects QSE for AGRI", () => {
     expect(validateScorecardTypeForSector("AGRI", "QSE")).toMatch(/Use one of/);
+  });
+});
+
+describe("resolveScorecardTypeForSector", () => {
+  it("keeps valid scorecard type when sector changes within same option set", () => {
+    expect(resolveScorecardTypeForSector("RCOGP", "QSE")).toBe("QSE");
+    expect(resolveScorecardTypeForSector("ICT", "Generic")).toBe("Generic");
+  });
+
+  it("auto-selects Generic when sector allows only Generic", () => {
+    expect(resolveScorecardTypeForSector("FSC", "QSE")).toBe("Generic");
+    expect(resolveScorecardTypeForSector("AGRI", "")).toBe("Generic");
+  });
+
+  it("clears invalid scorecard type when multiple options remain", () => {
+    expect(resolveScorecardTypeForSector("RCOGP", "Contractor")).toBe("");
+    expect(resolveScorecardTypeForSector("CONSTRUCTION", "Generic")).toBe("");
   });
 });
