@@ -96,3 +96,7 @@ ARANGO_DB = "bbbee_db"
 ARANGO_USER = "root"
 ARANGO_VERIFY_SSL = "true"
 ALLOW_IN_MEMORY_DB = "true"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
