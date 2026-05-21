@@ -1,0 +1,57 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  extractBeeGatheringBuffer,
+  isBeeGatheringWorkbook,
+  mapExtractedToWorkbookSections,
+  normalizeSectorDeterministic,
+} from "../excelImport";
+import * as XLSX from "xlsx";
+
+const fixturePath = resolve(
+  process.cwd(),
+  "../../docs/BEE Information Gathering File - Thandanani Transport.xlsm",
+);
+
+describe("excelImport — Thandanani Transport fixture", () => {
+  const buffer = readFileSync(fixturePath).buffer;
+
+  it("detects BEE gathering workbook format", () => {
+    const wb = XLSX.read(buffer, { type: "array" });
+    expect(isBeeGatheringWorkbook(wb)).toBe(true);
+  });
+
+  it("extracts company, financials, and ownership totals", () => {
+    const result = extractBeeGatheringBuffer(buffer);
+    expect(result.isBeeGatheringFormat).toBe(true);
+    expect(result.data.companyName).toBe("Thandanani Transport");
+    expect(result.data.sector).toBe("TRANSPORT");
+    expect(result.data.revenue).toBe(10_826_271);
+    expect(result.data.npat).toBe(-27_124);
+    expect(result.data.payroll).toBe(2_753_331);
+    expect(result.data.totalProcurement).toBe(4_674_995);
+    expect(result.data.blackOwnership).toBe(100);
+    expect(result.data.financialYearEnd).toBe("2025-02-28");
+    expect(result.data.scorecardType).toBe("QSE");
+    expect(result.mappedSheets.length).toBeGreaterThan(3);
+  });
+
+  it("maps extracted data into workbook sections", () => {
+    const extraction = extractBeeGatheringBuffer(buffer);
+    const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sections = mapExtractedToWorkbookSections(extraction.data, wb);
+
+    expect(sections["company-information"]?.meta?.companyName).toBe("Thandanani Transport");
+    expect(sections["company-information"]?.meta?.industrySector).toBe("TRANSPORT");
+    expect(sections["financial-information"]?.meta?.revenue).toBe(10_826_271);
+    expect(sections.ownership?.rows?.length).toBeGreaterThan(0);
+    expect(sections.employees?.rows?.length).toBeGreaterThan(0);
+  });
+
+  it("normalizes sector labels deterministically", () => {
+    expect(normalizeSectorDeterministic("Transport")).toBe("TRANSPORT");
+    expect(normalizeSectorDeterministic("Financial Services")).toBe("FSC");
+    expect(normalizeSectorDeterministic("Unknown Sector XYZ")).toBeUndefined();
+  });
+});
