@@ -12,8 +12,91 @@ import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore, calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
+import {
+  calculateTransportQseEmploymentEquity,
+  calculateTransportQseManagement,
+} from "@toolkit/lib/calculators/transport";
+import { getSectorConfig } from "../../../../api/pipeline/sectorConfig";
 import type { CalculatorConfig } from "../../../shared/schema";
 import * as XLSX from "xlsx";
+
+function transportQseCalculatorConfig(): CalculatorConfig {
+  const sc = getSectorConfig("TRANSPORT", "QSE");
+  const t = sc.targets || {};
+  const own = t.ownership || {};
+  const mc = t.managementControl || {};
+  const ee = t.employmentEquity || {};
+  const sk = t.skills || {};
+  const pr = t.procurement || {};
+  const esd = t.esd || {};
+  const sed = t.sed || {};
+  const pc = sc.pillarConfigs || {};
+  return {
+    totalMaxPoints: sc.totalMaxPoints,
+    ownership: {
+      votingRightsMax: own.votingRightsMaxPts,
+      womenBonusMax: own.womenVotingMaxPts,
+      economicInterestMax: own.economicInterestMaxPts,
+      netValueMax: own.netValueMaxPts,
+      targetEconomicInterest: own.economicInterestTarget,
+      subMinNetValue: 0,
+      votingRightsTarget: own.votingRightsTarget,
+      womenVotingTarget: own.womenVotingTarget,
+      womenEIMax: own.womenEIMaxPts,
+      womenEITarget: own.womenEITarget,
+      newEntrantsMax: own.newEntrantsMaxPts,
+      designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
+      designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
+    },
+    management: {
+      boardBlackTarget: mc.boardBlackTarget,
+      boardBlackPoints: mc.boardBlackMaxPts,
+      boardWomenTarget: mc.boardBWTarget,
+      boardWomenPoints: mc.boardBWMaxPts,
+      execBlackTarget: mc.execBlackTarget,
+      execBlackPoints: mc.execBlackMaxPts,
+      execWomenTarget: mc.execBWTarget,
+      execWomenPoints: mc.execBWMaxPts,
+    },
+    managementControl: { maxPoints: pc.managementControl?.maxPoints ?? 27 },
+    employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27 },
+    skills: {
+      generalMax: sk.learningProgrammesMaxPts,
+      bursaryMax: sk.bursaryMaxPts,
+      overallTarget: sk.overallSpendPercent,
+      bursaryTarget: sk.bursarySpendPercent,
+      subMinThreshold: 0,
+    },
+    procurement: {
+      baseMax: pr.allSuppliersMaxPts,
+      bonusMax: 0,
+      tmpsTarget: 0,
+      subMinThreshold: 0,
+      blackOwnedThreshold: pr.bo51Target,
+      allSuppliersTarget: pr.allSuppliersTarget,
+      allSuppliersMaxPts: pr.allSuppliersMaxPts,
+    },
+    esd: {
+      supplierDevMax: esd.sdMaxPts,
+      enterpriseDevMax: esd.edMaxPts,
+      supplierDevTarget: (esd.sdPercent ?? 2) / 100,
+      enterpriseDevTarget: (esd.edPercent ?? 1) / 100,
+    },
+    sed: { maxPoints: sed.maxPts, npatTarget: (sed.spendPercent ?? 1) / 100 },
+    discounting: { dropLevels: 1, maxDropLevel: 8 },
+    pillarConfigs: {
+      ownership: { maxPoints: pc.ownership?.maxPoints ?? 28 },
+      managementControl: { maxPoints: pc.managementControl?.maxPoints ?? 27 },
+      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27 },
+      skillsDevelopment: { maxPoints: pc.skillsDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.skillsDevelopment?.chooseOneGroup },
+      preferentialProcurement: { maxPoints: pc.preferentialProcurement?.maxPoints ?? 25, chooseOneGroup: pc.preferentialProcurement?.chooseOneGroup },
+      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.enterpriseDevelopment?.chooseOneGroup },
+      socioEconomicDevelopment: { maxPoints: pc.socioEconomicDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.socioEconomicDevelopment?.chooseOneGroup },
+    },
+    benefitFactors: [],
+    industryNorms: [],
+  };
+}
 
 const RCOGP_GENERIC_CONFIG: CalculatorConfig = {
   totalMaxPoints: 120,
@@ -202,6 +285,64 @@ describe("excelImport — Thandanani Transport fixture", () => {
 
     const firstSh = sections.ownership?.rows?.[0] as Record<string, unknown> | undefined;
     expect(Number(firstSh?.blackOwnership)).toBeGreaterThan(0);
+  });
+
+  it("scores Thandanani Transport QSE at ~58-68 / 107 after import", () => {
+    const extraction = extractBeeGatheringBuffer(buffer);
+    const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sections = mapExtractedToWorkbookSections(
+      extraction.data,
+      wb,
+      extraction.ownershipChainTiers,
+    );
+    const projection = projectWorkbookToClient({
+      companyId: "thandanani-import-test",
+      ownerOrganizationId: null,
+      ownerUserId: "test",
+      sections,
+      updatedAt: new Date().toISOString(),
+    } as any);
+
+    const cfg = transportQseCalculatorConfig();
+    expect(cfg.totalMaxPoints).toBe(107);
+    expect(cfg.pillarConfigs?.ownership?.maxPoints).toBe(28);
+
+    const own = calculateOwnershipScore(
+      {
+        id: "",
+        clientId: "",
+        shareholders: projection.shareholders as any,
+        companyValue: 0,
+        outstandingDebt: 0,
+        yearsHeld: 5,
+      } as any,
+      cfg,
+    );
+    const mc = calculateTransportQseManagement(
+      { id: "", clientId: "", employees: projection.employees as any },
+      cfg,
+    );
+    const ee = calculateTransportQseEmploymentEquity(
+      { id: "", clientId: "", employees: projection.employees as any },
+      cfg,
+      "Gauteng",
+    );
+
+    const total = own.total + mc.score + ee.score;
+    // eslint-disable-next-line no-console
+    console.log("[SCORING-TRACE] Thandanani Transport QSE:", {
+      ownership: `${own.total} / ${cfg.pillarConfigs?.ownership?.maxPoints}`,
+      managementControl: `${mc.score} / ${mc.maxPoints}`,
+      employmentEquity: `${ee.score} / ${ee.maxPoints}`,
+      total: `${total} / ${cfg.totalMaxPoints}`,
+    });
+
+    expect(own.total).toBeCloseTo(28, 0);
+    expect(mc.maxPoints).toBe(27);
+    expect(ee.maxPoints).toBe(27);
+    expect(ee.score).toBeGreaterThan(0);
+    expect(total).toBeGreaterThan(40);
+    expect(total).toBeLessThan(70);
   });
 
   it("maps Lake Trading Test.xlsx into supplier, ESD, and SED detail rows", () => {
