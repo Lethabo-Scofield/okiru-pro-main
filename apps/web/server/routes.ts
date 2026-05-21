@@ -2435,20 +2435,12 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.put("/api/clients/:clientId/calculator-config", async (req, res) => {
-    try {
-      const userId = (req.session as any)?.userId;
-      if (!userId) return res.status(401).json({ error: "Not authenticated" });
-      const { clientId } = req.params;
-      const { config } = req.body;
-      if (!config) {
-        return res.status(400).json({ error: "config is required" });
-      }
-      const row = await storage.saveCalculatorConfig(clientId, config);
-      res.json(row.config);
-    } catch (error: any) {
-      logger.error("Error saving calculator config", error);
-      res.status(500).json({ error: "Failed to save calculator config" });
-    }
+    const userId = (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    // Client calculator overrides are disabled; sector config is authoritative.
+    res.status(403).json({
+      error: "Calculator config overrides are disabled. Use sector config from the scorecard builder.",
+    });
   });
 
   app.post("/api/generate-calculator-suggestions", async (req, res) => {

@@ -1161,9 +1161,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const scorecardType = client.scorecardType || client.companySize || 'Generic';
 
     const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
-    const clientConfig = await api.getCalculatorConfig(clientId).catch(() => null);
 
-    if (sectorConfig) {
+    if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
       console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
         totalMaxPoints: sectorConfig.totalMaxPoints,
         ownership: sectorConfig.pillarConfigs?.ownership?.maxPoints,
@@ -1175,26 +1174,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       return;
     }
 
-    if (clientConfig && hasValidPillarConfigs(clientConfig)) {
-      set({ calculatorConfig: clientConfig });
-      get()._recalculateAll();
-      return;
+    if (sectorConfig && !hasValidPillarConfigs(sectorConfig)) {
+      console.warn('[store] Sector config rejected (invalid pillar maxPoints):', sectorCode, scorecardType);
     }
 
     console.error('[store] No valid calculator config for', sectorCode, scorecardType);
   },
 
-  saveCalculatorConfig: async (config: CalculatorConfig) => {
-    set({ calculatorConfig: config });
-    get()._recalculateAll();
-    const clientId = get().activeClientId;
-    if (clientId) {
-      try {
-        await api.saveCalculatorConfig(clientId, config);
-      } catch (error) {
-        console.error('Failed to save calculator config:', error);
-      }
-    }
+  saveCalculatorConfig: async (_config: CalculatorConfig) => {
+    console.warn('[store] saveCalculatorConfig is disabled; sector config is authoritative');
   },
 
   _recalculateAll: () => {
