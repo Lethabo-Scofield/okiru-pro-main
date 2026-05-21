@@ -91,6 +91,9 @@ describe("excelImport — Thandanani Transport fixture", () => {
   it("normalizes sector labels deterministically", () => {
     expect(normalizeSectorDeterministic("Transport")).toBe("TRANSPORT");
     expect(normalizeSectorDeterministic("Financial Services")).toBe("FSC");
+    expect(normalizeSectorDeterministic("Retail / RCOGP")).toBe("RCOGP");
+    expect(normalizeSectorDeterministic("retail")).toBe("RCOGP");
+    expect(normalizeSectorDeterministic("Information and Communication Technology")).toBe("ICT");
     expect(normalizeSectorDeterministic("Unknown Sector XYZ")).toBeUndefined();
   });
 });

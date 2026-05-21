@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
+import OpenAI, { AzureOpenAI } from "openai";
 import { createLogger } from "./logger";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { getScorecardTypeOptions } from "../src/components/workbook/sections";
@@ -13,20 +13,32 @@ function norm(s: string): string {
 }
 
 const SECTOR_ALIASES: Record<string, string> = {
+  retailrcogp: "RCOGP",
+  retail: "RCOGP",
+  rcogp: "RCOGP",
+  retailmotoroilcateringaccommodation: "RCOGP",
   transport: "TRANSPORT",
+  transportandlogistics: "TRANSPORT",
   tourism: "RCOGP",
   agricultural: "AGRI",
   agriculture: "AGRI",
+  agri: "AGRI",
+  agribbbee: "AGRI",
   construction: "CONSTRUCTION",
   financialservices: "FSC",
   financial: "FSC",
+  financialsector: "FSC",
+  fsc: "FSC",
   ict: "ICT",
   informationcommunicationtechnology: "ICT",
+  informationandcommunicationtechnology: "ICT",
   property: "RCOGP",
   legal: "RCOGP",
   forestry: "AGRI",
   defence: "RCOGP",
 };
+
+const SECTOR_CODE_PARTIALS = ["RCOGP", "CONSTRUCTION", "TRANSPORT", "AGRI", "ICT", "FSC"] as const;
 
 function normalizeSectorDeterministic(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -37,7 +49,36 @@ function normalizeSectorDeterministic(raw: string | undefined): string | undefin
   for (const [alias, code] of Object.entries(SECTOR_ALIASES)) {
     if (key.includes(alias) || alias.includes(key)) return code;
   }
+  const lower = raw.toLowerCase();
+  for (const code of SECTOR_CODE_PARTIALS) {
+    if (lower.includes(code.toLowerCase())) return code;
+  }
   return undefined;
+}
+
+function getOpenAIClient(): { client: OpenAI; model: string } | null {
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+  if (endpoint && apiKey && deployment) {
+    return {
+      client: new AzureOpenAI({
+        endpoint,
+        apiKey,
+        deployment,
+        apiVersion: process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview",
+      }),
+      model: deployment,
+    };
+  }
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    return {
+      client: new OpenAI({ apiKey: openaiKey }),
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    };
+  }
+  return null;
 }
 
 function inferScorecardType(revenueHint: string | undefined, raw: string | undefined): string | undefined {
@@ -146,10 +187,10 @@ async function normalizeWithOpenAI(input: {
   financialYearEnd?: string;
   notes: string[];
 } | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  const openaiConfig = getOpenAIClient();
+  if (!openaiConfig) return null;
 
-  const openai = new OpenAI({ apiKey });
+  const { client: openai, model } = openaiConfig;
   const allowedSectors = SECTOR_CODE_OPTIONS.join(", ");
   const allowedTypes = SCORECARD_TYPES.join(", ");
 
@@ -164,7 +205,7 @@ async function normalizeWithOpenAI(input: {
 
   try {
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model,
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
@@ -264,7 +305,7 @@ export function registerExcelImportRoutes(app: Express) {
             validationWarnings,
           });
         }
-        notes.push("OPENAI_API_KEY not configured or AI call failed — using deterministic values only.");
+        notes.push("Azure OpenAI / OpenAI not configured or AI call failed — using deterministic values only.");
       }
 
       if (sector && scorecardType) {
