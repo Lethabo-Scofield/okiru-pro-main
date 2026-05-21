@@ -736,7 +736,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }));
 
       set({
-        isLoaded: true,
+        isLoaded: false,
         activeClientId: clientId,
         client: clientData,
         ownership: ownershipState,
@@ -751,8 +751,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         baseSnapshot: null,
       });
 
-      get()._recalculateAll();
       await get().loadCalculatorConfig(clientId);
+      set({ isLoaded: true });
+      get()._recalculateAll();
     } catch (error) {
       console.error('Failed to load client data:', clientId, error);
       throw error;

@@ -38,7 +38,7 @@ import { useEffect, useState } from "react";
 function RouteAwareSkeleton() {
   const [location] = useLocation();
 
-  if (location === '/scorecard') return <ScorecardSkeleton />;
+  if (location === '/scorecard' || location === '/scorecard-summary') return <ScorecardSkeleton />;
   if (location === '/reports') return <ReportsSkeleton />;
   if (location === '/scenarios') return <ScenariosSkeleton />;
   if (location === '/settings') return <SettingsSkeleton />;

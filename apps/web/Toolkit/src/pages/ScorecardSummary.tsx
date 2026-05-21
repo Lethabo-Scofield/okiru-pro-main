@@ -35,18 +35,43 @@ function pct(value: number): string {
 
 export default function ScorecardSummary() {
   const state = useBbeeStore();
-  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig } = state;
+  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig, isLoaded } = state;
   const { user } = useAuth();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
 
-  const cfg = calculatorConfig!;
-  const ownResult = useMemo(() => calculateOwnershipScore(ownership, cfg), [ownership, cfg]);
-  const mgtResult = useMemo(() => calculateManagementScore(management, cfg), [management, cfg]);
-  const skillResult = useMemo(() => calculateSkillsScore(skills, cfg), [skills, cfg]);
-  const procResult = useMemo(() => calculateProcurementScore(procurement, cfg), [procurement, cfg]);
-  const esdResult = useMemo(() => calculateEsdScore(esd, client.npat, cfg), [esd, client.npat, cfg]);
-  const sedResult = useMemo(() => calculateSedScore(sed, client.npat, cfg), [sed, client.npat, cfg]);
+  const hasConfig = !!calculatorConfig?.pillarConfigs;
+  const cfg = calculatorConfig;
+
+  const ownResult = useMemo(() => {
+    try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
+  }, [ownership, cfg, hasConfig]);
+  const mgtResult = useMemo(() => {
+    try { return hasConfig ? calculateManagementScore(management, cfg!) : null; } catch { return null; }
+  }, [management, cfg, hasConfig]);
+  const skillResult = useMemo(() => {
+    try { return hasConfig ? calculateSkillsScore(skills, cfg!) : null; } catch { return null; }
+  }, [skills, cfg, hasConfig]);
+  const procResult = useMemo(() => {
+    try { return hasConfig ? calculateProcurementScore(procurement, cfg!) : null; } catch { return null; }
+  }, [procurement, cfg, hasConfig]);
+  const esdResult = useMemo(() => {
+    try { return hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null; } catch { return null; }
+  }, [esd, client.npat, cfg, hasConfig]);
+  const sedResult = useMemo(() => {
+    try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
+  }, [sed, client.npat, cfg, hasConfig]);
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 py-24">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading scorecard summary...</p>
+        </div>
+      </div>
+    );
+  }
 
   const pillars: PillarSummary[] = [
     {
@@ -80,7 +105,7 @@ export default function ScorecardSummary() {
       accentColor: "text-emerald-500 dark:text-emerald-400",
       barColor: "bg-emerald-500",
       subMinimumMet: scorecard.skillsDevelopment.subMinimumMet,
-      bonusPoints: skillResult.absorption,
+      bonusPoints: skillResult?.absorption,
     },
     {
       key: "procurement",
@@ -92,7 +117,7 @@ export default function ScorecardSummary() {
       accentColor: "text-amber-500 dark:text-amber-400",
       barColor: "bg-amber-500",
       subMinimumMet: scorecard.procurement.subMinimumMet,
-      bonusPoints: procResult.designatedGroup,
+      bonusPoints: procResult?.designatedGroup,
     },
     {
       key: "supplierDevelopment",
@@ -115,7 +140,7 @@ export default function ScorecardSummary() {
       accentColor: "text-orange-500 dark:text-orange-400",
       barColor: "bg-orange-500",
       subMinimumMet: scorecard.enterpriseDevelopment.subMinimumMet,
-      bonusPoints: (esdResult.graduationBonus ? 1 : 0) + (esdResult.jobsCreatedBonus ? 1 : 0),
+      bonusPoints: (esdResult?.graduationBonus ? 1 : 0) + (esdResult?.jobsCreatedBonus ? 1 : 0),
     },
     {
       key: "socioEconomicDevelopment",

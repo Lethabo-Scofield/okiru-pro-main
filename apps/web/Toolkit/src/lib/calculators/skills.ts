@@ -166,8 +166,8 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
   const disabledTargetPct = sc.disabledSpendPercent ?? 0.003;
   const fgCap = sc.categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
   const adminCap = sc.adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
-  const subMinThreshold = config.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
-  const maxPoints = config.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
+  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
+  const maxPoints = config?.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
 
   const learningMaxPts = sc.learningProgrammesMaxPts ?? sc.generalMax;
   const bursaryMaxPts = sc.bursaryMaxPts ?? sc.bursaryMax;

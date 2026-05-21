@@ -147,8 +147,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
   const sdTotal = clampScore(sdScore, supplierDevMax);
   const edTotal = clampScore(edScore + graduationBonusScore + jobsCreatedBonusScore, enterpriseDevMax + 2);
 
-  const sdSubMinPct = config.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
-  const edSubMinPct = config.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
+  const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
+  const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
   const sdSubMinimumMet = sdTotal >= (supplierDevMax * sdSubMinPct / 100);
   const edSubMinimumMet = edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 

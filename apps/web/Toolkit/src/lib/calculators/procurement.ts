@@ -83,8 +83,8 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   const dgMaxPts = pc.dgMaxPts ?? 2;
   
   const blackWomenThreshold = config.procurement.blackWomenThreshold ?? 0.30;
-  const subMinThreshold = config.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
-  const maxPoints = config.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
+  const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
+  const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 
   const TARGET_ALL = tmps * allSuppliersTarget;
   const TARGET_QSE = tmps * qseTarget;
