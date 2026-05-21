@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
+import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import {
   SECTIONS,
@@ -55,6 +56,7 @@ interface Company {
   id?: string;
   clientId?: string;
   name: string;
+  createdByUserId?: string | null;
 }
 
 function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
@@ -328,26 +330,41 @@ function CompanyPicker({
             No companies yet. Create one below.
           </div>
         ) : (
-          <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
-            {filtered.map((c) => (
-              <button
-                key={c.id || c.clientId || c.name}
-                onClick={() => onPick(c)}
-                className="w-full text-left flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#0e0e10] hover:bg-[#2c2c2e] smooth press-sm"
-                data-testid={`company-${c.clientId || c.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-white/[0.06] grid place-items-center">
-                    <Building2 className="h-4 w-4 text-[#d1d1d6]" />
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-medium text-white">{c.name}</div>
-                    <div className="text-[11px] text-[#636366]">{c.clientId || c.id}</div>
-                  </div>
+          <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+            {filtered.map((c) => {
+              const companyId = c.clientId || c.id || "";
+              return (
+                <div
+                  key={companyId || c.name}
+                  className="flex items-center gap-1 rounded-lg bg-[#0e0e10] hover:bg-[#2c2c2e] smooth"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onPick(c)}
+                    className="flex-1 min-w-0 text-left flex items-center justify-between px-3 py-2.5 press-sm"
+                    data-testid={`company-${companyId}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-lg bg-white/[0.06] grid place-items-center shrink-0">
+                        <Building2 className="h-4 w-4 text-[#d1d1d6]" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-white truncate">{c.name}</div>
+                        <div className="text-[11px] text-[#636366] truncate">{companyId}</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-[#636366] shrink-0 ml-2" />
+                  </button>
+                  <DeleteCompanyButton
+                    companyId={companyId}
+                    companyName={c.name}
+                    createdByUserId={c.createdByUserId}
+                    onDeleted={load}
+                    className="mr-1"
+                  />
                 </div>
-                <ChevronRight className="h-4 w-4 text-[#636366]" />
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

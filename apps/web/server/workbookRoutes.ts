@@ -355,6 +355,17 @@ const DATA_SHEETS: DataSheetSpec[] = [
 const memoryStore = new Map<string, WorkbookData>();
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
+/** Remove workbook data when a client is deleted (Mongo or dev memory fallback). */
+export async function deleteWorkbookForClient(companyId: string): Promise<void> {
+  if (mongoReady()) {
+    await WorkbookModel.deleteOne({ companyId });
+    return;
+  }
+  if (canUseMemoryFallback()) {
+    memoryStore.delete(companyId);
+  }
+}
+
 function mongoReady(): boolean {
   return mongoose.connection.readyState === 1;
 }

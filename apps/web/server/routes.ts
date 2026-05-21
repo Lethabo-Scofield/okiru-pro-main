@@ -25,7 +25,8 @@ import { registerWorkbookRoutes } from "./workbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
-import { buildClientVisibilityFilter } from "./roles";
+import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import { deleteWorkbookForClient } from "./workbookRoutes";
 import {
   listClientsForTenant as memListClients,
   getClient as memGetClient,
@@ -1521,6 +1522,15 @@ export async function registerRoutes(
     return mem;
   }
 
+  function canDeleteClient(
+    client: { createdByUserId?: string | null },
+    userId: string,
+    user: { role?: string | null; secondaryRoles?: string[] | null } | null | undefined,
+  ): boolean {
+    if (hasAnyRole(user, "super_admin")) return true;
+    return !!client.createdByUserId && client.createdByUserId === userId;
+  }
+
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any).userId as string;
@@ -1647,13 +1657,22 @@ export async function registerRoutes(
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
 
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      if (!canDeleteClient(existing, userId, user)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const { clientId } = req.params;
+      await deleteWorkbookForClient(clientId);
+
       if (isMongoConnected()) {
-        const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+        const result = await ClientModel.deleteOne({ clientId });
         if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
         return res.json({ success: true });
       }
 
-      const ok = memDeleteClient(req.params.clientId);
+      const ok = memDeleteClient(clientId);
       if (!ok) return res.status(404).json({ error: "Client not found" });
       res.json({ success: true });
     } catch (error: any) {

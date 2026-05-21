@@ -6,6 +6,7 @@ import { Loader2, Search, ChevronRight, FileText, Building2, HelpCircle, Externa
 import { useOnboarding, OnboardingTour } from '@/components/OnboardingTour';
 import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
+import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
 import { API_BASE } from '@toolkit/lib/config';
 
 interface ClientRow {
@@ -16,6 +17,7 @@ interface ClientRow {
   sectorCode?: string;
   scorecardType?: string;
   updatedAt?: string;
+  createdByUserId?: string | null;
 }
 
 type Page = 'home' | 'scorecards';
@@ -62,6 +64,7 @@ export default function Dashboard() {
       industry: c.industrySector || c.sectorCode || 'Other',
       scorecardType: c.scorecardType || 'â€”',
       updatedAt: c.updatedAt,
+      createdByUserId: c.createdByUserId,
     }));
   }, [clients]);
 
@@ -148,45 +151,45 @@ export default function Dashboard() {
               <p className="text-[15px] text-[#98989f] mt-1">Choose what you want to do.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-5xl">
               <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth"
+                className="group text-left rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] p-8 min-h-[200px] lift press hover:bg-[#2c2c2e] smooth w-full"
                 onClick={() => navigate('/create-scorecard')}
                 data-testid="card-create-scorecard"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">Create Scorecard</div>
-                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[18px] font-semibold tracking-tight text-white">Create Scorecard</div>
+                    <div className="text-[14px] text-[#98989f] mt-2 leading-relaxed max-w-xl">
                       Pick a company and complete the information workbook, then submit to scorecard.
                     </div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
-                    <ClipboardList className="h-5 w-5 text-[#d1d1d6]" />
+                  <div className="h-12 w-12 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.12] smooth shrink-0">
+                    <ClipboardList className="h-6 w-6 text-[#d1d1d6]" />
                   </div>
                 </div>
-                <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
+                <div className="mt-6 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
                   Workbook <ChevronRight className="w-3 h-3" /> Submit
                 </div>
               </button>
 
               <button
-                className="group text-left rounded-2xl bg-[#1c1c1e] p-6 lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-1"
+                className="group text-left rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] p-8 min-h-[200px] lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-1 w-full"
                 onClick={() => goTo('scorecards')}
                 data-testid="card-scorecards"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-[15px] font-semibold tracking-tight text-white">View Scorecard</div>
-                    <div className="text-[13px] text-[#98989f] mt-1.5 leading-relaxed">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[18px] font-semibold tracking-tight text-white">View Scorecard</div>
+                    <div className="text-[14px] text-[#98989f] mt-2 leading-relaxed max-w-xl">
                       Open saved companies in the scorecard or toolkit.
                     </div>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.18]/15 smooth">
-                    <Building2 className="h-5 w-5 text-[#d1d1d6]" />
+                  <div className="h-12 w-12 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.12] smooth shrink-0">
+                    <Building2 className="h-6 w-6 text-[#d1d1d6]" />
                   </div>
                 </div>
-                <div className="mt-5 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
+                <div className="mt-6 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
                   Companies <ChevronRight className="w-3 h-3" /> Scorecard
                 </div>
               </button>
@@ -308,6 +311,12 @@ export default function Dashboard() {
                           <td className="px-5 py-3.5 text-[#8e8e93]">{c.scorecardType}</td>
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-2">
+                              <DeleteCompanyButton
+                                companyId={c.id}
+                                companyName={c.name}
+                                createdByUserId={c.createdByUserId}
+                                onDeleted={fetchClients}
+                              />
                               <button
                                 onClick={() => openSummary(c.id)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
