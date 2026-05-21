@@ -844,10 +844,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-12 gap-6">
         <aside className="col-span-12 lg:col-span-3">
           <div
-            className="rounded-xl bg-[#1c1c1e] p-2 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto"
+            className="rounded-xl bg-[#1c1c1e] p-2 lg:sticky lg:top-[calc(3.5rem+1rem)] lg:max-h-[calc(100vh-3.5rem-2rem)] lg:overflow-y-auto lg:z-10"
             data-testid="workbook-tabs"
           >
             {enabledSections.map((s) => {
