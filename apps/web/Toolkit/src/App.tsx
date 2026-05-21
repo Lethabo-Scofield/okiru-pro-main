@@ -22,7 +22,6 @@ import Financials from "@toolkit/pages/pillars/Financials";
 import IndustryNorms from "@toolkit/pages/pillars/IndustryNorms";
 import Reports from "@toolkit/pages/Reports";
 import Scenarios from "@toolkit/pages/Scenarios";
-import ExcelImport from "@toolkit/pages/ExcelImport";
 import Scorecard from "@toolkit/pages/Scorecard";
 import ScorecardSummary from "@toolkit/pages/ScorecardSummary";
 import Settings from "@toolkit/pages/Settings";
@@ -128,7 +127,6 @@ export function AppRoutes() {
           <Route path="/" component={Dashboard}/>
           <Route path="/scorecard" component={Scorecard}/>
           <Route path="/scorecard-summary" component={ScorecardSummary}/>
-          <Route path="/import" component={ExcelImport}/>
           <Route path="/scenarios" component={Scenarios}/>
           <Route path="/reports" component={Reports}/>
           <Route path="/settings" component={Settings}/>
