@@ -87,26 +87,29 @@ function classifyDemographic(emp: Employee): DemoGroup | null {
  * Per-demographic EAP scoring per RCOGP slide 100.
  * Each group gets its own effective target, effective weight, and score.
  * Achievement is capped at the EAP proportion to prevent gaming.
+ *
+ * The aggregate score is a simple safeRatio against the overall category
+ * black-EAP target (matching the Excel ground-truth template and the UCS
+ * engine in `apps/api/pipeline/rules/pillarCalculators.ts`). The
+ * per-demographic breakdown is still surfaced for UI diagnostics, but the
+ * old `eapProp * maxPoints` weighting only ever summed to ~92.5% of the
+ * pillar max, permanently capping scores. See LAKE_TRADING_FIX_PLAN §1 Bug 2:
+ * Lake Trading must produce ≈11.77/19 (Gauteng) to hit the 63.56 grand total.
  */
 function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): { score: number; breakdown: EAPGroupBreakdown[] } {
   if (employees.length === 0) return { score: 0, breakdown: [] };
-  let totalScore = 0;
   const breakdown: EAPGroupBreakdown[] = [];
   for (const group of Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]) {
     const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
-    const effectiveTarget = eapProp * categoryTarget;
-    const effectiveWeight = eapProp * maxPoints;
-
     const count = employees.filter(e => classifyDemographic(e) === group).length;
     const ratio = employees.length > 0 ? count / employees.length : 0;
     breakdown.push({ group, eapTarget: round2(eapProp), actual: round2(ratio), count, totalInLevel: employees.length });
-
-    if (effectiveTarget <= 0) continue;
-    const cappedRatio = Math.min(ratio, eapProp);
-    const achievement = cappedRatio / effectiveTarget;
-    totalScore += Math.min(achievement, 1) * effectiveWeight;
   }
-  return { score: totalScore, breakdown };
+  const blackPct = countBlack(employees) / employees.length;
+  const score = categoryTarget > 0
+    ? Math.min((blackPct / categoryTarget) * maxPoints, maxPoints)
+    : 0;
+  return { score, breakdown };
 }
 
 const countBlack = (emps: Employee[]): number =>
@@ -217,27 +220,32 @@ export function calculateManagementScore(
   const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
   const otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
   const otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
-  // Per-demographic EAP scoring (slide 100) for Senior/Middle/Junior
+  // Lake Trading Fix Plan §1 Bug 2 — match the Excel ground-truth template
+  // (and `apps/api/pipeline/rules/pillarCalculators.ts::calcManagement`) by
+  // scoring Black and BWO independently with simple safeRatio against the
+  // provincial EAP target. The per-demographic breakdown is still surfaced
+  // below for UI diagnostics. Junior includes Semi-skilled and Unskilled.
   const seniorTarget = cfg?.seniorBlackTarget ?? seniorEAP.blackTarget;
+  const seniorBWTarget = seniorEAP.blackWomenTarget;
   const middleTarget = cfg?.middleBlackTarget ?? middleEAP.blackTarget;
+  const middleBWTarget = middleEAP.blackWomenTarget;
   const juniorTarget = cfg?.juniorBlackTarget ?? juniorEAP.blackTarget;
-
-  const seniorEAPResult = calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts);
-  const seniorScore = clampScore(seniorEAPResult.score, seniorMaxPts + seniorBWMaxPts);
-  const middleEAPResult = calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts);
-  const middleScore = clampScore(middleEAPResult.score, middleMaxPts + middleBWMaxPts);
+  const juniorBWTarget = juniorEAP.blackWomenTarget;
 
   const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
-  const juniorEAPResult = calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts);
-  const juniorScore = clampScore(juniorEAPResult.score, juniorMaxPts + juniorBWMaxPts);
+  const juniorCombinedBlackPct = pctOf(juniorCombined, countBlack);
+  const juniorCombinedBWOPct = pctOf(juniorCombined, countBlackWomen);
 
-  // Split combined EAP score into Black/BWO proportions for display
-  const seniorBlack = clampScore(seniorScore * (seniorMaxPts / (seniorMaxPts + seniorBWMaxPts)), seniorMaxPts);
-  const seniorBWO = clampScore(seniorScore - seniorBlack, seniorBWMaxPts);
-  const middleBlack = clampScore(middleScore * (middleMaxPts / (middleMaxPts + middleBWMaxPts)), middleMaxPts);
-  const middleBWO = clampScore(middleScore - middleBlack, middleBWMaxPts);
-  const juniorBlackScore = clampScore(juniorScore * (juniorMaxPts / (juniorMaxPts + juniorBWMaxPts)), juniorMaxPts);
-  const juniorBWOScore = clampScore(juniorScore - juniorBlackScore, juniorBWMaxPts);
+  const seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorTarget, seniorMaxPts), seniorMaxPts);
+  const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorBWTarget, seniorBWMaxPts), seniorBWMaxPts);
+  const middleBlack = clampScore(safeRatio(middleBlackPct, middleTarget, middleMaxPts), middleMaxPts);
+  const middleBWO = clampScore(safeRatio(middleBWOPct, middleBWTarget, middleBWMaxPts), middleBWMaxPts);
+  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorTarget, juniorMaxPts), juniorMaxPts);
+  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorBWTarget, juniorBWMaxPts), juniorBWMaxPts);
+
+  const seniorEAPResult = calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts);
+  const middleEAPResult = calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts);
+  const juniorEAPResult = calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts);
 
   // Skilled Technical is informational only (not part of RCOGP 19-point total)
   const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, seniorMaxPts), seniorMaxPts);

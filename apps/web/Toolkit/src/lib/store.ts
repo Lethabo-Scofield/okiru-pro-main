@@ -595,6 +595,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         })),
       };
 
+      // Lake Trading Fix Plan §1 Bug 6: pass through every scoring field the
+      // ownership calculator reads — yearsHeld, isDesignatedGroup, blackNewEntrant,
+      // votingRightsPercent, economicInterestPercent. Without these the
+      // calculator can't award Designated Groups / New Entrants / graduation.
       const ownershipState: OwnershipData = {
         id: data.ownership?.id || '',
         clientId,
@@ -606,6 +610,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           blackWomenOwnership: sh.blackWomenOwnership || 0,
           shares: sh.shares || 0,
           shareValue: sh.shareValue || 0,
+          yearsHeld: sh.yearsHeld || 0,
+          isDesignatedGroup: Boolean(sh.isDesignatedGroup),
+          designatedGroupType: sh.designatedGroupType,
+          blackNewEntrant: Boolean(sh.blackNewEntrant),
+          votingRightsPercent:
+            sh.votingRightsPercent ?? sh.blackOwnership ?? 0,
+          economicInterestPercent:
+            sh.economicInterestPercent ?? sh.blackOwnership ?? 0,
         })),
         companyValue: data.ownership?.companyValue || 0,
         outstandingDebt: data.ownership?.outstandingDebt || 0,
@@ -655,6 +667,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         yesAbsorbedCount: yesCandidatesFromSkills.filter((tp: any) => tp.isAbsorbed).length,
       };
 
+      // Lake Trading Fix Plan §1 Bug 6 + 8: preserve every flag the procurement
+      // calculator reads (isEmpoweringSupplier, isForeignSupplier, BO51/BWO30,
+      // designated-group flag) and default beeLevel to 0 (non-compliant) — never
+      // to 4, which silently inflates procurement for missing certificates.
       const procurementState: ProcurementData = {
         id: '',
         clientId,
@@ -662,13 +678,23 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         suppliers: (data.procurement?.suppliers || []).map((s: any) => ({
           id: s.id,
           name: s.name,
-          beeLevel: s.beeLevel || 4,
+          beeLevel: Number.isFinite(Number(s.beeLevel)) ? Number(s.beeLevel) : 0,
           blackOwnership: s.blackOwnership || 0,
           blackWomenOwnership: s.blackWomenOwnership || 0,
           youthOwnership: s.youthOwnership || 0,
           disabledOwnership: s.disabledOwnership || 0,
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
+          isEmpoweringSupplier:
+            typeof s.isEmpoweringSupplier === 'boolean'
+              ? s.isEmpoweringSupplier
+              : Boolean(s.empoweringSupplier),
+          isForeignSupplier: Boolean(s.isForeignSupplier),
+          isBlackOwned51: Boolean(s.isBlackOwned51),
+          isBlackWomanOwned30: Boolean(s.isBlackWomanOwned30),
+          isDesignatedGroup: Boolean(s.isDesignatedGroup),
+          isSupplierDevRecipient: Boolean(s.isSupplierDevRecipient),
+          hasThreeYearContract: Boolean(s.hasThreeYearContract),
         })),
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };

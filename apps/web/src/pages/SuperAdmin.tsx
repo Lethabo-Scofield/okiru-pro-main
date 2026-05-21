@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@toolkit/lib/auth";
 import { apiRequest, queryClient } from "@toolkit/lib/queryClient";
@@ -80,6 +80,18 @@ interface PillarConfig {
   maxPoints: number;
   hasSubMinimum: boolean;
   subMinimumPercent: number;
+  chooseOneGroup?: string;
+}
+
+interface SectorIndicatorRow {
+  code: string;
+  element: string;
+  category: string;
+  name: string;
+  weight: number;
+  target: number | string;
+  targetUnit?: string;
+  calculation?: string;
 }
 
 interface Sector {
@@ -90,6 +102,7 @@ interface Sector {
   pillarConfigs?: Record<string, PillarConfig | undefined> | StoredPillarLike[];
   targets?: Record<string, unknown>;
   levelThresholds?: Array<{ level: number; minPoints: number; recognition: number }> | unknown;
+  indicators?: SectorIndicatorRow[];
 }
 
 /** Arango / ingestion shape: pillar list rows, not a keyed record */
@@ -142,6 +155,9 @@ function safePillarConfigs(sector: Sector | null | undefined): Record<string, Pi
         maxPoints,
         hasSubMinimum: Boolean(item.hasSubMinimum),
         subMinimumPercent: subMin,
+        ...((item as { chooseOneGroup?: string }).chooseOneGroup
+          ? { chooseOneGroup: (item as { chooseOneGroup?: string }).chooseOneGroup }
+          : {}),
       };
     }
     return out;
@@ -389,7 +405,39 @@ function getPillarFormula(pillarKey: string, fieldKey: string): string {
   return bucket[fieldKey] ?? "min(actual / target, 1) × max_points";
 }
 
+/** Construction element name → workbook / sectorConfig pillar key. */
+const PILLAR_TO_CONSTRUCTION_ELEMENT: Record<string, string> = {
+  ownership: "ownership",
+  managementControl: "managementControl",
+  skillsDevelopment: "skillsDevelopment",
+  supplierDevelopment: "enterpriseSupplierDevelopment",
+  socioEconomicDevelopment: "socioEconomicDevelopment",
+};
+
+function buildIndicatorRows(sector: Sector, pillarKey: string): TargetRow[] {
+  const indicators = sector.indicators;
+  if (!indicators?.length) return [];
+  const element = PILLAR_TO_CONSTRUCTION_ELEMENT[pillarKey] ?? pillarKey;
+  return indicators
+    .filter((ind) => ind.element === element && ind.weight > 0)
+    .map((ind) => ({
+      criteria: ind.name,
+      points: ind.weight,
+      target:
+        typeof ind.target === "number"
+          ? ind.targetUnit === "percent" || ind.targetUnit === "percent_above"
+            ? `${ind.target}%`
+            : String(ind.target)
+          : String(ind.target),
+      formula: ind.calculation ?? "indicator",
+      isBonus: ind.category === "bonus",
+    }));
+}
+
 function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
+  const indicatorRows = buildIndicatorRows(sector, pillarKey);
+  if (indicatorRows.length > 0) return indicatorRows;
+
   const targets = sector.targets;
   if (!targets || typeof targets !== "object") return [];
   const bucketKey = PILLAR_TARGET_KEY[pillarKey];
@@ -397,8 +445,19 @@ function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
   const bucket = (targets as Record<string, unknown>)[bucketKey];
   if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];
 
+  // Super Admin Fix Plan §1.2 — SD and ED share `targets.esd`; filter by key prefix.
+  const esdPrefix =
+    bucketKey === "esd"
+      ? pillarKey === "supplierDevelopment"
+        ? "sd"
+        : pillarKey === "enterpriseDevelopment"
+          ? "ed"
+          : null
+      : null;
+
   const rows: TargetRow[] = [];
   for (const [k, v] of Object.entries(bucket as Record<string, unknown>)) {
+    if (esdPrefix && !k.toLowerCase().startsWith(esdPrefix)) continue;
     if (typeof v !== "number" || v <= 0) continue;
     if (!k.endsWith("MaxPts") && !k.endsWith("Bonus")) continue;
     const targetKey = k.replace(/MaxPts$/, "Target").replace(/Bonus$/, "Target");
@@ -482,8 +541,13 @@ function ApiPillarCard({
         onClick={() => hasDetail && setOpen((v) => !v)}
         disabled={!hasDetail}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <span className="text-sm font-semibold truncate">{PILLAR_NAMES[pillarKey] ?? pillarKey}</span>
+          {config.chooseOneGroup === "transport_qse_elective" && (
+            <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700 shrink-0">
+              Elective — choose 1 of 4
+            </Badge>
+          )}
           {config.hasSubMinimum && (
             <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-600 shrink-0">
               sub-min {config.subMinimumPercent}%
@@ -601,6 +665,14 @@ function SectorTabView({ sector }: { sector: Sector }) {
           </Badge>
         )}
       </div>
+
+      {isTransportQse(sector) && (
+        <p className="text-xs text-amber-700 bg-amber-500/5 border border-amber-500/30 rounded-md px-3 py-2">
+          This scorecard requires choosing exactly one of four elective pillars (Skills Development, Preferential
+          Procurement, Enterprise Development, or Socio-Economic Development), each worth 25 pts. That elective is added
+          to the 82-pt compulsory base for a 107-pt total.
+        </p>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-2">

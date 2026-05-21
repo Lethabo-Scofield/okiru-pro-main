@@ -650,23 +650,150 @@ async function authorizeWorkbookAccess(
 
 // ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
 
-function projectWorkbookToClient(wb: WorkbookData) {
+// Lake Trading Fix Plan §1 Bug 1 (ownership) helpers
+const BLACK_RACES = new Set(["African", "Coloured", "Indian"]);
+
+// Lake Trading Fix Plan §1 Bug 2 (designations) — workbook label → calculator enum
+const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
+  "Executive Director": "Executive Director",
+  "Non-executive Director": "Board",
+  "Other Executive Manager": "Other Executive Management",
+  "Senior Manager": "Senior",
+  "Middle Manager": "Middle",
+  "Junior Manager": "Junior",
+  "Semi-skilled": "Semi-skilled",
+  "Unskilled": "Unskilled",
+  // pass-through for direct enum values already used elsewhere
+  Board: "Board",
+  Executive: "Executive",
+  "Other Executive Management": "Other Executive Management",
+  Senior: "Senior",
+  Middle: "Middle",
+  Junior: "Junior",
+  "Skilled Technical": "Skilled Technical",
+};
+
+function mapDesignation(raw: string): string {
+  const trimmed = (raw ?? "").trim();
+  return WORKBOOK_TO_DESIGNATION[trimmed] ?? trimmed;
+}
+
+// Lake Trading Fix Plan §1 Bug 4 + 5 (ESD/SED type)
+// Map human-friendly workbook contributionType labels → calculator snake_case keys
+function mapContributionType(raw: string): string {
+  const t = (raw ?? "").toLowerCase().replace(/\s+/g, "_");
+  if (t.includes("grant")) return "grant";
+  if (t.includes("interest") && t.includes("free")) return "interest_free_loan";
+  if (t.includes("loan")) return "standard_loan";
+  if (t.includes("guarantee")) return "guarantees";
+  if (t.includes("discount")) return "discounts";
+  if (t.includes("payment") && t.includes("period")) return "shorter_payment_terms";
+  if (t.includes("professional")) return "professional_services_free";
+  if (t.includes("human") || t.includes("employee_time")) return "employee_time";
+  if (t.includes("direct")) return "direct_cost";
+  // "Other Monetary" / fallback — Lake fixture uses this for direct-cost SD/ED
+  return "direct_cost";
+}
+
+function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
+  const t = (raw ?? "").toLowerCase();
+  if (t.startsWith("enterprise")) return "enterprise_development";
+  // Lake Trading Fix Plan §1 Bug 4: safe default — counts toward SD sub-min
+  return "supplier_development";
+}
+
+// Lake Trading Fix Plan §1 Bug 3 + 7: supplier size → enterpriseType + unit normalisation
+function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
+  const t = (rawSize ?? "").trim().toLowerCase();
+  if (t === "eme") return "eme";
+  if (t === "qse") return "qse";
+  return "generic";
+}
+
+// Lake Trading Fix Plan §1 Bug 7: workbook stores % (0–100); calculators expect fractions (0–1)
+function pctToFraction(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  if (n <= 1) return Math.max(0, n);
+  return Math.max(0, n / 100);
+}
+
+// Lake Trading Fix Plan §1 Bug 3: beeLevel must be a number 1–8 (0 = non-compliant)
+function parseBeeLevel(raw: unknown): number {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 1 && n <= 8) return Math.round(n);
+  return 0;
+}
+
+export function projectWorkbookToClient(wb: WorkbookData) {
   const sec = wb.sections;
   const finMeta = (sec["financial-information"]?.meta ?? {}) as Record<string, unknown>;
   const companyMeta = (sec["company-information"]?.meta ?? {}) as Record<string, unknown>;
 
-  const shareholders = (sec["ownership"]?.rows ?? []).map((r) => ({
-    name: s((r as any).shareholderName ?? (r as any).name),
-    idNumber: s((r as any).idNumber),
-    race: s((r as any).race),
-    gender: s((r as any).gender),
-    isDisabled: Boolean((r as any).isDisabled),
-    isYouth: Boolean((r as any).isYouth),
-    votingRights: num((r as any).votingRights),
-    economicInterest: num((r as any).economicInterest),
-    shareholding: num((r as any).shareholding),
-    modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
-  }));
+  // Lake Trading Fix Plan §1 Bug 1: write every scoring field the calculators read,
+  // derived from the workbook columns (race, gender, votingRights%, economicInterest%, etc.).
+  // For trust / multi-beneficiary holders the workbook row can also carry an
+  // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
+  // Lake demo seed for the Family Trust shareholder); when present we prefer it.
+  const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
+    const race = s((r as any).race);
+    const gender = s((r as any).gender);
+    const isBlack = BLACK_RACES.has(race);
+    const isFemale = gender === "Female";
+    const votingPct = pctToFraction((r as any).votingRights);
+    const eiPct = pctToFraction((r as any).economicInterest);
+    const sharePct = pctToFraction((r as any).shareholding);
+    const isYouth = Boolean((r as any).isYouth);
+    const isDisabled = Boolean((r as any).isDisabled);
+    // Lake demo writes `isNewEntrant` directly; default false otherwise.
+    const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+
+    // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
+    // supplies them (trust holders, multi-beneficiary shareholders). Fall back
+    // to race+gender+voting/EI derivation for individual shareholders.
+    const explicitBlackOwn = (r as any).blackOwnership;
+    const explicitBlackWomenOwn = (r as any).blackWomenOwnership;
+    const blackOwnership =
+      explicitBlackOwn != null
+        ? pctToFraction(explicitBlackOwn)
+        : isBlack
+          ? Math.max(votingPct, eiPct)
+          : 0;
+    const blackWomenOwnership =
+      explicitBlackWomenOwn != null
+        ? pctToFraction(explicitBlackWomenOwn)
+        : isBlack && isFemale
+          ? Math.max(votingPct, eiPct)
+          : 0;
+
+    return {
+      name: s((r as any).shareholderName ?? (r as any).name),
+      idNumber: s((r as any).idNumber),
+      race,
+      gender,
+      isDisabled,
+      isYouth,
+      votingRights: num((r as any).votingRights),
+      economicInterest: num((r as any).economicInterest),
+      shareholding: num((r as any).shareholding),
+      modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
+      // NEW (fix plan Bug 1) — scoring-engine fields the loader reads.
+      blackOwnership,
+      blackWomenOwnership,
+      // Use integer "shares" derived from shareholding %; only relative weight matters
+      // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
+      // branch in calculateOwnershipScore so blackOwnership flows through.
+      shares: Math.max(1, Math.round(sharePct * 10_000)),
+      shareValue: 1,
+      yearsHeld: num((r as any).yearsHeld),
+      isDesignatedGroup:
+        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled,
+      blackNewEntrant: isNewEntrant,
+      votingRightsPercent: votingPct,
+      economicInterestPercent: eiPct,
+      ownershipType: "shareholder" as const,
+    };
+  });
 
   const empSeen = new Set<string>();
   const employees: any[] = [];
@@ -675,6 +802,11 @@ function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && empSeen.has(id)) continue;
       if (id) empSeen.add(id);
+      // Lake Trading Fix Plan §1 Bug 2: translate workbook label → calculator enum
+      const rawDesig = s((r as any).designation ?? (r as any).occupationalLevel);
+      const rawOcc = s((r as any).occupationalLevel ?? (r as any).designation);
+      const designation = mapDesignation(rawDesig);
+      const occupationalLevel = mapDesignation(rawOcc);
       employees.push({
         name: s((r as any).name),
         surname: s((r as any).surname),
@@ -682,8 +814,8 @@ function projectWorkbookToClient(wb: WorkbookData) {
         idNumber: s((r as any).idNumber),
         race: s((r as any).race),
         gender: s((r as any).gender),
-        occupationalLevel: s((r as any).occupationalLevel ?? (r as any).designation),
-        designation: s((r as any).designation ?? (r as any).occupationalLevel),
+        occupationalLevel,
+        designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
         isDisabled: Boolean((r as any).isDisabled),
@@ -743,58 +875,100 @@ function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && supSeen.has(id)) continue;
       if (id) supSeen.add(id);
-      const blackOwn = num((r as any).currentBlackOwnership);
-      const blackFemOwn = num((r as any).currentBlackFemaleOwnership);
-      const lvl = s((r as any).bbbeeLevel);
+      // Lake Trading Fix Plan §1 Bug 7: workbook stores % (0–100); calculators
+      // expect fractions (0–1). Normalise once at projection.
+      const blackOwnershipFraction = pctToFraction((r as any).currentBlackOwnership);
+      const blackFemaleOwnershipFraction = pctToFraction(
+        (r as any).currentBlackFemaleOwnership,
+      );
+      // Lake Trading Fix Plan §1 Bug 3: map workbook size → enterpriseType, parse
+      // beeLevel to a number (loader default of 4 hides non-compliant suppliers
+      // — see Bug 8 — but here we just carry the parsed value through).
+      const sizeRaw = s((r as any).currentSize);
+      const enterpriseType = mapEnterpriseType(sizeRaw);
+      const beeLevel = parseBeeLevel((r as any).bbbeeLevel);
       suppliers.push({
+        id: id ?? undefined,
         supplierName: s((r as any).supplierName),
         // Alias `name` for downstream consumers that key off it.
         name: s((r as any).supplierName),
-        currentSize: s((r as any).currentSize),
-        size: s((r as any).currentSize),
-        bbbeeLevel: lvl,
-        beeLevel: lvl,
+        currentSize: sizeRaw,
+        size: sizeRaw,
+        enterpriseType, // Lake Trading Fix Plan §1 Bug 3
+        bbbeeLevel: beeLevel,
+        beeLevel,
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
         empoweringSupplier: Boolean((r as any).empoweringSupplier),
-        currentBlackOwnership: blackOwn,
-        blackOwnership: blackOwn,
-        currentBlackFemaleOwnership: blackFemOwn,
-        blackFemaleOwnership: blackFemOwn,
+        isEmpoweringSupplier: Boolean((r as any).empoweringSupplier),
+        // Carry both the raw % (for audit) and the fraction (for scoring)
+        currentBlackOwnership: num((r as any).currentBlackOwnership),
+        blackOwnership: blackOwnershipFraction,
+        currentBlackFemaleOwnership: num((r as any).currentBlackFemaleOwnership),
+        blackFemaleOwnership: blackFemaleOwnershipFraction,
+        blackWomenOwnership: blackFemaleOwnershipFraction,
         sdRecipient: Boolean((r as any).sdRecipient),
+        isSupplierDevRecipient: Boolean((r as any).sdRecipient),
         threeYearContract: Boolean((r as any).threeYearContract),
+        hasThreeYearContract: Boolean((r as any).threeYearContract),
         designated: Boolean((r as any).designated),
+        isDesignatedGroup: Boolean((r as any).designated),
         spend: num((r as any).spend),
         amount: num((r as any).spend),
+        // Calculators check these flags when present
+        isBlackOwned51: blackOwnershipFraction >= 0.51,
+        isBlackWomanOwned30: blackFemaleOwnershipFraction >= 0.30,
         firstProcurementDate: s((r as any).firstProcurementDate),
         certificateExpiryDate: s((r as any).certificateExpiryDate),
       });
     }
   }
 
-  const esdContributions = (sec["esd"]?.rows ?? []).map((r) => ({
-    supplierName: s((r as any).supplierName),
-    currentBlackOwnership: num((r as any).currentBlackOwnership),
-    currentSize: s((r as any).currentSize),
-    contributionDescription: s((r as any).contributionDescription),
-    contributionType: s((r as any).contributionType),
-    amount: num((r as any).amount),
-    dateOfTransaction: s((r as any).dateOfTransaction),
-    invoiceDate: s((r as any).invoiceDate),
-    paymentDate: s((r as any).paymentDate),
-    primeRate: num((r as any).primeRate),
-    actualRate: num((r as any).actualRate),
-  }));
+  // Lake Trading Fix Plan §1 Bug 4: include `category` (supplier_development /
+  // enterprise_development) and map contributionType labels → calculator keys.
+  const esdContributions = (sec["esd"]?.rows ?? []).map((r) => {
+    const rawType = s((r as any).contributionType);
+    const rawCategory = s((r as any).esdCategory);
+    return {
+      id: (r as any)._id ?? undefined,
+      // Calculator reads `beneficiary` + `type` + `category` + `amount`
+      beneficiary: s((r as any).supplierName),
+      supplierName: s((r as any).supplierName),
+      type: mapContributionType(rawType),
+      contributionType: rawType,
+      category: mapEsdCategory(rawCategory),
+      currentBlackOwnership: num((r as any).currentBlackOwnership),
+      blackBenefitPercent: num((r as any).currentBlackOwnership),
+      currentSize: s((r as any).currentSize),
+      contributionDescription: s((r as any).contributionDescription),
+      amount: num((r as any).amount),
+      dateOfTransaction: s((r as any).dateOfTransaction),
+      invoiceDate: s((r as any).invoiceDate),
+      paymentDate: s((r as any).paymentDate),
+      primeRate: num((r as any).primeRate),
+      actualRate: num((r as any).actualRate),
+    };
+  });
 
-  const sedContributions = (sec["sed"]?.rows ?? []).map((r) => ({
-    beneficiaryName: s((r as any).beneficiaryName),
-    descriptionOfSpend: s((r as any).descriptionOfSpend),
-    ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
-    contributionType: s((r as any).contributionType),
-    percentBenefitingBlack: num((r as any).percentBenefitingBlack),
-    amount: num((r as any).amount),
-    dateOfTransaction: s((r as any).dateOfTransaction),
-  }));
+  // Lake Trading Fix Plan §1 Bug 5: rename to `beneficiary` + map type to
+  // calculator keys (SED has no category filter, but factor must still apply).
+  const sedContributions = (sec["sed"]?.rows ?? []).map((r) => {
+    const rawType = s((r as any).contributionType);
+    return {
+      id: (r as any)._id ?? undefined,
+      beneficiary: s((r as any).beneficiaryName),
+      beneficiaryName: s((r as any).beneficiaryName),
+      type: mapContributionType(rawType),
+      contributionType: rawType,
+      category: "socio_economic" as const,
+      descriptionOfSpend: s((r as any).descriptionOfSpend),
+      ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
+      percentBenefitingBlack: num((r as any).percentBenefitingBlack),
+      blackBenefitPercent: num((r as any).percentBenefitingBlack),
+      amount: num((r as any).amount),
+      dateOfTransaction: s((r as any).dateOfTransaction),
+    };
+  });
 
   const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta);
 
