@@ -81,6 +81,13 @@ interface PillarConfig {
   hasSubMinimum: boolean;
   subMinimumPercent: number;
   chooseOneGroup?: string;
+  subElements?: Array<{
+    criteria: string;
+    points: number;
+    target: string;
+    formula: string;
+    isBonus?: boolean;
+  }>;
 }
 
 interface SectorIndicatorRow {
@@ -158,7 +165,22 @@ function safePillarConfigs(sector: Sector | null | undefined): Record<string, Pi
         ...((item as { chooseOneGroup?: string }).chooseOneGroup
           ? { chooseOneGroup: (item as { chooseOneGroup?: string }).chooseOneGroup }
           : {}),
+        ...((item as { subElements?: PillarConfig['subElements'] }).subElements?.length
+          ? { subElements: (item as { subElements?: PillarConfig['subElements'] }).subElements }
+          : {}),
       };
+    }
+    // Legacy Arango rows merged SD+ED into enterpriseSupplierDevelopment
+    const esdLegacy = (pc as StoredPillarLike[]).find((p) => p?.code === 'enterpriseSupplierDevelopment');
+    if (esdLegacy && typeof esdLegacy.maxPoints === 'number' && esdLegacy.maxPoints > 0) {
+      const esdPts = esdLegacy.maxPoints;
+      if (!out.supplierDevelopment?.maxPoints) {
+        out.supplierDevelopment = {
+          maxPoints: esdPts,
+          hasSubMinimum: Boolean(esdLegacy.hasSubMinimum),
+          subMinimumPercent: Number(esdLegacy.subMinimumThreshold) || 0,
+        };
+      }
     }
     return out;
   }
@@ -435,6 +457,17 @@ function buildIndicatorRows(sector: Sector, pillarKey: string): TargetRow[] {
 }
 
 function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
+  const pillarConfig = safePillarConfigs(sector)[pillarKey];
+  if (pillarConfig?.subElements?.length) {
+    return pillarConfig.subElements.map((el) => ({
+      criteria: el.criteria,
+      points: el.points,
+      target: el.target || "—",
+      formula: el.formula || "min(actual / target, 1) × max_points",
+      isBonus: el.isBonus,
+    }));
+  }
+
   const indicatorRows = buildIndicatorRows(sector, pillarKey);
   if (indicatorRows.length > 0) return indicatorRows;
 
@@ -473,8 +506,43 @@ function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
   return rows;
 }
 
+function getPillarSubMinimumCopy(pillarKey: string): string | null {
+  if (pillarKey === "ownership") {
+    return "Sub-minimum: 40% of Net Value points (3.2 / 8 pts)";
+  }
+  return null;
+}
+
+function getManagementControlLabel(sector: Sector): string {
+  const pc = safePillarConfigs(sector);
+  const eePts = pc.employmentEquity?.maxPoints ?? 0;
+  return eePts > 0 ? "Management Control" : "Management Control (incl. Employment Equity)";
+}
+
+function sectorHasSeparateEePillar(sectors: Sector[]): boolean {
+  return sectors.some((s) => (safePillarConfigs(s).employmentEquity?.maxPoints ?? 0) > 0);
+}
+
+function SectorIntegrityWarning({ sector, pillarKey, config }: { sector: Sector; pillarKey: string; config: PillarConfig }) {
+  const targetRows = buildPillarTargetRows(sector, pillarKey);
+  if (targetRows.length === 0) return null;
+  const rowSum = targetRows.reduce((s, r) => s + r.points, 0);
+  if (Math.abs(rowSum - config.maxPoints) <= 0.5) return null;
+  return (
+    <div className="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-800">
+      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+      <span>
+        Pillar header reports <strong>{config.maxPoints} pts</strong> but indicator rows sum to{" "}
+        <strong>{rowSum} pts</strong> — see docs/SECTOR_TRUTH_LEDGER.md.
+      </span>
+    </div>
+  );
+}
+
 function CrossSectorTable({ sectors }: { sectors: Sector[] }) {
   const ordered = [...sectors].sort((a, b) => sectorTabLabel(a).localeCompare(sectorTabLabel(b)));
+  const showEeRow = sectorHasSeparateEePillar(ordered);
+  const visiblePillars = PILLAR_ORDER.filter((key) => showEeRow || key !== "employmentEquity");
 
   return (
     <Card>
@@ -491,9 +559,11 @@ function CrossSectorTable({ sectors }: { sectors: Sector[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {PILLAR_ORDER.map((key) => (
+            {visiblePillars.map((key) => (
               <TableRow key={key}>
-                <TableCell className="text-xs font-medium">{PILLAR_NAMES[key] ?? key}</TableCell>
+                <TableCell className="text-xs font-medium">
+                  {key === "managementControl" ? "Management Control (incl. EE where merged)" : PILLAR_NAMES[key] ?? key}
+                </TableCell>
                 {ordered.map((s) => {
                   const config = safePillarConfigs(s)[key];
                   const pts = config?.maxPoints ?? 0;
@@ -524,10 +594,12 @@ function ApiPillarCard({
   pillarKey,
   config,
   sector,
+  pillarLabel,
 }: {
   pillarKey: string;
   config: PillarConfig;
   sector: Sector;
+  pillarLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const targetRows = buildPillarTargetRows(sector, pillarKey);
@@ -542,7 +614,7 @@ function ApiPillarCard({
         disabled={!hasDetail}
       >
         <div className="flex items-center gap-3 min-w-0 flex-wrap">
-          <span className="text-sm font-semibold truncate">{PILLAR_NAMES[pillarKey] ?? pillarKey}</span>
+          <span className="text-sm font-semibold truncate">{pillarLabel ?? PILLAR_NAMES[pillarKey] ?? pillarKey}</span>
           {config.chooseOneGroup === "transport_qse_elective" && (
             <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700 shrink-0">
               Elective — choose 1 of 4
@@ -550,7 +622,7 @@ function ApiPillarCard({
           )}
           {config.hasSubMinimum && (
             <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-600 shrink-0">
-              sub-min {config.subMinimumPercent}%
+              {getPillarSubMinimumCopy(pillarKey) ?? `sub-min ${config.subMinimumPercent}%`}
             </Badge>
           )}
         </div>
@@ -562,6 +634,7 @@ function ApiPillarCard({
 
       {open && hasDetail && (
         <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
+          <SectorIntegrityWarning sector={sector} pillarKey={pillarKey} config={config} />
           {targetRows.length > 0 && (
             <div className="overflow-x-auto">
               <Table>
@@ -597,8 +670,9 @@ function ApiPillarCard({
             <div className="flex items-start gap-2 p-2 rounded bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-700">
               <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
               <span>
-                <strong>Sub-minimum rule:</strong> If scored points fall below {config.subMinimumPercent}% of max points,
-                the B-BBEE level is discounted by one level (e.g. Level 3 → Level 4).
+                <strong>Sub-minimum rule:</strong>{" "}
+                {getPillarSubMinimumCopy(pillarKey) ??
+                  `If scored points fall below ${config.subMinimumPercent}% of max points, the B-BBEE level is discounted by one level (e.g. Level 3 → Level 4).`}
               </span>
             </div>
           )}
@@ -638,6 +712,31 @@ const SECTOR_CALC_METHODS: Record<string, { levelNote: string; subMinNote: strin
     levelNote: "Standard scale (100/95/90/80/75/70/55/40). Total out of 132 pts.",
     subMinNote: "Same sub-minimum rules as RCOGP Generic, applied to AgriBEE max points.",
     npatNote: "Deemed NPAT uses agriculture norm (8% industry norm).",
+  },
+  "TRANSPORT-Generic": {
+    levelNote: "Standard scale scaled to 108-pt total (e.g. L1 ≥ 90 pts). MC and EE are separate gazetted pillars (11 + 18 pts).",
+    subMinNote: "Transport toolkit Notes sheet defines MC indicator sub-minimum targets (Voting 50%/25%, Exec 50%/20%, Senior/Other Top 40%/20%).",
+    npatNote: "Enterprise Development pillar (15 pts) uses 3% NPAT supplier development formula — toolkit labelling quirk.",
+  },
+  "TRANSPORT-QSE": {
+    levelNote: "Standard scale scaled to 107-pt total (82 compulsory + 25 chosen elective).",
+    subMinNote: "Choose exactly ONE elective pillar (Skills / PP / Enterprise Dev / SED) at 25 pts each.",
+    npatNote: "Compulsory pillars: Ownership 28 + MC 27 + EE 27 = 82. One elective adds 25 pts.",
+  },
+  "CONSTRUCTION-QSE": {
+    levelNote: "Construction QSE total 110 pts. Level thresholds use standard scale as placeholder — [UNVERIFIED] pending expert calibration.",
+    subMinNote: "Construction QSE uses combined Enterprise & Supplier Development pillar (29 pts).",
+    npatNote: "Indicator-level scoring via Construction Sector Code matrix (constructionIndicators.ts).",
+  },
+  "CONSTRUCTION-Contractor": {
+    levelNote: "Construction Contractor total 123 pts. Level thresholds placeholder — [UNVERIFIED].",
+    subMinNote: "Combined ESD pillar 38 pts (PP + SD). MC includes board through junior bands plus professional registration and youth bonus.",
+    npatNote: "SD contributions target 3% NPAT; SED target 1.25% NPAT.",
+  },
+  "CONSTRUCTION-BEP": {
+    levelNote: "Construction BEP total 123 pts (Skills 34, ESD 30). Level thresholds placeholder — [UNVERIFIED].",
+    subMinNote: "BEP MC excludes junior management rows; ownership targets subject to professional-registration adjustment rule.",
+    npatNote: "Indicator matrix matches Construction sector codes docx column 4/5 weights.",
   },
 };
 
@@ -680,7 +779,13 @@ function SectorTabView({ sector }: { sector: Sector }) {
             Pillar breakdown — click to expand scoring rows and formulas
           </p>
           {activeEntries.map(({ key, config }) => (
-            <ApiPillarCard key={key} pillarKey={key} config={config!} sector={sector} />
+            <ApiPillarCard
+              key={key}
+              pillarKey={key}
+              config={config!}
+              sector={sector}
+              pillarLabel={key === "managementControl" ? getManagementControlLabel(sector) : undefined}
+            />
           ))}
         </div>
 
@@ -711,7 +816,7 @@ function SectorTabView({ sector }: { sector: Sector }) {
             </Card>
           </div>
 
-          {calcMethod && (
+          {calcMethod ? (
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Calculation method
@@ -741,12 +846,25 @@ function SectorTabView({ sector }: { sector: Sector }) {
                       <CheckCircle2 className="h-3 w-3" /> YES initiative
                     </p>
                     <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      YES is <strong>not scored</strong> — it improves the B-BBEE level after all pillars are calculated.
-                      Meeting YES target + 2.5% absorption = +1 level. Double YES + 5% absorption = +2 levels.
-                      1.5× YES + 5% absorption = +1 level plus 3 bonus points.
-                      Qualification requires meeting 40% sub-minimum on all priority elements, or 50% average.
+                      YES is not scored — it improves the B-BBEE level after all pillars are calculated.
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Calculation method
+              </p>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Per-indicator formulas shown in each pillar breakdown use{" "}
+                    <span className="font-mono">min(actual / target, 1) × max_points</span> unless noted.
+                    Level thresholds are in the table above. Total score = sum of pillar points
+                    {isTransportQse(sector) ? " (82 compulsory + 1 chosen elective of 25)." : "."}
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -1230,9 +1348,16 @@ export default function SuperAdmin() {
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">YES initiative</p>
                   <Card>
-                    <CardContent className="p-4">
-                      <p className="text-[11px] text-amber-700 font-medium mb-2">Not scored — level improvement only</p>
-                      <p className="text-[11px] text-muted-foreground">Meet YES targets for level boosts per sector rules.</p>
+                    <CardContent className="p-4 space-y-2">
+                      <p className="text-[11px] text-amber-700 font-medium">Not a scored pillar (maxPoints = 0)</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        YES provides level uplift after sub-minimum discounting. Tier 2 (1.5× headcount + 5% absorption)
+                        also adds <strong>+3 bonus points</strong> to the achieved total — separate from the 120-point max.
+                      </p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Excel Summary shows a &quot;YES points&quot; row equal to the grand total when bonus = 0; that is not
+                        double-counting. Lake Trading validation: 63.56 pillar total, YES bonus 0.
+                      </p>
                     </CardContent>
                   </Card>
                 </div>

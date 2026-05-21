@@ -21,6 +21,10 @@ import {
   CONSTRUCTION_BEP_SCORECARD,
   type ConstructionIndicator,
 } from './constructionIndicators.js';
+import {
+  getAllSectorPillarSubElements,
+  type PillarSubElement,
+} from './sectorSubElements.js';
 
 const logger = createLogger('SectorConfig');
 
@@ -48,6 +52,8 @@ export interface PillarConfig {
    * Transport QSE uses 'transport_qse_elective' for Skills Dev / PP / Enterprise Dev / SED.
    */
   chooseOneGroup?: string;
+  /** Ledger-aligned indicator rows for Super Admin display (Construction uses `indicators` instead). */
+  subElements?: PillarSubElement[];
 }
 
 export interface OwnershipTargets {
@@ -96,6 +102,12 @@ export interface EETargets {
   /** Black women disabled employees row (Transport Large sheet1) */
   disabledWomenMaxPts?: number;
   disabledWomenTarget?: number;
+  /** Transport Large — women equivalents per management band */
+  seniorBWMaxPts?: number;
+  middleBWMaxPts?: number;
+  juniorBWMaxPts?: number;
+  semiUnskilledWomenMaxPts?: number;
+  eapBonusMaxPts?: number;
 }
 
 export interface SkillsTargets {
@@ -610,7 +622,7 @@ export const FSC_GENERIC: SectorConfig = {
       bwo30Target: 0.12, bwo30MaxPts: 3,
       dgTarget: 0.02, dgMaxPts: 4,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
     sed: { spendPercent: 1.0, maxPts: 8 }, // SED+CE combined for Others sub-sector
   },
   levelThresholds: FSC_LEVELS,
@@ -927,7 +939,7 @@ export const TRANSPORT_GENERIC: SectorConfig = {
       juniorBWMaxPts: 1.5,
       semiUnskilledWomenMaxPts: 2,
       eapBonusMaxPts: 3,
-    } as any,
+    },
     skills: {
       learningProgrammesMaxPts: 3,
       bursaryMaxPts: 3,
@@ -1233,23 +1245,49 @@ export const CONSTRUCTION_BEP: SectorConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Enrich configs with ledger sub-elements for Super Admin / API display
+// ---------------------------------------------------------------------------
+
+function attachSubElements(config: SectorConfig): SectorConfig {
+  const subs = getAllSectorPillarSubElements(config.sectorCode, config.scorecardType);
+  if (Object.keys(subs).length === 0) return config;
+
+  const pillarConfigs = { ...config.pillarConfigs };
+  for (const [key, elements] of Object.entries(subs)) {
+    const pk = key as keyof typeof pillarConfigs;
+    const existing = pillarConfigs[pk];
+    if (existing && elements.length > 0) {
+      pillarConfigs[pk] = { ...existing, subElements: elements };
+    }
+  }
+  return { ...config, pillarConfigs };
+}
+
+function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
+  const match = ALL_CONFIGS.find(
+    (c) =>
+      c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
+      c.scorecardType.toLowerCase() === scorecardType.toLowerCase(),
+  );
+  if (!match) {
+    throw new Error(
+      `No sector config found for sectorCode="${sectorCode}", scorecardType="${scorecardType}". Available: ${ALL_CONFIGS.map((c) => `${c.sectorCode}/${c.scorecardType}`).join(', ')}`,
+    );
+  }
+  return match;
+}
+
+// ---------------------------------------------------------------------------
 // Lookup
 // ---------------------------------------------------------------------------
 
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
-];
+].map(attachSubElements);
 
 export function getSectorConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
-  const match = ALL_CONFIGS.find(c =>
-    c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
-    c.scorecardType.toLowerCase() === scorecardType.toLowerCase()
-  );
-  if (!match) {
-    throw new Error(`No sector config found for sectorCode="${sectorCode}", scorecardType="${scorecardType}". Available: ${ALL_CONFIGS.map(c => `${c.sectorCode}/${c.scorecardType}`).join(', ')}`);
-  }
-  return match;
+  return getEnrichedConfig(sectorCode, scorecardType);
 }
 
 /** Non-throwing version for display-only paths. Returns null if not found. */
@@ -1264,21 +1302,21 @@ export function detectSectorFromName(nameOrSector: string): SectorConfig {
   const lower = (nameOrSector || '').toLowerCase();
   const hasICT = /ict|information.*communic|technology|telecom|software|digital/i.test(lower);
   const hasQSE = /qse|qualifying\s*small/i.test(lower);
-  if (hasICT && hasQSE) return ICT_QSE;
-  if (hasICT) return ICT_GENERIC;
-  if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return FSC_GENERIC;
-  if (/agri|agriculture|farming|agribee/i.test(lower)) return AGRI_GENERIC;
+  if (hasICT && hasQSE) return getSectorConfig('ICT', 'QSE');
+  if (hasICT) return getSectorConfig('ICT', 'Generic');
+  if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return getSectorConfig('FSC', 'Generic');
+  if (/agri|agriculture|farming|agribee/i.test(lower)) return getSectorConfig('AGRI', 'Generic');
   if (/transport|freight|logistics|rail|aviation|maritime|shipping/i.test(lower)) {
-    return hasQSE ? TRANSPORT_QSE : TRANSPORT_GENERIC;
+    return hasQSE ? getSectorConfig('TRANSPORT', 'QSE') : getSectorConfig('TRANSPORT', 'Generic');
   }
   if (/construction|contractor|built\s*environment|builder/i.test(lower)) {
-    if (/bep|built\s*environment\s*professional/i.test(lower)) return CONSTRUCTION_BEP;
-    if (hasQSE) return CONSTRUCTION_QSE;
-    return CONSTRUCTION_CONTRACTOR;
+    if (/bep|built\s*environment\s*professional/i.test(lower)) return getSectorConfig('CONSTRUCTION', 'BEP');
+    if (hasQSE) return getSectorConfig('CONSTRUCTION', 'QSE');
+    return getSectorConfig('CONSTRUCTION', 'Contractor');
   }
-  if (hasQSE) return RCOGP_QSE;
+  if (hasQSE) return getSectorConfig('RCOGP', 'QSE');
   logger.warn('No sector match — defaulting to RCOGP Generic', { input: nameOrSector });
-  return RCOGP_GENERIC;
+  return getSectorConfig('RCOGP', 'Generic');
 }
 
 export function listSectorConfigs(): Array<{ code: string; name: string; type: string; totalPoints: number }> {
