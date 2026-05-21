@@ -12,7 +12,11 @@ import { getArangoDB, isArangoConnected } from '../../arango/connection.js';
 
 const logger = createLogger("Sectors");
 import { COLLECTIONS } from '../../arango/collections.js';
-import { listSectorConfigs, listSectorConfigsFull, type SectorConfig } from '../../pipeline/sectorConfig.js';
+import {
+  enrichSectorApiPayload,
+  listSectorConfigs,
+  listSectorConfigsFull,
+} from '../../pipeline/sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 
 const router = Router();
@@ -52,7 +56,7 @@ router.get('/', async (_req: Request, res: Response) => {
         }
     `);
 
-    const sectors = await cursor.all();
+    const sectors = (await cursor.all()).map(enrichSectorApiPayload);
 
     // If no sectors found in ArangoDB, seed and retry
     if (sectors.length === 0) {
@@ -74,7 +78,7 @@ router.get('/', async (_req: Request, res: Response) => {
             levelThresholds: s.levelThresholds
           }
       `);
-      const seededSectors = await retryCursor.all();
+      const seededSectors = (await retryCursor.all()).map(enrichSectorApiPayload);
 
       return res.json({
         success: true,

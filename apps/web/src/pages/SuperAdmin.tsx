@@ -152,12 +152,7 @@ function safePillarConfigs(sector: Sector | null | undefined): Record<string, Pi
       const key = typeof item.code === "string" && item.code ? item.code : typeof item.name === "string" ? item.name : "";
       if (!key) continue;
       const maxPoints = typeof item.maxPoints === "number" ? item.maxPoints : Number(item.maxPoints) || 0;
-      const subMin =
-        typeof item.subMinimumPercent === "number"
-          ? item.subMinimumPercent
-          : typeof item.subMinimumThreshold === "number"
-            ? item.subMinimumThreshold
-            : Number(item.subMinimumThreshold) || 0;
+      const subMin = deriveSubMinimumPercent(item);
       out[key] = {
         maxPoints,
         hasSubMinimum: Boolean(item.hasSubMinimum),
@@ -270,6 +265,31 @@ function formatDate(d: string | null) {
   });
 }
 
+/** Format numeric values to at most `decimals` places (fixes float display like 6.800000000000001). */
+function formatDecimal(value: number, decimals = 2): string {
+  if (!Number.isFinite(value)) return "—";
+  return Number(value.toFixed(decimals)).toString();
+}
+
+function formatPercent(value: number, decimals = 2): string {
+  return `${formatDecimal(value, decimals)}%`;
+}
+
+function deriveSubMinimumPercent(item: StoredPillarLike): number {
+  if (typeof item.subMinimumPercent === "number" && Number.isFinite(item.subMinimumPercent)) {
+    return item.subMinimumPercent;
+  }
+  const maxPts = typeof item.maxPoints === "number" ? item.maxPoints : Number(item.maxPoints) || 0;
+  const threshold =
+    typeof item.subMinimumThreshold === "number"
+      ? item.subMinimumThreshold
+      : Number(item.subMinimumThreshold) || 0;
+  if (maxPts > 0 && threshold > 0 && threshold <= maxPts) {
+    return (threshold / maxPts) * 100;
+  }
+  return 0;
+}
+
 function RoleBadge({ role }: { role: string }) {
   const cls = ROLE_COLORS[role] ?? ROLE_COLORS.user;
   return (
@@ -322,6 +342,14 @@ function isTransportQse(sector: Sector): boolean {
   return code.toUpperCase() === "TRANSPORT" && t.toLowerCase() === "qse";
 }
 
+const TRANSPORT_QSE_COMPULSORY_PILLARS = new Set(["ownership", "managementControl", "employmentEquity"]);
+const TRANSPORT_QSE_ELECTIVE_PILLARS = new Set([
+  "skillsDevelopment",
+  "preferentialProcurement",
+  "enterpriseDevelopment",
+  "socioEconomicDevelopment",
+]);
+
 const PILLAR_ORDER = [
   "ownership",
   "managementControl",
@@ -367,10 +395,10 @@ function humanizeKey(key: string): string {
 
 function formatTargetValue(key: string, value: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  if (key.includes("Percent") || key.includes("Target") || key.includes("Target")) {
-    if (value > 0 && value <= 1) return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+  if (key.includes("Percent") || key.includes("Target")) {
+    if (value > 0 && value <= 1) return formatPercent(value * 100);
   }
-  return String(value);
+  return formatDecimal(value);
 }
 
 // Per-pillar scoring formulas for expert reference
@@ -492,7 +520,7 @@ function buildPillarTargetRows(sector: Sector, pillarKey: string): TargetRow[] {
   for (const [k, v] of Object.entries(bucket as Record<string, unknown>)) {
     if (esdPrefix && !k.toLowerCase().startsWith(esdPrefix)) continue;
     if (typeof v !== "number" || v <= 0) continue;
-    if (!k.endsWith("MaxPts") && !k.endsWith("Bonus")) continue;
+    if (!k.endsWith("MaxPts") && !k.endsWith("Bonus") && k !== "maxPts") continue;
     const targetKey = k.replace(/MaxPts$/, "Target").replace(/Bonus$/, "Target");
     const targetVal = (bucket as Record<string, unknown>)[targetKey];
     rows.push({
@@ -603,39 +631,45 @@ function ApiPillarCard({
 }) {
   const [open, setOpen] = useState(false);
   const targetRows = buildPillarTargetRows(sector, pillarKey);
-  const hasDetail = targetRows.length > 0 || config.hasSubMinimum;
+  const transportQse = isTransportQse(sector);
+  const isCompulsory = transportQse && TRANSPORT_QSE_COMPULSORY_PILLARS.has(pillarKey);
+  const isElective = transportQse && (config.chooseOneGroup === "transport_qse_elective" || TRANSPORT_QSE_ELECTIVE_PILLARS.has(pillarKey));
 
   return (
     <Card className={config.hasSubMinimum ? "border-amber-500/40" : ""}>
       <button
         type="button"
         className="w-full text-left px-4 py-3 flex items-center justify-between gap-4"
-        onClick={() => hasDetail && setOpen((v) => !v)}
-        disabled={!hasDetail}
+        onClick={() => setOpen((v) => !v)}
       >
         <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <span className="text-sm font-semibold truncate">{pillarLabel ?? PILLAR_NAMES[pillarKey] ?? pillarKey}</span>
-          {config.chooseOneGroup === "transport_qse_elective" && (
+          {isCompulsory && (
+            <Badge variant="outline" className="text-[9px] border-blue-500/50 text-blue-700 shrink-0">
+              Compulsory (82 pts base)
+            </Badge>
+          )}
+          {isElective && (
             <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700 shrink-0">
-              Elective — choose 1 of 4
+              Elective — choose 1 of 4 (+25 pts)
             </Badge>
           )}
           {config.hasSubMinimum && (
             <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-600 shrink-0">
-              {getPillarSubMinimumCopy(pillarKey) ?? `sub-min ${config.subMinimumPercent}%`}
+              {getPillarSubMinimumCopy(pillarKey) ?? `sub-min ${formatPercent(config.subMinimumPercent)}`}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="font-mono text-sm font-bold">{config.maxPoints} pts</span>
-          {hasDetail && (open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />)}
+          <span className="font-mono text-sm font-bold">{formatDecimal(config.maxPoints)} pts</span>
+          {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
       </button>
 
-      {open && hasDetail && (
+      {open && (
         <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
           <SectorIntegrityWarning sector={sector} pillarKey={pillarKey} config={config} />
-          {targetRows.length > 0 && (
+          {targetRows.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -657,7 +691,7 @@ function ApiPillarCard({
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-center font-mono font-semibold">{el.points}</TableCell>
+                      <TableCell className="text-xs text-center font-mono font-semibold">{formatDecimal(el.points)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{el.target}</TableCell>
                       <TableCell className="text-[10px] text-muted-foreground font-mono leading-relaxed">{el.formula}</TableCell>
                     </TableRow>
@@ -665,6 +699,10 @@ function ApiPillarCard({
                 </TableBody>
               </Table>
             </div>
+          ) : (
+            <p className="text-xs text-muted-foreground italic">
+              No scoring rows configured for this pillar — check sector config or re-seed from code.
+            </p>
           )}
           {config.hasSubMinimum && (
             <div className="flex items-start gap-2 p-2 rounded bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-700">
@@ -672,7 +710,7 @@ function ApiPillarCard({
               <span>
                 <strong>Sub-minimum rule:</strong>{" "}
                 {getPillarSubMinimumCopy(pillarKey) ??
-                  `If scored points fall below ${config.subMinimumPercent}% of max points, the B-BBEE level is discounted by one level (e.g. Level 3 → Level 4).`}
+                  `If scored points fall below ${formatPercent(config.subMinimumPercent)} of max points, the B-BBEE level is discounted by one level (e.g. Level 3 → Level 4).`}
               </span>
             </div>
           )}
@@ -760,7 +798,7 @@ function SectorTabView({ sector }: { sector: Sector }) {
         <span className="text-sm font-mono font-bold text-primary">{sector.totalPoints} total points</span>
         {isTransportQse(sector) && (
           <Badge variant="outline" className="text-[9px] border-amber-500/50 text-amber-700">
-            Transport QSE — measured pillars only
+            82 compulsory + 25 elective = 107 pts
           </Badge>
         )}
       </div>
@@ -926,7 +964,8 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                 <div className="mt-3 p-2 bg-amber-500/10 rounded border border-amber-500/20">
                   <p className="text-xs text-amber-700 flex items-center gap-1">
                     <AlertCircle className="h-3 w-3" />
-                    <strong>Transport QSE:</strong> Exactly 4 pillars at 25 points each = 100 total
+                    <strong>Transport QSE:</strong> Compulsory base 82 pts (Ownership 28 + MC 27 + EE 27) + choose ONE
+                    elective at 25 pts (Skills / PP / Enterprise Dev / SED) = 107 total
                   </p>
                 </div>
               )}
@@ -951,22 +990,29 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
               <TableBody>
                 {safeObjectEntriesKV(pillarConfigs).map(([key, config]) => {
                   const isApplicable = config && config.maxPoints > 0;
-                  const isTransportQsePillar = isTransportQseSector && isApplicable;
+                  const isTransportQseCompulsory = isTransportQseSector && TRANSPORT_QSE_COMPULSORY_PILLARS.has(key);
+                  const isTransportQseElective =
+                    isTransportQseSector && isApplicable && config?.chooseOneGroup === "transport_qse_elective";
                   return (
                     <TableRow
                       key={key}
-                      className={isTransportQsePillar ? "bg-amber-500/10" : !isApplicable ? "opacity-50" : ""}
+                      className={isTransportQseCompulsory || isTransportQseElective ? "bg-amber-500/10" : !isApplicable ? "opacity-50" : ""}
                     >
                       <TableCell className="text-sm font-medium">
                         {PILLAR_NAMES[key] || key}
-                        {isTransportQsePillar && (
+                        {isTransportQseCompulsory && (
+                          <Badge variant="outline" className="ml-2 text-[9px] border-blue-500/50 text-blue-700">
+                            compulsory
+                          </Badge>
+                        )}
+                        {isTransportQseElective && (
                           <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50 text-amber-700">
-                            25 pts
+                            elective (+25)
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-right font-mono">
-                        {config?.maxPoints || 0}
+                        {formatDecimal(config?.maxPoints || 0)}
                       </TableCell>
                       <TableCell className="text-center">
                         {isApplicable ? (
@@ -980,7 +1026,7 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                         )}
                       </TableCell>
                       <TableCell className="text-center text-xs">
-                        {config?.hasSubMinimum ? `${config.subMinimumPercent}%` : "—"}
+                        {config?.hasSubMinimum ? formatPercent(config.subMinimumPercent) : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -1002,8 +1048,8 @@ function SectorDetailsDialog({ sector }: { sector: Sector }) {
                   className="p-2 border rounded text-center"
                 >
                   <p className="text-xs text-muted-foreground">Level {threshold.level}</p>
-                  <p className="font-semibold text-sm">{threshold.minPoints} pts</p>
-                  <p className="text-[10px] text-muted-foreground">{threshold.recognition}%</p>
+                  <p className="font-semibold text-sm">{formatDecimal(threshold.minPoints)} pts</p>
+                  <p className="text-[10px] text-muted-foreground">{formatPercent(threshold.recognition)}</p>
                 </div>
               ))}
             </div>

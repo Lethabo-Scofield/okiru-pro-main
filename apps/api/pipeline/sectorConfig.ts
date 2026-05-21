@@ -1328,6 +1328,66 @@ export function listSectorConfigs(): Array<{ code: string; name: string; type: s
   }));
 }
 
+/** Merge canonical ledger sub-elements onto API/Arango sector payloads (stale DB rows may omit them). */
+export function enrichSectorApiPayload<T extends {
+  code: string;
+  type: string;
+  totalPoints?: number;
+  pillarConfigs?: unknown;
+  indicators?: SectorIndicatorRow[];
+}>(sector: T): T {
+  const config = getSectorConfigSafe(sector.code, sector.type);
+  if (!config) return sector;
+
+  const out = { ...sector, totalPoints: config.totalMaxPoints };
+
+  if (Array.isArray(sector.pillarConfigs)) {
+    out.pillarConfigs = (sector.pillarConfigs as Array<{
+      code?: string;
+      chooseOneGroup?: string;
+      subElements?: PillarSubElement[];
+      subMinimumPercent?: number;
+      maxPoints?: number;
+      hasSubMinimum?: boolean;
+    }>).map((p) => {
+      const pk = p.code;
+      if (!pk) return p;
+      const canonical = config.pillarConfigs[pk as keyof typeof config.pillarConfigs];
+      if (!canonical) return p;
+      return {
+        ...p,
+        maxPoints: p.maxPoints ?? canonical.maxPoints,
+        hasSubMinimum: p.hasSubMinimum ?? canonical.hasSubMinimum,
+        subMinimumPercent:
+          typeof p.subMinimumPercent === 'number' ? p.subMinimumPercent : canonical.subMinimumPercent,
+        chooseOneGroup: p.chooseOneGroup ?? canonical.chooseOneGroup,
+        subElements: p.subElements?.length ? p.subElements : canonical.subElements,
+      };
+    });
+  } else if (sector.pillarConfigs && typeof sector.pillarConfigs === 'object') {
+    const merged = { ...(sector.pillarConfigs as Record<string, PillarConfig>) };
+    for (const [key, canonical] of Object.entries(config.pillarConfigs)) {
+      if (!canonical) continue;
+      const existing = merged[key];
+      merged[key] = {
+        ...(existing ?? canonical),
+        maxPoints: existing?.maxPoints ?? canonical.maxPoints,
+        hasSubMinimum: existing?.hasSubMinimum ?? canonical.hasSubMinimum,
+        subMinimumPercent: existing?.subMinimumPercent ?? canonical.subMinimumPercent,
+        chooseOneGroup: existing?.chooseOneGroup ?? canonical.chooseOneGroup,
+        subElements: existing?.subElements?.length ? existing.subElements : canonical.subElements,
+      };
+    }
+    out.pillarConfigs = merged;
+  }
+
+  if (config.indicators?.length && !out.indicators?.length) {
+    out.indicators = config.indicators;
+  }
+
+  return out;
+}
+
 /** Full sector payloads for `/api/sectors` fallback when Arango is unavailable. */
 export function listSectorConfigsFull(): Array<{
   code: string;
