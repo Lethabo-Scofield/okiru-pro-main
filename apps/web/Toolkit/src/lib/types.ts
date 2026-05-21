@@ -390,15 +390,19 @@ export interface PillarScore {
 export interface ScorecardResult {
   ownership: PillarScore & { subMinimumMet: boolean };
   managementControl: PillarScore;
-  skillsDevelopment: PillarScore & { subMinimumMet: boolean };
-  procurement: PillarScore & { subMinimumMet: boolean };
+  /** Separate EE pillar when sector config sets employmentEquity.maxPoints > 0 (e.g. Transport QSE). */
+  employmentEquity?: PillarScore;
+  skillsDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
+  procurement: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   supplierDevelopment: PillarScore & { subMinimumMet: boolean };
-  enterpriseDevelopment: PillarScore & { subMinimumMet: boolean };
-  socioEconomicDevelopment: PillarScore;
+  enterpriseDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
+  socioEconomicDevelopment: PillarScore & { isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   yesInitiative: PillarScore;
   total: PillarScore;
   achievedLevel: number;
   discountedLevel: number;
   isDiscounted: boolean;
   recognitionLevel: string;
+  /** Transport QSE: which elective pillar was auto-selected (highest score). */
+  chosenElectivePillar?: string | null;
 }

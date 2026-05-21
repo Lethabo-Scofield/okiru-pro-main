@@ -386,6 +386,17 @@ function CompanyPicker({
           const companyName = String(previewResult?.data.companyName ?? "").trim();
           const sections = pendingSections;
           if (!companyName || !sections) return;
+          console.log(`[SCORING-TRACE] Excel import confirmed for ${companyName}`);
+          console.log('[SCORING-TRACE] Extracted data:', JSON.stringify({
+            sector: previewResult?.data.sector,
+            scorecardType: previewResult?.data.scorecardType,
+            revenue: previewResult?.data.revenue,
+            blackOwnership: previewResult?.data.blackOwnership,
+            employees: previewResult?.data.numberOfEmployees,
+          }));
+          console.log('[SCORING-TRACE] Mapped to workbook sections:', Object.fromEntries(
+            Object.entries(sections).map(([k, v]) => [k, (v as any)?.rows?.length ?? 0]),
+          ));
           setCreating(true);
           try {
             const res = await fetch(`${API_BASE}/api/clients`, {
@@ -422,11 +433,13 @@ function CompanyPicker({
               toast({ title: "Import failed", variant: "destructive" });
               return;
             }
+            console.log('[SCORING-TRACE] POST /api/workbook/import response:', importRes.status, await importRes.clone().json().catch(() => ({})));
             let submitted = false;
             const submitRes = await fetch(
               `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
               { method: "POST", credentials: "include" },
             );
+            console.log('[SCORING-TRACE] POST /api/workbook/submit response:', submitRes.status, submitRes.ok ? await submitRes.clone().json().catch(() => ({})) : await submitRes.text().catch(() => ''));
             if (submitRes.ok) {
               submitted = true;
               try {

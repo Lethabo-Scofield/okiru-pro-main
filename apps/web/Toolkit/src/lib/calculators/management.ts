@@ -137,6 +137,11 @@ export function calculateManagementScore(
 ): ManagementResult {
   if (!config) throw new Error('CalculatorConfig is required for management score calculation');
   const employees = data.employees || [];
+  console.log('[SCORING-TRACE] calculateManagementScore received:', {
+    employeeCount: employees.length,
+    eapProvince,
+    designations: [...new Set(employees.map(e => e.designation))].slice(0, 8),
+  });
   const grouped = groupByDesignation(employees);
 
   const cfg = config.managementControl;
@@ -280,6 +285,9 @@ export function calculateManagementScore(
     { name: "Black employees with disabilities", target: `${(disabledTarget * 100).toFixed(0)}%`, weighting: disabledMaxPts, score: disabledScore },
   ];
 
+  const finalTotal = round2(clampScore(totalPoints, maxTotal));
+  console.log(`[SCORING-TRACE] calculateManagementScore result: ${finalTotal} / ${maxTotal}`);
+
   return {
     boardVotingBlack: round2(boardVotingBlack),
     boardVotingBWO: round2(boardVotingBWO),
@@ -296,7 +304,7 @@ export function calculateManagementScore(
     skilledTechnicalBlack: round2(skilledTechnicalBlackScore),
     skilledTechnicalBWO: round2(skilledTechnicalBWOScore),
     disabled: round2(disabledScore),
-    total: round2(clampScore(totalPoints, maxTotal)),
+    total: finalTotal,
     subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     eapBreakdowns: {

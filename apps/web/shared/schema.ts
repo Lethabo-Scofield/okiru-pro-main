@@ -132,15 +132,15 @@ export interface CalculatorConfig {
   recognitionTable?: { level: number; multiplier: number }[];
   levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;
   pillarConfigs?: {
-    ownership?: { maxPoints: number; subMinimumPercent?: number };
-    managementControl?: { maxPoints: number; subMinimumPercent?: number };
-    employmentEquity?: { maxPoints: number };
-    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number };
-    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    socioEconomicDevelopment?: { maxPoints: number };
-    yesInitiative?: { maxPoints: number };
+    ownership?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    managementControl?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    employmentEquity?: { maxPoints: number; chooseOneGroup?: string };
+    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    socioEconomicDevelopment?: { maxPoints: number; chooseOneGroup?: string };
+    yesInitiative?: { maxPoints: number; chooseOneGroup?: string };
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];
