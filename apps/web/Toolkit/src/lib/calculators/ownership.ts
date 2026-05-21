@@ -176,7 +176,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     designatedGroups: round2(designatedGroups),
     newEntrants: round2(newEntrants),
     netValue: round2(netValuePoints),
-    total: round2(clampScore(totalPoints, config.pillarConfigs?.ownership?.maxPoints ?? 25)),
+    total: round2(clampScore(totalPoints, config?.pillarConfigs?.ownership?.maxPoints ?? 25)),
     subMinimumMet,
     fullOwnershipAwarded,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
