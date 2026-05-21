@@ -170,7 +170,10 @@ export function calculateManagementScore(
   const disabledTarget = config.employmentEquity?.disabledTarget ?? cfg?.disabledTarget ?? config.management.disabledTarget ?? 0.02;
   const disabledMaxPts = config.employmentEquity?.disabledMaxPts ?? cfg?.disabledMaxPts ?? 2;
   
-  const maxTotal = config?.pillarConfigs?.managementControl?.maxPoints ?? config?.managementControl?.maxPoints ?? 19;
+  const configuredMcMax = config?.pillarConfigs?.managementControl?.maxPoints;
+  const maxTotal = (configuredMcMax != null && configuredMcMax > 0)
+    ? configuredMcMax
+    : (config?.managementControl?.maxPoints ?? 19);
   const subMinPercent = config?.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
 
   // Get EAP targets based on province
