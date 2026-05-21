@@ -1163,6 +1163,15 @@ export function registerWorkbookRoutes(app: Express): void {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
+      console.log(`[SCORING-TRACE] Submit workbook for ${wb.companyId}`);
+      console.log(`[SCORING-TRACE] Workbook sections: ${Object.keys(wb.sections).join(", ")}`);
+      for (const [id, sec] of Object.entries(wb.sections)) {
+        const rows = (sec as any)?.rows ?? [];
+        if (rows.length > 0) {
+          console.log(`[SCORING-TRACE] Section ${id} has ${rows.length} rows, sample:`, JSON.stringify(rows.slice(0, 2)));
+        }
+      }
+
       if (!mongoReady() && !canUseMemoryFallback()) {
         return res
           .status(503)
@@ -1179,6 +1188,22 @@ export function registerWorkbookRoutes(app: Express): void {
       }
 
       const projected = projectWorkbookToClient(wb);
+      console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
+        companyId: wb.companyId,
+        sectionIds: Object.keys(wb.sections),
+        finMeta: wb.sections["financial-information"]?.meta,
+        companyMeta: wb.sections["company-information"]?.meta,
+      });
+      console.log("[SCORING-TRACE] projectWorkbookToClient output:", {
+        ownership: projected.shareholders.length,
+        employees: projected.employees.length,
+        skills: projected.trainingPrograms.length,
+        procurement: projected.suppliers.length,
+        esd: projected.esdContributions.length,
+        sed: projected.sedContributions.length,
+        sampleShareholder: projected.shareholders[0],
+        sampleEmployee: projected.employees[0],
+      });
       try {
         const buildUpdate = (): Record<string, any> => {
           const update: Record<string, any> = {
@@ -1268,6 +1293,17 @@ export function registerWorkbookRoutes(app: Express): void {
         }
 
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
+
+        const saved = await ClientModel.findOne({ clientId: wb.companyId })
+          .select({ sectorCode: 1, scorecardType: 1, companySize: 1, shareholders: 1, employees: 1 })
+          .lean();
+        console.log("[SCORING-TRACE] Client saved to DB:", {
+          clientId: wb.companyId,
+          sector: (saved as any)?.sectorCode,
+          scorecardType: (saved as any)?.scorecardType ?? (saved as any)?.companySize,
+          shareholders: ((saved as any)?.shareholders ?? []).length,
+          employees: ((saved as any)?.employees ?? []).length,
+        });
 
         const userId =
           (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;

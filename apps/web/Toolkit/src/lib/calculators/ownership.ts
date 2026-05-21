@@ -66,6 +66,15 @@ function getGraduationFactor(years: number): number {
 
 export function calculateOwnershipScore(data: OwnershipData, config: CalculatorConfig): OwnershipResult {
   const shareholders = data.shareholders || [];
+  console.log('[SCORING-TRACE] calculateOwnershipScore received:', {
+    shareholderCount: shareholders.length,
+    companyValue: data.companyValue,
+    sample: shareholders.slice(0, 2).map(s => ({
+      name: s.name,
+      blackOwnership: s.blackOwnership,
+      shares: s.shares,
+    })),
+  });
   const { companyValue, outstandingDebt, yearsHeld } = data;
 
   const oc = config?.ownership;
@@ -168,6 +177,10 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     { name: "Net value", target: "≥ 3.2 pts", weighting: 8, score: netValuePoints },
   ];
 
+  const maxPts = config?.pillarConfigs?.ownership?.maxPoints ?? 25;
+  const total = round2(clampScore(totalPoints, maxPts));
+  console.log(`[SCORING-TRACE] calculateOwnershipScore result: ${total} / ${maxPts}`);
+
   return {
     votingRightsBlack: round2(votingRightsBlack),
     votingRightsBWO: round2(votingRightsBWO),
@@ -176,7 +189,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     designatedGroups: round2(designatedGroups),
     newEntrants: round2(newEntrants),
     netValue: round2(netValuePoints),
-    total: round2(clampScore(totalPoints, config?.pillarConfigs?.ownership?.maxPoints ?? 25)),
+    total,
     subMinimumMet,
     fullOwnershipAwarded,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),

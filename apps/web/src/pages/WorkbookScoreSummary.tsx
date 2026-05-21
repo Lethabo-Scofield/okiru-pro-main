@@ -7,6 +7,7 @@ import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSumma
 const PILLAR_META: { key: string; label: string; color: string }[] = [
   { key: "ownership", label: "Ownership", color: "#5e9bff" },
   { key: "managementControl", label: "Management Control", color: "#34d399" },
+  { key: "employmentEquity", label: "Employment Equity", color: "#2dd4bf" },
   { key: "skillsDevelopment", label: "Skills Development", color: "#f59e0b" },
   { key: "procurement", label: "Preferential Procurement", color: "#a78bfa" },
   { key: "supplierDevelopment", label: "Supplier Development", color: "#38bdf8" },
@@ -37,22 +38,38 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
   }, [companyId, loadClientData]);
 
   const pillarRows = useMemo(() => {
+    const transportQse =
+      (client.sectorCode ?? "").toUpperCase().includes("TRANSPORT") &&
+      (client.scorecardType ?? "").toUpperCase() === "QSE";
+
     return PILLAR_META.map((meta) => {
       const pillar = scorecard[meta.key as keyof typeof scorecard] as
-        | { score?: number; weighting?: number; subMinimumMet?: boolean }
+        | { score?: number; weighting?: number; subMinimumMet?: boolean; isElectiveNotChosen?: boolean; isChosenElective?: boolean }
         | undefined;
       const score = typeof pillar?.score === "number" ? pillar.score : 0;
-      const maxPoints = typeof pillar?.weighting === "number" ? pillar.weighting : 0;
+      let maxPoints = typeof pillar?.weighting === "number" ? pillar.weighting : 0;
+      let label = meta.label;
+      if (pillar?.isChosenElective) label = `${meta.label} (chosen elective)`;
+      if (pillar?.isElectiveNotChosen) return null;
+      if (maxPoints <= 0 && !transportQse) return null;
+      if (maxPoints <= 0) return null;
       return {
         code: meta.key,
-        label: meta.label,
+        label,
         score,
         maxPoints,
         color: meta.color,
         subMinimumMet: pillar?.subMinimumMet,
       };
-    }).filter((p) => p.maxPoints > 0);
-  }, [scorecard]);
+    }).filter(Boolean) as Array<{
+      code: string;
+      label: string;
+      score: number;
+      maxPoints: number;
+      color: string;
+      subMinimumMet?: boolean;
+    }>;
+  }, [scorecard, client.sectorCode, client.scorecardType]);
 
   const goToScorecard = () => {
     localStorage.setItem("okiru-pro-active-client", companyId);
@@ -74,6 +91,7 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
           <p className="text-[13px] text-[#636366] mt-1">
             {sector}
             {client.scorecardType ? ` · ${client.scorecardType}` : ""}
+            {scorecard.chosenElectivePillar ? " · 82 compulsory + 1 elective (107 max)" : ""}
           </p>
         </div>
         <button

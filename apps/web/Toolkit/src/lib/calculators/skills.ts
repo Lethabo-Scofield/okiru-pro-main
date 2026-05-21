@@ -157,6 +157,10 @@ function applyCapToSpend(
 
 export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig): SkillsResult {
   if (!config) throw new Error('CalculatorConfig is required for skills score calculation');
+  console.log('[SCORING-TRACE] calculateSkillsScore received:', {
+    leviableAmount: data.leviableAmount,
+    programCount: data.trainingPrograms?.length ?? 0,
+  });
   const { leviableAmount } = data;
   const trainingPrograms = data.trainingPrograms || [];
   const sc = config.skills;
@@ -213,13 +217,16 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
     { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },
   ];
 
+  const skillsTotal = round2(totalScore);
+  console.log(`[SCORING-TRACE] calculateSkillsScore result: ${skillsTotal} / ${maxPoints}`);
+
   return {
     learningProgrammes: round2(learningScore),
     bursaries: round2(bursaryScore),
     disabledLearning: round2(disabledScore),
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
-    total: round2(totalScore),
+    total: skillsTotal,
     subMinimumMet:
       subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : false,
     categoryBreakdown: breakdown,

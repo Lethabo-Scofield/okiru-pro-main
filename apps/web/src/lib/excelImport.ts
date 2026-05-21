@@ -1583,6 +1583,20 @@ function applyExtractedOwnershipToRows(
   ];
 }
 
+function mapJobTitleToDesignationForImport(raw: string): string {
+  const t = (raw ?? "").trim().toLowerCase();
+  if (!t) return "Junior";
+  if (t.includes("non-executive") || t.includes("non executive") || t === "director") return "Non-executive Director";
+  if (t.includes("executive director")) return "Executive Director";
+  if (t.includes("other executive")) return "Other Executive Manager";
+  if (t.includes("senior")) return "Senior Manager";
+  if (t.includes("middle")) return "Middle Manager";
+  if (t.includes("junior")) return "Junior Manager";
+  if (t.includes("executive") || t.includes("ceo") || t.includes("managing director")) return "Executive Director";
+  if (t.includes("manager") || t.includes("supervisor")) return "Middle Manager";
+  return "Junior Manager";
+}
+
 function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
   return parseGridRows(matrix, ["name", "race", "job"], (row, headers) => {
     const nameIdx = colIdx(headers, "namesurname", "name");
@@ -1593,6 +1607,8 @@ function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
     const name = nameIdx !== undefined ? cellStr(row[nameIdx]) : "";
     if (!name || /^\d+$/.test(name)) return null;
     const { name: first, surname } = splitName(name);
+    const jobTitle = jobIdx !== undefined ? cellStr(row[jobIdx]) : "";
+    const designation = mapJobTitleToDesignationForImport(jobTitle);
     return {
       _id: uuidv4(),
       name: first,
@@ -1600,7 +1616,8 @@ function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
       idNumber: idIdx !== undefined ? cellStr(row[idIdx]) : "",
       race: raceIdx !== undefined ? RACE_MAP[norm(cellStr(row[raceIdx]))] || cellStr(row[raceIdx]) : "",
       gender: genderIdx !== undefined ? GENDER_MAP[norm(cellStr(row[genderIdx]))] || cellStr(row[genderIdx]) : "",
-      occupationalLevel: jobIdx !== undefined ? cellStr(row[jobIdx]) : "",
+      designation,
+      occupationalLevel: jobTitle || designation,
       isDisabled: false,
       isForeign: false,
     };
