@@ -54,6 +54,51 @@ function inferScorecardType(revenueHint: string | undefined, raw: string | undef
   return undefined;
 }
 
+type ExtractedPayload = Record<string, string | number | undefined>;
+
+function validateExtractedConsistency(data: ExtractedPayload): string[] {
+  const warnings: string[] = [];
+  const pct = (k: string) => {
+    const v = data[k];
+    return typeof v === "number" ? v : undefined;
+  };
+
+  const blackOwnership = pct("blackOwnership");
+  const blackWomenOwnership = pct("blackWomenOwnership");
+  if (blackOwnership !== undefined && (blackOwnership < 0 || blackOwnership > 100)) {
+    warnings.push(`Black ownership (${blackOwnership}%) is outside 0–100.`);
+  }
+  if (blackWomenOwnership !== undefined && (blackWomenOwnership < 0 || blackWomenOwnership > 100)) {
+    warnings.push(`Black women ownership (${blackWomenOwnership}%) is outside 0–100.`);
+  }
+  if (
+    blackOwnership !== undefined &&
+    blackWomenOwnership !== undefined &&
+    blackWomenOwnership > blackOwnership
+  ) {
+    warnings.push("Black women ownership exceeds total black ownership.");
+  }
+
+  const revenue = typeof data.revenue === "number" ? data.revenue : undefined;
+  const npat = typeof data.npat === "number" ? data.npat : undefined;
+  if (revenue !== undefined && revenue <= 0) {
+    warnings.push("Revenue is zero or negative — verify financial year data.");
+  }
+  if (revenue !== undefined && npat !== undefined && Math.abs(npat) > revenue * 2) {
+    warnings.push("NPAT magnitude is unusually large relative to revenue.");
+  }
+
+  const missing: string[] = [];
+  if (!data.companyName) missing.push("company name");
+  if (!data.sector) missing.push("sector");
+  if (revenue === undefined) missing.push("revenue");
+  if (missing.length) {
+    warnings.push(`Missing critical fields: ${missing.join(", ")}.`);
+  }
+
+  return warnings;
+}
+
 function normalizeDateDeterministic(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const s = raw.trim();
@@ -183,11 +228,16 @@ export function registerExcelImportRoutes(app: Express) {
       const rawSector = typeof body.sector === "string" ? body.sector : undefined;
       const rawScorecard = typeof body.scorecardType === "string" ? body.scorecardType : undefined;
       const rawDate = typeof body.financialYearEnd === "string" ? body.financialYearEnd : undefined;
+      const extractedData =
+        body.extractedData && typeof body.extractedData === "object"
+          ? (body.extractedData as ExtractedPayload)
+          : undefined;
 
       let sector = normalizeSectorDeterministic(rawSector);
       let scorecardType = inferScorecardType(undefined, rawScorecard);
       let financialYearEnd = normalizeDateDeterministic(rawDate);
       const notes: string[] = [];
+      const validationWarnings = extractedData ? validateExtractedConsistency(extractedData) : [];
 
       const needsAi =
         (rawSector && !sector) ||
@@ -211,6 +261,7 @@ export function registerExcelImportRoutes(app: Express) {
             financialYearEnd,
             usedAi: true,
             notes,
+            validationWarnings,
           });
         }
         notes.push("OPENAI_API_KEY not configured or AI call failed — using deterministic values only.");
@@ -229,6 +280,7 @@ export function registerExcelImportRoutes(app: Express) {
         financialYearEnd,
         usedAi: false,
         notes,
+        validationWarnings,
       });
     } catch (err) {
       logger.error("Excel import normalize failed", err);

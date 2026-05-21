@@ -34,7 +34,38 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(result.data.blackOwnership).toBe(100);
     expect(result.data.financialYearEnd).toBe("2025-02-28");
     expect(result.data.scorecardType).toBe("QSE");
-    expect(result.mappedSheets.length).toBeGreaterThan(3);
+    expect(result.mappedSheets.length).toBeGreaterThan(10);
+    expect(result.extractedFieldCount).toBeGreaterThanOrEqual(20);
+  });
+
+  it("extracts extended BEE pillar fields from Thandanani file", () => {
+    const result = extractBeeGatheringBuffer(buffer);
+    const { data, fieldConfidences } = result;
+
+    expect(data.leviableAmount).toBe(2_124_744);
+    expect(data.skillsSpend).toBe(0);
+    expect(data.learnershipCount).toBe(0);
+    expect(data.esdContributions).toBe(0);
+    expect(data.sedContributions).toBe(0);
+    expect(data.empowermentFinancing).toBe(0);
+    expect(data.beeCompliantSpend).toBe(0);
+    expect(data.yesEmployees).toBe(0);
+    expect(data.yesAbsorbed).toBe(0);
+
+    expect(data.topMgmtBlackPercent).toBe(100);
+    expect(data.seniorMgmtEEBlackPercent).toBe(100);
+    expect(data.boardBlackPercent).toBe(100);
+    expect(data.boardWomenPercent).toBe(0);
+    expect(data.seniorMgmtBlackPercent).toBe(100);
+
+    expect(fieldConfidences.companyName).toBe("high");
+    expect(fieldConfidences.revenue).toBe("high");
+    expect(fieldConfidences.blackOwnership).toBe("high");
+    expect(fieldConfidences.topMgmtBlackPercent).toBe("high");
+
+    expect(result.ownershipChainTiers.length).toBeGreaterThan(0);
+    expect(result.ownershipChainTiers[0]?.entityName).toBe("Thandanani Packers and Hauliers");
+    expect(result.ownershipChainTiers[0]?.blackVotingRights).toBe(100);
   });
 
   it("maps extracted data into workbook sections", () => {
