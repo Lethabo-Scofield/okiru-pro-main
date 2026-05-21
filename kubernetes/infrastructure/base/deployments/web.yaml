@@ -128,6 +128,30 @@ spec:
                   name: external-api-keys
                   key: GROQ_API_KEY
                   optional: true
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_ENDPOINT
+                  optional: true
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_KEY
+                  optional: true
+            - name: AZURE_OPENAI_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_DEPLOYMENT
+                  optional: true
+            - name: AZURE_OPENAI_API_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_VERSION
+                  optional: true
             - name: SMTP_HOST
               valueFrom:
                 secretKeyRef:

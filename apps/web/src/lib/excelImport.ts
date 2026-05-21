@@ -282,16 +282,25 @@ export const FIELD_GROUPS: Array<{
 ];
 
 const SECTOR_ALIASES: Record<string, string> = {
+  retailrcogp: "RCOGP",
+  retail: "RCOGP",
+  rcogp: "RCOGP",
+  retailmotoroilcateringaccommodation: "RCOGP",
   transport: "TRANSPORT",
+  transportandlogistics: "TRANSPORT",
   tourism: "RCOGP",
   agricultural: "AGRI",
   agriculture: "AGRI",
   agri: "AGRI",
+  agribbbee: "AGRI",
   construction: "CONSTRUCTION",
   financialservices: "FSC",
   financial: "FSC",
+  financialsector: "FSC",
+  fsc: "FSC",
   ict: "ICT",
   informationcommunicationtechnology: "ICT",
+  informationandcommunicationtechnology: "ICT",
   property: "RCOGP",
   legal: "RCOGP",
   charteredaccounting: "RCOGP",
@@ -299,6 +308,8 @@ const SECTOR_ALIASES: Record<string, string> = {
   forestry: "AGRI",
   defence: "RCOGP",
 };
+
+const SECTOR_CODE_PARTIALS = ["RCOGP", "CONSTRUCTION", "TRANSPORT", "AGRI", "ICT", "FSC"] as const;
 
 const RACE_MAP: Record<string, string> = {
   african: "African",
@@ -1233,6 +1244,10 @@ export function normalizeSectorDeterministic(raw: string | undefined): string | 
   if (SECTOR_ALIASES[key]) return SECTOR_ALIASES[key];
   for (const [alias, code] of Object.entries(SECTOR_ALIASES)) {
     if (key.includes(alias) || alias.includes(key)) return code;
+  }
+  const lower = raw.toLowerCase();
+  for (const code of SECTOR_CODE_PARTIALS) {
+    if (lower.includes(code.toLowerCase())) return code;
   }
   return undefined;
 }
