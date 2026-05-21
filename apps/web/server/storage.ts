@@ -65,6 +65,7 @@ export interface Assessment {
 
 export interface Client {
   id?: string;
+  clientId?: string;
   name: string;
   registrationNumber?: string;
   vatNumber?: string;
@@ -80,17 +81,44 @@ export interface Client {
   financialYear?: string;
   sectorCode?: string;
   companySize?: string;
+  scorecardType?: string;
+  industry?: string;
+  tradingName?: string;
+  logo?: string;
+  measurementPeriodStart?: string | null;
+  measurementPeriodEnd?: string | null;
+  eapProvince?: string | null;
   revenue?: number;
   npat?: number;
   leviableAmount?: number;
+  tmps?: number;
   financials?: any;
   beeCertificateNumber?: string;
   beeCertificateExpiry?: string;
   beeCertificateLevel?: number | null;
   verificationAgency?: string;
   userId?: string;
+  organizationId?: string | null;
+  createdByUserId?: string;
+  lakeTradingDemo?: boolean;
+  shareholders?: any[];
+  employees?: any[];
+  trainingPrograms?: any[];
+  suppliers?: any[];
+  esdContributions?: any[];
+  sedContributions?: any[];
+  companyValue?: number;
+  outstandingDebt?: number;
+  pillars?: any;
+  createdAt?: Date;
   updatedAt?: Date;
 }
+
+export type ClientVisibilityCarrier = {
+  role?: string | null;
+  secondaryRoles?: string[] | null;
+  organizationId?: string | null;
+};
 
 export interface IStorage {
   getTemplatesByUser(userId: string): Promise<Template[]>;
@@ -129,6 +157,10 @@ export interface IStorage {
   createOrUpdateClient(client: Partial<Client>): Promise<Client>;
   getClientById(clientId: string): Promise<Client | undefined>;
   updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined>;
+  listClientsForUser(userId: string, user: ClientVisibilityCarrier): Promise<Client[]>;
+  getClientByClientId(clientId: string): Promise<Client | undefined>;
+  updateClientByClientId(clientId: string, patch: Partial<Client>): Promise<Client | undefined>;
+  deleteClientByClientId(clientId: string): Promise<boolean>;
 
   // Company profile (onboarding) methods
   getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined>;
@@ -423,45 +455,74 @@ export class MemoryStorage implements IStorage {
   }
   
   async createOrUpdateClient(client: Partial<Client>): Promise<Client> {
-    const existing = client.id ? this.clients.get(client.id) : undefined;
-    
+    const keyCandidate = client.clientId || client.id;
+    const existing = keyCandidate ? this.clients.get(keyCandidate) : undefined;
+    const id = keyCandidate || existing?.id || (++this.clientSeq).toString();
+
     const doc: Client = {
-      id: existing?.id || (++this.clientSeq).toString(),
-      name: client.name || existing?.name || '',
-      registrationNumber: client.registrationNumber || existing?.registrationNumber,
-      vatNumber: client.vatNumber || existing?.vatNumber,
-      taxNumber: client.taxNumber || existing?.taxNumber,
-      industrySector: client.industrySector || existing?.industrySector,
-      physicalAddress: client.physicalAddress || existing?.physicalAddress,
-      postalAddress: client.postalAddress || existing?.postalAddress,
-      contactPerson: client.contactPerson || existing?.contactPerson,
-      contactEmail: client.contactEmail || existing?.contactEmail,
-      contactPhone: client.contactPhone || existing?.contactPhone,
-      annualTurnover: client.annualTurnover || existing?.annualTurnover,
-      numberOfEmployees: client.numberOfEmployees || existing?.numberOfEmployees,
-      financialYear: client.financialYear || existing?.financialYear,
-      sectorCode: client.sectorCode || existing?.sectorCode,
-      companySize: client.companySize || existing?.companySize,
-      revenue: client.revenue || existing?.revenue,
-      npat: client.npat || existing?.npat,
-      leviableAmount: client.leviableAmount || existing?.leviableAmount,
-      financials: client.financials || existing?.financials,
-      beeCertificateNumber: client.beeCertificateNumber || existing?.beeCertificateNumber,
-      beeCertificateExpiry: client.beeCertificateExpiry || existing?.beeCertificateExpiry,
-      beeCertificateLevel: client.beeCertificateLevel !== undefined ? client.beeCertificateLevel : existing?.beeCertificateLevel,
-      verificationAgency: client.verificationAgency || existing?.verificationAgency,
-      userId: client.userId || existing?.userId,
+      ...(existing || {}),
+      ...client,
+      id,
+      clientId: client.clientId || existing?.clientId || id,
+      name: client.name ?? existing?.name ?? '',
+      createdAt: existing?.createdAt || new Date(),
       updatedAt: new Date(),
     };
-    
-    this.clients.set(doc.id!, doc);
+
+    this.clients.set(id, doc);
     return doc;
   }
-  
+
   async getClientById(clientId: string): Promise<Client | undefined> {
     return this.clients.get(clientId);
   }
-  
+
+  async listClientsForUser(userId: string, user: ClientVisibilityCarrier): Promise<Client[]> {
+    const orgId = user.organizationId ?? null;
+    const roles = new Set<string>();
+    if (user.role) roles.add(user.role);
+    for (const r of user.secondaryRoles ?? []) if (r) roles.add(r);
+    const isSuper = roles.has("super_admin");
+    const all = Array.from(this.clients.values());
+    const visible = all.filter((c) => {
+      if (c.createdByUserId === userId) return true;
+      if (orgId && c.organizationId === orgId) return true;
+      if (isSuper && c.lakeTradingDemo) return true;
+      return false;
+    });
+    visible.sort((a, b) => {
+      const at = a.createdAt ? a.createdAt.getTime() : 0;
+      const bt = b.createdAt ? b.createdAt.getTime() : 0;
+      return bt - at;
+    });
+    return visible;
+  }
+
+  async getClientByClientId(clientId: string): Promise<Client | undefined> {
+    const direct = this.clients.get(clientId);
+    if (direct) return direct;
+    for (const c of this.clients.values()) {
+      if (c.clientId === clientId) return c;
+    }
+    return undefined;
+  }
+
+  async updateClientByClientId(clientId: string, patch: Partial<Client>): Promise<Client | undefined> {
+    const existing = await this.getClientByClientId(clientId);
+    if (!existing) return undefined;
+    const key = existing.id!;
+    const next: Client = { ...existing, ...patch, id: key, clientId: existing.clientId || key, updatedAt: new Date() };
+    this.clients.set(key, next);
+    return next;
+  }
+
+  async deleteClientByClientId(clientId: string): Promise<boolean> {
+    const existing = await this.getClientByClientId(clientId);
+    if (!existing) return false;
+    this.clients.delete(existing.id!);
+    return true;
+  }
+
   async updateClientPillarData(clientId: string, pillars: any): Promise<Client | undefined> {
     const client = this.clients.get(clientId);
     if (!client) return undefined;
@@ -1020,6 +1081,40 @@ export class DatabaseStorage implements IStorage {
       { new: true }
     );
     return toClient(doc);
+  }
+
+  async listClientsForUser(userId: string, user: ClientVisibilityCarrier): Promise<Client[]> {
+    const { ClientModel } = await import("../shared/schema");
+    const orClause: Record<string, unknown>[] = [{ createdByUserId: userId }];
+    if (user.organizationId) orClause.push({ organizationId: user.organizationId });
+    const roles = new Set<string>();
+    if (user.role) roles.add(user.role);
+    for (const r of user.secondaryRoles ?? []) if (r) roles.add(r);
+    if (roles.has("super_admin")) orClause.push({ lakeTradingDemo: true });
+    const docs = await ClientModel.find({ $or: orClause }).sort({ createdAt: -1 });
+    return docs.map((d: any) => d.toJSON() as Client);
+  }
+
+  async getClientByClientId(clientId: string): Promise<Client | undefined> {
+    const { ClientModel } = await import("../shared/schema");
+    const doc = await ClientModel.findOne({ clientId });
+    return doc ? (doc.toJSON() as Client) : undefined;
+  }
+
+  async updateClientByClientId(clientId: string, patch: Partial<Client>): Promise<Client | undefined> {
+    const { ClientModel } = await import("../shared/schema");
+    const doc = await ClientModel.findOneAndUpdate(
+      { clientId },
+      { ...patch, updatedAt: new Date() },
+      { new: true }
+    );
+    return doc ? (doc.toJSON() as Client) : undefined;
+  }
+
+  async deleteClientByClientId(clientId: string): Promise<boolean> {
+    const { ClientModel } = await import("../shared/schema");
+    const result = await ClientModel.deleteOne({ clientId });
+    return (result.deletedCount ?? 0) > 0;
   }
 
   async getCompanyProfileByUserId(userId: string): Promise<CompanyProfile | undefined> {

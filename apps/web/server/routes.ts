@@ -25,6 +25,15 @@ import { registerWorkbookRoutes } from "./workbookRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { buildClientVisibilityFilter } from "./roles";
+import {
+  listClientsForTenant as memListClients,
+  getClient as memGetClient,
+  createClient as memCreateClient,
+  updateClient as memUpdateClient,
+  deleteClient as memDeleteClient,
+  canAccessClient as memCanAccessClient,
+  type MemoryClient,
+} from "./clientsMemoryStore";
 
 const logger = createLogger("Routes");
 
@@ -51,7 +60,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
-  logger.warn("GROQ_API_KEY is not set — AI endpoints will return errors");
+  logger.warn("GROQ_API_KEY is not set ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â AI endpoints will return errors");
 }
 const groq = new Groq({ apiKey: groqApiKey || "not-set" });
 
@@ -121,7 +130,7 @@ export async function registerRoutes(
       touchAfter: 24 * 3600,
     });
   } else {
-    logger.warn("Using in-memory session store (MONGODB_URI not set) — sessions will not persist across restarts");
+    logger.warn("Using in-memory session store (MONGODB_URI not set) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -536,7 +545,7 @@ export async function registerRoutes(
       res.clearCookie("okiru.web.sid", {
         path: "/",
         httpOnly: true,
-        secure: isProduction,
+        secure: isProduction || isReplit,
         sameSite: isReplit ? "none" : "lax",
       });
       res.json({ success: true });
@@ -641,7 +650,7 @@ export async function registerRoutes(
     }
   });
 
-  /** Company profile / onboarding — served on web so /api/onboarding hits the same session as sign-up (fixes 404 when ingress sends /api traffic to web). */
+  /** Company profile / onboarding ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â served on web so /api/onboarding hits the same session as sign-up (fixes 404 when ingress sends /api traffic to web). */
   const ONBOARD_MAX = 500;
   const onboardSanitizeStr = (v: unknown, max = ONBOARD_MAX): string | null => {
     if (typeof v !== "string") return null;
@@ -705,7 +714,7 @@ export async function registerRoutes(
   });
 
   const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
-    "— Company profile skipped (add details anytime — open the menu under your name)";
+    "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Company profile skipped (add details anytime ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â open the menu under your name)";
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
@@ -932,7 +941,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You cannot view invites for this team." });
       }
       const invites = await storage.listInvites(workspaceId);
-      // Strip tokens from the listing — only the email recipient should ever see the raw token.
+      // Strip tokens from the listing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only the email recipient should ever see the raw token.
       const safe = invites.map((inv) => ({
         id: inv.id,
         workspaceId: inv.workspaceId,
@@ -1072,7 +1081,7 @@ export async function registerRoutes(
         },
       });
 
-      // Never echo the raw token in the listing payload — clients use the email link.
+      // Never echo the raw token in the listing payload ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â clients use the email link.
       return res.json({
         invite: {
           id: invite.id,
@@ -1452,14 +1461,79 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: load a client (Mongo or in-memory) and enforce tenant access.
+  // Returns the plain client doc on success, or null after writing the
+  // appropriate 404/403 response. Used by the per-client routes below to
+  // dedupe the access guard.
+  async function loadClientWithAccess(
+    req: Request,
+    res: Response,
+  ): Promise<any | null> {
+    const userId = (req.session as any).userId as string;
+    const user = (req as any).user;
+    const userOrgId: string | null = user?.organizationId ?? null;
+    const { clientId } = req.params;
+
+    if (isMongoConnected()) {
+      const doc = await ClientModel.findOne({ clientId });
+      if (!doc) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
+      const c: any = doc.toJSON();
+      const sameOrg =
+        c.organizationId && c.organizationId === userOrgId;
+      const sameUser =
+        c.createdByUserId && c.createdByUserId === userId;
+      const hasTenancy = !!(c.organizationId || c.createdByUserId);
+      const isProd = process.env.NODE_ENV === "production";
+      // In production, refuse access to legacy untenantized records ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they
+      // would otherwise be globally readable/writable by any authenticated
+      // user. Backfill via a controlled migration before exposing. In dev we
+      // keep them accessible so local fixtures keep working. Mirrors
+      // authorizeWorkbookAccess in workbookRoutes.ts.
+      if (!hasTenancy) {
+        if (isProd) {
+          logger.warn("Refusing access to legacy client missing tenancy fields", {
+            clientId,
+            requesterUserId: userId,
+          });
+          res.status(404).json({ error: "Client not found" });
+          return null;
+        }
+      } else if (!sameOrg && !sameUser) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
+      return c;
+    }
+
+    const mem = memGetClient(clientId);
+    if (!mem) {
+      res.status(404).json({ error: "Client not found" });
+      return null;
+    }
+    if (!memCanAccessClient(mem, userId, userOrgId)) {
+      res.status(404).json({ error: "Client not found" });
+      return null;
+    }
+    return mem;
+  }
+
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
-      const userId = (req.session as any).userId;
-      const user = await storage.getUserById(userId);
-      if (!user) return res.status(401).json({ error: "Not authenticated" });
-      const filter = buildClientVisibilityFilter(userId, user);
-      const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
-      res.json(clients.map((c: any) => c.toJSON()));
+import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
+import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { buildClientVisibilityFilter } from "./roles";
+import {
+  listClientsForTenant as memListClients,
+  getClient as memGetClient,
+  createClient as memCreateClient,
+  updateClient as memUpdateClient,
+  deleteClient as memDeleteClient,
+  canAccessClient as memCanAccessClient,
+  type MemoryClient,
+} from "./clientsMemoryStore";
     } catch (error: any) {
       logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
@@ -1470,22 +1544,18 @@ export async function registerRoutes(
     try {
       const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
-      if (industrySector) {
-        const sector = String(industrySector).trim().toUpperCase();
-        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
-          return res.status(400).json({
-            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
-          });
-        }
-      }
-      const userId = (req.session as any).userId;
-      const user = await storage.getUserById(userId);
-      const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
-      const normalizedSector = industrySector
-        ? String(industrySector).trim().toUpperCase()
-        : null;
-      const client = await ClientModel.create({
-        id: clientId,
+import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
+import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { buildClientVisibilityFilter } from "./roles";
+import {
+  listClientsForTenant as memListClients,
+  getClient as memGetClient,
+  createClient as memCreateClient,
+  updateClient as memUpdateClient,
+  deleteClient as memDeleteClient,
+  canAccessClient as memCanAccessClient,
+  type MemoryClient,
+} from "./clientsMemoryStore";
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
@@ -1495,10 +1565,13 @@ export async function registerRoutes(
         revenue: revenue || 0,
         npat: npat || 0,
         leviableAmount: leviableAmount || 0,
-        organizationId: user?.organizationId || null,
+        organizationId: userOrgId,
         createdByUserId: userId,
-      });
-      res.json(client.toJSON());
+        createdAt: now,
+        updatedAt: now,
+      };
+      memCreateClient(doc);
+      res.json(doc);
     } catch (error: any) {
       logger.error("Error creating client", error);
       res.status(500).json({ error: "Failed to create client" });
@@ -1507,39 +1580,60 @@ export async function registerRoutes(
 
   app.get("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const client = await ClientModel.findOne({ clientId: req.params.clientId });
-      if (!client) return res.status(404).json({ error: "Client not found" });
-      res.json(client.toJSON());
+      const client = await loadClientWithAccess(req, res);
+      if (!client) return;
+      res.json(client);
     } catch (error: any) {
+      logger.error("Error fetching client", error);
       res.status(500).json({ error: "Failed to fetch client" });
     }
   });
 
   app.patch("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const updates: any = { updatedAt: new Date() };
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
       const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+      const updates: any = { updatedAt: new Date() };
       for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = req.body[key];
       }
-      const client = await ClientModel.findOneAndUpdate(
-        { clientId: req.params.clientId },
-        updates,
-        { new: true }
-      );
-      if (!client) return res.status(404).json({ error: "Client not found" });
-      res.json(client.toJSON());
+
+      if (isMongoConnected()) {
+        const client = await ClientModel.findOneAndUpdate(
+          { clientId: req.params.clientId },
+          updates,
+          { new: true },
+        );
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        return res.json(client.toJSON());
+      }
+
+      const updated = memUpdateClient(req.params.clientId, updates);
+      if (!updated) return res.status(404).json({ error: "Client not found" });
+      res.json(updated);
     } catch (error: any) {
+      logger.error("Error updating client", error);
       res.status(500).json({ error: "Failed to update client" });
     }
   });
 
   app.delete("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
-      if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
+
+      if (isMongoConnected()) {
+        const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+        if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+        return res.json({ success: true });
+      }
+
+      const ok = memDeleteClient(req.params.clientId);
+      if (!ok) return res.status(404).json({ error: "Client not found" });
       res.json({ success: true });
     } catch (error: any) {
+      logger.error("Error deleting client", error);
       res.status(500).json({ error: "Failed to delete client" });
     }
   });
@@ -1547,15 +1641,12 @@ export async function registerRoutes(
   app.get("/api/clients/:clientId/data", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
-      const client = await ClientModel.findOne({ clientId });
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
-      }
-      const c = client.toJSON();
+      const c = await loadClientWithAccess(req, res);
+      if (!c) return;
 
       res.json({
         client: {
-          id: c.id,
+          id: c.id ?? c.clientId,
           name: c.name,
           financialYear: c.financialYear,
           revenue: c.revenue,
@@ -1626,8 +1717,8 @@ export async function registerRoutes(
       const { clientId } = req.params;
       const { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials } = req.body;
 
-      const client = await ClientModel.findOne({ clientId });
-      if (!client) return res.status(404).json({ error: "Client not found" });
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
 
       const update: Record<string, any> = { updatedAt: new Date() };
       if (Array.isArray(shareholders)) update.shareholders = shareholders;
@@ -1644,7 +1735,11 @@ export async function registerRoutes(
         if (financials.industrySector) update.industrySector = financials.industrySector;
       }
 
-      await ClientModel.updateOne({ clientId }, { $set: update });
+      if (isMongoConnected()) {
+        await ClientModel.updateOne({ clientId }, { $set: update });
+      } else {
+        memUpdateClient(clientId, update);
+      }
 
       res.json({
         success: true,
@@ -1927,21 +2022,21 @@ export async function registerRoutes(
 
 Your job: read the user's natural language description (it may be a single word, a phrase, or a full sentence) and deeply understand WHAT data they are trying to extract from documents. Then generate exactly ONE perfectly-configured entity definition.
 
-CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices — all in a South African business context.
+CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â all in a South African business context.
 
 INSTRUCTIONS:
-1. Parse the user's intent — even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
+1. Parse the user's intent ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â even if they write casually, e.g. "I want the expiry date of the certificate" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ entity: CertificateExpiryDate
 2. Infer the data type: date, monetary amount (Rand), percentage, name/organisation, identifier/reference, level/status, count, address, etc.
 3. Generate a label in PascalCase that is specific and descriptive (2-3 words is fine, e.g. "BBBEELevel", "CertificateExpiryDate", "BlackOwnership")
 4. Write a professional definition that explains exactly what the entity represents and when it appears in documents
 5. Synonyms: realistic alternative names as they appear in actual B-BBEE documents
 6. Positives: realistic South African examples of actual values (use Rand amounts like R1,200,000, percentages like 51%, dates like 31 March 2025, levels like "Level 2 Contributor")
-7. Negatives: common false positives — values that look similar but are NOT this entity
+7. Negatives: common false positives ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â values that look similar but are NOT this entity
 8. Zones: where in documents this typically appears (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
 9. Keywords: actual words that appear near this value in documents (must = required co-occurrence, nice = helpful, neg = words that rule it out)
 10. Pattern: a precise regex if the value has a predictable format, otherwise ""
 
-RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation — raw JSON only.
+RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â raw JSON only.
 
 Schema:
 {
@@ -1957,13 +2052,13 @@ Schema:
 
 Examples:
 
-User: "bee level" →
-[{"label":"BBBEELevel","definition":"The B-BBEE contributor level (1–8) or Non-Compliant status assigned to the measured entity by a SANAS-accredited verification agency.","synonyms":["BEE Level","Contributor Level","B-BBEE Status","BBBEE Rating"],"positives":["Level 1 Contributor","Level 4","Level 8 Contributor","Non-Compliant"],"negatives":["Risk Level","Service Level Agreement","Employment Level"],"zones":["PDF Header","Tables"],"keywords":{"must":["level","contributor"],"nice":["B-BBEE","status","compliant"],"neg":["risk","service","agreement"]},"pattern":"Level\\s*[1-8](\\s*Contributor)?|Non-Compliant"}]
+User: "bee level" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+[{"label":"BBBEELevel","definition":"The B-BBEE contributor level (1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“8) or Non-Compliant status assigned to the measured entity by a SANAS-accredited verification agency.","synonyms":["BEE Level","Contributor Level","B-BBEE Status","BBBEE Rating"],"positives":["Level 1 Contributor","Level 4","Level 8 Contributor","Non-Compliant"],"negatives":["Risk Level","Service Level Agreement","Employment Level"],"zones":["PDF Header","Tables"],"keywords":{"must":["level","contributor"],"nice":["B-BBEE","status","compliant"],"neg":["risk","service","agreement"]},"pattern":"Level\\s*[1-8](\\s*Contributor)?|Non-Compliant"}]
 
-User: "I want to know when the certificate expires" →
+User: "I want to know when the certificate expires" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
 [{"label":"CertificateExpiryDate","definition":"The date on which the B-BBEE certificate expires and re-verification becomes required for the measured entity.","synonyms":["Expiry Date","Valid Until","Certificate End Date","Validity Period End","Expiration Date"],"positives":["31 March 2026","2026-03-31","31/03/2026","30 June 2025"],"negatives":["Issue Date","Measurement Date","Financial Year End","Contract Expiry"],"zones":["PDF Header","Tables"],"keywords":{"must":["expir","valid"],"nice":["until","end","certificate"],"neg":["issue","start","financial year"]},"pattern":"\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}|\\d{4}[-/]\\d{2}[-/]\\d{2}"}]
 
-User: "the rand amount of their annual turnover" →
+User: "the rand amount of their annual turnover" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
 [{"label":"AnnualTurnover","definition":"The total annual revenue or turnover of the measured entity as reported in their audited financial statements, used to determine the applicable B-BBEE scorecard.","synonyms":["Annual Revenue","Total Turnover","Gross Revenue","Annual Sales"],"positives":["R12,500,000","R 5,000,000.00","R2.3M","R150,000,000"],"negatives":["Monthly Revenue","Net Profit","Operating Expenses","Tax Amount"],"zones":["Tables","PDF Header"],"keywords":{"must":["turnover","revenue"],"nice":["annual","total","gross"],"neg":["monthly","net","profit","expenses"]},"pattern":"R\\s?[\\d,\\s]+(\\s*M|\\s*million|\\.\\d{2})?"}]`;
 
       let formattedEntities: any[] = [];
@@ -2196,7 +2291,7 @@ Respond ONLY with a valid JSON array.`;
           const streamSystemPrompt = hasRealContent
             ? `You are a document entity extraction engine. You are given the actual text content of a document named "${fileName}". Your job is to find and extract the requested entities from the document text.
 
-CRITICAL RULES — READ CAREFULLY:
+CRITICAL RULES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â READ CAREFULLY:
 1. ALWAYS search the ENTIRE document text thoroughly, word by word if needed.
 2. Matching is CASE-INSENSITIVE. "nationality" matches "Nationality", "NATIONALITY", etc.
 3. Look for the entity label itself, its synonyms, related words, and ANY mention that relates to the entity concept.
@@ -2933,7 +3028,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   // CRITICAL FIX: Create new assessment with server-backed clientId
-  // This enables DocumentProcessor→Toolkit handoff with proper persistence
+  // This enables DocumentProcessorÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢Toolkit handoff with proper persistence
   app.post("/api/assessments", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;

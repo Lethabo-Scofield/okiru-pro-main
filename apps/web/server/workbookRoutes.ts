@@ -12,6 +12,11 @@ import {
   formatWorkbookValidationSummary,
 } from "../src/components/workbook/workbookValidation";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
+import {
+  getClient as memGetClient,
+  canAccessClient as memCanAccessClient,
+  updateClient as memUpdateClient,
+} from "./clientsMemoryStore";
 
 const logger = createLogger("Workbook");
 
@@ -344,7 +349,7 @@ const DATA_SHEETS: DataSheetSpec[] = [
   },
 ];
 
-// In-memory fallback — only used in non-production when Mongo is unavailable.
+// In-memory fallback Î“Ã‡Ã¶ only used in non-production when Mongo is unavailable.
 // In production we refuse to silently divert writes to memory, since switching
 // back to Mongo later would cause silent data loss.
 const memoryStore = new Map<string, WorkbookData>();
@@ -567,14 +572,36 @@ async function authorizeWorkbookAccess(
       return null;
     }
 
-    // Step 1: client-level authorization.
-    // In dev with no Mongo, we accept the caller as the de-facto owner
-    // (memory-only mode); in prod or with Mongo connected, we enforce the check.
+    // Step 1: client-level authorization (P3) â€” Mongo and in-memory dev paths.
     let clientOrgId: string | null = null;
     let clientCreatorId: string | null = null;
-    if (mongoReady()) {
+
+    if (!mongoReady()) {
+      const memClient = memGetClient(companyId);
+      if (!memClient) {
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      const sameOrg = memClient.organizationId !== null && memClient.organizationId === userOrgId;
+      const sameUser = memClient.createdByUserId === userId;
+      const superAdmin = hasAnyRole(user, "super_admin");
+      const isLakeDemo = companyId === LAKE_TRADING_DEMO_CLIENT_ID;
+      if (!sameOrg && !sameUser && !(superAdmin && isLakeDemo)) {
+        logger.warn("Cross-tenant client access denied via workbook route (memory)", {
+          companyId,
+          requesterUserId: userId,
+          requesterOrgId: userOrgId,
+          clientOrgId: memClient.organizationId,
+          clientCreatorId: memClient.createdByUserId,
+        });
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      clientOrgId = memClient.organizationId;
+      clientCreatorId = memClient.createdByUserId;
+    } else {
       const client = await ClientModel.findOne({ clientId: companyId })
-        .select({ organizationId: 1, createdByUserId: 1 })
+        .select({ organizationId: 1, createdByUserId: 1, lakeTradingDemo: 1 })
         .lean();
       if (!client) {
         res.status(404).json({ error: "Company not found" });
@@ -586,9 +613,6 @@ async function authorizeWorkbookAccess(
       const clientSameUser = clientCreatorId === userId;
 
       if (!clientOrgId && !clientCreatorId) {
-        // Legacy record with no tenancy fields. Refuse access in production —
-        // operators must backfill ownership via a controlled migration before
-        // these clients can be edited. In dev we allow it for local testing.
         if (IS_PRODUCTION) {
           logger.warn("Refusing access to legacy client missing tenancy fields", {
             companyId,
@@ -608,15 +632,12 @@ async function authorizeWorkbookAccess(
             clientOrgId,
             clientCreatorId,
           });
-          res.status(403).json({ message: "Forbidden" });
+          res.status(404).json({ error: "Company not found" });
           return null;
         }
       }
     }
 
-    // Step 2: load (or create) workbook, pinned to the *client's* tenancy
-    // when present — not the caller's — so the first caller cannot redirect a
-    // shared client's workbook to their personal scope.
     const workbookOrgId = clientOrgId ?? userOrgId;
     const workbookOwnerId = clientCreatorId ?? userId;
     const wb = await loadOrCreateWorkbook(companyId, workbookOrgId, workbookOwnerId);
@@ -650,10 +671,10 @@ async function authorizeWorkbookAccess(
 
 // ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
 
-// Lake Trading Fix Plan §1 Bug 1 (ownership) helpers
+// Lake Trading Fix Plan â”¬Âº1 Bug 1 (ownership) helpers
 const BLACK_RACES = new Set(["African", "Coloured", "Indian"]);
 
-// Lake Trading Fix Plan §1 Bug 2 (designations) — workbook label → calculator enum
+// Lake Trading Fix Plan â”¬Âº1 Bug 2 (designations) Î“Ã‡Ã¶ workbook label Î“Ã¥Ã† calculator enum
 const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
   "Executive Director": "Executive Director",
   "Non-executive Director": "Board",
@@ -678,8 +699,8 @@ function mapDesignation(raw: string): string {
   return WORKBOOK_TO_DESIGNATION[trimmed] ?? trimmed;
 }
 
-// Lake Trading Fix Plan §1 Bug 4 + 5 (ESD/SED type)
-// Map human-friendly workbook contributionType labels → calculator snake_case keys
+// Lake Trading Fix Plan â”¬Âº1 Bug 4 + 5 (ESD/SED type)
+// Map human-friendly workbook contributionType labels Î“Ã¥Ã† calculator snake_case keys
 function mapContributionType(raw: string): string {
   const t = (raw ?? "").toLowerCase().replace(/\s+/g, "_");
   if (t.includes("grant")) return "grant";
@@ -691,18 +712,18 @@ function mapContributionType(raw: string): string {
   if (t.includes("professional")) return "professional_services_free";
   if (t.includes("human") || t.includes("employee_time")) return "employee_time";
   if (t.includes("direct")) return "direct_cost";
-  // "Other Monetary" / fallback — Lake fixture uses this for direct-cost SD/ED
+  // "Other Monetary" / fallback Î“Ã‡Ã¶ Lake fixture uses this for direct-cost SD/ED
   return "direct_cost";
 }
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
   const t = (raw ?? "").toLowerCase();
   if (t.startsWith("enterprise")) return "enterprise_development";
-  // Lake Trading Fix Plan §1 Bug 4: safe default — counts toward SD sub-min
+  // Lake Trading Fix Plan â”¬Âº1 Bug 4: safe default Î“Ã‡Ã¶ counts toward SD sub-min
   return "supplier_development";
 }
 
-// Lake Trading Fix Plan §1 Bug 3 + 7: supplier size → enterpriseType + unit normalisation
+// Lake Trading Fix Plan â”¬Âº1 Bug 3 + 7: supplier size Î“Ã¥Ã† enterpriseType + unit normalisation
 function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
   const t = (rawSize ?? "").trim().toLowerCase();
   if (t === "eme") return "eme";
@@ -710,7 +731,7 @@ function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
   return "generic";
 }
 
-// Lake Trading Fix Plan §1 Bug 7: workbook stores % (0–100); calculators expect fractions (0–1)
+// Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators expect fractions (0Î“Ã‡Ã´1)
 function pctToFraction(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -718,7 +739,7 @@ function pctToFraction(v: unknown): number {
   return Math.max(0, n / 100);
 }
 
-// Lake Trading Fix Plan §1 Bug 3: beeLevel must be a number 1–8 (0 = non-compliant)
+// Lake Trading Fix Plan â”¬Âº1 Bug 3: beeLevel must be a number 1Î“Ã‡Ã´8 (0 = non-compliant)
 function parseBeeLevel(raw: unknown): number {
   const n = Number(raw);
   if (Number.isFinite(n) && n >= 1 && n <= 8) return Math.round(n);
@@ -730,7 +751,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const finMeta = (sec["financial-information"]?.meta ?? {}) as Record<string, unknown>;
   const companyMeta = (sec["company-information"]?.meta ?? {}) as Record<string, unknown>;
 
-  // Lake Trading Fix Plan §1 Bug 1: write every scoring field the calculators read,
+  // Lake Trading Fix Plan â”¬Âº1 Bug 1: write every scoring field the calculators read,
   // derived from the workbook columns (race, gender, votingRights%, economicInterest%, etc.).
   // For trust / multi-beneficiary holders the workbook row can also carry an
   // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
@@ -777,7 +798,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       economicInterest: num((r as any).economicInterest),
       shareholding: num((r as any).shareholding),
       modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
-      // NEW (fix plan Bug 1) — scoring-engine fields the loader reads.
+      // NEW (fix plan Bug 1) Î“Ã‡Ã¶ scoring-engine fields the loader reads.
       blackOwnership,
       blackWomenOwnership,
       // Use integer "shares" derived from shareholding %; only relative weight matters
@@ -802,7 +823,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && empSeen.has(id)) continue;
       if (id) empSeen.add(id);
-      // Lake Trading Fix Plan §1 Bug 2: translate workbook label → calculator enum
+      // Lake Trading Fix Plan â”¬Âº1 Bug 2: translate workbook label Î“Ã¥Ã† calculator enum
       const rawDesig = s((r as any).designation ?? (r as any).occupationalLevel);
       const rawOcc = s((r as any).occupationalLevel ?? (r as any).designation);
       const designation = mapDesignation(rawDesig);
@@ -875,15 +896,15 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && supSeen.has(id)) continue;
       if (id) supSeen.add(id);
-      // Lake Trading Fix Plan §1 Bug 7: workbook stores % (0–100); calculators
-      // expect fractions (0–1). Normalise once at projection.
+      // Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators
+      // expect fractions (0Î“Ã‡Ã´1). Normalise once at projection.
       const blackOwnershipFraction = pctToFraction((r as any).currentBlackOwnership);
       const blackFemaleOwnershipFraction = pctToFraction(
         (r as any).currentBlackFemaleOwnership,
       );
-      // Lake Trading Fix Plan §1 Bug 3: map workbook size → enterpriseType, parse
+      // Lake Trading Fix Plan â”¬Âº1 Bug 3: map workbook size Î“Ã¥Ã† enterpriseType, parse
       // beeLevel to a number (loader default of 4 hides non-compliant suppliers
-      // — see Bug 8 — but here we just carry the parsed value through).
+      // Î“Ã‡Ã¶ see Bug 8 Î“Ã‡Ã¶ but here we just carry the parsed value through).
       const sizeRaw = s((r as any).currentSize);
       const enterpriseType = mapEnterpriseType(sizeRaw);
       const beeLevel = parseBeeLevel((r as any).bbbeeLevel);
@@ -894,7 +915,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         name: s((r as any).supplierName),
         currentSize: sizeRaw,
         size: sizeRaw,
-        enterpriseType, // Lake Trading Fix Plan §1 Bug 3
+        enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
         bbbeeLevel: beeLevel,
         beeLevel,
         vatNumber: s((r as any).vatNumber),
@@ -924,8 +945,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     }
   }
 
-  // Lake Trading Fix Plan §1 Bug 4: include `category` (supplier_development /
-  // enterprise_development) and map contributionType labels → calculator keys.
+  // Lake Trading Fix Plan â”¬Âº1 Bug 4: include `category` (supplier_development /
+  // enterprise_development) and map contributionType labels Î“Ã¥Ã† calculator keys.
   const esdContributions = (sec["esd"]?.rows ?? []).map((r) => {
     const rawType = s((r as any).contributionType);
     const rawCategory = s((r as any).esdCategory);
@@ -950,7 +971,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     };
   });
 
-  // Lake Trading Fix Plan §1 Bug 5: rename to `beneficiary` + map type to
+  // Lake Trading Fix Plan â”¬Âº1 Bug 5: rename to `beneficiary` + map type to
   // calculator keys (SED has no category filter, but factor must still apply).
   const sedContributions = (sec["sed"]?.rows ?? []).map((r) => {
     const rawType = s((r as any).contributionType);
@@ -1122,7 +1143,7 @@ export function registerWorkbookRoutes(app: Express): void {
     },
   );
 
-  // Submit the workbook → write its contents into the associated client record
+  // Submit the workbook Î“Ã¥Ã† write its contents into the associated client record
   // so the scorecard pipeline can pick it up. Returns row counts of what was synced.
   app.post(
     "/api/workbook/:companyId/submit",
@@ -1131,7 +1152,7 @@ export function registerWorkbookRoutes(app: Express): void {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
-      if (!mongoReady()) {
+      if (!mongoReady() && !canUseMemoryFallback()) {
         return res
           .status(503)
           .json({ error: "Database unavailable — cannot submit workbook." });
@@ -1148,59 +1169,91 @@ export function registerWorkbookRoutes(app: Express): void {
 
       const projected = projectWorkbookToClient(wb);
       try {
+        const buildUpdate = (): Record<string, any> => {
+          const update: Record<string, any> = {
+            updatedAt: new Date(),
+            shareholders: projected.shareholders,
+            employees: projected.employees,
+            trainingPrograms: projected.trainingPrograms,
+            suppliers: projected.suppliers,
+            esdContributions: projected.esdContributions,
+            sedContributions: projected.sedContributions,
+          };
+          const f = projected.financials;
+          if (f.revenue > 0) update.revenue = f.revenue;
+          if (typeof f.npat === "number") update.npat = f.npat;
+          if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
+          if (f.tmps > 0) update.tmps = f.tmps;
+          if (f.industrySector) {
+            update.industrySector = f.industrySector;
+            update.sectorCode = f.industrySector;
+          }
+          if (f.scorecardType) {
+            update.scorecardType = f.scorecardType;
+            update.companySize = f.scorecardType;
+          }
+          if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
+          const cm = projected.companyMeta;
+          for (const key of [
+            "tradingName",
+            "registrationNumber",
+            "vatNumber",
+            "taxNumber",
+            "physicalAddress",
+            "postalAddress",
+            "contactPerson",
+            "contactEmail",
+            "contactPhone",
+            "financialYearEnd",
+          ] as const) {
+            const v = cm[key];
+            if (typeof v === "string" && v.trim()) {
+              if (key === "financialYearEnd") {
+                update.financialYear = v.trim();
+              } else {
+                update[key] = v.trim();
+              }
+            }
+          }
+          return update;
+        };
+
+        const update = buildUpdate();
+
+        if (!mongoReady()) {
+          const userId =
+            (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
+          const submittedAt = new Date().toISOString();
+          const updated = memUpdateClient(wb.companyId, update);
+          if (!updated) {
+            return res
+              .status(404)
+              .json({ error: "Client not found for this workbook." });
+          }
+          wb.submittedAt = submittedAt;
+          wb.submittedByUserId = userId;
+          wb.updatedAt = submittedAt;
+          memoryStore.set(wb.companyId, wb);
+          return res.json({
+            ok: true,
+            clientId: wb.companyId,
+            counts: {
+              shareholders: projected.shareholders.length,
+              employees: projected.employees.length,
+              trainingPrograms: projected.trainingPrograms.length,
+              suppliers: projected.suppliers.length,
+              esdContributions: projected.esdContributions.length,
+              sedContributions: projected.sedContributions.length,
+            },
+            submittedAt,
+          });
+        }
+
         const client = await ClientModel.findOne({ clientId: wb.companyId });
         if (!client) {
           return res
             .status(404)
             .json({ error: "Client not found for this workbook." });
-        }
-
-        const update: Record<string, any> = {
-          updatedAt: new Date(),
-          shareholders: projected.shareholders,
-          employees: projected.employees,
-          trainingPrograms: projected.trainingPrograms,
-          suppliers: projected.suppliers,
-          esdContributions: projected.esdContributions,
-          sedContributions: projected.sedContributions,
-        };
-        const f = projected.financials;
-        if (f.revenue > 0) update.revenue = f.revenue;
-        if (typeof f.npat === "number") update.npat = f.npat;
-        if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
-        if (f.tmps > 0) update.tmps = f.tmps;
-        if (f.industrySector) {
-          update.industrySector = f.industrySector;
-          update.sectorCode = f.industrySector;
-        }
-        if (f.scorecardType) {
-          update.scorecardType = f.scorecardType;
-          update.companySize = f.scorecardType;
-        }
-        if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
-
-        // Lift company-info fields into the client record too.
-        const cm = projected.companyMeta;
-        for (const key of [
-          "tradingName",
-          "registrationNumber",
-          "vatNumber",
-          "taxNumber",
-          "physicalAddress",
-          "postalAddress",
-          "contactPerson",
-          "contactEmail",
-          "contactPhone",
-          "financialYearEnd",
-        ] as const) {
-          const v = cm[key];
-          if (typeof v === "string" && v.trim()) {
-            if (key === "financialYearEnd") {
-              update.financialYear = v.trim();
-            } else {
-              update[key] = v.trim();
-            }
-          }
         }
 
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
@@ -1212,6 +1265,19 @@ export function registerWorkbookRoutes(app: Express): void {
           { $set: { submittedAt: new Date(), submittedByUserId: userId, updatedAt: new Date() } },
         );
 
+        res.json({
+          ok: true,
+          clientId: wb.companyId,
+          counts: {
+            shareholders: projected.shareholders.length,
+            employees: projected.employees.length,
+            trainingPrograms: projected.trainingPrograms.length,
+            suppliers: projected.suppliers.length,
+            esdContributions: projected.esdContributions.length,
+            sedContributions: projected.sedContributions.length,
+          },
+          submittedAt: new Date().toISOString(),
+        });
         res.json({
           ok: true,
           clientId: wb.companyId,
