@@ -22,6 +22,7 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import { registerExcelImportRoutes } from "./excelImportRoute";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { buildClientVisibilityFilter } from "./roles";
@@ -1522,40 +1523,64 @@ export async function registerRoutes(
 
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
-import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
-import { registerFeedbackRoutes } from "./feedbackRoutes";
-import { buildClientVisibilityFilter } from "./roles";
-import {
-  listClientsForTenant as memListClients,
-  getClient as memGetClient,
-  createClient as memCreateClient,
-  updateClient as memUpdateClient,
-  deleteClient as memDeleteClient,
-  canAccessClient as memCanAccessClient,
-  type MemoryClient,
-} from "./clientsMemoryStore";
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+      const userOrgId: string | null = user?.organizationId ?? null;
+
+      if (isMongoConnected()) {
+        const filter = buildClientVisibilityFilter(userId, user);
+        const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
+        return res.json(clients.map((c: any) => c.toJSON()));
+      }
+
+      const clients = memListClients(userId, userOrgId);
+      res.json(clients);
     } catch (error: any) {
       logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
     }
   });
-
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
       const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
-import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
-import { registerFeedbackRoutes } from "./feedbackRoutes";
-import { buildClientVisibilityFilter } from "./roles";
-import {
-  listClientsForTenant as memListClients,
-  getClient as memGetClient,
-  createClient as memCreateClient,
-  updateClient as memUpdateClient,
-  deleteClient as memDeleteClient,
-  canAccessClient as memCanAccessClient,
-  type MemoryClient,
-} from "./clientsMemoryStore";
+      if (industrySector) {
+        const sector = String(industrySector).trim().toUpperCase();
+        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
+          return res.status(400).json({
+            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
+          });
+        }
+      }
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      const userOrgId: string | null = user?.organizationId ?? null;
+      const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
+      const now = new Date();
+      const normalizedSector = industrySector
+        ? String(industrySector).trim().toUpperCase()
+        : null;
+
+      if (isMongoConnected()) {
+        const client = await ClientModel.create({
+          id: clientId,
+          clientId,
+          name,
+          financialYear: financialYear || new Date().getFullYear().toString(),
+          industrySector: normalizedSector,
+          sectorCode: normalizedSector || "RCOGP",
+          eapProvince: eapProvince || null,
+          revenue: revenue || 0,
+          npat: npat || 0,
+          leviableAmount: leviableAmount || 0,
+          organizationId: userOrgId,
+          createdByUserId: userId,
+        });
+        return res.json(client.toJSON());
+      }
+
+      const doc: MemoryClient = {
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
@@ -1577,7 +1602,6 @@ import {
       res.status(500).json({ error: "Failed to create client" });
     }
   });
-
   app.get("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
       const client = await loadClientWithAccess(req, res);
@@ -3170,6 +3194,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   registerWorkbookRoutes(app);
+  registerExcelImportRoutes(app);
   registerFeedbackRoutes(app, requireAuth);
 
   logger.info("Route registration completed");
