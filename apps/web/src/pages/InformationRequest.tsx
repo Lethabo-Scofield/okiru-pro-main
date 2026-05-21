@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
-  ChevronDown,
   ChevronRight,
   Download,
   Loader2,
@@ -36,6 +35,7 @@ import {
 import {
   normalizeExcelFile,
 } from "@/lib/workbookExcelNormalizer";
+import { useBbeeStore } from "@toolkit/lib/store";
 
 type Row = Record<string, unknown> & { _id: string };
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
@@ -463,10 +463,9 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const companyId = company.clientId || company.id || "";
   const [, navigate] = useLocation();
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(["company-information"]),
-  );
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeSectionKey, setActiveSectionKey] = useState("company-information");
+  const mainPanelRef = useRef<HTMLElement>(null);
+  const loadClientData = useBbeeStore((s) => s.loadClientData);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -694,6 +693,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
         });
         localStorage.setItem("okiru-pro-active-client", companyId);
+        try {
+          await loadClientData(companyId);
+        } catch {
+          // DataLoader will retry on the summary page if preload fails.
+        }
         navigate("/toolkit/scorecard-summary?from=submit");
       } else {
         toast({
@@ -707,7 +711,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     } finally {
       setSubmitting(false);
     }
-  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast, navigate]);
+  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast, navigate, loadClientData]);
 
   const handleExcelImport = useCallback(
     async (file: File) => {
@@ -749,23 +753,17 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     [companyId, toast],
   );
 
-  const toggleSection = (key: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const focusSection = (key: string) => {
-    setExpandedKeys((prev) => new Set(prev).add(key));
-    requestAnimationFrame(() => {
-      sectionRefs.current[key]?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
-
   const enabledSections = useMemo(() => SECTIONS.filter((s) => s.enabled), []);
+
+  const selectSection = useCallback((key: string) => {
+    setActiveSectionKey(key);
+    requestAnimationFrame(() => {
+      mainPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const activeSection =
+    enabledSections.find((s) => s.key === activeSectionKey) ?? enabledSections[0];
 
   const sectionStatus = (key: string): "empty" | "filled" => {
     const sec = workbook?.sections[key];
@@ -786,6 +784,55 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       : savedAt
         ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
         : "";
+
+  const renderSectionNav = (variant: "sidebar" | "tabs") =>
+    enabledSections.map((s) => {
+      const status = sectionStatus(s.key);
+      const count = workbook?.sections[s.key]?.rows?.length || 0;
+      const isActive = activeSectionKey === s.key;
+      const indicator = s.meta
+        ? status === "filled"
+          ? "✓"
+          : "—"
+        : count > 0
+          ? String(count)
+          : "—";
+      const baseClass =
+        variant === "sidebar"
+          ? "w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm"
+          : "shrink-0 px-3 py-2 rounded-lg text-[12px] flex items-center gap-2 smooth press-sm whitespace-nowrap";
+      return (
+        <button
+          key={s.key}
+          onClick={() => selectSection(s.key)}
+          className={`${baseClass} ${
+            isActive
+              ? "bg-white/[0.08] text-white"
+              : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
+          }`}
+          data-testid={`tab-${s.key}`}
+        >
+          <span className={variant === "sidebar" ? "truncate" : ""}>{s.label}</span>
+          <span
+            className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
+          >
+            {indicator}
+          </span>
+        </button>
+      );
+    });
+
+  const activeSectionData = workbook?.sections[activeSection?.key ?? ""] || {
+    rows: [],
+    meta: {},
+  };
+  const activeRows = activeSectionData.rows || [];
+  const activeMeta = (activeSectionData.meta || {}) as Record<string, unknown>;
+  const activeMetaFields = activeSection?.meta
+    ? activeSection.key === "company-information"
+      ? getCompanyInfoMetaFields(String(activeMeta.industrySector ?? ""))
+      : activeSection.meta
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -844,117 +891,62 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        <aside className="col-span-12 lg:col-span-3">
-          <div
-            className="rounded-xl bg-[#1c1c1e] p-2 lg:sticky lg:top-[calc(3.5rem+1rem)] lg:max-h-[calc(100vh-3.5rem-2rem)] lg:overflow-y-auto lg:z-10"
-            data-testid="workbook-tabs"
-          >
-            {enabledSections.map((s) => {
-              const status = sectionStatus(s.key);
-              const count = workbook?.sections[s.key]?.rows?.length || 0;
-              const isExpanded = expandedKeys.has(s.key);
-              const indicator = s.meta
-                ? status === "filled"
-                  ? "✓"
-                  : "—"
-                : count > 0
-                  ? String(count)
-                  : "—";
-              return (
-                <button
-                  key={s.key}
-                  onClick={() => focusSection(s.key)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${
-                    isExpanded
-                      ? "bg-white/[0.08] text-white"
-                      : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
-                  }`}
-                  data-testid={`tab-${s.key}`}
-                >
-                  <span className="truncate">{s.label}</span>
-                  <span
-                    className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
-                  >
-                    {indicator}
-                  </span>
-                </button>
-              );
-            })}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="lg:hidden w-full -mx-1 px-1 overflow-x-auto">
+          <div className="flex gap-1.5 min-w-max pb-1" data-testid="workbook-mobile-tabs">
+            {renderSectionNav("tabs")}
+          </div>
+        </div>
+
+        <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:z-10">
+          <div className="rounded-xl bg-[#1c1c1e] p-2" data-testid="workbook-tabs">
+            {renderSectionNav("sidebar")}
           </div>
         </aside>
 
-        <section className="col-span-12 lg:col-span-9 space-y-4">
+        <section
+          ref={mainPanelRef}
+          className="flex-1 min-w-0 scroll-mt-24"
+          data-testid={`section-panel-${activeSection?.key ?? "unknown"}`}
+        >
           {loading ? (
             <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
             </div>
-          ) : (
-            enabledSections.map((section) => {
-              const sectionData = workbook?.sections[section.key] || { rows: [], meta: {} };
-              const rows = sectionData.rows || [];
-              const meta = (sectionData.meta || {}) as Record<string, unknown>;
-              const isExpanded = expandedKeys.has(section.key);
-              const metaFields = section.meta
-                ? section.key === "company-information"
-                  ? getCompanyInfoMetaFields(String(meta.industrySector ?? ""))
-                  : section.meta
-                : undefined;
-
-              return (
-                <div
-                  key={section.key}
-                  ref={(el) => {
-                    sectionRefs.current[section.key] = el;
-                  }}
-                  className="rounded-2xl bg-[#1c1c1e] overflow-hidden scroll-mt-24"
-                  data-testid={`section-panel-${section.key}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(section.key)}
-                    className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-white/[0.02] smooth"
-                  >
-                    <div>
-                      <h2 className="text-[18px] font-bold tracking-tight text-white">
-                        {section.label}
-                      </h2>
-                      <p className="text-[13px] text-[#8e8e93] mt-0.5">{section.description}</p>
-                    </div>
-                    <ChevronDown
-                      className={`h-5 w-5 text-[#636366] shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          ) : activeSection ? (
+            <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
+              <div className="px-6 py-4 border-b border-white/[0.06]">
+                <h2 className="text-[18px] font-bold tracking-tight text-white">
+                  {activeSection.label}
+                </h2>
+                <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+              </div>
+              <div className="px-6 pb-6">
+                {activeMetaFields ? (
+                  <div className="pt-5">
+                    <MetaForm
+                      fields={activeMetaFields}
+                      value={activeMeta}
+                      onChange={(next) => handleMetaChange(activeSection.key, next)}
                     />
-                  </button>
-                  {isExpanded && (
-                    <div className="px-6 pb-6 border-t border-white/[0.06]">
-                      {metaFields ? (
-                        <div className="pt-5">
-                          <MetaForm
-                            fields={metaFields}
-                            value={meta}
-                            onChange={(next) => handleMetaChange(section.key, next)}
-                          />
-                        </div>
-                      ) : section.columns ? (
-                        <div className="pt-5">
-                          <SpreadsheetGrid
-                            columns={section.columns}
-                            rows={rows}
-                            rowValidate={section.rowValidate}
-                            onChange={(nextRows) => handleRowsChange(section.key, nextRows)}
-                          />
-                        </div>
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
-                          <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
+                  </div>
+                ) : activeSection.columns ? (
+                  <div className="pt-5">
+                    <SpreadsheetGrid
+                      columns={activeSection.columns}
+                      rows={activeRows}
+                      rowValidate={activeSection.rowValidate}
+                      onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
+                    <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>
