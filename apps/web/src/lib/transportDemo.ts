@@ -1,13 +1,8 @@
 /**
- * Transport QSE - demo dataset for Transport sector (4-pillar scorecard).
+ * Transport QSE - demo dataset for Transport sector scorecard.
  *
- * Transport QSE has exactly 4 pillars at 25 points each:
- * - Skills Development (25 pts)
- * - Preferential Procurement (25 pts)
- * - Enterprise & Supplier Development (25 pts)
- * - Socio-Economic Development (25 pts)
- *
- * Ownership, Management Control, and YES Initiative are NOT included (0 points).
+ * Structure: 82 compulsory (Ownership 28 + MC 27 + EE 27) + ONE elective of 25 pts = 107 max.
+ * Electives (choose exactly one): Skills Dev, PP, Enterprise Dev, or SED — each 25 pts.
  */
 
 import type { ClientInformationData } from '@/components/build/ClientInformationForm';
@@ -271,7 +266,7 @@ export const transportPillars: Omit<BuildPillarsData, 'ownership' | 'management'
   },
 };
 
-/** Transport QSE expected scores (4 pillars × 25 pts each = 100 pts max) */
+/** Transport QSE expected scores (82 compulsory + 25 chosen elective = 107 pts max) */
 export const transportExpectedScores = {
   skillsDevelopment: 18.5,
   procurement: 22.0,
