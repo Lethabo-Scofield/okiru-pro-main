@@ -36,6 +36,8 @@ import {
   normalizeExcelFile,
 } from "@/lib/workbookExcelNormalizer";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { ScorecardFlowStepper } from "@/components/scorecard/ScorecardFlowStepper";
+import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
 
 type Row = Record<string, unknown> & { _id: string };
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
@@ -698,7 +700,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         } catch {
           // DataLoader will retry on the summary page if preload fails.
         }
-        navigate("/toolkit/scorecard-summary?from=submit");
+        navigate(`/create-scorecard/${encodeURIComponent(companyId)}/summary`);
       } else {
         toast({
           title: "Submit failed",
@@ -879,6 +881,16 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
           <ExcelImportButton onImport={handleExcelImport} disabled={loading || !workbook} />
+          {submittedAt && (
+            <button
+              onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}/summary`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
+              data-testid="button-continue-summary"
+            >
+              Continue to Summary
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             onClick={handleSubmit}
             disabled={submitting}
@@ -961,6 +973,9 @@ export default function InformationRequest() {
   const [picked, setPicked] = useState<Company | null>(null);
   const basePath = location.startsWith("/create-scorecard") ? "/create-scorecard" : "/information-request";
   const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
+  const isCreateScorecardFlow = basePath === "/create-scorecard";
+  const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
+  const resolvedCompanyId = params.companyId || picked?.clientId || picked?.id || "";
 
   useEffect(() => {
     if (params.companyId && !picked) {
@@ -969,6 +984,12 @@ export default function InformationRequest() {
         .then((c) => c && setPicked(c));
     }
   }, [params.companyId, picked]);
+
+  useEffect(() => {
+    if (isCreateScorecardFlow && !params.companyId && picked) {
+      setPicked(null);
+    }
+  }, [isCreateScorecardFlow, params.companyId, picked]);
 
   const handlePick = (c: Company) => {
     setPicked(c);
@@ -999,20 +1020,30 @@ export default function InformationRequest() {
         </div>
       </header>
 
+      {isCreateScorecardFlow && (
+        <ScorecardFlowStepper companyId={params.companyId || resolvedCompanyId || undefined} />
+      )}
+
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">
-            {basePath === "/create-scorecard" ? "Create Scorecard" : "Company Assessment Workbook"}
-          </h1>
-          <p className="text-[14px] text-[#98989f] mt-1">
-            {basePath === "/create-scorecard"
-              ? "Pick a company, complete the workbook sections, then submit to generate your scorecard."
-              : "Structured spreadsheet collection — replaces manual onboarding sheets."}
-          </p>
-        </div>
+        {!isSummaryStep && (
+          <div className="mb-8">
+            <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">
+              {basePath === "/create-scorecard" ? "Create Scorecard" : "Company Assessment Workbook"}
+            </h1>
+            <p className="text-[14px] text-[#98989f] mt-1">
+              {basePath === "/create-scorecard"
+                ? "Pick a company, complete the workbook sections, then submit to generate your scorecard."
+                : "Structured spreadsheet collection — replaces manual onboarding sheets."}
+            </p>
+          </div>
+        )}
 
         {picked ? (
-          <WorkbookView company={picked} onBack={handleBack} />
+          isSummaryStep && resolvedCompanyId ? (
+            <WorkbookScoreSummary companyId={resolvedCompanyId} companyName={picked.name} />
+          ) : (
+            <WorkbookView company={picked} onBack={handleBack} />
+          )
         ) : (
           <CompanyPicker onPick={handlePick} />
         )}

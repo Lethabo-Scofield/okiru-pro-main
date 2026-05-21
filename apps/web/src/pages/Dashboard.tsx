@@ -100,7 +100,7 @@ export default function Dashboard() {
 
   const openSummary = (clientId: string) => {
     localStorage.setItem('okiru-pro-active-client', clientId);
-    navigate('/toolkit/scorecard-summary');
+    navigate(`/create-scorecard/${encodeURIComponent(clientId)}/summary`);
   };
 
   const openScorecard = (clientId: string) => {
