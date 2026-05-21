@@ -573,6 +573,39 @@ function sectorConfigToCalculatorConfig(sc: any) {
   };
 }
 
+/** Reject Arango rows whose pillar weightings don't match verified sectorConfig.ts. */
+function calculatorConfigHasValidPillars(config: ReturnType<typeof sectorConfigToCalculatorConfig>): boolean {
+  const pc = config.pillarConfigs;
+  if (!pc) return false;
+  const ownMax = pc.ownership?.maxPoints ?? 0;
+  const mcMax = pc.managementControl?.maxPoints ?? 0;
+  return (ownMax + mcMax) > 0 && (config.totalMaxPoints ?? 0) > 0;
+}
+
+function isStaleStoredSectorConfig(
+  sectorCode: string,
+  scorecardType: string,
+  dbConfig: ReturnType<typeof sectorConfigToCalculatorConfig>,
+): boolean {
+  if (!calculatorConfigHasValidPillars(dbConfig)) return true;
+  try {
+    const expected = sectorConfigToCalculatorConfig(getSectorConfig(sectorCode, scorecardType));
+    if (expected.totalMaxPoints !== dbConfig.totalMaxPoints) return true;
+    const expectedOwn = expected.pillarConfigs?.ownership?.maxPoints ?? 0;
+    const dbOwn = dbConfig.pillarConfigs?.ownership?.maxPoints ?? 0;
+    if (expectedOwn > 0 && expectedOwn !== dbOwn) return true;
+    const expectedMc = expected.pillarConfigs?.managementControl?.maxPoints ?? 0;
+    const dbMc = dbConfig.pillarConfigs?.managementControl?.maxPoints ?? 0;
+    if (expectedMc > 0 && expectedMc !== dbMc) return true;
+    const expectedGroup = expected.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
+    const dbGroup = dbConfig.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
+    if (expectedGroup && expectedGroup !== dbGroup) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/scorecard/sector-config/:sectorCode/:scorecardType
 // Returns sector-specific calculator configuration in CalculatorConfig shape.
@@ -601,9 +634,11 @@ router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res
       const rows = await cursor.all();
 
       if (rows.length > 0 && rows[0]) {
-        // Transform ArangoDB shape (StoredSectorRule) to CalculatorConfig
         const dbConfig = sectorConfigToCalculatorConfig(rows[0]);
-        return res.json({ success: true, config: dbConfig, source: 'arangodb' });
+        if (!isStaleStoredSectorConfig(sectorCode, scorecardType, dbConfig)) {
+          return res.json({ success: true, config: dbConfig, source: 'arangodb' });
+        }
+        logger.warn('Stale Arango sector config — falling back to hardcoded', { sectorCode, scorecardType });
       }
     } catch (arangoErr) {
       logger.warn('ArangoDB unavailable, falling back to hardcoded', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
