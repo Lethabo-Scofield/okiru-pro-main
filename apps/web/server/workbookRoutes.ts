@@ -1289,19 +1289,6 @@ export function registerWorkbookRoutes(app: Express): void {
           },
           submittedAt: new Date().toISOString(),
         });
-        res.json({
-          ok: true,
-          clientId: wb.companyId,
-          counts: {
-            shareholders: projected.shareholders.length,
-            employees: projected.employees.length,
-            trainingPrograms: projected.trainingPrograms.length,
-            suppliers: projected.suppliers.length,
-            esdContributions: projected.esdContributions.length,
-            sedContributions: projected.sedContributions.length,
-          },
-          submittedAt: new Date().toISOString(),
-        });
       } catch (err: any) {
         logger.error("Failed to submit workbook", err);
         res.status(500).json({ error: "Failed to submit workbook" });

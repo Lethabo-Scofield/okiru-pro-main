@@ -220,7 +220,8 @@ export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig)
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: round2(totalScore),
-    subMinimumMet: baseScore >= subMinThresholdPoints,
+    subMinimumMet:
+      subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : false,
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {

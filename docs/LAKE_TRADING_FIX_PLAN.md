@@ -629,3 +629,25 @@ expect(ownership.total + mgmt.total + sk.total + proc.total + esd.sdTotal + esd.
 | 8 (beeLevel default) | High | Default 4 overstates non-compliant suppliers; latent for Lake |
 | 9 (Discounted level) | High | UCS test expectation matches spec, engine returns base level |
 | 10 (Ontology / ESD pillar) | Medium | Needs design call on simplified vs full path |
+
+---
+
+## 11. YES Initiative — not a cause of the 19.5 vs 63.56 gap
+
+**Audited**: 2026-05-21 against `docs/Lake Trading  Toolkit (RCOGP).xlsx`.
+
+Lake Trading Excel shows:
+
+- **Grand total (7 pillars)**: 63.56 / 120
+- **YES Points (bonus)**: **0** (`Scorecard Calculations` sheet; `YES Achieved? = No`)
+- **Qualify for YES?**: **No** (YES sheet)
+- Summary row labelled **YES points** also shows 63.56 — this is the toolkit formula *Current Points + YES Points* when bonus = 0, **not** an extra pillar or missing +3
+
+The 19.5 production total is caused by workbook projection bugs (§1), not YES exclusion. Lake demo data has zero YES candidates; excluding YES bonus is **correct** for this dataset.
+
+| Total | Points | Applies to Lake? |
+|---|---|---|
+| Without YES bonus | **63.56** / 120 | Yes — authoritative |
+| With Tier 2 YES bonus (+3) | **66.56** / 123 | No — Lake does not qualify |
+
+Full YES rules: `docs/YES_INITIATIVE_CLARIFICATION.md` and `docs/SECTOR_TRUTH_LEDGER.md` §16.

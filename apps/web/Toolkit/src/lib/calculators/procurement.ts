@@ -170,7 +170,8 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
     total: round2(totalScore),
-    subMinimumMet: baseTotal >= subMinThresholdPoints, // Excludes DG bonus
+    subMinimumMet:
+      subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : false,
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

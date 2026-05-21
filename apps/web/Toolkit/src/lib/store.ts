@@ -506,6 +506,16 @@ function calculateScorecard(
   const prSubMinMet = procScore.subMinimumMet;
   const sdSubMinMet = esdScore.sdSubMinimumMet;
   const edSubMinMet = esdScore.edSubMinimumMet;
+
+  /** Hide sub-min badges when the sector sets subMinimumPercent to 0 or maxPoints to 0. */
+  const showSubMin = (pillarKey: keyof NonNullable<CalculatorConfig['pillarConfigs']>): boolean => {
+    const p = pConfig?.[pillarKey];
+    if (!p) return true;
+    const pct = 'subMinimumPercent' in p ? (p as { subMinimumPercent?: number }).subMinimumPercent : undefined;
+    if (pct === 0) return false;
+    if ('maxPoints' in p && (p as { maxPoints?: number }).maxPoints === 0) return false;
+    return pct == null || pct > 0;
+  };
   const anySubMinFailed = !ownSubMinMet || !skSubMinMet || !prSubMinMet || !sdSubMinMet || !edSubMinMet;
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
   let discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
@@ -516,12 +526,37 @@ function calculateScorecard(
   }
 
   return {
-    ownership: { score: round2(ownScore.total), target: ownTarget, weighting: ownTarget, subMinimumMet: ownSubMinMet },
+    ownership: {
+      score: round2(ownScore.total),
+      target: ownTarget,
+      weighting: ownTarget,
+      subMinimumMet: showSubMin('ownership') ? ownSubMinMet : undefined,
+    },
     managementControl: { score: round2(mgtScore.total), target: mcTarget, weighting: mcTarget },
-    skillsDevelopment: { score: round2(skillScore.total), target: skillsTarget, weighting: skillsTarget, subMinimumMet: skSubMinMet },
-    procurement: { score: round2(procScore.total), target: procTarget, weighting: procTarget, subMinimumMet: prSubMinMet },
-    supplierDevelopment: { score: round2(esdScore.sdTotal), target: sdTarget, weighting: sdTarget, subMinimumMet: sdSubMinMet },
-    enterpriseDevelopment: { score: round2(esdScore.edTotal), target: edTarget, weighting: edTarget, subMinimumMet: edSubMinMet },
+    skillsDevelopment: {
+      score: round2(skillScore.total),
+      target: skillsTarget,
+      weighting: skillsTarget,
+      subMinimumMet: showSubMin('skillsDevelopment') ? skSubMinMet : undefined,
+    },
+    procurement: {
+      score: round2(procScore.total),
+      target: procTarget,
+      weighting: procTarget,
+      subMinimumMet: showSubMin('preferentialProcurement') ? prSubMinMet : undefined,
+    },
+    supplierDevelopment: {
+      score: round2(esdScore.sdTotal),
+      target: sdTarget,
+      weighting: sdTarget,
+      subMinimumMet: showSubMin('supplierDevelopment') ? sdSubMinMet : undefined,
+    },
+    enterpriseDevelopment: {
+      score: round2(esdScore.edTotal),
+      target: edTarget,
+      weighting: edTarget,
+      subMinimumMet: showSubMin('enterpriseDevelopment') ? edSubMinMet : undefined,
+    },
     socioEconomicDevelopment: { score: round2(sedScore.total), target: sedTarget, weighting: sedTarget },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: yesTarget, weighting: yesTarget },
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },

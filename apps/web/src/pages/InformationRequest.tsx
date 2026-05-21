@@ -192,6 +192,7 @@ function CompanyPicker({
   const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
   const [pendingSections, setPendingSections] = useState<WorkbookSectionsInput | null>(null);
   const { toast } = useToast();
+  const loadClientData = useBbeeStore((s) => s.loadClientData);
   const showLakeDemo = isSuperAdmin(user);
 
   const load = useCallback(async () => {
@@ -421,13 +422,31 @@ function CompanyPicker({
               toast({ title: "Import failed", variant: "destructive" });
               return;
             }
+            let submitted = false;
+            const submitRes = await fetch(
+              `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
+              { method: "POST", credentials: "include" },
+            );
+            if (submitRes.ok) {
+              submitted = true;
+              try {
+                await loadClientData(clientId);
+              } catch {
+                // Summary page will retry loadClientData.
+              }
+            }
             const warnCount = previewResult?.warnings.length ?? 0;
             toast({
-              title: warnCount > 0 ? "Imported with gaps" : "Workbook imported",
-              description:
-                warnCount > 0
-                  ? `${warnCount} warning(s) — review sections before submit.`
-                  : companyName,
+              title: submitted
+                ? "Imported and synced to scorecard"
+                : warnCount > 0
+                  ? "Imported with gaps"
+                  : "Workbook imported",
+              description: submitted
+                ? companyName
+                : warnCount > 0
+                  ? `${warnCount} warning(s) — open workbook and submit when ready.`
+                  : `${companyName} — submit workbook to calculate score.`,
             });
             setPreviewOpen(false);
             setPendingFile(null);
