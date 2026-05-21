@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
+  ChevronDown,
   ChevronRight,
   Download,
   Loader2,
@@ -9,8 +10,7 @@ import {
   Search,
   Send,
   CheckCircle2,
-  Pencil,
-  UploadCloud,
+  Upload,
   FlaskConical,
 } from "lucide-react";
 import { useAuth } from "@toolkit/lib/auth";
@@ -33,6 +33,9 @@ import {
   validateWorkbook,
   formatWorkbookValidationSummary,
 } from "@/components/workbook/workbookValidation";
+import {
+  normalizeExcelFile,
+} from "@/lib/workbookExcelNormalizer";
 
 type Row = Record<string, unknown> & { _id: string };
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
@@ -119,7 +122,58 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
   );
 }
 
-function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
+function ExcelImportButton({
+  onImport,
+  disabled,
+  label = "Import from Excel",
+}: {
+  onImport: (file: File) => Promise<void>;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      await onImport(file);
+    } finally {
+      setImporting(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={(e) => handleFile(e.target.files?.[0])}
+        data-testid="input-excel-import"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled || importing}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm disabled:opacity-60"
+        data-testid="button-import-excel"
+      >
+        {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+        {label}
+      </button>
+    </>
+  );
+}
+
+function CompanyPicker({
+  onPick,
+}: {
+  onPick: (c: Company) => void;
+}) {
   const { user } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,8 +241,82 @@ function CompanyPicker({ onPick }: { onPick: (c: Company) => void }) {
     <div className="space-y-6">
       {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
       <div className="rounded-2xl bg-[#1c1c1e] p-6">
-        <h2 className="text-[15px] font-semibold text-white mb-1">Pick a company</h2>
-        <p className="text-[13px] text-[#8e8e93] mb-4">Workbook data is isolated per company.</p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-white mb-1">Pick a company</h2>
+            <p className="text-[13px] text-[#8e8e93]">Workbook data is isolated per company.</p>
+          </div>
+          <ExcelImportButton
+            label="Import from Excel"
+            onImport={async (file) => {
+              const result = await normalizeExcelFile(file);
+              if (result.criticalBlocked) {
+                toast({
+                  title: "Import blocked — fix critical fields",
+                  description: formatWorkbookValidationSummary(result.validationIssues, 5),
+                  variant: "destructive",
+                });
+                return;
+              }
+              const companyName = String(
+                result.sections["company-information"]?.meta?.companyName ?? "",
+              ).trim();
+              if (!companyName) {
+                toast({
+                  title: "Company name required",
+                  description: "Add a Company / Legal Name column or sheet before importing.",
+                  variant: "destructive",
+                });
+                return;
+              }
+              setCreating(true);
+              try {
+                const res = await fetch(`${API_BASE}/api/clients`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ name: companyName }),
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  toast({
+                    title: "Could not create company",
+                    description: err.error || "Server error.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                const c = await res.json();
+                const clientId = c.clientId || c.id;
+                const importRes = await fetch(
+                  `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
+                  {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sections: result.sections }),
+                  },
+                );
+                if (!importRes.ok) {
+                  toast({ title: "Import failed", variant: "destructive" });
+                  return;
+                }
+                if (result.validationIssues.length > 0) {
+                  toast({
+                    title: "Imported with gaps",
+                    description:
+                      "Some non-critical fields are missing — scores may reflect discounted levels.",
+                  });
+                } else {
+                  toast({ title: "Workbook imported", description: companyName });
+                }
+                onPick(c);
+              } finally {
+                setCreating(false);
+              }
+            }}
+          />
+        </div>
 
         <div className="relative mb-4">
           <Search className="h-4 w-4 absolute left-3 top-2.5 text-[#636366]" />
@@ -335,7 +463,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const companyId = company.clientId || company.id || "";
   const [, navigate] = useLocation();
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
-  const [activeKey, setActiveKey] = useState<string>("company-information");
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(["company-information"]),
+  );
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -487,16 +618,19 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     [scheduleSave, workbook],
   );
 
-  const handleManualSave = useCallback(() => {
+  const waitForInFlight = useCallback(async () => {
+    const start = Date.now();
+    while (inFlight.current > 0 && Date.now() - start < 15000) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }, []);
+
+  const handleManualSave = useCallback(async () => {
     if (!workbook) return;
-    const sec = workbook.sections[activeKey] || { rows: [] };
-    // Cancel any pending debounced save for this section — we're firing now.
-    const t = saveTimers.current[activeKey];
-    if (t) clearTimeout(t);
-    delete saveTimers.current[activeKey];
-    delete pendingPayloads.current[activeKey];
-    saveSection(activeKey, { rows: sec.rows, meta: sec.meta });
-  }, [workbook, activeKey, saveSection]);
+    await flushAllPending();
+    await waitForInFlight();
+    toast({ title: "All sections saved" });
+  }, [workbook, flushAllPending, waitForInFlight, toast]);
 
   const handleExport = useCallback(() => {
     window.open(
@@ -516,14 +650,6 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, []);
-
-  const waitForInFlight = useCallback(async () => {
-    // Spin-wait (cheap) until all in-flight section saves resolve.
-    const start = Date.now();
-    while (inFlight.current > 0 && Date.now() - start < 15000) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -564,9 +690,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         setSubmittedAt(data.submittedAt || new Date().toISOString());
         const c = data.counts || {};
         toast({
-          title: "Submitted to scorecard engine",
+          title: "Submitted to scorecard",
           description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
         });
+        localStorage.setItem("okiru-pro-active-client", companyId);
+        navigate("/toolkit/scorecard");
       } else {
         toast({
           title: "Submit failed",
@@ -579,19 +707,65 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     } finally {
       setSubmitting(false);
     }
-  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast]);
+  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast, navigate]);
 
-  const activeSection = getSection(activeKey);
-  const activeData = workbook?.sections[activeKey] || { rows: [], meta: {} };
-  const activeRows = activeData.rows || [];
-  const activeMeta = (activeData.meta || {}) as Record<string, unknown>;
-  const activeMetaFields = useMemo((): ColumnDef[] | undefined => {
-    if (!activeSection?.meta) return undefined;
-    if (activeKey === "company-information") {
-      return getCompanyInfoMetaFields(String(activeMeta.industrySector ?? ""));
-    }
-    return activeSection.meta;
-  }, [activeKey, activeSection?.meta, activeMeta.industrySector]);
+  const handleExcelImport = useCallback(
+    async (file: File) => {
+      const result = await normalizeExcelFile(file);
+      if (result.criticalBlocked) {
+        toast({
+          title: "Import blocked — fix critical fields",
+          description: formatWorkbookValidationSummary(result.validationIssues, 5),
+          variant: "destructive",
+        });
+        return;
+      }
+      const res = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/import`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sections: result.sections }),
+        },
+      );
+      if (!res.ok) {
+        toast({ title: "Import failed", variant: "destructive" });
+        return;
+      }
+      setWorkbook((prev) =>
+        prev ? { ...prev, sections: { ...prev.sections, ...result.sections } } : prev,
+      );
+      if (result.validationIssues.length > 0) {
+        toast({
+          title: "Imported with gaps",
+          description:
+            "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
+        });
+      } else {
+        toast({ title: "Workbook updated from Excel" });
+      }
+    },
+    [companyId, toast],
+  );
+
+  const toggleSection = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const focusSection = (key: string) => {
+    setExpandedKeys((prev) => new Set(prev).add(key));
+    requestAnimationFrame(() => {
+      sectionRefs.current[key]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const enabledSections = useMemo(() => SECTIONS.filter((s) => s.enabled), []);
 
   const sectionStatus = (key: string): "empty" | "filled" => {
     const sec = workbook?.sections[key];
@@ -657,6 +831,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           >
             <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
+          <ExcelImportButton onImport={handleExcelImport} disabled={loading || !workbook} />
           <button
             onClick={handleSubmit}
             disabled={submitting}
@@ -669,34 +844,16 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         </div>
       </div>
 
-      {/* Gap 5: Start Assessment shortcuts after submit */}
-      {submittedAt && (
-        <div className="flex flex-wrap items-center gap-2 px-1 pb-2 pt-0">
-          <span className="text-[11px] text-[#636366] shrink-0">Start assessment:</span>
-          <button
-            onClick={() => navigate(`/processor?new=true&client=${encodeURIComponent(companyId)}&mode=build`)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm border border-[#2c2c2e]"
-            data-testid="button-open-manual-build"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Open in Manual Build
-          </button>
-          <button
-            onClick={() => navigate(`/processor?new=true&client=${encodeURIComponent(companyId)}&mode=upload`)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm border border-[#2c2c2e]"
-            data-testid="button-open-upload-extract"
-          >
-            <UploadCloud className="h-3.5 w-3.5" /> Open in Upload &amp; Extract
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-6 items-start">
         <aside className="col-span-12 lg:col-span-3">
-          <div className="rounded-xl bg-[#1c1c1e] p-2 sticky top-20" data-testid="workbook-tabs">
-            {SECTIONS.map((s) => {
-              const isActive = s.key === activeKey;
+          <div
+            className="rounded-xl bg-[#1c1c1e] p-2 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto"
+            data-testid="workbook-tabs"
+          >
+            {enabledSections.map((s) => {
               const status = sectionStatus(s.key);
               const count = workbook?.sections[s.key]?.rows?.length || 0;
+              const isExpanded = expandedKeys.has(s.key);
               const indicator = s.meta
                 ? status === "filled"
                   ? "✓"
@@ -707,9 +864,9 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               return (
                 <button
                   key={s.key}
-                  onClick={() => setActiveKey(s.key)}
+                  onClick={() => focusSection(s.key)}
                   className={`w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${
-                    isActive
+                    isExpanded
                       ? "bg-white/[0.08] text-white"
                       : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
                   }`}
@@ -727,38 +884,77 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           </div>
         </aside>
 
-        <section className="col-span-12 lg:col-span-9">
-          <div className="rounded-2xl bg-[#1c1c1e] p-6">
-            <div className="mb-5">
-              <h2 className="text-[20px] font-bold tracking-tight text-white">
-                {activeSection?.label}
-              </h2>
-              <p className="text-[13px] text-[#8e8e93] mt-1">{activeSection?.description}</p>
+        <section className="col-span-12 lg:col-span-9 space-y-4">
+          {loading ? (
+            <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
             </div>
+          ) : (
+            enabledSections.map((section) => {
+              const sectionData = workbook?.sections[section.key] || { rows: [], meta: {} };
+              const rows = sectionData.rows || [];
+              const meta = (sectionData.meta || {}) as Record<string, unknown>;
+              const isExpanded = expandedKeys.has(section.key);
+              const metaFields = section.meta
+                ? section.key === "company-information"
+                  ? getCompanyInfoMetaFields(String(meta.industrySector ?? ""))
+                  : section.meta
+                : undefined;
 
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
-              </div>
-            ) : activeMetaFields ? (
-              <MetaForm
-                fields={activeMetaFields}
-                value={activeMeta}
-                onChange={(next) => handleMetaChange(activeKey, next)}
-              />
-            ) : activeSection?.columns ? (
-              <SpreadsheetGrid
-                columns={activeSection.columns}
-                rows={activeRows}
-                rowValidate={activeSection.rowValidate}
-                onChange={(rows) => handleRowsChange(activeKey, rows)}
-              />
-            ) : (
-              <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center">
-                <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
-              </div>
-            )}
-          </div>
+              return (
+                <div
+                  key={section.key}
+                  ref={(el) => {
+                    sectionRefs.current[section.key] = el;
+                  }}
+                  className="rounded-2xl bg-[#1c1c1e] overflow-hidden scroll-mt-24"
+                  data-testid={`section-panel-${section.key}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.key)}
+                    className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-white/[0.02] smooth"
+                  >
+                    <div>
+                      <h2 className="text-[18px] font-bold tracking-tight text-white">
+                        {section.label}
+                      </h2>
+                      <p className="text-[13px] text-[#8e8e93] mt-0.5">{section.description}</p>
+                    </div>
+                    <ChevronDown
+                      className={`h-5 w-5 text-[#636366] shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div className="px-6 pb-6 border-t border-white/[0.06]">
+                      {metaFields ? (
+                        <div className="pt-5">
+                          <MetaForm
+                            fields={metaFields}
+                            value={meta}
+                            onChange={(next) => handleMetaChange(section.key, next)}
+                          />
+                        </div>
+                      ) : section.columns ? (
+                        <div className="pt-5">
+                          <SpreadsheetGrid
+                            columns={section.columns}
+                            rows={rows}
+                            rowValidate={section.rowValidate}
+                            onChange={(nextRows) => handleRowsChange(section.key, nextRows)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
+                          <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </section>
       </div>
     </div>
@@ -767,8 +963,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
 export default function InformationRequest() {
   const params = useParams<{ companyId?: string }>();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const [picked, setPicked] = useState<Company | null>(null);
+  const basePath = location.startsWith("/create-scorecard") ? "/create-scorecard" : "/information-request";
+  const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
 
   useEffect(() => {
     if (params.companyId && !picked) {
@@ -781,12 +979,12 @@ export default function InformationRequest() {
   const handlePick = (c: Company) => {
     setPicked(c);
     const id = c.clientId || c.id;
-    if (id) navigate(`/information-request/${id}`, { replace: true });
+    if (id) navigate(`${basePath}/${id}`, { replace: true });
   };
 
   const handleBack = () => {
     setPicked(null);
-    navigate("/information-request", { replace: true });
+    navigate(basePath, { replace: true });
   };
 
   return (
@@ -799,7 +997,7 @@ export default function InformationRequest() {
             <div className="flex items-center gap-3">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
               <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
-                Information Request
+                {pageTitle}
               </span>
             </div>
           </div>
@@ -810,10 +1008,12 @@ export default function InformationRequest() {
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">
-            Company Assessment Workbook
+            {basePath === "/create-scorecard" ? "Create Scorecard" : "Company Assessment Workbook"}
           </h1>
           <p className="text-[14px] text-[#98989f] mt-1">
-            Structured spreadsheet collection — replaces manual onboarding sheets.
+            {basePath === "/create-scorecard"
+              ? "Pick a company, complete the workbook sections, then submit to generate your scorecard."
+              : "Structured spreadsheet collection — replaces manual onboarding sheets."}
           </p>
         </div>
 

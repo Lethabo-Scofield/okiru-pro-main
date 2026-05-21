@@ -145,12 +145,12 @@ export default function Dashboard() {
           <div className="space-y-1.5">
             <h1 className="text-lg font-heading font-semibold">Get started</h1>
             <p className="text-[13px] text-muted-foreground/60 max-w-xs mx-auto leading-relaxed">
-              Upload your B-BBEE Excel toolkit to see your compliance scorecard.
+              Complete the company workbook to generate your compliance scorecard.
             </p>
           </div>
           <Button
             className="gap-2 rounded-full px-6 h-9 text-[13px]"
-            onClick={() => navigate("/processor")}
+            onClick={() => navigate("/create-scorecard")}
             data-testid="btn-build-scorecard"
           >
             <Building2 className="h-4 w-4" />
@@ -302,7 +302,7 @@ export default function Dashboard() {
             <h3 className="text-[12px] font-medium text-muted-foreground/40 tracking-wide">Quick Actions</h3>
             <div className="space-y-0.5">
               {[
-                { label: "New Assessment", desc: "Build or upload a scorecard", icon: Building2, href: "/processor", testId: "btn-reimport", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400" },
+                { label: "Create Scorecard", desc: "Complete the company workbook", icon: Building2, href: "/create-scorecard", testId: "btn-reimport", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400" },
                 { label: "Full Scorecard", desc: "Pillar-by-pillar breakdown", icon: Table, href: "/scorecard", testId: "btn-view-scorecard", iconBg: "bg-blue-500/15", iconColor: "text-blue-400" },
               ].map((action) => (
                 <button
