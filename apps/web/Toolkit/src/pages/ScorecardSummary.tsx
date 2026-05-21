@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Award, Trophy, TrendingUp, CheckCircle2, XCircle, Shield, ArrowLeft, Download, Loader2 } from "lucide-react";
+import { useSearch } from "wouter";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { useAuth } from "@toolkit/lib/auth";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -35,13 +36,22 @@ function pct(value: number): string {
 
 export default function ScorecardSummary() {
   const state = useBbeeStore();
-  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig, isLoaded } = state;
+  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig, isLoaded, activeClientId, loadCalculatorConfig } = state;
   const { user } = useAuth();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+  const search = useSearch();
+  const fromSubmit = new URLSearchParams(search).get("from") === "submit";
 
   const hasConfig = !!calculatorConfig?.pillarConfigs;
   const cfg = calculatorConfig;
+  const [waitingForConfig, setWaitingForConfig] = useState(false);
+
+  useEffect(() => {
+    if (!isLoaded || hasConfig || !activeClientId) return;
+    setWaitingForConfig(true);
+    loadCalculatorConfig(activeClientId).finally(() => setWaitingForConfig(false));
+  }, [isLoaded, hasConfig, activeClientId, loadCalculatorConfig]);
 
   const ownResult = useMemo(() => {
     try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
@@ -62,7 +72,7 @@ export default function ScorecardSummary() {
     try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
   }, [sed, client.npat, cfg, hasConfig]);
 
-  if (!isLoaded) {
+  if (!isLoaded || (waitingForConfig && !hasConfig)) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 py-24">
@@ -203,6 +213,12 @@ export default function ScorecardSummary() {
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back
             </Button>
+            {fromSubmit && (
+              <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Workbook submitted. Here is your scorecard at a glance.
+              </div>
+            )}
             <h1 className="text-3xl font-heading font-bold tracking-tight">Scorecard Summary</h1>
             <p className="text-muted-foreground mt-1">
               {client.name ? `${client.name} — ` : ''}B-BBEE Verification Complete
