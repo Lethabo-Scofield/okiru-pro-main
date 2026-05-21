@@ -394,6 +394,7 @@ function sectorConfigToCalculatorConfig(sc: any) {
         maxPoints: p.maxPoints ?? 0,
         hasSubMinimum: p.hasSubMinimum ?? false,
         subMinimumPercent: p.subMinimumThreshold ? Math.round((p.subMinimumThreshold / p.maxPoints) * 100) : 0,
+        chooseOneGroup: p.chooseOneGroup,
       };
     }
   } else {
@@ -441,6 +442,13 @@ function sectorConfigToCalculatorConfig(sc: any) {
       netValueMax: own.netValueMaxPts,
       targetEconomicInterest: own.economicInterestTarget,
       subMinNetValue: ownershipSubMin,
+      votingRightsTarget: own.votingRightsTarget,
+      womenVotingTarget: own.womenVotingTarget,
+      womenEIMax: own.womenEIMaxPts,
+      womenEITarget: own.womenEITarget,
+      newEntrantsMax: own.newEntrantsMaxPts,
+      designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
+      designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,

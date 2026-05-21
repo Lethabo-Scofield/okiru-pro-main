@@ -107,6 +107,33 @@ function normalizeFraction(v: unknown): number {
   return Math.max(0, n);
 }
 
+/** Fetch sector-specific calculator config from API (authoritative pillar weightings). */
+async function fetchSectorCalculatorConfig(
+  sectorCode: string,
+  scorecardType: string,
+): Promise<CalculatorConfig | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`,
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.config) return data.config as CalculatorConfig;
+    }
+  } catch (error) {
+    console.error('[store] Failed to fetch sector calculator config:', error);
+  }
+  return null;
+}
+
+function hasValidPillarConfigs(config: CalculatorConfig | null | undefined): boolean {
+  if (!config?.pillarConfigs) return false;
+  const pc = config.pillarConfigs;
+  const ownMax = pc.ownership?.maxPoints ?? 0;
+  const mcMax = pc.managementControl?.maxPoints ?? 0;
+  return (ownMax + mcMax) > 0 && (config.totalMaxPoints ?? 0) > 0;
+}
+
 /** Map workbook / EE job titles to calculator designation enums. */
 function mapJobTitleToDesignation(raw: string | undefined): string {
   const t = (raw ?? '').trim().toLowerCase();
@@ -466,7 +493,7 @@ function calculateScorecard(
 
   let mgtScoreTotal: number;
   let eeScoreTotal = 0;
-  if (transportQse && eeMax > 0) {
+  if (transportQse) {
     console.log('[SCORING-TRACE] Calculator input for managementControl (Transport QSE):', {
       employees: state.management.employees?.length ?? 0,
     });
@@ -859,7 +886,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
             normalizeFraction(sh.economicInterestPercent ?? sh.blackOwnership ?? 0),
         };
         }),
-        companyValue: data.ownership?.companyValue || 0,
+        companyValue: data.ownership?.companyValue || clientData.revenue || 0,
         outstandingDebt: data.ownership?.outstandingDebt || 0,
         yearsHeld: data.ownership?.yearsHeld || 0,
         ownershipScorePoints: data.ownership?.ownershipScorePoints || 0,
@@ -1129,33 +1156,32 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   },
 
   loadCalculatorConfig: async (clientId: string) => {
-    try {
-      const config = await api.getCalculatorConfig(clientId).catch(() => null);
-      if (config) {
-        set({ calculatorConfig: config });
-        get()._recalculateAll();
-        return;
-      }
-    } catch {
-      // Client-specific config not available, fall through to sector config
+    const { client } = get();
+    const sectorCode = client.sectorCode || 'RCOGP';
+    const scorecardType = client.scorecardType || client.companySize || 'Generic';
+
+    const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
+    const clientConfig = await api.getCalculatorConfig(clientId).catch(() => null);
+
+    if (sectorConfig) {
+      console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
+        totalMaxPoints: sectorConfig.totalMaxPoints,
+        ownership: sectorConfig.pillarConfigs?.ownership?.maxPoints,
+        managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
+        employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
+      });
+      set({ calculatorConfig: sectorConfig });
+      get()._recalculateAll();
+      return;
     }
 
-    // Fallback: load from sector config (needed for synthetic upload-*/build-*/session-* IDs)
-    try {
-      const { client } = get();
-      const sectorCode = client.sectorCode || 'RCOGP';
-      const scorecardType = client.scorecardType || client.companySize || 'Generic';
-      const res = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.config) {
-          set({ calculatorConfig: data.config });
-          get()._recalculateAll();
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load calculator config (sector fallback):', error);
+    if (clientConfig && hasValidPillarConfigs(clientConfig)) {
+      set({ calculatorConfig: clientConfig });
+      get()._recalculateAll();
+      return;
     }
+
+    console.error('[store] No valid calculator config for', sectorCode, scorecardType);
   },
 
   saveCalculatorConfig: async (config: CalculatorConfig) => {

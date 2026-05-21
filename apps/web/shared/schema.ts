@@ -21,6 +21,14 @@ export interface CalculatorConfig {
     netValueMax: number;
     targetEconomicInterest: number;
     subMinNetValue: number;
+    /** Sector-specific targets — populated by sectorConfigToCalculatorConfig */
+    votingRightsTarget?: number;
+    womenVotingTarget?: number;
+    womenEIMax?: number;
+    womenEITarget?: number;
+    newEntrantsMax?: number;
+    designatedGroupsMax?: number;
+    designatedGroupsTarget?: number;
   };
   management: {
     boardBlackTarget: number;
