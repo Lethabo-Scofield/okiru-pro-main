@@ -157,7 +157,7 @@ export default function HubLanding() {
       tag: 'B-BBEE',
       aiBadge: 'AI-Verified',
       icon: <Award className="w-5 h-5" />,
-      link: '/certificates',
+      action: handleComingSoon,
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
       featured: false,
     },

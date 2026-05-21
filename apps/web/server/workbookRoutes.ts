@@ -882,6 +882,48 @@ export function registerWorkbookRoutes(app: Express): void {
     },
   );
 
+  // Import normalized workbook sections (client-side Excel parse or manual JSON).
+  app.post(
+    "/api/workbook/:companyId/import",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const wb = await authorizeWorkbookAccess(req, res);
+      if (!wb) return;
+      const incoming = (req.body as any)?.sections;
+      if (!incoming || typeof incoming !== "object") {
+        return res.status(400).json({ error: "Missing sections payload." });
+      }
+      try {
+        let next = wb;
+        for (const key of Object.keys(incoming)) {
+          if (!SECTION_KEYS.includes(key as (typeof SECTION_KEYS)[number])) continue;
+          const sec = incoming[key];
+          const rows = sanitizeRows(sec?.rows);
+          const meta =
+            sec?.meta && typeof sec.meta === "object"
+              ? (sec.meta as Record<string, unknown>)
+              : undefined;
+          next = await persistSection(next, key, {
+            rows,
+            ...(meta ? { meta } : {}),
+          });
+        }
+        const validationIssues = validateWorkbook(next.sections);
+        res.json({
+          ok: true,
+          updatedAt: next.updatedAt,
+          validationIssues,
+          summary: validationIssues.length
+            ? formatWorkbookValidationSummary(validationIssues)
+            : null,
+        });
+      } catch (err: any) {
+        logger.error("Failed to import workbook sections", err);
+        res.status(500).json({ error: "Failed to import workbook" });
+      }
+    },
+  );
+
   app.get(
     "/api/workbook/:companyId/export.xlsx",
     requireAuth,
@@ -998,6 +1040,7 @@ export function registerWorkbookRoutes(app: Express): void {
 
         res.json({
           ok: true,
+          clientId: wb.companyId,
           counts: {
             shareholders: projected.shareholders.length,
             employees: projected.employees.length,
