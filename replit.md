@@ -90,6 +90,14 @@ The app gracefully degrades when external services are unavailable:
 - Computation Engine uses **in-memory DB mode** when ArangoDB is unavailable
 - AI endpoints return errors when API keys are not set
 
+## Information Request — Mongo-less dev fallback (May 2026, `lethabo/quality-assurance`)
+- **`/api/clients` in-memory fallback** — `GET/POST/GET:id/PATCH:id/DELETE:id/GET:id/data/POST:id/bulk-import` now branch on `isMongoConnected()`. Without Mongo they read/write a shared module-level Map in `apps/web/server/clientsMemoryStore.ts` instead of letting Mongoose buffer and time out. The Mongo path is unchanged. The same tenant filter (org-or-creator) is applied in both branches via the new `loadClientWithAccess` helper.
+- **Workbook GET tenant check** — `authorizeWorkbookAccess` in `apps/web/server/workbookRoutes.ts` now consults the in-memory clients store when `!mongoReady()`. An unknown or cross-tenant `companyId` returns `404 "Company not found"` instead of synthesising a fresh workbook stamped with the caller's org. The Mongo branch was hardened to return 404 for cross-tenant access too (was 403, leaked existence).
+- **Submit unchanged** — when Mongo is absent, `POST /api/workbook/:id/submit` still returns a clean `503 "Database unavailable — cannot submit workbook."` (no silent write to memory).
+- **Known dead code (follow-up)** — `apps/api/src/routes/index.ts` still mounts an unused `clientsRouter` (`apps/api/src/routes/clients.ts`); browser requests go to the web server's `/api/clients` before reaching the API proxy, so the API copy never runs. Remove in a follow-up to stop drift.
+- **Hardened Mongo client access** — `loadClientWithAccess` now refuses access to legacy records missing both `organizationId` and `createdByUserId` in production (logged via `logger.warn`); dev still tolerates them for fixtures. The Mongo `GET /api/clients` list now uses `{$or: [{createdByUserId}, {organizationId}]}` to match the in-memory branch and to never list with an empty filter when the user has no org.
+- **Tests** — `apps/web/server/__tests__/clientsFallback.test.ts` (10 tests, all passing). Covers `listClientsForTenant`/`canAccessClient` unit behaviour (including cross-tenant denial and null-tenancy orphan denial) plus an HTTP round-trip against the dev server: `/api/clients` 200 empty → 200 after create → list includes the new client, `/api/workbook/:owned` 200, `/api/workbook/:unknown` 404, submit still 503. Run with `pnpm --filter rest-express vitest run server/__tests__/clientsFallback.test.ts`. The HTTP tests use `REPLIT_DEV_DOMAIN` (HTTPS) because the session cookie is `Secure` in Replit.
+
 ## Production Deployment
 - **Replit**: Build command builds both `apps/api` and `apps/web`; `scripts/start-production.sh` starts both servers
 - **Docker/K8s**: Separate Dockerfiles for each service (`apps/api/Dockerfile`, `apps/web/Dockerfile`, `apps/Computation-Engine/Dockerfile`)

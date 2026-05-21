@@ -4,6 +4,10 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { requireAuth } from "./routes";
 import { WorkbookModel, ClientModel } from "../shared/schema";
+import {
+  getClient as memGetClient,
+  canAccessClient as memCanAccessClient,
+} from "./clientsMemoryStore";
 
 const logger = createLogger("Workbook");
 
@@ -560,8 +564,9 @@ async function authorizeWorkbookAccess(
     }
 
     // Step 1: client-level authorization.
-    // In dev with no Mongo, we accept the caller as the de-facto owner
-    // (memory-only mode); in prod or with Mongo connected, we enforce the check.
+    // Anchor tenancy to the client record itself — applied in both the Mongo
+    // path and the in-memory fallback so a stranger can't fabricate a workbook
+    // by guessing/squatting on a companyId they don't own.
     let clientOrgId: string | null = null;
     let clientCreatorId: string | null = null;
     if (mongoReady()) {
@@ -597,9 +602,33 @@ async function authorizeWorkbookAccess(
           clientOrgId,
           clientCreatorId,
         });
-        res.status(403).json({ message: "Forbidden" });
+        res.status(404).json({ error: "Company not found" });
         return null;
       }
+    } else {
+      // No Mongo, dev fallback. Require the client to exist in the shared
+      // in-memory store and belong to the caller's tenant; we no longer
+      // synthesise a workbook for arbitrary companyIds.
+      const memClient = memGetClient(companyId);
+      if (!memClient) {
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      if (!memCanAccessClient(memClient, userId, userOrgId)) {
+        logger.warn("Cross-tenant client access denied via workbook route (memory)", {
+          companyId,
+          requesterUserId: userId,
+          requesterOrgId: userOrgId,
+          clientOrgId: memClient.organizationId,
+          clientCreatorId: memClient.createdByUserId,
+        });
+        // Return 404 (not 403) to avoid leaking the existence of a sibling
+        // tenant's company. Matches the /api/clients tenant filter.
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      clientOrgId = memClient.organizationId;
+      clientCreatorId = memClient.createdByUserId;
     }
 
     // Step 2: load (or create) workbook, pinned to the *client's* tenancy

@@ -22,6 +22,15 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import {
+  listClientsForTenant as memListClients,
+  getClient as memGetClient,
+  createClient as memCreateClient,
+  updateClient as memUpdateClient,
+  deleteClient as memDeleteClient,
+  canAccessClient as memCanAccessClient,
+  type MemoryClient,
+} from "./clientsMemoryStore";
 
 const logger = createLogger("Routes");
 
@@ -1453,13 +1462,86 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: load a client (Mongo or in-memory) and enforce tenant access.
+  // Returns the plain client doc on success, or null after writing the
+  // appropriate 404/403 response. Used by the per-client routes below to
+  // dedupe the access guard.
+  async function loadClientWithAccess(
+    req: Request,
+    res: Response,
+  ): Promise<any | null> {
+    const userId = (req.session as any).userId as string;
+    const user = (req as any).user;
+    const userOrgId: string | null = user?.organizationId ?? null;
+    const { clientId } = req.params;
+
+    if (isMongoConnected()) {
+      const doc = await ClientModel.findOne({ clientId });
+      if (!doc) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
+      const c: any = doc.toJSON();
+      const sameOrg =
+        c.organizationId && c.organizationId === userOrgId;
+      const sameUser =
+        c.createdByUserId && c.createdByUserId === userId;
+      const hasTenancy = !!(c.organizationId || c.createdByUserId);
+      const isProd = process.env.NODE_ENV === "production";
+      // In production, refuse access to legacy untenantized records — they
+      // would otherwise be globally readable/writable by any authenticated
+      // user. Backfill via a controlled migration before exposing. In dev we
+      // keep them accessible so local fixtures keep working. Mirrors
+      // authorizeWorkbookAccess in workbookRoutes.ts.
+      if (!hasTenancy) {
+        if (isProd) {
+          logger.warn("Refusing access to legacy client missing tenancy fields", {
+            clientId,
+            requesterUserId: userId,
+          });
+          res.status(404).json({ error: "Client not found" });
+          return null;
+        }
+      } else if (!sameOrg && !sameUser) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
+      return c;
+    }
+
+    const mem = memGetClient(clientId);
+    if (!mem) {
+      res.status(404).json({ error: "Client not found" });
+      return null;
+    }
+    if (!memCanAccessClient(mem, userId, userOrgId)) {
+      res.status(404).json({ error: "Client not found" });
+      return null;
+    }
+    return mem;
+  }
+
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUserById((req.session as any).userId);
-      const filter: any = {};
-      if (user?.organizationId) filter.organizationId = user.organizationId;
-      const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
-      res.json(clients.map((c: any) => c.toJSON()));
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user;
+      const userOrgId: string | null = user?.organizationId ?? null;
+
+      if (isMongoConnected()) {
+        // Org-or-creator visibility (matches the in-memory branch and
+        // loadClientWithAccess). Never list with an empty filter — that would
+        // expose all tenants' clients to a user without an organizationId.
+        const orClauses: any[] = [{ createdByUserId: userId }];
+        if (userOrgId) orClauses.push({ organizationId: userOrgId });
+        const clients = await ClientModel.find({ $or: orClauses }).sort({
+          createdAt: -1,
+        });
+        return res.json(clients.map((c: any) => c.toJSON()));
+      }
+
+      // In-memory fallback (dev without MONGODB_URI).
+      const clients = memListClients(userId, userOrgId);
+      res.json(clients);
     } catch (error: any) {
       logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
@@ -1470,10 +1552,29 @@ export async function registerRoutes(
     try {
       const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
-      const userId = (req.session as any).userId;
-      const user = await storage.getUserById(userId);
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      const userOrgId: string | null = user?.organizationId ?? null;
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
-      const client = await ClientModel.create({
+      const now = new Date();
+
+      if (isMongoConnected()) {
+        const client = await ClientModel.create({
+          clientId,
+          name,
+          financialYear: financialYear || new Date().getFullYear().toString(),
+          industrySector: industrySector || null,
+          eapProvince: eapProvince || null,
+          revenue: revenue || 0,
+          npat: npat || 0,
+          leviableAmount: leviableAmount || 0,
+          organizationId: userOrgId,
+          createdByUserId: userId,
+        });
+        return res.json(client.toJSON());
+      }
+
+      const doc: MemoryClient = {
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
@@ -1482,10 +1583,13 @@ export async function registerRoutes(
         revenue: revenue || 0,
         npat: npat || 0,
         leviableAmount: leviableAmount || 0,
-        organizationId: user?.organizationId || null,
+        organizationId: userOrgId,
         createdByUserId: userId,
-      });
-      res.json(client.toJSON());
+        createdAt: now,
+        updatedAt: now,
+      };
+      memCreateClient(doc);
+      res.json(doc);
     } catch (error: any) {
       logger.error("Error creating client", error);
       res.status(500).json({ error: "Failed to create client" });
@@ -1494,39 +1598,60 @@ export async function registerRoutes(
 
   app.get("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const client = await ClientModel.findOne({ clientId: req.params.clientId });
-      if (!client) return res.status(404).json({ error: "Client not found" });
-      res.json(client.toJSON());
+      const client = await loadClientWithAccess(req, res);
+      if (!client) return;
+      res.json(client);
     } catch (error: any) {
+      logger.error("Error fetching client", error);
       res.status(500).json({ error: "Failed to fetch client" });
     }
   });
 
   app.patch("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const updates: any = { updatedAt: new Date() };
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
       const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+      const updates: any = { updatedAt: new Date() };
       for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = req.body[key];
       }
-      const client = await ClientModel.findOneAndUpdate(
-        { clientId: req.params.clientId },
-        updates,
-        { new: true }
-      );
-      if (!client) return res.status(404).json({ error: "Client not found" });
-      res.json(client.toJSON());
+
+      if (isMongoConnected()) {
+        const client = await ClientModel.findOneAndUpdate(
+          { clientId: req.params.clientId },
+          updates,
+          { new: true },
+        );
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        return res.json(client.toJSON());
+      }
+
+      const updated = memUpdateClient(req.params.clientId, updates);
+      if (!updated) return res.status(404).json({ error: "Client not found" });
+      res.json(updated);
     } catch (error: any) {
+      logger.error("Error updating client", error);
       res.status(500).json({ error: "Failed to update client" });
     }
   });
 
   app.delete("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
-      const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
-      if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
+
+      if (isMongoConnected()) {
+        const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+        if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
+        return res.json({ success: true });
+      }
+
+      const ok = memDeleteClient(req.params.clientId);
+      if (!ok) return res.status(404).json({ error: "Client not found" });
       res.json({ success: true });
     } catch (error: any) {
+      logger.error("Error deleting client", error);
       res.status(500).json({ error: "Failed to delete client" });
     }
   });
@@ -1534,15 +1659,12 @@ export async function registerRoutes(
   app.get("/api/clients/:clientId/data", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
-      const client = await ClientModel.findOne({ clientId });
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
-      }
-      const c = client.toJSON();
+      const c = await loadClientWithAccess(req, res);
+      if (!c) return;
 
       res.json({
         client: {
-          id: c.id,
+          id: c.id ?? c.clientId,
           name: c.name,
           financialYear: c.financialYear,
           revenue: c.revenue,
@@ -1591,8 +1713,8 @@ export async function registerRoutes(
       const { clientId } = req.params;
       const { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials } = req.body;
 
-      const client = await ClientModel.findOne({ clientId });
-      if (!client) return res.status(404).json({ error: "Client not found" });
+      const existing = await loadClientWithAccess(req, res);
+      if (!existing) return;
 
       const update: Record<string, any> = { updatedAt: new Date() };
       if (Array.isArray(shareholders)) update.shareholders = shareholders;
@@ -1609,7 +1731,11 @@ export async function registerRoutes(
         if (financials.industrySector) update.industrySector = financials.industrySector;
       }
 
-      await ClientModel.updateOne({ clientId }, { $set: update });
+      if (isMongoConnected()) {
+        await ClientModel.updateOne({ clientId }, { $set: update });
+      } else {
+        memUpdateClient(clientId, update);
+      }
 
       res.json({
         success: true,
