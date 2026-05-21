@@ -47,7 +47,8 @@ router.get('/', async (_req: Request, res: Response) => {
           totalPoints: s.totalMaxPoints,
           pillarConfigs: s.pillarConfigs,
           targets: s.targets,
-          levelThresholds: s.levelThresholds
+          levelThresholds: s.levelThresholds,
+          indicators: s.indicators
         }
     `);
 
@@ -133,13 +134,16 @@ router.get('/options', async (_req: Request, res: Response) => {
 
     const sectorGroups = await cursor.all();
 
-    // Map to dropdown format
+    // Map to dropdown format — FSC exposes planned sub-sector variants as advisory hint
     const options = sectorGroups.map(group => ({
       value: group.code,
       label: group.name || `${group.code} Sector Code`,
       code: group.code,
       hasQSE: group.hasQSE,
       availableTypes: group.types,
+      ...(group.code === 'FSC'
+        ? { availableVariants: ['Banks', 'LongTermInsurers', 'ShortTermInsurers', 'Others'] as const }
+        : {}),
     }));
 
     return res.json({
@@ -291,6 +295,9 @@ function getFallbackSectorOptions() {
     code: g.code,
     hasQSE: g.types.includes('QSE'),
     availableTypes: g.types,
+    ...(g.code === 'FSC'
+      ? { availableVariants: ['Banks', 'LongTermInsurers', 'ShortTermInsurers', 'Others'] as const }
+      : {}),
   }));
 }
 
