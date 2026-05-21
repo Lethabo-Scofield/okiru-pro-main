@@ -566,10 +566,37 @@ async function authorizeWorkbookAccess(
     // Step 1: client-level authorization.
     // Anchor tenancy to the client record itself — applied in both the Mongo
     // path and the in-memory fallback so a stranger can't fabricate a workbook
-    // by guessing/squatting on a companyId they don't own.
+    // by guessing/squatting on a companyId they don't own. Without this, GET
+    // /api/workbook/:id would scaffold a workbook for an arbitrary id and
+    // stamp it with the caller's tenancy, leaking the scaffold to any
+    // logged-in user that guesses an id (P3).
     let clientOrgId: string | null = null;
     let clientCreatorId: string | null = null;
-    if (mongoReady()) {
+    if (!mongoReady()) {
+      const { storage } = await import("./storage");
+      const memClient = await storage.getClientByClientId(companyId);
+      if (!memClient) {
+        res.status(404).json({ error: "Company not found" });
+        return null;
+      }
+      clientOrgId = memClient.organizationId ?? null;
+      clientCreatorId = memClient.createdByUserId ?? null;
+      const sameOrg = clientOrgId !== null && clientOrgId === userOrgId;
+      const sameUser = clientCreatorId === userId;
+      const isDemoClient = Boolean(memClient.lakeTradingDemo);
+      const superAdmin = hasAnyRole(user, "super_admin");
+      if (!sameOrg && !sameUser && !(isDemoClient && superAdmin)) {
+        logger.warn("Cross-tenant client access denied via workbook route (memory)", {
+          companyId,
+          requesterUserId: userId,
+          requesterOrgId: userOrgId,
+          clientOrgId,
+          clientCreatorId,
+        });
+        res.status(403).json({ message: "Forbidden" });
+        return null;
+      }
+    } else if (mongoReady()) {
       const client = await ClientModel.findOne({ clientId: companyId })
         .select({ organizationId: 1, createdByUserId: 1 })
         .lean();

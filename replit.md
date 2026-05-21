@@ -126,6 +126,16 @@ The team invitation system was hardened to feel collaborative (Google Drive styl
 - **Tokens & expiry** — 24-byte `crypto.randomBytes` base64url tokens, default 14-day expiry. `publicInviteStatus()` derives `pending|accepted|revoked|expired`.
 - **Tests** — `apps/web/server/__tests__/invites.test.ts` (15 tests, all passing) covers token entropy/uniqueness, expiry math, accept/revoke semantics, tenant isolation on revoke and `findActivePendingInvite`, the email template content, HTML escaping, and missing-company fallback. Run with `pnpm --filter rest-express vitest run server/__tests__/invites.test.ts`.
 
+## Information Request — in-memory fallback & tenant check (May 2026)
+Hardened on `lethabo/quality-assurance` after a manual E2E pass.
+
+- **`/api/clients` in-memory fallback (P1)** — `GET`, `POST`, `GET/:id`, `PATCH/:id`, `DELETE/:id`, `GET/:id/data`, and `POST/:id/bulk-import` in `apps/web/server/routes.ts` now branch on `isMongoConnected()`. When Mongo is offline they read/write the shared `MemoryStorage` via new IStorage methods (`listClientsForUser`, `getClientByClientId`, `updateClientByClientId`, `deleteClientByClientId`); when it's connected, behaviour is unchanged (still goes through `ClientModel` with `buildClientVisibilityFilter`). Lets the Information Request CompanyPicker list and create companies in dev without MongoDB.
+- **Tenant guard on `/api/clients/:clientId*` (IDOR fix)** — All per-id routes (`GET`, `PATCH`, `DELETE`, `GET/:id/data`, `POST/:id/bulk-import`) now run through a shared `loadClientWithAccess()` helper that loads the client (Mongo or memory), then requires the caller to be the creator, a member of the same `organizationId`, or a `super_admin` viewing a `lakeTradingDemo` client. Unknown id → 404; cross-tenant → 403 (logged). Closes a pre-existing IDOR on the per-id handlers surfaced during code review of the P1 fallback.
+- **Tenant check on workbook GET (P3)** — `authorizeWorkbookAccess()` in `apps/web/server/workbookRoutes.ts` no longer skips the client-existence check when Mongo is down. The no-Mongo branch loads the client from `storage`, returns `404` if it doesn't exist, and `403` if it belongs to a different tenant. Stops `GET /api/workbook/:anyId` from synthesising a workbook stamped with the caller's org for arbitrary ids.
+- **Submit still 503s cleanly** when Mongo is absent (unchanged) — the in-memory fallback is read/write for the workbook editor; submit remains a Mongo-only operation that surfaces a clear "Database unavailable" error.
+- **Tests** — `apps/web/server/__tests__/clientsFallback.test.ts` (10 tests) cover empty/non-empty listing, tenancy filtering (own user, same org, super_admin demo-visibility), CRUD by `clientId`, and the workbook GET 404/403/200 matrix. Run with `pnpm --filter rest-express exec vitest run server/__tests__/clientsFallback.test.ts`.
+- **Follow-up — duplicate `/api/clients`** — `apps/api/src/routes/index.ts:117` ships a second `/api/clients` implementation that is unreachable in dev (the API server has no auth session for the web cookie) and effectively dead code. Leave for a dedicated cleanup task.
+
 ## Enterprise Security (Apr 2026)
 The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 
