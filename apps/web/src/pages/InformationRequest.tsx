@@ -34,7 +34,10 @@ import {
 } from "@/components/workbook/workbookValidation";
 import {
   normalizeExcelFile,
+  type WorkbookSectionsInput,
 } from "@/lib/workbookExcelNormalizer";
+import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
+import { ExcelImportPreviewModal } from "@/components/scorecard/ExcelImportPreviewModal";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { ScorecardFlowStepper } from "@/components/scorecard/ScorecardFlowStepper";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
@@ -152,7 +155,7 @@ function ExcelImportButton({
       <input
         ref={inputRef}
         type="file"
-        accept=".xlsx,.xls"
+        accept=".xlsx,.xlsm,.xls"
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
         data-testid="input-excel-import"
@@ -182,6 +185,10 @@ function CompanyPicker({
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
+  const [pendingSections, setPendingSections] = useState<WorkbookSectionsInput | null>(null);
   const { toast } = useToast();
   const showLakeDemo = isSuperAdmin(user);
 
@@ -251,71 +258,52 @@ function CompanyPicker({
           <ExcelImportButton
             label="Import from Excel"
             onImport={async (file) => {
-              const result = await normalizeExcelFile(file);
-              if (result.criticalBlocked) {
-                toast({
-                  title: "Import blocked — fix critical fields",
-                  description: formatWorkbookValidationSummary(result.validationIssues, 5),
-                  variant: "destructive",
-                });
-                return;
-              }
-              const companyName = String(
-                result.sections["company-information"]?.meta?.companyName ?? "",
-              ).trim();
-              if (!companyName) {
-                toast({
-                  title: "Company name required",
-                  description: "Add a Company / Legal Name column or sheet before importing.",
-                  variant: "destructive",
-                });
-                return;
-              }
-              setCreating(true);
-              try {
-                const res = await fetch(`${API_BASE}/api/clients`, {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ name: companyName }),
-                });
-                if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
+              const result = await importBeeGatheringExcel(file, API_BASE);
+              if (!result.extraction.isBeeGatheringFormat) {
+                const fallback = await normalizeExcelFile(file);
+                if (fallback.criticalBlocked) {
                   toast({
-                    title: "Could not create company",
-                    description: err.error || "Server error.",
+                    title: "Import blocked — fix critical fields",
+                    description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
                     variant: "destructive",
                   });
                   return;
                 }
-                const c = await res.json();
-                const clientId = c.clientId || c.id;
-                const importRes = await fetch(
-                  `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
-                  {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ sections: result.sections }),
-                  },
-                );
-                if (!importRes.ok) {
-                  toast({ title: "Import failed", variant: "destructive" });
+                const companyName = String(
+                  fallback.sections["company-information"]?.meta?.companyName ?? "",
+                ).trim();
+                if (!companyName) {
+                  toast({
+                    title: "Unrecognized Excel layout",
+                    description:
+                      "Upload a BEE Information Gathering file or a workbook with Company / Legal Name.",
+                    variant: "destructive",
+                  });
                   return;
                 }
-                if (result.validationIssues.length > 0) {
-                  toast({
-                    title: "Imported with gaps",
-                    description:
-                      "Some non-critical fields are missing — scores may reflect discounted levels.",
-                  });
-                } else {
-                  toast({ title: "Workbook imported", description: companyName });
-                }
-                onPick(c);
-              } finally {
-                setCreating(false);
+                setPendingFile(file);
+                setPreviewResult({
+                  data: {
+                    companyName,
+                    sector: String(fallback.sections["company-information"]?.meta?.industrySector ?? ""),
+                    scorecardType: String(fallback.sections["company-information"]?.meta?.scorecardType ?? ""),
+                    revenue: Number(fallback.sections["financial-information"]?.meta?.revenue ?? 0) || undefined,
+                    npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
+                  },
+                  warnings: fallback.warnings,
+                  unmappedFields: [],
+                  fieldStatuses: { companyName: "mapped" },
+                  isBeeGatheringFormat: true,
+                  mappedSheets: Object.keys(fallback.mappedSheets),
+                });
+                setPendingSections(fallback.sections);
+                setPreviewOpen(true);
+                return;
               }
+              setPendingFile(file);
+              setPreviewResult(result.extraction);
+              setPendingSections(result.sections);
+              setPreviewOpen(true);
             }}
           />
         </div>
@@ -363,6 +351,77 @@ function CompanyPicker({
           </div>
         )}
       </div>
+
+      <ExcelImportPreviewModal
+        open={previewOpen}
+        fileName={pendingFile?.name ?? ""}
+        result={previewResult}
+        importing={creating}
+        onClose={() => {
+          if (creating) return;
+          setPreviewOpen(false);
+          setPendingFile(null);
+          setPreviewResult(null);
+          setPendingSections(null);
+        }}
+        onConfirm={async () => {
+          const companyName = String(previewResult?.data.companyName ?? "").trim();
+          const sections = pendingSections;
+          if (!companyName || !sections) return;
+          setCreating(true);
+          try {
+            const res = await fetch(`${API_BASE}/api/clients`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: companyName }),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              toast({
+                title: "Could not create company",
+                description: err.error || "Server error.",
+                variant: "destructive",
+              });
+              return;
+            }
+            const c = await res.json();
+            const clientId = c.clientId || c.id;
+            sessionStorage.setItem(
+              `okiru-excel-import-${clientId}`,
+              JSON.stringify({ extracted: previewResult?.data, importedAt: new Date().toISOString() }),
+            );
+            const importRes = await fetch(
+              `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sections }),
+              },
+            );
+            if (!importRes.ok) {
+              toast({ title: "Import failed", variant: "destructive" });
+              return;
+            }
+            const warnCount = previewResult?.warnings.length ?? 0;
+            toast({
+              title: warnCount > 0 ? "Imported with gaps" : "Workbook imported",
+              description:
+                warnCount > 0
+                  ? `${warnCount} warning(s) — review sections before submit.`
+                  : companyName,
+            });
+            setPreviewOpen(false);
+            setPendingFile(null);
+            setPreviewResult(null);
+            setPendingSections(null);
+            onPick(c);
+          } finally {
+            setCreating(false);
+          }
+        }}
+      />
 
       <div className="rounded-2xl bg-[#1c1c1e] p-6">
         <h2 className="text-[15px] font-semibold text-white mb-1">Add a new company</h2>
@@ -717,7 +776,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
   const handleExcelImport = useCallback(
     async (file: File) => {
-      const result = await normalizeExcelFile(file);
+      const bee = await importBeeGatheringExcel(file, API_BASE);
+      const result = bee.extraction.isBeeGatheringFormat
+        ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
+        : await normalizeExcelFile(file);
+
       if (result.criticalBlocked) {
         toast({
           title: "Import blocked — fix critical fields",
