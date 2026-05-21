@@ -937,6 +937,8 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       rows={activeRows}
                       rowValidate={activeSection.rowValidate}
                       onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
+                      sectionLabel={activeSection.label}
+                      sectionDescription={activeSection.description}
                     />
                   </div>
                 ) : (
