@@ -694,7 +694,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
         });
         localStorage.setItem("okiru-pro-active-client", companyId);
-        navigate("/toolkit/scorecard");
+        navigate("/toolkit/scorecard-summary?from=submit");
       } else {
         toast({
           title: "Submit failed",

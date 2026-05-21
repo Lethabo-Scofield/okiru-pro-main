@@ -98,6 +98,11 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const openSummary = (clientId: string) => {
+    localStorage.setItem('okiru-pro-active-client', clientId);
+    navigate('/toolkit/scorecard-summary');
+  };
+
   const openScorecard = (clientId: string) => {
     localStorage.setItem('okiru-pro-active-client', clientId);
     navigate('/toolkit/scorecard');
@@ -304,11 +309,18 @@ export default function Dashboard() {
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <button
-                                onClick={() => openScorecard(c.id)}
+                                onClick={() => openSummary(c.id)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
-                                data-testid={`button-scorecard-${c.id}`}
+                                data-testid={`button-summary-${c.id}`}
                               >
                                 <ExternalLink className="h-3 w-3" />
+                                Summary
+                              </button>
+                              <button
+                                onClick={() => openScorecard(c.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white text-[12px] font-semibold smooth press-sm"
+                                data-testid={`button-scorecard-${c.id}`}
+                              >
                                 View Scorecard
                               </button>
                               <button

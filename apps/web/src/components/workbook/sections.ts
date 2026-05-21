@@ -389,11 +389,18 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
 
 export const SUPPLIER_COLUMNS: ColumnDef[] = PROCUREMENT_COLUMNS;
 
+// ESD category — Supplier Development vs Enterprise Development
+// Per docs/LAKE_TRADING_FIX_PLAN.md §1 Bug 4: the workbook ESD section captures
+// both SD and ED contributions on one sheet; this column tells the scoring
+// engine which sub-element a row belongs to.
+const ESD_CATEGORY_OPTIONS = ["Supplier Development", "Enterprise Development"];
+
 // ---------- ESD ----------
 export const ESD_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Beneficiary / Supplier", type: "text", required: true, width: 220 },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", required: true, width: 160, validate: percentValidator },
   { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
+  { key: "esdCategory", label: "Category (SD / ED)", type: "select", options: ESD_CATEGORY_OPTIONS, required: false, width: 190 },
   { key: "contributionDescription", label: "Description", type: "text", required: true, width: 240 },
   { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200 },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },

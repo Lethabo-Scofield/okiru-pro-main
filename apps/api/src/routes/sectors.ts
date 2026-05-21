@@ -12,7 +12,7 @@ import { getArangoDB, isArangoConnected } from '../../arango/connection.js';
 
 const logger = createLogger("Sectors");
 import { COLLECTIONS } from '../../arango/collections.js';
-import { listSectorConfigs, type SectorConfig } from '../../pipeline/sectorConfig.js';
+import { listSectorConfigs, listSectorConfigsFull, type SectorConfig } from '../../pipeline/sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 
 const router = Router();
@@ -267,12 +267,7 @@ router.post('/seed', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 function getFallbackSectors() {
-  return listSectorConfigs().map(c => ({
-    code: c.code,
-    name: c.name,
-    type: c.type,
-    totalPoints: c.totalPoints,
-  }));
+  return listSectorConfigsFull();
 }
 
 function getFallbackSectorOptions() {

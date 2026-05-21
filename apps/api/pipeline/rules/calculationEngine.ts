@@ -1511,10 +1511,113 @@ export async function calculateScorecard(
     toPillarResult('socioEconomicDevelopment', 'Socio-Economic Development', result.socioEconomicDevelopment),
   );
 
+  // Lake Trading Fix Plan §1 Bug 10 — expose combined ESD pillar + per-criterion
+  // breakdown expected by UCS integration tests and AI guidance consumers.
+  const sdScore = result.supplierDevelopment;
+  const edScore = result.enterpriseDevelopment;
+  const esdMax = sdScore.maxPoints + edScore.maxPoints;
+  const esdPoints = sdScore.score + edScore.score;
+  const esdCombined: PillarResult = {
+    pillarCode: 'enterpriseSupplierDevelopment',
+    pillarName: 'Enterprise & Supplier Development',
+    points: esdPoints,
+    maxPoints: esdMax,
+    percentage: esdMax > 0 ? r2((esdPoints / esdMax) * 100) : 0,
+    // ED often has no sub-minimum (subMinimumPercent = 0 → always met); combined
+    // ESD passes when SD meets its sub-min OR ED is exempt.
+    subMinimumMet: sdScore.subMinimumMet || edScore.subMinimumMet,
+    criteria: [
+      {
+        criterionCode: 'ESD-SD',
+        pillarCode: 'enterpriseSupplierDevelopment',
+        name: 'Supplier Development',
+        formulaId: 'esd_supplier_development',
+        points: sdScore.score,
+        maxPoints: sdScore.maxPoints,
+        percentage: sdScore.maxPoints > 0 ? r2((sdScore.score / sdScore.maxPoints) * 100) : 0,
+        targetMet: sdScore.score >= sdScore.maxPoints,
+        subMinimumMet: sdScore.subMinimumMet,
+        inputs: {},
+        errors: [],
+      },
+      {
+        criterionCode: 'ESD-ED',
+        pillarCode: 'enterpriseSupplierDevelopment',
+        name: 'Enterprise Development',
+        formulaId: 'esd_enterprise_development',
+        points: edScore.score,
+        maxPoints: edScore.maxPoints,
+        percentage: edScore.maxPoints > 0 ? r2((edScore.score / edScore.maxPoints) * 100) : 0,
+        targetMet: edScore.score >= edScore.maxPoints,
+        subMinimumMet: edScore.subMinimumMet,
+        inputs: {},
+        errors: [],
+      },
+    ],
+  };
+  pillarResults.push(esdCombined);
+
   const subMinimums: Record<string, boolean> = {};
   for (const p of pillarResults) subMinimums[p.pillarCode] = p.subMinimumMet;
 
   logger.debug('Pillar scores (simplified)', { pillars: pillarResults.map(p => `${p.pillarCode}: ${p.points}/${p.maxPoints}`), totalPoints: result.totalPoints, beeLevel: result.beeLevel });
+
+  // Lake Trading Fix Plan §1 Bug 9: when sub-minimums fail the engine returns
+  // `discountedLevel` separately from `beeLevel`. The simplified result must
+  // surface the discounted value so API consumers (and the lakeTradingUCS test)
+  // see the post-discount level rather than the raw band-based level.
+  const reportedLevel = result.isDiscounted ? result.discountedLevel : result.beeLevel;
+
+  const pillarConfigs: OntologySnapshot['sectorConfig']['pillarConfigs'] = {};
+  for (const [key, pc] of Object.entries(sectorConfig.pillarConfigs)) {
+    if (pc) {
+      pillarConfigs[key] = {
+        maxPoints: pc.maxPoints,
+        hasSubMinimum: pc.hasSubMinimum,
+        subMinimumPercent: pc.subMinimumPercent,
+      };
+    }
+  }
+
+  const zeroScorePillars = pillarResults
+    .filter((p) => p.points === 0 && p.maxPoints > 0)
+    .map((p) => p.pillarCode);
+
+  const calculatedAt = new Date().toISOString();
+  const ontologySnapshot: OntologySnapshot = {
+    calculatedAt,
+    sectorCode: options.sectorCode,
+    scorecardType: options.scorecardType,
+    configSource,
+    sectorConfig: {
+      pillarConfigs,
+      levelThresholds: sectorConfig.levelThresholds,
+      totalMaxPoints: sectorConfig.totalMaxPoints,
+    },
+    pillarTraces: pillarResults.map((pr) => ({
+      pillarCode: pr.pillarCode,
+      criteriaUsed: pr.criteria.map((cr) => ({
+        code: cr.criterionCode,
+        formulaId: cr.formulaId,
+        target: 0,
+        maxPoints: cr.maxPoints,
+        actualValue: cr.percentage,
+        calculatedScore: cr.points,
+        inputs: {},
+      })),
+      totalScore: pr.points,
+      subMinimumThreshold: r2(
+        (pillarConfigs[pr.pillarCode]?.maxPoints ?? 0) *
+          ((pillarConfigs[pr.pillarCode]?.subMinimumPercent ?? 0) / 100),
+      ),
+      subMinimumMet: pr.subMinimumMet,
+    })),
+    entityTemplateVersion: 'simplified-v1',
+    manifestPillars: pillarResults.map((p) => p.pillarCode),
+    missingEntities: [],
+    zeroScorePillars,
+    nearSubMinimumPillars: [],
+  };
 
   return {
     assessmentId: options.assessmentId,
@@ -1523,12 +1626,13 @@ export async function calculateScorecard(
     totalPoints: result.totalPoints,
     maxPoints: result.maxPoints,
     overallPercentage: r2(result.maxPoints > 0 ? (result.totalPoints / result.maxPoints) * 100 : 0),
-    beeLevel: result.beeLevel,
+    beeLevel: reportedLevel,
     recognitionLevel: result.recognitionLevel,
     pillars: pillarResults,
     subMinimums,
     calculationErrors: [],
-    calculatedAt: new Date().toISOString(),
+    calculatedAt,
+    ontologySnapshot,
   };
 }
 

@@ -31,7 +31,16 @@ function splitEmployeeName(full: string): { name: string; surname: string } {
   return { name: parts[0], surname: parts.slice(1).join(" ") };
 }
 
+// Lake Trading Fix Plan §1 Bug 2: workbook DESIGNATION_OPTIONS in sections.ts
+// uses human-friendly labels; the projection (workbookRoutes.ts) translates
+// these back to calculator enums (Board, Senior, Middle, Junior, Other
+// Executive Management). Preserve the calculator enum values directly when
+// they're already in the workbook label set; only "Board" needs to map to a
+// workbook label, but the demo uses an Executive Director label so the
+// calculator-side mapping is the canonical translation.
 const DESIGNATION_TO_WORKBOOK: Record<string, string> = {
+  // Board → Non-executive Director (workbook label). Calculator side then maps
+  // "Non-executive Director" → "Board".
   Board: "Non-executive Director",
   "Executive Director": "Executive Director",
   "Other Executive Management": "Other Executive Manager",
@@ -96,6 +105,11 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
     forecastPayroll: payroll,
   };
 
+  // Lake Trading Fix Plan §1 Bug 1: Lake's sole holder is a Family Trust whose
+  // beneficiaries are 100% black and 50% black women + a new-entrant flag. We
+  // therefore carry these scoring fields directly on the workbook row (in
+  // addition to the schema columns) so the projection can preserve them without
+  // having to fake `race`/`gender` on a trust.
   const sh = lakeTradingOwnership.shareholders[0];
   const ownershipRows: WorkbookRow[] = [
     {
@@ -110,6 +124,13 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
       economicInterest: pct100(sh.economicInterestPercent ?? 1),
       shareholding: pct100(sh.shares ?? 100),
       modifiedFlowThrough: false,
+      // NEW — scoring-engine passthrough fields preserved by
+      // projectWorkbookToClient (see Lake Trading Fix Plan §1 Bug 1).
+      blackOwnership: sh.blackOwnership ?? 1,
+      blackWomenOwnership: sh.blackWomenOwnership ?? 0.5,
+      isDesignatedGroup: Boolean(sh.isDesignatedGroup),
+      isNewEntrant: Boolean(sh.blackNewEntrant),
+      yearsHeld: lakeTradingOwnership.yearsHeld ?? 0,
     },
   ];
 
@@ -143,17 +164,26 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
     },
   );
 
+  // Lake Trading Fix Plan §1 Bug 4: include `esdCategory` so the projection
+  // can route contributions into Supplier Development vs Enterprise Development.
   const esdRows: WorkbookRow[] = (lakeTradingPillars.esd?.contributions ?? []).map(
-    (c: Record<string, unknown>, i: number) => ({
-      _id: String(c.id ?? rowId("lt_esd", i)),
-      supplierName: c.beneficiary,
-      currentBlackOwnership: pct100(Number(c.blackBenefitPercent ?? 100)),
-      currentSize: "EME",
-      contributionDescription: c.description ?? "",
-      contributionType: "Other Monetary",
-      amount: Number(c.amount ?? 0),
-      dateOfTransaction: String(c.transactionDate ?? "2025-09-01"),
-    }),
+    (c: Record<string, unknown>, i: number) => {
+      const categoryRaw = String(c.category ?? "").toLowerCase();
+      const esdCategory = categoryRaw.startsWith("enterprise")
+        ? "Enterprise Development"
+        : "Supplier Development";
+      return {
+        _id: String(c.id ?? rowId("lt_esd", i)),
+        supplierName: c.beneficiary,
+        currentBlackOwnership: pct100(Number(c.blackBenefitPercent ?? 100)),
+        currentSize: "EME",
+        contributionDescription: c.description ?? "",
+        contributionType: "Other Monetary",
+        esdCategory,
+        amount: Number(c.amount ?? 0),
+        dateOfTransaction: String(c.transactionDate ?? "2025-09-01"),
+      };
+    },
   );
 
   const sedRows: WorkbookRow[] = (lakeTradingPillars.sed?.contributions ?? []).map(
