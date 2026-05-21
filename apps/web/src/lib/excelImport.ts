@@ -1046,7 +1046,7 @@ function extractProcurementSheet(matrix: SheetMatrix, sheetName: string): FieldC
   let headerIdx = -1;
   for (let i = 0; i < Math.min(matrix.length, 15); i++) {
     const rowText = (matrix[i] || []).map(cellStr).join(" ").toLowerCase();
-    if (rowText.includes("supplier name") && rowText.includes("expenditure")) {
+    if (rowText.includes("supplier name") && (rowText.includes("expenditure") || rowText.includes("spend"))) {
       headerIdx = i;
       break;
     }
@@ -1054,7 +1054,12 @@ function extractProcurementSheet(matrix: SheetMatrix, sheetName: string): FieldC
   if (headerIdx < 0) return out;
 
   const headers = mapHeaderRow(matrix[headerIdx] as unknown[]);
-  const spendIdx = colIdx(headers, "expenditurepersupplierledgerfortheperiodincludingvat", "expenditure");
+  const spendIdx = colIdx(
+    headers,
+    "expenditurepersupplierledgerfortheperiodincludingvat",
+    "expenditure",
+    "spend",
+  );
   const blackOwnIdx = colIdx(headers, "blackownership", "black ownership");
   const blackWomenIdx = colIdx(headers, "blackwomanownership", "black woman ownership");
   const beeLevelIdx = colIdx(headers, "beelevel", "bee level");
@@ -1445,6 +1450,10 @@ export function extractBeeGatheringBuffer(buffer: ArrayBuffer): ExcelExtractionR
   };
 }
 
+function stablePersonRowId(name: string, surname: string): string {
+  return `emp_${norm(name)}_${norm(surname)}`;
+}
+
 function splitName(full: string): { name: string; surname: string } {
   const parts = full.trim().split(/\s*,\s*|\s+/).filter(Boolean);
   if (parts.length <= 1) return { name: full.trim(), surname: "—" };
@@ -1482,26 +1491,48 @@ function parseGridRows(
 
 function parseOwnershipRows(matrix: SheetMatrix): WorkbookRow[] {
   return parseGridRows(matrix, ["name", "race"], (row, headers) => {
-    const nameIdx = colIdx(headers, "namesurname", "name");
+    const nameIdx = colIdx(headers, "namesurname", "name", "shareholdername");
     const idIdx = colIdx(headers, "idnumber", "id");
     const raceIdx = colIdx(headers, "race");
     const genderIdx = colIdx(headers, "gender");
-    const voteIdx = colIdx(headers, "votingrights", "economicinterest");
+    const voteIdx = colIdx(headers, "votingrights");
+    const eiIdx = colIdx(headers, "economicinterest");
+    const shareIdx = colIdx(headers, "shareholding", "shareholdingpercent");
+    const blackOwnIdx = colIdx(headers, "blackownership", "black ownership");
+    const blackWomenIdx = colIdx(headers, "blackwomenownership", "black women ownership");
+    const newEntrantIdx = colIdx(headers, "newentrant", "new entrant");
     const name = nameIdx !== undefined ? cellStr(row[nameIdx]) : "";
     if (!name || /^\d+$/.test(name)) return null;
-    return {
+    const voting = voteIdx !== undefined ? parsePercent(row[voteIdx]) : undefined;
+    const economic = eiIdx !== undefined ? parsePercent(row[eiIdx]) : voting;
+    const shareholding = shareIdx !== undefined ? parsePercent(row[shareIdx]) : voting;
+    const blackOwn = blackOwnIdx !== undefined ? parsePercent(row[blackOwnIdx]) : undefined;
+    const blackWomen = blackWomenIdx !== undefined ? parsePercent(row[blackWomenIdx]) : undefined;
+    const newEntrantRaw = newEntrantIdx !== undefined ? cellStr(row[newEntrantIdx]).toLowerCase() : "";
+    const rowOut: WorkbookRow = {
       _id: uuidv4(),
       shareholderName: name,
       idNumber: idIdx !== undefined ? cellStr(row[idIdx]) : "",
       race: raceIdx !== undefined ? RACE_MAP[norm(cellStr(row[raceIdx]))] || cellStr(row[raceIdx]) : "",
       gender: genderIdx !== undefined ? GENDER_MAP[norm(cellStr(row[genderIdx]))] || cellStr(row[genderIdx]) : "",
-      votingRights: voteIdx !== undefined ? parsePercent(row[voteIdx]) ?? "" : "",
-      economicInterest: voteIdx !== undefined ? parsePercent(row[voteIdx]) ?? "" : "",
-      shareholding: voteIdx !== undefined ? parsePercent(row[voteIdx]) ?? "" : "",
+      votingRights: voting ?? "",
+      economicInterest: economic ?? voting ?? "",
+      shareholding: shareholding ?? voting ?? "",
       isDisabled: false,
       isYouth: false,
       modifiedFlowThrough: false,
     };
+    if (blackOwn != null) {
+      (rowOut as Record<string, unknown>).blackOwnership = blackOwn <= 1 ? blackOwn * 100 : blackOwn;
+    }
+    if (blackWomen != null) {
+      (rowOut as Record<string, unknown>).blackWomenOwnership =
+        blackWomen <= 1 ? blackWomen * 100 : blackWomen;
+    }
+    if (newEntrantRaw === "yes" || newEntrantRaw === "y" || newEntrantRaw === "true" || newEntrantRaw === "1") {
+      (rowOut as Record<string, unknown>).isNewEntrant = true;
+    }
+    return rowOut;
   });
 }
 
@@ -1518,7 +1549,7 @@ function parseManagementRows(matrix: SheetMatrix): WorkbookRow[] {
     const { name: first, surname } = splitName(name);
     const designation = desigIdx !== undefined ? cellStr(row[desigIdx]) : "Other Executive Manager";
     return {
-      _id: uuidv4(),
+      _id: stablePersonRowId(first, surname),
       name: first,
       surname,
       idNumber: idIdx !== undefined ? cellStr(row[idIdx]) : "",
@@ -1612,6 +1643,323 @@ function mapJobTitleToDesignationForImport(raw: string): string {
   return "Junior Manager";
 }
 
+function normalizeBeeLevelCell(raw: unknown): string {
+  const s = cellStr(raw).toLowerCase();
+  if (!s || s.includes("non")) return "Non-compliant";
+  const n = parseInt(s, 10);
+  if (n >= 1 && n <= 8) return String(n);
+  return "";
+}
+
+function inferSupplierSize(spend: number, tmps: number): string {
+  if (tmps > 0 && spend >= tmps * 0.5) return "EME";
+  if (spend < 50_000_000) return "QSE";
+  return "Large";
+}
+
+function parseSupplierGridRows(matrix: SheetMatrix): WorkbookRow[] {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(matrix.length, 20); i++) {
+    const rowText = (matrix[i] || []).map(cellStr).join(" ").toLowerCase();
+    if (rowText.includes("supplier name") && (rowText.includes("expenditure") || rowText.includes("spend"))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+
+  const headers = mapHeaderRow(matrix[headerIdx] as unknown[]);
+  const nameIdx = colIdx(headers, "suppliername", "supplier name");
+  const sizeIdx = colIdx(headers, "currentsize", "current size", "companysize");
+  const beeIdx = colIdx(headers, "beelevel", "bbbeelevel", "b-bbee level", "bbbbelevel");
+  const empoweringIdx = colIdx(headers, "empoweringsupplier", "empowering supplier");
+  const blackOwnIdx = colIdx(headers, "blackownership", "black ownership");
+  const blackWomenIdx = colIdx(headers, "blackwomanownership", "black woman ownership", "blackfemaleownership");
+  const spendIdx = colIdx(
+    headers,
+    "expenditurepersupplierledgerfortheperiodincludingvat",
+    "expenditure",
+    "spend",
+  );
+
+  const out: WorkbookRow[] = [];
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
+    const row = matrix[r] as unknown[] | undefined;
+    if (!row) continue;
+    const name = nameIdx !== undefined ? cellStr(row[nameIdx]) : "";
+    if (!name || /^\d+$/.test(name)) continue;
+    const spend = spendIdx !== undefined ? parseCurrency(row[spendIdx]) ?? 0 : 0;
+    if (spend <= 0) continue;
+    const sizeRaw = sizeIdx !== undefined ? cellStr(row[sizeIdx]) : "";
+    const size =
+      norm(sizeRaw).includes("eme") ? "EME" : norm(sizeRaw).includes("qse") ? "QSE" : sizeRaw || "Large";
+    const blackPct = blackOwnIdx !== undefined ? parsePercent(row[blackOwnIdx]) ?? 100 : 100;
+    const womenPct = blackWomenIdx !== undefined ? parsePercent(row[blackWomenIdx]) ?? 0 : 0;
+    out.push({
+      _id: uuidv4(),
+      supplierName: name,
+      currentSize: size,
+      bbbeeLevel: beeIdx !== undefined ? normalizeBeeLevelCell(row[beeIdx]) : "",
+      measuredUnder: "RCoGP",
+      empoweringSupplier:
+        empoweringIdx !== undefined
+          ? ["yes", "y", "true", "1"].includes(cellStr(row[empoweringIdx]).toLowerCase())
+          : true,
+      currentBlackOwnership: pctForWorkbook(blackPct) || 100,
+      currentBlackFemaleOwnership: pctForWorkbook(womenPct) || 0,
+      hasModifiedBlackOwnership: false,
+      sdRecipient: false,
+      threeYearContract: false,
+      designated: false,
+      spend,
+      certificateExpiryDate: "2027-02-28",
+    });
+  }
+  return out;
+}
+
+function parseSkillsProgramGridRows(matrix: SheetMatrix): WorkbookRow[] {
+  let headerIdx = -1;
+  for (let i = 0; i < matrix.length; i++) {
+    const rowText = (matrix[i] || []).map(cellStr).join(" ").toLowerCase();
+    if (rowText.includes("dateoftraining")) {
+      headerIdx = i;
+      break;
+    }
+    if (
+      (/\bprogram\b/.test(rowText) || rowText.includes("programme")) &&
+      rowText.includes("expenditure")
+    ) {
+      headerIdx = i;
+      break;
+    }
+    if (rowText.includes("learner") && rowText.includes("race")) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+
+  const headers = mapHeaderRow(matrix[headerIdx] as unknown[]);
+  const programIdx = colIdx(headers, "programname", "trainingprogramme", "course");
+  const raceIdx = colIdx(headers, "race");
+  const spendIdx = colIdx(headers, "totalexpenditure", "total expenditure", "totalcost");
+  const absorbedIdx = colIdx(headers, "absorbedlearner", "absorbed");
+  if (spendIdx === undefined && programIdx === undefined) return [];
+
+  const out: WorkbookRow[] = [];
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
+    const row = matrix[r] as unknown[] | undefined;
+    if (!row || row.every((v) => !cellStr(v))) continue;
+    const programName = programIdx !== undefined ? cellStr(row[programIdx]) : "";
+    const spend = spendIdx !== undefined ? parseCurrency(row[spendIdx]) ?? 0 : 0;
+    if (programName.toLowerCase().startsWith("note:")) continue;
+    if (!programName && spend <= 0) continue;
+    if (spend <= 0 && !programName) continue;
+    out.push({
+      _id: uuidv4(),
+      programName: programName || "Imported training programme",
+      categoryCode: "E",
+      race: raceIdx !== undefined ? RACE_MAP[norm(cellStr(row[raceIdx]))] || cellStr(row[raceIdx]) : "",
+      totalCost: spend,
+      courseCost: spend,
+      absorbed:
+        absorbedIdx !== undefined
+          ? ["yes", "y", "true", "1"].includes(cellStr(row[absorbedIdx]).toLowerCase())
+          : false,
+      completed: true,
+      employed: true,
+    });
+  }
+  return out;
+}
+
+function parseEsdGridRows(matrix: SheetMatrix): WorkbookRow[] {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(matrix.length, 25); i++) {
+    const rowText = (matrix[i] || []).map(cellStr).join(" ").toLowerCase();
+    if (rowText.includes("beneficiary") && rowText.includes("amount")) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+
+  const headers = mapHeaderRow(matrix[headerIdx] as unknown[]);
+  const nameIdx = colIdx(headers, "beneficiary", "suppliername", "supplier name");
+  const sizeIdx = colIdx(headers, "currentsize", "current size");
+  const blackIdx = colIdx(headers, "blackownership", "black ownership");
+  const descIdx = colIdx(headers, "description", "contributiondescription");
+  const typeIdx = colIdx(headers, "contributiontype", "contribution type");
+  const catIdx = colIdx(headers, "esdcategory", "category", "esd category");
+  const amountIdx = colIdx(headers, "amount");
+  const dateIdx = colIdx(headers, "dateoftransaction", "date");
+
+  const out: WorkbookRow[] = [];
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
+    const row = matrix[r] as unknown[] | undefined;
+    if (!row) continue;
+    const name = nameIdx !== undefined ? cellStr(row[nameIdx]) : "";
+    const amount = amountIdx !== undefined ? parseCurrency(row[amountIdx]) ?? 0 : 0;
+    if (!name || amount <= 0) continue;
+    const catRaw = catIdx !== undefined ? cellStr(row[catIdx]).toLowerCase() : "";
+    const esdCategory = catRaw.includes("enterprise") ? "Enterprise Development" : "Supplier Development";
+    const blackPct = blackIdx !== undefined ? parsePercent(row[blackIdx]) ?? 100 : 100;
+    out.push({
+      _id: uuidv4(),
+      supplierName: name,
+      currentSize: sizeIdx !== undefined ? cellStr(row[sizeIdx]) || "EME" : "EME",
+      currentBlackOwnership: pctForWorkbook(blackPct) || 100,
+      contributionDescription: descIdx !== undefined ? cellStr(row[descIdx]) : "Imported contribution",
+      contributionType: typeIdx !== undefined ? cellStr(row[typeIdx]) || "Other Monetary" : "Other Monetary",
+      esdCategory,
+      amount,
+      dateOfTransaction:
+        dateIdx !== undefined ? parseDateToIso(row[dateIdx]) ?? cellStr(row[dateIdx]) : "2025-09-01",
+    });
+  }
+  return out;
+}
+
+function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(matrix.length, 25); i++) {
+    const rowText = (matrix[i] || []).map(cellStr).join(" ").toLowerCase();
+    if (rowText.includes("beneficiary") && rowText.includes("amount")) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+
+  const headers = mapHeaderRow(matrix[headerIdx] as unknown[]);
+  const nameIdx = colIdx(headers, "beneficiary", "beneficiaryname");
+  const descIdx = colIdx(headers, "description", "descriptionofspend");
+  const typeIdx = colIdx(headers, "contributiontype", "contribution type");
+  const blackPctIdx = colIdx(headers, "benefitingblack", "benefiting black", "percentbenefitingblack");
+  const amountIdx = colIdx(headers, "amount");
+  const dateIdx = colIdx(headers, "dateoftransaction", "date");
+
+  const out: WorkbookRow[] = [];
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
+    const row = matrix[r] as unknown[] | undefined;
+    if (!row) continue;
+    const name = nameIdx !== undefined ? cellStr(row[nameIdx]) : "";
+    const amount = amountIdx !== undefined ? parseCurrency(row[amountIdx]) ?? 0 : 0;
+    if (!name || amount <= 0) continue;
+    const blackPct = blackPctIdx !== undefined ? parsePercent(row[blackPctIdx]) ?? 100 : 100;
+    out.push({
+      _id: uuidv4(),
+      beneficiaryName: name,
+      descriptionOfSpend: descIdx !== undefined ? cellStr(row[descIdx]) : "Grant",
+      ictSpecificInitiative: false,
+      contributionType: typeIdx !== undefined ? cellStr(row[typeIdx]) || "Grant Contribution" : "Grant Contribution",
+      percentBenefitingBlack: pctForWorkbook(blackPct) || 100,
+      amount,
+      dateOfTransaction:
+        dateIdx !== undefined ? parseDateToIso(row[dateIdx]) ?? cellStr(row[dateIdx]) : "2025-06-01",
+    });
+  }
+  return out;
+}
+
+/** When extractors only found pillar totals, synthesize detail rows the calculators require. */
+function ensureAggregateDetailRows(
+  data: ExtractedCompanyData,
+  sections: WorkbookSectionsInput,
+): void {
+  const tmps = Number(data.totalProcurement ?? sections["financial-information"]?.meta?.tmps ?? 0);
+  const certExpiry = data.financialYearEnd ? String(data.financialYearEnd) : "2027-02-28";
+
+  if ((sections.suppliers?.rows?.length ?? 0) === 0) {
+    const spendTotal =
+      data.beeCompliantSpend ?? data.blackOwnedSpend ?? data.totalProcurement ?? tmps;
+    if (spendTotal != null && spendTotal > 0) {
+      const blackPct = data.blackOwnedSpendPercent ?? data.beeCompliantSpendPercent ?? 100;
+      const womenPct = data.blackWomenOwnedSpendPercent ?? 0;
+      const beeLevel =
+        (data.beeCompliantSpendPercent ?? 0) >= 80
+          ? "1"
+          : (data.beeCompliantSpendPercent ?? 0) >= 50
+            ? "4"
+            : "Non-compliant";
+      const row: WorkbookRow = {
+        _id: uuidv4(),
+        supplierName: data.companyName ? `${data.companyName} — aggregate procurement` : "Aggregate procurement",
+        currentSize: inferSupplierSize(spendTotal, tmps),
+        bbbeeLevel: beeLevel,
+        measuredUnder: "RCoGP",
+        empoweringSupplier: true,
+        currentBlackOwnership: pctForWorkbook(blackPct) || 100,
+        currentBlackFemaleOwnership: pctForWorkbook(womenPct) || 0,
+        hasModifiedBlackOwnership: false,
+        sdRecipient: false,
+        threeYearContract: false,
+        designated: false,
+        spend: spendTotal,
+        certificateExpiryDate: certExpiry,
+      };
+      sections.suppliers!.rows = [row];
+      sections.procurement!.rows = [row];
+    }
+  }
+
+  const leviable = data.leviableAmount ?? data.payroll ?? 0;
+  const maxReasonableSkills = leviable > 0 ? leviable * 0.5 : 10_000_000;
+  const skillsSpend = data.skillsSpend ?? 0;
+  if (
+    (sections["skills-development"]?.rows?.length ?? 0) === 0 &&
+    skillsSpend > 0 &&
+    skillsSpend <= maxReasonableSkills
+  ) {
+    const spend = skillsSpend;
+    const row: WorkbookRow = {
+      _id: uuidv4(),
+      programName: "Aggregate skills development spend",
+      categoryCode: "E",
+      totalCost: spend,
+      courseCost: spend,
+      race: "African",
+      completed: true,
+      employed: true,
+      absorbed: (data.absorbedLearnerships ?? 0) > 0,
+    };
+    sections["skills-development"]!.rows = [row];
+  }
+
+  if ((sections.esd?.rows?.length ?? 0) === 0 && (data.esdContributions ?? 0) > 0) {
+    const total = data.esdContributions ?? 0;
+    sections.esd!.rows = [
+      {
+        _id: uuidv4(),
+        supplierName: "Aggregate ESD contribution",
+        currentSize: "EME",
+        currentBlackOwnership: 100,
+        contributionDescription: "Imported enterprise & supplier development total",
+        contributionType: "Other Monetary",
+        esdCategory: "Supplier Development",
+        amount: total,
+        dateOfTransaction: "2025-09-01",
+      },
+    ];
+  }
+
+  if ((sections.sed?.rows?.length ?? 0) === 0 && (data.sedContributions ?? 0) > 0) {
+    sections.sed!.rows = [
+      {
+        _id: uuidv4(),
+        beneficiaryName: data.companyName ? `${data.companyName} — SED` : "Aggregate SED beneficiary",
+        descriptionOfSpend: "Imported socio-economic development total",
+        ictSpecificInitiative: false,
+        contributionType: "Grant Contribution",
+        percentBenefitingBlack: 100,
+        amount: data.sedContributions ?? 0,
+        dateOfTransaction: "2025-06-01",
+      },
+    ];
+  }
+}
+
 function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
   return parseGridRows(matrix, ["name", "race", "job"], (row, headers) => {
     const nameIdx = colIdx(headers, "namesurname", "name");
@@ -1625,7 +1973,7 @@ function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
     const jobTitle = jobIdx !== undefined ? cellStr(row[jobIdx]) : "";
     const designation = mapJobTitleToDesignationForImport(jobTitle);
     return {
-      _id: uuidv4(),
+      _id: stablePersonRowId(first, surname),
       name: first,
       surname,
       idNumber: idIdx !== undefined ? cellStr(row[idIdx]) : "",
@@ -1687,8 +2035,13 @@ export function mapExtractedToWorkbookSections(
 
   if (wb) {
     const ownershipSheet = findSheet(wb, "Ownership");
+    const ownershipChainSheet = findSheet(wb, "Ownership Chain");
     const mgmtSheet = findSheet(wb, "Management Control");
     const eeSheet = findSheet(wb, "Employment Equity");
+    const skillsSheet = findSheet(wb, "Skills Development");
+    const procurementSheet = findSheet(wb, "Procurement");
+    const esdSheet = findSheet(wb, "Enterprise Development");
+    const sedSheet = findSheet(wb, "Socio-Economic Development", "Social Development", "Economic Development");
 
     if (ownershipSheet) {
       sections.ownership.rows = parseOwnershipRows(sheetMatrix(wb, ownershipSheet));
@@ -1698,6 +2051,27 @@ export function mapExtractedToWorkbookSections(
     }
     if (eeSheet) {
       sections.employees.rows = parseEmployeeRows(sheetMatrix(wb, eeSheet));
+    }
+    if (skillsSheet) {
+      sections["skills-development"].rows = parseSkillsProgramGridRows(sheetMatrix(wb, skillsSheet));
+    }
+    if (procurementSheet) {
+      const supplierRows = parseSupplierGridRows(sheetMatrix(wb, procurementSheet));
+      sections.suppliers.rows = supplierRows;
+      sections.procurement.rows = supplierRows;
+    }
+    if (esdSheet) {
+      sections.esd.rows = parseEsdGridRows(sheetMatrix(wb, esdSheet));
+    }
+    if (sedSheet) {
+      sections.sed.rows = parseSedGridRows(sheetMatrix(wb, sedSheet));
+    }
+    if (!ownershipChainSheet && ownershipChainTiers.length === 0) {
+      const chainSheet = wb.SheetNames.find((n) => norm(n).includes("ownershipchain"));
+      if (chainSheet) {
+        const chain = extractOwnershipChainSheet(sheetMatrix(wb, chainSheet), chainSheet);
+        if (chain.tiers.length) ownershipChainTiers = chain.tiers;
+      }
     }
   }
 
@@ -1710,6 +2084,12 @@ export function mapExtractedToWorkbookSections(
   if (sections.employees.rows.length === 0 && sections["management-control"].rows.length > 0) {
     sections.employees.rows = [...sections["management-control"].rows];
   }
+
+  ensureAggregateDetailRows(data, sections);
+
+  sections["skills-development"].rows = (sections["skills-development"].rows ?? []).filter(
+    (r) => (Number((r as WorkbookRow).totalCost) || Number((r as WorkbookRow).courseCost) || 0) > 0,
+  );
 
   return sections;
 }
