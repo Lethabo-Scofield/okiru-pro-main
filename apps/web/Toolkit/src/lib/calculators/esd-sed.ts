@@ -149,8 +149,14 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
 
   const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
   const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
-  const sdSubMinimumMet = sdTotal >= (supplierDevMax * sdSubMinPct / 100);
-  const edSubMinimumMet = edTotal >= (enterpriseDevMax * edSubMinPct / 100);
+  const sdSubMinimumMet =
+    supplierDevMax > 0 &&
+    sdSubMinPct > 0 &&
+    sdTotal >= (supplierDevMax * sdSubMinPct / 100);
+  const edSubMinimumMet =
+    enterpriseDevMax > 0 &&
+    edSubMinPct > 0 &&
+    edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
     { name: "Annual value of all Supplier Development contributions", target: "2% of NPAT", weighting: 10, score: sdScore },

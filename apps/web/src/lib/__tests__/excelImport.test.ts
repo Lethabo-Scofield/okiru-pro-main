@@ -71,13 +71,21 @@ describe("excelImport — Thandanani Transport fixture", () => {
   it("maps extracted data into workbook sections", () => {
     const extraction = extractBeeGatheringBuffer(buffer);
     const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-    const sections = mapExtractedToWorkbookSections(extraction.data, wb);
+    const sections = mapExtractedToWorkbookSections(
+      extraction.data,
+      wb,
+      extraction.ownershipChainTiers,
+    );
 
     expect(sections["company-information"]?.meta?.companyName).toBe("Thandanani Transport");
     expect(sections["company-information"]?.meta?.industrySector).toBe("TRANSPORT");
+    expect(sections["company-information"]?.meta?.scorecardType).toBe("QSE");
     expect(sections["financial-information"]?.meta?.revenue).toBe(10_826_271);
     expect(sections.ownership?.rows?.length).toBeGreaterThan(0);
     expect(sections.employees?.rows?.length).toBeGreaterThan(0);
+
+    const firstSh = sections.ownership?.rows?.[0] as Record<string, unknown> | undefined;
+    expect(Number(firstSh?.blackOwnership)).toBeGreaterThan(0);
   });
 
   it("normalizes sector labels deterministically", () => {

@@ -525,3 +525,74 @@ For Transport Large and Transport QSE: the toolkit's "Notes" sheet defines a sep
 8. **Liquid Fuels / Media / other sector codes** — listed as outstanding in `BBBEE_ONTOLOGY_EXPERT_GUIDE.md` §1. Not in scope for current ledger but flagged.
 
 ---
+
+## 16. YES Initiative — scored vs level boost vs bonus points
+
+Source: `docs/SCORECARD_GROUND_TRUTH.md` §10; `docs/toolkits/BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx` Summary Scorecard + YES sheet; Lake Trading validation workbook `docs/Lake Trading  Toolkit (RCOGP).xlsx` (verified 2026-05-21).
+
+### 16.1 What YES is (all 6 generic codes + Construction + Transport)
+
+| Aspect | Canonical truth | Ledger / code |
+|---|---|---|
+| Pillar max points | **0** — YES is not a scored pillar in the 120/108/140/… grand total | `sectorConfig.ts` → `yesInitiative.maxPoints: 0` ✓ |
+| Primary reward | **Level uplift** after sub-minimum discounting | Toolkit `calculateYESScore` → `yesBeeLevelIncrease` ✓ |
+| Secondary reward (Tier 2 only) | **+3 bonus points** added to the points total (not to the 120 max) | Toolkit store adds `yesBonusPoints` to total when Tier 2 achieved ✓ |
+| Qualification gate | 40% sub-min on all priority elements **or** 50% average (35/70); maintain prior level | Excel YES sheet rows 6–14 |
+
+### 16.2 Tier rewards (RCOGP Generic — training pack slide 123)
+
+| Achievement | Level improvement | Bonus points |
+|---|---|---|
+| 1× YES headcount target + 2.5% absorption | +1 level | 0 |
+| 1.5× YES headcount target + 5% absorption | +1 level | **+3** |
+| 2× YES headcount target + 5% absorption | +2 levels | 0 |
+
+Level uplift applies **after** sub-minimum discounting. Bonus points apply **only** when Tier 2 (1.5× + 5% absorption) is achieved **and** the entity qualifies for YES.
+
+### 16.3 How the Empower / RCOGP Excel toolkit displays YES
+
+The Summary Scorecard has **two separate rows** below the seven scored pillars:
+
+1. **Grand total** — sum of Ownership + MC + Skills + PP + SD + ED + SED (max **120** for RCOGP Generic).
+2. **YES points** — a follow-on row whose *Actual* column mirrors the formula **Current pillar points + YES bonus points** (column header: *Current Points + YES Points*).
+
+When no YES bonus applies, both rows show the **same number**. This is **not** double-counting — the YES row is a display convention, not an extra pillar.
+
+The **Scorecard Calculations** sheet exposes the bonus explicitly: row **YES Points** = **0** when YES is not achieved; column **YES Achieved?** = **No**.
+
+### 16.4 Lake Trading (Silver Lake Trading 447) — verified YES state
+
+Source: `docs/Lake Trading  Toolkit (RCOGP).xlsx`, measurement period 01 Mar 2025 – 28 Feb 2026.
+
+| Field | Excel value | Meaning |
+|---|---|---|
+| Grand total (7 pillars) | **63.56** / 120 | Pillar sum only — ground truth §17 ✓ |
+| YES Achieved? | **No** | No YES programme in measurement period |
+| Qualify for YES? | **No** | 50% priority-element average not met (`#VALUE!` on YES sheet) |
+| YES Points (bonus) | **0** | Scorecard Calculations sheet |
+| Current Points + YES Points | **63.56** | 63.56 + 0 — same as grand total |
+| YES Level | Level 8 | Matches discounted level (not an uplift) |
+
+**Lake Trading totals:**
+
+| Total | Points | Level |
+|---|---|---|
+| **Without YES bonus** (pillar sum) | **63.56** / 120 | 7 (discounted **8**) |
+| **With YES bonus** (if Tier 2 achieved) | **66.56** / 123 | Would be 7 + uplift rules — **not applicable** to Lake data |
+| **Actual Lake Trading** | **63.56** / 120 | 7 (discounted **8**) — YES bonus = 0 |
+
+No YES candidates appear in Lake demo data (`lakeTradingDemo.ts`: `yesCandidatesCount: 0`). The workbook fixture has no YES section rows. **No code change is required** for Lake Trading scoring — exclusion of YES bonus is correct for this dataset.
+
+### 16.5 Common sources of confusion
+
+| Source | What users see | Actual meaning |
+|---|---|---|
+| Excel Summary "YES points" row | Same 63.56 as Grand total | Formula output when bonus = 0, not a missing pillar |
+| Excel "Current Points + YES Points" header | 63.56 in Lake case | Base points + 0 bonus, not base − bonus |
+| Ledger §1 matrix `YES Initiative: 0` | Looks like YES is ignored | Correct — 0 max pillar points; bonus is conditional |
+| Toolkit Sidebar `target: 3` on YES | Implies 3 scored pillar points | Display tier reference only; `sectorConfig` maxPoints stays 0 |
+| `DocumentProcessor.tsx` comment "YES: 5 pts" | Stale comment | Wrong — ignore; see `YES_INITIATIVE_CLARIFICATION.md` |
+
+See also: `docs/YES_INITIATIVE_CLARIFICATION.md` for full audit trail and code references.
+
+---

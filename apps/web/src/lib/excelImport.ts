@@ -1518,6 +1518,71 @@ function parseManagementRows(matrix: SheetMatrix): WorkbookRow[] {
   });
 }
 
+function pctForWorkbook(value: number | undefined): number | "" {
+  if (value == null || !Number.isFinite(value)) return "";
+  return value <= 1 ? Math.round(value * 10000) / 100 : Math.round(value * 100) / 100;
+}
+
+/** Stamp extracted ownership totals onto sheet rows (trusts / corps often have blank race). */
+function applyExtractedOwnershipToRows(
+  data: ExtractedCompanyData,
+  tiers: OwnershipChainTier[],
+  rows: WorkbookRow[],
+): WorkbookRow[] {
+  const blackOwn = data.blackOwnership;
+  const blackWomen = data.blackWomenOwnership;
+  if (blackOwn == null && tiers.length === 0) return rows;
+
+  const hasExplicitBlack = rows.some((r) => {
+    const explicit = (r as Record<string, unknown>).blackOwnership;
+    return explicit != null && Number(explicit) > 0;
+  });
+  if (hasExplicitBlack) return rows;
+
+  const tier0 = tiers[0];
+  const blackPct = pctForWorkbook(tier0?.blackVotingRights ?? blackOwn);
+  const womenPct = pctForWorkbook(tier0?.blackWomenVotingRights ?? blackWomen);
+  const eiPct = pctForWorkbook(tier0?.blackEconomicInterest ?? blackOwn);
+  const sharePct = pctForWorkbook(tier0?.ownershipInNextTier ?? 100);
+
+  if (rows.length > 0) {
+    return rows.map((r, i) => {
+      if (i !== 0) return r;
+      const row = { ...r } as Record<string, unknown>;
+      if (blackPct !== "") {
+        row.blackOwnership = typeof blackPct === "number" ? blackPct : blackOwn;
+        row.blackWomenOwnership =
+          womenPct !== "" ? (typeof womenPct === "number" ? womenPct : blackWomen) : blackWomen ?? 0;
+        if (!row.votingRights) row.votingRights = blackPct;
+        if (!row.economicInterest) row.economicInterest = eiPct !== "" ? eiPct : blackPct;
+        if (!row.shareholding) row.shareholding = sharePct !== "" ? sharePct : blackPct;
+      }
+      return row as WorkbookRow;
+    });
+  }
+
+  const entityName =
+    tier0?.entityName?.trim() || data.companyName?.trim() || "Measured entity";
+  return [
+    {
+      _id: uuidv4(),
+      shareholderName: entityName,
+      idNumber: "",
+      race: "",
+      gender: "",
+      votingRights: blackPct !== "" ? blackPct : 100,
+      economicInterest: eiPct !== "" ? eiPct : blackPct !== "" ? blackPct : 100,
+      shareholding: sharePct !== "" ? sharePct : 100,
+      isDisabled: false,
+      isYouth: false,
+      modifiedFlowThrough: false,
+      blackOwnership: typeof blackPct === "number" ? blackPct : blackOwn ?? 0,
+      blackWomenOwnership:
+        typeof womenPct === "number" ? womenPct : blackWomen ?? 0,
+    },
+  ];
+}
+
 function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
   return parseGridRows(matrix, ["name", "race", "job"], (row, headers) => {
     const nameIdx = colIdx(headers, "namesurname", "name");
@@ -1545,6 +1610,7 @@ function parseEmployeeRows(matrix: SheetMatrix): WorkbookRow[] {
 export function mapExtractedToWorkbookSections(
   data: ExtractedCompanyData,
   wb?: XLSX.WorkBook,
+  ownershipChainTiers: OwnershipChainTier[] = [],
 ): WorkbookSectionsInput {
   const sections: WorkbookSectionsInput = {
     "company-information": { rows: [], meta: {} },
@@ -1601,6 +1667,16 @@ export function mapExtractedToWorkbookSections(
     if (eeSheet) {
       sections.employees.rows = parseEmployeeRows(sheetMatrix(wb, eeSheet));
     }
+  }
+
+  sections.ownership.rows = applyExtractedOwnershipToRows(
+    data,
+    ownershipChainTiers,
+    sections.ownership.rows,
+  );
+
+  if (sections.employees.rows.length === 0 && sections["management-control"].rows.length > 0) {
+    sections.employees.rows = [...sections["management-control"].rows];
   }
 
   return sections;
@@ -1675,7 +1751,11 @@ export async function importBeeGatheringExcel(
     cellNF: false,
     cellStyles: false,
   });
-  const sections = mapExtractedToWorkbookSections(extraction.data, wb);
+  const sections = mapExtractedToWorkbookSections(
+    extraction.data,
+    wb,
+    extraction.ownershipChainTiers,
+  );
   const validationIssues = validateWorkbook(sections);
   const criticalBlocked = validationIssues.some(
     (issue) =>

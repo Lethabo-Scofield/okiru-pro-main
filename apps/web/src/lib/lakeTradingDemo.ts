@@ -233,7 +233,11 @@ export const lakeTradingPillars: BuildPillarsData = {
   },
 };
 
-/** SCORECARD_GROUND_TRUTH.md §7 (MC shows Excel value; live Toolkit MC may differ by ~0.02). */
+/**
+ * SCORECARD_GROUND_TRUTH.md §17 (MC shows Excel value; live Toolkit MC may differ by ~0.02).
+ * YES bonus: 0 for Lake (Qualify for YES? = No in Excel). Total with/without YES = 63.56.
+ * Hypothetical Tier-2 YES bonus would be 66.56 — see docs/YES_INITIATIVE_CLARIFICATION.md.
+ */
 export const lakeTradingExpectedScores = {
   ownership: 25,
   managementControl: 11.77,
