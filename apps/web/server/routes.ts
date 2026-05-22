@@ -949,6 +949,8 @@ export async function registerRoutes(
         workspaceId: inv.workspaceId,
         email: inv.email,
         role: inv.role,
+        displayRole: inv.displayRole ?? null,
+        pillarScopes: inv.pillarScopes ?? [],
         invitedByUserId: inv.invitedByUserId,
         expiresAt: inv.expiresAt,
         acceptedAt: inv.acceptedAt,
@@ -980,7 +982,35 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You cannot invite people to this team." });
       }
       const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
-      const role = req.body?.role as WorkspaceRole;
+      const displayRole = req.body?.displayRole as string | undefined;
+      const rawPillarScopes = req.body?.pillarScopes;
+
+      // Map display role to system role
+      const DISPLAY_ROLE_MAP: Record<string, WorkspaceRole> = {
+        admin: "collaborator",
+        contributor: "collaborator",
+        reviewer: "viewer",
+        viewer: "viewer",
+      };
+      const validDisplayRoles = ["admin", "contributor", "reviewer", "viewer"];
+
+      let role: WorkspaceRole;
+      if (displayRole && validDisplayRoles.includes(displayRole)) {
+        role = DISPLAY_ROLE_MAP[displayRole];
+      } else if (req.body?.role === "collaborator" || req.body?.role === "viewer") {
+        // Backwards-compat: accept legacy role field
+        role = req.body.role as WorkspaceRole;
+      } else {
+        await recordAudit(req, {
+          action: "workspace.invite.create",
+          resourceType: "workspace_invite",
+          resourceId: workspaceId,
+          result: "failure",
+          metadata: { reason: "invalid_role", workspaceId, role: String(displayRole ?? req.body?.role) },
+        });
+        return res.status(400).json({ message: "Invalid invite role. Use: admin, contributor, reviewer, or viewer" });
+      }
+
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         await recordAudit(req, {
           action: "workspace.invite.create",
@@ -991,15 +1021,14 @@ export async function registerRoutes(
         });
         return res.status(400).json({ message: "Valid email is required" });
       }
-      if (role !== "collaborator" && role !== "viewer") {
-        await recordAudit(req, {
-          action: "workspace.invite.create",
-          resourceType: "workspace_invite",
-          resourceId: workspaceId,
-          result: "failure",
-          metadata: { reason: "invalid_role", workspaceId, role: String(role) },
-        });
-        return res.status(400).json({ message: "Invalid invite role" });
+
+      // Validate pillar scopes for contributor role
+      let pillarScopes: string[] | undefined;
+      if (displayRole === "contributor") {
+        if (!Array.isArray(rawPillarScopes) || rawPillarScopes.length === 0) {
+          return res.status(400).json({ message: "Contributors must have at least one pillar selected." });
+        }
+        pillarScopes = (rawPillarScopes as string[]).filter((k) => typeof k === "string" && k.trim().length > 0);
       }
 
       // Block self-invite
@@ -1050,6 +1079,8 @@ export async function registerRoutes(
         workspaceId,
         email,
         role,
+        ...(displayRole ? { displayRole } : {}),
+        ...(pillarScopes?.length ? { pillarScopes } : {}),
         invitedByUserId: inviterId,
       });
 
@@ -1084,12 +1115,16 @@ export async function registerRoutes(
       });
 
       // Never echo the raw token in the listing payload ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â clients use the email link.
+      // Return token in creation response so the inviter can copy the link immediately.
       return res.json({
         invite: {
           id: invite.id,
           workspaceId: invite.workspaceId,
           email: invite.email,
           role: invite.role,
+          displayRole: invite.displayRole ?? null,
+          pillarScopes: invite.pillarScopes ?? [],
+          token: invite.token,
           invitedByUserId: invite.invitedByUserId,
           expiresAt: invite.expiresAt,
           acceptedAt: invite.acceptedAt,
@@ -1223,7 +1258,7 @@ export async function registerRoutes(
       // Idempotent: if already a member, just mark accepted.
       const existing = await storage.getMember(inv.workspaceId, userId);
       if (!existing) {
-        await storage.addMember(inv.workspaceId, userId, inv.role);
+        await storage.addMember(inv.workspaceId, userId, inv.role, { pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined, displayRole: inv.displayRole });
       }
       await storage.acceptInvite(token);
       await recordAudit(req, {

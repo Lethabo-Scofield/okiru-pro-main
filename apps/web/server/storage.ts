@@ -173,16 +173,16 @@ export interface IStorage {
   listWorkspacesForUser(userId: string): Promise<Array<Workspace & { role: WorkspaceRole }>>;
   getMember(workspaceId: string, userId: string): Promise<WorkspaceMember | undefined>;
   listMembers(workspaceId: string): Promise<WorkspaceMember[]>;
-  addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember>;
+  addMember(workspaceId: string, userId: string, role: WorkspaceRole, opts?: { pillarScopes?: string[]; displayRole?: string }): Promise<WorkspaceMember>;
   updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined>;
   updateWorkspaceMember(
     workspaceId: string,
     userId: string,
-    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null; displayRole?: string | null },
   ): Promise<WorkspaceMember | undefined>;
   removeMember(workspaceId: string, userId: string): Promise<boolean>;
 
-  createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite>;
+  createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; displayRole?: string; pillarScopes?: string[]; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite>;
   getInviteByToken(token: string): Promise<WorkspaceInvite | undefined>;
   listInvites(workspaceId: string): Promise<WorkspaceInvite[]>;
   findActivePendingInvite(workspaceId: string, email: string): Promise<WorkspaceInvite | undefined>;
@@ -597,11 +597,13 @@ export class MemoryStorage implements IStorage {
       .sort((a, b) => +new Date(a.joinedAt) - +new Date(b.joinedAt));
   }
 
-  async addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
+  async addMember(workspaceId: string, userId: string, role: WorkspaceRole, opts?: { pillarScopes?: string[]; displayRole?: string }): Promise<WorkspaceMember> {
     const key = `${workspaceId}:${userId}`;
     const existing = this.workspaceMembers.get(key);
     if (existing) {
       existing.role = role;
+      if (opts?.displayRole) (existing as any).displayRole = opts.displayRole;
+      if (opts?.pillarScopes) existing.pillarScopes = opts.pillarScopes;
       return existing;
     }
     const m: WorkspaceMember = {
@@ -609,6 +611,8 @@ export class MemoryStorage implements IStorage {
       workspaceId,
       userId,
       role,
+      ...(opts?.displayRole ? { displayRole: opts.displayRole as any } : {}),
+      ...(opts?.pillarScopes?.length ? { pillarScopes: opts.pillarScopes } : {}),
       joinedAt: new Date(),
     };
     this.workspaceMembers.set(key, m);
@@ -636,13 +640,15 @@ export class MemoryStorage implements IStorage {
     return this.workspaceMembers.delete(`${workspaceId}:${userId}`);
   }
 
-  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
+  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; displayRole?: string; pillarScopes?: string[]; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
     const ttlDays = invite.ttlDays ?? 14;
     const inv: WorkspaceInvite = {
       id: `inv_${crypto.randomBytes(8).toString("hex")}`,
       workspaceId: invite.workspaceId,
       email: invite.email.toLowerCase(),
       role: invite.role,
+      ...(invite.displayRole ? { displayRole: invite.displayRole as any } : {}),
+      ...(invite.pillarScopes?.length ? { pillarScopes: invite.pillarScopes } : {}),
       token: crypto.randomBytes(24).toString("base64url"),
       invitedByUserId: invite.invitedByUserId,
       expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
@@ -1258,7 +1264,10 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
+  async addMember(workspaceId: string, userId: string, role: WorkspaceRole, opts?: { pillarScopes?: string[]; displayRole?: string }): Promise<WorkspaceMember> {
+    const $set: Record<string, unknown> = { role };
+    if (opts?.displayRole) $set.displayRole = opts.displayRole;
+    if (opts?.pillarScopes?.length) $set.pillarScopes = opts.pillarScopes;
     const doc = await WorkspaceMemberModel.findOneAndUpdate(
       { workspaceId, userId },
       {
@@ -1268,12 +1277,17 @@ export class DatabaseStorage implements IStorage {
           userId,
           joinedAt: new Date(),
         },
-        $set: { role },
+        $set,
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
     const obj = doc.toJSON() as any;
-    return { id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role, joinedAt: obj.joinedAt };
+    return {
+      id: obj.id, workspaceId: obj.workspaceId, userId: obj.userId, role: obj.role,
+      ...(obj.displayRole ? { displayRole: obj.displayRole } : {}),
+      ...(Array.isArray(obj.pillarScopes) ? { pillarScopes: obj.pillarScopes } : {}),
+      joinedAt: obj.joinedAt,
+    };
   }
 
   async updateMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember | undefined> {
@@ -1316,13 +1330,15 @@ export class DatabaseStorage implements IStorage {
     return (result.deletedCount || 0) > 0;
   }
 
-  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
+  async createInvite(invite: { workspaceId: string; email: string; role: WorkspaceRole; displayRole?: string; pillarScopes?: string[]; invitedByUserId: string; ttlDays?: number }): Promise<WorkspaceInvite> {
     const ttlDays = invite.ttlDays ?? 14;
     const doc = await WorkspaceInviteModel.create({
       inviteId: `inv_${crypto.randomBytes(8).toString("hex")}`,
       workspaceId: invite.workspaceId,
       email: invite.email.toLowerCase(),
       role: invite.role,
+      ...(invite.displayRole ? { displayRole: invite.displayRole } : {}),
+      ...(invite.pillarScopes?.length ? { pillarScopes: invite.pillarScopes } : {}),
       token: crypto.randomBytes(24).toString("base64url"),
       invitedByUserId: invite.invitedByUserId,
       expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
@@ -1333,6 +1349,8 @@ export class DatabaseStorage implements IStorage {
     const obj = doc.toJSON() as any;
     return {
       id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      ...(obj.displayRole ? { displayRole: obj.displayRole } : {}),
+      ...(Array.isArray(obj.pillarScopes) ? { pillarScopes: obj.pillarScopes } : {}),
       token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
       acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
     };
@@ -1344,6 +1362,8 @@ export class DatabaseStorage implements IStorage {
     const obj = doc.toJSON() as any;
     return {
       id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+      ...(obj.displayRole ? { displayRole: obj.displayRole } : {}),
+      ...(Array.isArray(obj.pillarScopes) ? { pillarScopes: obj.pillarScopes } : {}),
       token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
       acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
     };
@@ -1355,6 +1375,8 @@ export class DatabaseStorage implements IStorage {
       const obj = d.toJSON();
       return {
         id: obj.id, workspaceId: obj.workspaceId, email: obj.email, role: obj.role,
+        ...(obj.displayRole ? { displayRole: obj.displayRole } : {}),
+        ...(Array.isArray(obj.pillarScopes) ? { pillarScopes: obj.pillarScopes } : {}),
         token: obj.token, invitedByUserId: obj.invitedByUserId, expiresAt: obj.expiresAt,
         acceptedAt: obj.acceptedAt, revokedAt: obj.revokedAt, createdAt: obj.createdAt,
       };
