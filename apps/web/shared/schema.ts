@@ -21,6 +21,14 @@ export interface CalculatorConfig {
     netValueMax: number;
     targetEconomicInterest: number;
     subMinNetValue: number;
+    /** Sector-specific targets — populated by sectorConfigToCalculatorConfig */
+    votingRightsTarget?: number;
+    womenVotingTarget?: number;
+    womenEIMax?: number;
+    womenEITarget?: number;
+    newEntrantsMax?: number;
+    designatedGroupsMax?: number;
+    designatedGroupsTarget?: number;
   };
   management: {
     boardBlackTarget: number;
@@ -132,15 +140,15 @@ export interface CalculatorConfig {
   recognitionTable?: { level: number; multiplier: number }[];
   levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;
   pillarConfigs?: {
-    ownership?: { maxPoints: number; subMinimumPercent?: number };
-    managementControl?: { maxPoints: number; subMinimumPercent?: number };
-    employmentEquity?: { maxPoints: number };
-    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number };
-    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number };
-    socioEconomicDevelopment?: { maxPoints: number };
-    yesInitiative?: { maxPoints: number };
+    ownership?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    managementControl?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    employmentEquity?: { maxPoints: number; chooseOneGroup?: string };
+    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    socioEconomicDevelopment?: { maxPoints: number; chooseOneGroup?: string };
+    yesInitiative?: { maxPoints: number; chooseOneGroup?: string };
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];
@@ -153,6 +161,7 @@ export interface User {
   fullName: string | null;
   email: string | null;
   role: string | null;
+  secondaryRoles?: string[];
   organizationId: string | null;
   organizationName: string | null;
   profilePicture: string | null;
@@ -247,6 +256,7 @@ const userSchema = new Schema(
     fullName: { type: String, default: null },
     email: { type: String, default: null },
     role: { type: String, default: "user" },
+    secondaryRoles: { type: [String], default: [] },
     organizationId: { type: String, default: null },
     organizationName: { type: String, default: null },
     profilePicture: { type: String, default: null },
@@ -452,6 +462,8 @@ export interface InsertClient {
 }
 
 const clientSchema = new Schema({
+  /** Aligns with API `clients.id` unique index — set equal to clientId on create. */
+  id: { type: String, default: null, sparse: true, unique: true },
   clientId: { type: String, required: true, unique: true, index: true },
   name: { type: String, required: true },
   financialYear: { type: String, default: () => new Date().getFullYear().toString() },
@@ -486,6 +498,7 @@ const clientSchema = new Schema({
   contactEmail: { type: String, default: null },
   contactPhone: { type: String, default: null },
   sectorCode: { type: String, default: 'RCOGP' },
+  scorecardType: { type: String, default: 'Generic' },
   industry: { type: String, default: 'Other' },
   companySize: { type: String, default: 'Generic' },
   annualTurnover: { type: Number, default: 0 },
@@ -498,6 +511,8 @@ const clientSchema = new Schema({
   verificationAgency: { type: String, default: null },
   financials: { type: Schema.Types.Mixed, default: null },
   pillars: { type: Schema.Types.Mixed, default: null },
+  /** Platform demo workbook (Lake Trading ground truth); visible to super_admin only. */
+  lakeTradingDemo: { type: Boolean, default: false, index: true },
 });
 
 clientSchema.set("toJSON", {

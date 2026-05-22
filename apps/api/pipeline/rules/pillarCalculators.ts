@@ -910,9 +910,14 @@ function calcTransportLargeOwnership(
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }
 
-function calcTransportLargeManagementAndEE(employees: EmployeeInput[], cfg: SectorConfig): PillarScore {
+// Super Admin Fix Plan §1.3 + §3.1 T1–T4 — Transport Large now has two
+// separate pillars (MC 11 + EE 18 = 29). Previously these were combined and
+// returned as a single management pillar of 29. We split into MC and EE
+// helpers so Super Admin can render them independently and the engine
+// reports them as separate pillar scores.
+function calcTransportLargeManagementControl(employees: EmployeeInput[], cfg: SectorConfig): PillarScore {
   const maxTotal = cfg.pillarConfigs.managementControl.maxPoints;
-  const eeCfg = cfg.targets.employmentEquity;
+  if (maxTotal <= 0) return { score: 0, maxPoints: 0, subMinimumMet: true };
 
   const grouped: Record<string, EmployeeInput[]> = {};
   for (const emp of employees) {
@@ -929,10 +934,6 @@ function calcTransportLargeManagementAndEE(employees: EmployeeInput[], cfg: Sect
   const exec = [...(grouped['Executive'] || []), ...(grouped['Executive Director'] || [])];
   const senior = grouped['Senior'] || [];
   const middle = grouped['Middle'] || [];
-  const junior = grouped['Junior'] || [];
-  const semiSkilled = grouped['Semi-skilled'] || [];
-  const unskilled = grouped['Unskilled'] || [];
-  const allNonForeign = employees.filter(e => !e.isForeign);
 
   let mc = 0;
   mc += clampScore(safeRatio(pct(board, countB), 0.5, 1.5), 1.5);
@@ -943,7 +944,33 @@ function calcTransportLargeManagementAndEE(employees: EmployeeInput[], cfg: Sect
   mc += clampScore(safeRatio(pct(senior, countBW), 0.2, 1.5), 1.5);
   mc += clampScore(safeRatio(pct(middle, countB), 0.4, 1), 1);
   mc += clampScore(safeRatio(pct(middle, countBW), 0.2, 1), 1);
-  mc += clampScore(safeRatio(pct(board, countB), 0.4, 1), 1);
+  mc += clampScore(safeRatio(pct(board, countB), 0.4, 1), 1); // Bonus Independent NEDs
+
+  return { score: r2(clampScore(mc, maxTotal)), maxPoints: maxTotal, subMinimumMet: true };
+}
+
+function calcTransportLargeEmploymentEquity(employees: EmployeeInput[], cfg: SectorConfig): PillarScore {
+  const maxTotal = cfg.pillarConfigs.employmentEquity?.maxPoints ?? 0;
+  if (maxTotal <= 0) return { score: 0, maxPoints: 0, subMinimumMet: true };
+  const eeCfg = cfg.targets.employmentEquity;
+
+  const grouped: Record<string, EmployeeInput[]> = {};
+  for (const emp of employees) {
+    if (emp.isForeign) continue;
+    (grouped[emp.designation] ??= []).push(emp);
+  }
+
+  const countB = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race)).length;
+  const countBW = (emps: EmployeeInput[]) => emps.filter(e => isBlack(e.race) && e.gender === 'Female').length;
+  const pct = (emps: EmployeeInput[], fn: (e: EmployeeInput[]) => number) =>
+    emps.length > 0 ? fn(emps) / emps.length : 0;
+
+  const senior = grouped['Senior'] || [];
+  const middle = grouped['Middle'] || [];
+  const junior = grouped['Junior'] || [];
+  const semiSkilled = grouped['Semi-skilled'] || [];
+  const unskilled = grouped['Unskilled'] || [];
+  const allNonForeign = employees.filter(e => !e.isForeign);
 
   let ee = 0;
   ee += clampScore(safeRatio(pct(senior, countB), 0.43, 2.5), 2.5);
@@ -978,8 +1005,7 @@ function calcTransportLargeManagementAndEE(employees: EmployeeInput[], cfg: Sect
     : 0;
   ee += bonusEE;
 
-  const total = clampScore(mc + ee, maxTotal);
-  return { score: r2(total), maxPoints: maxTotal, subMinimumMet: true };
+  return { score: r2(clampScore(ee, maxTotal)), maxPoints: maxTotal, subMinimumMet: true };
 }
 
 function calcTransportLargeSkills(
@@ -1118,13 +1144,15 @@ export function calculateAllPillars(
       ? calcTransportLargeOwnership(shareholders, financials, config)
       : calcOwnership(shareholders, financials, config);
     management = isTransportLargeGeneric(config)
-      ? calcTransportLargeManagementAndEE(employees, config)
+      ? calcTransportLargeManagementControl(employees, config)
       : calcManagement(employees, config, inputs.province);
-    employmentEquity = {
-      score: 0,
-      maxPoints: config.pillarConfigs.employmentEquity?.maxPoints ?? 0,
-      subMinimumMet: true,
-    };
+    employmentEquity = isTransportLargeGeneric(config)
+      ? calcTransportLargeEmploymentEquity(employees, config)
+      : {
+          score: 0,
+          maxPoints: config.pillarConfigs.employmentEquity?.maxPoints ?? 0,
+          subMinimumMet: true,
+        };
     skills = isTransportLargeGeneric(config)
       ? calcTransportLargeSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config)
       : calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config);

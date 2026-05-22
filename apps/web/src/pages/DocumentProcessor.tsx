@@ -26,7 +26,7 @@ import { AssessmentSnapshotsPanel } from '@/components/AssessmentSnapshotsPanel'
 import { filterScorecardPillarRows, filterSubMinimumsByScope, sumPillarRows, canMergeExtractedPillarForScopes } from '@/lib/pillarScopeUi';
 import { normalizeSectorCodeForExtraction } from '@/lib/bbeeSectorCodes';
 import { BuildPopulateUploadDialog } from '@/components/build/BuildPopulateUploadDialog';
-import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore, getPreferredWorkspaceId, loadAssessmentData } from '@/lib/foundationApi';
+import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore, getPreferredWorkspaceId, loadAssessmentData, toolkitClientToClientInfo, toolkitClientToFinancials, mapClientDataToBuildPillars } from '@/lib/foundationApi';
 import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import {
@@ -1243,6 +1243,19 @@ export default function DocumentProcessor() {
   const [integratedToolkitUpload, setIntegratedToolkitUpload] = useState(false);
   const [buildPopulateUploadOpen, setBuildPopulateUploadOpen] = useState(false);
   const [buildPopulateUploadNonce, setBuildPopulateUploadNonce] = useState(0);
+  // "Load from client" picker for manual build flow (Gap 2)
+  const [buildClientPickerOpen, setBuildClientPickerOpen] = useState(false);
+  const [buildClientPickerClients, setBuildClientPickerClients] = useState<{ clientId: string; name: string }[]>([]);
+  const [buildClientPickerLoading, setBuildClientPickerLoading] = useState(false);
+  const [buildClientPickerSearch, setBuildClientPickerSearch] = useState('');
+  const [loadingClientData, setLoadingClientData] = useState(false);
+  // "Select existing client" for upload flow company-info step (Gap 3)
+  const [uploadClientPickerOpen, setUploadClientPickerOpen] = useState(false);
+  const [uploadClientPickerClients, setUploadClientPickerClients] = useState<{ clientId: string; name: string }[]>([]);
+  const [uploadClientPickerLoading, setUploadClientPickerLoading] = useState(false);
+  const [uploadClientPickerSearch, setUploadClientPickerSearch] = useState('');
+  const [uploadLinkedClientId, setUploadLinkedClientId] = useState<string | null>(null);
+  const [uploadLinkedClientName, setUploadLinkedClientName] = useState<string | null>(null);
   const [toolkitSectorCode, setToolkitSectorCode] = useState('');
   const [toolkitImportedFile, setToolkitImportedFile] = useState<File | null>(null);
   const [toolkitExtractionResult, setToolkitExtractionResult] = useState<ExtractionApiResult | null>(null);
@@ -1575,6 +1588,19 @@ export default function DocumentProcessor() {
       if (templateParam) {
         sessionStorage.setItem('bbee-last-template-id', templateParam);
       }
+
+      // Gap 5: ?mode=build or ?mode=upload from Information Request shortcut
+      const modeParam = params.get('mode');
+      if (modeParam === 'build') {
+        setFlowMode('build');
+        setIntegratedToolkitUpload(false);
+        setCurrentPage('build-foundation');
+      } else if (modeParam === 'upload') {
+        setFlowMode('upload');
+        setIntegratedToolkitUpload(true);
+        setCurrentPage('company-info');
+      }
+
       return;
     }
 
@@ -1927,6 +1953,45 @@ export default function DocumentProcessor() {
     }
   }, [currentPage, assessmentStorageSync, user?.id]);
 
+  // Gap 2: auto-load client data when ?client=<clientId> is in the URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const clientIdParam = params.get('client');
+    if (!clientIdParam) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/clients/${encodeURIComponent(clientIdParam)}/data`, { credentials: 'include' });
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const clientRec = data.client as any;
+        const newClientInfo = toolkitClientToClientInfo(clientRec);
+        const newFinancials = toolkitClientToFinancials(clientRec);
+        const realTmps = (data.procurement?.tmps as number) || 0;
+        if (realTmps > 0) {
+          newFinancials.tmps = realTmps;
+          newFinancials.tmpsInclusions = realTmps;
+          newFinancials.tmpsExclusions = 0;
+        }
+        const newPillars = mapClientDataToBuildPillars(data);
+        setFoundationData({ clientInfo: newClientInfo, financials: newFinancials });
+        setPillarData(prev => ({ ...prev, ...newPillars }));
+        setToolkitClientId(clientIdParam);
+        populatingClientIdRef.current = clientIdParam;
+        if (flowMode === 'build' && currentPage !== 'build-foundation') {
+          setCurrentPage('build-foundation');
+        }
+        toast({ title: `Loaded: ${clientRec.name}`, description: 'Foundation and pillar data pre-filled from client record.' });
+      } catch {
+        // ignore — user can fill manually
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const refreshAssessmentFromServer = useCallback(async () => {
     let aid: string | null = null;
     try {
@@ -1977,6 +2042,101 @@ export default function DocumentProcessor() {
     setBuildValues(prev => ({ ...prev, [entityId]: value }));
     setScorecardResult(null); // Invalidate previous results
   }, []);
+
+  // Gap 2: open client picker for manual build "Load from client"
+  const handleOpenBuildClientPicker = useCallback(async () => {
+    setBuildClientPickerOpen(true);
+    setBuildClientPickerSearch('');
+    setBuildClientPickerLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setBuildClientPickerClients(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setBuildClientPickerLoading(false);
+    }
+  }, []);
+
+  const handleLoadFromClientRecord = useCallback(async (clientId: string) => {
+    setBuildClientPickerOpen(false);
+    setLoadingClientData(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${encodeURIComponent(clientId)}/data`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const clientRec = data.client as any;
+      const newClientInfo = toolkitClientToClientInfo(clientRec);
+      const newFinancials = toolkitClientToFinancials(clientRec);
+      const realTmps = (data.procurement?.tmps as number) || 0;
+      if (realTmps > 0) {
+        newFinancials.tmps = realTmps;
+        newFinancials.tmpsInclusions = realTmps;
+        newFinancials.tmpsExclusions = 0;
+      }
+      const newPillars = mapClientDataToBuildPillars(data);
+      setFoundationData({ clientInfo: newClientInfo, financials: newFinancials });
+      setPillarData(prev => ({ ...prev, ...newPillars }));
+      setToolkitClientId(clientId);
+      populatingClientIdRef.current = clientId;
+      toast({ title: `Loaded: ${clientRec.name}`, description: 'Foundation and pillar data pre-filled from client record.' });
+    } catch (err: any) {
+      toast({ title: 'Load failed', description: err.message || 'Could not fetch client data.', variant: 'destructive' });
+    } finally {
+      setLoadingClientData(false);
+    }
+  }, [toast]);
+
+  // Gap 3: open client picker for upload flow company-info step
+  const handleOpenUploadClientPicker = useCallback(async () => {
+    setUploadClientPickerOpen(true);
+    setUploadClientPickerSearch('');
+    setUploadClientPickerLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setUploadClientPickerClients(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setUploadClientPickerLoading(false);
+    }
+  }, []);
+
+  const handleSelectUploadClient = useCallback(async (clientId: string, clientName: string) => {
+    setUploadClientPickerOpen(false);
+    setUploadLinkedClientId(clientId);
+    setUploadLinkedClientName(clientName);
+    setToolkitClientId(clientId);
+    populatingClientIdRef.current = clientId;
+    // Pre-fill basic company info from client record
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${encodeURIComponent(clientId)}/data`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const c = data.client as any;
+      setCompanyInfo(prev => ({
+        ...prev,
+        name: c.name || prev.name,
+        sector: c.sectorCode || prev.sector,
+        registrationNumber: c.registrationNumber || prev.registrationNumber,
+        annualTurnover: c.annualTurnover > 0 ? `R ${Number(c.annualTurnover).toLocaleString()}` : prev.annualTurnover,
+        employees: c.numberOfEmployees > 0 ? String(c.numberOfEmployees) : prev.employees,
+        address: c.physicalAddress || prev.address,
+        contactName: c.contactPerson || prev.contactName,
+        contactEmail: c.contactEmail || prev.contactEmail,
+        contactPhone: c.contactPhone || prev.contactPhone,
+      }));
+      toast({ title: `Linked: ${c.name}`, description: 'Company info pre-filled from existing client.' });
+    } catch {
+      // ignore — fields already cleared with name
+    }
+  }, [toast]);
 
   const handlePillarValidate = useCallback((pillarCode: string, isValid: boolean) => {
     setPillarValidation(prev => {
@@ -3458,6 +3618,42 @@ export default function DocumentProcessor() {
                     </p>
                   </div>
 
+                  {/* Gap 3: Select existing client for upload flow */}
+                  {flowMode === 'upload' && (
+                    <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                      <div className="px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                          <p className="text-[13px] font-medium text-white">
+                            {uploadLinkedClientId ? `Linked: ${uploadLinkedClientName}` : 'Select existing client (optional)'}
+                          </p>
+                          <p className="text-[11px] text-[#636366] mt-0.5">
+                            {uploadLinkedClientId
+                              ? 'Fields pre-filled — existing record will be updated, no duplicate created.'
+                              : 'Pre-fill from an existing client to avoid duplicates.'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {uploadLinkedClientId && (
+                            <button
+                              type="button"
+                              onClick={() => { setUploadLinkedClientId(null); setUploadLinkedClientName(null); setToolkitClientId(null); populatingClientIdRef.current = null; }}
+                              className="px-3 py-1.5 rounded-lg bg-[#1c1c1e] text-[#8e8e93] hover:text-white text-[12px] smooth"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleOpenUploadClientPicker}
+                            className="px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-white smooth border border-[#2c2c2e]"
+                          >
+                            {uploadLinkedClientId ? 'Change' : 'Select client'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Card ── */}
                   <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
 
@@ -3733,8 +3929,118 @@ export default function DocumentProcessor() {
             />
           )}
 
+          {/* Gap 3: client picker dialog for upload flow "Select existing client" */}
+          {uploadClientPickerOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setUploadClientPickerOpen(false)}>
+              <div
+                className="w-full max-w-md rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="text-[15px] font-semibold text-white mb-1">Select existing client</h2>
+                <p className="text-[12px] text-[#8e8e93] mb-4">Link to an existing record to avoid duplicates.</p>
+                <input
+                  value={uploadClientPickerSearch}
+                  onChange={(e) => setUploadClientPickerSearch(e.target.value)}
+                  placeholder="Search clients…"
+                  className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] mb-3"
+                  autoFocus
+                />
+                {uploadClientPickerLoading ? (
+                  <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-6">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {uploadClientPickerClients
+                      .filter(c => c.name?.toLowerCase().includes(uploadClientPickerSearch.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.clientId}
+                          onClick={() => handleSelectUploadClient(c.clientId, c.name)}
+                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#0e0e10] hover:bg-[#2c2c2e] text-[13px] text-white smooth"
+                        >
+                          <Building2 className="h-4 w-4 text-[#636366] shrink-0" />
+                          <div>
+                            <div className="font-medium">{c.name}</div>
+                            <div className="text-[11px] text-[#636366]">{c.clientId}</div>
+                          </div>
+                        </button>
+                      ))}
+                    {uploadClientPickerClients.filter(c => c.name?.toLowerCase().includes(uploadClientPickerSearch.toLowerCase())).length === 0 && (
+                      <p className="text-[13px] text-[#636366] py-4 text-center">No clients found.</p>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setUploadClientPickerOpen(false)}
+                  className="mt-4 w-full py-2 rounded-lg bg-[#2c2c2e] text-[#8e8e93] hover:text-white text-[13px] smooth"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Gap 2: client picker dialog for "Load from client" in manual build */}
+          {buildClientPickerOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setBuildClientPickerOpen(false)}>
+              <div
+                className="w-full max-w-md rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="text-[15px] font-semibold text-white mb-1">Load from client</h2>
+                <p className="text-[12px] text-[#8e8e93] mb-4">Select an existing client to pre-fill all form fields.</p>
+                <input
+                  value={buildClientPickerSearch}
+                  onChange={(e) => setBuildClientPickerSearch(e.target.value)}
+                  placeholder="Search clients…"
+                  className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] mb-3"
+                  autoFocus
+                />
+                {buildClientPickerLoading ? (
+                  <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-6">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {buildClientPickerClients
+                      .filter(c => c.name?.toLowerCase().includes(buildClientPickerSearch.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.clientId}
+                          onClick={() => handleLoadFromClientRecord(c.clientId)}
+                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#0e0e10] hover:bg-[#2c2c2e] text-[13px] text-white smooth"
+                        >
+                          <Building2 className="h-4 w-4 text-[#636366] shrink-0" />
+                          <div>
+                            <div className="font-medium">{c.name}</div>
+                            <div className="text-[11px] text-[#636366]">{c.clientId}</div>
+                          </div>
+                        </button>
+                      ))}
+                    {buildClientPickerClients.filter(c => c.name?.toLowerCase().includes(buildClientPickerSearch.toLowerCase())).length === 0 && (
+                      <p className="text-[13px] text-[#636366] py-4 text-center">No clients found.</p>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setBuildClientPickerOpen(false)}
+                  className="mt-4 w-full py-2 rounded-lg bg-[#2c2c2e] text-[#8e8e93] hover:text-white text-[13px] smooth"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {currentPage === 'build-foundation' && (
             <div className="max-w-5xl mx-auto w-full">
+              {loadingClientData && (
+                <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl bg-[#1c1c1e] text-[#8e8e93] text-[13px]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading client data…
+                </div>
+              )}
               <FoundationStep
                 data={foundationData}
                 onChange={setFoundationData}
@@ -3743,6 +4049,8 @@ export default function DocumentProcessor() {
                   setBuildPopulateUploadNonce((n) => n + 1);
                   setBuildPopulateUploadOpen(true);
                 }}
+                showLoadFromClient={flowMode === 'build'}
+                onLoadFromClient={handleOpenBuildClientPicker}
                 onNext={() => {
                   // Sync foundation data to companyInfo for backward compatibility
                   const clientInfo = foundationData.clientInfo;

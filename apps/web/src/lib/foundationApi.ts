@@ -823,6 +823,71 @@ export async function populateAndScoreFromEntities(
   });
 }
 
+/**
+ * Map GET /api/clients/:clientId/data response to BuildPillarsData.
+ * Reuses the pillar slices already returned by the endpoint.
+ */
+export function mapClientDataToBuildPillars(data: {
+  ownership?: { id?: string; shareholders?: any[]; companyValue?: number; outstandingDebt?: number; yearsHeld?: number };
+  management?: { employees?: any[] };
+  skills?: { leviableAmount?: number; trainingPrograms?: any[] };
+  procurement?: { tmps?: number; suppliers?: any[] };
+  esd?: { contributions?: any[] };
+  sed?: { contributions?: any[] };
+}): BuildPillarsData {
+  return {
+    ownership: {
+      id: data.ownership?.id || '',
+      clientId: '',
+      shareholders: data.ownership?.shareholders || [],
+      companyValue: data.ownership?.companyValue || 0,
+      outstandingDebt: data.ownership?.outstandingDebt || 0,
+      yearsHeld: data.ownership?.yearsHeld || 0,
+    } as any,
+    management: {
+      id: '',
+      clientId: '',
+      employees: data.management?.employees || [],
+    } as any,
+    skills: {
+      id: '',
+      clientId: '',
+      leviableAmount: data.skills?.leviableAmount || 0,
+      trainingPrograms: data.skills?.trainingPrograms || [],
+    } as any,
+    procurement: {
+      id: '',
+      clientId: '',
+      tmps: data.procurement?.tmps || 0,
+      suppliers: data.procurement?.suppliers || [],
+    } as any,
+    esd: {
+      id: '',
+      clientId: '',
+      contributions: data.esd?.contributions || [],
+      graduationBonus: false,
+      jobsCreatedBonus: false,
+    } as any,
+    sed: {
+      id: '',
+      clientId: '',
+      contributions: data.sed?.contributions || [],
+    } as any,
+    yes: {
+      id: '',
+      clientId: '',
+      totalEmployees: 0,
+      candidates: [],
+      yesYouthEnrolled: 0,
+      yesBlackYouthCount: 0,
+      yesBlackYouthPercentage: 0,
+      yesAbsorbedCount: 0,
+      yesAbsorptionRate: 0,
+      totalYesCost: 0,
+    } as any,
+  };
+}
+
 export default {
   syncFoundationToStore,
   syncFoundationFromStore,
@@ -834,6 +899,7 @@ export default {
   clientInfoToToolkitClient,
   toolkitClientToClientInfo,
   toolkitClientToFinancials,
+  mapClientDataToBuildPillars,
   inferEapProvinceFromAddress,
   mergeYesIntoSkills,
   populateAndScore,

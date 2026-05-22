@@ -12,7 +12,11 @@ import { getArangoDB, isArangoConnected } from '../../arango/connection.js';
 
 const logger = createLogger("Sectors");
 import { COLLECTIONS } from '../../arango/collections.js';
-import { listSectorConfigs, type SectorConfig } from '../../pipeline/sectorConfig.js';
+import {
+  enrichSectorApiPayload,
+  listSectorConfigs,
+  listSectorConfigsFull,
+} from '../../pipeline/sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 
 const router = Router();
@@ -47,11 +51,12 @@ router.get('/', async (_req: Request, res: Response) => {
           totalPoints: s.totalMaxPoints,
           pillarConfigs: s.pillarConfigs,
           targets: s.targets,
-          levelThresholds: s.levelThresholds
+          levelThresholds: s.levelThresholds,
+          indicators: s.indicators
         }
     `);
 
-    const sectors = await cursor.all();
+    const sectors = (await cursor.all()).map(enrichSectorApiPayload);
 
     // If no sectors found in ArangoDB, seed and retry
     if (sectors.length === 0) {
@@ -73,7 +78,7 @@ router.get('/', async (_req: Request, res: Response) => {
             levelThresholds: s.levelThresholds
           }
       `);
-      const seededSectors = await retryCursor.all();
+      const seededSectors = (await retryCursor.all()).map(enrichSectorApiPayload);
 
       return res.json({
         success: true,
@@ -133,13 +138,16 @@ router.get('/options', async (_req: Request, res: Response) => {
 
     const sectorGroups = await cursor.all();
 
-    // Map to dropdown format
+    // Map to dropdown format — FSC exposes planned sub-sector variants as advisory hint
     const options = sectorGroups.map(group => ({
       value: group.code,
       label: group.name || `${group.code} Sector Code`,
       code: group.code,
       hasQSE: group.hasQSE,
       availableTypes: group.types,
+      ...(group.code === 'FSC'
+        ? { availableVariants: ['Banks', 'LongTermInsurers', 'ShortTermInsurers', 'Others'] as const }
+        : {}),
     }));
 
     return res.json({
@@ -267,12 +275,7 @@ router.post('/seed', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 function getFallbackSectors() {
-  return listSectorConfigs().map(c => ({
-    code: c.code,
-    name: c.name,
-    type: c.type,
-    totalPoints: c.totalPoints,
-  }));
+  return listSectorConfigsFull();
 }
 
 function getFallbackSectorOptions() {
@@ -296,6 +299,9 @@ function getFallbackSectorOptions() {
     code: g.code,
     hasQSE: g.types.includes('QSE'),
     availableTypes: g.types,
+    ...(g.code === 'FSC'
+      ? { availableVariants: ['Banks', 'LongTermInsurers', 'ShortTermInsurers', 'Others'] as const }
+      : {}),
   }));
 }
 

@@ -15,13 +15,45 @@
  */
 
 import { createLogger } from '../src/logger.js';
+import {
+  CONSTRUCTION_QSE_SCORECARD,
+  CONSTRUCTION_CONTRACTOR_SCORECARD,
+  CONSTRUCTION_BEP_SCORECARD,
+  type ConstructionIndicator,
+} from './constructionIndicators.js';
+import {
+  getAllSectorPillarSubElements,
+  type PillarSubElement,
+} from './sectorSubElements.js';
 
 const logger = createLogger('SectorConfig');
+
+/** Map Construction indicator matrix rows → Super Admin / API `indicators` shape. */
+function mapConstructionIndicators(indicators: ConstructionIndicator[]): SectorIndicatorRow[] {
+  return indicators.map((ind) => ({
+    code: ind.code,
+    element: ind.element,
+    category: ind.category,
+    name: ind.name,
+    weight: ind.weight,
+    target: ind.target,
+    targetUnit: ind.targetUnit,
+    calculation: ind.calculation,
+  }));
+}
 
 export interface PillarConfig {
   maxPoints: number;
   hasSubMinimum: boolean;
   subMinimumPercent: number;
+  /**
+   * If set, this pillar belongs to a "choose one" elective group.
+   * Only the single highest-scoring pillar in the group counts toward the total.
+   * Transport QSE uses 'transport_qse_elective' for Skills Dev / PP / Enterprise Dev / SED.
+   */
+  chooseOneGroup?: string;
+  /** Ledger-aligned indicator rows for Super Admin display (Construction uses `indicators` instead). */
+  subElements?: PillarSubElement[];
 }
 
 export interface OwnershipTargets {
@@ -70,6 +102,12 @@ export interface EETargets {
   /** Black women disabled employees row (Transport Large sheet1) */
   disabledWomenMaxPts?: number;
   disabledWomenTarget?: number;
+  /** Transport Large — women equivalents per management band */
+  seniorBWMaxPts?: number;
+  middleBWMaxPts?: number;
+  juniorBWMaxPts?: number;
+  semiUnskilledWomenMaxPts?: number;
+  eapBonusMaxPts?: number;
 }
 
 export interface SkillsTargets {
@@ -144,11 +182,30 @@ export interface SedTargets {
   maxPts: number;
 }
 
+/**
+ * Super Admin Fix Plan §1.1 + §4.1 — Construction-style per-indicator scorecard
+ * rows surfaced for sectors whose `targets.*` legacy buckets don't map cleanly
+ * (e.g. Construction Sector Code). When present, Super Admin renders these
+ * rows directly instead of trying to derive them from `targets.*MaxPts`.
+ */
+export interface SectorIndicatorRow {
+  code: string;
+  element: string;
+  category: 'main' | 'bonus';
+  name: string;
+  weight: number;
+  target: number | string;
+  targetUnit: string;
+  calculation: string;
+}
+
 export interface SectorConfig {
   sectorCode: string;
   sectorName: string;
   scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
   totalMaxPoints: number; // Total points including YES if applicable
+  /** Optional indicator-level breakdown (Construction sectors). */
+  indicators?: SectorIndicatorRow[];
   pillarConfigs: {
     ownership: PillarConfig;
     managementControl: PillarConfig;
@@ -213,10 +270,11 @@ const TRANSPORT_LARGE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognit
   recognition,
 }));
 
-// Transport Sector QSE — 4 × 25-point pillars = 100 total (docs/Transport Codes.xlsx sheet2)
+// Transport Sector QSE — 107 total (82 compulsory + 25 chosen elective)
+// Thresholds scaled proportionally from STANDARD_LEVELS (base 120) to 107.
 const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognition }) => ({
   level,
-  minPoints: Math.round((minPoints * 100) / 120 * 100) / 100,
+  minPoints: Math.round((minPoints * 107) / 120 * 100) / 100,
   recognition,
 }));
 
@@ -254,20 +312,23 @@ export const STANDARD_RECOGNITION_TABLE: RecognitionLevel[] = [
 // Reference: Schedule 4.3 of the Codes
 // ---------------------------------------------------------------------------
 
+// ESD Benefit Factors verified against SCORECARD_GROUND_TRUTH.md Section 13
+// "ESD" columns (sdFactor/edFactor) = ESD applies to SD and ED
+// SED-specific factors differ but are handled separately in calcSed()
 const STANDARD_BENEFIT_FACTORS: BenefitFactor[] = [
-  { contributionType: 'grant', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'direct_cost', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'discounts', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'overhead_costs', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'interest_free_loan', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'standard_loan', sdFactor: 0.7, edFactor: 0.7 },
-  { contributionType: 'guarantees', sdFactor: 0.03, edFactor: 0.03 },
-  { contributionType: 'lower_interest_rate', sdFactor: 0.7, edFactor: 0.7 },
-  { contributionType: 'minority_investment', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'professional_services_free', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'professional_services_discounted', sdFactor: 0.8, edFactor: 0.8 },
-  { contributionType: 'employee_time', sdFactor: 1.0, edFactor: 1.0 },
-  { contributionType: 'shorter_payment_periods', sdFactor: 0.7, edFactor: 0.0 },
+  { contributionType: 'grant', sdFactor: 1.0, edFactor: 1.0 },          // Grant: 100% ✓
+  { contributionType: 'direct_cost', sdFactor: 1.0, edFactor: 1.0 },    // Direct Cost: 100% ✓
+  { contributionType: 'discounts', sdFactor: 1.0, edFactor: 1.0 },      // Discounts: 100% ✓
+  { contributionType: 'overhead_costs', sdFactor: 0.7, edFactor: 0.7 }, // Overhead: 70% (ESD); SED=80% handled separately
+  { contributionType: 'interest_free_loan', sdFactor: 0.7, edFactor: 0.7 }, // Interest-free loan: 70%
+  { contributionType: 'standard_loan', sdFactor: 0.5, edFactor: 0.5 },  // Standard loan (no security): 50%
+  { contributionType: 'guarantees', sdFactor: 0.03, edFactor: 0.03 },   // Guarantees: 3% of value ✓
+  { contributionType: 'lower_interest_rate', sdFactor: 0.0, edFactor: 0.0 }, // Prime - Actual rate (variable, calculated at runtime)
+  { contributionType: 'minority_investment', sdFactor: 0.7, edFactor: 0.7 }, // Minority investment in EME/QSE: 70%
+  { contributionType: 'professional_services_free', sdFactor: 0.6, edFactor: 0.6 }, // Prof services (no cost): 60% ESD
+  { contributionType: 'professional_services_discounted', sdFactor: 0.6, edFactor: 0.6 }, // Prof services (discount): 60% ESD
+  { contributionType: 'employee_time', sdFactor: 0.6, edFactor: 0.6 },  // Employee time/secondment: 60% ESD
+  { contributionType: 'shorter_payment_periods', sdFactor: 0.15, edFactor: 0.0 }, // Shorter payment terms: 15% of invoice (SD only)
   { contributionType: 'equity_investment', sdFactor: 0.0, edFactor: 1.0 },
 ];
 
@@ -343,10 +404,15 @@ export const RCOGP_GENERIC: SectorConfig = {
   },
   targets: {
     ownership: {
+      // Super Admin Fix Plan §3.3 R1 — RCOGP Ownership has a designated-group /
+      // ownership-schemes 3 pt indicator at 3% target (Ground Truth §3.1).
+      // Previously this row was missing, leaving the expanded view at 22 pts
+      // while the pillar header reported 25.
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
       economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.03, economicInterestDesignatedGroupMaxPts: 3,
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
@@ -427,11 +493,12 @@ export const ICT_GENERIC: SectorConfig = {
   },
   targets: {
     ownership: {
-      votingRightsTarget: 0.25, votingRightsMaxPts: 5, // Generic uses 25% + 1 vote
+      // GROUND TRUTH Section 4: ICT voting target = 30% (not 25%)
+      votingRightsTarget: 0.30, votingRightsMaxPts: 5,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
       economicInterestTarget: 0.25, economicInterestMaxPts: 5,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3, // 2% designated group
+      netValueMaxPts: 8, newEntrantsMaxPts: 3,
     },
     managementControl: {
       boardBlackTarget: 0.50, boardBlackMaxPts: 3, // 50% target
@@ -449,16 +516,18 @@ export const ICT_GENERIC: SectorConfig = {
       disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
     },
     skills: {
-      learningProgrammesMaxPts: 15, // 3% of leviable amount
-      bursaryMaxPts: 7, // 1% for black female
-      disabledLearningMaxPts: 3, // 0.15% for disabled
-      learnershipsMaxPts: 0, // Included in learning programmes
-      absorptionMaxPts: 5, // 1% absorption
+      // Super Admin Fix Plan §3.4 I1 — ICT Generic Skills rows must sum to 25
+      // (6+4+4+6+5), not 30 (Ground Truth §4 + extracted ICT Generic JSON).
+      learningProgrammesMaxPts: 6,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 6,
+      absorptionMaxPts: 5,
       overallSpendPercent: 3.0,
       bursarySpendPercent: 1.0,
       disabledSpendPercent: 0.15,
-      learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5, // 80% spend
@@ -512,25 +581,28 @@ export const FSC_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // FSC has different Other Exec targets: 75%/38% instead of 60%/30%
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
-      boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.50, execBlackMaxPts: 3,
-      execBWTarget: 0.25, execBWMaxPts: 1, // 25% (NOT 30%)
-      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10, // 75% (NOT 60%)
-      otherExecBWTarget: 0.38, otherExecBWMaxPts: 2, // 38% (NOT 30%)
+      // GROUND TRUTH Section 5: FSC MC breakdown: board 2+1, exec 2+1, other exec 10+4 = 20; + disabled 1 = 21
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,  // board: 2 pts black
+      boardBWTarget: 0.25, boardBWMaxPts: 1,         // board: 1 pt women
+      execBlackTarget: 0.50, execBlackMaxPts: 2,     // exec: 2 pts black
+      execBWTarget: 0.25, execBWMaxPts: 1,           // exec: 1 pt women
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10, // other exec: 10 pts (75%)
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,        // other exec: 4 pts women (38%)
       seniorMaxPts: 0, seniorBWMaxPts: 0,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 0, disabledTarget: 0.02, // 2% (NOT 3%)
+      disabledMaxPts: 1, disabledTarget: 0.02, // FSC: 1 pt disabled (NOT 0)
     },
     skills: {
-      learningProgrammesMaxPts: 6,
+      // Super Admin Fix Plan §3.5 F1 — FSC Others Skills rows must sum to 23
+      // per Ground Truth §5 (2+2+3+4+4+1+4+3). Previously the rows summed to
+      // 25 while the pillar header showed 23.
+      learningProgrammesMaxPts: 5,
       bursaryMaxPts: 4,
-      disabledLearningMaxPts: 4,
+      disabledLearningMaxPts: 3,
       learnershipsMaxPts: 6,
       absorptionMaxPts: 5,
       overallSpendPercent: 3.5,
@@ -540,14 +612,17 @@ export const FSC_GENERIC: SectorConfig = {
       absorptionTargetPercent: 2.5,
     },
     procurement: {
+      // Super Admin Fix Plan §3.5 F2 — FSC Others PP rows must sum to 24
+      // per Ground Truth §5 (5+3+2+7+3+2+2). Previously the rows summed to
+      // 27 while the pillar header showed 24.
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
-      emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.50, bo51MaxPts: 9,
-      bwo30Target: 0.12, bwo30MaxPts: 4,
-      dgTarget: 0.02, dgMaxPts: 2,
+      emeTarget: 0.15, emeMaxPts: 2,
+      bo51Target: 0.50, bo51MaxPts: 7,
+      bwo30Target: 0.12, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
     sed: { spendPercent: 1.0, maxPts: 8 }, // SED+CE combined for Others sub-sector
   },
   levelThresholds: FSC_LEVELS,
@@ -556,7 +631,8 @@ export const FSC_GENERIC: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// FSC Generic verified from Excel: 25+21+23+24+10+9+8 = 120 (Others sub-sector)
+// FSC Generic verified: 25+21+23+24+10+9+8 = 120 (Others sub-sector) ✓
+// MC breakdown (Section 5): board 2+1, exec 2+1, other exec 10+4, disabled 1 = 21 ✓
 // FSC uses scaled level thresholds: L1=95.5, L2=90.7, ... L8=38.2
 // FSC has sub-variants: Banks, Long-Term Insurers, Short-Term Insurers, Others
 // EF is "NOT Applicable" for Others sub-sector
@@ -606,16 +682,19 @@ export const AGRI_GENERIC: SectorConfig = {
       disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
     },
     skills: {
-      learningProgrammesMaxPts: 15,
-      bursaryMaxPts: 7,
-      disabledLearningMaxPts: 3,
-      learnershipsMaxPts: 0,
+      // Super Admin Fix Plan §3.6 A1 — AGRI Generic Skills rows must sum to 25
+      // per Ground Truth §6 (8+4+4+4+5). Previously the rows summed to 30
+      // while the pillar header showed 25.
+      learningProgrammesMaxPts: 8,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 4,
       absorptionMaxPts: 5,
       overallSpendPercent: 3.0,
       bursarySpendPercent: 1.0,
       disabledSpendPercent: 0.15,
-      learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 2.5,
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -796,10 +875,14 @@ export const TRANSPORT_GENERIC: SectorConfig = {
   sectorName: 'Transport Sector Code (Large Enterprise)',
   scorecardType: 'Generic',
   totalMaxPoints: 108,
+  // Super Admin Fix Plan §1.3 + §3.1 T1/T2 — Transport Large has two separate
+  // pillars per the gazette (Transport Codes row 22 = MC 11; row 33 = EE 18).
+  // Previously they were merged into MC = 29 / EE = 0, leaving EE invisible
+  // in Super Admin.
   pillarConfigs: {
     ownership: { maxPoints: 24, hasSubMinimum: false, subMinimumPercent: 0 },
-    managementControl: { maxPoints: 29, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     preferentialProcurement: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     supplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -809,28 +892,53 @@ export const TRANSPORT_GENERIC: SectorConfig = {
   },
   targets: {
     ownership: {
+      // Super Admin Fix Plan §3.1 T5 — Transport Generic Ownership previously
+      // summed to 21 (header 24). Add Ownership Fulfilment 1 pt (Transport
+      // Codes row 9) and Bonus ESOP/BBOS 2 pts (row 11). We reuse the
+      // `newEntrantsMaxPts` slot for Ownership Fulfilment (semantically the
+      // "ownership fulfilment" 1-pt indicator from the gazette) and lift
+      // `womenVotingMaxPts` from 2 → 2 + 2 (bonus ESOP/BBOS) for a 24-pt
+      // total: 3+4+4+2+1+7+1+2 = 24 ✓.
       votingRightsTarget: 0.25, votingRightsMaxPts: 3,
-      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 4, // 2 women-voting + 2 bonus ESOP/BBOS
       economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
       economicInterestDesignatedGroupTarget: 0.025, economicInterestDesignatedGroupMaxPts: 1,
-      netValueMaxPts: 7, newEntrantsMaxPts: 2,
+      netValueMaxPts: 7, newEntrantsMaxPts: 3, // 2 new-entrants + 1 ownership fulfilment
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 0,
-      boardBWTarget: 0.25, boardBWMaxPts: 0,
-      execBlackTarget: 0.50, execBlackMaxPts: 0,
-      execBWTarget: 0.25, execBWMaxPts: 0,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 0,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 0,
-      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      // Super Admin Fix Plan §3.1 T3 — Transport Codes Road Freight Large rows
+      // 23–31: Board B/BW 1.5/1.5, Exec Dir B/BW 1/1, Senior Top B/BW 1.5/1.5,
+      // Other Top B/BW 1/1, Bonus Independent NEDs 1 → MC = 11 ✓
+      boardBlackTarget: 0.50, boardBlackMaxPts: 1.5,
+      boardBWTarget: 0.25, boardBWMaxPts: 1.5,
+      execBlackTarget: 0.50, execBlackMaxPts: 1,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 1.5,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1.5,
+      // Top mgmt (above other exec) – modelled in the senior slot; bonus
+      // Independent NEDs (1 pt) modelled in seniorBWMaxPts. Junior/middle
+      // unused at MC level for Transport Large (live in EE).
+      seniorMaxPts: 1, seniorBWMaxPts: 1, // 1 = Other Top Black; 1 = Bonus Independent NEDs
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
-      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      // Super Admin Fix Plan §3.1 T4 — Transport Codes Road Freight Large rows
+      // 33–43: Black Senior 2.5 + BW Senior 2.5 + Black Middle 1.5 + BW Middle
+      // 1.5 + Black Junior 1.5 + BW Junior 1.5 + BW Semi/Unskilled 2 +
+      // Disabled 1 + Disabled Women 1 + Bonus EAP 3 → EE = 18 ✓.
+      seniorMaxPts: 2.5, middleMaxPts: 1.5, juniorMaxPts: 1.5,
       disabledMaxPts: 1, disabledTarget: 0.02,
       disabledWomenMaxPts: 1, disabledWomenTarget: 0.01,
+      // Black women equivalents at each level — held as optional fields on
+      // EETargets so Super Admin can render them; engine reads them in
+      // calcTransportLargeManagementAndEE.
+      seniorBWMaxPts: 2.5,
+      middleBWMaxPts: 1.5,
+      juniorBWMaxPts: 1.5,
+      semiUnskilledWomenMaxPts: 2,
+      eapBonusMaxPts: 3,
     },
     skills: {
       learningProgrammesMaxPts: 3,
@@ -868,51 +976,76 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 // Verification sheet1: 24+(11+18)+15+20+15+5 = 108 (toolkit labels MC and EE separately; engine reports one management pillar max 29)
 
 // ---------------------------------------------------------------------------
-// Transport Sector — QSE (docs/Transport Codes.xlsx sheet2)
-// Entities measure exactly FOUR elements. The four equal-weight elements (each 25 pts)
-// are Skills Development, Preferential Procurement, Enterprise Development and SED = 100 total.
-// Ownership / MC / EE and YES are not measured in this scorecard type.
+// Transport Sector — QSE (docs/Transport Codes.xlsx "Road Freight QSE" sheet)
+//
+// Structure: 3 compulsory pillars (Ownership 28 + MC 27 + EE 27 = 82 pts)
+//            + choose ONE of 4 elective pillars (Skills Dev / PP / Enterprise Dev / SED, each 25 pts)
+//            = 107 total.
+//
+// NOTE: Choose ONE of the 4 elective pillars (Skills Dev, PP, Enterprise Dev, SED) —
+//       only that pillar's 25 pts count toward the 107 total. Indicated by chooseOneGroup
+//       = 'transport_qse_elective' on each elective pillar.
+//
+// Source: docs/Transport Codes.xlsx — "Road Freight QSE" sheet
+// Ownership 28: voting 6 + EI 9 + fulfilment 1 + net value 9 + bonus women 2 + bonus ESOP 1
+// MC 27: top mgmt 25 + bonus black women 2
+// EE 27: black mgmt 7.5 + black women mgmt 7.5 + black employees 5 + black women employees 5 + EAP bonus 2
 // ---------------------------------------------------------------------------
 
 export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
   sectorName: 'Transport Sector Code (QSE)',
   scorecardType: 'QSE',
-  totalMaxPoints: 100, // 4 × 25 (Skills + PP + ED + SED); ownership/MC/EE not measured
+  // 82 compulsory (Ownership 28 + MC 27 + EE 27) + 1 chosen elective of 4 × 25 = 107
+  totalMaxPoints: 107,
   pillarConfigs: {
-    ownership: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },          // Not measured (QSE pick-4)
-    managementControl: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },   // Not measured
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },    // Not measured
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not applicable
-    enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },       // Not applicable for Transport
+    // --- Compulsory pillars ---
+    ownership: { maxPoints: 28, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    // --- Elective pillars (choose ONE; only the chosen 25 pts count toward 107) ---
+    skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not a standalone elective
+    enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
+      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; fulfilment = 1 pt (newEntrants);
+      // net value 60% = 9 pts; bonus black women 10% = 2 pts; bonus ESOP/BBOS/co-ops 10% = 1 pt
+      // Total: 6+9+1+9+2+1 = 28 ✓
       votingRightsTarget: 0.25, votingRightsMaxPts: 6,
-      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,      // bonus: black women
       economicInterestTarget: 0.25, economicInterestMaxPts: 9,
-      womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 1,
+      womenEITarget: 0.10, womenEIMaxPts: 1,              // bonus: ESOP/BBOS/co-ops
+      netValueMaxPts: 9,                                   // net value 60%
+      newEntrantsMaxPts: 1,                                // ownership fulfilment
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 0,
-      boardBWTarget: 0.25, boardBWMaxPts: 0,
-      execBlackTarget: 0.501, execBlackMaxPts: 0,
-      execBWTarget: 0.25, execBWMaxPts: 0,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 0,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 0,
+      // Top management black 50.1% = 25 pts; bonus black women 25% = 2 pts; Total: 27 ✓
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,               // bonus: black women at top mgmt
+      execBlackTarget: 0.501, execBlackMaxPts: 25,         // top management black 50.1%
+      execBWTarget: 0, execBWMaxPts: 0,
+      otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+      otherExecBWTarget: 0, otherExecBWMaxPts: 0,
       seniorMaxPts: 0, seniorBWMaxPts: 0,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
-      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 0, disabledTarget: 0.02,
+      // Black mgmt as % of all mgmt 40% = 7.5 pts; black women mgmt 20% = 7.5 pts
+      // Black employees as % of total 60% = 5 pts; black women employees 30% = 5 pts
+      // Bonus: meet/exceed EAP = 2 pts; Total: 7.5+7.5+5+5+2 = 27 ✓
+      seniorMaxPts: 15,      // black mgmt 7.5 + black women mgmt 7.5
+      middleMaxPts: 10,      // black employees 5 + black women employees 5
+      juniorMaxPts: 0,
+      disabledMaxPts: 2,     // EAP bonus
+      disabledTarget: 0,
     },
+    // Skills elective: 2% leviable → 12.5 pts; 1% black women → 12.5 pts
     skills: {
       learningProgrammesMaxPts: 12.5,
       bursaryMaxPts: 12.5,
@@ -925,17 +1058,20 @@ export const TRANSPORT_QSE: SectorConfig = {
       learnershipTargetPercent: 0,
       absorptionTargetPercent: 0,
     },
+    // PP elective: 40% B-BBEE spend → 25 pts (single indicator)
     procurement: {
       allSuppliersTarget: 0.40, allSuppliersMaxPts: 25,
       qseTarget: 0, qseMaxPts: 0, emeTarget: 0, emeMaxPts: 0,
       bo51Target: 0, bo51MaxPts: 0, bwo30Target: 0, bwo30MaxPts: 0,
       dgTarget: 0, dgMaxPts: 0,
     },
+    // Enterprise Dev elective: 2% NPAT → 25 pts
     esd: {
       sdPercent: 0, sdMaxPts: 0,
       edPercent: 2.0, edMaxPts: 25,
       edGraduationBonus: 0, edJobsBonus: 0,
     },
+    // SED elective: 1% NPAT → 25 pts
     sed: { spendPercent: 1.0, maxPts: 25 },
   },
   levelThresholds: TRANSPORT_QSE_LEVELS,
@@ -944,10 +1080,21 @@ export const TRANSPORT_QSE: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// Verified: 4 equal-weight pillars × 25 = 100 (Skills + PP + ED + SED). Ownership/MC/EE/YES not measured.
+// Verified against docs/Transport Codes.xlsx "Road Freight QSE":
+// Compulsory: Ownership 28 + MC 27 + EE 27 = 82
+// Elective (choose ONE of 4): Skills Dev 25 / PP 25 / Enterprise Dev 25 / SED 25
+// Grand total: 82 + 25 = 107 ✓
+// Level thresholds scaled: STANDARD_LEVELS × (107/120)
 
 // ---------------------------------------------------------------------------
 // Construction Sector configs (May 2026)
+//
+// ⚠️  UNVERIFIED — Construction sector totals (QSE=110, Contractor=123, BEP=123)
+// are NOT present in docs/SCORECARD_GROUND_TRUTH.md and have NOT been verified
+// against any official Construction Sector Code Excel toolkit.
+// These values were derived from a Construction Sector Code document supplied
+// alongside the core toolkits but require expert verification before use.
+// Do NOT rely on these for compliance reporting until verified.
 //
 // Construction uses an indicator-level scoring engine — see
 // `pipeline/constructionIndicators.ts` and `pipeline/constructionScoring.ts`.
@@ -1015,6 +1162,7 @@ export const CONSTRUCTION_QSE: SectorConfig = {
   sectorName: 'Construction Sector Code (QSE)',
   scorecardType: 'QSE',
   totalMaxPoints: 110, // 30 + 20 + 26 + 29 + 5
+  indicators: mapConstructionIndicators(CONSTRUCTION_QSE_SCORECARD.indicators),
   pillarConfigs: {
     ownership: { maxPoints: 30, hasSubMinimum: false, subMinimumPercent: 0 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1043,6 +1191,7 @@ export const CONSTRUCTION_CONTRACTOR: SectorConfig = {
   sectorName: 'Construction Sector Code (Contractor)',
   scorecardType: 'Contractor',
   totalMaxPoints: 123, // 31 + 22 + 26 + 38 + 6
+  indicators: mapConstructionIndicators(CONSTRUCTION_CONTRACTOR_SCORECARD.indicators),
   pillarConfigs: {
     ownership: { maxPoints: 31, hasSubMinimum: false, subMinimumPercent: 0 },
     managementControl: { maxPoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1071,6 +1220,7 @@ export const CONSTRUCTION_BEP: SectorConfig = {
   sectorName: 'Construction Sector Code (Built Environment Professional)',
   scorecardType: 'BEP',
   totalMaxPoints: 123, // 31 + 22 + 34 + 30 + 6
+  indicators: mapConstructionIndicators(CONSTRUCTION_BEP_SCORECARD.indicators),
   pillarConfigs: {
     ownership: { maxPoints: 31, hasSubMinimum: false, subMinimumPercent: 0 },
     managementControl: { maxPoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1095,23 +1245,49 @@ export const CONSTRUCTION_BEP: SectorConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Enrich configs with ledger sub-elements for Super Admin / API display
+// ---------------------------------------------------------------------------
+
+function attachSubElements(config: SectorConfig): SectorConfig {
+  const subs = getAllSectorPillarSubElements(config.sectorCode, config.scorecardType);
+  if (Object.keys(subs).length === 0) return config;
+
+  const pillarConfigs = { ...config.pillarConfigs };
+  for (const [key, elements] of Object.entries(subs)) {
+    const pk = key as keyof typeof pillarConfigs;
+    const existing = pillarConfigs[pk];
+    if (existing && elements.length > 0) {
+      pillarConfigs[pk] = { ...existing, subElements: elements };
+    }
+  }
+  return { ...config, pillarConfigs };
+}
+
+function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
+  const match = ALL_CONFIGS.find(
+    (c) =>
+      c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
+      c.scorecardType.toLowerCase() === scorecardType.toLowerCase(),
+  );
+  if (!match) {
+    throw new Error(
+      `No sector config found for sectorCode="${sectorCode}", scorecardType="${scorecardType}". Available: ${ALL_CONFIGS.map((c) => `${c.sectorCode}/${c.scorecardType}`).join(', ')}`,
+    );
+  }
+  return match;
+}
+
+// ---------------------------------------------------------------------------
 // Lookup
 // ---------------------------------------------------------------------------
 
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
-];
+].map(attachSubElements);
 
 export function getSectorConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
-  const match = ALL_CONFIGS.find(c =>
-    c.sectorCode.toLowerCase() === sectorCode.toLowerCase() &&
-    c.scorecardType.toLowerCase() === scorecardType.toLowerCase()
-  );
-  if (!match) {
-    throw new Error(`No sector config found for sectorCode="${sectorCode}", scorecardType="${scorecardType}". Available: ${ALL_CONFIGS.map(c => `${c.sectorCode}/${c.scorecardType}`).join(', ')}`);
-  }
-  return match;
+  return getEnrichedConfig(sectorCode, scorecardType);
 }
 
 /** Non-throwing version for display-only paths. Returns null if not found. */
@@ -1126,21 +1302,21 @@ export function detectSectorFromName(nameOrSector: string): SectorConfig {
   const lower = (nameOrSector || '').toLowerCase();
   const hasICT = /ict|information.*communic|technology|telecom|software|digital/i.test(lower);
   const hasQSE = /qse|qualifying\s*small/i.test(lower);
-  if (hasICT && hasQSE) return ICT_QSE;
-  if (hasICT) return ICT_GENERIC;
-  if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return FSC_GENERIC;
-  if (/agri|agriculture|farming|agribee/i.test(lower)) return AGRI_GENERIC;
+  if (hasICT && hasQSE) return getSectorConfig('ICT', 'QSE');
+  if (hasICT) return getSectorConfig('ICT', 'Generic');
+  if (/fsc|financial\s*sector|banking|insurance|investment/i.test(lower)) return getSectorConfig('FSC', 'Generic');
+  if (/agri|agriculture|farming|agribee/i.test(lower)) return getSectorConfig('AGRI', 'Generic');
   if (/transport|freight|logistics|rail|aviation|maritime|shipping/i.test(lower)) {
-    return hasQSE ? TRANSPORT_QSE : TRANSPORT_GENERIC;
+    return hasQSE ? getSectorConfig('TRANSPORT', 'QSE') : getSectorConfig('TRANSPORT', 'Generic');
   }
   if (/construction|contractor|built\s*environment|builder/i.test(lower)) {
-    if (/bep|built\s*environment\s*professional/i.test(lower)) return CONSTRUCTION_BEP;
-    if (hasQSE) return CONSTRUCTION_QSE;
-    return CONSTRUCTION_CONTRACTOR;
+    if (/bep|built\s*environment\s*professional/i.test(lower)) return getSectorConfig('CONSTRUCTION', 'BEP');
+    if (hasQSE) return getSectorConfig('CONSTRUCTION', 'QSE');
+    return getSectorConfig('CONSTRUCTION', 'Contractor');
   }
-  if (hasQSE) return RCOGP_QSE;
+  if (hasQSE) return getSectorConfig('RCOGP', 'QSE');
   logger.warn('No sector match — defaulting to RCOGP Generic', { input: nameOrSector });
-  return RCOGP_GENERIC;
+  return getSectorConfig('RCOGP', 'Generic');
 }
 
 export function listSectorConfigs(): Array<{ code: string; name: string; type: string; totalPoints: number }> {
@@ -1149,5 +1325,88 @@ export function listSectorConfigs(): Array<{ code: string; name: string; type: s
     name: c.sectorName,
     type: c.scorecardType,
     totalPoints: c.totalMaxPoints,
+  }));
+}
+
+/** Merge canonical ledger sub-elements onto API/Arango sector payloads (stale DB rows may omit them). */
+export function enrichSectorApiPayload<T extends {
+  code: string;
+  type: string;
+  totalPoints?: number;
+  pillarConfigs?: unknown;
+  indicators?: SectorIndicatorRow[];
+}>(sector: T): T {
+  const config = getSectorConfigSafe(sector.code, sector.type);
+  if (!config) return sector;
+
+  const out = { ...sector, totalPoints: config.totalMaxPoints };
+
+  if (Array.isArray(sector.pillarConfigs)) {
+    out.pillarConfigs = (sector.pillarConfigs as Array<{
+      code?: string;
+      chooseOneGroup?: string;
+      subElements?: PillarSubElement[];
+      subMinimumPercent?: number;
+      maxPoints?: number;
+      hasSubMinimum?: boolean;
+    }>).map((p) => {
+      const pk = p.code;
+      if (!pk) return p;
+      const canonical = config.pillarConfigs[pk as keyof typeof config.pillarConfigs];
+      if (!canonical) return p;
+      return {
+        ...p,
+        maxPoints: p.maxPoints ?? canonical.maxPoints,
+        hasSubMinimum: p.hasSubMinimum ?? canonical.hasSubMinimum,
+        subMinimumPercent:
+          typeof p.subMinimumPercent === 'number' ? p.subMinimumPercent : canonical.subMinimumPercent,
+        chooseOneGroup: p.chooseOneGroup ?? canonical.chooseOneGroup,
+        subElements: p.subElements?.length ? p.subElements : canonical.subElements,
+      };
+    });
+  } else if (sector.pillarConfigs && typeof sector.pillarConfigs === 'object') {
+    const merged = { ...(sector.pillarConfigs as Record<string, PillarConfig>) };
+    for (const [key, canonical] of Object.entries(config.pillarConfigs)) {
+      if (!canonical) continue;
+      const existing = merged[key];
+      merged[key] = {
+        ...(existing ?? canonical),
+        maxPoints: existing?.maxPoints ?? canonical.maxPoints,
+        hasSubMinimum: existing?.hasSubMinimum ?? canonical.hasSubMinimum,
+        subMinimumPercent: existing?.subMinimumPercent ?? canonical.subMinimumPercent,
+        chooseOneGroup: existing?.chooseOneGroup ?? canonical.chooseOneGroup,
+        subElements: existing?.subElements?.length ? existing.subElements : canonical.subElements,
+      };
+    }
+    out.pillarConfigs = merged;
+  }
+
+  if (config.indicators?.length && !out.indicators?.length) {
+    out.indicators = config.indicators;
+  }
+
+  return out;
+}
+
+/** Full sector payloads for `/api/sectors` fallback when Arango is unavailable. */
+export function listSectorConfigsFull(): Array<{
+  code: string;
+  name: string;
+  type: string;
+  totalPoints: number;
+  pillarConfigs: SectorConfig['pillarConfigs'];
+  targets: SectorConfig['targets'];
+  levelThresholds: SectorConfig['levelThresholds'];
+  indicators?: SectorIndicatorRow[];
+}> {
+  return ALL_CONFIGS.map((c) => ({
+    code: c.sectorCode,
+    name: c.sectorName,
+    type: c.scorecardType,
+    totalPoints: c.totalMaxPoints,
+    pillarConfigs: c.pillarConfigs,
+    targets: c.targets,
+    levelThresholds: c.levelThresholds,
+    ...(c.indicators?.length ? { indicators: c.indicators } : {}),
   }));
 }

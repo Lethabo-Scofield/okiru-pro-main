@@ -22,6 +22,15 @@ export interface StoredPillarConfig {
   maxPoints: number;
   hasSubMinimum: boolean;
   subMinimumThreshold: number;
+  subMinimumPercent?: number;
+  chooseOneGroup?: string;
+  subElements?: Array<{
+    criteria: string;
+    points: number;
+    target: string;
+    formula: string;
+    isBonus?: boolean;
+  }>;
   displayOrder: number;
 }
 
@@ -45,6 +54,17 @@ export interface StoredSectorRule {
   benefitFactors?: Array<{ contributionType: string; sdFactor: number; edFactor: number }>;
   categoryWeightings?: Array<{ code: string; name: string; weighting: number; cap?: number }>;
   industryNorms?: Array<{ industry: string; normPercent: number; quarterThresholdPercent: number }>;
+  /** Construction indicator matrix + optional display rows for other sectors */
+  indicators?: Array<{
+    code: string;
+    element: string;
+    category: string;
+    name: string;
+    weight: number;
+    target: number | string;
+    targetUnit?: string;
+    calculation?: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }

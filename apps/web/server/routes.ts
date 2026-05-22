@@ -22,6 +22,11 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import { registerExcelImportRoutes } from "./excelImportRoute";
+import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
+import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import { deleteWorkbookForClient } from "./workbookRoutes";
 import {
   listClientsForTenant as memListClients,
   getClient as memGetClient,
@@ -57,7 +62,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 let groqApiKey = process.env.GROQ_API_KEY;
 if (!groqApiKey) {
-  logger.warn("GROQ_API_KEY is not set — AI endpoints will return errors");
+  logger.warn("GROQ_API_KEY is not set ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â AI endpoints will return errors");
 }
 const groq = new Groq({ apiKey: groqApiKey || "not-set" });
 
@@ -127,7 +132,7 @@ export async function registerRoutes(
       touchAfter: 24 * 3600,
     });
   } else {
-    logger.warn("Using in-memory session store (MONGODB_URI not set) — sessions will not persist across restarts");
+    logger.warn("Using in-memory session store (MONGODB_URI not set) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -542,7 +547,7 @@ export async function registerRoutes(
       res.clearCookie("okiru.web.sid", {
         path: "/",
         httpOnly: true,
-        secure: isProduction,
+        secure: isProduction || isReplit,
         sameSite: isReplit ? "none" : "lax",
       });
       res.json({ success: true });
@@ -634,10 +639,6 @@ export async function registerRoutes(
       if (!userId) {
         return res.status(401).json({ message: "Not authenticated" });
       }
-      const cached = (req.session as any)?.userData;
-      if (cached) {
-        return res.json({ user: cached });
-      }
       const user = await storage.getUserById(userId);
       if (!user) {
         return res.status(401).json({ message: "User not found" });
@@ -651,7 +652,7 @@ export async function registerRoutes(
     }
   });
 
-  /** Company profile / onboarding — served on web so /api/onboarding hits the same session as sign-up (fixes 404 when ingress sends /api traffic to web). */
+  /** Company profile / onboarding ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â served on web so /api/onboarding hits the same session as sign-up (fixes 404 when ingress sends /api traffic to web). */
   const ONBOARD_MAX = 500;
   const onboardSanitizeStr = (v: unknown, max = ONBOARD_MAX): string | null => {
     if (typeof v !== "string") return null;
@@ -715,7 +716,7 @@ export async function registerRoutes(
   });
 
   const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
-    "— Company profile skipped (add details anytime — open the menu under your name)";
+    "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Company profile skipped (add details anytime ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â open the menu under your name)";
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
@@ -942,7 +943,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You cannot view invites for this team." });
       }
       const invites = await storage.listInvites(workspaceId);
-      // Strip tokens from the listing — only the email recipient should ever see the raw token.
+      // Strip tokens from the listing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only the email recipient should ever see the raw token.
       const safe = invites.map((inv) => ({
         id: inv.id,
         workspaceId: inv.workspaceId,
@@ -1082,7 +1083,7 @@ export async function registerRoutes(
         },
       });
 
-      // Never echo the raw token in the listing payload — clients use the email link.
+      // Never echo the raw token in the listing payload ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â clients use the email link.
       return res.json({
         invite: {
           id: invite.id,
@@ -1488,7 +1489,7 @@ export async function registerRoutes(
         c.createdByUserId && c.createdByUserId === userId;
       const hasTenancy = !!(c.organizationId || c.createdByUserId);
       const isProd = process.env.NODE_ENV === "production";
-      // In production, refuse access to legacy untenantized records — they
+      // In production, refuse access to legacy untenantized records ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they
       // would otherwise be globally readable/writable by any authenticated
       // user. Backfill via a controlled migration before exposing. In dev we
       // keep them accessible so local fixtures keep working. Mirrors
@@ -1521,25 +1522,28 @@ export async function registerRoutes(
     return mem;
   }
 
+  function canDeleteClient(
+    client: { createdByUserId?: string | null },
+    userId: string,
+    user: { role?: string | null; secondaryRoles?: string[] | null } | null | undefined,
+  ): boolean {
+    if (hasAnyRole(user, "super_admin")) return true;
+    return !!client.createdByUserId && client.createdByUserId === userId;
+  }
+
   app.get("/api/clients", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any).userId as string;
-      const user = (req as any).user;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
       const userOrgId: string | null = user?.organizationId ?? null;
 
       if (isMongoConnected()) {
-        // Org-or-creator visibility (matches the in-memory branch and
-        // loadClientWithAccess). Never list with an empty filter — that would
-        // expose all tenants' clients to a user without an organizationId.
-        const orClauses: any[] = [{ createdByUserId: userId }];
-        if (userOrgId) orClauses.push({ organizationId: userOrgId });
-        const clients = await ClientModel.find({ $or: orClauses }).sort({
-          createdAt: -1,
-        });
+        const filter = buildClientVisibilityFilter(userId, user);
+        const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
         return res.json(clients.map((c: any) => c.toJSON()));
       }
 
-      // In-memory fallback (dev without MONGODB_URI).
       const clients = memListClients(userId, userOrgId);
       res.json(clients);
     } catch (error: any) {
@@ -1547,23 +1551,35 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch clients" });
     }
   });
-
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
       const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
+      if (industrySector) {
+        const sector = String(industrySector).trim().toUpperCase();
+        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
+          return res.status(400).json({
+            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
+          });
+        }
+      }
       const userId = (req.session as any).userId as string;
       const user = (req as any).user ?? (await storage.getUserById(userId));
       const userOrgId: string | null = user?.organizationId ?? null;
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
       const now = new Date();
+      const normalizedSector = industrySector
+        ? String(industrySector).trim().toUpperCase()
+        : null;
 
       if (isMongoConnected()) {
         const client = await ClientModel.create({
+          id: clientId,
           clientId,
           name,
           financialYear: financialYear || new Date().getFullYear().toString(),
-          industrySector: industrySector || null,
+          industrySector: normalizedSector,
+          sectorCode: normalizedSector || "RCOGP",
           eapProvince: eapProvince || null,
           revenue: revenue || 0,
           npat: npat || 0,
@@ -1578,7 +1594,8 @@ export async function registerRoutes(
         clientId,
         name,
         financialYear: financialYear || new Date().getFullYear().toString(),
-        industrySector: industrySector || null,
+        industrySector: normalizedSector,
+        sectorCode: normalizedSector || "RCOGP",
         eapProvince: eapProvince || null,
         revenue: revenue || 0,
         npat: npat || 0,
@@ -1595,7 +1612,6 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to create client" });
     }
   });
-
   app.get("/api/clients/:clientId", requireAuth, async (req, res) => {
     try {
       const client = await loadClientWithAccess(req, res);
@@ -1641,13 +1657,22 @@ export async function registerRoutes(
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
 
+      const userId = (req.session as any).userId as string;
+      const user = (req as any).user ?? (await storage.getUserById(userId));
+      if (!canDeleteClient(existing, userId, user)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const { clientId } = req.params;
+      await deleteWorkbookForClient(clientId);
+
       if (isMongoConnected()) {
-        const result = await ClientModel.deleteOne({ clientId: req.params.clientId });
+        const result = await ClientModel.deleteOne({ clientId });
         if (result.deletedCount === 0) return res.status(404).json({ error: "Client not found" });
         return res.json({ success: true });
       }
 
-      const ok = memDeleteClient(req.params.clientId);
+      const ok = memDeleteClient(clientId);
       if (!ok) return res.status(404).json({ error: "Client not found" });
       res.json({ success: true });
     } catch (error: any) {
@@ -1673,6 +1698,28 @@ export async function registerRoutes(
           industrySector: c.industrySector,
           eapProvince: c.eapProvince || "National",
           industryNorm: undefined,
+          // Extended Foundation Layer fields
+          sectorCode: c.sectorCode || c.industrySector || 'RCOGP',
+          scorecardType: c.scorecardType || c.companySize || 'Generic',
+          companySize: c.companySize || c.scorecardType || 'Generic',
+          industry: c.industry || 'Other',
+          registrationNumber: c.registrationNumber || '',
+          tradingName: c.tradingName || '',
+          vatNumber: c.vatNumber || '',
+          taxNumber: c.taxNumber || '',
+          physicalAddress: c.physicalAddress || '',
+          postalAddress: c.postalAddress || '',
+          contactPerson: c.contactPerson || '',
+          contactEmail: c.contactEmail || '',
+          contactPhone: c.contactPhone || '',
+          annualTurnover: c.annualTurnover || 0,
+          numberOfEmployees: c.numberOfEmployees || 0,
+          measurementPeriodStart: c.measurementPeriodStart || null,
+          measurementPeriodEnd: c.measurementPeriodEnd || null,
+          beeCertificateNumber: c.beeCertificateNumber || '',
+          beeCertificateExpiry: c.beeCertificateExpiry || '',
+          beeCertificateLevel: c.beeCertificateLevel || null,
+          verificationAgency: c.verificationAgency || '',
         },
         ownership: {
           id: `own-${clientId}`,
@@ -2018,21 +2065,21 @@ export async function registerRoutes(
 
 Your job: read the user's natural language description (it may be a single word, a phrase, or a full sentence) and deeply understand WHAT data they are trying to extract from documents. Then generate exactly ONE perfectly-configured entity definition.
 
-CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices — all in a South African business context.
+CONTEXT: Documents processed include B-BBEE certificates, scorecards, verification letters, audited financial statements, company registration documents, employment equity reports, and supplier invoices ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â all in a South African business context.
 
 INSTRUCTIONS:
-1. Parse the user's intent — even if they write casually, e.g. "I want the expiry date of the certificate" → entity: CertificateExpiryDate
+1. Parse the user's intent ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â even if they write casually, e.g. "I want the expiry date of the certificate" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ entity: CertificateExpiryDate
 2. Infer the data type: date, monetary amount (Rand), percentage, name/organisation, identifier/reference, level/status, count, address, etc.
 3. Generate a label in PascalCase that is specific and descriptive (2-3 words is fine, e.g. "BBBEELevel", "CertificateExpiryDate", "BlackOwnership")
 4. Write a professional definition that explains exactly what the entity represents and when it appears in documents
 5. Synonyms: realistic alternative names as they appear in actual B-BBEE documents
 6. Positives: realistic South African examples of actual values (use Rand amounts like R1,200,000, percentages like 51%, dates like 31 March 2025, levels like "Level 2 Contributor")
-7. Negatives: common false positives — values that look similar but are NOT this entity
+7. Negatives: common false positives ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â values that look similar but are NOT this entity
 8. Zones: where in documents this typically appears (from: "Email Subject", "Email Body", "PDF Header", "Tables", "Footer", "Signature Block")
 9. Keywords: actual words that appear near this value in documents (must = required co-occurrence, nice = helpful, neg = words that rule it out)
 10. Pattern: a precise regex if the value has a predictable format, otherwise ""
 
-RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation — raw JSON only.
+RESPOND ONLY with a valid JSON array containing exactly ONE entity object. No markdown, no code fences, no explanation ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â raw JSON only.
 
 Schema:
 {
@@ -2048,13 +2095,13 @@ Schema:
 
 Examples:
 
-User: "bee level" →
-[{"label":"BBBEELevel","definition":"The B-BBEE contributor level (1–8) or Non-Compliant status assigned to the measured entity by a SANAS-accredited verification agency.","synonyms":["BEE Level","Contributor Level","B-BBEE Status","BBBEE Rating"],"positives":["Level 1 Contributor","Level 4","Level 8 Contributor","Non-Compliant"],"negatives":["Risk Level","Service Level Agreement","Employment Level"],"zones":["PDF Header","Tables"],"keywords":{"must":["level","contributor"],"nice":["B-BBEE","status","compliant"],"neg":["risk","service","agreement"]},"pattern":"Level\\s*[1-8](\\s*Contributor)?|Non-Compliant"}]
+User: "bee level" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+[{"label":"BBBEELevel","definition":"The B-BBEE contributor level (1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“8) or Non-Compliant status assigned to the measured entity by a SANAS-accredited verification agency.","synonyms":["BEE Level","Contributor Level","B-BBEE Status","BBBEE Rating"],"positives":["Level 1 Contributor","Level 4","Level 8 Contributor","Non-Compliant"],"negatives":["Risk Level","Service Level Agreement","Employment Level"],"zones":["PDF Header","Tables"],"keywords":{"must":["level","contributor"],"nice":["B-BBEE","status","compliant"],"neg":["risk","service","agreement"]},"pattern":"Level\\s*[1-8](\\s*Contributor)?|Non-Compliant"}]
 
-User: "I want to know when the certificate expires" →
+User: "I want to know when the certificate expires" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
 [{"label":"CertificateExpiryDate","definition":"The date on which the B-BBEE certificate expires and re-verification becomes required for the measured entity.","synonyms":["Expiry Date","Valid Until","Certificate End Date","Validity Period End","Expiration Date"],"positives":["31 March 2026","2026-03-31","31/03/2026","30 June 2025"],"negatives":["Issue Date","Measurement Date","Financial Year End","Contract Expiry"],"zones":["PDF Header","Tables"],"keywords":{"must":["expir","valid"],"nice":["until","end","certificate"],"neg":["issue","start","financial year"]},"pattern":"\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}|\\d{4}[-/]\\d{2}[-/]\\d{2}"}]
 
-User: "the rand amount of their annual turnover" →
+User: "the rand amount of their annual turnover" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
 [{"label":"AnnualTurnover","definition":"The total annual revenue or turnover of the measured entity as reported in their audited financial statements, used to determine the applicable B-BBEE scorecard.","synonyms":["Annual Revenue","Total Turnover","Gross Revenue","Annual Sales"],"positives":["R12,500,000","R 5,000,000.00","R2.3M","R150,000,000"],"negatives":["Monthly Revenue","Net Profit","Operating Expenses","Tax Amount"],"zones":["Tables","PDF Header"],"keywords":{"must":["turnover","revenue"],"nice":["annual","total","gross"],"neg":["monthly","net","profit","expenses"]},"pattern":"R\\s?[\\d,\\s]+(\\s*M|\\s*million|\\.\\d{2})?"}]`;
 
       let formattedEntities: any[] = [];
@@ -2287,7 +2334,7 @@ Respond ONLY with a valid JSON array.`;
           const streamSystemPrompt = hasRealContent
             ? `You are a document entity extraction engine. You are given the actual text content of a document named "${fileName}". Your job is to find and extract the requested entities from the document text.
 
-CRITICAL RULES — READ CAREFULLY:
+CRITICAL RULES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â READ CAREFULLY:
 1. ALWAYS search the ENTIRE document text thoroughly, word by word if needed.
 2. Matching is CASE-INSENSITIVE. "nationality" matches "Nationality", "NATIONALITY", etc.
 3. Look for the entity label itself, its synonyms, related words, and ANY mention that relates to the entity concept.
@@ -2388,20 +2435,12 @@ Respond ONLY with a valid JSON array.`;
   });
 
   app.put("/api/clients/:clientId/calculator-config", async (req, res) => {
-    try {
-      const userId = (req.session as any)?.userId;
-      if (!userId) return res.status(401).json({ error: "Not authenticated" });
-      const { clientId } = req.params;
-      const { config } = req.body;
-      if (!config) {
-        return res.status(400).json({ error: "config is required" });
-      }
-      const row = await storage.saveCalculatorConfig(clientId, config);
-      res.json(row.config);
-    } catch (error: any) {
-      logger.error("Error saving calculator config", error);
-      res.status(500).json({ error: "Failed to save calculator config" });
-    }
+    const userId = (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    // Client calculator overrides are disabled; sector config is authoritative.
+    res.status(403).json({
+      error: "Calculator config overrides are disabled. Use sector config from the scorecard builder.",
+    });
   });
 
   app.post("/api/generate-calculator-suggestions", async (req, res) => {
@@ -3024,7 +3063,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   // CRITICAL FIX: Create new assessment with server-backed clientId
-  // This enables DocumentProcessor→Toolkit handoff with proper persistence
+  // This enables DocumentProcessorÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢Toolkit handoff with proper persistence
   app.post("/api/assessments", requireAuth, async (req, res) => {
     try {
       const userId = (req.session as any)?.userId;
@@ -3166,6 +3205,8 @@ Respond ONLY with a valid JSON array.`;
   });
 
   registerWorkbookRoutes(app);
+  registerExcelImportRoutes(app);
+  registerFeedbackRoutes(app, requireAuth);
 
   logger.info("Route registration completed");
   return httpServer;

@@ -9,6 +9,7 @@ interface AuthUser {
   fullName: string | null;
   email: string | null;
   role: string | null;
+  secondaryRoles: string[];
   organizationId: string | null;
   organizationName: string | null;
   profilePicture: string | null;

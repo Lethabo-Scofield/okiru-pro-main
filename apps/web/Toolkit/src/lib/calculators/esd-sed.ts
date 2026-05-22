@@ -124,6 +124,10 @@ function categorizeContributions(
 
 export function calculateEsdScore(data: ESDData, npat: number, config: CalculatorConfig): EsdResult {
   if (!config) throw new Error('CalculatorConfig is required for ESD score calculation');
+  console.log('[SCORING-TRACE] calculateEsdScore received:', {
+    npat,
+    contributionCount: data.contributions?.length ?? 0,
+  });
   const contributions = data.contributions || [];
   const ec = config.esd;
 
@@ -147,10 +151,16 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
   const sdTotal = clampScore(sdScore, supplierDevMax);
   const edTotal = clampScore(edScore + graduationBonusScore + jobsCreatedBonusScore, enterpriseDevMax + 2);
 
-  const sdSubMinPct = config.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
-  const edSubMinPct = config.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
-  const sdSubMinimumMet = sdTotal >= (supplierDevMax * sdSubMinPct / 100);
-  const edSubMinimumMet = edTotal >= (enterpriseDevMax * edSubMinPct / 100);
+  const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
+  const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
+  const sdSubMinimumMet =
+    supplierDevMax > 0 &&
+    sdSubMinPct > 0 &&
+    sdTotal >= (supplierDevMax * sdSubMinPct / 100);
+  const edSubMinimumMet =
+    enterpriseDevMax > 0 &&
+    edSubMinPct > 0 &&
+    edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
     { name: "Annual value of all Supplier Development contributions", target: "2% of NPAT", weighting: 10, score: sdScore },
@@ -164,7 +174,7 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
 
   const subLines: EsdSubLine[] = [...sdSubLines, ...edSubLines];
 
-  return {
+  const result = {
     supplierDev: round2(sdScore),
     enterpriseDev: round2(edScore),
     graduationBonus: round2(graduationBonusScore),
@@ -183,10 +193,16 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
     edSubLines: edSubLines.map(l => ({ ...l, score: round2(l.score) })),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
   };
+  console.log(`[SCORING-TRACE] calculateEsdScore result: sd ${result.sdTotal} + ed ${result.edTotal}`);
+  return result;
 }
 
 export function calculateSedScore(data: SEDData, npat: number, config: CalculatorConfig): SedResult {
   if (!config) throw new Error('CalculatorConfig is required for SED score calculation');
+  console.log('[SCORING-TRACE] calculateSedScore received:', {
+    npat,
+    contributionCount: data.contributions?.length ?? 0,
+  });
   const contributions = data.contributions || [];
   const sc = config.sed;
 
@@ -200,9 +216,11 @@ export function calculateSedScore(data: SEDData, npat: number, config: Calculato
     return acc + c.amount * factor;
   }, 0);
   const score = safeRatio(totalSpend, target, maxPoints);
+  const total = round2(score);
+  console.log(`[SCORING-TRACE] calculateSedScore result: ${total} / ${maxPoints}`);
 
   return {
-    total: round2(score),
+    total,
     subMinimumMet: true,
     actualSpend: round2(totalSpend),
     target: round2(target),

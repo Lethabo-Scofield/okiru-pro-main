@@ -413,6 +413,8 @@ When the system is fed the Lake Trading data, it must produce exactly these scor
 | **B-BBEE Level** | **7** | |
 | **Discounted Level** | **8** | |
 
+**YES note**: Lake Trading does not qualify for YES (`Qualify for YES? = No`; `YES Points = 0` in Excel). The 63.56 total is pillar-only. Tier 2 YES would add +3 bonus points (→ 66.56) but does not apply to this dataset. The Excel Summary "YES points" row mirrors the grand total when bonus = 0 — see `docs/YES_INITIATIVE_CLARIFICATION.md`.
+
 ---
 
 ## 18. Critical Bugs to Never Reintroduce

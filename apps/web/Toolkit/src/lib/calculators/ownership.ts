@@ -2,22 +2,19 @@
  * @domain-rule pillar:ownership, slides:108-114
  * @see docs/domain/pillars/01_ownership.md
  * @see docs/domain/calculations/net_value.md
+ *
+ * Sector targets and max points come from CalculatorConfig (sectorConfigToCalculatorConfig).
+ * Mirrors apps/api/pipeline/rules/pillarCalculators.ts::calcOwnership.
  */
 import type { OwnershipData } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
-const FULL_OWNERSHIP_THRESHOLD = 0.25;
-const WOMEN_VOTING_TARGET = 0.10;
-const WOMEN_ECONOMIC_TARGET = 0.10;
-const DESIGNATED_GROUP_TARGET = 0.03; // Per RCOGP slide 109: 3% target
+const DEFAULT_VOTING_TARGET = 0.25;
+const DEFAULT_WOMEN_VOTING_TARGET = 0.10;
+const DEFAULT_WOMEN_EI_TARGET = 0.10;
+const DEFAULT_DG_TARGET = 0.03;
 
-/**
- * Time-Based Graduation Factor per RCOGP slide 114
- * @domain-rule pillar:ownership, slide:114
- * @see docs/domain/calculations/net_value.md#time-based-graduation-factor
- * Years 3-4 = 40%, 5-6 = 60%, 7-8 = 80%, 9-10 = 100%
- */
 const GRADUATION_TABLE: Record<number, number> = {
   1: 0.1, 2: 0.2, 3: 0.4, 4: 0.4,
   5: 0.6, 6: 0.6, 7: 0.8, 8: 0.8,
@@ -64,13 +61,45 @@ function getGraduationFactor(years: number): number {
   return factor;
 }
 
+function resolveOwnershipTargets(config: CalculatorConfig) {
+  const oc = config?.ownership;
+  const configuredMax = config?.pillarConfigs?.ownership?.maxPoints;
+  const maxPts = configuredMax != null && configuredMax > 0 ? configuredMax : 25;
+
+  return {
+    votingRightsTarget: oc?.votingRightsTarget ?? DEFAULT_VOTING_TARGET,
+    votingRightsMaxPts: oc?.votingRightsMax ?? 4,
+    womenVotingTarget: oc?.womenVotingTarget ?? DEFAULT_WOMEN_VOTING_TARGET,
+    womenVotingMaxPts: oc?.womenBonusMax ?? 2,
+    economicInterestTarget: oc?.targetEconomicInterest ?? DEFAULT_VOTING_TARGET,
+    economicInterestMaxPts: oc?.economicInterestMax ?? 4,
+    womenEITarget: oc?.womenEITarget ?? DEFAULT_WOMEN_EI_TARGET,
+    womenEIMaxPts: oc?.womenEIMax ?? 2,
+    netValueMaxPts: oc?.netValueMax ?? 8,
+    newEntrantsMaxPts: oc?.newEntrantsMax ?? 2,
+    designatedGroupsMax: oc?.designatedGroupsMax ?? 3,
+    designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
+    subMinNetValue: oc?.subMinNetValue ?? 3.2,
+    maxPts,
+  };
+}
+
 export function calculateOwnershipScore(data: OwnershipData, config: CalculatorConfig): OwnershipResult {
   const shareholders = data.shareholders || [];
-  const { companyValue, outstandingDebt, yearsHeld } = data;
+  const ot = resolveOwnershipTargets(config);
 
-  const oc = config?.ownership;
-  const SUB_MIN_NET_VALUE = oc?.subMinNetValue ?? 3.2;
-  const TARGET_ECONOMIC_INTEREST = oc?.targetEconomicInterest ?? FULL_OWNERSHIP_THRESHOLD;
+  console.log('[SCORING-TRACE] calculateOwnershipScore received:', {
+    shareholderCount: shareholders.length,
+    companyValue: data.companyValue,
+    maxPoints: ot.maxPts,
+    sample: shareholders.slice(0, 2).map(s => ({
+      name: s.name,
+      blackOwnership: s.blackOwnership,
+      shares: s.shares,
+    })),
+  });
+
+  const { companyValue, outstandingDebt, yearsHeld } = data;
 
   const totalSharesRaw = shareholders.reduce((acc, sh) => acc + sh.shares, 0);
   const hasShares = totalSharesRaw > 0;
@@ -92,7 +121,6 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     totalBlackWomenVoting += pct * sh.blackWomenOwnership;
     totalEconomicInterest += pct * sh.blackOwnership;
     totalEconomicInterestBWO += pct * sh.blackWomenOwnership;
-    // CRITICAL FIX: Only count designated group if explicitly flagged
     if (sh.isDesignatedGroup) {
       totalDesignatedGroup += pct * sh.blackOwnership;
     }
@@ -103,12 +131,12 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       const debtAttributable = outstandingDebt * pct;
       const carryingValue = sh.shareValue * pct;
       const shareValueAllocated = companyValue * pct;
-      const deemedValue = (shareValueAllocated - debtAttributable) / carryingValue;
+      const deemedValue = carryingValue > 0 ? (shareValueAllocated - debtAttributable) / carryingValue : 0;
       netValuePointsAgg += Math.max(0, deemedValue) * sh.blackOwnership;
     }
   }
 
-  const fullOwnershipAwarded = totalBlackVoting >= FULL_OWNERSHIP_THRESHOLD && hasShares;
+  const fullOwnershipAwarded = totalBlackVoting >= ot.votingRightsTarget && hasShares;
 
   let votingRightsBlack: number;
   let votingRightsBWO: number;
@@ -119,54 +147,58 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   let netValuePoints: number;
 
   if (fullOwnershipAwarded) {
-    votingRightsBlack = 4;
-    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, WOMEN_VOTING_TARGET, 2), 2);
-    economicInterestBlack = 4;
-    economicInterestBWO = 2;
-    designatedGroups = 3;
-    newEntrants = hasNewEntrant ? 2 : 0;
-    netValuePoints = 8;
+    votingRightsBlack = ot.votingRightsMaxPts;
+    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
+    economicInterestBlack = ot.economicInterestMaxPts;
+    economicInterestBWO = ot.womenEIMaxPts;
+    designatedGroups = ot.designatedGroupsMax;
+    newEntrants = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
+    netValuePoints = ot.netValueMaxPts;
   } else {
-    votingRightsBlack = clampScore(safeRatio(totalBlackVoting, FULL_OWNERSHIP_THRESHOLD, 4), 4);
-    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, WOMEN_VOTING_TARGET, 2), 2);
+    votingRightsBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
+    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
 
-    // Net Value = Lower of Formula A and Formula B (slide 113)
     const gradFactor = getGraduationFactor(yearsHeld);
     const formulaA = gradFactor > 0
-      ? totalEconomicInterest * (1 / (TARGET_ECONOMIC_INTEREST * gradFactor)) * 4
+      ? totalEconomicInterest * (1 / (ot.economicInterestTarget * gradFactor)) * ot.economicInterestMaxPts
       : 0;
-    const formulaB = (totalEconomicInterest / TARGET_ECONOMIC_INTEREST) * 4;
+    const formulaB = (totalEconomicInterest / ot.economicInterestTarget) * ot.economicInterestMaxPts;
     economicInterestBlack = clampScore(
       gradFactor > 0 ? Math.min(formulaA, formulaB) : formulaB,
-      4
+      ot.economicInterestMaxPts,
     );
 
-    economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, WOMEN_ECONOMIC_TARGET, 2), 2);
-    designatedGroups = clampScore(safeRatio(totalDesignatedGroup, DESIGNATED_GROUP_TARGET, 3), 3);
-    newEntrants = hasNewEntrant ? 2 : 0;
+    economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
+    designatedGroups = clampScore(safeRatio(totalDesignatedGroup, ot.designatedGroupsTarget, ot.designatedGroupsMax), ot.designatedGroupsMax);
+    newEntrants = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
 
     const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
     if (hasNetValue) {
-      netValuePoints = clampScore(netValuePointsAgg, 8);
+      netValuePoints = clampScore(netValuePointsAgg, ot.netValueMaxPts);
     } else {
+      // QSE fallback: when company value unknown, award net value from black ownership %
       netValuePoints = totalBlackVoting >= 1.0
-        ? 8
-        : clampScore(safeRatio(totalBlackVoting, FULL_OWNERSHIP_THRESHOLD, 8), 8);
+        ? ot.netValueMaxPts
+        : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
     }
   }
 
-  const subMinimumMet = fullOwnershipAwarded || netValuePoints >= SUB_MIN_NET_VALUE;
-  const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO + designatedGroups + newEntrants + netValuePoints;
+  const subMinimumMet = fullOwnershipAwarded || netValuePoints >= ot.subMinNetValue;
+  const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
+    + designatedGroups + newEntrants + netValuePoints;
 
   const subLines: OwnershipSubLine[] = [
-    { name: "Exercisable voting rights of black individuals", target: "25% + 1 vote", weighting: 4, score: votingRightsBlack },
-    { name: "Exercisable voting rights of black females", target: "10%", weighting: 2, score: votingRightsBWO },
-    { name: "Economic interest of black individuals", target: "25%", weighting: 4, score: economicInterestBlack },
-    { name: "Economic interest of black females", target: "10%", weighting: 2, score: economicInterestBWO },
-    { name: "Economic interest of black designated groups or participants in ownership schemes", target: "10%", weighting: 3, score: designatedGroups },
-    { name: "Economic interest of black new entrants", target: "New entrant", weighting: 2, score: newEntrants },
-    { name: "Net value", target: "≥ 3.2 pts", weighting: 8, score: netValuePoints },
+    { name: 'Exercisable voting rights of black individuals', target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`, weighting: ot.votingRightsMaxPts, score: votingRightsBlack },
+    { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO },
+    { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
+    { name: 'Economic interest of black females / ESOP bonus', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
+    { name: 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
+    { name: 'Economic interest of black new entrants', target: 'New entrant', weighting: ot.newEntrantsMaxPts, score: newEntrants },
+    { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
   ];
+
+  const total = round2(clampScore(totalPoints, ot.maxPts));
+  console.log(`[SCORING-TRACE] calculateOwnershipScore result: ${total} / ${ot.maxPts}`);
 
   return {
     votingRightsBlack: round2(votingRightsBlack),
@@ -176,7 +208,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     designatedGroups: round2(designatedGroups),
     newEntrants: round2(newEntrants),
     netValue: round2(netValuePoints),
-    total: round2(clampScore(totalPoints, config.pillarConfigs?.ownership?.maxPoints ?? 25)),
+    total,
     subMinimumMet,
     fullOwnershipAwarded,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
@@ -186,7 +218,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       economicInterestPercentage: round2(totalEconomicInterest),
       economicInterestBWOPercentage: round2(totalEconomicInterestBWO),
       designatedGroupPercentage: round2(totalDesignatedGroup),
-      netValuePercentage: round2(fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / 8)),
+      netValuePercentage: round2(fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / ot.netValueMaxPts)),
     },
   };
 }
