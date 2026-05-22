@@ -619,6 +619,9 @@ export type InsertCompanyProfile = Omit<CompanyProfile, "id" | "createdAt" | "up
 
 export type WorkspaceRole = "owner" | "collaborator" | "viewer";
 
+/** High-level display role chosen by the admin at invite time. */
+export type WorkspaceDisplayRole = "admin" | "contributor" | "reviewer" | "viewer";
+
 export interface Workspace {
   id: string;
   name: string;
@@ -632,6 +635,8 @@ export interface WorkspaceMember {
   workspaceId: string;
   userId: string;
   role: WorkspaceRole;
+  /** Display role chosen at invite time (admin | contributor | reviewer | viewer). */
+  displayRole?: WorkspaceDisplayRole;
   /** When set for collaborators, limits which scorecard pillars they may view or edit. Empty/absent = all pillars. */
   pillarScopes?: string[];
   joinedAt: Date;
@@ -642,6 +647,10 @@ export interface WorkspaceInvite {
   workspaceId: string;
   email: string;
   role: WorkspaceRole;
+  /** Display role chosen at invite time. */
+  displayRole?: WorkspaceDisplayRole;
+  /** Pillar keys the invitee will be scoped to (contributor role only). */
+  pillarScopes?: string[];
   token: string;
   invitedByUserId: string;
   expiresAt: Date;
@@ -673,6 +682,7 @@ const workspaceMemberSchema = new Schema({
   workspaceId: { type: String, required: true, index: true },
   userId: { type: String, required: true, index: true },
   role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
+  displayRole: { type: String, enum: ["owner", "admin", "contributor", "reviewer", "viewer"], default: null },
   pillarScopes: { type: [String], default: undefined },
   joinedAt: { type: Date, default: Date.now },
 }, { collection: "workspace_members" });
@@ -694,6 +704,8 @@ const workspaceInviteSchema = new Schema({
   workspaceId: { type: String, required: true, index: true },
   email: { type: String, required: true, lowercase: true, index: true },
   role: { type: String, enum: ["collaborator", "viewer"], required: true },
+  displayRole: { type: String, enum: ["admin", "contributor", "reviewer", "viewer"], default: null },
+  pillarScopes: { type: [String], default: undefined },
   token: { type: String, required: true, unique: true, index: true },
   invitedByUserId: { type: String, required: true },
   expiresAt: { type: Date, required: true },

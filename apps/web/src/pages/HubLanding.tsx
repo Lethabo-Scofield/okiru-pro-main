@@ -18,9 +18,6 @@ interface CompanyProfile {
   companyName?: string;
   beeLevel?: string | null;
 }
-interface WorkspaceLite { id: string; name: string }
-interface MemberLite { id: string; userId: string }
-interface InviteLite { id: string; acceptedAt: string | null; revokedAt: string | null; expiresAt: string }
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -46,9 +43,6 @@ export default function HubLanding() {
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-
-  const [stats, setStats] = useState<{ teamCount: number; pendingInvites: number } | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
 
   // Cmd/Ctrl+K opens search.
   useEffect(() => {
@@ -97,40 +91,6 @@ export default function HubLanding() {
     })();
     return () => { cancelled = true; };
   }, [user?.id, location, navigate]);
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    (async () => {
-      setStatsLoading(true);
-      try {
-        const wsRes = await fetch('/api/workspaces', { credentials: 'include' });
-        const wsData = await wsRes.json().catch(() => ({}));
-        const ws: WorkspaceLite[] = wsData.workspaces || [];
-        if (ws.length === 0) {
-          if (!cancelled) setStats({ teamCount: 1, pendingInvites: 0 });
-          return;
-        }
-        const id = ws[0].id;
-        const [mRes, iRes] = await Promise.all([
-          fetch(`/api/workspaces/${id}/members`, { credentials: 'include' }),
-          fetch(`/api/workspaces/${id}/invites`, { credentials: 'include' }),
-        ]);
-        const mData = await mRes.json().catch(() => ({}));
-        const iData = await iRes.json().catch(() => ({}));
-        const members: MemberLite[] = mData.members || [];
-        const invites: InviteLite[] = iData.invites || [];
-        const pending = invites.filter(
-          (i) => !i.acceptedAt && !i.revokedAt && new Date(i.expiresAt).getTime() > Date.now(),
-        ).length;
-        if (!cancelled) setStats({ teamCount: members.length, pendingInvites: pending });
-      } catch {
-        if (!cancelled) setStats({ teamCount: 1, pendingInvites: 0 });
-      } finally {
-        if (!cancelled) setStatsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.id]);
 
   const handleComingSoon = () => {
     toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
@@ -157,7 +117,7 @@ export default function HubLanding() {
       tag: 'B-BBEE',
       aiBadge: 'AI-Verified',
       icon: <Award className="w-5 h-5" />,
-      action: handleComingSoon,
+      link: '/certificates',
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
       featured: false,
     },
@@ -185,9 +145,6 @@ export default function HubLanding() {
   ]), []);
 
   const active = toolkits.filter((t) => 'link' in t && t.link);
-  const upcoming = toolkits.filter((t) => !('link' in t) || !t.link);
-  const suiteModuleTotal = toolkits.length;
-  const suiteLiveCount = active.length;
 
   const filteredActive = searchQuery.trim()
     ? active.filter((t) =>
@@ -195,13 +152,6 @@ export default function HubLanding() {
         (t.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.tag.toLowerCase().includes(searchQuery.toLowerCase()))
     : active;
-
-  const filteredUpcoming = searchQuery.trim()
-    ? upcoming.filter((t) =>
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.tag.toLowerCase().includes(searchQuery.toLowerCase()))
-    : upcoming;
 
   const featured = filteredActive.find((t: any) => t.featured) || filteredActive[0];
   const otherActive = filteredActive.filter((t) => t.id !== featured?.id);
@@ -212,11 +162,6 @@ export default function HubLanding() {
     companyName && isSkippedCompanyProfileName(companyName)
       ? "Your company (add details anytime)"
       : companyName;
-  const beeLevel = profile?.beeLevel || null;
-  const beeLevelSub =
-    profileLoading ? '' : beeLevel
-      ? 'Current rating'
-      : 'Add from your profile';
 
   return (
     <div
@@ -232,11 +177,6 @@ export default function HubLanding() {
           transform: 'translate(-50%, 0)',
         }}
       />
-
-      {/* Top progress bar - visible while initial profile/stats are loading */}
-      {(profileLoading || statsLoading || authLoading) && (
-        <div className="top-progress" aria-hidden data-testid="top-progress" />
-      )}
 
       <header
         className="h-14 shrink-0 z-20 sticky top-0 backdrop-blur-xl bg-black/70"
@@ -262,15 +202,12 @@ export default function HubLanding() {
             </button>
             <button
               onClick={() => setSearchOpen((s) => !s)}
-              className="hidden sm:inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
-              title="Search toolkits (⌘K)"
+              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
+              title="Search toolkits"
               data-testid="btn-search-toolkits"
             >
               <Search className="h-3.5 w-3.5" />
               <span>Search</span>
-              <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06] text-[10px] font-mono text-[#8e8e93]">
-                ⌘K
-              </kbd>
             </button>
             <button
               onClick={() => setSearchOpen((s) => !s)}
@@ -337,10 +274,6 @@ export default function HubLanding() {
       <main className="relative max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
         {/* HERO - personalized */}
         <section className="mb-10 fade-in" data-testid="hero-welcome">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[#8e8e93] text-[10.5px] font-semibold tracking-[0.14em] uppercase mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/60"></span>
-            Compliance Suite · ZA
-          </div>
           <h1
             className="text-[36px] leading-[1.05] sm:text-[52px] font-semibold tracking-tight text-white"
             style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
@@ -396,49 +329,6 @@ export default function HubLanding() {
           </div>
         </section>
 
-        {/* STATS STRIP */}
-        <section
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10"
-          data-testid="stats-strip"
-        >
-          <StatTile
-            label="Live modules"
-            value={suiteLiveCount}
-            sub={`${suiteLiveCount} of ${suiteModuleTotal} in this suite`}
-            loading={false}
-            staggerClass="card-rise stagger-1"
-          />
-          <StatTile
-            label="Team members"
-            value={statsLoading ? null : (stats?.teamCount ?? 1)}
-            sub={statsLoading ? '' : (stats && stats.teamCount > 1 ? 'Collaborating' : 'Open Workspace')}
-            loading={statsLoading}
-            onClick={() => navigate('/workspace')}
-            staggerClass="card-rise stagger-2"
-          />
-          <StatTile
-            label="Pending invites"
-            value={statsLoading ? null : (stats?.pendingInvites ?? 0)}
-            sub={statsLoading ? '' : (stats?.pendingInvites ? 'Awaiting acceptance' : 'None waiting')}
-            loading={statsLoading}
-            onClick={() => navigate('/workspace')}
-            staggerClass="card-rise stagger-3"
-          />
-          <StatTile
-            label="B-BBEE level"
-            value={profileLoading ? null : (beeLevel || '—')}
-            sub={beeLevelSub}
-            loading={profileLoading}
-            accent
-            onClick={
-              !profileLoading && !beeLevel
-                ? () => navigate(companyProfilePath('/hub'))
-                : undefined
-            }
-            staggerClass="card-rise stagger-4"
-          />
-        </section>
-
         {/* FEATURED + ACTIVE TOOLKITS */}
         <section className="mb-12">
           <SectionHeader title="Available now" count={filteredActive.length} />
@@ -459,21 +349,7 @@ export default function HubLanding() {
           </div>
         </section>
 
-        {/* COMING SOON */}
-        <section>
-          <SectionHeader title="On the roadmap" count={filteredUpcoming.length} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {filteredUpcoming.map((t, i) => (
-              <UpcomingCard
-                key={t.id}
-                toolkit={t}
-                staggerClass={`card-rise stagger-${7 + Math.min(i, 3)}`}
-              />
-            ))}
-          </div>
-        </section>
-
-        {filteredActive.length === 0 && filteredUpcoming.length === 0 && (
+        {filteredActive.length === 0 && (
           <div className="mt-10 rounded-2xl bg-white/[0.03] p-12 text-center border border-white/[0.06]">
             <Search className="w-8 h-8 text-[#2c2c2e] mx-auto mb-3" />
             <p className="text-[14px] text-[#636366]" data-testid="text-no-results">
@@ -495,51 +371,6 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
         {title}
       </h2>
       <span className="text-[11px] text-[#48484a] font-mono">{String(count).padStart(2, '0')}</span>
-    </div>
-  );
-}
-
-function StatTile({
-  label, value, sub, loading, onClick, accent, staggerClass,
-}: {
-  label: string; value: string | number | null; sub: string;
-  loading: boolean; onClick?: () => void; accent?: boolean; staggerClass?: string;
-}) {
-  const interactive = !!onClick;
-  const sharedClass = `${staggerClass || ''} text-left relative rounded-2xl p-4 bg-white/[0.02] ring-1 ring-inset ring-white/[0.05] hover:ring-white/[0.12] smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${interactive ? 'press-sm cursor-pointer hover:bg-white/[0.04]' : ''}`;
-  const valueColor = accent ? 'text-violet-300' : 'text-white';
-  const testId = `stat-${label.toLowerCase().replace(/\s+/g, '-')}`;
-  const inner = (
-    <>
-      <p className="text-[10.5px] font-semibold tracking-[0.14em] uppercase text-[#8e8e93]">{label}</p>
-      <div className="mt-1.5 flex items-baseline gap-2 min-h-[28px]">
-        {loading || value === null ? (
-          <span className="skel h-6 w-12 inline-block rounded-md" />
-        ) : (
-          <span
-            key={String(value)}
-            className={`text-[24px] font-semibold tracking-tight ${valueColor} bounce-in`}
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}
-          >
-            {value}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 text-[11px] text-[#636366] min-h-[14px]">
-        {loading ? <span className="skel h-2.5 w-20 inline-block align-middle" /> : sub}
-      </div>
-    </>
-  );
-  if (interactive) {
-    return (
-      <button type="button" onClick={onClick} className={sharedClass} data-testid={testId}>
-        {inner}
-      </button>
-    );
-  }
-  return (
-    <div className={sharedClass} data-testid={testId}>
-      {inner}
     </div>
   );
 }
@@ -607,22 +438,39 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
     <Link
       href={toolkit.link}
       className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-white/[0.025] border border-white/[0.06]
-        hover:border-white/[0.14] hover:bg-white/[0.04] transition-all duration-200
-        hover:-translate-y-0.5 min-h-[180px] flex flex-col`}
+        hover:border-white/[0.14] hover:bg-white/[0.04] transition-all duration-250
+        hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)] min-h-[180px] flex flex-col`}
       data-testid={`card-toolkit-${toolkit.id}`}
     >
       <div className="flex items-start justify-between mb-4">
         <div className="icon-rise w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#d1d1d6] flex items-center justify-center group-hover:bg-white/[0.08] group-hover:border-white/[0.14] group-hover:text-white smooth">
           {toolkit.icon}
         </div>
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#8e8e93] border border-white/[0.08] bg-white/[0.03] tracking-wider">
-          {toolkit.tag}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {toolkit.aiBadge && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#8e8e93]">
+              <Sparkles className="w-2.5 h-2.5" /> {toolkit.aiBadge}
+            </span>
+          )}
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#8e8e93] border border-white/[0.08] bg-white/[0.03] tracking-wider">
+            {toolkit.tag}
+          </span>
+        </div>
       </div>
       <h3 className="text-[15px] font-semibold tracking-tight text-white">{toolkit.title}</h3>
-      <p className="mt-1.5 text-[12.5px] text-[#8e8e93] leading-relaxed line-clamp-3">
+      <p className="mt-1.5 text-[12.5px] text-[#8e8e93] leading-relaxed line-clamp-2">
         {toolkit.description}
       </p>
+      {toolkit.features && toolkit.features.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-1">
+          {toolkit.features.slice(0, 2).map((f: string, i: number) => (
+            <li key={i} className="flex items-center gap-1.5 text-[11.5px] text-[#636366]">
+              <span className="w-1 h-1 rounded-full bg-white/30 shrink-0"></span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-auto pt-4 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-[#a1a1a6]">
           <span className="w-1.5 h-1.5 rounded-full bg-white/70 pulse-soft"></span> Live
