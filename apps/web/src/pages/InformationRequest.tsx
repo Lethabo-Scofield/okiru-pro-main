@@ -28,7 +28,7 @@ import {
   resolveScorecardTypeForSector,
   type ColumnDef,
 } from "@/components/workbook/sections";
-import { SectionWorkbookEditor, type SectionViewMode } from "@/components/workbook/SectionWorkbookEditor";
+import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
   validateWorkbook,
@@ -802,17 +802,15 @@ function ActiveSectionEditor({
   rows,
   onChange,
   workspaceId,
-  viewMode,
-  onViewModeChange,
+  clientCreatedByUserId,
 }: {
   section: NonNullable<ReturnType<typeof getSection>>;
   rows: Row[];
   onChange: (rows: Row[]) => void;
   workspaceId?: string | null;
-  viewMode: SectionViewMode;
-  onViewModeChange: (mode: SectionViewMode) => void;
+  clientCreatedByUserId?: string | null;
 }) {
-  const permissions = usePillarPermission(section.key, workspaceId);
+  const permissions = usePillarPermission(section.key, workspaceId, clientCreatedByUserId);
 
   if (!section.columns) return null;
 
@@ -822,8 +820,6 @@ function ActiveSectionEditor({
       rows={rows}
       onChange={onChange}
       permissions={permissions}
-      viewMode={viewMode}
-      onViewModeChange={onViewModeChange}
     />
   );
 }
@@ -842,14 +838,6 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const [submitting, setSubmitting] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [sectionViewModes, setSectionViewModes] = useState<Record<string, SectionViewMode>>(() => {
-    try {
-      const raw = localStorage.getItem("okiru-workbook-view-modes");
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  });
   // Per-section debounce timers + pending payloads so editing section B never
   // discards a pending save for section A.
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); 
@@ -887,21 +875,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       .catch(() => {});
   }, []);
 
-  const setSectionViewMode = useCallback((sectionKey: string, mode: SectionViewMode) => {
-    setSectionViewModes((prev) => {
-      const next = { ...prev, [sectionKey]: mode };
-      try {
-        localStorage.setItem("okiru-workbook-view-modes", JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
-
   const activeSectionPermissions = usePillarPermission(
     activeSectionKey,
     workspaceId,
+    company.createdByUserId,
   );
 
   const saveSection = useCallback(
@@ -1362,8 +1339,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       section={activeSection}
                       rows={activeRows}
                       workspaceId={workspaceId}
-                      viewMode={sectionViewModes[activeSection.key] ?? "spreadsheet"}
-                      onViewModeChange={(mode) => setSectionViewMode(activeSection.key, mode)}
+                      clientCreatedByUserId={company.createdByUserId}
                       onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
                     />
                   </div>

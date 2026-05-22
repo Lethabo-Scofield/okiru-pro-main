@@ -10,6 +10,7 @@ import { useAuth } from "@toolkit/lib/auth";
 import { API_BASE } from "@toolkit/lib/config";
 import type { WorkspaceDisplayRole } from "../../shared/schema";
 import { sectionKeyToPillar, isFoundationSection } from "@/lib/workbookSectionPillarMap";
+import { isSuperAdmin } from "@/lib/roles";
 
 export interface PillarPermission {
   loading: boolean;
@@ -123,10 +124,12 @@ function permissionsFromMember(
 /**
  * @param pillarKeyOrSection - pillar scope key or workbook section key
  * @param workspaceId - optional workspace; when omitted, defaults to full access
+ * @param clientCreatedByUserId - client owner gets full access regardless of workspace role
  */
 export function usePillarPermission(
   pillarKeyOrSection: string,
   workspaceId?: string | null,
+  clientCreatedByUserId?: string | null,
 ): PillarPermission {
   const { user } = useAuth();
   const [loading, setLoading] = useState(Boolean(workspaceId && user?.id));
@@ -183,6 +186,8 @@ export function usePillarPermission(
   }, [workspaceId, user?.id]);
 
   return useMemo(() => {
+    if (user && isSuperAdmin(user)) return FULL_ACCESS;
+    if (user?.id && clientCreatedByUserId && clientCreatedByUserId === user.id) return FULL_ACCESS;
     if (!workspaceId || !user?.id) return FULL_ACCESS;
     if (loading) {
       return {
@@ -198,5 +203,5 @@ export function usePillarPermission(
     if (!member) return FULL_ACCESS;
     const display = resolveDisplayRole(member.role, member.displayRole);
     return permissionsFromMember(display, member.pillarScopes, pillarKey, foundation);
-  }, [workspaceId, user?.id, loading, member, pillarKey, foundation]);
+  }, [workspaceId, user, loading, member, pillarKey, foundation, clientCreatedByUserId]);
 }

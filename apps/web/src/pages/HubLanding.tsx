@@ -331,7 +331,7 @@ export default function HubLanding() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-300 flex items-center justify-center mb-5">
+                  <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-300 flex items-center justify-center mb-5">
                     <ClipboardList className="w-6 h-6" />
                   </div>
                   <h3
@@ -344,7 +344,7 @@ export default function HubLanding() {
                     Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
                   </p>
                 </div>
-                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-emerald-300 transition-colors shrink-0 mt-1" />
+                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-violet-300 transition-colors shrink-0 mt-1" />
               </div>
               <div className="mt-6 flex items-center gap-1.5 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
                 <Sparkles className="w-3 h-3" /> New workbook
