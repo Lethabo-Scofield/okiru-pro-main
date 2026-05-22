@@ -1,9 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation, useSearch } from 'wouter';
-import { useAuth } from '@toolkit/lib/auth';
-import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { Loader2, Search, ChevronRight, FileText, Building2, HelpCircle, ExternalLink, ClipboardList, Pencil } from 'lucide-react';
-import { useOnboarding, OnboardingTour } from '@/components/OnboardingTour';
+import { useLocation } from 'wouter';import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import { Loader2, Search, FileText, Building2, ExternalLink, Pencil } from 'lucide-react';
 import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
@@ -20,17 +17,10 @@ interface ClientRow {
   createdByUserId?: string | null;
 }
 
-type Page = 'home' | 'scorecards';
-
 export default function Dashboard() {
-  const search = useSearch();
-  const initialTab = new URLSearchParams(search).get('tab') as Page | null;
-  const [page, setPage] = useState<Page>(initialTab && ['home', 'scorecards'].includes(initialTab) ? initialTab : 'home');
   const [, navigate] = useLocation();
-  const { user } = useAuth();
   const [companySearch, setCompanySearch] = useState('');
   const [industryFilter, setIndustryFilter] = useState('all');
-  const { showTour, startTour, completeTour, dismissTour } = useOnboarding(user?.id);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
 
@@ -52,10 +42,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
-
-  useEffect(() => {
-    if (page === 'scorecards') fetchClients();
-  }, [page, fetchClients]);
 
   const allCompanies = useMemo(() => {
     return clients.map((c) => ({
@@ -96,16 +82,6 @@ export default function Dashboard() {
     [allCompanies, industries],
   );
 
-  const goTo = (p: Page) => {
-    setPage(p);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const openSummary = (clientId: string) => {
-    localStorage.setItem('okiru-pro-active-client', clientId);
-    navigate(`/create-scorecard/${encodeURIComponent(clientId)}/summary`);
-  };
-
   const openScorecard = (clientId: string) => {
     localStorage.setItem('okiru-pro-active-client', clientId);
     navigate('/toolkit/scorecard');
@@ -114,110 +90,33 @@ export default function Dashboard() {
   return (
     <div className="font-sans min-h-screen bg-black" style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}>
 
-      {showTour && page === 'home' && <OnboardingTour onComplete={completeTour} onDismiss={dismissTour} />}
-
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: '1px solid #2c2c2e' }}>
         <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" className="shrink-0" />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block"></div>
-            <button onClick={() => goTo('home')} className="flex items-center gap-3 press-sm" data-testid="logo-home">
+            <div className="flex items-center gap-3">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">Dashboard</span>
-            </button>
+              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">View Scorecard</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setPage('home'); startTour(); }}
-              className="p-2 rounded-full bg-[#1c1c1e] hover:bg-[#3a3a3c] smooth press-sm text-[#8e8e93] hover:text-[#d1d1d6]"
-              title="Take a tour"
-              aria-label="Take a guided tour"
-              data-testid="button-help-tour"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </button>
             <UserAccountMenu variant="dashboard" />
           </div>
         </div>
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-
-        {page === 'home' && (
-          <section data-testid="page-home" className="fade-in">
-            <div className="mb-10">
-              <h1 className="text-[32px] font-bold tracking-[-0.03em] text-white">Dashboard</h1>
-              <p className="text-[15px] text-[#98989f] mt-1">Choose what you want to do.</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-5xl">
-              <button
-                className="group text-left rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] p-8 min-h-[200px] lift press hover:bg-[#2c2c2e] smooth w-full"
-                onClick={() => navigate('/create-scorecard')}
-                data-testid="card-create-scorecard"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[18px] font-semibold tracking-tight text-white">Create Scorecard</div>
-                    <div className="text-[14px] text-[#98989f] mt-2 leading-relaxed max-w-xl">
-                      Pick a company and complete the information workbook, then submit to scorecard.
-                    </div>
-                  </div>
-                  <div className="h-12 w-12 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.12] smooth shrink-0">
-                    <ClipboardList className="h-6 w-6 text-[#d1d1d6]" />
-                  </div>
-                </div>
-                <div className="mt-6 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                  Workbook <ChevronRight className="w-3 h-3" /> Submit
-                </div>
-              </button>
-
-              <button
-                className="group text-left rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] p-8 min-h-[200px] lift press hover:bg-[#2c2c2e] smooth opacity-0 fade-in stagger-1 w-full"
-                onClick={() => goTo('scorecards')}
-                data-testid="card-scorecards"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[18px] font-semibold tracking-tight text-white">View Scorecard</div>
-                    <div className="text-[14px] text-[#98989f] mt-2 leading-relaxed max-w-xl">
-                      Open saved companies in the scorecard or toolkit.
-                    </div>
-                  </div>
-                  <div className="h-12 w-12 rounded-xl bg-white/[0.06] grid place-items-center group-hover:bg-white/[0.12] smooth shrink-0">
-                    <Building2 className="h-6 w-6 text-[#d1d1d6]" />
-                  </div>
-                </div>
-                <div className="mt-6 flex items-center gap-1 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                  Companies <ChevronRight className="w-3 h-3" /> Scorecard
-                </div>
-              </button>
-            </div>
-          </section>
-        )}
-
-        {page === 'scorecards' && (
           <section data-testid="page-scorecards" className="fade-in">
             <div className="flex items-start justify-between gap-4 mb-8">
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <AppNavBack
-                    onClick={() => goTo('home')}
-                    eyebrow="Dashboard"
-                    label="Back"
-                    variant="dark"
-                    size="compact"
-                    data-testid="button-back-home-sc"
-                  />
-                  <span className="text-[11px] text-[#636366] font-medium">/ View Scorecard</span>
-                </div>
                 <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">Saved Companies</h1>
                 <p className="text-[14px] text-[#98989f] mt-1">Open a scorecard or continue editing a company workbook.</p>
               </div>
               <button
                 onClick={() => navigate('/create-scorecard')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-8"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.12] hover:bg-white/[0.18] text-white text-[13px] font-semibold smooth press-sm shadow-sm shadow-black/10 shrink-0 mt-2"
                 data-testid="button-new-scorecard"
               >
                 <FileText className="h-4 w-4" />
@@ -318,7 +217,10 @@ export default function Dashboard() {
                                 onDeleted={fetchClients}
                               />
                               <button
-                                onClick={() => openSummary(c.id)}
+                                onClick={() => {
+                                  localStorage.setItem('okiru-pro-active-client', c.id);
+                                  navigate(`/create-scorecard/${encodeURIComponent(c.id)}/summary`);
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
                                 data-testid={`button-summary-${c.id}`}
                               >
@@ -376,7 +278,6 @@ export default function Dashboard() {
               )}
             </div>
           </section>
-        )}
       </main>
     </div>
   );

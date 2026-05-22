@@ -7,8 +7,8 @@ import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
-  BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles,
+  Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
+  Sparkles, ClipboardList, BarChart3,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -98,18 +98,6 @@ export default function HubLanding() {
 
   const toolkits = useMemo(() => ([
     {
-      id: 'bbbee-scorecard',
-      title: 'B-BBEE Scorecard Calculator',
-      description:
-        'Model your scorecard across all five elements - Ownership, Management Control, Skills Development, Enterprise Development, and Socio-Economic Development.',
-      tag: 'B-BBEE',
-      aiBadge: 'AI-Scored',
-      icon: <BarChart3 className="w-5 h-5" />,
-      link: '/dashboard',
-      features: ['Automatic level determination', 'Scenario modelling & what-if', 'DTI Codes compliant'],
-      featured: true,
-    },
-    {
       id: 'bbbee-cert',
       title: 'B-BBEE Certificate Hub',
       description:
@@ -119,7 +107,7 @@ export default function HubLanding() {
       icon: <Award className="w-5 h-5" />,
       link: '/certificates',
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
-      featured: false,
+      featured: true,
     },
     {
       id: 'esg', title: 'ESG Toolkit', tag: 'ESG', aiBadge: 'AI-Insights',
@@ -326,6 +314,72 @@ export default function HubLanding() {
                 for invites, or jump into a toolkit below.
               </>
             )}
+          </div>
+        </section>
+
+        {/* SCORECARD ACTIONS */}
+        <section className="mb-12" data-testid="scorecard-actions">
+          <SectionHeader title="B-BBEE Scorecard" count={2} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/create-scorecard')}
+              className="group text-left rounded-2xl border border-white/[0.08] bg-white/[0.025] p-8 min-h-[220px]
+                hover:border-violet-400/30 hover:bg-violet-500/[0.06] transition-all duration-300
+                hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(124,58,237,0.25)] card-rise stagger-1"
+              data-testid="card-create-scorecard"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-300 flex items-center justify-center mb-5">
+                    <ClipboardList className="w-6 h-6" />
+                  </div>
+                  <h3
+                    className="text-[22px] font-semibold tracking-tight text-white"
+                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+                  >
+                    Create Scorecard
+                  </h3>
+                  <p className="text-[13.5px] text-[#8e8e93] mt-2 leading-relaxed max-w-md">
+                    Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-emerald-300 transition-colors shrink-0 mt-1" />
+              </div>
+              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
+                <Sparkles className="w-3 h-3" /> New workbook
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="group text-left rounded-2xl border border-white/[0.08] bg-white/[0.025] p-8 min-h-[220px]
+                hover:border-white/[0.16] hover:bg-white/[0.04] transition-all duration-300
+                hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.5)] card-rise stagger-2"
+              data-testid="card-view-scorecard"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-300 flex items-center justify-center mb-5">
+                    <BarChart3 className="w-6 h-6" />
+                  </div>
+                  <h3
+                    className="text-[22px] font-semibold tracking-tight text-white"
+                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+                  >
+                    View Scorecard
+                  </h3>
+                  <p className="text-[13.5px] text-[#8e8e93] mt-2 leading-relaxed max-w-md">
+                    Open saved companies, review scorecard summaries, and continue editing existing workbooks.
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-violet-300 transition-colors shrink-0 mt-1" />
+              </div>
+              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
+                Saved companies <ChevronRight className="w-3 h-3" />
+              </div>
+            </button>
           </div>
         </section>
 
