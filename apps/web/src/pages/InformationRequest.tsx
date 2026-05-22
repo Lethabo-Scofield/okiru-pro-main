@@ -59,7 +59,13 @@ interface Company {
   createdByUserId?: string | null;
 }
 
-function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
+function LakeTradingDemoEntry({
+  onPick,
+  compact = false,
+}: {
+  onPick: (c: Company) => void;
+  compact?: boolean;
+}) {
   const [seeding, setSeeding] = useState(false);
   const { toast } = useToast();
 
@@ -97,6 +103,35 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
       setSeeding(false);
     }
   };
+
+  if (compact) {
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+          <FlaskConical className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[#d1d1d6]">Lake Trading Demo</p>
+            <p className="text-[12px] text-[#636366] mt-0.5">
+              Pre-filled RCOGP workbook — same validation and submit flow as a live client.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={openDemo}
+          disabled={seeding}
+          className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-200 text-[12px] font-semibold press-sm hover:bg-amber-500/25 disabled:opacity-60 smooth"
+          data-testid="button-open-lake-trading-demo"
+        >
+          {seeding ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FlaskConical className="h-3.5 w-3.5" />
+          )}
+          Open Lake Trading Demo
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-6">
@@ -254,71 +289,66 @@ function CompanyPicker({
 
   if (mode === "create") {
     return (
-      <div className="max-w-xl mx-auto py-8">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-300 mb-6">
-            <Building2 className="w-8 h-8" />
+      <div className="max-w-3xl mx-auto py-6">
+        <div className="rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] overflow-hidden">
+          <div className="px-6 sm:px-8 pt-6 pb-5 border-b border-[#2c2c2e]">
+            <h2
+              className="text-[22px] sm:text-[26px] font-semibold tracking-tight text-white"
+              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+            >
+              Create Scorecard
+            </h2>
+            <p className="text-[14px] text-[#8e8e93] mt-1.5">
+              Enter your company&apos;s B-BBEE information to generate your scorecard.
+            </p>
           </div>
-          <h2
-            className="text-[32px] font-semibold tracking-tight text-white"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-          >
-            Create Scorecard
-          </h2>
-          <p className="text-[15px] text-[#8e8e93] mt-3 leading-relaxed max-w-md mx-auto">
-            Enter your company&apos;s B-BBEE information to generate your scorecard. Start fresh with a new company name below.
-          </p>
-        </div>
 
-        {showLakeDemo && (
-          <div className="mb-6">
-            <LakeTradingDemoEntry onPick={onPick} />
-          </div>
-        )}
+          <div className="px-6 sm:px-8 py-5">
+            <label
+              htmlFor="new-company-name"
+              className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2"
+            >
+              Company name
+            </label>
+            <input
+              id="new-company-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && create()}
+              placeholder="e.g. Acme Holdings (Pty) Ltd"
+              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10 mb-3"
+              data-testid="input-new-company"
+              autoFocus
+            />
+            <button
+              onClick={create}
+              disabled={!newName.trim() || creating}
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-[14px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
+              data-testid="button-start-scorecard"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  Start New Scorecard
+                  <ChevronRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
 
-        <div className="rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] p-8">
-          <label htmlFor="new-company-name" className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2">
-            Company name
-          </label>
-          <input
-            id="new-company-name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && create()}
-            placeholder="e.g. Acme Holdings (Pty) Ltd"
-            className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-3.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10 mb-4"
-            data-testid="input-new-company"
-            autoFocus
-          />
-          <button
-            onClick={create}
-            disabled={!newName.trim() || creating}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white text-black text-[15px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
-            data-testid="button-start-scorecard"
-          >
-            {creating ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                Start New Scorecard
-                <ChevronRight className="h-5 w-5" />
-              </>
-            )}
-          </button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#2c2c2e]" />
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#2c2c2e]" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
+              </div>
             </div>
-            <div className="relative flex justify-center">
-              <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
-            </div>
-          </div>
 
-          <div className="flex justify-center">
-            <ExcelImportButton
-              label="Import from Excel"
-              onImport={async (file) => {
+            <div className="flex justify-center">
+              <ExcelImportButton
+                label="Import from Excel"
+                onImport={async (file) => {
                 const result = await importBeeGatheringExcel(file, API_BASE);
                 if (!result.extraction.isBeeGatheringFormat) {
                   const fallback = await normalizeExcelFile(file);
@@ -368,6 +398,12 @@ function CompanyPicker({
               }}
             />
           </div>
+
+          {showLakeDemo && (
+            <div className="px-6 sm:px-8 py-4 border-t border-[#2c2c2e] bg-amber-500/[0.03]">
+              <LakeTradingDemoEntry onPick={onPick} compact />
+            </div>
+          )}
         </div>
 
         <ExcelImportPreviewModal
@@ -459,7 +495,7 @@ function CompanyPicker({
           }}
         />
 
-        <p className="text-center text-[13px] text-[#636366] mt-6">
+        <p className="text-center text-[13px] text-[#636366] mt-5">
           Already have a scorecard?{" "}
           <a href="/dashboard" className="text-violet-300 hover:text-violet-200 underline underline-offset-2">
             View saved companies
@@ -1408,7 +1444,17 @@ export default function InformationRequest() {
             <AppNavBack href={isCreateScorecardFlow ? "/hub" : "/dashboard"} eyebrow="Back" label={isCreateScorecardFlow ? "Hub" : "Dashboard"} variant="dark" className="shrink-0" />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
             <div className="flex items-center gap-3">
-              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
+              <div className="h-8 w-8 rounded-[8px] bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
+                <img
+                  src={logoCircle}
+                  alt="Okiru"
+                  className="h-5 w-5 rounded-[6px] object-contain"
+                  style={{
+                    filter:
+                      "brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(245deg) brightness(98%) contrast(98%)",
+                  }}
+                />
+              </div>
               <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
                 {pageTitle}
               </span>
