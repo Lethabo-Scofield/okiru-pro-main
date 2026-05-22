@@ -459,21 +459,7 @@ export default function HubLanding() {
           </div>
         </section>
 
-        {/* COMING SOON */}
-        <section>
-          <SectionHeader title="On the roadmap" count={filteredUpcoming.length} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {filteredUpcoming.map((t, i) => (
-              <UpcomingCard
-                key={t.id}
-                toolkit={t}
-                staggerClass={`card-rise stagger-${7 + Math.min(i, 3)}`}
-              />
-            ))}
-          </div>
-        </section>
-
-        {filteredActive.length === 0 && filteredUpcoming.length === 0 && (
+        {filteredActive.length === 0 && (
           <div className="mt-10 rounded-2xl bg-white/[0.03] p-12 text-center border border-white/[0.06]">
             <Search className="w-8 h-8 text-[#2c2c2e] mx-auto mb-3" />
             <p className="text-[14px] text-[#636366]" data-testid="text-no-results">
