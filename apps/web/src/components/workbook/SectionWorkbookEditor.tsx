@@ -76,46 +76,57 @@ export function SectionWorkbookEditor({
   }, [importFile, importDiff, columns, rows, importMode, onChange]);
 
   return (
-    <div className="space-y-4" data-testid={`section-editor-${section.key}`}>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {permissions.canExport && (
-          <button
-            type="button"
-            onClick={handleExport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
-            data-testid="button-export-section"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export section
-          </button>
-        )}
-        {permissions.canImport && (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-              data-testid="input-section-import"
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
-              data-testid="button-import-section"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Import section
-            </button>
-          </>
-        )}
-        {permissions.loading && (
-          <Loader2 className="h-4 w-4 animate-spin text-[#636366]" />
-        )}
+    <>
+      <div className="px-6 py-4 border-b border-white/[0.06]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[18px] font-bold tracking-tight text-white">{section.label}</h2>
+            {section.description && (
+              <p className="text-[13px] text-[#8e8e93] mt-0.5">{section.description}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            {permissions.canExport && (
+              <button
+                type="button"
+                onClick={handleExport}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+                data-testid="button-export-section"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export section
+              </button>
+            )}
+            {permissions.canImport && (
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => handleFile(e.target.files?.[0])}
+                  data-testid="input-section-import"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+                  data-testid="button-import-section"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Import section
+                </button>
+              </>
+            )}
+            {permissions.loading && (
+              <Loader2 className="h-4 w-4 animate-spin text-[#636366]" />
+            )}
+          </div>
+        </div>
       </div>
 
-      <SpreadsheetGrid
+      <div className="px-6 pb-6 pt-5 space-y-4" data-testid={`section-editor-${section.key}`}>
+        <SpreadsheetGrid
         columns={columns}
         rows={rows}
         onChange={onChange}
@@ -144,6 +155,7 @@ export function SectionWorkbookEditor({
         }}
         onConfirm={confirmImport}
       />
-    </div>
+      </div>
+    </>
   );
 }

@@ -1311,15 +1311,15 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             </div>
           ) : activeSection ? (
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/[0.06]">
-                <h2 className="text-[18px] font-bold tracking-tight text-white">
-                  {activeSection.label}
-                </h2>
-                <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
-              </div>
-              <div className="px-6 pb-6">
-                {activeMetaFields ? (
-                  <div className="pt-5">
+              {activeMetaFields ? (
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                  </div>
+                  <div className="px-6 pb-6 pt-5">
                     {activeSectionPermissions.loading ? (
                       <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
@@ -1333,22 +1333,30 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       />
                     )}
                   </div>
-                ) : activeSection.columns ? (
-                  <div className="pt-5">
-                    <ActiveSectionEditor
-                      section={activeSection}
-                      rows={activeRows}
-                      workspaceId={workspaceId}
-                      clientCreatedByUserId={company.createdByUserId}
-                      onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
-                    />
+                </>
+              ) : activeSection.columns ? (
+                <ActiveSectionEditor
+                  section={activeSection}
+                  rows={activeRows}
+                  workspaceId={workspaceId}
+                  clientCreatedByUserId={company.createdByUserId}
+                  onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
+                />
+              ) : (
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
                   </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
-                    <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                  <div className="px-6 pb-6">
+                    <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
+                      <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           ) : null}
         </section>
