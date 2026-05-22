@@ -76,6 +76,9 @@ export async function resolvePermissions(
   const user = await storage.getUser(userId);
   const roleNames = new Set<string>();
   if (user?.role) roleNames.add(user.role);
+  for (const sr of (user as any)?.secondaryRoles ?? []) {
+    if (sr) roleNames.add(sr);
+  }
 
   // Layer in any explicit role assignments. Failure to read this collection
   // (e.g. MongoDB not connected) must not block the request — we fall back

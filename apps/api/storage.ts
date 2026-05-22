@@ -160,12 +160,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClient(id: string): Promise<Client | undefined> {
-    const doc = await ClientModel.findOne({ id }).lean();
+    const doc = await ClientModel.findOne({ $or: [{ id }, { clientId: id }] }).lean();
     return doc ? clean<Client>(doc) : undefined;
   }
 
-  async createClient(client: InsertClient): Promise<Client> {
-    const doc = await ClientModel.create({ id: uuid(), ...client });
+  async createClient(client: InsertClient & { createdByUserId?: string; clientId?: string }): Promise<Client> {
+    const businessId = client.clientId ?? uuid();
+    const doc = await ClientModel.create({
+      id: businessId,
+      clientId: businessId,
+      ...client,
+    });
     return clean<Client>(doc);
   }
 

@@ -758,6 +758,7 @@ Respond ONLY with a valid JSON array.`;
         const user = await UserModel.findById(userId);
         const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
         const client = await ClientModel.create({
+          id: clientId,
           clientId,
           name,
           financialYear: financialYear || new Date().getFullYear().toString(),
@@ -869,17 +870,11 @@ Respond ONLY with a valid JSON array.`;
     });
 
     app.put("/api/clients/:clientId/calculator-config", async (req, res) => {
-      try {
-        const userId = (req.session as any)?.userId;
-        if (!userId) return res.status(401).json({ error: "Not authenticated" });
-        const { config } = req.body;
-        if (!config) return res.status(400).json({ error: "config is required" });
-        if (!isDbConnected) return res.json(config);
-        const doc = await CalculatorConfigModel.findOneAndUpdate({ clientId: req.params.clientId }, { config, updatedAt: new Date() }, { new: true, upsert: true });
-        res.json(doc.toJSON().config);
-      } catch (error: any) {
-        res.status(500).json({ error: "Failed to save calculator config" });
-      }
+      const userId = (req.session as any)?.userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      res.status(403).json({
+        error: "Calculator config overrides are disabled. Use sector config from the scorecard builder.",
+      });
     });
 
     app.post("/api/generate-calculator-suggestions", async (req, res) => {

@@ -16,6 +16,11 @@ import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
+import {
+  calculateTransportQseManagement,
+  calculateTransportQseEmploymentEquity,
+  isTransportQseSector,
+} from './calculators/transport';
 import { deepClone, round2 } from './calculators/shared';
 
 export interface ScenarioSnapshot {
@@ -95,11 +100,101 @@ const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
  * Factory function to build an empty scorecard from calculatorConfig.
  * Falls back to RCOGP Generic defaults if no config provided.
  */
+function normalizeFraction(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  if (n > 1) return n / 100;
+  return Math.max(0, n);
+}
+
+/** Fetch sector-specific calculator config from API (authoritative pillar weightings). */
+async function fetchSectorCalculatorConfig(
+  sectorCode: string,
+  scorecardType: string,
+): Promise<CalculatorConfig | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`,
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.config) return data.config as CalculatorConfig;
+    }
+  } catch (error) {
+    console.error('[store] Failed to fetch sector calculator config:', error);
+  }
+  return null;
+}
+
+function hasValidPillarConfigs(config: CalculatorConfig | null | undefined): boolean {
+  if (!config?.pillarConfigs) return false;
+  const pc = config.pillarConfigs;
+  const ownMax = pc.ownership?.maxPoints ?? 0;
+  const mcMax = pc.managementControl?.maxPoints ?? 0;
+  return (ownMax + mcMax) > 0 && (config.totalMaxPoints ?? 0) > 0;
+}
+
+/** Map workbook / EE job titles to calculator designation enums. */
+function mapJobTitleToDesignation(raw: string | undefined): string {
+  const t = (raw ?? '').trim().toLowerCase();
+  if (!t) return 'Junior';
+  if (t.includes('non-executive') || t.includes('non executive') || t === 'director') return 'Board';
+  if (t.includes('executive director')) return 'Executive Director';
+  if (t.includes('other executive')) return 'Other Executive Management';
+  if (t.includes('senior')) return 'Senior';
+  if (t.includes('middle')) return 'Middle';
+  if (t.includes('junior')) return 'Junior';
+  if (t.includes('semi-skilled') || t.includes('semi skilled')) return 'Semi-skilled';
+  if (t.includes('unskilled')) return 'Unskilled';
+  if (t.includes('executive') || t.includes('ceo') || t.includes('managing director')) return 'Executive Director';
+  if (t.includes('manager') || t.includes('supervisor')) return 'Middle';
+  return 'Junior';
+}
+
+type PillarConfigKey =
+  | 'skillsDevelopment'
+  | 'preferentialProcurement'
+  | 'enterpriseDevelopment'
+  | 'socioEconomicDevelopment';
+
+const ELECTIVE_CONFIG_TO_SCORECARD: Record<PillarConfigKey, keyof ScorecardResult> = {
+  skillsDevelopment: 'skillsDevelopment',
+  preferentialProcurement: 'procurement',
+  enterpriseDevelopment: 'enterpriseDevelopment',
+  socioEconomicDevelopment: 'socioEconomicDevelopment',
+};
+
+/** Auto-select highest-scoring pillar per chooseOneGroup (Transport QSE electives). */
+function resolveChooseOneElectives(
+  pConfig: CalculatorConfig['pillarConfigs'],
+  rawScores: Record<PillarConfigKey, number>,
+): { chosenKey: PillarConfigKey | null; activeKeys: Set<PillarConfigKey> } {
+  const groups = new Map<string, PillarConfigKey[]>();
+  for (const key of Object.keys(ELECTIVE_CONFIG_TO_SCORECARD) as PillarConfigKey[]) {
+    const group = pConfig?.[key]?.chooseOneGroup;
+    if (group) {
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group)!.push(key);
+    }
+  }
+  const activeKeys = new Set<PillarConfigKey>();
+  let chosenKey: PillarConfigKey | null = null;
+  for (const keys of groups.values()) {
+    const best = keys.reduce((a, b) => (rawScores[b] > rawScores[a] ? b : a), keys[0]);
+    activeKeys.add(best);
+    chosenKey = best;
+    console.log('[SCORING-TRACE] chooseOneGroup resolved:', keys.join(', '), '→ chosen:', best, `(${rawScores[best]} pts)`);
+  }
+  return { chosenKey, activeKeys };
+}
+
 function buildEmptyScorecard(config?: CalculatorConfig | null): ScorecardResult {
   const pc = config?.pillarConfigs;
+  const eeMax = pc?.employmentEquity?.maxPoints ?? 0;
   return {
     ownership: { score: 0, target: pc?.ownership?.maxPoints ?? 25, weighting: pc?.ownership?.maxPoints ?? 25, subMinimumMet: false },
     managementControl: { score: 0, target: pc?.managementControl?.maxPoints ?? 19, weighting: pc?.managementControl?.maxPoints ?? 19 },
+    ...(eeMax > 0 ? { employmentEquity: { score: 0, target: eeMax, weighting: eeMax } } : {}),
     skillsDevelopment: { score: 0, target: pc?.skillsDevelopment?.maxPoints ?? 25, weighting: pc?.skillsDevelopment?.maxPoints ?? 25, subMinimumMet: false },
     procurement: { score: 0, target: pc?.preferentialProcurement?.maxPoints ?? 29, weighting: pc?.preferentialProcurement?.maxPoints ?? 29, subMinimumMet: false },
     supplierDevelopment: { score: 0, target: pc?.supplierDevelopment?.maxPoints ?? 10, weighting: pc?.supplierDevelopment?.maxPoints ?? 10, subMinimumMet: false },
@@ -112,6 +207,7 @@ function buildEmptyScorecard(config?: CalculatorConfig | null): ScorecardResult 
       weighting: config?.totalMaxPoints ?? 120,
     },
     achievedLevel: 9, discountedLevel: 9, isDiscounted: false, recognitionLevel: '0%',
+    chosenElectivePillar: null,
   };
 }
 
@@ -385,12 +481,65 @@ function calculateScorecard(
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
   if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
+  const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
+  const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
+
+  console.log('[SCORING-TRACE] Calculator input for ownership:', {
+    shareholders: state.ownership.shareholders?.length ?? 0,
+    sample: state.ownership.shareholders?.slice(0, 2),
+  });
   const ownScore = calculateOwnershipScore(state.ownership, cfg);
-  const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
+  console.log('[SCORING-TRACE] Calculator output for ownership:', { score: ownScore.total, subMin: ownScore.subMinimumMet });
+
+  let mgtScoreTotal: number;
+  let eeScoreTotal = 0;
+  if (transportQse) {
+    console.log('[SCORING-TRACE] Calculator input for managementControl (Transport QSE):', {
+      employees: state.management.employees?.length ?? 0,
+    });
+    const tqMc = calculateTransportQseManagement(state.management, cfg);
+    mgtScoreTotal = tqMc.score;
+    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: tqMc.score, subMin: true });
+
+    console.log('[SCORING-TRACE] Calculator input for employmentEquity (Transport QSE):', {
+      employees: state.management.employees?.length ?? 0,
+      eapProvince: state.client.eapProvince,
+    });
+    const tqEe = calculateTransportQseEmploymentEquity(state.management, cfg, state.client.eapProvince);
+    eeScoreTotal = tqEe.score;
+    console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tqEe.score, subMin: true });
+  } else {
+    console.log('[SCORING-TRACE] Calculator input for managementControl:', {
+      employees: state.management.employees?.length ?? 0,
+    });
+    const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
+    mgtScoreTotal = mgtScore.total;
+    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: mgtScore.total, subMin: mgtScore.subMinimumMet });
+  }
+
+  console.log('[SCORING-TRACE] Calculator input for skillsDevelopment:', {
+    leviableAmount: state.skills.leviableAmount,
+    programs: state.skills.trainingPrograms?.length ?? 0,
+  });
   const skillScore = calculateSkillsScore(state.skills, cfg);
+  console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
+
+  console.log('[SCORING-TRACE] Calculator input for procurement:', {
+    tmps: state.procurement.tmps,
+    suppliers: state.procurement.suppliers?.length ?? 0,
+  });
   const procScore = calculateProcurementScore(state.procurement, cfg);
+  console.log('[SCORING-TRACE] Calculator output for procurement:', { score: procScore.total, subMin: procScore.subMinimumMet });
+
+  console.log('[SCORING-TRACE] Calculator input for esd/sed:', {
+    esdContributions: state.esd.contributions?.length ?? 0,
+    sedContributions: state.sed.contributions?.length ?? 0,
+    npat: state.client.npat,
+  });
   const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
   const sedScore = calculateSedScore(state.sed, state.client.npat, cfg);
+  console.log('[SCORING-TRACE] Calculator output for esd:', { sd: esdScore.sdTotal, ed: esdScore.edTotal });
+  console.log('[SCORING-TRACE] Calculator output for sed:', { score: sedScore.total });
   // CRITICAL: Wire YES calculator - construct YESData from skills and management state
   // Training programs with isYesEmployee=true are treated as YES candidates
   const yesCandidates = state.skills.trainingPrograms
@@ -433,7 +582,7 @@ function calculateScorecard(
   if (overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0) {
     const ov = overrides;
     const ownPts = ov.ownership ?? ownScore.total;
-    const mcPts = ov.managementControl ?? mgtScore.total;
+    const mcPts = ov.managementControl ?? mgtScoreTotal;
     const skPts = ov.skillsDevelopment ?? skillScore.total;
     const prPts = ov.procurement ?? procScore.total;
     const sdPts = ov.supplierDevelopment ?? esdScore.sdTotal;
@@ -483,22 +632,56 @@ function calculateScorecard(
     };
   }
 
-  // Get dynamic targets from config or use defaults
   const pConfig = cfg?.pillarConfigs;
   const ownTarget = pConfig?.ownership?.maxPoints ?? 25;
   const mcTarget = pConfig?.managementControl?.maxPoints ?? 19;
+  const eeTarget = pConfig?.employmentEquity?.maxPoints ?? 0;
   const skillsTarget = pConfig?.skillsDevelopment?.maxPoints ?? 25;
   const procTarget = pConfig?.preferentialProcurement?.maxPoints ?? 29;
   const sdTarget = pConfig?.supplierDevelopment?.maxPoints ?? 10;
   const edTarget = pConfig?.enterpriseDevelopment?.maxPoints ?? 7;
   const sedTarget = pConfig?.socioEconomicDevelopment?.maxPoints ?? 5;
-  const yesTarget = pConfig?.yesInitiative?.maxPoints ?? 0; // YES is level boost, not scored points
-  // Use totalMaxPoints from config (verified Excel value) instead of calculating
-  const totalTarget = cfg?.totalMaxPoints ?? (ownTarget + mcTarget + skillsTarget + procTarget + sdTarget + edTarget + sedTarget + yesTarget);
+  const yesTarget = pConfig?.yesInitiative?.maxPoints ?? 0;
 
-  // YES bonus points (Tier 2 = +3 bonus points) are added to total scorecard
-  const totalPoints = ownScore.total + mgtScore.total + skillScore.total + procScore.total
-    + esdScore.sdTotal + esdScore.edTotal + sedScore.total + yesScore.score + yesScore.yesBonusPoints;
+  const electiveRawScores: Record<PillarConfigKey, number> = {
+    skillsDevelopment: skillScore.total,
+    preferentialProcurement: procScore.total,
+    enterpriseDevelopment: esdScore.edTotal,
+    socioEconomicDevelopment: sedScore.total,
+  };
+  const hasChooseOne = Object.values(pConfig ?? {}).some(p => p?.chooseOneGroup);
+  const { chosenKey: chosenElectiveKey, activeKeys: activeElectiveKeys } = hasChooseOne
+    ? resolveChooseOneElectives(pConfig, electiveRawScores)
+    : { chosenKey: null, activeKeys: new Set<PillarConfigKey>() };
+
+  const electiveScoreForTotal = (key: PillarConfigKey, score: number): number => {
+    if (!hasChooseOne) return score;
+    return activeElectiveKeys.has(key) ? score : 0;
+  };
+
+  const skillsForTotal = electiveScoreForTotal('skillsDevelopment', skillScore.total);
+  const procForTotal = electiveScoreForTotal('preferentialProcurement', procScore.total);
+  const edForTotal = electiveScoreForTotal('enterpriseDevelopment', esdScore.edTotal);
+  const sedForTotal = electiveScoreForTotal('socioEconomicDevelopment', sedScore.total);
+
+  const sdForTotal = sdTarget > 0 ? esdScore.sdTotal : 0;
+
+  const compulsoryTotal = ownScore.total + mgtScoreTotal + (eeTarget > 0 ? eeScoreTotal : 0);
+  const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
+  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + yesScore.score + yesScore.yesBonusPoints;
+
+  const totalTarget = cfg?.totalMaxPoints ?? (
+    ownTarget + mcTarget + eeTarget +
+    (hasChooseOne ? 25 : skillsTarget + procTarget + edTarget + sedTarget) +
+    sdTarget + yesTarget
+  );
+
+  console.log('[SCORING-TRACE] Final recalculated:', `${round2(totalPoints)} / ${totalTarget} = Level ${pointsToLevel(totalPoints, cfg)}`, {
+    chosenElective: chosenElectiveKey,
+    compulsory: round2(compulsoryTotal),
+    elective: round2(electiveTotal),
+  });
+
   const level = pointsToLevel(totalPoints, cfg);
 
   const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet;
@@ -506,26 +689,93 @@ function calculateScorecard(
   const prSubMinMet = procScore.subMinimumMet;
   const sdSubMinMet = esdScore.sdSubMinimumMet;
   const edSubMinMet = esdScore.edSubMinimumMet;
+
+  /** Hide sub-min badges when the sector sets subMinimumPercent to 0 or maxPoints to 0. */
+  const showSubMin = (pillarKey: keyof NonNullable<CalculatorConfig['pillarConfigs']>): boolean => {
+    const p = pConfig?.[pillarKey];
+    if (!p) return true;
+    const pct = 'subMinimumPercent' in p ? (p as { subMinimumPercent?: number }).subMinimumPercent : undefined;
+    if (pct === 0) return false;
+    if ('maxPoints' in p && (p as { maxPoints?: number }).maxPoints === 0) return false;
+    return pct == null || pct > 0;
+  };
   const anySubMinFailed = !ownSubMinMet || !skSubMinMet || !prSubMinMet || !sdSubMinMet || !edSubMinMet;
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
   let discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
 
-  // YES level uplift applied AFTER discounting (slide 123)
   if (yesScore.yesBeeLevelIncrease > 0 && discountedLevel > 1) {
     discountedLevel = Math.max(1, discountedLevel - yesScore.yesBeeLevelIncrease);
   }
 
+  const mkElectiveMeta = (key: PillarConfigKey) => ({
+    isChosenElective: hasChooseOne && activeElectiveKeys.has(key),
+    isElectiveNotChosen: hasChooseOne && !activeElectiveKeys.has(key),
+  });
+
+  const skillsWeight = hasChooseOne
+    ? (activeElectiveKeys.has('skillsDevelopment') ? skillsTarget : 0)
+    : skillsTarget;
+  const procWeight = hasChooseOne
+    ? (activeElectiveKeys.has('preferentialProcurement') ? procTarget : 0)
+    : procTarget;
+  const edWeight = hasChooseOne
+    ? (activeElectiveKeys.has('enterpriseDevelopment') ? edTarget : 0)
+    : edTarget;
+  const sedWeight = hasChooseOne
+    ? (activeElectiveKeys.has('socioEconomicDevelopment') ? sedTarget : 0)
+    : sedTarget;
+
   return {
-    ownership: { score: round2(ownScore.total), target: ownTarget, weighting: ownTarget, subMinimumMet: ownSubMinMet },
-    managementControl: { score: round2(mgtScore.total), target: mcTarget, weighting: mcTarget },
-    skillsDevelopment: { score: round2(skillScore.total), target: skillsTarget, weighting: skillsTarget, subMinimumMet: skSubMinMet },
-    procurement: { score: round2(procScore.total), target: procTarget, weighting: procTarget, subMinimumMet: prSubMinMet },
-    supplierDevelopment: { score: round2(esdScore.sdTotal), target: sdTarget, weighting: sdTarget, subMinimumMet: sdSubMinMet },
-    enterpriseDevelopment: { score: round2(esdScore.edTotal), target: edTarget, weighting: edTarget, subMinimumMet: edSubMinMet },
-    socioEconomicDevelopment: { score: round2(sedScore.total), target: sedTarget, weighting: sedTarget },
+    ownership: {
+      score: round2(ownScore.total),
+      target: ownTarget,
+      weighting: ownTarget,
+      subMinimumMet: showSubMin('ownership') ? ownSubMinMet : undefined,
+    },
+    managementControl: { score: round2(mgtScoreTotal), target: mcTarget, weighting: mcTarget },
+    ...(eeTarget > 0 ? {
+      employmentEquity: { score: round2(eeScoreTotal), target: eeTarget, weighting: eeTarget },
+    } : {}),
+    skillsDevelopment: {
+      score: round2(skillScore.total),
+      target: skillsWeight,
+      weighting: skillsWeight,
+      subMinimumMet: showSubMin('skillsDevelopment') ? skSubMinMet : undefined,
+      ...mkElectiveMeta('skillsDevelopment'),
+    },
+    procurement: {
+      score: round2(procScore.total),
+      target: procWeight,
+      weighting: procWeight,
+      subMinimumMet: showSubMin('preferentialProcurement') ? prSubMinMet : undefined,
+      ...mkElectiveMeta('preferentialProcurement'),
+    },
+    supplierDevelopment: {
+      score: round2(esdScore.sdTotal),
+      target: sdTarget,
+      weighting: sdTarget,
+      subMinimumMet: showSubMin('supplierDevelopment') ? sdSubMinMet : undefined,
+    },
+    enterpriseDevelopment: {
+      score: round2(esdScore.edTotal),
+      target: edWeight,
+      weighting: edWeight,
+      subMinimumMet: showSubMin('enterpriseDevelopment') ? edSubMinMet : undefined,
+      ...mkElectiveMeta('enterpriseDevelopment'),
+    },
+    socioEconomicDevelopment: {
+      score: round2(sedScore.total),
+      target: sedWeight,
+      weighting: sedWeight,
+      ...mkElectiveMeta('socioEconomicDevelopment'),
+    },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: yesTarget, weighting: yesTarget },
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
-    achievedLevel: level, discountedLevel, isDiscounted, recognitionLevel: levelToRecognition(discountedLevel),
+    achievedLevel: level,
+    discountedLevel,
+    isDiscounted,
+    recognitionLevel: levelToRecognition(discountedLevel),
+    chosenElectivePillar: chosenElectiveKey ? ELECTIVE_CONFIG_TO_SCORECARD[chosenElectiveKey] : null,
   };
 }
 
@@ -561,6 +811,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
 
   loadClientData: async (clientId: string) => {
     try {
+      console.log(`[SCORING-TRACE] loadClientData(${clientId}) — fetching`);
       const data = await api.getClientData(clientId);
       
       const clientData: Client = {
@@ -577,6 +828,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         contactPhone: data.client.contactPhone || '',
         sectorCode: data.client.sectorCode || 'RCOGP',
         companySize: data.client.companySize || 'Generic',
+        scorecardType: data.client.scorecardType || data.client.companySize || 'Generic',
         financialYear: data.client.financialYear || '',
         revenue: data.client.revenue || 0,
         npat: data.client.npat || 0,
@@ -594,19 +846,47 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         })),
       };
 
+      // Lake Trading Fix Plan §1 Bug 6: pass through every scoring field the
+      // ownership calculator reads — yearsHeld, isDesignatedGroup, blackNewEntrant,
+      // votingRightsPercent, economicInterestPercent. Without these the
+      // calculator can't award Designated Groups / New Entrants / graduation.
+      console.log('[SCORING-TRACE] Client data received:', {
+        sector: clientData.sectorCode,
+        scorecardType: clientData.scorecardType,
+        revenue: clientData.revenue,
+        shareholders: data.ownership?.shareholders?.length ?? 0,
+        employees: data.management?.employees?.length ?? 0,
+        suppliers: data.procurement?.suppliers?.length ?? 0,
+      });
+
       const ownershipState: OwnershipData = {
         id: data.ownership?.id || '',
         clientId,
-        shareholders: (data.ownership?.shareholders || []).map((sh: any) => ({
+        shareholders: (data.ownership?.shareholders || []).map((sh: any) => {
+          const blackOwnership = normalizeFraction(sh.blackOwnership);
+          const sharePct = normalizeFraction(
+            sh.shareholding ?? sh.votingRightsPercent ?? sh.votingRights ?? sh.blackOwnership,
+          );
+          const derivedShares = sh.shares > 0 ? sh.shares : Math.max(1, Math.round(sharePct * 10_000));
+          return {
           id: sh.id,
           name: sh.name,
           ownershipType: sh.ownershipType || 'shareholder',
-          blackOwnership: sh.blackOwnership || 0,
-          blackWomenOwnership: sh.blackWomenOwnership || 0,
-          shares: sh.shares || 0,
-          shareValue: sh.shareValue || 0,
-        })),
-        companyValue: data.ownership?.companyValue || 0,
+          blackOwnership,
+          blackWomenOwnership: normalizeFraction(sh.blackWomenOwnership),
+          shares: derivedShares,
+          shareValue: sh.shareValue || 1,
+          yearsHeld: sh.yearsHeld || 0,
+          isDesignatedGroup: Boolean(sh.isDesignatedGroup),
+          designatedGroupType: sh.designatedGroupType,
+          blackNewEntrant: Boolean(sh.blackNewEntrant),
+          votingRightsPercent:
+            normalizeFraction(sh.votingRightsPercent ?? sh.blackOwnership ?? 0),
+          economicInterestPercent:
+            normalizeFraction(sh.economicInterestPercent ?? sh.blackOwnership ?? 0),
+        };
+        }),
+        companyValue: data.ownership?.companyValue || clientData.revenue || 0,
         outstandingDebt: data.ownership?.outstandingDebt || 0,
         yearsHeld: data.ownership?.yearsHeld || 0,
         ownershipScorePoints: data.ownership?.ownershipScorePoints || 0,
@@ -623,7 +903,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           name: e.name,
           gender: e.gender,
           race: e.race,
-          designation: e.designation,
+          designation: e.designation || mapJobTitleToDesignation(e.occupationalLevel),
           isDisabled: e.isDisabled || false,
         })),
       };
@@ -654,6 +934,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         yesAbsorbedCount: yesCandidatesFromSkills.filter((tp: any) => tp.isAbsorbed).length,
       };
 
+      // Lake Trading Fix Plan §1 Bug 6 + 8: preserve every flag the procurement
+      // calculator reads (isEmpoweringSupplier, isForeignSupplier, BO51/BWO30,
+      // designated-group flag) and default beeLevel to 0 (non-compliant) — never
+      // to 4, which silently inflates procurement for missing certificates.
       const procurementState: ProcurementData = {
         id: '',
         clientId,
@@ -661,13 +945,23 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         suppliers: (data.procurement?.suppliers || []).map((s: any) => ({
           id: s.id,
           name: s.name,
-          beeLevel: s.beeLevel || 4,
+          beeLevel: Number.isFinite(Number(s.beeLevel)) ? Number(s.beeLevel) : 0,
           blackOwnership: s.blackOwnership || 0,
           blackWomenOwnership: s.blackWomenOwnership || 0,
           youthOwnership: s.youthOwnership || 0,
           disabledOwnership: s.disabledOwnership || 0,
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
+          isEmpoweringSupplier:
+            typeof s.isEmpoweringSupplier === 'boolean'
+              ? s.isEmpoweringSupplier
+              : Boolean(s.empoweringSupplier),
+          isForeignSupplier: Boolean(s.isForeignSupplier),
+          isBlackOwned51: Boolean(s.isBlackOwned51),
+          isBlackWomanOwned30: Boolean(s.isBlackWomanOwned30),
+          isDesignatedGroup: Boolean(s.isDesignatedGroup),
+          isSupplierDevRecipient: Boolean(s.isSupplierDevRecipient),
+          hasThreeYearContract: Boolean(s.hasThreeYearContract),
         })),
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
@@ -709,7 +1003,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }));
 
       set({
-        isLoaded: true,
+        isLoaded: false,
         activeClientId: clientId,
         client: clientData,
         ownership: ownershipState,
@@ -724,8 +1018,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         baseSnapshot: null,
       });
 
-      get()._recalculateAll();
       await get().loadCalculatorConfig(clientId);
+      const cfg = get().calculatorConfig;
+      if (cfg?.pillarConfigs) {
+        console.log('[SCORING-TRACE] Pillar configs:', Object.fromEntries(
+          Object.entries(cfg.pillarConfigs).map(([k, v]) => [k, { maxPoints: v?.maxPoints, chooseOneGroup: v?.chooseOneGroup }]),
+        ));
+      }
+      set({ isLoaded: true });
+      get()._recalculateAll();
     } catch (error) {
       console.error('Failed to load client data:', clientId, error);
       throw error;
@@ -855,47 +1156,33 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   },
 
   loadCalculatorConfig: async (clientId: string) => {
-    try {
-      const config = await api.getCalculatorConfig(clientId).catch(() => null);
-      if (config) {
-        set({ calculatorConfig: config });
-        get()._recalculateAll();
-        return;
-      }
-    } catch {
-      // Client-specific config not available, fall through to sector config
+    const { client } = get();
+    const sectorCode = client.sectorCode || 'RCOGP';
+    const scorecardType = client.scorecardType || client.companySize || 'Generic';
+
+    const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
+
+    if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
+      console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
+        totalMaxPoints: sectorConfig.totalMaxPoints,
+        ownership: sectorConfig.pillarConfigs?.ownership?.maxPoints,
+        managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
+        employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
+      });
+      set({ calculatorConfig: sectorConfig });
+      get()._recalculateAll();
+      return;
     }
 
-    // Fallback: load from sector config (needed for synthetic upload-*/build-*/session-* IDs)
-    try {
-      const { client } = get();
-      const sectorCode = client.sectorCode || 'RCOGP';
-      const turnover = client.annualTurnover || client.revenue || 0;
-      const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
-      const res = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.config) {
-          set({ calculatorConfig: data.config });
-          get()._recalculateAll();
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load calculator config (sector fallback):', error);
+    if (sectorConfig && !hasValidPillarConfigs(sectorConfig)) {
+      console.warn('[store] Sector config rejected (invalid pillar maxPoints):', sectorCode, scorecardType);
     }
+
+    console.error('[store] No valid calculator config for', sectorCode, scorecardType);
   },
 
-  saveCalculatorConfig: async (config: CalculatorConfig) => {
-    set({ calculatorConfig: config });
-    get()._recalculateAll();
-    const clientId = get().activeClientId;
-    if (clientId) {
-      try {
-        await api.saveCalculatorConfig(clientId, config);
-      } catch (error) {
-        console.error('Failed to save calculator config:', error);
-      }
-    }
+  saveCalculatorConfig: async (_config: CalculatorConfig) => {
+    console.warn('[store] saveCalculatorConfig is disabled; sector config is authoritative');
   },
 
   _recalculateAll: () => {
@@ -909,7 +1196,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     try {
       const result = calculateScorecard(state, state.pipelineOverrides);
       set({ scorecard: result });
-      console.log('[store] Scorecard recalculated:', result.total.score, 'points, Level', result.achievedLevel);
+      console.log('[SCORING-TRACE] Final recalculated:', `${result.total.score} / ${result.total.weighting} = Level ${result.achievedLevel}`);
     } catch (error) {
       console.error('[store] Calculation failed:', error);
     }

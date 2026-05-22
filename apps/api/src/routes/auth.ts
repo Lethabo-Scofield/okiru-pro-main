@@ -171,7 +171,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req: 
     });
 
     return res.json({
-      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: org.id, profilePicture: user.profilePicture },
+      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: org.id, profilePicture: user.profilePicture },
       organization: org,
     });
   } catch (error: unknown) {
@@ -246,7 +246,7 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
     });
 
     return res.json({
-      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: user.organizationId, profilePicture: user.profilePicture },
+      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture },
     });
   } catch (error: unknown) {
     logger.error('Login error', error);
@@ -289,7 +289,7 @@ router.get('/me', async (req: Request, res: Response) => {
   }
   logger.debug('/me: Returning user', { userId: user.id });
   return res.json({
-    user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, organizationId: user.organizationId, profilePicture: user.profilePicture },
+    user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture },
   });
 });
 

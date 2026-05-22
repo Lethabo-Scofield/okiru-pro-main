@@ -394,6 +394,7 @@ function sectorConfigToCalculatorConfig(sc: any) {
         maxPoints: p.maxPoints ?? 0,
         hasSubMinimum: p.hasSubMinimum ?? false,
         subMinimumPercent: p.subMinimumThreshold ? Math.round((p.subMinimumThreshold / p.maxPoints) * 100) : 0,
+        chooseOneGroup: p.chooseOneGroup,
       };
     }
   } else {
@@ -441,6 +442,13 @@ function sectorConfigToCalculatorConfig(sc: any) {
       netValueMax: own.netValueMaxPts,
       targetEconomicInterest: own.economicInterestTarget,
       subMinNetValue: ownershipSubMin,
+      votingRightsTarget: own.votingRightsTarget,
+      womenVotingTarget: own.womenVotingTarget,
+      womenEIMax: own.womenEIMaxPts,
+      womenEITarget: own.womenEITarget,
+      newEntrantsMax: own.newEntrantsMaxPts,
+      designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
+      designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,
@@ -546,15 +554,15 @@ function sectorConfigToCalculatorConfig(sc: any) {
       level: lt.level, minPoints: lt.minPoints, recognition: lt.recognition,
     })),
     pillarConfigs: {
-      ownership: { maxPoints: pOwn.maxPoints, subMinimumPercent: pOwn.subMinimumPercent },
-      managementControl: { maxPoints: pMc.maxPoints, subMinimumPercent: pMc.subMinimumPercent },
-      ...(pEe.maxPoints > 0 ? { employmentEquity: { maxPoints: pEe.maxPoints } } : {}),
-      skillsDevelopment: { maxPoints: pSk.maxPoints, subMinimumPercent: pSk.subMinimumPercent },
-      preferentialProcurement: { maxPoints: pPp.maxPoints, subMinimumPercent: pPp.subMinimumPercent },
-      supplierDevelopment: { maxPoints: pSd.maxPoints, subMinimumPercent: pSd.subMinimumPercent },
-      enterpriseDevelopment: { maxPoints: pEd.maxPoints, subMinimumPercent: pEd.subMinimumPercent },
-      socioEconomicDevelopment: { maxPoints: pSed.maxPoints },
-      ...(pYes.maxPoints > 0 ? { yesInitiative: { maxPoints: pYes.maxPoints } } : {}),
+      ownership: { maxPoints: pOwn.maxPoints, subMinimumPercent: pOwn.subMinimumPercent, chooseOneGroup: pOwn.chooseOneGroup },
+      managementControl: { maxPoints: pMc.maxPoints, subMinimumPercent: pMc.subMinimumPercent, chooseOneGroup: pMc.chooseOneGroup },
+      ...(pEe.maxPoints > 0 ? { employmentEquity: { maxPoints: pEe.maxPoints, chooseOneGroup: pEe.chooseOneGroup } } : {}),
+      skillsDevelopment: { maxPoints: pSk.maxPoints, subMinimumPercent: pSk.subMinimumPercent, chooseOneGroup: pSk.chooseOneGroup },
+      preferentialProcurement: { maxPoints: pPp.maxPoints, subMinimumPercent: pPp.subMinimumPercent, chooseOneGroup: pPp.chooseOneGroup },
+      supplierDevelopment: { maxPoints: pSd.maxPoints, subMinimumPercent: pSd.subMinimumPercent, chooseOneGroup: pSd.chooseOneGroup },
+      enterpriseDevelopment: { maxPoints: pEd.maxPoints, subMinimumPercent: pEd.subMinimumPercent, chooseOneGroup: pEd.chooseOneGroup },
+      socioEconomicDevelopment: { maxPoints: pSed.maxPoints, chooseOneGroup: pSed.chooseOneGroup },
+      ...(pYes.maxPoints > 0 ? { yesInitiative: { maxPoints: pYes.maxPoints, chooseOneGroup: pYes.chooseOneGroup } } : {}),
     },
     benefitFactors: (sc.benefitFactors || []).map((bf: any) => ({
       type: bf.contributionType ?? bf.type, factor: bf.sdFactor ?? bf.factor,
@@ -563,6 +571,39 @@ function sectorConfigToCalculatorConfig(sc: any) {
       name: n.industry ?? n.name, norm: String(n.normPercent ?? n.norm ?? '5.58'),
     })),
   };
+}
+
+/** Reject Arango rows whose pillar weightings don't match verified sectorConfig.ts. */
+function calculatorConfigHasValidPillars(config: ReturnType<typeof sectorConfigToCalculatorConfig>): boolean {
+  const pc = config.pillarConfigs;
+  if (!pc) return false;
+  const ownMax = pc.ownership?.maxPoints ?? 0;
+  const mcMax = pc.managementControl?.maxPoints ?? 0;
+  return (ownMax + mcMax) > 0 && (config.totalMaxPoints ?? 0) > 0;
+}
+
+function isStaleStoredSectorConfig(
+  sectorCode: string,
+  scorecardType: string,
+  dbConfig: ReturnType<typeof sectorConfigToCalculatorConfig>,
+): boolean {
+  if (!calculatorConfigHasValidPillars(dbConfig)) return true;
+  try {
+    const expected = sectorConfigToCalculatorConfig(getSectorConfig(sectorCode, scorecardType));
+    if (expected.totalMaxPoints !== dbConfig.totalMaxPoints) return true;
+    const expectedOwn = expected.pillarConfigs?.ownership?.maxPoints ?? 0;
+    const dbOwn = dbConfig.pillarConfigs?.ownership?.maxPoints ?? 0;
+    if (expectedOwn > 0 && expectedOwn !== dbOwn) return true;
+    const expectedMc = expected.pillarConfigs?.managementControl?.maxPoints ?? 0;
+    const dbMc = dbConfig.pillarConfigs?.managementControl?.maxPoints ?? 0;
+    if (expectedMc > 0 && expectedMc !== dbMc) return true;
+    const expectedGroup = expected.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
+    const dbGroup = dbConfig.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
+    if (expectedGroup && expectedGroup !== dbGroup) return true;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -593,9 +634,11 @@ router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res
       const rows = await cursor.all();
 
       if (rows.length > 0 && rows[0]) {
-        // Transform ArangoDB shape (StoredSectorRule) to CalculatorConfig
         const dbConfig = sectorConfigToCalculatorConfig(rows[0]);
-        return res.json({ success: true, config: dbConfig, source: 'arangodb' });
+        if (!isStaleStoredSectorConfig(sectorCode, scorecardType, dbConfig)) {
+          return res.json({ success: true, config: dbConfig, source: 'arangodb' });
+        }
+        logger.warn('Stale Arango sector config — falling back to hardcoded', { sectorCode, scorecardType });
       }
     } catch (arangoErr) {
       logger.warn('ArangoDB unavailable, falling back to hardcoded', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });

@@ -3,10 +3,19 @@ import * as XLSX from "xlsx";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { requireAuth } from "./routes";
+import { hasAnyRole } from "./roles";
+import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
+import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
 import { WorkbookModel, ClientModel } from "../shared/schema";
+import {
+  validateWorkbook,
+  formatWorkbookValidationSummary,
+} from "../src/components/workbook/workbookValidation";
+import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
+  updateClient as memUpdateClient,
 } from "./clientsMemoryStore";
 
 const logger = createLogger("Workbook");
@@ -340,11 +349,22 @@ const DATA_SHEETS: DataSheetSpec[] = [
   },
 ];
 
-// In-memory fallback — only used in non-production when Mongo is unavailable.
+// In-memory fallback Î“Ã‡Ã¶ only used in non-production when Mongo is unavailable.
 // In production we refuse to silently divert writes to memory, since switching
 // back to Mongo later would cause silent data loss.
 const memoryStore = new Map<string, WorkbookData>();
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+/** Remove workbook data when a client is deleted (Mongo or dev memory fallback). */
+export async function deleteWorkbookForClient(companyId: string): Promise<void> {
+  if (mongoReady()) {
+    await WorkbookModel.deleteOne({ companyId });
+    return;
+  }
+  if (canUseMemoryFallback()) {
+    memoryStore.delete(companyId);
+  }
+}
 
 function mongoReady(): boolean {
   return mongoose.connection.readyState === 1;
@@ -563,42 +583,36 @@ async function authorizeWorkbookAccess(
       return null;
     }
 
-    // Step 1: client-level authorization.
-    // Anchor tenancy to the client record itself — applied in both the Mongo
-    // path and the in-memory fallback so a stranger can't fabricate a workbook
-    // by guessing/squatting on a companyId they don't own. Without this, GET
-    // /api/workbook/:id would scaffold a workbook for an arbitrary id and
-    // stamp it with the caller's tenancy, leaking the scaffold to any
-    // logged-in user that guesses an id (P3).
+    // Step 1: client-level authorization (P3) â€” Mongo and in-memory dev paths.
     let clientOrgId: string | null = null;
     let clientCreatorId: string | null = null;
+
     if (!mongoReady()) {
-      const { storage } = await import("./storage");
-      const memClient = await storage.getClientByClientId(companyId);
+      const memClient = memGetClient(companyId);
       if (!memClient) {
         res.status(404).json({ error: "Company not found" });
         return null;
       }
-      clientOrgId = memClient.organizationId ?? null;
-      clientCreatorId = memClient.createdByUserId ?? null;
-      const sameOrg = clientOrgId !== null && clientOrgId === userOrgId;
-      const sameUser = clientCreatorId === userId;
-      const isDemoClient = Boolean(memClient.lakeTradingDemo);
+      const sameOrg = memClient.organizationId !== null && memClient.organizationId === userOrgId;
+      const sameUser = memClient.createdByUserId === userId;
       const superAdmin = hasAnyRole(user, "super_admin");
-      if (!sameOrg && !sameUser && !(isDemoClient && superAdmin)) {
+      const isLakeDemo = companyId === LAKE_TRADING_DEMO_CLIENT_ID;
+      if (!sameOrg && !sameUser && !(superAdmin && isLakeDemo)) {
         logger.warn("Cross-tenant client access denied via workbook route (memory)", {
           companyId,
           requesterUserId: userId,
           requesterOrgId: userOrgId,
-          clientOrgId,
-          clientCreatorId,
+          clientOrgId: memClient.organizationId,
+          clientCreatorId: memClient.createdByUserId,
         });
-        res.status(403).json({ message: "Forbidden" });
+        res.status(404).json({ error: "Company not found" });
         return null;
       }
-    } else if (mongoReady()) {
+      clientOrgId = memClient.organizationId;
+      clientCreatorId = memClient.createdByUserId;
+    } else {
       const client = await ClientModel.findOne({ clientId: companyId })
-        .select({ organizationId: 1, createdByUserId: 1 })
+        .select({ organizationId: 1, createdByUserId: 1, lakeTradingDemo: 1 })
         .lean();
       if (!client) {
         res.status(404).json({ error: "Company not found" });
@@ -610,9 +624,6 @@ async function authorizeWorkbookAccess(
       const clientSameUser = clientCreatorId === userId;
 
       if (!clientOrgId && !clientCreatorId) {
-        // Legacy record with no tenancy fields. Refuse access in production —
-        // operators must backfill ownership via a controlled migration before
-        // these clients can be edited. In dev we allow it for local testing.
         if (IS_PRODUCTION) {
           logger.warn("Refusing access to legacy client missing tenancy fields", {
             companyId,
@@ -622,52 +633,31 @@ async function authorizeWorkbookAccess(
           return null;
         }
       } else if (!clientSameOrg && !clientSameUser) {
-        logger.warn("Cross-tenant client access denied via workbook route", {
-          companyId,
-          requesterUserId: userId,
-          requesterOrgId: userOrgId,
-          clientOrgId,
-          clientCreatorId,
-        });
-        res.status(404).json({ error: "Company not found" });
-        return null;
+        const isDemoClient = Boolean((client as any).lakeTradingDemo);
+        const superAdmin = hasAnyRole(user, "super_admin");
+        if (!(isDemoClient && superAdmin)) {
+          logger.warn("Cross-tenant client access denied via workbook route", {
+            companyId,
+            requesterUserId: userId,
+            requesterOrgId: userOrgId,
+            clientOrgId,
+            clientCreatorId,
+          });
+          res.status(404).json({ error: "Company not found" });
+          return null;
+        }
       }
-    } else {
-      // No Mongo, dev fallback. Require the client to exist in the shared
-      // in-memory store and belong to the caller's tenant; we no longer
-      // synthesise a workbook for arbitrary companyIds.
-      const memClient = memGetClient(companyId);
-      if (!memClient) {
-        res.status(404).json({ error: "Company not found" });
-        return null;
-      }
-      if (!memCanAccessClient(memClient, userId, userOrgId)) {
-        logger.warn("Cross-tenant client access denied via workbook route (memory)", {
-          companyId,
-          requesterUserId: userId,
-          requesterOrgId: userOrgId,
-          clientOrgId: memClient.organizationId,
-          clientCreatorId: memClient.createdByUserId,
-        });
-        // Return 404 (not 403) to avoid leaking the existence of a sibling
-        // tenant's company. Matches the /api/clients tenant filter.
-        res.status(404).json({ error: "Company not found" });
-        return null;
-      }
-      clientOrgId = memClient.organizationId;
-      clientCreatorId = memClient.createdByUserId;
     }
 
-    // Step 2: load (or create) workbook, pinned to the *client's* tenancy
-    // when present — not the caller's — so the first caller cannot redirect a
-    // shared client's workbook to their personal scope.
     const workbookOrgId = clientOrgId ?? userOrgId;
     const workbookOwnerId = clientCreatorId ?? userId;
     const wb = await loadOrCreateWorkbook(companyId, workbookOrgId, workbookOwnerId);
 
     const sameOrg = wb.ownerOrganizationId !== null && wb.ownerOrganizationId === userOrgId;
     const sameUser = wb.ownerUserId === userId;
-    if (!sameOrg && !sameUser) {
+    const superAdmin = hasAnyRole(user, "super_admin");
+    const isLakeDemo = companyId === LAKE_TRADING_DEMO_CLIENT_ID;
+    if (!sameOrg && !sameUser && !(superAdmin && isLakeDemo)) {
       logger.warn("Cross-tenant workbook access denied", {
         companyId,
         requesterUserId: userId,
@@ -692,23 +682,150 @@ async function authorizeWorkbookAccess(
 
 // ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
 
-function projectWorkbookToClient(wb: WorkbookData) {
+// Lake Trading Fix Plan â”¬Âº1 Bug 1 (ownership) helpers
+const BLACK_RACES = new Set(["African", "Coloured", "Indian"]);
+
+// Lake Trading Fix Plan â”¬Âº1 Bug 2 (designations) Î“Ã‡Ã¶ workbook label Î“Ã¥Ã† calculator enum
+const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
+  "Executive Director": "Executive Director",
+  "Non-executive Director": "Board",
+  "Other Executive Manager": "Other Executive Management",
+  "Senior Manager": "Senior",
+  "Middle Manager": "Middle",
+  "Junior Manager": "Junior",
+  "Semi-skilled": "Semi-skilled",
+  "Unskilled": "Unskilled",
+  // pass-through for direct enum values already used elsewhere
+  Board: "Board",
+  Executive: "Executive",
+  "Other Executive Management": "Other Executive Management",
+  Senior: "Senior",
+  Middle: "Middle",
+  Junior: "Junior",
+  "Skilled Technical": "Skilled Technical",
+};
+
+function mapDesignation(raw: string): string {
+  const trimmed = (raw ?? "").trim();
+  return WORKBOOK_TO_DESIGNATION[trimmed] ?? trimmed;
+}
+
+// Lake Trading Fix Plan â”¬Âº1 Bug 4 + 5 (ESD/SED type)
+// Map human-friendly workbook contributionType labels Î“Ã¥Ã† calculator snake_case keys
+function mapContributionType(raw: string): string {
+  const t = (raw ?? "").toLowerCase().replace(/\s+/g, "_");
+  if (t.includes("grant")) return "grant";
+  if (t.includes("interest") && t.includes("free")) return "interest_free_loan";
+  if (t.includes("loan")) return "standard_loan";
+  if (t.includes("guarantee")) return "guarantees";
+  if (t.includes("discount")) return "discounts";
+  if (t.includes("payment") && t.includes("period")) return "shorter_payment_terms";
+  if (t.includes("professional")) return "professional_services_free";
+  if (t.includes("human") || t.includes("employee_time")) return "employee_time";
+  if (t.includes("direct")) return "direct_cost";
+  // "Other Monetary" / fallback Î“Ã‡Ã¶ Lake fixture uses this for direct-cost SD/ED
+  return "direct_cost";
+}
+
+function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
+  const t = (raw ?? "").toLowerCase();
+  if (t.startsWith("enterprise")) return "enterprise_development";
+  // Lake Trading Fix Plan â”¬Âº1 Bug 4: safe default Î“Ã‡Ã¶ counts toward SD sub-min
+  return "supplier_development";
+}
+
+// Lake Trading Fix Plan â”¬Âº1 Bug 3 + 7: supplier size Î“Ã¥Ã† enterpriseType + unit normalisation
+function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
+  const t = (rawSize ?? "").trim().toLowerCase();
+  if (t === "eme") return "eme";
+  if (t === "qse") return "qse";
+  return "generic";
+}
+
+// Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators expect fractions (0Î“Ã‡Ã´1)
+function pctToFraction(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  if (n <= 1) return Math.max(0, n);
+  return Math.max(0, n / 100);
+}
+
+// Lake Trading Fix Plan â”¬Âº1 Bug 3: beeLevel must be a number 1Î“Ã‡Ã´8 (0 = non-compliant)
+function parseBeeLevel(raw: unknown): number {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 1 && n <= 8) return Math.round(n);
+  return 0;
+}
+
+export function projectWorkbookToClient(wb: WorkbookData) {
   const sec = wb.sections;
   const finMeta = (sec["financial-information"]?.meta ?? {}) as Record<string, unknown>;
   const companyMeta = (sec["company-information"]?.meta ?? {}) as Record<string, unknown>;
 
-  const shareholders = (sec["ownership"]?.rows ?? []).map((r) => ({
-    name: s((r as any).shareholderName ?? (r as any).name),
-    idNumber: s((r as any).idNumber),
-    race: s((r as any).race),
-    gender: s((r as any).gender),
-    isDisabled: Boolean((r as any).isDisabled),
-    isYouth: Boolean((r as any).isYouth),
-    votingRights: num((r as any).votingRights),
-    economicInterest: num((r as any).economicInterest),
-    shareholding: num((r as any).shareholding),
-    modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
-  }));
+  // Lake Trading Fix Plan â”¬Âº1 Bug 1: write every scoring field the calculators read,
+  // derived from the workbook columns (race, gender, votingRights%, economicInterest%, etc.).
+  // For trust / multi-beneficiary holders the workbook row can also carry an
+  // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
+  // Lake demo seed for the Family Trust shareholder); when present we prefer it.
+  const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
+    const race = s((r as any).race);
+    const gender = s((r as any).gender);
+    const isBlack = BLACK_RACES.has(race);
+    const isFemale = gender === "Female";
+    const votingPct = pctToFraction((r as any).votingRights);
+    const eiPct = pctToFraction((r as any).economicInterest);
+    const sharePct = pctToFraction((r as any).shareholding);
+    const isYouth = Boolean((r as any).isYouth);
+    const isDisabled = Boolean((r as any).isDisabled);
+    // Lake demo writes `isNewEntrant` directly; default false otherwise.
+    const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+
+    // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
+    // supplies them (trust holders, multi-beneficiary shareholders). Fall back
+    // to race+gender+voting/EI derivation for individual shareholders.
+    const explicitBlackOwn = (r as any).blackOwnership;
+    const explicitBlackWomenOwn = (r as any).blackWomenOwnership;
+    const blackOwnership =
+      explicitBlackOwn != null
+        ? pctToFraction(explicitBlackOwn)
+        : isBlack
+          ? Math.max(votingPct, eiPct)
+          : 0;
+    const blackWomenOwnership =
+      explicitBlackWomenOwn != null
+        ? pctToFraction(explicitBlackWomenOwn)
+        : isBlack && isFemale
+          ? Math.max(votingPct, eiPct)
+          : 0;
+
+    return {
+      name: s((r as any).shareholderName ?? (r as any).name),
+      idNumber: s((r as any).idNumber),
+      race,
+      gender,
+      isDisabled,
+      isYouth,
+      votingRights: num((r as any).votingRights),
+      economicInterest: num((r as any).economicInterest),
+      shareholding: num((r as any).shareholding),
+      modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
+      // NEW (fix plan Bug 1) Î“Ã‡Ã¶ scoring-engine fields the loader reads.
+      blackOwnership,
+      blackWomenOwnership,
+      // Use integer "shares" derived from shareholding %; only relative weight matters
+      // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
+      // branch in calculateOwnershipScore so blackOwnership flows through.
+      shares: Math.max(1, Math.round(sharePct * 10_000)),
+      shareValue: 1,
+      yearsHeld: num((r as any).yearsHeld),
+      isDesignatedGroup:
+        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled,
+      blackNewEntrant: isNewEntrant,
+      votingRightsPercent: votingPct,
+      economicInterestPercent: eiPct,
+      ownershipType: "shareholder" as const,
+    };
+  });
 
   const empSeen = new Set<string>();
   const employees: any[] = [];
@@ -717,6 +834,11 @@ function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && empSeen.has(id)) continue;
       if (id) empSeen.add(id);
+      // Lake Trading Fix Plan â”¬Âº1 Bug 2: translate workbook label Î“Ã¥Ã† calculator enum
+      const rawDesig = s((r as any).designation ?? (r as any).occupationalLevel);
+      const rawOcc = s((r as any).occupationalLevel ?? (r as any).designation);
+      const designation = mapDesignation(rawDesig);
+      const occupationalLevel = mapDesignation(rawOcc);
       employees.push({
         name: s((r as any).name),
         surname: s((r as any).surname),
@@ -724,8 +846,8 @@ function projectWorkbookToClient(wb: WorkbookData) {
         idNumber: s((r as any).idNumber),
         race: s((r as any).race),
         gender: s((r as any).gender),
-        occupationalLevel: s((r as any).occupationalLevel ?? (r as any).designation),
-        designation: s((r as any).designation ?? (r as any).occupationalLevel),
+        occupationalLevel,
+        designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
         isDisabled: Boolean((r as any).isDisabled),
@@ -742,6 +864,9 @@ function projectWorkbookToClient(wb: WorkbookData) {
       num((r as any).courseCost) +
         num((r as any).travelCost) +
         num((r as any).accommodationCost) +
+        num((r as any).cateringCost) +
+        num((r as any).stationeryCost) +
+        num((r as any).trainingFacilityCost) +
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
     const absorbed = Boolean((r as any).absorbed);
@@ -782,71 +907,156 @@ function projectWorkbookToClient(wb: WorkbookData) {
       const id = (r as any)._id as string | undefined;
       if (id && supSeen.has(id)) continue;
       if (id) supSeen.add(id);
-      const blackOwn = num((r as any).currentBlackOwnership);
-      const blackFemOwn = num((r as any).currentBlackFemaleOwnership);
-      const lvl = s((r as any).bbbeeLevel);
+      // Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators
+      // expect fractions (0Î“Ã‡Ã´1). Normalise once at projection.
+      const blackOwnershipFraction = pctToFraction((r as any).currentBlackOwnership);
+      const blackFemaleOwnershipFraction = pctToFraction(
+        (r as any).currentBlackFemaleOwnership,
+      );
+      // Lake Trading Fix Plan â”¬Âº1 Bug 3: map workbook size Î“Ã¥Ã† enterpriseType, parse
+      // beeLevel to a number (loader default of 4 hides non-compliant suppliers
+      // Î“Ã‡Ã¶ see Bug 8 Î“Ã‡Ã¶ but here we just carry the parsed value through).
+      const sizeRaw = s((r as any).currentSize);
+      const enterpriseType = mapEnterpriseType(sizeRaw);
+      const beeLevel = parseBeeLevel((r as any).bbbeeLevel);
       suppliers.push({
+        id: id ?? undefined,
         supplierName: s((r as any).supplierName),
         // Alias `name` for downstream consumers that key off it.
         name: s((r as any).supplierName),
-        currentSize: s((r as any).currentSize),
-        size: s((r as any).currentSize),
-        bbbeeLevel: lvl,
-        beeLevel: lvl,
+        currentSize: sizeRaw,
+        size: sizeRaw,
+        enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
+        bbbeeLevel: beeLevel,
+        beeLevel,
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
         empoweringSupplier: Boolean((r as any).empoweringSupplier),
-        currentBlackOwnership: blackOwn,
-        blackOwnership: blackOwn,
-        currentBlackFemaleOwnership: blackFemOwn,
-        blackFemaleOwnership: blackFemOwn,
+        isEmpoweringSupplier: Boolean((r as any).empoweringSupplier),
+        // Carry both the raw % (for audit) and the fraction (for scoring)
+        currentBlackOwnership: num((r as any).currentBlackOwnership),
+        blackOwnership: blackOwnershipFraction,
+        currentBlackFemaleOwnership: num((r as any).currentBlackFemaleOwnership),
+        blackFemaleOwnership: blackFemaleOwnershipFraction,
+        blackWomenOwnership: blackFemaleOwnershipFraction,
         sdRecipient: Boolean((r as any).sdRecipient),
+        isSupplierDevRecipient: Boolean((r as any).sdRecipient),
         threeYearContract: Boolean((r as any).threeYearContract),
+        hasThreeYearContract: Boolean((r as any).threeYearContract),
         designated: Boolean((r as any).designated),
+        isDesignatedGroup: Boolean((r as any).designated),
         spend: num((r as any).spend),
         amount: num((r as any).spend),
+        // Calculators check these flags when present
+        isBlackOwned51: blackOwnershipFraction >= 0.51,
+        isBlackWomanOwned30: blackFemaleOwnershipFraction >= 0.30,
         firstProcurementDate: s((r as any).firstProcurementDate),
         certificateExpiryDate: s((r as any).certificateExpiryDate),
       });
     }
   }
 
-  const esdContributions = (sec["esd"]?.rows ?? []).map((r) => ({
-    supplierName: s((r as any).supplierName),
-    currentBlackOwnership: num((r as any).currentBlackOwnership),
-    currentSize: s((r as any).currentSize),
-    contributionDescription: s((r as any).contributionDescription),
-    contributionType: s((r as any).contributionType),
-    amount: num((r as any).amount),
-    dateOfTransaction: s((r as any).dateOfTransaction),
-    invoiceDate: s((r as any).invoiceDate),
-    paymentDate: s((r as any).paymentDate),
-    primeRate: num((r as any).primeRate),
-    actualRate: num((r as any).actualRate),
-  }));
+  // Lake Trading Fix Plan â”¬Âº1 Bug 4: include `category` (supplier_development /
+  // enterprise_development) and map contributionType labels Î“Ã¥Ã† calculator keys.
+  const esdContributions = (sec["esd"]?.rows ?? []).map((r) => {
+    const rawType = s((r as any).contributionType);
+    const rawCategory = s((r as any).esdCategory);
+    return {
+      id: (r as any)._id ?? undefined,
+      // Calculator reads `beneficiary` + `type` + `category` + `amount`
+      beneficiary: s((r as any).supplierName),
+      supplierName: s((r as any).supplierName),
+      type: mapContributionType(rawType),
+      contributionType: rawType,
+      category: mapEsdCategory(rawCategory),
+      currentBlackOwnership: num((r as any).currentBlackOwnership),
+      blackBenefitPercent: num((r as any).currentBlackOwnership),
+      currentSize: s((r as any).currentSize),
+      contributionDescription: s((r as any).contributionDescription),
+      amount: num((r as any).amount),
+      dateOfTransaction: s((r as any).dateOfTransaction),
+      invoiceDate: s((r as any).invoiceDate),
+      paymentDate: s((r as any).paymentDate),
+      primeRate: num((r as any).primeRate),
+      actualRate: num((r as any).actualRate),
+    };
+  });
 
-  const sedContributions = (sec["sed"]?.rows ?? []).map((r) => ({
-    beneficiaryName: s((r as any).beneficiaryName),
-    descriptionOfSpend: s((r as any).descriptionOfSpend),
-    ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
-    contributionType: s((r as any).contributionType),
-    percentBenefitingBlack: num((r as any).percentBenefitingBlack),
-    amount: num((r as any).amount),
-    dateOfTransaction: s((r as any).dateOfTransaction),
-  }));
+  // Lake Trading Fix Plan â”¬Âº1 Bug 5: rename to `beneficiary` + map type to
+  // calculator keys (SED has no category filter, but factor must still apply).
+  const sedContributions = (sec["sed"]?.rows ?? []).map((r) => {
+    const rawType = s((r as any).contributionType);
+    return {
+      id: (r as any)._id ?? undefined,
+      beneficiary: s((r as any).beneficiaryName),
+      beneficiaryName: s((r as any).beneficiaryName),
+      type: mapContributionType(rawType),
+      contributionType: rawType,
+      category: "socio_economic" as const,
+      descriptionOfSpend: s((r as any).descriptionOfSpend),
+      ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
+      percentBenefitingBlack: num((r as any).percentBenefitingBlack),
+      blackBenefitPercent: num((r as any).percentBenefitingBlack),
+      amount: num((r as any).amount),
+      dateOfTransaction: s((r as any).dateOfTransaction),
+    };
+  });
 
-  const financials = {
-    revenue: num(finMeta.revenue),
-    npat: num(finMeta.npat),
-    leviableAmount: num(finMeta.leviableAmount) || num(finMeta.payroll),
-    tmps: num(finMeta.tmps),
-    industrySector: s(companyMeta.industrySector) || undefined,
-  };
+  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta);
 
   return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
 }
 
+function requireSuperAdmin(req: Request, res: Response): boolean {
+  const user = (req as any).user;
+  if (!hasAnyRole(user, "super_admin")) {
+    res.status(403).json({ message: "Super-admin access required" });
+    return false;
+  }
+  return true;
+}
+
 export function registerWorkbookRoutes(app: Express): void {
+  app.get("/api/admin/demo/lake-trading", requireAuth, async (req: Request, res: Response) => {
+    if (!requireSuperAdmin(req, res)) return;
+    if (!mongoReady()) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
+    const client = await ClientModel.findOne({ clientId: LAKE_TRADING_DEMO_CLIENT_ID })
+      .select({ clientId: 1, name: 1, lakeTradingDemo: 1 })
+      .lean();
+    if (!client) {
+      return res.json({ exists: false, clientId: LAKE_TRADING_DEMO_CLIENT_ID, name: null });
+    }
+    const wb = await WorkbookModel.findOne({ companyId: LAKE_TRADING_DEMO_CLIENT_ID })
+      .select({ submittedAt: 1, updatedAt: 1 })
+      .lean();
+    return res.json({
+      exists: true,
+      clientId: LAKE_TRADING_DEMO_CLIENT_ID,
+      name: (client as any).name,
+      submittedAt: wb?.submittedAt ? new Date(wb.submittedAt).toISOString() : null,
+      updatedAt: wb?.updatedAt ? new Date(wb.updatedAt).toISOString() : null,
+    });
+  });
+
+  app.post("/api/admin/demo/lake-trading", requireAuth, async (req: Request, res: Response) => {
+    if (!requireSuperAdmin(req, res)) return;
+    const user = (req as any).user;
+    const userId: string = user?.id || (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const result = await seedLakeTradingDemo(userId, user?.organizationId ?? null);
+      return res.json({ ok: true, ...result });
+    } catch (err: any) {
+      if (err?.message === "DATABASE_UNAVAILABLE") {
+        return res.status(503).json({ error: "Database unavailable" });
+      }
+      logger.error("Lake Trading demo seed failed", err);
+      return res.status(500).json({ error: "Failed to seed Lake Trading demo" });
+    }
+  });
+
   app.get("/api/workbook/:companyId", requireAuth, async (req: Request, res: Response) => {
     const wb = await authorizeWorkbookAccess(req, res);
     if (!wb) return;
@@ -878,6 +1088,48 @@ export function registerWorkbookRoutes(app: Express): void {
     },
   );
 
+  // Import normalized workbook sections (client-side Excel parse or manual JSON).
+  app.post(
+    "/api/workbook/:companyId/import",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const wb = await authorizeWorkbookAccess(req, res);
+      if (!wb) return;
+      const incoming = (req.body as any)?.sections;
+      if (!incoming || typeof incoming !== "object") {
+        return res.status(400).json({ error: "Missing sections payload." });
+      }
+      try {
+        let next = wb;
+        for (const key of Object.keys(incoming)) {
+          if (!SECTION_KEYS.includes(key as (typeof SECTION_KEYS)[number])) continue;
+          const sec = incoming[key];
+          const rows = sanitizeRows(sec?.rows);
+          const meta =
+            sec?.meta && typeof sec.meta === "object"
+              ? (sec.meta as Record<string, unknown>)
+              : undefined;
+          next = await persistSection(next, key, {
+            rows,
+            ...(meta ? { meta } : {}),
+          });
+        }
+        const validationIssues = validateWorkbook(next.sections);
+        res.json({
+          ok: true,
+          updatedAt: next.updatedAt,
+          validationIssues,
+          summary: validationIssues.length
+            ? formatWorkbookValidationSummary(validationIssues)
+            : null,
+        });
+      } catch (err: any) {
+        logger.error("Failed to import workbook sections", err);
+        res.status(500).json({ error: "Failed to import workbook" });
+      }
+    },
+  );
+
   app.get(
     "/api/workbook/:companyId/export.xlsx",
     requireAuth,
@@ -902,7 +1154,7 @@ export function registerWorkbookRoutes(app: Express): void {
     },
   );
 
-  // Submit the workbook → write its contents into the associated client record
+  // Submit the workbook Î“Ã¥Ã† write its contents into the associated client record
   // so the scorecard pipeline can pick it up. Returns row counts of what was synced.
   app.post(
     "/api/workbook/:companyId/submit",
@@ -911,14 +1163,128 @@ export function registerWorkbookRoutes(app: Express): void {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
-      if (!mongoReady()) {
+      console.log(`[SCORING-TRACE] Submit workbook for ${wb.companyId}`);
+      console.log(`[SCORING-TRACE] Workbook sections: ${Object.keys(wb.sections).join(", ")}`);
+      for (const [id, sec] of Object.entries(wb.sections)) {
+        const rows = (sec as any)?.rows ?? [];
+        if (rows.length > 0) {
+          console.log(`[SCORING-TRACE] Section ${id} has ${rows.length} rows, sample:`, JSON.stringify(rows.slice(0, 2)));
+        }
+      }
+
+      if (!mongoReady() && !canUseMemoryFallback()) {
         return res
           .status(503)
           .json({ error: "Database unavailable — cannot submit workbook." });
       }
 
+      const validationIssues = validateWorkbook(wb.sections);
+      if (validationIssues.length > 0) {
+        return res.status(400).json({
+          error: "Workbook validation failed",
+          issues: validationIssues,
+          summary: formatWorkbookValidationSummary(validationIssues),
+        });
+      }
+
       const projected = projectWorkbookToClient(wb);
+      console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
+        companyId: wb.companyId,
+        sectionIds: Object.keys(wb.sections),
+        finMeta: wb.sections["financial-information"]?.meta,
+        companyMeta: wb.sections["company-information"]?.meta,
+      });
+      console.log("[SCORING-TRACE] projectWorkbookToClient output:", {
+        ownership: projected.shareholders.length,
+        employees: projected.employees.length,
+        skills: projected.trainingPrograms.length,
+        procurement: projected.suppliers.length,
+        esd: projected.esdContributions.length,
+        sed: projected.sedContributions.length,
+        sampleShareholder: projected.shareholders[0],
+        sampleEmployee: projected.employees[0],
+      });
       try {
+        const buildUpdate = (): Record<string, any> => {
+          const update: Record<string, any> = {
+            updatedAt: new Date(),
+            shareholders: projected.shareholders,
+            employees: projected.employees,
+            trainingPrograms: projected.trainingPrograms,
+            suppliers: projected.suppliers,
+            esdContributions: projected.esdContributions,
+            sedContributions: projected.sedContributions,
+          };
+          const f = projected.financials;
+          if (f.revenue > 0) update.revenue = f.revenue;
+          if (typeof f.npat === "number") update.npat = f.npat;
+          if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
+          if (f.tmps > 0) update.tmps = f.tmps;
+          if (f.industrySector) {
+            update.industrySector = f.industrySector;
+            update.sectorCode = f.industrySector;
+          }
+          if (f.scorecardType) {
+            update.scorecardType = f.scorecardType;
+            update.companySize = f.scorecardType;
+          }
+          if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
+          const cm = projected.companyMeta;
+          for (const key of [
+            "tradingName",
+            "registrationNumber",
+            "vatNumber",
+            "taxNumber",
+            "physicalAddress",
+            "postalAddress",
+            "contactPerson",
+            "contactEmail",
+            "contactPhone",
+            "financialYearEnd",
+          ] as const) {
+            const v = cm[key];
+            if (typeof v === "string" && v.trim()) {
+              if (key === "financialYearEnd") {
+                update.financialYear = v.trim();
+              } else {
+                update[key] = v.trim();
+              }
+            }
+          }
+          return update;
+        };
+
+        const update = buildUpdate();
+
+        if (!mongoReady()) {
+          const userId =
+            (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
+          const submittedAt = new Date().toISOString();
+          const updated = memUpdateClient(wb.companyId, update);
+          if (!updated) {
+            return res
+              .status(404)
+              .json({ error: "Client not found for this workbook." });
+          }
+          wb.submittedAt = submittedAt;
+          wb.submittedByUserId = userId;
+          wb.updatedAt = submittedAt;
+          memoryStore.set(wb.companyId, wb);
+          return res.json({
+            ok: true,
+            clientId: wb.companyId,
+            counts: {
+              shareholders: projected.shareholders.length,
+              employees: projected.employees.length,
+              trainingPrograms: projected.trainingPrograms.length,
+              suppliers: projected.suppliers.length,
+              esdContributions: projected.esdContributions.length,
+              sedContributions: projected.sedContributions.length,
+            },
+            submittedAt,
+          });
+        }
+
         const client = await ClientModel.findOne({ clientId: wb.companyId });
         if (!client) {
           return res
@@ -926,40 +1292,18 @@ export function registerWorkbookRoutes(app: Express): void {
             .json({ error: "Client not found for this workbook." });
         }
 
-        const update: Record<string, any> = {
-          updatedAt: new Date(),
-          shareholders: projected.shareholders,
-          employees: projected.employees,
-          trainingPrograms: projected.trainingPrograms,
-          suppliers: projected.suppliers,
-          esdContributions: projected.esdContributions,
-          sedContributions: projected.sedContributions,
-        };
-        const f = projected.financials;
-        if (f.revenue > 0) update.revenue = f.revenue;
-        if (typeof f.npat === "number") update.npat = f.npat;
-        if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
-        if (f.tmps > 0) update.tmps = f.tmps;
-        if (f.industrySector) update.industrySector = f.industrySector;
-
-        // Lift a handful of company-info fields into the client record too.
-        const cm = projected.companyMeta;
-        for (const key of [
-          "tradingName",
-          "registrationNumber",
-          "vatNumber",
-          "taxNumber",
-          "physicalAddress",
-          "postalAddress",
-          "contactPerson",
-          "contactEmail",
-          "contactPhone",
-        ] as const) {
-          const v = cm[key];
-          if (typeof v === "string" && v.trim()) update[key] = v.trim();
-        }
-
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
+
+        const saved = await ClientModel.findOne({ clientId: wb.companyId })
+          .select({ sectorCode: 1, scorecardType: 1, companySize: 1, shareholders: 1, employees: 1 })
+          .lean();
+        console.log("[SCORING-TRACE] Client saved to DB:", {
+          clientId: wb.companyId,
+          sector: (saved as any)?.sectorCode,
+          scorecardType: (saved as any)?.scorecardType ?? (saved as any)?.companySize,
+          shareholders: ((saved as any)?.shareholders ?? []).length,
+          employees: ((saved as any)?.employees ?? []).length,
+        });
 
         const userId =
           (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
@@ -970,6 +1314,7 @@ export function registerWorkbookRoutes(app: Express): void {
 
         res.json({
           ok: true,
+          clientId: wb.companyId,
           counts: {
             shareholders: projected.shareholders.length,
             employees: projected.employees.length,

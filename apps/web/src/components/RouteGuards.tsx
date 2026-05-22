@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@toolkit/lib/auth";
+import { isSuperAdmin } from "@/lib/roles";
 import { fetchOnboardingStatus } from "@/lib/onboardingStatus";
 
 function FullScreenSpinner() {
@@ -76,13 +77,13 @@ export function SuperAdminRoute({ children }: { children: React.ReactNode }) {
       navigate("/auth", { replace: true });
       return;
     }
-    if (user.role !== "super_admin") {
+    if (!isSuperAdmin(user)) {
       navigate("/hub", { replace: true });
     }
   }, [user, isLoading, navigate]);
 
   if (isLoading) return <FullScreenSpinner />;
-  if (!user || user.role !== "super_admin") return null;
+  if (!user || !isSuperAdmin(user)) return null;
 
   return <>{children}</>;
 }

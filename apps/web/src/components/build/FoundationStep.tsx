@@ -17,7 +17,8 @@ import {
   AlertCircle,
   ArrowRight,
   FileText,
-  Sparkles
+  Sparkles,
+  Users,
 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
 
@@ -41,6 +42,9 @@ interface FoundationStepProps {
   /** Manual build: optional workbook extract merged into foundation + pillar state without leaving this flow. */
   showPopulateFromUpload?: boolean;
   onPopulateFromUpload?: () => void;
+  /** Manual build: load all foundation + pillar data from an existing client record. */
+  showLoadFromClient?: boolean;
+  onLoadFromClient?: () => void;
 }
 
 type InputMode = 'manual' | 'upload' | 'extracted';
@@ -68,6 +72,8 @@ export function FoundationStep({
   showIntegratedToolkitShortcut = false,
   showPopulateFromUpload = false,
   onPopulateFromUpload,
+  showLoadFromClient = false,
+  onLoadFromClient,
 }: FoundationStepProps) {
   const [activeTab, setActiveTab] = useState<'client' | 'financials'>('client');
   const [sectionState, setSectionState] = useState<SectionState>({
@@ -300,15 +306,26 @@ export function FoundationStep({
               and choose that path — it keeps extraction, review, and the manual scorecard builder separate.
             </p>
           )}
-          {showPopulateFromUpload && onPopulateFromUpload && (
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3 mt-4 pt-4 border-t border-border/80">
-              <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={onPopulateFromUpload}>
-                <Upload className="h-4 w-4" />
-                Populate with upload
-              </Button>
+          {(showPopulateFromUpload || showLoadFromClient) && (
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 mt-4 pt-4 border-t border-border/80 flex-wrap">
+              {showPopulateFromUpload && onPopulateFromUpload && (
+                <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={onPopulateFromUpload}>
+                  <Upload className="h-4 w-4" />
+                  Populate with upload
+                </Button>
+              )}
+              {showLoadFromClient && onLoadFromClient && (
+                <Button type="button" variant="outline" className="gap-2 shrink-0" onClick={onLoadFromClient}>
+                  <Users className="h-4 w-4" />
+                  Load from client
+                </Button>
+              )}
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Upload a toolkit workbook — same extract as the integrated flow — to fill client info, financials, and
-                pillar tables where columns match (you stay in manual build).
+                {showPopulateFromUpload && showLoadFromClient
+                  ? 'Upload a toolkit workbook or load from an existing client record to fill all fields.'
+                  : showPopulateFromUpload
+                    ? 'Upload a toolkit workbook — same extract as the integrated flow — to fill client info, financials, and pillar tables where columns match (you stay in manual build).'
+                    : 'Load foundation and pillar data from an existing client record.'}
               </p>
             </div>
           )}

@@ -65,6 +65,10 @@ function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): n
  */
 export function calculateProcurementScore(data: ProcurementData, config: CalculatorConfig): ProcurementResult {
   if (!config) throw new Error('CalculatorConfig is required for procurement score calculation');
+  console.log('[SCORING-TRACE] calculateProcurementScore received:', {
+    tmps: data.tmps,
+    supplierCount: data.suppliers?.length ?? 0,
+  });
   const { tmps } = data;
   const suppliers = data.suppliers || [];
   const pc = config.procurement;
@@ -83,8 +87,8 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   const dgMaxPts = pc.dgMaxPts ?? 2;
   
   const blackWomenThreshold = config.procurement.blackWomenThreshold ?? 0.30;
-  const subMinThreshold = config.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
-  const maxPoints = config.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
+  const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
+  const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 
   const TARGET_ALL = tmps * allSuppliersTarget;
   const TARGET_QSE = tmps * qseTarget;
@@ -161,6 +165,9 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     { name: "Spend on Designated Group Suppliers ≥51% Black Owned", target: `${(dgTarget * 100).toFixed(0)}% of TMPS`, weighting: dgMaxPts, score: designatedGroupScore, spend: designatedGroupSpend, isBonus: true },
   ];
 
+  const procTotal = round2(totalScore);
+  console.log(`[SCORING-TRACE] calculateProcurementScore result: ${procTotal} / ${config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29}`);
+
   return {
     base: round2(baseTotal),
     empoweringSuppliers: round2(empoweringScore),
@@ -169,8 +176,9 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
     blackOwned51: round2(blackOwned51Score),
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
-    total: round2(totalScore),
-    subMinimumMet: baseTotal >= subMinThresholdPoints, // Excludes DG bonus
+    total: procTotal,
+    subMinimumMet:
+      subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : false,
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

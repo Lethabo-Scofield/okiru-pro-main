@@ -8,6 +8,7 @@ import { createLogger } from '../logger.js';
 const logger = createLogger("Clients");
 import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
 import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
+import { ClientModel } from '../../models.js';
 import {
   ShareholderModel, OwnershipDataModel, EmployeeModel, TrainingProgramModel,
   SupplierModel, ProcurementDataModel, EsdContributionModel, SedContributionModel,
@@ -19,16 +20,37 @@ const router = Router();
 
 router.get('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), async (req: Request, res: Response) => {
   const orgId = req.session.organizationId!;
+  const userId = req.session.userId!;
   const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
-  const result = await storage.getClientsByOrgPaginated(orgId, page, limit);
-  return res.json(result);
+  const skip = (page - 1) * limit;
+  const visibilityFilter = {
+    $or: [
+      { createdByUserId: userId },
+      ...(orgId ? [{ organizationId: orgId }] : []),
+    ],
+  };
+  const [docs, total] = await Promise.all([
+    ClientModel.find(visibilityFilter).skip(skip).limit(limit).lean(),
+    ClientModel.countDocuments(visibilityFilter),
+  ]);
+  return res.json({
+    items: docs,
+    total,
+    page,
+    limit,
+  });
 });
 
 router.post('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   try {
     const orgId = req.session.organizationId!;
-    const client = await storage.createClient({ ...req.body, organizationId: orgId });
+    const userId = req.session.userId!;
+    const client = await storage.createClient({
+      ...req.body,
+      organizationId: orgId,
+      createdByUserId: userId,
+    });
     await recordAudit(req, {
       action: "client.create",
       resourceType: "client",

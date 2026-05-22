@@ -10,7 +10,6 @@ import {
   Handshake,
   Settings,
   GitCompare,
-  FileSpreadsheet,
   FileText,
   Calculator,
   LineChart,
@@ -25,7 +24,6 @@ import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.pn
 const mainNavItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Scorecard", href: "/scorecard", icon: Table },
-  { name: "Import Excel", href: "/import", icon: FileSpreadsheet },
   { name: "Scenarios", href: "/scenarios", icon: GitCompare },
   { name: "Reports", href: "/reports", icon: FileText },
 ];

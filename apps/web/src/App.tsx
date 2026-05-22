@@ -26,8 +26,30 @@ import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { useAuth } from "@toolkit/lib/auth";
+import { isSuperAdmin } from "@/lib/roles";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+
+/** Legacy upload/build flows — super-admin only in production go-live. */
+function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    if (!isLoading && user && !isSuperAdmin(user)) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, isLoading, navigate]);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
+      </div>
+    );
+  }
+  if (!user || !isSuperAdmin(user)) return null;
+  return <>{children}</>;
+}
 
 /** Old links to `/onboarding` continue to work — company profile now lives on `/auth`. */
 function LegacyOnboardingRedirect() {
@@ -85,6 +107,15 @@ function AppRouter() {
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>
       </Route>
+      <Route path="/create-scorecard/:companyId/summary">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/create-scorecard/:companyId">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/create-scorecard">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
       <Route path="/information-request/:companyId">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
@@ -92,10 +123,10 @@ function AppRouter() {
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
       <Route path="/builder">
-        <ProtectedRoute><EntityBuilder /></ProtectedRoute>
+        <ProtectedRoute><SuperAdminOnlyRoute><EntityBuilder /></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/processor">
-        <ProtectedRoute><DocumentProcessor /></ProtectedRoute>
+        <ProtectedRoute><SuperAdminOnlyRoute><DocumentProcessor /></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/certificates">
         <CertificateHub />

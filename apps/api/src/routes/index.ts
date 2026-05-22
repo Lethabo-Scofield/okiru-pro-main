@@ -39,6 +39,7 @@ import certificatesRouter from './certificates.js';
 import auditRouter from './audit.js';
 import onboardingRouter from './onboarding.js';
 import adminUsersRouter from './adminUsers.js';
+import feedbackRouter from './feedback.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -191,6 +192,9 @@ export async function registerRoutes(
   // Admin: user management (super_admin only)
   app.use('/api/admin/users', adminUsersRouter);
   app.use('/api/admin', adminUsersRouter);
+
+  // User feedback (public POST; admin GET/PATCH/DELETE)
+  app.use('/api/feedback', feedbackRouter);
 
   // Import routes
   app.use('/api/import', importRouter);

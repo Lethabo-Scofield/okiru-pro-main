@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@toolkit/components/ui/button";
-import { FileSpreadsheet, Loader2, UploadCloud, FileText, FileType, CheckCircle2, X, XCircle, AlertTriangle, ArrowRight, Upload, Table, Users, Calculator, BarChart3, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Loader2, UploadCloud, FileText, FileType, CheckCircle2, X, XCircle, AlertTriangle, ArrowRight, Upload, Table, Users, Calculator, BarChart3, Sparkles, Building2, Save } from "lucide-react";
 import { Progress } from "@toolkit/components/ui/progress";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -110,6 +110,13 @@ export default function ExcelImport() {
   ];
 
   const [clientResult, setClientResult] = useState<ClientSideImportResult | null>(null);
+  // Gap 4: Save to client record
+  const [saveToClientOpen, setSaveToClientOpen] = useState(false);
+  const [saveToClientClients, setSaveToClientClients] = useState<{ clientId: string; name: string }[]>([]);
+  const [saveToClientLoading, setSaveToClientLoading] = useState(false);
+  const [saveToClientSearch, setSaveToClientSearch] = useState('');
+  const [savingToClient, setSavingToClient] = useState(false);
+  const [savedToClientName, setSavedToClientName] = useState<string | null>(null);
 
   const startImport = async () => {
     if (files.length === 0) return;
@@ -255,7 +262,59 @@ export default function ExcelImport() {
     setProgress(0);
     setIsProcessing(false);
     setShowLogs(false);
+    setSavedToClientName(null);
   };
+
+  // Gap 4: open client picker for saving parsed data
+  const handleOpenSaveToClient = useCallback(async () => {
+    setSaveToClientOpen(true);
+    setSaveToClientSearch('');
+    setSaveToClientLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setSaveToClientClients(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSaveToClientLoading(false);
+    }
+  }, []);
+
+  const handleSaveToClientRecord = useCallback(async (clientId: string, clientName: string) => {
+    const data = clientResult;
+    if (!data) return;
+    setSaveToClientOpen(false);
+    setSavingToClient(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${encodeURIComponent(clientId)}/bulk-import`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shareholders: data.shareholders,
+          employees: data.employees,
+          trainingPrograms: data.trainingPrograms,
+          suppliers: data.suppliers,
+          esdContributions: data.esdContributions,
+          sedContributions: data.sedContributions,
+          financials: data.financials,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      setSavedToClientName(clientName);
+      toast({ title: 'Saved to client record', description: `${data.entityCount} entities saved to ${clientName}.` });
+    } catch (err: any) {
+      toast({ title: 'Save failed', description: err.message || 'Could not save to client.', variant: 'destructive' });
+    } finally {
+      setSavingToClient(false);
+    }
+  }, [clientResult, toast]);
 
   const getFileIcon = (name: string) => {
     if (name.endsWith('.pdf')) return <FileText className="h-5 w-5 text-muted-foreground" />;
@@ -655,6 +714,29 @@ export default function ExcelImport() {
                   )}
                 </AnimatePresence>
 
+                {/* Gap 4: save to client record */}
+                {!isFailed && isClientMode && (
+                  <div className="flex items-center gap-3 pt-1 pb-1">
+                    {savedToClientName ? (
+                      <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Saved to <span className="font-medium">{savedToClientName}</span>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={handleOpenSaveToClient}
+                        disabled={savingToClient}
+                        className="gap-2 h-9 text-sm rounded-full"
+                        data-testid="btn-save-to-client"
+                      >
+                        {savingToClient ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        Save to client record
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-3 pt-1">
                   {!isFailed && (
                     <Button
@@ -679,6 +761,59 @@ export default function ExcelImport() {
             );
           })()}
         </motion.div>
+      )}
+
+      {/* Gap 4: client picker dialog for "Save to client record" */}
+      {saveToClientOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setSaveToClientOpen(false)}>
+          <div
+            className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-semibold mb-1">Save to client record</h2>
+            <p className="text-sm text-muted-foreground mb-4">Select a client to save parsed B-BBEE data to.</p>
+            <input
+              value={saveToClientSearch}
+              onChange={(e) => setSaveToClientSearch(e.target.value)}
+              placeholder="Search clients…"
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm placeholder-muted-foreground outline-none focus:border-ring mb-3"
+              autoFocus
+            />
+            {saveToClientLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm py-6">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {saveToClientClients
+                  .filter(c => c.name?.toLowerCase().includes(saveToClientSearch.toLowerCase()))
+                  .map(c => (
+                    <button
+                      key={c.clientId}
+                      onClick={() => handleSaveToClientRecord(c.clientId, c.name)}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted hover:bg-accent text-sm transition-colors"
+                    >
+                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <div className="font-medium">{c.name}</div>
+                        <div className="text-xs text-muted-foreground">{c.clientId}</div>
+                      </div>
+                    </button>
+                  ))}
+                {saveToClientClients.filter(c => c.name?.toLowerCase().includes(saveToClientSearch.toLowerCase())).length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No clients found.</p>
+                )}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              onClick={() => setSaveToClientOpen(false)}
+              className="mt-4 w-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
 
       {recentImports.length > 0 && showDropzone && (
