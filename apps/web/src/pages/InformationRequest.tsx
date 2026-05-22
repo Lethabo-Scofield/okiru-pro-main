@@ -28,7 +28,8 @@ import {
   resolveScorecardTypeForSector,
   type ColumnDef,
 } from "@/components/workbook/sections";
-import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
+import { SectionWorkbookEditor, type SectionViewMode } from "@/components/workbook/SectionWorkbookEditor";
+import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
   validateWorkbook,
   formatWorkbookValidationSummary,
@@ -722,12 +723,17 @@ function MetaForm({
   fields,
   value,
   onChange,
+  readOnly = false,
 }: {
   fields: ColumnDef[];
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  readOnly?: boolean;
 }) {
-  const setField = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  const setField = (k: string, v: unknown) => {
+    if (readOnly) return;
+    onChange({ ...value, [k]: v });
+  };
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {fields.map((f) => {
@@ -745,8 +751,9 @@ function MetaForm({
             {f.type === "select" ? (
               <select
                 value={String(v ?? "")}
+                disabled={readOnly}
                 onChange={(e) => setField(f.key, e.target.value)}
-                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a]"
+                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a] disabled:opacity-60"
               >
                 <option value="" className="bg-[#1c1c1e]">—</option>
                 {f.options?.map((o) => (
@@ -760,14 +767,16 @@ function MetaForm({
                 <input
                   type="checkbox"
                   checked={Boolean(v)}
+                  disabled={readOnly}
                   onChange={(e) => setField(f.key, e.target.checked)}
-                  className="h-4 w-4 accent-blue-500"
+                  className="h-4 w-4 accent-blue-500 disabled:opacity-60"
                 />
               </div>
             ) : (
               <input
                 type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
                 value={String(v ?? "")}
+                disabled={readOnly}
                 onChange={(e) =>
                   setField(
                     f.key,
@@ -776,7 +785,7 @@ function MetaForm({
                       : e.target.value,
                   )
                 }
-                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
+                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
                 placeholder={f.required ? "Required" : ""}
               />
             )}
@@ -785,6 +794,37 @@ function MetaForm({
         );
       })}
     </div>
+  );
+}
+
+function ActiveSectionEditor({
+  section,
+  rows,
+  onChange,
+  workspaceId,
+  viewMode,
+  onViewModeChange,
+}: {
+  section: NonNullable<ReturnType<typeof getSection>>;
+  rows: Row[];
+  onChange: (rows: Row[]) => void;
+  workspaceId?: string | null;
+  viewMode: SectionViewMode;
+  onViewModeChange: (mode: SectionViewMode) => void;
+}) {
+  const permissions = usePillarPermission(section.key, workspaceId);
+
+  if (!section.columns) return null;
+
+  return (
+    <SectionWorkbookEditor
+      section={section}
+      rows={rows}
+      onChange={onChange}
+      permissions={permissions}
+      viewMode={viewMode}
+      onViewModeChange={onViewModeChange}
+    />
   );
 }
 
@@ -801,6 +841,15 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [sectionViewModes, setSectionViewModes] = useState<Record<string, SectionViewMode>>(() => {
+    try {
+      const raw = localStorage.getItem("okiru-workbook-view-modes");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   // Per-section debounce timers + pending payloads so editing section B never
   // discards a pending save for section A.
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); 
@@ -827,6 +876,33 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       cancelled = true;
     };
   }, [companyId]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/workspaces`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: Array<{ id?: string; workspaceId?: string }>) => {
+        const first = Array.isArray(list) ? list[0] : null;
+        if (first) setWorkspaceId(first.id || first.workspaceId || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const setSectionViewMode = useCallback((sectionKey: string, mode: SectionViewMode) => {
+    setSectionViewModes((prev) => {
+      const next = { ...prev, [sectionKey]: mode };
+      try {
+        localStorage.setItem("okiru-workbook-view-modes", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  const activeSectionPermissions = usePillarPermission(
+    activeSectionKey,
+    workspaceId,
+  );
 
   const saveSection = useCallback(
     async (
@@ -1267,21 +1343,28 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               <div className="px-6 pb-6">
                 {activeMetaFields ? (
                   <div className="pt-5">
-                    <MetaForm
-                      fields={activeMetaFields}
-                      value={activeMeta}
-                      onChange={(next) => handleMetaChange(activeSection.key, next)}
-                    />
+                    {activeSectionPermissions.loading ? (
+                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
+                      </div>
+                    ) : (
+                      <MetaForm
+                        fields={activeMetaFields}
+                        value={activeMeta}
+                        readOnly={!activeSectionPermissions.canEdit}
+                        onChange={(next) => handleMetaChange(activeSection.key, next)}
+                      />
+                    )}
                   </div>
                 ) : activeSection.columns ? (
                   <div className="pt-5">
-                    <SpreadsheetGrid
-                      columns={activeSection.columns}
+                    <ActiveSectionEditor
+                      section={activeSection}
                       rows={activeRows}
-                      rowValidate={activeSection.rowValidate}
+                      workspaceId={workspaceId}
+                      viewMode={sectionViewModes[activeSection.key] ?? "spreadsheet"}
+                      onViewModeChange={(mode) => setSectionViewMode(activeSection.key, mode)}
                       onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
-                      sectionLabel={activeSection.label}
-                      sectionDescription={activeSection.description}
                     />
                   </div>
                 ) : (
