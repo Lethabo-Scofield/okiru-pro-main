@@ -397,6 +397,7 @@ function CompanyPicker({
                 setPreviewOpen(true);
               }}
             />
+            </div>
           </div>
 
           {showLakeDemo && (
