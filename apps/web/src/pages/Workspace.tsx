@@ -21,6 +21,7 @@ import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { setPreferredWorkspaceId } from "@/lib/foundationApi";
 
 type Role = "owner" | "collaborator" | "viewer";
+type DisplayRole = "admin" | "contributor" | "reviewer" | "viewer";
 
 interface Workspace {
   id: string;
@@ -32,6 +33,7 @@ interface WorkspaceMember {
   id: string;
   userId: string;
   role: Role;
+  displayRole?: DisplayRole | null;
   joinedAt: string;
   pillarScopes: string[] | null;
   username: string | null;
@@ -43,7 +45,9 @@ interface WorkspaceInvite {
   id: string;
   email: string;
   role: Role;
-  token: string;
+  displayRole?: DisplayRole | null;
+  pillarScopes?: string[];
+  token?: string;
   expiresAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
@@ -56,11 +60,33 @@ const ROLE_LABEL: Record<Role, string> = {
   viewer: "Viewer",
 };
 
-const ROLE_DESCRIPTION: Record<Role, string> = {
-  owner: "Full access. Can manage people, send invites and rename the team space.",
-  collaborator: "Can view and edit work (pillar access can be limited by the owner).",
-  viewer: "Can view everything but can't make changes.",
+const DISPLAY_ROLE_LABEL: Record<DisplayRole, string> = {
+  admin: "Admin",
+  contributor: "Contributor",
+  reviewer: "Reviewer",
+  viewer: "Viewer",
 };
+
+const DISPLAY_ROLE_DESCRIPTION: Record<DisplayRole, string> = {
+  admin: "Full editing access across all scorecard pillars. Can also invite others.",
+  contributor: "Can view and edit work on the specific pillars you choose below.",
+  reviewer: "Read-only access to review and comment — cannot make changes.",
+  viewer: "Can view the workspace but cannot edit or comment.",
+};
+
+const DISPLAY_ROLE_OPTIONS: { value: DisplayRole; label: string }[] = [
+  { value: "admin", label: "Admin — full edit access, can invite" },
+  { value: "contributor", label: "Contributor — edit selected pillars" },
+  { value: "reviewer", label: "Reviewer — read-only" },
+  { value: "viewer", label: "Viewer — view only" },
+];
+
+function effectiveDisplayLabel(m: WorkspaceMember): string {
+  if (m.displayRole) return DISPLAY_ROLE_LABEL[m.displayRole];
+  if (m.role === "owner") return "Owner";
+  if (m.role === "collaborator") return (m.pillarScopes?.length ?? 0) > 0 ? "Contributor" : "Admin";
+  return "Viewer";
+}
 
 /** Keys must match server scorecardCollaboration SCORECARD_PILLAR_KEYS */
 const PILLAR_SCOPE_OPTIONS: { key: string; label: string }[] = [
@@ -91,7 +117,8 @@ export default function WorkspacePage() {
   const [nameDraft, setNameDraft] = useState("");
 
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<Role>("collaborator");
+  const [inviteDisplayRole, setInviteDisplayRole] = useState<DisplayRole>("admin");
+  const [invitePillarScopes, setInvitePillarScopes] = useState<Set<string>>(new Set());
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const inviteSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -201,18 +228,30 @@ export default function WorkspacePage() {
       toast({ title: "Enter a valid email", variant: "destructive" });
       return;
     }
+    if (inviteDisplayRole === "contributor" && invitePillarScopes.size === 0) {
+      toast({ title: "Select at least one pillar for this contributor", variant: "destructive" });
+      return;
+    }
     setBusy(true);
     try {
+      const body: Record<string, unknown> = {
+        email,
+        displayRole: inviteDisplayRole,
+      };
+      if (inviteDisplayRole === "contributor") {
+        body.pillarScopes = Array.from(invitePillarScopes);
+      }
       const data = await fetchJson(`/api/workspaces/${active.id}/invites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role: inviteRole }),
+        body: JSON.stringify(body),
       });
       toast({
         title: "Invite link ready",
-        description: `Copy the link below and send it to ${email} - they'll sign up and join your team.`,
+        description: `Copy the link below and send it to ${email} — they'll sign up and join your team.`,
       });
       setInviteEmail("");
+      setInvitePillarScopes(new Set());
       setInvites((prev) => [data.invite, ...prev]);
     } catch (err: any) {
       toast({ title: "Could not invite", description: err.message, variant: "destructive" });
@@ -469,8 +508,7 @@ export default function WorkspacePage() {
                               {m.email || m.username}
                               {m.role === "collaborator" && (m.pillarScopes?.length ?? 0) > 0 && (
                                 <span className="text-amber-500/90 ml-1">
-                                  · Limited to {m.pillarScopes!.length}{" "}
-                                  pillar{m.pillarScopes!.length === 1 ? "" : "s"}
+                                  · {m.pillarScopes!.length} pillar{m.pillarScopes!.length === 1 ? "" : "s"}
                                 </span>
                               )}
                             </p>
@@ -489,7 +527,7 @@ export default function WorkspacePage() {
                               </select>
                             ) : (
                               <span className="text-[11px] text-muted-foreground px-2 py-1 rounded-full border border-border/40">
-                                {ROLE_LABEL[m.role]}
+                                {effectiveDisplayLabel(m)}
                               </span>
                             )}
                             {isOwner && m.role !== "owner" && (
@@ -549,11 +587,11 @@ export default function WorkspacePage() {
                         We'll generate a link below - copy it and send it to them by email,
                         WhatsApp, or any chat. They sign up with the same email and join your team.
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <Label className="text-[12px] text-muted-foreground/70">
                           Their email address
                         </Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                           <Input
                             type="email"
                             placeholder="colleague@yourcompany.com"
@@ -561,15 +599,6 @@ export default function WorkspacePage() {
                             onChange={(e) => setInviteEmail(e.target.value)}
                             data-testid="input-invite-email"
                           />
-                          <select
-                            value={inviteRole}
-                            onChange={(e) => setInviteRole(e.target.value as Role)}
-                            className="h-10 rounded-md border border-border/50 bg-background px-3 text-[13px]"
-                            data-testid="select-invite-role"
-                          >
-                            <option value="collaborator">Editor - can view and edit</option>
-                            <option value="viewer">Viewer - view only</option>
-                          </select>
                           <Button onClick={sendInvite} disabled={busy} data-testid="btn-send-invite">
                             {busy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -578,10 +607,72 @@ export default function WorkspacePage() {
                             )}
                           </Button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          <span className="text-foreground font-medium">{ROLE_LABEL[inviteRole]}:</span>{" "}
-                          {ROLE_DESCRIPTION[inviteRole]}
-                        </p>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] text-muted-foreground/70">Role</Label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {DISPLAY_ROLE_OPTIONS.map(({ value, label }) => (
+                              <label
+                                key={value}
+                                className={`flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer transition-colors ${
+                                  inviteDisplayRole === value
+                                    ? "border-primary/50 bg-primary/5"
+                                    : "border-border/40 hover:border-border/70"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="inviteDisplayRole"
+                                  value={value}
+                                  checked={inviteDisplayRole === value}
+                                  onChange={() => {
+                                    setInviteDisplayRole(value);
+                                    if (value !== "contributor") setInvitePillarScopes(new Set());
+                                  }}
+                                  className="mt-0.5 accent-primary"
+                                  data-testid={`radio-role-${value}`}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-[12px] font-medium leading-snug">{DISPLAY_ROLE_LABEL[value]}</p>
+                                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                                    {DISPLAY_ROLE_DESCRIPTION[value]}
+                                  </p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        {inviteDisplayRole === "contributor" && (
+                          <div className="rounded-lg border border-border/40 p-3 space-y-2">
+                            <p className="text-[12px] font-medium">
+                              Scorecard pillars this contributor can access
+                              <span className="text-muted-foreground font-normal ml-1">(select at least one)</span>
+                            </p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                              {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
+                                <label
+                                  key={key}
+                                  className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                >
+                                  <Checkbox
+                                    checked={invitePillarScopes.has(key)}
+                                    onCheckedChange={(checked) => {
+                                      setInvitePillarScopes((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) next.add(key);
+                                        else next.delete(key);
+                                        return next;
+                                      });
+                                    }}
+                                    data-testid={`invite-pillar-${key}`}
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {invites.length > 0 && (
@@ -603,8 +694,13 @@ export default function WorkspacePage() {
                                 <div className="min-w-0">
                                   <p className="text-sm font-medium truncate">{inv.email}</p>
                                   <p className="text-[11px] text-muted-foreground truncate">
-                                    {ROLE_LABEL[inv.role]} ·{" "}
-                                    <span className={status.className}>{status.label}</span>
+                                    {inv.displayRole ? DISPLAY_ROLE_LABEL[inv.displayRole] : ROLE_LABEL[inv.role]}
+                                    {inv.displayRole === "contributor" && (inv.pillarScopes?.length ?? 0) > 0 && (
+                                      <span className="text-amber-500/90 ml-1">
+                                        · {inv.pillarScopes!.length} pillar{inv.pillarScopes!.length === 1 ? "" : "s"}
+                                      </span>
+                                    )}
+                                    {" · "}<span className={status.className}>{status.label}</span>
                                   </p>
                                   {canRevoke && (
                                     <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
