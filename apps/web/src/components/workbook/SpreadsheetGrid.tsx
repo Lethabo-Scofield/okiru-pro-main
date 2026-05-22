@@ -6,6 +6,7 @@ import type { ColumnDef } from "./sections";
 import { applyPasteToRows, parseClipboardMatrix } from "@/lib/workbookGridParse";
 
 type Row = Record<string, unknown> & { _id: string };
+type CellRef = { row: number; col: number };
 
 interface Props {
   columns: ColumnDef[];
@@ -19,11 +20,23 @@ interface Props {
   canAddRows?: boolean;
 }
 
-type CellRef = { row: number; col: number };
-
-const VIRTUAL_THRESHOLD = 100;
+const VIRTUAL_THRESHOLD = 50;
 const ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = 120;
+
+function colLetter(idx: number): string {
+  let n = idx;
+  let s = "";
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+function cellKey(row: number, col: number): string {
+  return `${row}:${col}`;
+}
 
 function isRowEmpty(row: Row, columns: ColumnDef[]): boolean {
   for (const c of columns) {
@@ -51,7 +64,7 @@ function emptyRow(columns: ColumnDef[]): Row {
   return r;
 }
 
-function normalizeRange(a: CellRef, b: CellRef): { minR: number; maxR: number; minC: number; maxC: number } {
+function normalizeRange(a: CellRef, b: CellRef) {
   return {
     minR: Math.min(a.row, b.row),
     maxR: Math.max(a.row, b.row),
@@ -60,9 +73,16 @@ function normalizeRange(a: CellRef, b: CellRef): { minR: number; maxR: number; m
   };
 }
 
-function cellInRange(row: number, col: number, range: ReturnType<typeof normalizeRange> | null): boolean {
-  if (!range) return false;
-  return row >= range.minR && row <= range.maxR && col >= range.minC && col <= range.maxC;
+function formatCellDisplay(v: unknown, col: ColumnDef): string {
+  if (col.type === "boolean") return v ? "TRUE" : "FALSE";
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function serializeCellValue(v: unknown, col: ColumnDef): string {
+  if (col.type === "boolean") return v ? "TRUE" : "FALSE";
+  if (v === null || v === undefined) return "";
+  return String(v);
 }
 
 export function SpreadsheetGrid({
@@ -76,8 +96,11 @@ export function SpreadsheetGrid({
   canDeleteRows = true,
   canAddRows = true,
 }: Props) {
-  const [active, setActive] = useState<CellRef | null>(null);
+  const [activeCell, setActiveCell] = useState<CellRef | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<CellRef | null>(null);
+  const [extraCells, setExtraCells] = useState<Set<string>>(new Set());
+  const [editingCell, setEditingCell] = useState<CellRef | null>(null);
+  const [editValue, setEditValue] = useState("");
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -87,11 +110,14 @@ export function SpreadsheetGrid({
   });
   const [undoStack, setUndoStack] = useState<Row[][]>([]);
   const [pastePreview, setPastePreview] = useState<{ rows: number; cols: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const dragAnchor = useRef<CellRef | null>(null);
   const isDragging = useRef(false);
+  const fillDrag = useRef<{ startRow: number; endRow: number } | null>(null);
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
 
   const useVirtual = rows.length > VIRTUAL_THRESHOLD;
@@ -105,9 +131,9 @@ export function SpreadsheetGrid({
   });
 
   const selectionRange = useMemo(() => {
-    if (!active || !selectionEnd) return null;
-    return normalizeRange(active, selectionEnd);
-  }, [active, selectionEnd]);
+    if (!activeCell || !selectionEnd) return null;
+    return normalizeRange(activeCell, selectionEnd);
+  }, [activeCell, selectionEnd]);
 
   const pushUndo = useCallback((snapshot: Row[]) => {
     setUndoStack((prev) => [...prev.slice(-19), snapshot.map((r) => ({ ...r }))]);
@@ -182,6 +208,15 @@ export function SpreadsheetGrid({
     [errorMap],
   );
 
+  const getCellValue = useCallback(
+    (rowIdx: number, colIdx: number): unknown => {
+      const col = columns[colIdx];
+      if (!col) return "";
+      return rows[rowIdx]?.[col.key];
+    },
+    [columns, rows],
+  );
+
   const updateCell = useCallback(
     (rowIdx: number, colKey: string, value: unknown) => {
       if (readOnly) return;
@@ -192,16 +227,60 @@ export function SpreadsheetGrid({
     [rows, onChange, readOnly, pushUndo],
   );
 
-  const addRow = useCallback(() => {
-    if (readOnly || !canAddRows) return;
-    pushUndo(rows);
-    onChange([...rows, emptyRow(columns)]);
-    setTimeout(() => {
-      setActive({ row: rows.length, col: 0 });
-      setSelectionEnd({ row: rows.length, col: 0 });
-      setSelectedRow(rows.length);
-    }, 0);
-  }, [rows, columns, onChange, readOnly, canAddRows, pushUndo]);
+  const commitEdit = useCallback(
+    (moveTo?: CellRef | null) => {
+      if (!editingCell) return;
+      const col = columns[editingCell.col];
+      if (col && !readOnly) {
+        let value: unknown = editValue;
+        if (col.type === "number") {
+          value = editValue !== "" ? Number(editValue) : "";
+        } else if (col.type === "boolean") {
+          value = editValue.toLowerCase() === "true" || editValue === "1";
+        }
+        updateCell(editingCell.row, col.key, value);
+      }
+      setEditingCell(null);
+      setEditValue("");
+      if (moveTo) {
+        setActiveCell(moveTo);
+        setSelectionEnd(moveTo);
+      }
+    },
+    [editingCell, editValue, columns, readOnly, updateCell],
+  );
+
+  const startEdit = useCallback(
+    (ref: CellRef, initialValue?: string) => {
+      if (readOnly) return;
+      const col = columns[ref.col];
+      if (!col || col.type === "boolean") return;
+      const v = getCellValue(ref.row, ref.col);
+      setEditingCell(ref);
+      setEditValue(initialValue ?? String(v ?? ""));
+      setActiveCell(ref);
+      setSelectionEnd(ref);
+    },
+    [readOnly, columns, getCellValue],
+  );
+
+  const addRow = useCallback(
+    (atIdx?: number) => {
+      if (readOnly || !canAddRows) return;
+      pushUndo(rows);
+      const newRow = emptyRow(columns);
+      const idx = atIdx ?? rows.length;
+      const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
+      onChange(next);
+      setTimeout(() => {
+        const ref = { row: idx, col: 0 };
+        setActiveCell(ref);
+        setSelectionEnd(ref);
+        setSelectedRow(null);
+      }, 0);
+    },
+    [rows, columns, onChange, readOnly, canAddRows, pushUndo],
+  );
 
   const deleteRow = useCallback(
     (rowIdx: number) => {
@@ -209,15 +288,93 @@ export function SpreadsheetGrid({
       pushUndo(rows);
       onChange(rows.filter((_, i) => i !== rowIdx));
       setSelectedRow(null);
-      setActive(null);
+      setActiveCell(null);
       setSelectionEnd(null);
+      setExtraCells(new Set());
+      setEditingCell(null);
     },
     [rows, onChange, readOnly, canDeleteRows, pushUndo],
   );
 
+  const clearSelection = useCallback(() => {
+    if (readOnly || !selectionRange) return;
+    pushUndo(rows);
+    const next = rows.map((r, ri) => {
+      if (ri < selectionRange.minR || ri > selectionRange.maxR) return r;
+      const copy = { ...r };
+      for (let ci = selectionRange.minC; ci <= selectionRange.maxC; ci++) {
+        const col = columns[ci];
+        if (col) copy[col.key] = col.type === "boolean" ? false : "";
+      }
+      return copy;
+    });
+    for (const key of extraCells) {
+      const [rs, cs] = key.split(":").map(Number);
+      if (next[rs]) {
+        const col = columns[cs];
+        if (col) next[rs] = { ...next[rs], [col.key]: col.type === "boolean" ? false : "" };
+      }
+    }
+    onChange(next);
+  }, [readOnly, selectionRange, extraCells, rows, columns, onChange, pushUndo]);
+
+  const collectSelectedCells = useCallback((): Array<{ row: number; col: number }> => {
+    const cells: Array<{ row: number; col: number }> = [];
+    const seen = new Set<string>();
+    const add = (r: number, c: number) => {
+      const k = cellKey(r, c);
+      if (!seen.has(k)) {
+        seen.add(k);
+        cells.push({ row: r, col: c });
+      }
+    };
+    if (selectionRange) {
+      for (let r = selectionRange.minR; r <= selectionRange.maxR; r++) {
+        for (let c = selectionRange.minC; c <= selectionRange.maxC; c++) add(r, c);
+      }
+    }
+    for (const k of extraCells) {
+      const [r, c] = k.split(":").map(Number);
+      add(r, c);
+    }
+    if (cells.length === 0 && activeCell) add(activeCell.row, activeCell.col);
+    return cells;
+  }, [selectionRange, extraCells, activeCell]);
+
+  const copySelection = useCallback(async () => {
+    const cells = collectSelectedCells();
+    if (cells.length === 0) return;
+
+    const minR = Math.min(...cells.map((c) => c.row));
+    const maxR = Math.max(...cells.map((c) => c.row));
+    const minC = Math.min(...cells.map((c) => c.col));
+    const maxC = Math.max(...cells.map((c) => c.col));
+
+    const lines: string[] = [];
+    for (let r = minR; r <= maxR; r++) {
+      const rowVals: string[] = [];
+      for (let c = minC; c <= maxC; c++) {
+        const inSel = cells.some((x) => x.row === r && x.col === c);
+        if (inSel) {
+          const col = columns[c];
+          rowVals.push(col ? serializeCellValue(getCellValue(r, c), col) : "");
+        } else {
+          rowVals.push("");
+        }
+      }
+      lines.push(rowVals.join("\t"));
+    }
+    const tsv = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(tsv);
+    } catch {
+      /* clipboard may be blocked */
+    }
+  }, [collectSelectedCells, columns, getCellValue]);
+
   const handlePaste = useCallback(
     (text: string) => {
-      if (readOnly || !active) return;
+      if (readOnly || !activeCell) return;
       const matrix = parseClipboardMatrix(text);
       if (matrix.length === 0) return;
 
@@ -230,13 +387,36 @@ export function SpreadsheetGrid({
         rows,
         columns,
         matrix,
-        active,
+        activeCell,
         Boolean(firstRowLooksLikeHeaders),
       );
       onChange(next);
-      setPastePreview(null);
+      setPastePreview({ rows: matrix.length, cols: matrix[0]?.length ?? 0 });
+      setTimeout(() => setPastePreview(null), 2000);
     },
-    [readOnly, active, columns, rows, onChange, pushUndo],
+    [readOnly, activeCell, columns, rows, onChange, pushUndo],
+  );
+
+  const applyFill = useCallback(
+    (fromRow: number, toRow: number) => {
+      if (readOnly || !selectionRange) return;
+      const sourceRow = selectionRange.minR;
+      if (toRow <= sourceRow) return;
+      pushUndo(rows);
+      const next = rows.map((r) => ({ ...r }));
+      for (let r = sourceRow + 1; r <= toRow; r++) {
+        if (r >= next.length) {
+          next.push(emptyRow(columns));
+        }
+        for (let c = selectionRange.minC; c <= selectionRange.maxC; c++) {
+          const col = columns[c];
+          if (!col) continue;
+          next[r] = { ...next[r], [col.key]: next[sourceRow][col.key] };
+        }
+      }
+      onChange(next);
+    },
+    [readOnly, selectionRange, rows, columns, onChange, pushUndo],
   );
 
   useEffect(() => {
@@ -246,109 +426,208 @@ export function SpreadsheetGrid({
     const onPaste = (e: ClipboardEvent) => {
       if (readOnly) return;
       const text = e.clipboardData?.getData("text/plain");
-      if (!text || !active) return;
+      if (!text || !activeCell) return;
       e.preventDefault();
-      const matrix = parseClipboardMatrix(text);
-      if (matrix.length > 0) {
-        setPastePreview({ rows: matrix.length, cols: matrix[0]?.length ?? 0 });
-        handlePaste(text);
-      }
+      handlePaste(text);
     };
 
     el.addEventListener("paste", onPaste);
     return () => el.removeEventListener("paste", onPaste);
-  }, [readOnly, active, handlePaste]);
+  }, [readOnly, activeCell, handlePaste]);
+
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
+
+  useEffect(() => {
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (editingCell) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setEditingCell(null);
+          setEditValue("");
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const { row, col } = editingCell;
+          commitEdit({ row: Math.min(row + 1, rows.length - 1), col });
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const { row, col } = editingCell;
+          if (e.shiftKey && col > 0) commitEdit({ row, col: col - 1 });
+          else if (!e.shiftKey && col < columns.length - 1) commitEdit({ row, col: col + 1 });
+          else commitEdit();
+          return;
+        }
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         undo();
         return;
       }
-      if (!active) return;
-      const { row, col } = active;
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        e.preventDefault();
+        copySelection();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && activeCell) {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+      if (e.key === "F2" && activeCell) {
+        e.preventDefault();
+        startEdit(activeCell);
+        return;
+      }
+      if (!activeCell) return;
+
+      const { row, col } = activeCell;
       const lastCol = columns.length - 1;
       const lastRow = rows.length - 1;
 
       if (e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
-        const nr = row < lastRow ? row + 1 : row;
         if (row < lastRow) {
-          const next = { row: nr, col };
-          setActive(next);
+          const next = { row: row + 1, col };
+          setActiveCell(next);
           setSelectionEnd(next);
+          setExtraCells(new Set());
         } else if (e.key === "Enter" && canAddRows && !readOnly) addRow();
       } else if (e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey)) {
         if (row > 0) {
           e.preventDefault();
           const next = { row: row - 1, col };
-          setActive(next);
+          setActiveCell(next);
           setSelectionEnd(next);
+          setExtraCells(new Set());
         }
       } else if (e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey)) {
         if (col < lastCol) {
           e.preventDefault();
           const next = { row, col: col + 1 };
-          setActive(next);
+          setActiveCell(next);
           setSelectionEnd(next);
+          setExtraCells(new Set());
         } else if (e.key === "Tab" && row < lastRow) {
           e.preventDefault();
           const next = { row: row + 1, col: 0 };
-          setActive(next);
+          setActiveCell(next);
           setSelectionEnd(next);
+          setExtraCells(new Set());
         }
       } else if (e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey)) {
         if (col > 0) {
           e.preventDefault();
           const next = { row, col: col - 1 };
-          setActive(next);
+          setActiveCell(next);
           setSelectionEnd(next);
+          setExtraCells(new Set());
         }
       }
     },
-    [active, columns.length, rows.length, addRow, undo, canAddRows, readOnly],
+    [
+      editingCell,
+      activeCell,
+      columns.length,
+      rows.length,
+      addRow,
+      undo,
+      canAddRows,
+      readOnly,
+      copySelection,
+      clearSelection,
+      startEdit,
+      commitEdit,
+    ],
   );
 
-  useEffect(() => {
-    if (!active || !containerRef.current) return;
-    const sel = containerRef.current.querySelector<HTMLElement>(
-      `[data-cell="${active.row}-${active.col}"] input, [data-cell="${active.row}-${active.col}"] select`,
-    );
-    sel?.focus();
-  }, [active]);
-
   const handleCellMouseDown = (rIdx: number, cIdx: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
     const ref = { row: rIdx, col: cIdx };
-    if (e.shiftKey && active) {
+    if (e.ctrlKey || e.metaKey) {
+      setExtraCells((prev) => {
+        const next = new Set(prev);
+        const k = cellKey(rIdx, cIdx);
+        if (next.has(k)) next.delete(k);
+        else next.add(k);
+        return next;
+      });
+      setActiveCell(ref);
+      return;
+    }
+    if (e.shiftKey && activeCell) {
       setSelectionEnd(ref);
+      setExtraCells(new Set());
     } else {
       dragAnchor.current = ref;
       isDragging.current = true;
-      setActive(ref);
+      setActiveCell(ref);
       setSelectionEnd(ref);
+      setExtraCells(new Set());
       setSelectedRow(null);
     }
   };
 
   const handleCellMouseEnter = (rIdx: number, cIdx: number) => {
+    if (fillDrag.current) {
+      fillDrag.current.endRow = rIdx;
+      return;
+    }
     if (!isDragging.current || !dragAnchor.current) return;
     setSelectionEnd({ row: rIdx, col: cIdx });
   };
 
   useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (fillDrag.current) {
+        /* visual feedback handled via state on mouseup */
+      }
+    };
     const up = () => {
+      if (fillDrag.current) {
+        const { startRow, endRow } = fillDrag.current;
+        if (endRow > startRow) applyFill(startRow, endRow);
+        fillDrag.current = null;
+      }
       isDragging.current = false;
       dragAnchor.current = null;
     };
+    window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", up);
-    return () => window.removeEventListener("mouseup", up);
-  }, []);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [applyFill]);
 
   const handleRowSelect = (rIdx: number) => {
     setSelectedRow(rIdx);
-    setActive({ row: rIdx, col: 0 });
+    setActiveCell({ row: rIdx, col: 0 });
     setSelectionEnd({ row: rIdx, col: columns.length - 1 });
+    setExtraCells(new Set());
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, row: number) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, row });
   };
 
   const startResize = (key: string, e: React.MouseEvent) => {
@@ -375,79 +654,90 @@ export function SpreadsheetGrid({
     };
   }, []);
 
+  const isCellSelected = (rIdx: number, cIdx: number): boolean => {
+    if (extraCells.has(cellKey(rIdx, cIdx))) return true;
+    if (selectionRange) {
+      return (
+        rIdx >= selectionRange.minR &&
+        rIdx <= selectionRange.maxR &&
+        cIdx >= selectionRange.minC &&
+        cIdx <= selectionRange.maxC
+      );
+    }
+    return false;
+  };
+
+  const isActiveCell = (rIdx: number, cIdx: number): boolean =>
+    activeCell?.row === rIdx && activeCell?.col === cIdx;
+
+  const showFillHandle =
+    !readOnly &&
+    selectionRange &&
+    activeCell &&
+    selectionRange.minR === selectionRange.maxR &&
+    selectionRange.minC <= selectionRange.maxC;
+
   const renderCell = (row: Row, rIdx: number, col: ColumnDef, cIdx: number) => {
     const v = row[col.key];
     const errs = errorMap[row._id] || {};
     const err = errs[col.key];
-    const isActive = active?.row === rIdx && active?.col === cIdx;
-    const inSelection = cellInRange(rIdx, cIdx, selectionRange);
-    const rowSelected = selectedRow === rIdx;
+    const selected = isCellSelected(rIdx, cIdx);
+    const active = isActiveCell(rIdx, cIdx);
+    const isEditing = editingCell?.row === rIdx && editingCell?.col === cIdx;
 
     return (
       <td
         key={col.key}
         data-cell={`${rIdx}-${cIdx}`}
         style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
-        className={`border-b border-r border-[#2c2c2e] p-0 relative ${
-          isActive ? "ring-1 ring-inset ring-blue-500 z-[1]" : ""
-        } ${inSelection || rowSelected ? "bg-blue-500/10" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
+        className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+          selected ? "bg-blue-500/10" : ""
+        } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
         onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
         onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
+        onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
+        onContextMenu={(e) => handleContextMenu(e, rIdx)}
         title={err || undefined}
       >
-        {col.type === "select" ? (
-          <select
-            value={String(v ?? "")}
-            disabled={readOnly}
-            onChange={(e) => updateCell(rIdx, col.key, e.target.value)}
-            onFocus={() => {
-              setActive({ row: rIdx, col: cIdx });
-              setSelectionEnd({ row: rIdx, col: cIdx });
-            }}
-            className="w-full bg-transparent px-3 py-2 text-[13px] text-white outline-none disabled:opacity-60"
-            data-testid={`cell-${rIdx}-${col.key}`}
-          >
-            <option value="" className="bg-[#1c1c1e]">—</option>
-            {col.options?.map((o) => (
-              <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
-            ))}
-          </select>
-        ) : col.type === "boolean" ? (
+        {col.type === "boolean" ? (
           <div className="flex items-center justify-center h-full py-2">
             <input
               type="checkbox"
               checked={Boolean(v)}
               disabled={readOnly}
               onChange={(e) => updateCell(rIdx, col.key, e.target.checked)}
-              onFocus={() => {
-                setActive({ row: rIdx, col: cIdx });
-                setSelectionEnd({ row: rIdx, col: cIdx });
-              }}
               className="h-4 w-4 accent-blue-500 disabled:opacity-60"
               data-testid={`cell-${rIdx}-${col.key}`}
             />
           </div>
-        ) : (
+        ) : isEditing ? (
           <input
+            ref={editInputRef}
             type={col.type === "number" ? "number" : "text"}
-            value={String(v ?? "")}
-            readOnly={readOnly}
-            onChange={(e) =>
-              updateCell(
-                rIdx,
-                col.key,
-                col.type === "number" && e.target.value !== ""
-                  ? Number(e.target.value)
-                  : e.target.value,
-              )
-            }
-            onFocus={() => {
-              setActive({ row: rIdx, col: cIdx });
-              setSelectionEnd({ row: rIdx, col: cIdx });
-            }}
-            className="w-full bg-transparent px-3 py-2 text-[13px] text-white outline-none placeholder-[#48484a] read-only:opacity-80"
-            placeholder={col.required ? "Required" : ""}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => commitEdit()}
+            className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+            data-testid={`cell-edit-${rIdx}-${col.key}`}
+          />
+        ) : (
+          <div
+            className="px-3 py-2 text-[13px] text-white truncate min-h-[36px] flex items-center"
             data-testid={`cell-${rIdx}-${col.key}`}
+          >
+            {formatCellDisplay(v, col) || (
+              <span className="text-[#48484a]">{col.required ? "Required" : ""}</span>
+            )}
+          </div>
+        )}
+        {active && showFillHandle && cIdx === selectionRange!.maxC && (
+          <span
+            className="absolute -bottom-[3px] -right-[3px] w-2 h-2 bg-blue-500 border border-white cursor-crosshair z-20"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              fillDrag.current = { startRow: rIdx, endRow: rIdx };
+            }}
+            data-testid="fill-handle"
           />
         )}
         {err && (
@@ -462,10 +752,11 @@ export function SpreadsheetGrid({
   const renderDataRow = (row: Row, rIdx: number) => (
     <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`row-${rIdx}`}>
       <td
-        className={`text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 cursor-pointer select-none ${
+        className={`text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 cursor-pointer select-none sticky left-0 bg-[#0e0e10] z-[1] ${
           selectedRow === rIdx ? "bg-blue-500/20 text-blue-300" : ""
         }`}
         onClick={() => handleRowSelect(rIdx)}
+        onContextMenu={(e) => handleContextMenu(e, rIdx)}
         data-testid={`row-select-${rIdx}`}
       >
         {rIdx + 1}
@@ -543,7 +834,7 @@ export function SpreadsheetGrid({
         {canAddRows && !readOnly && (
           <button
             type="button"
-            onClick={addRow}
+            onClick={() => addRow()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold press-sm hover:bg-white/90 smooth"
             data-testid="button-add-row"
           >
@@ -566,13 +857,14 @@ export function SpreadsheetGrid({
       <table className="w-full text-[13px] border-collapse table-fixed">
         <thead className="sticky top-0 bg-[#1c1c1e] z-10">
           <tr>
-            <th className="w-10 p-2 text-[#636366] font-medium text-[11px] border-b border-r border-[#2c2c2e]">#</th>
-            {columns.map((c) => (
+            <th className="w-10 p-2 text-[#636366] font-medium text-[11px] border-b border-r border-[#2c2c2e] sticky left-0 bg-[#1c1c1e] z-20" />
+            {columns.map((c, i) => (
               <th
                 key={c.key}
                 style={{ width: colWidths[c.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[c.key] || DEFAULT_COL_WIDTH }}
-                className="relative text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] uppercase tracking-wider text-[11px]"
+                className="relative text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] text-[11px]"
               >
+                <span className="text-[#636366] mr-1.5 font-mono">{colLetter(i)}</span>
                 {c.label}
                 {c.required && <span className="text-status-error ml-0.5">*</span>}
                 <span
@@ -626,6 +918,82 @@ export function SpreadsheetGrid({
     </div>
   );
 
+  const contextMenuPortal =
+    contextMenu &&
+    createPortal(
+      <div
+        className="fixed z-[200] min-w-[160px] rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] py-1 shadow-xl"
+        style={{ left: contextMenu.x, top: contextMenu.y }}
+        onClick={(e) => e.stopPropagation()}
+        data-testid="grid-context-menu"
+      >
+        {!readOnly && canAddRows && (
+          <>
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              onClick={() => {
+                addRow(contextMenu.row);
+                setContextMenu(null);
+              }}
+            >
+              Insert row above
+            </button>
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              onClick={() => {
+                addRow(contextMenu.row + 1);
+                setContextMenu(null);
+              }}
+            >
+              Insert row below
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+          onClick={() => {
+            copySelection();
+            setContextMenu(null);
+          }}
+        >
+          Copy
+        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                handlePaste(text);
+              } catch {
+                /* ignore */
+              }
+              setContextMenu(null);
+            }}
+          >
+            Paste
+          </button>
+        )}
+        {!readOnly && canDeleteRows && (
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-[12px] text-status-error hover:bg-white/[0.06]"
+            onClick={() => {
+              deleteRow(contextMenu.row);
+              setContextMenu(null);
+            }}
+          >
+            Delete row
+          </button>
+        )}
+      </div>,
+      document.body,
+    );
+
   const gridBody = (
     <div
       ref={containerRef}
@@ -637,9 +1005,11 @@ export function SpreadsheetGrid({
       {gridTable}
       {!readOnly && (
         <p className="text-[11px] text-[#636366]">
-          Tip: Copy from Excel/Sheets and paste here. Tab / Enter / arrows to navigate. Ctrl+Z to undo.
+          Click to select · drag for range · Shift+click extend · Ctrl+click multi-select · F2/double-click edit ·
+          Ctrl+C copy · Ctrl+V paste · drag fill handle to copy down.
         </p>
       )}
+      {contextMenuPortal}
     </div>
   );
 

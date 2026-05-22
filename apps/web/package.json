@@ -44,7 +44,6 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.21",
-    "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.25",
     "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^7.0.11",
