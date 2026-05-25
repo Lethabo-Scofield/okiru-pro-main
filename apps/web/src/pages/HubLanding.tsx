@@ -336,10 +336,9 @@ export default function HubLanding() {
 
         {/* PRIMARY ACTIONS — Create / View scorecard */}
         <section className="mb-12 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
-          <button
-            type="button"
-            onClick={() => navigate('/create-scorecard')}
-            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-violet-400/40 hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col"
+          <Link
+            href="/create-scorecard"
+            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-violet-400/40 hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col cursor-pointer"
             data-testid="action-create-scorecard"
           >
             <div className="flex items-start justify-between mb-3">
@@ -355,12 +354,11 @@ export default function HubLanding() {
             <span className="mt-auto pt-4 text-[12px] font-medium text-violet-300/90 group-hover:text-violet-200 transition-colors">
               New workbook →
             </span>
-          </button>
+          </Link>
 
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard')}
-            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col"
+          <Link
+            href="/dashboard"
+            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col cursor-pointer"
             data-testid="action-view-scorecard"
           >
             <div className="flex items-start justify-between mb-3">
@@ -376,7 +374,7 @@ export default function HubLanding() {
             <span className="mt-auto pt-4 text-[12px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
               Saved companies →
             </span>
-          </button>
+          </Link>
         </section>
 
         {/* FEATURED + ACTIVE TOOLKITS */}

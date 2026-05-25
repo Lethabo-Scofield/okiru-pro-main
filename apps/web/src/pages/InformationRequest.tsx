@@ -1119,7 +1119,13 @@ export default function InformationRequest() {
       <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: "1px solid #2c2c2e" }}>
         <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <AppNavBack href="/dashboard" eyebrow="Back" label="Dashboard" variant="dark" className="shrink-0" />
+            <AppNavBack
+              href={isCreateScorecardFlow ? "/hub" : "/dashboard"}
+              eyebrow="Back"
+              label={isCreateScorecardFlow ? "Hub" : "Dashboard"}
+              variant="dark"
+              className="shrink-0"
+            />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
             <div className="flex items-center gap-3">
               <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
