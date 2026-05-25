@@ -9,7 +9,7 @@ import hubBackground from '@assets/image_1779723521128.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, Upload, FileSearch, TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -345,31 +345,6 @@ export default function HubLanding() {
           </div>
         </section>
 
-        {/* HOW IT WORKS — 3 simple steps, helps first-time users get oriented */}
-        <section className="mb-12 fade-in" data-testid="how-it-works">
-          <SectionHeader title="How Okiru works" count={3} />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StepCard
-              n={1}
-              icon={<Upload className="w-4 h-4" />}
-              title="Upload your toolkit"
-              body="Drop in your sector B-BBEE Excel or supplier certificates. We read them automatically."
-            />
-            <StepCard
-              n={2}
-              icon={<FileSearch className="w-4 h-4" />}
-              title="We score & verify"
-              body="AI extracts your data, runs the five pillars and flags missing or expiring evidence."
-            />
-            <StepCard
-              n={3}
-              icon={<TrendingUp className="w-4 h-4" />}
-              title="See your level & next moves"
-              body="Get a verification-ready scorecard plus what-if scenarios to lift your level."
-            />
-          </div>
-        </section>
-
         {/* FEATURED + ACTIVE TOOLKITS */}
         <section className="mb-12">
           <SectionHeader title="Open a toolkit" count={filteredActive.length} />
@@ -519,36 +494,6 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
         <ChevronRight className="w-4 h-4 text-[#636366] group-hover:text-white group-hover:translate-x-0.5 smooth" />
       </div>
     </Link>
-  );
-}
-
-function StepCard({
-  n,
-  icon,
-  title,
-  body,
-}: {
-  n: number;
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div
-      className="card-rise group rounded-2xl p-5 bg-white/[0.03] backdrop-blur-md border border-white/[0.07] hover:border-white/[0.14] transition-colors min-h-[140px] flex flex-col"
-      data-testid={`step-${n}`}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-lg bg-violet-500/[0.10] border border-violet-400/20 text-violet-200 flex items-center justify-center">
-          {icon}
-        </div>
-        <span className="text-[11px] font-mono text-[#8e8e93] tracking-wider">
-          STEP {String(n).padStart(2, '0')}
-        </span>
-      </div>
-      <h3 className="text-[14px] font-semibold text-white tracking-tight">{title}</h3>
-      <p className="mt-1.5 text-[12.5px] text-[#a1a1a6] leading-relaxed">{body}</p>
-    </div>
   );
 }
 
