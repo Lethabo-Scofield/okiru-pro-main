@@ -9,7 +9,7 @@ import hubBackground from '@assets/image_1779723521128.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles,
+  Sparkles, Plus, LineChart,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -342,6 +342,37 @@ export default function HubLanding() {
                 for invites, or jump into a toolkit below.
               </>
             )}
+          </div>
+
+          {/* QUICK ACTIONS */}
+          <div className="mt-6 flex flex-wrap gap-2" data-testid="hero-quick-actions">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard?new=1')}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-violet-500/90 hover:bg-violet-500 border border-violet-400/30 backdrop-blur-md transition-colors"
+              data-testid="action-create-scorecard"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Create scorecard
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] backdrop-blur-md transition-colors"
+              data-testid="action-view-scorecard"
+            >
+              <LineChart className="w-3.5 h-3.5" />
+              View scorecard
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/certificates')}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] backdrop-blur-md transition-colors"
+              data-testid="action-bbbee-certificate"
+            >
+              <Award className="w-3.5 h-3.5" />
+              B-BBEE certificate
+            </button>
           </div>
         </section>
 
