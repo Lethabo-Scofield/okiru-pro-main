@@ -283,56 +283,60 @@ export default function HubLanding() {
               )}
             </div>
 
-            <button
-              onClick={() => setSearchOpen((s) => !s)}
-              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
-              title="Search toolkits"
-              data-testid="btn-search-toolkits"
+            {/* Inline-expanding search */}
+            <div
+              className={`relative flex items-center rounded-full border smooth overflow-hidden ${
+                searchOpen
+                  ? 'w-[220px] sm:w-[300px] bg-white/[0.06] border-white/[0.14]'
+                  : 'w-9 bg-white/[0.04] hover:bg-white/[0.08] border-transparent'
+              }`}
+              style={{ transitionProperty: 'width, background-color, border-color' }}
             >
-              <Search className="h-3.5 w-3.5" />
-              <span>Search</span>
-            </button>
-            <button
-              onClick={() => setSearchOpen((s) => !s)}
-              className="sm:hidden p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Search toolkits"
-              data-testid="btn-search-toolkits-mobile"
-            >
-              <Search className="h-4 w-4" />
-            </button>
+              <button
+                onClick={() => {
+                  if (searchOpen && !searchQuery) setSearchOpen(false);
+                  else setSearchOpen(true);
+                }}
+                className="shrink-0 h-9 w-9 grid place-items-center text-[#8e8e93] hover:text-white smooth press-sm"
+                title="Search toolkits"
+                aria-label="Search toolkits"
+                data-testid="btn-search-toolkits"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              <input
+                type="text"
+                placeholder="Search toolkits…"
+                autoFocus={searchOpen}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false); }
+                }}
+                onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
+                tabIndex={searchOpen ? 0 : -1}
+                aria-hidden={!searchOpen}
+                className={`flex-1 min-w-0 bg-transparent pr-2 text-[13px] text-white placeholder-[#636366] outline-none ${
+                  searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                } transition-opacity duration-150`}
+                data-testid="input-search-toolkits"
+              />
+              {searchOpen && searchQuery && (
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+                  className="shrink-0 h-7 w-7 mr-1 grid place-items-center rounded-full text-[#636366] hover:text-white hover:bg-white/[0.08] smooth"
+                  title="Clear search"
+                  data-testid="btn-clear-search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             {user?.id && !authLoading ? <UserAccountMenu variant="hub" /> : null}
           </div>
         </div>
       </header>
-
-      {searchOpen && (
-        <div
-          className="w-full px-4 sm:px-6 lg:px-8 py-3 bg-black/60 backdrop-blur-md"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
-        >
-          <div className="relative max-w-lg mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a]" />
-            <input
-              type="text"
-              placeholder="Search toolkits..."
-              autoFocus
-              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/20 focus:border-white/[0.18] smooth placeholder:text-[#48484a]"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              data-testid="input-search-toolkits"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#636366] hover:text-white smooth"
-                data-testid="btn-clear-search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
         {/* HERO - personalized */}
