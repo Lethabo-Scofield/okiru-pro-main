@@ -10,7 +10,7 @@ import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, Plus, LineChart,
+  Sparkles, Plus, LineChart, UserCog, ChevronDown,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -42,6 +42,7 @@ export default function HubLanding() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -196,16 +197,92 @@ export default function HubLanding() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/workspace')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/25 hover:border-violet-300/45 smooth press-sm text-violet-100 shadow-sm shadow-violet-950/20"
-              title="Workspace — invite people and manage your team"
-              aria-label="Workspace — invite people and manage your team"
-              data-testid="btn-workspace"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              <span className="text-[12px] font-semibold">Workspace</span>
-            </button>
+            {/* Consolidated Team menu — Workspace + Admin + Super Admin */}
+            <div className="relative">
+              <button
+                onClick={() => setTeamMenuOpen((s) => !s)}
+                className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/25 hover:border-violet-300/45 smooth press-sm text-violet-100 shadow-sm shadow-violet-950/20"
+                title="Team & access"
+                aria-haspopup="menu"
+                aria-expanded={teamMenuOpen}
+                data-testid="btn-team-menu"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span className="text-[12px] font-semibold">Team</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${teamMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {teamMenuOpen && (
+                <>
+                  <div
+                    aria-hidden
+                    className="fixed inset-0 z-30"
+                    onClick={() => setTeamMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-[260px] rounded-2xl border border-white/[0.08] bg-[#141416]/95 backdrop-blur-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.7)] overflow-hidden z-40"
+                  >
+                    <div className="px-3 pt-3 pb-2">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#636366] font-semibold">
+                        Team & access
+                      </div>
+                    </div>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setTeamMenuOpen(false); navigate('/workspace'); }}
+                      className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left"
+                      data-testid="menu-item-workspace"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-violet-500/15 border border-violet-400/25 grid place-items-center shrink-0">
+                        <Building2 className="h-4 w-4 text-violet-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-white">Workspace</div>
+                        <div className="text-[11px] text-[#8e8e93]">Invite people, manage your team</div>
+                      </div>
+                    </button>
+                    {user?.role === 'admin' && (
+                      <Link
+                        href="/admin/users"
+                        onClick={() => setTeamMenuOpen(false)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left"
+                        data-testid="menu-item-admin-users"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-white/[0.06] border border-white/[0.08] grid place-items-center shrink-0">
+                          <UserCog className="h-4 w-4 text-[#d1d1d6]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-white">User management</div>
+                          <div className="text-[11px] text-[#8e8e93]">Roles, permissions, accounts</div>
+                        </div>
+                      </Link>
+                    )}
+                    {user?.role === 'super_admin' && (
+                      <Link
+                        href="/super-admin"
+                        onClick={() => setTeamMenuOpen(false)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left border-t border-white/[0.05]"
+                        data-testid="menu-item-super-admin"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/15 border border-amber-500/30 grid place-items-center shrink-0">
+                          <Crown className="h-4 w-4 text-amber-300" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                            Super Admin
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-semibold">
+                              Owner
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#8e8e93]">Platform-wide controls</div>
+                        </div>
+                      </Link>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={() => setSearchOpen((s) => !s)}
               className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
@@ -223,26 +300,6 @@ export default function HubLanding() {
             >
               <Search className="h-4 w-4" />
             </button>
-            {user?.role === 'admin' && (
-              <Link
-                href="/admin/users"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px] font-medium"
-                data-testid="link-admin-users"
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Admin
-              </Link>
-            )}
-            {user?.role === 'super_admin' && (
-              <Link
-                href="/super-admin"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 smooth press-sm text-amber-300 hover:text-amber-200 text-[12px] font-medium"
-                data-testid="link-super-admin"
-              >
-                <Crown className="h-3.5 w-3.5" />
-                Super Admin
-              </Link>
-            )}
             {user?.id && !authLoading ? <UserAccountMenu variant="hub" /> : null}
           </div>
         </div>
