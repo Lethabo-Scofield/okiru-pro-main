@@ -344,36 +344,51 @@ export default function HubLanding() {
             )}
           </div>
 
-          {/* QUICK ACTIONS */}
-          <div className="mt-6 flex flex-wrap gap-2" data-testid="hero-quick-actions">
-            <button
-              type="button"
-              onClick={() => navigate('/create-scorecard')}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-violet-500/90 hover:bg-violet-500 border border-violet-400/30 backdrop-blur-md transition-colors"
-              data-testid="action-create-scorecard"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Create scorecard
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard')}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] backdrop-blur-md transition-colors"
-              data-testid="action-view-scorecard"
-            >
-              <LineChart className="w-3.5 h-3.5" />
-              View scorecard
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/certificates')}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] backdrop-blur-md transition-colors"
-              data-testid="action-bbbee-certificate"
-            >
-              <Award className="w-3.5 h-3.5" />
-              B-BBEE certificate
-            </button>
-          </div>
+        </section>
+
+        {/* PRIMARY ACTIONS — Create / View scorecard */}
+        <section className="mb-12 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
+          <button
+            type="button"
+            onClick={() => navigate('/create-scorecard')}
+            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-violet-400/40 hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col"
+            data-testid="action-create-scorecard"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-400/30 text-violet-200 flex items-center justify-center">
+                <Plus className="w-5 h-5" />
+              </div>
+              <ArrowUpRight className="w-4 h-4 text-[#8e8e93] group-hover:text-violet-200 transition-colors" />
+            </div>
+            <h3 className="text-[18px] font-semibold text-white tracking-tight">Create Scorecard</h3>
+            <p className="mt-1.5 text-[13.5px] text-[#a1a1a6] leading-relaxed">
+              Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+            </p>
+            <span className="mt-auto pt-4 text-[12px] font-medium text-violet-300/90 group-hover:text-violet-200 transition-colors">
+              New workbook →
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col"
+            data-testid="action-view-scorecard"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white flex items-center justify-center">
+                <LineChart className="w-5 h-5" />
+              </div>
+              <ArrowUpRight className="w-4 h-4 text-[#8e8e93] group-hover:text-white transition-colors" />
+            </div>
+            <h3 className="text-[18px] font-semibold text-white tracking-tight">View Scorecard</h3>
+            <p className="mt-1.5 text-[13.5px] text-[#a1a1a6] leading-relaxed">
+              Open saved companies, review scorecard summaries, and continue editing existing workbooks.
+            </p>
+            <span className="mt-auto pt-4 text-[12px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
+              Saved companies →
+            </span>
+          </button>
         </section>
 
         {/* FEATURED + ACTIVE TOOLKITS */}
