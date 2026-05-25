@@ -8,7 +8,7 @@ import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import hubBackground from '@assets/image_1779723521128.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
-  BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
+  Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
   Sparkles, Plus, LineChart,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
@@ -99,18 +99,6 @@ export default function HubLanding() {
 
   const toolkits = useMemo(() => ([
     {
-      id: 'bbbee-scorecard',
-      title: 'B-BBEE Scorecard Calculator',
-      description:
-        'Model your scorecard across all five elements - Ownership, Management Control, Skills Development, Enterprise Development, and Socio-Economic Development.',
-      tag: 'B-BBEE',
-      aiBadge: 'AI-Scored',
-      icon: <BarChart3 className="w-5 h-5" />,
-      link: '/dashboard',
-      features: ['Automatic level determination', 'Scenario modelling & what-if', 'DTI Codes compliant'],
-      featured: true,
-    },
-    {
       id: 'bbbee-cert',
       title: 'B-BBEE Certificate Hub',
       description:
@@ -120,7 +108,7 @@ export default function HubLanding() {
       icon: <Award className="w-5 h-5" />,
       link: '/certificates',
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
-      featured: false,
+      featured: true,
     },
     {
       id: 'esg', title: 'ESG Toolkit', tag: 'ESG', aiBadge: 'AI-Insights',
