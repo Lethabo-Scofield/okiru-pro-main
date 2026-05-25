@@ -12,8 +12,6 @@ import {
   Mail,
   Loader2,
   Trash2,
-  Copy,
-  CheckCircle2,
   RefreshCw,
 } from "lucide-react";
 import { AppNavBack } from "@/components/AppNavBack";
@@ -47,7 +45,6 @@ interface WorkspaceInvite {
   role: Role;
   displayRole?: DisplayRole | null;
   pillarScopes?: string[];
-  token?: string;
   expiresAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
@@ -119,7 +116,6 @@ export default function WorkspacePage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteDisplayRole, setInviteDisplayRole] = useState<DisplayRole>("admin");
   const [invitePillarScopes, setInvitePillarScopes] = useState<Set<string>>(new Set());
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const inviteSectionRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(
@@ -185,7 +181,7 @@ export default function WorkspacePage() {
     toast({
       title: "Invite your team when you're ready",
       description:
-        "Use the form below to create an invite link. You can always return here from the Hub → Your team.",
+        "Enter their email below and we'll send them an invite. You can always return here from the Hub → Your team.",
     });
     requestAnimationFrame(() => {
       inviteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -247,8 +243,8 @@ export default function WorkspacePage() {
         body: JSON.stringify(body),
       });
       toast({
-        title: "Invite link ready",
-        description: `Copy the link below and send it to ${email} — they'll sign up and join your team.`,
+        title: "Invite sent",
+        description: `We emailed an invite to ${email}. They'll join your team once they sign up.`,
       });
       setInviteEmail("");
       setInvitePillarScopes(new Set());
@@ -331,20 +327,6 @@ export default function WorkspacePage() {
       toast({ title: "Remove failed", description: err.message, variant: "destructive" });
     } finally {
       setBusy(false);
-    }
-  }
-
-  function inviteUrl(token: string) {
-    return `${window.location.origin}/invite/${token}`;
-  }
-
-  async function copyInvite(token: string) {
-    try {
-      await navigator.clipboard.writeText(inviteUrl(token));
-      setCopiedToken(token);
-      setTimeout(() => setCopiedToken((t) => (t === token ? null : t)), 1800);
-    } catch {
-      toast({ title: "Could not copy link", variant: "destructive" });
     }
   }
 
@@ -583,9 +565,9 @@ export default function WorkspacePage() {
                     <CardContent className="space-y-4">
                       <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[12px] text-muted-foreground">
                         <span className="text-foreground font-medium">How it works:</span> enter
-                        their email, choose what they can do, then click <span className="text-foreground font-medium">Create invite link</span>.
-                        We'll generate a link below - copy it and send it to them by email,
-                        WhatsApp, or any chat. They sign up with the same email and join your team.
+                        their email, choose what they can do, then click <span className="text-foreground font-medium">Send invite</span>.
+                        We'll email them a personal invite link. They sign up with the same
+                        email and join your team automatically.
                       </div>
                       <div className="space-y-3">
                         <Label className="text-[12px] text-muted-foreground/70">
@@ -603,7 +585,7 @@ export default function WorkspacePage() {
                             {busy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              "Create invite link"
+                              "Send invite"
                             )}
                           </Button>
                         </div>
@@ -678,12 +660,10 @@ export default function WorkspacePage() {
                       {invites.length > 0 && (
                         <div className="space-y-2 pt-2">
                           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                            Pending invite links - copy and send
+                            Pending invites
                           </p>
                           {invites.map((inv) => {
                             const status = inviteStatus(inv);
-                            const url = inviteUrl(inv.token);
-                            const isCopied = copiedToken === inv.token;
                             const canRevoke = !inv.revokedAt && !inv.acceptedAt;
                             return (
                               <div
@@ -702,37 +682,18 @@ export default function WorkspacePage() {
                                     )}
                                     {" · "}<span className={status.className}>{status.label}</span>
                                   </p>
-                                  {canRevoke && (
-                                    <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
-                                      {url}
-                                    </p>
-                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   {canRevoke && (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => copyInvite(inv.token)}
-                                        data-testid={`btn-copy-${inv.id}`}
-                                      >
-                                        {isCopied ? (
-                                          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
-                                        ) : (
-                                          <Copy className="h-3.5 w-3.5 mr-1.5" />
-                                        )}
-                                        {isCopied ? "Copied" : "Copy link"}
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => revokeInvite(inv.id)}
-                                        data-testid={`btn-revoke-${inv.id}`}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => revokeInvite(inv.id)}
+                                      data-testid={`btn-revoke-${inv.id}`}
+                                      title="Revoke invite"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
                                   )}
                                 </div>
                               </div>
