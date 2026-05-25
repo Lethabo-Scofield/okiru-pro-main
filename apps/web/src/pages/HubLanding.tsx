@@ -277,19 +277,23 @@ export default function HubLanding() {
 
       <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
         {/* HERO - personalized */}
-        <section className="mb-10 fade-in" data-testid="hero-welcome">
+        <section className="mb-12 fade-in" data-testid="hero-welcome">
+          <div className="flex items-center gap-2 mb-5 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80 pulse-soft" />
+            Okiru Hub
+          </div>
           <h1
-            className="text-[36px] leading-[1.05] sm:text-[52px] font-semibold tracking-tight text-white"
+            className="text-[40px] leading-[1.04] sm:text-[60px] font-semibold tracking-tight text-white"
             style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {greeting()},{' '}
             {authLoading ? (
-              <span className="skel inline-block h-[36px] w-40 align-middle rounded-md" />
+              <span className="skel inline-block h-[40px] w-44 align-middle rounded-md" />
             ) : (
               <button
                 type="button"
                 onClick={() => navigate(companyProfilePath('/hub'))}
-                className="text-white border-b border-dashed border-white/35 hover:border-violet-300/80 hover:text-violet-100 transition-colors pb-0.5"
+                className="text-white border-b border-dashed border-white/30 hover:border-violet-300/80 hover:text-violet-100 transition-colors pb-0.5"
                 data-testid="text-greeting-name"
               >
                 {displayName}
@@ -297,85 +301,116 @@ export default function HubLanding() {
             )}
             <span className="text-[#5a5a60]">.</span>
           </h1>
-          <div className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-2xl lg:max-w-3xl">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             {profileLoading ? (
-              <span className="inline-flex flex-col gap-1.5">
-                <span className="skel h-3.5 w-72 block" />
-                <span className="skel h-3.5 w-56 block" />
-              </span>
+              <span className="skel h-7 w-64 rounded-full" />
             ) : companyName ? (
               <>
-                You&apos;re signed in to{' '}
-                <span className="text-[#d1d1d6] font-medium">{companyNameFriendly}</span>.{' '}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[12px] text-[#d1d1d6]">
+                  <Building2 className="w-3 h-3 text-[#8e8e93]" />
+                  {companyNameFriendly}
+                </span>
                 <button
                   type="button"
                   onClick={() => navigate('/workspace')}
-                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/25 text-[12px] text-violet-200 hover:bg-violet-500/20 hover:border-violet-300/40 transition-colors"
                   data-testid="link-hero-workspace-signed-in"
                 >
-                  Invite your team in Workspace
-                </button>{' '}
-                when you&apos;re ready, or open a toolkit below.
+                  <Users className="w-3 h-3" />
+                  Invite your team
+                </button>
               </>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => navigate('/workspace')}
-                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
-                  data-testid="link-hero-workspace-anon"
-                >
-                  Set up Workspace
-                </button>{' '}
-                for invites, or jump into a toolkit below.
-              </>
+              <button
+                type="button"
+                onClick={() => navigate('/workspace')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/25 text-[12px] text-violet-200 hover:bg-violet-500/20 hover:border-violet-300/40 transition-colors"
+                data-testid="link-hero-workspace-anon"
+              >
+                <Building2 className="w-3 h-3" />
+                Set up your workspace
+              </button>
             )}
           </div>
-
         </section>
 
         {/* PRIMARY ACTIONS — Create / View scorecard */}
-        <section className="mb-12 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
+        <section className="mb-14 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
           <Link
             href="/create-scorecard"
-            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-violet-400/40 hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col cursor-pointer"
+            className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] overflow-hidden border border-violet-400/25 hover:border-violet-300/50 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-20px_rgba(139,92,246,0.45)] cursor-pointer"
+            style={{
+              backgroundImage:
+                'linear-gradient(135deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.08) 40%, rgba(255,255,255,0.02) 100%)',
+            }}
             data-testid="action-create-scorecard"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-400/30 text-violet-200 flex items-center justify-center">
-                <Plus className="w-5 h-5" />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-20 -right-16 w-56 h-56 rounded-full opacity-60 blur-3xl"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(168,85,247,0.35) 0%, rgba(168,85,247,0) 70%)',
+              }}
+            />
+            <div className="relative flex flex-col h-full">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-violet-500/25 border border-violet-300/40 text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                  <Plus className="w-5 h-5" strokeWidth={2.4} />
+                </div>
+                <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-violet-200/80">
+                  Primary
+                </span>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-[#8e8e93] group-hover:text-violet-200 transition-colors" />
+              <h3
+                className="text-[24px] sm:text-[26px] font-semibold tracking-tight text-white leading-[1.1]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                Create Scorecard
+              </h3>
+              <p className="mt-2 text-[13.5px] text-[#d1d1d6]/90 leading-relaxed max-w-md">
+                Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+              </p>
+              <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-white">
+                New workbook
+                <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
             </div>
-            <h3 className="text-[18px] font-semibold text-white tracking-tight">Create Scorecard</h3>
-            <p className="mt-1.5 text-[13.5px] text-[#a1a1a6] leading-relaxed">
-              Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
-            </p>
-            <span className="mt-auto pt-4 text-[12px] font-medium text-violet-300/90 group-hover:text-violet-200 transition-colors">
-              New workbook →
-            </span>
           </Link>
 
           <Link
             href="/dashboard"
-            className="card-rise text-left group relative rounded-2xl p-6 bg-white/[0.04] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] hover:bg-white/[0.06] transition-all min-h-[180px] flex flex-col cursor-pointer"
+            className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] bg-white/[0.03] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.20] hover:bg-white/[0.05] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)] cursor-pointer"
             data-testid="action-view-scorecard"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white flex items-center justify-center">
-                <LineChart className="w-5 h-5" />
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-white/[0.06] border border-white/[0.14] text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <LineChart className="w-5 h-5" strokeWidth={2.2} />
+                </div>
+                <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#8e8e93]">
+                  Library
+                </span>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-[#8e8e93] group-hover:text-white transition-colors" />
+              <h3
+                className="text-[24px] sm:text-[26px] font-semibold tracking-tight text-white leading-[1.1]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                View Scorecard
+              </h3>
+              <p className="mt-2 text-[13.5px] text-[#a1a1a6] leading-relaxed max-w-md">
+                Open saved companies, review scorecard summaries, and continue editing existing workbooks.
+              </p>
+              <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
+                Saved companies
+                <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
             </div>
-            <h3 className="text-[18px] font-semibold text-white tracking-tight">View Scorecard</h3>
-            <p className="mt-1.5 text-[13.5px] text-[#a1a1a6] leading-relaxed">
-              Open saved companies, review scorecard summaries, and continue editing existing workbooks.
-            </p>
-            <span className="mt-auto pt-4 text-[12px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
-              Saved companies →
-            </span>
           </Link>
         </section>
+
+        {/* Hairline divider — gives the page rhythm */}
+        <div aria-hidden className="mb-10 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
 
         {/* FEATURED + ACTIVE TOOLKITS */}
         <section className="mb-12">
