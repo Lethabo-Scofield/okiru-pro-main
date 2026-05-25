@@ -348,7 +348,7 @@ export default function HubLanding() {
           <div className="mt-6 flex flex-wrap gap-2" data-testid="hero-quick-actions">
             <button
               type="button"
-              onClick={() => navigate('/dashboard?new=1')}
+              onClick={() => navigate('/create-scorecard')}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-white bg-violet-500/90 hover:bg-violet-500 border border-violet-400/30 backdrop-blur-md transition-colors"
               data-testid="action-create-scorecard"
             >
