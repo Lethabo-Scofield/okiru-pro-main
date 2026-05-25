@@ -6,6 +6,7 @@ import { checkOnboardingGate } from '@/lib/onboardingStatus';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import hubBackground from '@assets/image_1779723521128.png';
+import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
@@ -109,6 +110,7 @@ export default function HubLanding() {
       link: '/certificates',
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
       featured: true,
+      backgroundImage: certCardBg,
     },
     {
       id: 'esg', title: 'ESG Toolkit', tag: 'ESG', aiBadge: 'AI-Insights',
@@ -467,6 +469,23 @@ function FeaturedCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: 
         hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]`}
       data-testid={`card-featured-${toolkit.id}`}
     >
+      {toolkit.backgroundImage && (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-no-repeat bg-cover bg-center transition-transform duration-700 group-hover:scale-[1.04]"
+            style={{ backgroundImage: `url(${toolkit.backgroundImage})`, opacity: 0.85 }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(105deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.15) 100%)',
+            }}
+          />
+        </>
+      )}
       <div className="relative flex flex-col h-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
