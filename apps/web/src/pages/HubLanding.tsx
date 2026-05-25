@@ -5,10 +5,11 @@ import { useToast } from '@/hooks/use-toast';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import hubBackground from '@assets/image_1779723521128.png';
 import {
-  ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
+  ChevronRight, Search, X, ArrowUpRight, Building2,
   BarChart3, Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles,
+  Sparkles, Upload, FileSearch, TrendingUp,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -168,10 +169,25 @@ export default function HubLanding() {
       className="font-sans min-h-screen bg-black relative overflow-x-hidden"
       style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}
     >
-      {/* Single, very subtle purple wash - quiet brand signal, nothing more */}
+      {/* Cinematic smoke background — fixed so it stays put as you scroll */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft"
+        className="pointer-events-none fixed inset-0 z-0 bg-no-repeat bg-cover bg-center"
+        style={{ backgroundImage: `url(${hubBackground})`, opacity: 0.55 }}
+      />
+      {/* Vignette to keep text readable over the image */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.65) 55%, rgba(0,0,0,0.92) 100%)',
+        }}
+      />
+      {/* Subtle violet brand wash — same as before, just a quiet signal */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft z-0"
         style={{
           background: 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(168,85,247,0) 70%)',
           transform: 'translate(-50%, 0)',
@@ -271,7 +287,7 @@ export default function HubLanding() {
         </div>
       )}
 
-      <main className="relative max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
+      <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
         {/* HERO - personalized */}
         <section className="mb-10 fade-in" data-testid="hero-welcome">
           <h1
@@ -329,9 +345,34 @@ export default function HubLanding() {
           </div>
         </section>
 
+        {/* HOW IT WORKS — 3 simple steps, helps first-time users get oriented */}
+        <section className="mb-12 fade-in" data-testid="how-it-works">
+          <SectionHeader title="How Okiru works" count={3} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <StepCard
+              n={1}
+              icon={<Upload className="w-4 h-4" />}
+              title="Upload your toolkit"
+              body="Drop in your sector B-BBEE Excel or supplier certificates. We read them automatically."
+            />
+            <StepCard
+              n={2}
+              icon={<FileSearch className="w-4 h-4" />}
+              title="We score & verify"
+              body="AI extracts your data, runs the five pillars and flags missing or expiring evidence."
+            />
+            <StepCard
+              n={3}
+              icon={<TrendingUp className="w-4 h-4" />}
+              title="See your level & next moves"
+              body="Get a verification-ready scorecard plus what-if scenarios to lift your level."
+            />
+          </div>
+        </section>
+
         {/* FEATURED + ACTIVE TOOLKITS */}
         <section className="mb-12">
-          <SectionHeader title="Available now" count={filteredActive.length} />
+          <SectionHeader title="Open a toolkit" count={filteredActive.length} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {featured && (
               <FeaturedCard toolkit={featured} staggerClass="card-rise stagger-5" />
@@ -380,7 +421,7 @@ function FeaturedCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: 
     <Link
       href={toolkit.link}
       className={`${staggerClass || ''} lg:col-span-2 group relative block rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[260px]
-        bg-white/[0.025] border border-white/[0.07] hover:border-white/[0.16] transition-all duration-300
+        bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] transition-all duration-300
         hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]`}
       data-testid={`card-featured-${toolkit.id}`}
     >
@@ -437,8 +478,8 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
   return (
     <Link
       href={toolkit.link}
-      className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-white/[0.025] border border-white/[0.06]
-        hover:border-white/[0.14] hover:bg-white/[0.04] transition-all duration-250
+      className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-black/40 backdrop-blur-md border border-white/[0.07]
+        hover:border-white/[0.16] hover:bg-black/50 transition-all duration-250
         hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)] min-h-[180px] flex flex-col`}
       data-testid={`card-toolkit-${toolkit.id}`}
     >
@@ -481,32 +522,33 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
   );
 }
 
-function UpcomingCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: string }) {
+function StepCard({
+  n,
+  icon,
+  title,
+  body,
+}: {
+  n: number;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
   return (
-    <button
-      onClick={toolkit.action}
-      className={`${staggerClass || ''} text-left group relative rounded-xl p-4 bg-white/[0.015] border border-white/[0.04]
-        hover:bg-white/[0.03] hover:border-white/[0.08] transition-all duration-200 min-h-[130px] flex flex-col`}
-      data-testid={`card-toolkit-${toolkit.id}`}
+    <div
+      className="card-rise group rounded-2xl p-5 bg-white/[0.03] backdrop-blur-md border border-white/[0.07] hover:border-white/[0.14] transition-colors min-h-[140px] flex flex-col"
+      data-testid={`step-${n}`}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="w-8 h-8 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[#636366] flex items-center justify-center">
-          {toolkit.icon}
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-9 h-9 rounded-lg bg-violet-500/[0.10] border border-violet-400/20 text-violet-200 flex items-center justify-center">
+          {icon}
         </div>
-        <Lock className="w-3 h-3 text-[#3a3a3c]" />
-      </div>
-      <h3 className="text-[13.5px] font-medium tracking-tight text-[#d1d1d6] leading-snug">
-        {toolkit.title}
-      </h3>
-      <p className="mt-1 text-[11.5px] text-[#636366] leading-relaxed line-clamp-2">
-        {toolkit.description}
-      </p>
-      <div className="mt-auto pt-3 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#48484a]">
-          {toolkit.tag}
+        <span className="text-[11px] font-mono text-[#8e8e93] tracking-wider">
+          STEP {String(n).padStart(2, '0')}
         </span>
-        <span className="text-[10px] text-[#48484a] group-hover:text-[#8e8e93] smooth">Notify me</span>
       </div>
-    </button>
+      <h3 className="text-[14px] font-semibold text-white tracking-tight">{title}</h3>
+      <p className="mt-1.5 text-[12.5px] text-[#a1a1a6] leading-relaxed">{body}</p>
+    </div>
   );
 }
+
