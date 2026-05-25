@@ -379,7 +379,7 @@ export default function HubLanding() {
           </Link>
 
           <Link
-            href="/dashboard"
+            href="/dashboard?tab=scorecards"
             className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] bg-white/[0.03] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.20] hover:bg-white/[0.05] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)] cursor-pointer"
             data-testid="action-view-scorecard"
           >
