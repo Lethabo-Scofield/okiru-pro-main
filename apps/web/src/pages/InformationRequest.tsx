@@ -250,17 +250,58 @@ function CompanyPicker({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
-      <div className="rounded-2xl bg-[#1c1c1e] p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+
+      {/* Start a new company — primary action */}
+      <div
+        className="relative overflow-hidden rounded-2xl border border-violet-400/20 p-6"
+        style={{
+          backgroundImage:
+            'linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.04) 45%, rgba(255,255,255,0.015) 100%)',
+        }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-16 -right-12 w-48 h-48 rounded-full opacity-60 blur-3xl"
+          style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.30) 0%, rgba(168,85,247,0) 70%)' }}
+        />
+        <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 md:gap-6 md:items-end">
           <div>
-            <h2 className="text-[15px] font-semibold text-white mb-1">Pick a company</h2>
-            <p className="text-[13px] text-[#8e8e93]">Workbook data is isolated per company.</p>
+            <h2
+              className="text-[22px] font-semibold text-white tracking-tight leading-tight"
+              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+            >
+              Start a new company
+            </h2>
+            <p className="text-[13px] text-[#a1a1a6] mt-1.5 max-w-md">
+              Create a fresh workbook, or import an existing BEE Information Gathering file from Excel.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && create()}
+                placeholder="Company name…"
+                aria-label="New company name"
+                className="flex-1 bg-black/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none transition-colors"
+                data-testid="input-new-company"
+              />
+              <button
+                onClick={create}
+                disabled={!newName.trim() || creating}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-violet-500 text-white text-[13px] font-semibold press-sm hover:bg-violet-400 disabled:opacity-40 disabled:hover:bg-violet-500 smooth shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)]"
+                data-testid="button-create-company"
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create<ChevronRight className="h-4 w-4" /></>}
+              </button>
+            </div>
           </div>
-          <ExcelImportButton
-            label="Import from Excel"
-            onImport={async (file) => {
+          <div className="md:pl-4 md:border-l md:border-white/[0.08]">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-[#8e8e93] mb-2">Or</div>
+            <ExcelImportButton
+              label="Import from Excel"
+              onImport={async (file) => {
               const result = await importBeeGatheringExcel(file, API_BASE);
               if (!result.extraction.isBeeGatheringFormat) {
                 const fallback = await normalizeExcelFile(file);
@@ -309,59 +350,80 @@ function CompanyPicker({
               setPreviewOpen(true);
             }}
           />
+            </div>
+          </div>
         </div>
 
-        <div className="relative mb-4">
-          <Search className="h-4 w-4 absolute left-3 top-2.5 text-[#636366]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search companies"
-            className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg pl-9 pr-3 py-2 text-[13px] text-white placeholder-[#636366] outline-none focus:border-[#48484a]"
-            data-testid="input-company-search"
-          />
+      {/* Existing companies */}
+      <div className="rounded-2xl bg-[#141416] border border-white/[0.05] p-6">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-[15px] font-semibold text-white">Your companies</h2>
+            <span className="text-[11px] text-[#636366] tabular-nums">
+              {loading ? "" : `${filtered.length}${search && filtered.length !== companies.length ? ` of ${companies.length}` : ""}`}
+            </span>
+          </div>
+          <div className="relative w-full max-w-[260px]">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#636366]" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search companies…"
+              aria-label="Search companies"
+              className="w-full bg-black/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[#636366] outline-none focus:border-white/[0.18] transition-colors"
+              data-testid="input-company-search"
+            />
+          </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-6">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-10 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading companies…
+          </div>
+        ) : companies.length === 0 ? (
+          <div className="text-center py-12 px-4">
+            <div className="mx-auto w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.06] grid place-items-center mb-3">
+              <Building2 className="h-5 w-5 text-[#636366]" />
+            </div>
+            <div className="text-[14px] text-[#d1d1d6] font-medium">No companies yet</div>
+            <div className="text-[12px] text-[#636366] mt-1">Create your first one above to get started.</div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-[13px] text-[#636366] py-6 text-center">
-            No companies yet. Create one below.
+          <div className="text-[13px] text-[#636366] py-10 text-center">
+            No matches for "{search}".
           </div>
         ) : (
-          <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+          <div className="space-y-1.5 max-h-[48vh] overflow-y-auto -mx-1 px-1">
             {filtered.map((c) => {
               const companyId = c.clientId || c.id || "";
               return (
                 <div
                   key={companyId || c.name}
-                  className="flex items-center gap-1 rounded-lg bg-[#0e0e10] hover:bg-[#2c2c2e] smooth"
+                  className="group flex items-center gap-1 rounded-xl border border-transparent bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.08] smooth"
                 >
                   <button
                     type="button"
                     onClick={() => onPick(c)}
-                    className="flex-1 min-w-0 text-left flex items-center justify-between px-3 py-2.5 press-sm"
+                    className="flex-1 min-w-0 text-left flex items-center justify-between px-3.5 py-3 press-sm"
                     data-testid={`company-${companyId}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-lg bg-white/[0.06] grid place-items-center shrink-0">
-                        <Building2 className="h-4 w-4 text-[#d1d1d6]" />
+                      <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-white/[0.10] to-white/[0.03] border border-white/[0.06] grid place-items-center shrink-0 group-hover:border-violet-400/30 transition-colors">
+                        <Building2 className="h-4 w-4 text-[#d1d1d6] group-hover:text-violet-300 transition-colors" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[13px] font-medium text-white truncate">{c.name}</div>
-                        <div className="text-[11px] text-[#636366] truncate">{companyId}</div>
+                        <div className="text-[13.5px] font-medium text-white truncate">{c.name}</div>
+                        <div className="text-[11px] text-[#636366] truncate font-mono">{companyId}</div>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-[#636366] shrink-0 ml-2" />
+                    <ChevronRight className="h-4 w-4 text-[#636366] shrink-0 ml-2 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </button>
                   <DeleteCompanyButton
                     companyId={companyId}
                     companyName={c.name}
                     createdByUserId={c.createdByUserId}
                     onDeleted={load}
-                    className="mr-1"
+                    className="mr-1.5"
                   />
                 </div>
               );
@@ -471,29 +533,6 @@ function CompanyPicker({
           }
         }}
       />
-
-      <div className="rounded-2xl bg-[#1c1c1e] p-6">
-        <h2 className="text-[15px] font-semibold text-white mb-1">Add a new company</h2>
-        <p className="text-[13px] text-[#8e8e93] mb-4">Creates a client record you can collect data for.</p>
-        <div className="flex gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && create()}
-            placeholder="Company name"
-            className="flex-1 bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#636366] outline-none focus:border-[#48484a]"
-            data-testid="input-new-company"
-          />
-          <button
-            onClick={create}
-            disabled={!newName.trim() || creating}
-            className="px-4 py-2 rounded-lg bg-white text-black text-[13px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
-            data-testid="button-create-company"
-          >
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1142,16 +1181,33 @@ export default function InformationRequest() {
         <ScorecardFlowStepper companyId={params.companyId || resolvedCompanyId || undefined} />
       )}
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        {!isSummaryStep && (
-          <div className="mb-8">
-            <h1 className="text-[28px] font-bold tracking-[-0.03em] text-white">
-              {basePath === "/create-scorecard" ? "Create Scorecard" : "Company Assessment Workbook"}
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
+        {!isSummaryStep && !picked && (
+          <div className="mb-10 max-w-3xl">
+            <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80" />
+              {basePath === "/create-scorecard" ? "New Scorecard" : "Workbook"}
+            </div>
+            <h1
+              className="text-[40px] sm:text-[52px] font-semibold tracking-tight text-white leading-[1.04]"
+              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+            >
+              {basePath === "/create-scorecard" ? "Let's build your scorecard." : "Company Assessment Workbook"}
             </h1>
-            <p className="text-[14px] text-[#98989f] mt-1">
+            <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
               {basePath === "/create-scorecard"
-                ? "Pick a company, complete the workbook sections, then submit to generate your scorecard."
+                ? "Pick a company below or import an existing workbook from Excel. You can save and come back anytime."
                 : "Structured spreadsheet collection — replaces manual onboarding sheets."}
+            </p>
+          </div>
+        )}
+        {!isSummaryStep && picked && (
+          <div className="mb-6">
+            <h1 className="text-[24px] font-semibold tracking-tight text-white">
+              {picked.name}
+            </h1>
+            <p className="text-[13px] text-[#8e8e93] mt-1">
+              Complete each section, then submit to generate your scorecard.
             </p>
           </div>
         )}
