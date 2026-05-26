@@ -338,7 +338,7 @@ describe("ESD rules", () => {
 // Section catalogue sanity
 // --------------------------------------------------------------------------
 describe("Section catalogue", () => {
-  it("exposes the expected 10 sections in order", () => {
+  it("exposes the expected 9 sections in order (procurement merged with suppliers)", () => {
     expect(SECTIONS.map((s) => s.key)).toEqual([
       "company-information",
       "financial-information",
@@ -347,7 +347,6 @@ describe("Section catalogue", () => {
       "employees",
       "skills-development",
       "procurement",
-      "suppliers",
       "esd",
       "sed",
     ]);
