@@ -9,6 +9,9 @@ import {
   SECTIONS,
   getSection,
   parseWorkbookDate,
+  BBBEE_LEVEL_MAP,
+  OCC_LEVEL_MAP,
+  SUPPLIER_SIZE_MAP,
   type ColumnDef,
 } from "@/components/workbook/sections";
 import {
@@ -35,8 +38,9 @@ const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   { sectionKey: "management-control", hints: ["management control", "management", "board", "directors"] },
   { sectionKey: "employees", hints: ["employees", "employee", "staff list", "employment equity", "ee profile"] },
   { sectionKey: "skills-development", hints: ["skills development", "skills", "training", "learnership"] },
-  { sectionKey: "procurement", hints: ["procurement", "preferential procurement"] },
-  { sectionKey: "suppliers", hints: ["suppliers", "supplier", "vendor"] },
+  // The "suppliers" / "vendor" hints map to the canonical Procurement section
+  // (the standalone "Suppliers" section was removed in May 2026).
+  { sectionKey: "procurement", hints: ["procurement", "preferential procurement", "suppliers", "supplier", "vendor", "vendors"] },
   { sectionKey: "esd", hints: ["enterprise development", "supplier development", "esd", "es&sd"] },
   { sectionKey: "sed", hints: ["socioeconomic", "socio-economic", "socio economic", "sed", "csi"] },
 ];
@@ -75,12 +79,28 @@ function norm(s: string): string {
 
 function matchSheetName(sheetName: string): string | null {
   const n = norm(sheetName);
+  if (!n) return null;
+  // Two-pass match. (1) exact normalised match. (2) substring containment but
+  // only against hints of length ≥ 4 so short noise tokens like "pl" (from
+  // "p&l") don't accidentally swallow "Suppliers" → "financial-information".
   for (const { sectionKey, hints } of SHEET_SECTION_HINTS) {
-    if (hints.some((h) => n.includes(norm(h)) || norm(h).includes(n))) {
-      return sectionKey;
+    if (hints.some((h) => norm(h) === n)) return sectionKey;
+  }
+  let bestKey: string | null = null;
+  let bestLen = 0;
+  for (const { sectionKey, hints } of SHEET_SECTION_HINTS) {
+    for (const h of hints) {
+      const a = norm(h);
+      if (a.length < 4) continue;
+      if (n.includes(a) || a.includes(n)) {
+        if (a.length > bestLen) {
+          bestLen = a.length;
+          bestKey = sectionKey;
+        }
+      }
     }
   }
-  return null;
+  return bestKey;
 }
 
 function buildColumnAliases(col: ColumnDef): string[] {
@@ -89,19 +109,88 @@ function buildColumnAliases(col: ColumnDef): string[] {
   aliases.push(label);
   if (label.includes("—")) aliases.push(label.split("—")[0].trim());
   if (label.includes("(")) aliases.push(label.split("(")[0].trim());
+  if (col.aliases) aliases.push(...col.aliases);
   return aliases;
 }
 
 function mapHeaderToKey(header: string, columns: ColumnDef[]): string | null {
   const h = norm(header);
   if (!h) return null;
+  // First pass: exact normalised match — beats substring matches when both
+  // would qualify (e.g. "Spend" vs "Total Spend" → prefer the exact "Spend").
+  for (const col of columns) {
+    for (const alias of buildColumnAliases(col)) {
+      if (norm(alias) === h) return col.key;
+    }
+  }
+  // Second pass: substring/contains match (looser).
   for (const col of columns) {
     for (const alias of buildColumnAliases(col)) {
       const a = norm(alias);
-      if (h === a || h.includes(a) || a.includes(h)) return col.key;
+      if (!a) continue;
+      if (h.includes(a) || a.includes(h)) return col.key;
     }
   }
   return null;
+}
+
+/**
+ * Robust currency / numeric parser. Tolerates:
+ *  - `R` / `$` / `€` / `£` prefix
+ *  - thin/non-breaking spaces, plain spaces as thousands separators
+ *  - parentheses indicating negatives `(1,234)`
+ *  - either `,` or `.` as decimal separator (last separator wins)
+ *  - mixed thousands + decimal e.g. `R 1,234.50` or `R 1.234,50`
+ */
+export function parseLooseNumber(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  const negative = /^-/.test(s) || /^\(.+\)$/.test(s);
+  s = s
+    .replace(/[Rr$€£]/g, "")
+    .replace(/["'`]/g, "")
+    .replace(/[\s\u00A0\u202F]/g, "")
+    .replace(/[()]/g, "")
+    .replace(/^[+-]/, "");
+  if (!s || s === "." || s === ",") return null;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      normalized = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalized = s.replace(/,/g, "");
+    }
+  } else if (lastComma >= 0) {
+    const commaCount = (s.match(/,/g) || []).length;
+    const after = s.length - lastComma - 1;
+    if (commaCount === 1 && after !== 3) {
+      // Single comma not followed by exactly 3 digits → decimal.
+      normalized = s.replace(",", ".");
+    } else {
+      // Otherwise treat all commas as thousands separators.
+      normalized = s.replace(/,/g, "");
+    }
+  } else if (lastDot >= 0) {
+    const dotCount = (s.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      // e.g. 1.234.567 → European thousands → 1234567
+      normalized = s.replace(/\./g, "");
+    } else {
+      // Single dot → keep as decimal (covers "1234.5" and "1.234" which we
+      // intentionally read as 1.234, not 1234 — without ambiguity we trust
+      // the user's punctuation).
+      normalized = s;
+    }
+  } else {
+    normalized = s;
+  }
+  const n = parseFloat(normalized);
+  if (!Number.isFinite(n)) return null;
+  return negative && n > 0 ? -n : n;
 }
 
 function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unknown {
@@ -111,9 +200,8 @@ function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unk
     return s === "yes" || s === "true" || s === "1" || s === "y";
   }
   if (col?.type === "number") {
-    if (typeof raw === "number") return raw;
-    const n = parseFloat(String(raw).replace(/[^\d.-]/g, ""));
-    return Number.isFinite(n) ? n : "";
+    const n = parseLooseNumber(raw);
+    return n === null ? "" : n;
   }
   if (col?.type === "date") {
     if (raw instanceof Date) {
@@ -133,12 +221,25 @@ function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unk
   }
   if (col?.type === "select") {
     const s = String(raw).trim();
+    const n = norm(s);
     if (col.key === "race") {
-      const mapped = RACE_MAP[norm(s)];
+      const mapped = RACE_MAP[n];
       if (mapped) return mapped;
     }
     if (col.key === "gender") {
-      const mapped = GENDER_MAP[norm(s)];
+      const mapped = GENDER_MAP[n];
+      if (mapped) return mapped;
+    }
+    if (col.key === "currentSize" || col.key === "sizeAtFirstProcurement") {
+      const mapped = SUPPLIER_SIZE_MAP[n];
+      if (mapped) return mapped;
+    }
+    if (col.key === "occupationalLevel") {
+      const mapped = OCC_LEVEL_MAP[n];
+      if (mapped) return mapped;
+    }
+    if (col.key === "bbbeeLevel") {
+      const mapped = BBBEE_LEVEL_MAP[n];
       if (mapped) return mapped;
     }
     if (col.key === "industrySector") return s.toUpperCase();
