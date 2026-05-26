@@ -1124,7 +1124,6 @@ export async function registerRoutes(
           role: invite.role,
           displayRole: invite.displayRole ?? null,
           pillarScopes: invite.pillarScopes ?? [],
-          token: invite.token,
           invitedByUserId: invite.invitedByUserId,
           expiresAt: invite.expiresAt,
           acceptedAt: invite.acceptedAt,
