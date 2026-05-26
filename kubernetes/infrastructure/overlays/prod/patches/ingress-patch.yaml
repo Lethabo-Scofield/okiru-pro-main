@@ -1,4 +1,4 @@
-# Prod ingress: TLS SANs + nginx server-alias so okiru.pro hits the same routes as the nip.io host.
+# Prod ingress: explicit okiru.pro host rules (server-alias does not apply path rules to aliased domains).
 # Base paths: ../../base/ingress/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -7,7 +7,6 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-production"
     nginx.ingress.kubernetes.io/limit-rps: "50"
-    nginx.ingress.kubernetes.io/server-alias: "okiru.pro,www.okiru.pro"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
@@ -20,3 +19,115 @@ spec:
         - okiru.pro
         - www.okiru.pro
       secretName: okiru-pro-tls
+  rules:
+    - host: okiru.pro
+      http:
+        paths:
+          - path: /api/auth/login
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/me
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/logout
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/auth/register
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/onboarding/me
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/onboarding
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/workspaces
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/invites
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/feedback
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /api/organizations
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/auth/check-username
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/sector-templates
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+    - host: www.okiru.pro
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001

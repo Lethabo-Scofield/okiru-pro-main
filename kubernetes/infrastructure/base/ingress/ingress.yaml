@@ -82,6 +82,14 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # User feedback (web server handles both POST and GET — saved to MongoDB)
+          - path: /api/feedback
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # API backend routes (all other /api/*)
           - path: /api
             pathType: Prefix
