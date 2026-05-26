@@ -1,0 +1,148 @@
+Goal:
+Fix the user-reported bugs from 25–26 May 2026 and return a clear implementation report.
+
+Main route affected:
+- /create-scorecard/C-37659
+- /create-scorecard/C-51329
+- /toolkit/pillars/skills
+- /hub
+- /super-admin
+- /test
+
+User feedback source:
+Reported by Okiru users after testing uploaded Excel templates and scorecard flows.
+
+Tasks:
+
+1. Procurement / Suppliers duplication
+- Investigate why the app has both “Procurement” and “Suppliers” tabs.
+- Determine whether they duplicate the same scoring function.
+- If they do, consolidate them into one consistent flow.
+- Ensure uploaded supplier/procurement data maps correctly into scoring.
+
+2. Procurement rand value not picked up
+- Bug: uploaded sheets contain rand amounts for every supplier, but procurement scoring does not detect them.
+- Check Excel parsing, column names, normalization, and mapping logic.
+- Support likely column variations such as:
+  - Rand Value
+  - Amount
+  - Spend
+  - Procurement Spend
+  - Supplier Spend
+- Ensure numeric values are parsed even if formatted as currency, commas, spaces, or strings.
+
+3. Procurement current size not translating
+- Bug: Excel template includes current size, but uploaded data does not reflect it in scoring.
+- Inspect template column names and parser mapping.
+- Ensure company/supplier size fields are recognized and normalized.
+- Use dropdown-compatible values where possible.
+
+4. Employment Equity occupational levels missing
+- Bug: uploaded sheet includes occupational levels, but they do not show after upload.
+- Fix parser and UI mapping so occupational levels persist and appear correctly.
+- Support common variants:
+  - Junior Management
+  - Junior Manager
+  - Middle Management
+  - Senior Management
+  - Top Management
+  - Semi-skilled
+  - Unskilled
+- Add normalization so similar wording maps to valid scoring categories.
+
+5. Management Control / Employment Equity separation
+- Bug: Management Control and Employment Equity should only be separate pillars in Transport codes.
+- For all other codes, they should be treated as a combined pillar where applicable.
+- Update scorecard rendering logic to respect sector code rules.
+- Prevent confusing pillar separation for non-Transport codes.
+
+6. Dropdowns instead of typed values
+- Replace free-text inputs with dropdowns where scoring depends on predefined categories.
+- Apply especially to:
+  - Management Control
+  - Enterprise & Supplier Development
+  - Employment Equity
+  - Procurement supplier categories
+  - SED contribution types
+- Ensure dropdown values match backend/scoring engine expectations.
+
+7. SED contribution type guidance
+- Bug: bulk upload template does not explain contribution types.
+- Add clear instructions to the Excel template and upload UI.
+- The template should explain what each contribution type means.
+- Ensure uploaded contribution types map to the same options used in manual input.
+
+8. SED ICT-specific question
+- Bug: ICT-specific SED question appears even when user is not using ICT codes.
+- Fix conditional rendering.
+- ICT-specific SED questions must only appear when the selected scorecard/sector code is ICT.
+- RcGP and other non-ICT codes must not show ICT-specific questions.
+
+9. Template instructions missing
+- For every downloadable Excel template in every pillar, add clear completion instructions.
+- Include accepted values, examples, and formatting rules.
+- Example:
+  - “Use ‘Junior Management’, not random text.”
+  - “Rand values must be numeric.”
+  - “Dates must use YYYY-MM-DD or Excel date format.”
+- The upload system should either normalize accepted variations or return a helpful validation error.
+
+10. FSC scorecard missing elements
+- In /super-admin, check FSC scorecard setup.
+- Compare FSC scorecard elements against the existing Excel sheets/templates.
+- Add missing FSC elements.
+- Include the various FSC scorecard types if applicable.
+- Ensure FSC renders correctly in scorecard creation and scoring.
+
+11. Skills / SED toolkit bugs
+- Route: /toolkit/pillars/skills
+- Fix bulk upload button not working.
+- Investigate whether this route is incorrectly labelled as Socio-Economic Development.
+- Fix “% of payroll” calculation.
+- If payroll and leviable amount are treated as the same in this product, remove duplicate input or hard-code the correct relationship.
+
+12. Financial Information duplicate fields
+- Bug: payroll and leviable amount are the same for this flow.
+- Remove unnecessary duplication.
+- Keep one source of truth.
+- Ensure formulas depending on either field still work.
+
+13. Hub route
+- Route: /hub
+- Check whether the hub works.
+- Verify loading, navigation, authentication, and broken buttons.
+- Fix any visible runtime errors.
+
+14. Ownership / post-deploy verification
+- Route: /test
+- Investigate the anonymous post-deploy verification bug.
+- Confirm whether this is a real issue, test artifact, or stale report.
+- Remove test-only artifacts from production if needed.
+
+Quality requirements:
+- Do not only patch the UI.
+- Trace each bug from frontend input → upload/parser → normalized data → backend/scoring logic → displayed score.
+- Add validation messages where uploaded data cannot be scored.
+- Add regression tests for parser mappings and scorecard rendering rules.
+- Preserve existing working functionality.
+
+Deliverables:
+1. Fix all confirmed bugs.
+2. Return a report with:
+   - Bug title
+   - File(s) changed
+   - Root cause
+   - Fix implemented
+   - Test performed
+   - Status: Fixed / Needs clarification / Not reproducible
+3. Include screenshots or terminal output where useful.
+4. Mention any assumptions made.
+5. List any bugs that require business-rule confirmation before final implementation.
+
+Important:
+Prioritize bugs that block scoring accuracy:
+1. Procurement rand values
+2. Employment Equity occupational levels
+3. FSC missing elements
+4. Incorrect sector-specific pillar rendering
+5. Upload templates lacking instructions
