@@ -86,6 +86,7 @@ function validateMetaFields(
 function validateGridRow(
   section: SectionDef,
   row: Record<string, unknown>,
+  opts: { strictSelectOptions?: boolean } = {},
 ): Record<string, string> {
   const columns = section.columns!;
   const errors: Record<string, string> = {};
@@ -96,6 +97,25 @@ function validateGridRow(
     if (!empty && col.required && blank) {
       errors[col.key] = "Required";
       continue;
+    }
+    // Optional strict select-option membership check, used by the import
+    // preview (`validateWorkbook(..., { strictSelectOptions: true })`) so
+    // upload-time invalid values like "Garbage Level" / "Mega Corp" surface
+    // as validation issues (Task #18 areas 1/2). Off by default to preserve
+    // historical behaviour for fixtures and edited-in-place sections.
+    if (
+      opts.strictSelectOptions &&
+      !blank &&
+      col.type === "select" &&
+      Array.isArray(col.options) &&
+      col.options.length > 0
+    ) {
+      const sv = String(v);
+      const allowed = col.options.some((opt) => String(opt) === sv);
+      if (!allowed) {
+        errors[col.key] = `Not an allowed option. Use one of: ${col.options.join(", ")}`;
+        continue;
+      }
     }
     if (col.validate) {
       const err = col.validate(v);
@@ -195,6 +215,7 @@ function validateOwnershipVotingRights(sections: WorkbookSectionsInput): Workboo
  */
 export function validateWorkbook(
   sections: WorkbookSectionsInput,
+  opts: { strictSelectOptions?: boolean } = {},
 ): WorkbookValidationIssue[] {
   const issues: WorkbookValidationIssue[] = [];
 
@@ -212,7 +233,7 @@ export function validateWorkbook(
 
     if (!section.columns) continue;
     for (const row of data.rows ?? []) {
-      const errs = validateGridRow(section, row);
+      const errs = validateGridRow(section, row, opts);
       const rowId = String((row as Record<string, unknown>)._id ?? "");
       for (const [field, message] of Object.entries(errs)) {
         issues.push({

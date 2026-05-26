@@ -19,6 +19,33 @@ export type SkillsBulkUploadResult = {
   error?: string;
 };
 
+/**
+ * Pure helper extracted from `SkillsDevelopment.tsx` so the
+ * `targetSpend = leviableAmount * overallTargetPct` and
+ * `bursaryTarget = leviableAmount * bursaryTargetPct` formulas (used by the
+ * Skills KPI cards) are unit-testable. Mirrors the in-component derivation
+ * at sections.ts lines around 191–194:
+ *
+ *   const overallTargetPct = sc?.overallSpendPercent ?? sc?.overallTarget ?? 0.035;
+ *   const targetSpend       = leviableAmount * overallTargetPct;
+ *   const bursaryTarget     = leviableAmount * bursaryTargetPct;
+ */
+export function computeSkillsTargets(input: {
+  leviableAmount: number;
+  overallTargetPct?: number;
+  bursaryTargetPct?: number;
+}): { targetSpend: number; bursaryTarget: number; overallTargetPct: number; bursaryTargetPct: number } {
+  const leviable = Number.isFinite(input.leviableAmount) ? Math.max(0, input.leviableAmount) : 0;
+  const overallTargetPct = input.overallTargetPct ?? 0.035; // RCOGP/Generic default
+  const bursaryTargetPct = input.bursaryTargetPct ?? 0.025;
+  return {
+    targetSpend: leviable * overallTargetPct,
+    bursaryTarget: leviable * bursaryTargetPct,
+    overallTargetPct,
+    bursaryTargetPct,
+  };
+}
+
 function isBlackRace(race: string): boolean {
   return ["African", "Coloured", "Indian"].includes(race);
 }
