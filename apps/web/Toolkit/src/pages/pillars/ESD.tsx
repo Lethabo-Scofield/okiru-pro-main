@@ -189,15 +189,19 @@ export default function ESD() {
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">B-BBEE Level</Label>
-        <Input
-          type="number"
-          min="0"
-          max="8"
-          value={data.beeLevel}
-          onChange={e => setData({ ...data, beeLevel: Number(e.target.value) })}
-          className="col-span-3"
-          data-testid="input-supplier-bee-level"
-        />
+        <Select
+          value={String(data.beeLevel ?? "")}
+          onValueChange={v => setData({ ...data, beeLevel: v === "Non-compliant" ? 0 : Number(v) })}
+        >
+          <SelectTrigger className="col-span-3" data-testid="select-supplier-bee-level">
+            <SelectValue placeholder="Select B-BBEE level" />
+          </SelectTrigger>
+          <SelectContent>
+            {["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"].map(opt => (
+              <SelectItem key={opt} value={opt}>{opt === "Non-compliant" ? "Non-compliant" : `Level ${opt}`}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Enterprise Type</Label>

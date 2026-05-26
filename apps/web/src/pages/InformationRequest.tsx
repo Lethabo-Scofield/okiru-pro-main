@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronRight,
@@ -22,12 +22,14 @@ import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import {
-  SECTIONS,
   getSection,
   getCompanyInfoMetaFields,
+  getSectionGroupsForSector,
+  getOrderedSectionKeysForSector,
   resolveScorecardTypeForSector,
   validateFinancialMetaCrossFields,
   type ColumnDef,
+  type SectionGroup,
 } from "@/components/workbook/sections";
 import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
@@ -1229,7 +1231,26 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     [companyId, toast],
   );
 
-  const enabledSections = useMemo(() => SECTIONS.filter((s) => s.enabled), []);
+  const sectorCode = String(
+    (workbook?.sections["company-information"]?.meta as Record<string, unknown> | undefined)
+      ?.industrySector ?? "",
+  );
+
+  const sectionGroups: SectionGroup[] = useMemo(
+    () => getSectionGroupsForSector(sectorCode),
+    [sectorCode],
+  );
+
+  const orderedKeys = useMemo(
+    () => getOrderedSectionKeysForSector(sectorCode),
+    [sectorCode],
+  );
+
+  const enabledSections = useMemo(() => {
+    return orderedKeys
+      .map((k) => getSection(k, sectorCode))
+      .filter((s): s is NonNullable<ReturnType<typeof getSection>> => Boolean(s?.enabled));
+  }, [orderedKeys, sectorCode]);
 
   const selectSection = useCallback((key: string) => {
     setActiveSectionKey(key);
@@ -1261,42 +1282,88 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
         : "";
 
-  const renderSectionNav = (variant: "sidebar" | "tabs") =>
-    enabledSections.map((s) => {
-      const status = sectionStatus(s.key);
-      const count = workbook?.sections[s.key]?.rows?.length || 0;
-      const isActive = activeSectionKey === s.key;
-      const indicator = s.meta
-        ? status === "filled"
-          ? "✓"
-          : "—"
-        : count > 0
-          ? String(count)
-          : "—";
-      const baseClass =
-        variant === "sidebar"
-          ? "w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm"
-          : "shrink-0 px-3 py-2 rounded-lg text-[12px] flex items-center gap-2 smooth press-sm whitespace-nowrap";
-      return (
-        <button
-          key={s.key}
-          onClick={() => selectSection(s.key)}
-          className={`${baseClass} ${
-            isActive
-              ? "bg-white/[0.08] text-white"
-              : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
-          }`}
-          data-testid={`tab-${s.key}`}
+  const renderSectionTab = (key: string, variant: "sidebar" | "tabs", indent: boolean) => {
+    const sec = enabledSections.find((s) => s.key === key);
+    if (!sec) return null;
+    const status = sectionStatus(sec.key);
+    const count = workbook?.sections[sec.key]?.rows?.length || 0;
+    const isActive = activeSectionKey === sec.key;
+    const indicator = sec.meta
+      ? status === "filled"
+        ? "✓"
+        : "—"
+      : count > 0
+        ? String(count)
+        : "—";
+    const baseClass =
+      variant === "sidebar"
+        ? `w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${indent ? "pl-6" : ""}`
+        : "shrink-0 px-3 py-2 rounded-lg text-[12px] flex items-center gap-2 smooth press-sm whitespace-nowrap";
+    return (
+      <button
+        key={sec.key}
+        onClick={() => selectSection(sec.key)}
+        className={`${baseClass} ${
+          isActive
+            ? "bg-white/[0.08] text-white"
+            : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
+        }`}
+        data-testid={`tab-${sec.key}`}
+      >
+        <span className={variant === "sidebar" ? "truncate" : ""}>{sec.label}</span>
+        <span
+          className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
         >
-          <span className={variant === "sidebar" ? "truncate" : ""}>{s.label}</span>
-          <span
-            className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
+          {indicator}
+        </span>
+      </button>
+    );
+  };
+
+  const renderSectionNav = (variant: "sidebar" | "tabs") => {
+    const out: ReactNode[] = [];
+    for (const group of sectionGroups) {
+      if (group.isGroup && variant === "sidebar") {
+        out.push(
+          <div
+            key={`group-${group.key}`}
+            className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#636366]"
+            data-testid={`group-header-${group.key}`}
           >
-            {indicator}
-          </span>
-        </button>
-      );
-    });
+            {group.label}
+          </div>,
+        );
+        for (const k of group.sectionKeys) {
+          const node = renderSectionTab(k, variant, true);
+          if (node) out.push(node);
+        }
+      } else if (group.isGroup && variant === "tabs") {
+        // Mobile horizontal nav: render a chip-style group label, then the
+        // child tabs wrapped in a bracketed container so the grouping is
+        // visible even though we can't indent on a horizontal axis.
+        out.push(
+          <div
+            key={`group-chip-${group.key}`}
+            data-testid={`group-chip-${group.key}`}
+            className="shrink-0 inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04]"
+          >
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[#8e8e93] whitespace-nowrap">
+              {group.label}
+            </span>
+            <div className="flex items-center gap-1">
+              {group.sectionKeys.map((k) => renderSectionTab(k, variant, false))}
+            </div>
+          </div>,
+        );
+      } else {
+        for (const k of group.sectionKeys) {
+          const node = renderSectionTab(k, variant, false);
+          if (node) out.push(node);
+        }
+      }
+    }
+    return out;
+  };
 
   const activeSectionData = workbook?.sections[activeSection?.key ?? ""] || {
     rows: [],

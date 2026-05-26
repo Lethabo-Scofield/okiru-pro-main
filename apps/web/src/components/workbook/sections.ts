@@ -417,15 +417,21 @@ const COMPANY_INFO_META: ColumnDef[] = [
 ];
 
 // ---------- Financial Information (single-record meta form) ----------
+// Leviable Amount is intentionally NOT collected separately: per SARS the
+// Skills Development levy is calculated on total payroll (with statutory
+// exclusions), so we derive `leviableAmount` from `forecastPayroll` (preferred)
+// or `payroll` in `mapWorkbookFinancialsToClient`. This removes the user-facing
+// duplication that previously asked for both "Total Payroll" and "Leviable
+// Amount". Legacy workbooks that still carry a `leviableAmount` value continue
+// to be honoured by the mapping fallback.
 const FINANCIAL_META: ColumnDef[] = [
   { key: "revenue", label: "Revenue (R)", type: "number", required: true, validate: numericValidator },
   { key: "npat", label: "NPAT — Net Profit After Tax (R)", type: "number", required: true, validate: signedNumericValidator },
   { key: "payroll", label: "Total Payroll (R)", type: "number", required: true, validate: numericValidator },
-  { key: "leviableAmount", label: "Leviable Amount (R)", type: "number", validate: numericValidator },
   { key: "tmps", label: "Total Measured Procurement Spend (R)", type: "number", validate: numericValidator },
   { key: "forecastRevenue", label: "Forecast Revenue (R)", type: "number", required: true, validate: numericValidator },
   { key: "forecastNpat", label: "Forecast NPAT (R)", type: "number", required: true, validate: signedNumericValidator },
-  { key: "forecastPayroll", label: "Forecast Payroll (R)", type: "number", required: true, validate: numericValidator },
+  { key: "forecastPayroll", label: "Forecast Payroll (R, used as Leviable Amount for Skills)", type: "number", required: true, validate: numericValidator },
 ];
 
 // ---------- Ownership ----------
@@ -686,6 +692,93 @@ export const SECTIONS: SectionDef[] = [
   },
 ];
 
-export function getSection(key: string): SectionDef | undefined {
-  return SECTIONS.find((s) => s.key === key);
+/**
+ * Looks up a section by key, optionally filtering its columns to match the
+ * caller's sector. When `sectorCode` is supplied:
+ *  - The SED "ICT-Specific?" column is only included for the ICT sector.
+ * Other sectors get the section unmodified.
+ */
+export function getSection(key: string, sectorCode?: string): SectionDef | undefined {
+  const section = SECTIONS.find((s) => s.key === key);
+  if (!section) return undefined;
+  if (sectorCode === undefined) return section;
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  if (key === "sed" && section.columns) {
+    if (sector !== "ICT") {
+      return {
+        ...section,
+        columns: section.columns.filter((c) => c.key !== "ictSpecificInitiative"),
+      };
+    }
+  }
+  return section;
+}
+
+/**
+ * A logical grouping of one-or-more sections rendered together in the workbook
+ * navigation. Storage keys for each section remain unchanged regardless of
+ * grouping, so persisted workbooks stay compatible across sectors.
+ */
+export interface SectionGroup {
+  /** Stable identifier (used for React keys / data-testids). */
+  key: string;
+  /** Visible parent label. Empty for ungrouped (single-section) entries. */
+  label: string;
+  /** Section keys in display order. */
+  sectionKeys: string[];
+  /** True when the group contains more than one section. */
+  isGroup: boolean;
+}
+
+const BASE_SECTION_KEYS_PRE_MGMT = [
+  "company-information",
+  "financial-information",
+  "ownership",
+] as const;
+
+const BASE_SECTION_KEYS_POST_MGMT = [
+  "skills-development",
+  "procurement",
+  "esd",
+  "sed",
+] as const;
+
+/**
+ * Returns the visible section navigation grouped per sector rules:
+ *  - TRANSPORT: Management Control and Employees are rendered as separate
+ *    top-level sections (Transport scorecard splits them).
+ *  - All other sectors: Management Control and Employees are nested under a
+ *    single "Management Control & Employment Equity" parent group.
+ * Storage keys are untouched in both branches.
+ */
+export function getSectionGroupsForSector(sectorCode?: string): SectionGroup[] {
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  const groups: SectionGroup[] = [];
+  for (const key of BASE_SECTION_KEYS_PRE_MGMT) {
+    groups.push({ key, label: SECTIONS.find((s) => s.key === key)?.label ?? key, sectionKeys: [key], isGroup: false });
+  }
+  if (sector === "TRANSPORT") {
+    groups.push({ key: "management-control", label: "Management Control", sectionKeys: ["management-control"], isGroup: false });
+    groups.push({ key: "employees", label: "Employees", sectionKeys: ["employees"], isGroup: false });
+  } else {
+    groups.push({
+      key: "management-control-ee",
+      label: "Management Control & Employment Equity",
+      sectionKeys: ["management-control", "employees"],
+      isGroup: true,
+    });
+  }
+  for (const key of BASE_SECTION_KEYS_POST_MGMT) {
+    groups.push({ key, label: SECTIONS.find((s) => s.key === key)?.label ?? key, sectionKeys: [key], isGroup: false });
+  }
+  return groups;
+}
+
+/** Convenience: flat ordered list of enabled section keys per sector. */
+export function getOrderedSectionKeysForSector(sectorCode?: string): string[] {
+  const out: string[] = [];
+  for (const g of getSectionGroupsForSector(sectorCode)) {
+    out.push(...g.sectionKeys);
+  }
+  return out;
 }
