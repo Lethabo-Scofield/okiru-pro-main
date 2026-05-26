@@ -113,4 +113,20 @@ describe("Excel upload — occupational level normalisation", () => {
     );
     expect(issues.length).toBe(0);
   });
+
+  it("normalizeExcelBuffer (the real import-preview path) surfaces the invalid level in result.validationIssues", async () => {
+    // Integration-style assertion against the real preview pipeline.
+    const buf = makeBuffer({
+      Employees: [
+        ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
+        ["Frank", "Doe", "White", "Male", "Garbage Level"],
+      ],
+    });
+    const out = await normalizeExcelBuffer(buf);
+    const occIssues = out.validationIssues.filter(
+      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+    );
+    expect(occIssues.length).toBeGreaterThan(0);
+    expect(occIssues[0].message).toMatch(/Not an allowed option/);
+  });
 });
