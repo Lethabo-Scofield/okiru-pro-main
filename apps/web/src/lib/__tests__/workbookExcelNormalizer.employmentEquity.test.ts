@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { normalizeExcelBuffer } from "../workbookExcelNormalizer";
 import { OCC_LEVEL_MAP, SECTIONS } from "@/components/workbook/sections";
+import { validateWorkbook } from "@/components/workbook/workbookValidation";
 
 function makeBuffer(sheets: Record<string, unknown[][]>): ArrayBuffer {
   const wb = XLSX.utils.book_new();
@@ -65,7 +66,7 @@ describe("Excel upload — occupational level normalisation", () => {
     expect(mgmt[0].occupationalLevel).toBe("Top Management");
   });
 
-  it("leaves unmapped/invalid level text untouched on the row (UI is the rejection surface)", async () => {
+  it("leaves invalid level text on the row but validateWorkbook flags it as an invalid option", async () => {
     const buf = makeBuffer({
       Employees: [
         ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
@@ -73,20 +74,43 @@ describe("Excel upload — occupational level normalisation", () => {
       ],
     });
     const out = await normalizeExcelBuffer(buf);
-    // Value passes through verbatim — the normalizer doesn't drop bad input.
+    // Normalizer is non-destructive — bad input survives verbatim.
     expect(out.sections["employees"].rows[0].occupationalLevel).toBe("Garbage Level");
 
-    // The downstream rejection is the SpreadsheetGrid <select>, which only
-    // accepts values from the column's `options` list. Pin the option set
-    // here so a regression in `OCC_LEVEL_OPTIONS` is loud.
+    // Pin the column option-set contract.
     const employees = SECTIONS.find((s) => s.key === "employees")!;
     const occCol = employees.columns!.find((c) => c.key === "occupationalLevel")!;
     expect(occCol.type).toBe("select");
     expect(occCol.options).toBeDefined();
     expect(occCol.options).not.toContain("Garbage Level");
-    // NOTE: validateWorkbook does not currently surface invalid select values
-    // (validateGridRow only checks required+custom validators). The UI <select>
-    // is the rejection surface today. See follow-up Task #22 if a
-    // server-side validation issue is desired.
+
+    // validateWorkbook now surfaces invalid select values at the
+    // import-preview surface (Task #18 area 2 — invalid occupational level
+    // must appear in validationIssues).
+    const issues = validateWorkbook(out.sections, { strictSelectOptions: true });
+    const occIssues = issues.filter(
+      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+    );
+    expect(occIssues.length).toBeGreaterThan(0);
+    expect(occIssues[0].message).toMatch(/Not an allowed option/);
+    // The error message lists the allowed options so users can self-correct.
+    for (const opt of occCol.options!) {
+      expect(occIssues[0].message).toContain(opt);
+    }
+  });
+
+  it("validateWorkbook does NOT flag legal values (Top Management, Semi-Skilled, etc.)", async () => {
+    const buf = makeBuffer({
+      Employees: [
+        ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
+        ["A", "B", "African", "Male", "Top Management"],
+        ["C", "D", "African", "Female", "Semi-Skilled"],
+      ],
+    });
+    const out = await normalizeExcelBuffer(buf);
+    const issues = validateWorkbook(out.sections, { strictSelectOptions: true }).filter(
+      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+    );
+    expect(issues.length).toBe(0);
   });
 });

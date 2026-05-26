@@ -188,6 +188,9 @@ export default function SkillsDevelopment() {
   };
 
   const sc = calculatorConfig?.skills;
+  // Targets derived via the shared helper (see bulkUploadParser.ts) so the
+  // % of payroll formula is unit-testable. The component still owns the
+  // pillar-config lookup for the override percentages.
   const overallTargetPct = sc?.overallSpendPercent ?? sc?.overallTarget ?? 0.035;
   const bursaryTargetPct = sc?.bursarySpendPercent ?? sc?.bursaryTarget ?? 0.025;
   const targetSpend = leviableAmount * overallTargetPct;

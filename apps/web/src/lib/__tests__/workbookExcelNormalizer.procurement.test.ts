@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { normalizeExcelBuffer, parseLooseNumber } from "../workbookExcelNormalizer";
 import { SECTIONS } from "@/components/workbook/sections";
+import { validateWorkbook } from "@/components/workbook/workbookValidation";
 
 function makeBuffer(sheets: Record<string, unknown[][]>): ArrayBuffer {
   const wb = XLSX.utils.book_new();
@@ -85,7 +86,7 @@ describe("currentSize — SUPPLIER_SIZE_MAP synonyms", () => {
     expect(out.sections["procurement"].rows[0].currentSize).toBe(expected);
   });
 
-  it("leaves unmapped values untouched (UI <select> rejects them at render time)", async () => {
+  it("leaves unmapped values untouched but validateWorkbook flags them as invalid options", async () => {
     const buf = makeBuffer({
       Procurement: [
         ["Supplier Name", "Current Size", "Spend"],
@@ -96,16 +97,21 @@ describe("currentSize — SUPPLIER_SIZE_MAP synonyms", () => {
     // Source contract: unknown size strings pass through verbatim.
     expect(out.sections["procurement"].rows[0].currentSize).toBe("Mega Corp");
 
-    // Pin the option-set contract so a regression in SUPPLIER_SIZE_OPTIONS
-    // (or accidentally including arbitrary text) is loud.
+    // Pin the option-set contract.
     const procurement = SECTIONS.find((s) => s.key === "procurement")!;
     const sizeCol = procurement.columns!.find((c) => c.key === "currentSize")!;
     expect(sizeCol.type).toBe("select");
     expect(sizeCol.options).toBeDefined();
     expect(sizeCol.options).not.toContain("Mega Corp");
-    // NOTE: validateWorkbook does not currently emit issues for invalid
-    // select values; the SpreadsheetGrid <select> is the rejection surface.
-    // See follow-up Task #22 to surface a server-side validation issue.
+
+    // validateWorkbook now surfaces invalid select values at the
+    // import-preview surface (Task #18 area 1 — unknown size flagged).
+    const issues = validateWorkbook(out.sections, { strictSelectOptions: true });
+    const sizeIssues = issues.filter(
+      (i) => i.sectionKey === "procurement" && i.field === "currentSize",
+    );
+    expect(sizeIssues.length).toBeGreaterThan(0);
+    expect(sizeIssues[0].message).toMatch(/Not an allowed option/);
   });
 });
 

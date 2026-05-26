@@ -67,4 +67,36 @@ describe("Round-trip — new workbook uses only 'procurement'", () => {
     expect(Object.keys(out.sections)).not.toContain("suppliers");
     expect(out.sections["procurement"].rows.length).toBe(2);
   });
+
+  it("save→load round-trip preserves canonical procurement rows", async () => {
+    // First load (legacy sheet name) — rows land in `procurement`.
+    const firstLoad = await normalizeExcelBuffer(
+      makeBuffer({
+        Suppliers: [
+          ["Supplier Name", "Current Size", "Spend"],
+          ["Alpha", "EME", 100],
+          ["Beta", "QSE", 250],
+        ],
+      }),
+    );
+    expect(firstLoad.sections["procurement"].rows.length).toBe(2);
+
+    // Re-save under the canonical sheet name and re-load — round-trip must
+    // preserve row count, names and the canonical key.
+    const wb = XLSX.utils.book_new();
+    const rows = firstLoad.sections["procurement"].rows as Record<string, unknown>[];
+    const matrix: unknown[][] = [
+      ["Supplier Name", "Current Size", "Spend"],
+      ...rows.map((r) => [r.supplierName, r.currentSize, r.spend]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(matrix), "Procurement");
+    const resaved = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+
+    const secondLoad = await normalizeExcelBuffer(resaved);
+    expect(secondLoad.sections["procurement"]).toBeDefined();
+    expect(secondLoad.sections["suppliers"]).toBeUndefined();
+    expect(secondLoad.sections["procurement"].rows.length).toBe(2);
+    const names = secondLoad.sections["procurement"].rows.map((r) => r.supplierName);
+    expect(names.sort()).toEqual(["Alpha", "Beta"]);
+  });
 });

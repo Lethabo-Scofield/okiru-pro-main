@@ -97,15 +97,66 @@ describe('FSC sub-sector variants — current state', () => {
   });
 });
 
-describe('Negative — removing a FSC pillar produces an inconsistent total', () => {
-  it('a copy of FSC_GENERIC missing SED no longer sums to 120', () => {
-    // Build a "broken" copy by zeroing the SED pillar; the validator we use
-    // is just the arithmetic identity asserted above. This guards against
-    // accidental future regression where a pillar drops to 0 silently.
-    const p = { ...FSC_GENERIC.pillarConfigs };
-    const broken = { ...p, socioEconomicDevelopment: { ...p.socioEconomicDevelopment, maxPoints: 0 } };
-    const total = Object.values(broken).reduce((acc, c) => acc + c.maxPoints, 0);
-    expect(total).not.toBe(120);
-    expect(total).toBe(112);
+/**
+ * Mirrors `sumPillarMaxPoints` from `sectorConfig.integrity.test.ts` — the
+ * production "validator" today is the arithmetic identity between the per-
+ * pillar `maxPoints` (respecting `chooseOneGroup`) and `totalMaxPoints`.
+ * Calling it on a mutated config is the closest we can get to re-running a
+ * validator without introducing one.
+ */
+function sumPillarMaxPoints(config: typeof FSC_GENERIC): number {
+  const pc = config.pillarConfigs;
+  const chooseOneGroups = new Map<string, number>();
+  let total = 0;
+  for (const [, pillar] of Object.entries(pc)) {
+    if (!pillar || pillar.maxPoints <= 0) continue;
+    if ((pillar as { chooseOneGroup?: string }).chooseOneGroup) {
+      const key = (pillar as { chooseOneGroup: string }).chooseOneGroup;
+      chooseOneGroups.set(key, Math.max(chooseOneGroups.get(key) ?? 0, pillar.maxPoints));
+      continue;
+    }
+    total += pillar.maxPoints;
+  }
+  for (const pts of chooseOneGroups.values()) total += pts;
+  return total;
+}
+
+describe('Negative — re-running the FSC arithmetic validator on a broken config', () => {
+  it('FSC_GENERIC as-shipped passes the integrity validator (sum == totalMaxPoints == 120)', () => {
+    // Re-run the same validator the integrity suite uses on the shipped
+    // FSC_GENERIC config — must reconcile.
+    expect(sumPillarMaxPoints(FSC_GENERIC)).toBe(FSC_GENERIC.totalMaxPoints);
+    expect(sumPillarMaxPoints(FSC_GENERIC)).toBe(120);
+  });
+
+  it('detects a dropped pillar (SED zeroed) — sum 112, declared total 120, mismatch surfaced', () => {
+    // Deep-clone so we don't pollute the singleton, then zero SED.
+    const broken: typeof FSC_GENERIC = {
+      ...FSC_GENERIC,
+      pillarConfigs: {
+        ...FSC_GENERIC.pillarConfigs,
+        socioEconomicDevelopment: {
+          ...FSC_GENERIC.pillarConfigs.socioEconomicDevelopment,
+          maxPoints: 0,
+        },
+      },
+    };
+    const sum = sumPillarMaxPoints(broken);
+    expect(sum).toBe(112);
+    // The arithmetic-identity validator must reject: sum != declared total.
+    expect(sum).not.toBe(broken.totalMaxPoints);
+  });
+
+  it('detects a wrong pillar cap (Ownership inflated to 30) — sum 125, mismatch surfaced', () => {
+    const broken: typeof FSC_GENERIC = {
+      ...FSC_GENERIC,
+      pillarConfigs: {
+        ...FSC_GENERIC.pillarConfigs,
+        ownership: { ...FSC_GENERIC.pillarConfigs.ownership, maxPoints: 30 },
+      },
+    };
+    const sum = sumPillarMaxPoints(broken);
+    expect(sum).toBe(125);
+    expect(sum).not.toBe(broken.totalMaxPoints);
   });
 });
