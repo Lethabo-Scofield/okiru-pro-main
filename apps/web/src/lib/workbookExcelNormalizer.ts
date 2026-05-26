@@ -355,7 +355,11 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
     }
   }
 
-  const validationIssues = validateWorkbook(sections);
+  // Strict select-option enforcement is on for the Excel import-preview path
+  // so unrecognised dropdown values (e.g. "Mega Corp" supplier size,
+  // "Garbage Level" occupational level) surface as validation issues the
+  // user can fix before submission. Task #18 areas 1/2.
+  const validationIssues = validateWorkbook(sections, { strictSelectOptions: true });
   const criticalBlocked = hasCriticalGaps(validationIssues);
 
   return { sections, validationIssues, criticalBlocked, warnings, mappedSheets };
