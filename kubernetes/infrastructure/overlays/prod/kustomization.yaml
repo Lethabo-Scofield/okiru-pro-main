@@ -23,7 +23,7 @@ images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
   newTag: 26a81524-202605260922
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newTag: 26a81524-202605260922
+  newTag: 2cf23c8d-202605260950
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
