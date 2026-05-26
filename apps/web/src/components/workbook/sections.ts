@@ -20,6 +20,12 @@ export interface ColumnDef {
   guidance?: string;
   /** Per-option guidance map (option label → short explanation). */
   optionGuidance?: Record<string, string>;
+  /**
+   * Optional alternate header labels recognised when normalising an uploaded
+   * spreadsheet. Matching is whitespace/punctuation/case-insensitive (see
+   * `mapHeaderToKey` in `workbookExcelNormalizer.ts`).
+   */
+  aliases?: string[];
 }
 
 export interface SectionDef {
@@ -73,6 +79,76 @@ const SUPPLIER_SIZE_OPTIONS = ["Large", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
 const SKILLS_CATEGORY_OPTIONS = ["A", "B", "C", "D", "E", "F", "G"];
+
+/**
+ * Synonym maps consulted by the Excel normaliser when coercing a `select`
+ * cell. Keys are lower-cased and stripped of non-alphanumerics; see
+ * `norm()` in `workbookExcelNormalizer.ts`.
+ */
+export const SUPPLIER_SIZE_MAP: Record<string, string> = {
+  eme: "EME",
+  exemptedmicroenterprise: "EME",
+  exemptmicroenterprise: "EME",
+  micro: "EME",
+  microenterprise: "EME",
+  qse: "QSE",
+  qualifyingsmallenterprise: "QSE",
+  qualifyingsmall: "QSE",
+  small: "QSE",
+  smallenterprise: "QSE",
+  large: "Large",
+  largeenterprise: "Large",
+  generic: "Large",
+  l: "Large",
+};
+
+export const OCC_LEVEL_MAP: Record<string, string> = {
+  topmanagement: "Top Management",
+  topmgmt: "Top Management",
+  top: "Top Management",
+  executivemanagement: "Top Management",
+  exec: "Top Management",
+  seniormanagement: "Senior Management",
+  seniormgmt: "Senior Management",
+  snrmanagement: "Senior Management",
+  snrmgmt: "Senior Management",
+  senior: "Senior Management",
+  middlemanagement: "Middle Management",
+  middlemgmt: "Middle Management",
+  middle: "Middle Management",
+  midmgmt: "Middle Management",
+  topmanager: "Top Management",
+  seniormanager: "Senior Management",
+  middlemanager: "Middle Management",
+  juniormanagement: "Junior Management",
+  juniormanager: "Junior Management",
+  juniormgmt: "Junior Management",
+  jnrmanagement: "Junior Management",
+  jnrmanager: "Junior Management",
+  jnrmgmt: "Junior Management",
+  junior: "Junior Management",
+  skilled: "Skilled",
+  skilledtechnical: "Skilled",
+  skilledtech: "Skilled",
+  skilledtechnicalandacademicallyqualifiedworkers: "Skilled",
+  semiskilled: "Semi-Skilled",
+  semi: "Semi-Skilled",
+  semiskilledanddiscretionarydecisionmaking: "Semi-Skilled",
+  unskilled: "Unskilled",
+  unskilledanddefineddecisionmaking: "Unskilled",
+};
+
+export const BBBEE_LEVEL_MAP: Record<string, string> = {
+  "1": "1", "2": "2", "3": "3", "4": "4",
+  "5": "5", "6": "6", "7": "7", "8": "8",
+  level1: "1", level2: "2", level3: "3", level4: "4",
+  level5: "5", level6: "6", level7: "7", level8: "8",
+  noncompliant: "Non-compliant",
+  nc: "Non-compliant",
+  none: "Non-compliant",
+  na: "Non-compliant",
+  notcompliant: "Non-compliant",
+};
 const ESD_CONTRIBUTION_TYPES = [
   "Grant Contribution",
   "Loan",
@@ -370,13 +446,13 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
 // Rules: Full Name*, Gender*, Race*, Designation* (enum), Disabled?, Foreign?,
 // ID Number, Voting Rights*, Employee Code, Start date/years of service.
 export const MANAGEMENT_COLUMNS: ColumnDef[] = [
-  { key: "name", label: "First Name", type: "text", required: true, width: 140 },
-  { key: "surname", label: "Surname", type: "text", required: true, width: 140 },
-  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator },
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130 },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110 },
-  { key: "designation", label: "Designation", type: "select", options: DESIGNATION_OPTIONS, required: true, width: 200 },
-  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180 },
+  { key: "name", label: "First Name", type: "text", required: true, width: 140, aliases: ["First Name", "Given Name", "Name"] },
+  { key: "surname", label: "Surname", type: "text", required: true, width: 140, aliases: ["Surname", "Last Name", "Family Name"] },
+  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number", "ID/Passport"] },
+  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Race", "Population Group", "Ethnicity"] },
+  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Gender", "Sex"] },
+  { key: "designation", label: "Designation", type: "select", options: DESIGNATION_OPTIONS, required: true, width: 200, aliases: ["Designation", "Title", "Position", "Job Title"] },
+  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level"] },
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
   { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
   { key: "votingRights", label: "Voting Rights (%)", type: "number", required: true, width: 140, validate: percentValidator },
@@ -385,14 +461,14 @@ export const MANAGEMENT_COLUMNS: ColumnDef[] = [
 
 // ---------- Employees ----------
 export const EMPLOYEE_COLUMNS: ColumnDef[] = [
-  { key: "name", label: "First Name", type: "text", required: true, width: 140 },
-  { key: "surname", label: "Surname", type: "text", required: true, width: 140 },
-  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator },
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130 },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110 },
-  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180 },
-  { key: "department", label: "Department", type: "text", width: 160 },
-  { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator },
+  { key: "name", label: "First Name", type: "text", required: true, width: 140, aliases: ["First Name", "Given Name", "Name"] },
+  { key: "surname", label: "Surname", type: "text", required: true, width: 140, aliases: ["Surname", "Last Name", "Family Name"] },
+  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number", "ID/Passport"] },
+  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Race", "Population Group", "Ethnicity"] },
+  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Gender", "Sex"] },
+  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"] },
+  { key: "department", label: "Department", type: "text", width: 160, aliases: ["Department", "Dept", "Business Unit"] },
+  { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Remuneration", "Total Cost to Company", "CTC"] },
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
   { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
   { key: "startDate", label: "Start Date", type: "date", width: 140, validate: dateValidator },
@@ -401,30 +477,30 @@ export const EMPLOYEE_COLUMNS: ColumnDef[] = [
 // ---------- Skills Development ----------
 // Rules require: program*, category*, learner*, gender*, race*. Costs ≥ 0.
 export const SKILLS_COLUMNS: ColumnDef[] = [
-  { key: "programName", label: "Training Program", type: "text", required: true, width: 200 },
-  { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130 },
-  { key: "trainingProvider", label: "Training Provider", type: "text", width: 180 },
+  { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
+  { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
+  { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
   { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150 },
   { key: "municipality", label: "Municipality", type: "text", width: 160 },
-  { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180 },
-  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator },
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130 },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110 },
+  { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180, aliases: ["Learner", "Trainee", "Employee Name", "Beneficiary"] },
+  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number"] },
+  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Population Group", "Ethnicity"] },
+  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Sex"] },
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
   { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
   { key: "age", label: "Age", type: "number", width: 90, validate: integerNonNegValidator },
   { key: "employed", label: "Employed?", type: "boolean", width: 110 },
   { key: "completed", label: "Completed?", type: "boolean", width: 110 },
   { key: "absorbed", label: "Absorbed?", type: "boolean", width: 110 },
-  { key: "courseCost", label: "Course Cost (R)", type: "number", width: 140, validate: numericValidator },
-  { key: "travelCost", label: "Travel Cost (R)", type: "number", width: 140, validate: numericValidator },
-  { key: "accommodationCost", label: "Accommodation (R)", type: "number", width: 160, validate: numericValidator },
-  { key: "cateringCost", label: "Catering (R)", type: "number", width: 140, validate: numericValidator },
-  { key: "stationeryCost", label: "Stationery (R)", type: "number", width: 140, validate: numericValidator },
-  { key: "trainingFacilityCost", label: "Training Facility (R)", type: "number", width: 160, validate: numericValidator },
-  { key: "salaryCost", label: "Salary Cost (R, cat B/C/D)", type: "number", width: 170, validate: numericValidator },
-  { key: "otherCosts", label: "Other Costs (R)", type: "number", width: 140, validate: numericValidator },
-  { key: "totalCost", label: "Total Cost (R)", type: "number", width: 140, validate: numericValidator },
+  { key: "courseCost", label: "Course Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Course Fees", "Tuition", "Training Cost", "Course"] },
+  { key: "travelCost", label: "Travel Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Travel", "Transport"] },
+  { key: "accommodationCost", label: "Accommodation (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Accommodation Cost", "Accommodation"] },
+  { key: "cateringCost", label: "Catering (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Catering", "Food", "Meals"] },
+  { key: "stationeryCost", label: "Stationery (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Stationery", "Materials", "Books"] },
+  { key: "trainingFacilityCost", label: "Training Facility (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Facility Cost", "Venue", "Venue Cost"] },
+  { key: "salaryCost", label: "Salary Cost (R, cat B/C/D)", type: "number", width: 170, validate: numericValidator, aliases: ["Salary", "Salary Cost", "Wages"] },
+  { key: "otherCosts", label: "Other Costs (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Other Cost", "Misc", "Miscellaneous"] },
+  { key: "totalCost", label: "Total Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Total", "Total Spend", "Cost", "Amount"] },
   { key: "manHours", label: "Man Hours", type: "number", width: 120, validate: numericValidator },
   { key: "startDate", label: "Start Date", type: "date", width: 140, validate: dateValidator },
   { key: "endDate", label: "End Date", type: "date", width: 140, validate: dateValidator },
@@ -434,23 +510,23 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 // Rules require: supplier_name*, current_company_size*, spend*. Sizes are
 // {Large, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
-  { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220 },
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
-  { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140 },
-  { key: "vatNumber", label: "VAT Number", type: "text", width: 140 },
-  { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150 },
-  { key: "empoweringSupplier", label: "Empowering Supplier?", type: "boolean", width: 180 },
-  { key: "firstProcurementDate", label: "First Procured", type: "date", width: 140, validate: dateValidator },
-  { key: "sizeAtFirstProcurement", label: "Size at First Procurement", type: "select", options: SUPPLIER_SIZE_OPTIONS, width: 180 },
-  { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", width: 160, validate: percentValidator },
-  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator },
+  { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
+  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Large"] },
+  { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140, aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"] },
+  { key: "vatNumber", label: "VAT Number", type: "text", width: 140, aliases: ["VAT", "VAT No"] },
+  { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150, aliases: ["Code", "Codes", "Scorecard"] },
+  { key: "empoweringSupplier", label: "Empowering Supplier?", type: "boolean", width: 180, aliases: ["Empowering Supplier", "ES"] },
+  { key: "firstProcurementDate", label: "First Procured", type: "date", width: 140, validate: dateValidator, aliases: ["First Procurement Date", "First Spend Date", "Onboarded"] },
+  { key: "sizeAtFirstProcurement", label: "Size at First Procurement", type: "select", options: SUPPLIER_SIZE_OPTIONS, width: 180, aliases: ["Initial Size", "Original Size"] },
+  { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", width: 160, validate: percentValidator, aliases: ["Black Ownership", "% Black Ownership", "Black Owned %", "Black Owned"] },
+  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator, aliases: ["Black Female Ownership", "Black Women Ownership", "% Black Women", "Black Women Owned"] },
   { key: "hasModifiedBlackOwnership", label: "Modified Black Ownership?", type: "boolean", width: 190 },
   { key: "unmodifiedBlackOwnership", label: "Unmodified Black Ownership (%)", type: "number", width: 200, validate: percentValidator },
   { key: "sdRecipient", label: "SD Recipient?", type: "boolean", width: 130 },
   { key: "threeYearContract", label: "3yr Contract?", type: "boolean", width: 130 },
   { key: "designated", label: "Designated?", type: "boolean", width: 120 },
-  { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator },
-  { key: "certificateExpiryDate", label: "Cert Expiry", type: "date", width: 140, validate: dateValidator },
+  { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator, aliases: ["Rand Value", "Amount", "Spend", "Procurement Spend", "Supplier Spend", "Value (R)", "R Spend", "Total Spend", "Annual Spend", "Spend Amount", "Spend (Excl VAT)"] },
+  { key: "certificateExpiryDate", label: "Cert Expiry", type: "date", width: 140, validate: dateValidator, aliases: ["Certificate Expiry", "Cert Expiry Date", "Expiry Date", "Valid Until"] },
 ];
 
 export const SUPPLIER_COLUMNS: ColumnDef[] = PROCUREMENT_COLUMNS;
@@ -557,9 +633,14 @@ export const SECTIONS: SectionDef[] = [
     },
   },
   {
+    // NOTE: section key remains "procurement" to preserve previously persisted
+    // workbook data. The legacy "suppliers" section was removed in May 2026 —
+    // see workbookExcelNormalizer.ts SHEET_SECTION_HINTS for the sheet alias,
+    // and workbookRoutes.ts SECTION_KEYS which still loads any legacy
+    // "suppliers" rows and merges them at projection time.
     key: "procurement",
-    label: "Procurement",
-    description: "Supplier spend and B-BBEE certificate aggregation.",
+    label: "Procurement / Suppliers",
+    description: "Supplier register: spend, B-BBEE certificate, ownership.",
     enabled: true,
     columns: PROCUREMENT_COLUMNS,
     rowValidate: (row) => {
@@ -569,27 +650,6 @@ export const SECTIONS: SectionDef[] = [
         errs.certificateExpiryDate = "Required when B-BBEE level is set";
       }
       // PP_OWN_001: black female ownership <= total black ownership
-      if (!isBlank(row.currentBlackOwnership) && !isBlank(row.currentBlackFemaleOwnership)) {
-        const total = Number(row.currentBlackOwnership);
-        const female = Number(row.currentBlackFemaleOwnership);
-        if (Number.isFinite(total) && Number.isFinite(female) && female > total) {
-          errs.currentBlackFemaleOwnership = "Cannot exceed Black ownership";
-        }
-      }
-      return errs;
-    },
-  },
-  {
-    key: "suppliers",
-    label: "Suppliers",
-    description: "Supplier register with B-BBEE level and spend.",
-    enabled: true,
-    columns: SUPPLIER_COLUMNS,
-    rowValidate: (row) => {
-      const errs: Record<string, string> = {};
-      if (!isBlank(row.bbbeeLevel) && isBlank(row.certificateExpiryDate)) {
-        errs.certificateExpiryDate = "Required when B-BBEE level is set";
-      }
       if (!isBlank(row.currentBlackOwnership) && !isBlank(row.currentBlackFemaleOwnership)) {
         const total = Number(row.currentBlackOwnership);
         const female = Number(row.currentBlackFemaleOwnership);
