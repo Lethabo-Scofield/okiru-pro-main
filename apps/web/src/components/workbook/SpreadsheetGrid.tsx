@@ -289,10 +289,21 @@ export function SpreadsheetGrid({
                           onFocus={() => setActive({ row: rIdx, col: cIdx })}
                           className="w-full bg-transparent px-3 py-2 text-[13px] text-white outline-none"
                           data-testid={`cell-${rIdx}-${col.key}`}
+                          title={
+                            err ||
+                            col.optionGuidance?.[String(v ?? "")] ||
+                            col.guidance ||
+                            undefined
+                          }
                         >
                           <option value="" className="bg-[#1c1c1e]">—</option>
                           {col.options?.map((o) => (
-                            <option key={o} value={o} className="bg-[#1c1c1e]">
+                            <option
+                              key={o}
+                              value={o}
+                              className="bg-[#1c1c1e]"
+                              title={col.optionGuidance?.[o] || undefined}
+                            >
                               {o}
                             </option>
                           ))}
