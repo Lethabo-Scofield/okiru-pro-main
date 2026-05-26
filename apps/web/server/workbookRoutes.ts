@@ -594,7 +594,7 @@ function columnRowsForSection(section: SectionDef): unknown[][] {
   return rows;
 }
 
-function buildInstructionsSheet(): XLSX.WorkSheet {
+export function buildInstructionsSheet(): XLSX.WorkSheet {
   const aoa: unknown[][] = [];
   aoa.push(["Information Request — How to fill in this workbook"]);
   aoa.push([

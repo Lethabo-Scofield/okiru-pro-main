@@ -146,6 +146,47 @@ Hardened on `lethabo/quality-assurance` per `.local/tasks/task-4.md`.
 - **FSC scorecard completeness** — audited `apps/api/pipeline/sectorConfig.ts` (`FSC_GENERIC`, totals **120** = 25+21+23+24+10+9+8 for the "Others" sub-sector) against `apps/api/pipeline/sectorSubElements.ts` (`FSC:Generic` already enumerates Ownership / MC+EE / Skills / PP / SD / ED / SED+Consumer Education sub-elements consistent with the BBBEE Toolkit (FSC) Template v1.0.xlsx). The "Others" sub-sector has **no** Empowerment Financing (`empowermentFinancing` and `accessToFinancialServices` PillarConfig interface slots exist for sub-variants but are intentionally 0 for Others, per the FSC code). The FSC sub-variants (Banks, Long-Term Insurers, Short-Term Insurers) which **do** have Empowerment Financing + Access to Financial Services as priority elements are not modelled yet — that is left as a follow-up so a dedicated sub-sector picker can be designed.
 - **Route verification — `/hub` and `/test`** — `/hub` is mounted in `apps/web/src/App.tsx` (`<ProtectedRoute><HubLanding /></ProtectedRoute>`) and serves the Hub landing as expected. `/test` is **not** an application route — the wouter `Switch` falls through to the `NotFound` catch-all. If a `/test` route is required, add it to `App.tsx` alongside `/devmode`; no action taken in this task since it was a verification ask only.
 
+## Regression suite — May 2026 BBBEE fixes (Task #18, `lethabo/quality-assurance`)
+Locks in Tasks #2/#3/#4. All 112 new tests pass across 10 test files. The 84 pre-existing `Toolkit/src/lib/calculators/__tests__/skills.test.ts` failures (April 2026, commit `9afe7bc6d`) and other long-standing failures (Toolkit `esd-sed.test.ts`, `pipeline/scoringEngine.test.ts`, `src/routes/__tests__/clients.test.ts`, network-dependent auth tests, `session-store.test.ts`) are out of scope and unchanged.
+
+**New test files**
+- `apps/web/src/lib/__tests__/workbookExcelNormalizer.procurement.test.ts` — spend-column header aliases, `parseLooseNumber` Rand/negative contract, `SUPPLIER_SIZE_MAP` synonyms, Procurement/Suppliers sheet dedupe.
+- `apps/web/src/lib/__tests__/workbookExcelNormalizer.employmentEquity.test.ts` — `OCC_LEVEL_MAP` direct assertions + Excel-upload round trip for Employees / Management Control sheets.
+- `apps/web/src/lib/__tests__/workbookLegacyCompat.test.ts` — legacy "Suppliers" sheet routes into the canonical `procurement` section without data loss; SECTIONS catalogue no longer exposes `suppliers`.
+- `apps/web/src/components/workbook/__tests__/sectorRendering.regression.test.ts` — TRANSPORT splits MC/EE; every other sector (RCOGP, GENERIC, ICT, FSC, MAC, CONSTRUCTION, AGRI, PROPERTY, TOURISM) merges them; `SED_COLUMNS` is never mutated; storage keys are stable across sector switches.
+- `apps/web/src/components/workbook/__tests__/categoricalColumnGuard.test.ts` — every categorical `ColumnDef` is `type: "select"` with non-empty `options`; B-BBEE Level options match the canonical list; Toolkit `ESD.tsx`/`Procurement.tsx` render the level as a `<Select>` (source-level smoke check, no RTL).
+- `apps/web/src/components/workbook/__tests__/financialSingleSource.test.ts` — `FINANCIAL_META` has no `leviableAmount` field; `mapWorkbookFinancialsToClient` is the single derivation point (`forecastPayroll` → `leviableAmount` → `payroll` fallback).
+- `apps/web/Toolkit/src/pages/pillars/__tests__/SkillsDevelopment.bulkUpload.test.ts` — extracted `parseSkillsBulkUploadBuffer` helper: template parsing, case/punctuation-insensitive headers, Race/Gender/Category/Yes-No normalisation, skip counters, garbage workbook error string, % of payroll arithmetic.
+- `apps/web/server/__tests__/workbookRoutesInstructionsSheet.test.ts` — `buildInstructionsSheet()` documents date format, amount conventions, auto-generates per-sheet column reference from SECTIONS (with Required / Type / Accepted-values cells per column); SED/ESD guidance maps cover every dropdown option; `buildXlsx()` places "Instructions" first.
+- `apps/web/server/__tests__/workbookRoutesLegacySuppliers.test.ts` — persisted workbook JSON with the legacy `sections.suppliers` key still projects into the canonical `suppliers` client output via `projectWorkbookToClient`; dedupes by `_id` across `procurement` + `suppliers`; merges distinct rows.
+- `apps/web/src/__tests__/routes.test.ts` — App.tsx declares `/hub`, `/dashboard`, `/certificates`, `/super-admin`; does NOT declare `/test`.
+- `apps/api/__tests__/fscScorecard.test.ts` — `FSC_GENERIC` totals 120 (25+21+23+24+10+9+8); `SECTOR_PILLAR_SUB_ELEMENTS['FSC:Generic']` row totals reconcile with pillar caps once bonus rows are accounted for; FSC Banks / LTI / STI sub-variants are `it.skip` with a TODO referencing follow-up Task #10.
+
+**Production code touched (minimal)**
+- `apps/web/server/workbookRoutes.ts` — added `export` to `buildInstructionsSheet` so the instructions-sheet test can call it directly. No behaviour change.
+- `apps/web/Toolkit/src/pages/pillars/bulkUploadParser.ts` (new) + `SkillsDevelopment.tsx` (refactor) — extracted the inline xlsx parsing from `handleBulkUpload` into a sibling `parseSkillsBulkUploadBuffer()` helper that is pure / testable. The component now calls the helper and routes its `{ programs, skipped, error }` result through the existing toast UX. No user-visible change.
+
+**Commands**
+```bash
+# Web — runs all 9 new web/Toolkit/server tests + the existing suite
+pnpm --filter rest-express exec vitest run
+# Just the new files (~5s):
+pnpm --filter rest-express exec vitest run \
+  src/lib/__tests__/workbookExcelNormalizer.procurement.test.ts \
+  src/lib/__tests__/workbookExcelNormalizer.employmentEquity.test.ts \
+  src/lib/__tests__/workbookLegacyCompat.test.ts \
+  src/components/workbook/__tests__/sectorRendering.regression.test.ts \
+  src/components/workbook/__tests__/categoricalColumnGuard.test.ts \
+  src/components/workbook/__tests__/financialSingleSource.test.ts \
+  src/__tests__/routes.test.ts \
+  server/__tests__/workbookRoutesInstructionsSheet.test.ts \
+  server/__tests__/workbookRoutesLegacySuppliers.test.ts \
+  Toolkit/src/pages/pillars/__tests__/SkillsDevelopment.bulkUpload.test.ts
+
+# API — FSC scorecard regression
+pnpm --filter @okiru/api exec vitest run __tests__/fscScorecard.test.ts
+```
+
 ## Enterprise Security (Apr 2026)
 The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 
