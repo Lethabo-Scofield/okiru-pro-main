@@ -16,6 +16,10 @@ export interface ColumnDef {
   options?: string[];
   width?: number;
   validate?: (value: unknown) => string | null;
+  /** Inline guidance shown as a tooltip on hover (e.g. picker help text). */
+  guidance?: string;
+  /** Per-option guidance map (option label → short explanation). */
+  optionGuidance?: Record<string, string>;
 }
 
 export interface SectionDef {
@@ -89,6 +93,49 @@ const SED_CONTRIBUTION_TYPES = [
   "Other Non-Monetary",
 ];
 
+/**
+ * Short, plain-language guidance per SED contribution type, sourced from the
+ * Amended Generic Codes (Statement 500) – Socio-Economic Development. Used in
+ * the SED column tooltip and in the exported Excel "Instructions" sheet so
+ * users can pick the right category without leaving the workbook.
+ */
+export const SED_CONTRIBUTION_GUIDANCE: Record<string, string> = {
+  "Grant Contribution":
+    "Cash donation with no obligation to repay (e.g. funding to an NPO / community project).",
+  "Discount":
+    "Reduction in price on goods or services supplied to the beneficiary, over and above normal trade discounts.",
+  "Other Monetary":
+    "Any other cash-based contribution that is not a grant or discount (e.g. covering operating costs, bursaries paid direct to a beneficiary).",
+  "Professional Services":
+    "Free or below-market professional services provided to the beneficiary (e.g. legal, accounting, consulting) valued at cost to the measured entity.",
+  "Human Resource Capacity":
+    "Time of staff seconded or volunteering for the beneficiary, valued at the salary cost of the staff for the time given.",
+  "Other Non-Monetary":
+    "In-kind donations such as goods, equipment, training, premises or services that don't fit the categories above.",
+};
+
+/** Same shape as above for ESD — kept aligned with the Codes (Statement 400). */
+export const ESD_CONTRIBUTION_GUIDANCE: Record<string, string> = {
+  "Grant Contribution":
+    "Cash contribution to an Exempted/Qualifying beneficiary, no obligation to repay.",
+  "Loan":
+    "Loan provided at below prime (interest-rate concession is the recognised contribution).",
+  "Guarantee":
+    "Standby guarantee or surety extended on behalf of the beneficiary.",
+  "Discount":
+    "Reduction in price on goods/services sold to the beneficiary (above normal trade terms).",
+  "Payment Period Reduction":
+    "Faster-than-standard payment terms — recognised value is the working-capital benefit to the supplier.",
+  "Other Monetary":
+    "Any other cash-based contribution not captured above (e.g. early payment, fee waiver).",
+  "Professional Services":
+    "Free or subsidised professional services (legal, accounting, BD, mentoring) at cost.",
+  "Human Resource Capacity":
+    "Time of staff seconded or coaching the beneficiary, valued at salary cost.",
+  "Other Non-Monetary":
+    "In-kind support such as goods, equipment, training, premises or shared infrastructure.",
+};
+
 // ---------- Validators ----------
 
 const isBlank = (v: unknown): boolean =>
@@ -161,10 +208,29 @@ const idValidator = (v: unknown): string | null => {
   return null;
 };
 
+/**
+ * Coerces user-entered amount text to a number. Tolerates the conventions
+ * documented in the Instructions sheet of the downloaded Information Request
+ * workbook: an optional `R` / `r` prefix, thousands separators (`,` or
+ * non-breaking space), and surrounding whitespace. Returns `NaN` if the
+ * value cannot be parsed.
+ */
+export function parseAmount(v: unknown): number {
+  if (v === null || v === undefined) return NaN;
+  if (typeof v === "number") return v;
+  const s = String(v).trim();
+  if (!s) return NaN;
+  const cleaned = s
+    .replace(/^R\s*/i, "")
+    .replace(/[,\u00A0\s]/g, "");
+  if (cleaned === "" || cleaned === "-" || cleaned === ".") return NaN;
+  return Number(cleaned);
+}
+
 // Numeric, non-negative (revenue, payroll, costs, spend, amount).
 const numericValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
-  const n = Number(v);
+  const n = parseAmount(v);
   if (Number.isNaN(n)) return "Must be a number";
   if (n < 0) return "Must be ≥ 0";
   return null;
@@ -173,7 +239,7 @@ const numericValidator = (v: unknown): string | null => {
 // Numeric, allows negatives (e.g. NPAT can be a loss).
 const signedNumericValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
-  const n = Number(v);
+  const n = parseAmount(v);
   if (Number.isNaN(n)) return "Must be a number";
   return null;
 };
@@ -402,7 +468,7 @@ export const ESD_COLUMNS: ColumnDef[] = [
   { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
   { key: "esdCategory", label: "Category (SD / ED)", type: "select", options: ESD_CATEGORY_OPTIONS, required: false, width: 190 },
   { key: "contributionDescription", label: "Description", type: "text", required: true, width: 240 },
-  { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200 },
+  { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 400). Hover an option for the definition.", optionGuidance: ESD_CONTRIBUTION_GUIDANCE },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },
   { key: "dateOfTransaction", label: "Date of Transaction", type: "date", width: 160, validate: dateValidator },
   { key: "invoiceDate", label: "Invoice Date", type: "date", width: 140, validate: dateValidator },
@@ -416,7 +482,7 @@ export const SED_COLUMNS: ColumnDef[] = [
   { key: "beneficiaryName", label: "Beneficiary Name", type: "text", required: true, width: 220 },
   { key: "descriptionOfSpend", label: "Description of Spend", type: "text", required: true, width: 260 },
   { key: "ictSpecificInitiative", label: "ICT-Specific?", type: "boolean", width: 130 },
-  { key: "contributionType", label: "Contribution Type", type: "select", options: SED_CONTRIBUTION_TYPES, required: true, width: 200 },
+  { key: "contributionType", label: "Contribution Type", type: "select", options: SED_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 500). Hover an option for the definition.", optionGuidance: SED_CONTRIBUTION_GUIDANCE },
   { key: "percentBenefitingBlack", label: "% Benefiting Black", type: "number", required: true, width: 170, validate: percentValidator },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },
   { key: "dateOfTransaction", label: "Date of Transaction", type: "date", width: 160, validate: dateValidator },

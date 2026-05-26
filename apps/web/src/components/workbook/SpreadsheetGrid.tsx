@@ -697,7 +697,12 @@ export function SpreadsheetGrid({
         onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
         onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
         onContextMenu={(e) => handleContextMenu(e, rIdx)}
-        title={err || undefined}
+        title={
+          err ||
+          col.optionGuidance?.[String(v ?? "")] ||
+          col.guidance ||
+          undefined
+        }
       >
         {col.type === "boolean" ? (
           <div className="flex items-center justify-center h-full py-2">
