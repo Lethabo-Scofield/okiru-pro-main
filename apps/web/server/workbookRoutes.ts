@@ -11,6 +11,13 @@ import {
   validateWorkbook,
   formatWorkbookValidationSummary,
 } from "../src/components/workbook/workbookValidation";
+import {
+  SED_CONTRIBUTION_GUIDANCE,
+  ESD_CONTRIBUTION_GUIDANCE,
+  SECTIONS,
+  type ColumnDef,
+  type SectionDef,
+} from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 import {
   getClient as memGetClient,
@@ -543,8 +550,139 @@ function buildDataSheet(wb: WorkbookData, spec: DataSheetSpec): XLSX.WorkSheet {
   return ws;
 }
 
+/**
+ * Builds a stand-alone "Instructions" sheet placed at the front of the
+ * Information Request workbook. Spells out per-sheet column meanings,
+ * required fields, accepted picklist values, date format, numeric format,
+ * and short B-BBEE-code-aligned guidance for SED / ESD contribution types.
+ *
+ * Kept in sync with `apps/web/src/components/workbook/sections.ts` (the
+ * source of truth for column metadata used in the in-app grid) — when you
+ * add columns / picklists there, mirror them here.
+ */
+/**
+ * Per-section column rows derived from `SECTIONS` (the source of truth used
+ * by the in-app workbook grid). Keeping the Instructions sheet generated from
+ * the same `ColumnDef[]` means a column rename / new picklist / new required
+ * flag only has to be set in one place.
+ */
+function columnRowsForSection(section: SectionDef): unknown[][] {
+  const cols: ColumnDef[] =
+    (section.meta && section.meta.length > 0 ? section.meta : section.columns) ?? [];
+  if (cols.length === 0) return [];
+  const rows: unknown[][] = [];
+  rows.push([section.label, "Required", "Type", "Accepted values / format"]);
+  for (const c of cols) {
+    const req = c.required ? "Yes" : "";
+    let accepted: string;
+    if (c.options && c.options.length > 0) {
+      accepted = c.options.join(" / ");
+    } else if (c.type === "boolean") {
+      accepted = "Yes / No";
+    } else if (c.type === "date") {
+      accepted = "YYYY-MM-DD (preferred) or dd/mm/yyyy";
+    } else if (c.type === "number") {
+      accepted = "Rand amount — digits only; commas, spaces, and a leading 'R' are tolerated";
+    } else if (c.type === "id") {
+      accepted = "6–13 digit ID / registration number";
+    } else {
+      accepted = "Free text";
+    }
+    rows.push([c.label, req, c.type, accepted]);
+  }
+  rows.push([""]);
+  return rows;
+}
+
+function buildInstructionsSheet(): XLSX.WorkSheet {
+  const aoa: unknown[][] = [];
+  aoa.push(["Information Request — How to fill in this workbook"]);
+  aoa.push([
+    "Use one row per record. Required columns are marked with * in each sheet's header. Leave a cell blank if the value is unknown — do not write 'N/A' or '-' (this is treated as text).",
+  ]);
+  aoa.push([""]);
+  aoa.push(["General conventions"]);
+  aoa.push([
+    "Dates",
+    "YYYY-MM-DD (e.g. 2026-03-31). dd/mm/yyyy is also accepted. Avoid Excel's serial-number display — format the cell as Date.",
+  ]);
+  aoa.push([
+    "Amounts",
+    "Numbers in Rand, excluding VAT. Plain digits are preferred (e.g. 1500000), but thousands separators (1,500,000), spaces, and a leading 'R' are tolerated and stripped on import.",
+  ]);
+  aoa.push(["Yes / No fields", "Type 'Yes' or 'No'. Anything else is treated as blank."]);
+  aoa.push(["Race", "African / Coloured / Indian / White (the first three count as 'Black' for B-BBEE)."]);
+  aoa.push(["Gender", "Male / Female."]);
+  aoa.push([""]);
+
+  aoa.push(["Skills Development — accepted values"]);
+  aoa.push(["Category", "A (Bursaries), B (Learnerships/Internships), C (Accredited short courses), D (Other accredited), E (Non-accredited/Informal, capped at 25%), F (External unaccredited, capped at 15%), G (Informal — non-black, no points)."]);
+  aoa.push(["Costs", "Provide a breakdown across Course / Travel / Accommodation / Catering / Stationery / Training Facility / Salary (Cat B/C/D only) / Other. Each cost column is in Rand."]);
+  aoa.push(["Salary Cost", "Only allowed for learners on Category B, C or D programmes."]);
+  aoa.push([""]);
+
+  aoa.push(["Procurement / Suppliers — accepted values"]);
+  aoa.push(["Current Company Size", "Large / QSE / EME."]);
+  aoa.push(["B-BBEE Level", "1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / Non-compliant."]);
+  aoa.push(["Measured Under", "CoGP (Codes of Good Practice) or RCoGP (Revised CoGP)."]);
+  aoa.push(["Empowering Supplier?", "Yes / No. Required for points from Apr 2025 onwards."]);
+  aoa.push(["Black / Black Female Ownership", "Percentage 0–100 (e.g. 51 for 51%). Black Female cannot exceed Black."]);
+  aoa.push(["Certificate Expiry Date", "Required whenever B-BBEE Level is supplied; must match the certificate / sworn affidavit on file."]);
+  aoa.push([""]);
+
+  aoa.push(["Enterprise & Supplier Development — Contribution Type"]);
+  aoa.push(["Type", "What it means"]);
+  for (const [type, desc] of Object.entries(ESD_CONTRIBUTION_GUIDANCE)) {
+    aoa.push([type, desc]);
+  }
+  aoa.push(["Note", "Use the 'Category (SD / ED)' column to flag whether each row is Supplier Development (51%+ black, EME/QSE) or Enterprise Development."]);
+  aoa.push([""]);
+
+  aoa.push(["Socio-Economic Development — Contribution Type"]);
+  aoa.push(["Type", "What it means"]);
+  for (const [type, desc] of Object.entries(SED_CONTRIBUTION_GUIDANCE)) {
+    aoa.push([type, desc]);
+  }
+  aoa.push(["% Benefiting Black", "Percentage of the contribution that flows to black beneficiaries (0–100). Only this portion is recognised."]);
+  aoa.push([""]);
+
+  // Per-sheet column reference — derived from the same SECTIONS / ColumnDef
+  // metadata that drives the in-app workbook grid, so accepted values can
+  // never drift out of sync with what the parser actually accepts.
+  aoa.push(["Per-sheet column reference (auto-generated from in-app metadata)"]);
+  aoa.push([""]);
+  for (const section of SECTIONS) {
+    if (!section.enabled) continue;
+    const rows = columnRowsForSection(section);
+    for (const r of rows) aoa.push(r);
+  }
+
+  aoa.push(["Tips"]);
+  aoa.push([
+    "•",
+    "You can paste rows from your own spreadsheet — match the header names where possible.",
+  ]);
+  aoa.push([
+    "•",
+    "Re-opening this file in the Okiru web app will validate every row and flag missing or out-of-range values.",
+  ]);
+  aoa.push([
+    "•",
+    "Leave columns you don't track empty rather than guessing — blank is treated as 'not captured'.",
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 38 }, { wch: 12 }, { wch: 10 }, { wch: 90 }];
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+  ];
+  return ws;
+}
+
 export function buildXlsx(wb: WorkbookData): Buffer {
   const xwb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(xwb, buildInstructionsSheet(), "Instructions");
   XLSX.utils.book_append_sheet(xwb, buildChecklistSheet(wb), "Information Request");
   for (const spec of DATA_SHEETS) {
     XLSX.utils.book_append_sheet(xwb, buildDataSheet(wb, spec), spec.sheetName.slice(0, 31));
