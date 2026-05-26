@@ -155,32 +155,49 @@ function applyCapToSpend(
   return { totalRecognised, breakdown };
 }
 
-export function calculateSkillsScore(data: SkillsData, config: CalculatorConfig): SkillsResult {
-  if (!config) throw new Error('CalculatorConfig is required for skills score calculation');
+/**
+ * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
+ * Keeps the calculator usable in tests and as a safe fallback when sector
+ * configuration is still loading. Mirrors the RCOGP Generic Codes (Statement 300).
+ */
+const SKILLS_DEFAULTS = {
+  overallTarget: 0.035,
+  bursaryTarget: 0.025,
+  subMinThreshold: 40,
+  generalMax: 6,
+  bursaryMax: 4,
+  disabledLearningMaxPts: 4,
+  learnershipsMaxPts: 6,
+  absorptionMaxPts: 5,
+  learnershipTargetPercent: 5.0,
+  absorptionTargetPercent: 2.5,
+} as const;
+
+export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig): SkillsResult {
   console.log('[SCORING-TRACE] calculateSkillsScore received:', {
     leviableAmount: data.leviableAmount,
     programCount: data.trainingPrograms?.length ?? 0,
   });
   const { leviableAmount } = data;
   const trainingPrograms = data.trainingPrograms || [];
-  const sc = config.skills;
+  const sc = (config?.skills ?? {}) as Partial<NonNullable<CalculatorConfig['skills']>>;
 
-  const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget;
-  const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget;
+  const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget ?? SKILLS_DEFAULTS.overallTarget;
+  const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget ?? SKILLS_DEFAULTS.bursaryTarget;
   const disabledTargetPct = sc.disabledSpendPercent ?? 0.003;
-  const fgCap = sc.categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
-  const adminCap = sc.adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
-  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 40;
+  const fgCap = (sc as any).categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
+  const adminCap = (sc as any).adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
+  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? SKILLS_DEFAULTS.subMinThreshold;
   const maxPoints = config?.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
 
-  const learningMaxPts = sc.learningProgrammesMaxPts ?? sc.generalMax;
-  const bursaryMaxPts = sc.bursaryMaxPts ?? sc.bursaryMax;
-  const disabledMaxPts = sc.disabledLearningMaxPts ?? 4;
-  const learnershipMaxPts = sc.learnershipsMaxPts ?? 6;
-  const absorptionMaxPts = sc.absorptionMaxPts ?? 5;
+  const learningMaxPts = sc.learningProgrammesMaxPts ?? sc.generalMax ?? SKILLS_DEFAULTS.generalMax;
+  const bursaryMaxPts = sc.bursaryMaxPts ?? sc.bursaryMax ?? SKILLS_DEFAULTS.bursaryMax;
+  const disabledMaxPts = sc.disabledLearningMaxPts ?? SKILLS_DEFAULTS.disabledLearningMaxPts;
+  const learnershipMaxPts = sc.learnershipsMaxPts ?? SKILLS_DEFAULTS.learnershipsMaxPts;
+  const absorptionMaxPts = sc.absorptionMaxPts ?? SKILLS_DEFAULTS.absorptionMaxPts;
 
-  const learnershipTargetPct = sc.learnershipTargetPercent ?? 5.0;
-  const absorptionTargetPct = sc.absorptionTargetPercent ?? 2.5;
+  const learnershipTargetPct = sc.learnershipTargetPercent ?? SKILLS_DEFAULTS.learnershipTargetPercent;
+  const absorptionTargetPct = sc.absorptionTargetPercent ?? SKILLS_DEFAULTS.absorptionTargetPercent;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
