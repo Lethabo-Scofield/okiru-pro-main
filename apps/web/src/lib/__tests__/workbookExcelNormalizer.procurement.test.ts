@@ -104,10 +104,29 @@ describe("currentSize — SUPPLIER_SIZE_MAP synonyms", () => {
     expect(sizeCol.options).toBeDefined();
     expect(sizeCol.options).not.toContain("Mega Corp");
 
-    // validateWorkbook now surfaces invalid select values at the
+    // validateWorkbook surfaces invalid select values at the
     // import-preview surface (Task #18 area 1 — unknown size flagged).
     const issues = validateWorkbook(out.sections, { strictSelectOptions: true });
     const sizeIssues = issues.filter(
+      (i) => i.sectionKey === "procurement" && i.field === "currentSize",
+    );
+    expect(sizeIssues.length).toBeGreaterThan(0);
+    expect(sizeIssues[0].message).toMatch(/Not an allowed option/);
+  });
+
+  it("normalizeExcelBuffer (the real Excel-upload import-preview path) flags the invalid size in result.validationIssues", async () => {
+    // Integration-style assertion against the real preview pipeline:
+    // user uploads a sheet → normalizeExcelBuffer parses & validates →
+    // result.validationIssues must include the invalid-option error so the
+    // UI shows it to the user (Task #18 follow-up — wiring assertion).
+    const buf = makeBuffer({
+      Procurement: [
+        ["Supplier Name", "Current Size", "Spend"],
+        ["Acme", "Mega Corp", 100],
+      ],
+    });
+    const out = await normalizeExcelBuffer(buf);
+    const sizeIssues = out.validationIssues.filter(
       (i) => i.sectionKey === "procurement" && i.field === "currentSize",
     );
     expect(sizeIssues.length).toBeGreaterThan(0);

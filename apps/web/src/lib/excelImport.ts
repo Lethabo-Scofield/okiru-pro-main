@@ -2168,7 +2168,10 @@ export async function importBeeGatheringExcel(
     wb,
     extraction.ownershipChainTiers,
   );
-  const validationIssues = validateWorkbook(sections);
+  // Strict select-option enforcement on the legacy Excel import path so
+  // unrecognised dropdown values surface as validation issues at preview
+  // time (Task #18 areas 1/2). See `workbookValidation.ts`.
+  const validationIssues = validateWorkbook(sections, { strictSelectOptions: true });
   const criticalBlocked = validationIssues.some(
     (issue) =>
       (issue.sectionKey === "company-information" || issue.sectionKey === "financial-information") &&
