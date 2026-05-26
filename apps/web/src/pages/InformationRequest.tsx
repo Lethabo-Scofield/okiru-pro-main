@@ -26,12 +26,14 @@ import {
   getSection,
   getCompanyInfoMetaFields,
   resolveScorecardTypeForSector,
+  validateFinancialMetaCrossFields,
   type ColumnDef,
 } from "@/components/workbook/sections";
 import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
   validateWorkbook,
+  validateWorkbookForSubmit,
   formatWorkbookValidationSummary,
 } from "@/components/workbook/workbookValidation";
 import {
@@ -41,7 +43,6 @@ import {
 import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
 import { ExcelImportPreviewModal } from "@/components/scorecard/ExcelImportPreviewModal";
 import { useBbeeStore } from "@toolkit/lib/store";
-import { ScorecardFlowStepper } from "@/components/scorecard/ScorecardFlowStepper";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
 
 type Row = Record<string, unknown> & { _id: string };
@@ -801,11 +802,13 @@ function MetaForm({
   value,
   onChange,
   readOnly = false,
+  crossFieldErrors = {},
 }: {
   fields: ColumnDef[];
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
   readOnly?: boolean;
+  crossFieldErrors?: Record<string, string>;
 }) {
   const setField = (k: string, v: unknown) => {
     if (readOnly) return;
@@ -818,7 +821,9 @@ function MetaForm({
         const blank =
           v === "" || v === undefined || v === null ||
           (typeof v === "string" && v.trim() === "");
-        const err = f.required && blank ? "Required" : f.validate ? f.validate(v) : null;
+        const err =
+          crossFieldErrors[f.key] ||
+          (f.required && blank ? "Required" : f.validate ? f.validate(v) : null);
         return (
           <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
             <div className="text-[12px] text-[#8e8e93] mb-1.5 flex items-center gap-1">
@@ -1130,14 +1135,22 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         });
         return;
       }
-      const validationIssues = validateWorkbook(workbook.sections);
-      if (validationIssues.length > 0) {
+      const allIssues = validateWorkbook(workbook.sections);
+      const criticalIssues = validateWorkbookForSubmit(workbook.sections);
+      if (criticalIssues.length > 0) {
         toast({
-          title: "Fix validation errors before submitting",
-          description: formatWorkbookValidationSummary(validationIssues, 4),
+          title: "Fix required fields before submitting",
+          description: formatWorkbookValidationSummary(criticalIssues, 4),
           variant: "destructive",
         });
         return;
+      }
+      const advisoryCount = allIssues.length - criticalIssues.length;
+      if (advisoryCount > 0) {
+        toast({
+          title: "Submitting with pillar warnings",
+          description: `${advisoryCount} non-critical issue(s) in pillar sections — score will use available data (zeros elsewhere).`,
+        });
       }
       const res = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/submit`,
@@ -1296,6 +1309,15 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       ? getCompanyInfoMetaFields(String(activeMeta.industrySector ?? ""))
       : activeSection.meta
     : undefined;
+  const activeMetaCrossFieldErrors =
+    activeSection?.key === "financial-information"
+      ? validateFinancialMetaCrossFields(activeMeta)
+      : {};
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("okiru-workbook-active-section", activeSectionKey);
+  }, [activeSectionKey]);
 
   return (
     <div className="space-y-6">
@@ -1406,6 +1428,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                         fields={activeMetaFields}
                         value={activeMeta}
                         readOnly={!activeSectionPermissions.canEdit}
+                        crossFieldErrors={activeMetaCrossFieldErrors}
                         onChange={(next) => handleMetaChange(activeSection.key, next)}
                       />
                     )}
@@ -1510,10 +1533,6 @@ export default function InformationRequest() {
           <UserAccountMenu variant="dashboard" />
         </div>
       </header>
-
-      {isCreateScorecardFlow && (
-        <ScorecardFlowStepper companyId={params.companyId || resolvedCompanyId || undefined} />
-      )}
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
         {!isSummaryStep && !picked && (
