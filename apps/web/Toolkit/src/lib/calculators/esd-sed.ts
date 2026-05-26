@@ -122,19 +122,38 @@ function categorizeContributions(
   return { sdSpend, edSpend };
 }
 
-export function calculateEsdScore(data: ESDData, npat: number, config: CalculatorConfig): EsdResult {
-  if (!config) throw new Error('CalculatorConfig is required for ESD score calculation');
+/**
+ * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
+ * Mirrors the RCOGP Generic Codes (Statement 400 — ESD).
+ */
+const ESD_DEFAULTS = {
+  supplierDevMax: 10,
+  enterpriseDevMax: 5,
+  supplierDevTarget: 0.02,
+  enterpriseDevTarget: 0.01,
+} as const;
+
+/**
+ * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
+ * Mirrors the RCOGP Generic Codes (Statement 500 — SED).
+ */
+const SED_DEFAULTS = {
+  maxPoints: 5,
+  npatTarget: 0.01,
+} as const;
+
+export function calculateEsdScore(data: ESDData, npat: number, config?: CalculatorConfig): EsdResult {
   console.log('[SCORING-TRACE] calculateEsdScore received:', {
     npat,
     contributionCount: data.contributions?.length ?? 0,
   });
   const contributions = data.contributions || [];
-  const ec = config.esd;
+  const ec = (config?.esd ?? {}) as Partial<NonNullable<CalculatorConfig['esd']>>;
 
-  const supplierDevMax = ec.supplierDevMax;
-  const enterpriseDevMax = ec.enterpriseDevMax;
-  const supplierDevTargetPct = ec.supplierDevTarget;
-  const enterpriseDevTargetPct = ec.enterpriseDevTarget;
+  const supplierDevMax = ec.supplierDevMax ?? ESD_DEFAULTS.supplierDevMax;
+  const enterpriseDevMax = ec.enterpriseDevMax ?? ESD_DEFAULTS.enterpriseDevMax;
+  const supplierDevTargetPct = ec.supplierDevTarget ?? ESD_DEFAULTS.supplierDevTarget;
+  const enterpriseDevTargetPct = ec.enterpriseDevTarget ?? ESD_DEFAULTS.enterpriseDevTarget;
 
   const sdTarget = npat * supplierDevTargetPct;
   const edTarget = npat * enterpriseDevTargetPct;
@@ -197,17 +216,16 @@ export function calculateEsdScore(data: ESDData, npat: number, config: Calculato
   return result;
 }
 
-export function calculateSedScore(data: SEDData, npat: number, config: CalculatorConfig): SedResult {
-  if (!config) throw new Error('CalculatorConfig is required for SED score calculation');
+export function calculateSedScore(data: SEDData, npat: number, config?: CalculatorConfig): SedResult {
   console.log('[SCORING-TRACE] calculateSedScore received:', {
     npat,
     contributionCount: data.contributions?.length ?? 0,
   });
   const contributions = data.contributions || [];
-  const sc = config.sed;
+  const sc = (config?.sed ?? {}) as Partial<NonNullable<CalculatorConfig['sed']>>;
 
-  const maxPoints = sc.maxPoints;
-  const npatTargetPct = sc.npatTarget;
+  const maxPoints = sc.maxPoints ?? SED_DEFAULTS.maxPoints;
+  const npatTargetPct = sc.npatTarget ?? SED_DEFAULTS.npatTarget;
   const target = npat * npatTargetPct;
 
   const sedFactors = buildBenefitFactors('sed', config);
