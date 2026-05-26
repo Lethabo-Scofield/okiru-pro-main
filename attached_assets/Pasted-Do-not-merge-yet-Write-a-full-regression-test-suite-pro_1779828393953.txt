@@ -1,0 +1,98 @@
+Do not merge yet.
+
+Write a full regression test suite proving the recent Okiru fixes work as intended.
+
+Create tests for:
+
+1. Procurement Excel parsing
+- Rand value aliases are detected:
+  - Rand Value
+  - Amount
+  - Spend
+  - Procurement Spend
+  - Supplier Spend
+- Currency strings parse correctly:
+  - R1,200.50
+  - 1 200,50
+  - 1200.50
+- Current size maps correctly from template upload.
+- Procurement and Suppliers are deduplicated.
+
+2. Employment Equity upload
+- Occupational levels from Excel persist after upload.
+- Variants normalize correctly:
+  - Junior Management
+  - Junior Manager
+  - Middle Management
+  - Senior Management
+  - Top Management
+  - Semi-skilled
+  - Unskilled
+- Invalid occupational levels return clear validation errors.
+
+3. Sector-aware scorecard rendering
+- Non-Transport codes show Management Control and Employment Equity as one combined pillar.
+- Transport codes show them separately.
+- ICT-only SED fields only appear for ICT scorecards.
+- Non-ICT scorecards do not show ICT-specific SED questions.
+
+4. Dropdown enforcement
+- Management Control uses dropdowns.
+- ESD uses dropdowns.
+- B-BBEE Level uses dropdowns.
+- Free-text values that affect scoring should not be accepted silently.
+
+5. Financial information
+- Payroll and leviable amount use one source of truth.
+- Existing formulas still calculate correctly.
+- No duplicate field causes conflicting values.
+
+6. Skills Toolkit
+- Bulk upload button works.
+- Uploaded file reaches parser.
+- Valid file creates records.
+- Invalid file returns readable errors.
+- % of payroll formula is correct.
+
+7. SED / ESD guidance
+- Excel templates include an Instructions sheet.
+- Contribution type guidance exists.
+- Manual input options and upload template options match.
+
+8. FSC scorecard
+- FSC scorecard includes all expected elements from the Excel reference.
+- FSC sub-sector variants exist:
+  - Banks
+  - Long-Term Insurers
+  - Short-Term Insurers
+- Missing FSC fields should fail tests.
+
+9. Saved workbook compatibility
+- Old saved workbooks with legacy suppliers key still load.
+- New saved workbooks use the deduped key.
+- No data is lost during load/save.
+
+10. Route checks
+- /hub loads without runtime errors.
+- /test is absent or safely cleaned up.
+- /super-admin FSC configuration loads.
+
+Test requirements:
+- Add unit tests for parser/normalization logic.
+- Add integration tests for upload → normalized data → scoring.
+- Add UI tests where rendering behavior matters.
+- Use realistic sample Excel fixtures.
+- Include both positive and negative cases.
+- Ensure tests run in CI.
+- Do not rely only on snapshots.
+
+Return a report with:
+- Test files added or changed
+- Fixtures added
+- Commands used to run tests
+- Passing/failing status
+- Any uncovered risks
+- Any business-rule assumptions
+
+Acceptance condition:
+No merge until all new regression tests pass.
