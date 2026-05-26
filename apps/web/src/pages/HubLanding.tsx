@@ -5,10 +5,12 @@ import { useToast } from '@/hooks/use-toast';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
+import hubBackground from '@assets/image_1779723521128.png';
+import certCardBg from '@assets/image_1779724907320.png';
 import {
-  ChevronRight, Search, X, ArrowUpRight, Lock, Building2,
+  ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, ClipboardList, BarChart3,
+  Sparkles, Plus, LineChart, UserCog, ChevronDown,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { Crown } from 'lucide-react';
@@ -40,6 +42,7 @@ export default function HubLanding() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -108,6 +111,7 @@ export default function HubLanding() {
       link: '/certificates',
       features: ['AI certificate extraction', 'Expiry alerts & renewals', 'Procurement spend analytics'],
       featured: true,
+      backgroundImage: certCardBg,
     },
     {
       id: 'esg', title: 'ESG Toolkit', tag: 'ESG', aiBadge: 'AI-Insights',
@@ -156,10 +160,25 @@ export default function HubLanding() {
       className="font-sans min-h-screen bg-black relative overflow-x-hidden"
       style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}
     >
-      {/* Single, very subtle purple wash - quiet brand signal, nothing more */}
+      {/* Cinematic smoke background — fixed so it stays put as you scroll */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft"
+        className="pointer-events-none fixed inset-0 z-0 bg-no-repeat bg-cover bg-center"
+        style={{ backgroundImage: `url(${hubBackground})`, opacity: 0.55 }}
+      />
+      {/* Vignette to keep text readable over the image */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.65) 55%, rgba(0,0,0,0.92) 100%)',
+        }}
+      />
+      {/* Subtle violet brand wash — same as before, just a quiet signal */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 w-[760px] h-[760px] rounded-full opacity-[0.10] blur-[140px] float-soft z-0"
         style={{
           background: 'radial-gradient(circle, rgba(168,85,247,0.45) 0%, rgba(168,85,247,0) 70%)',
           transform: 'translate(-50%, 0)',
@@ -178,102 +197,166 @@ export default function HubLanding() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/workspace')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/25 hover:border-violet-300/45 smooth press-sm text-violet-100 shadow-sm shadow-violet-950/20"
-              title="Workspace — invite people and manage your team"
-              aria-label="Workspace — invite people and manage your team"
-              data-testid="btn-workspace"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              <span className="text-[12px] font-semibold">Workspace</span>
-            </button>
-            <button
-              onClick={() => setSearchOpen((s) => !s)}
-              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px]"
-              title="Search toolkits"
-              data-testid="btn-search-toolkits"
-            >
-              <Search className="h-3.5 w-3.5" />
-              <span>Search</span>
-            </button>
-            <button
-              onClick={() => setSearchOpen((s) => !s)}
-              className="sm:hidden p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white"
-              title="Search toolkits"
-              data-testid="btn-search-toolkits-mobile"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-            {user?.role === 'admin' && (
-              <Link
-                href="/admin/users"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] smooth press-sm text-[#8e8e93] hover:text-white text-[12px] font-medium"
-                data-testid="link-admin-users"
+            {/* Consolidated Team menu — Workspace + Admin + Super Admin */}
+            <div className="relative">
+              <button
+                onClick={() => setTeamMenuOpen((s) => !s)}
+                className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/35 hover:bg-violet-500/25 hover:border-violet-300/45 smooth press-sm text-violet-100 shadow-sm shadow-violet-950/20"
+                title="Team & access"
+                aria-haspopup="menu"
+                aria-expanded={teamMenuOpen}
+                data-testid="btn-team-menu"
               >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Admin
-              </Link>
-            )}
-            {user?.role === 'super_admin' && (
-              <Link
-                href="/super-admin"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 smooth press-sm text-amber-300 hover:text-amber-200 text-[12px] font-medium"
-                data-testid="link-super-admin"
+                <Users className="h-3.5 w-3.5" />
+                <span className="text-[12px] font-semibold">Team</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${teamMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {teamMenuOpen && (
+                <>
+                  <div
+                    aria-hidden
+                    className="fixed inset-0 z-30"
+                    onClick={() => setTeamMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-[260px] rounded-2xl border border-white/[0.08] bg-[#141416]/95 backdrop-blur-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.7)] overflow-hidden z-40"
+                  >
+                    <div className="px-3 pt-3 pb-2">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#636366] font-semibold">
+                        Team & access
+                      </div>
+                    </div>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setTeamMenuOpen(false); navigate('/workspace'); }}
+                      className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left"
+                      data-testid="menu-item-workspace"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-violet-500/15 border border-violet-400/25 grid place-items-center shrink-0">
+                        <Building2 className="h-4 w-4 text-violet-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-white">Workspace</div>
+                        <div className="text-[11px] text-[#8e8e93]">Invite people, manage your team</div>
+                      </div>
+                    </button>
+                    {user?.role === 'admin' && (
+                      <Link
+                        href="/admin/users"
+                        onClick={() => setTeamMenuOpen(false)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left"
+                        data-testid="menu-item-admin-users"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-white/[0.06] border border-white/[0.08] grid place-items-center shrink-0">
+                          <UserCog className="h-4 w-4 text-[#d1d1d6]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-white">User management</div>
+                          <div className="text-[11px] text-[#8e8e93]">Roles, permissions, accounts</div>
+                        </div>
+                      </Link>
+                    )}
+                    {user?.role === 'super_admin' && (
+                      <Link
+                        href="/super-admin"
+                        onClick={() => setTeamMenuOpen(false)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left border-t border-white/[0.05]"
+                        data-testid="menu-item-super-admin"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/15 border border-amber-500/30 grid place-items-center shrink-0">
+                          <Crown className="h-4 w-4 text-amber-300" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                            Super Admin
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-semibold">
+                              Owner
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#8e8e93]">Platform-wide controls</div>
+                        </div>
+                      </Link>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Inline-expanding search */}
+            <div
+              className={`relative flex items-center rounded-full border smooth overflow-hidden ${
+                searchOpen
+                  ? 'w-[220px] sm:w-[300px] bg-white/[0.06] border-white/[0.14]'
+                  : 'w-9 bg-white/[0.04] hover:bg-white/[0.08] border-transparent'
+              }`}
+              style={{ transitionProperty: 'width, background-color, border-color' }}
+            >
+              <button
+                onClick={() => {
+                  if (searchOpen && !searchQuery) setSearchOpen(false);
+                  else setSearchOpen(true);
+                }}
+                className="shrink-0 h-9 w-9 grid place-items-center text-[#8e8e93] hover:text-white smooth press-sm"
+                title="Search toolkits"
+                aria-label="Search toolkits"
+                data-testid="btn-search-toolkits"
               >
-                <Crown className="h-3.5 w-3.5" />
-                Super Admin
-              </Link>
-            )}
+                <Search className="h-4 w-4" />
+              </button>
+              <input
+                type="text"
+                placeholder="Search toolkits…"
+                autoFocus={searchOpen}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false); }
+                }}
+                onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
+                tabIndex={searchOpen ? 0 : -1}
+                aria-hidden={!searchOpen}
+                className={`flex-1 min-w-0 bg-transparent pr-2 text-[13px] text-white placeholder-[#636366] outline-none ${
+                  searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                } transition-opacity duration-150`}
+                data-testid="input-search-toolkits"
+              />
+              {searchOpen && searchQuery && (
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+                  className="shrink-0 h-7 w-7 mr-1 grid place-items-center rounded-full text-[#636366] hover:text-white hover:bg-white/[0.08] smooth"
+                  title="Clear search"
+                  data-testid="btn-clear-search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             {user?.id && !authLoading ? <UserAccountMenu variant="hub" /> : null}
           </div>
         </div>
       </header>
 
-      {searchOpen && (
-        <div
-          className="w-full px-4 sm:px-6 lg:px-8 py-3 bg-black/60 backdrop-blur-md"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
-        >
-          <div className="relative max-w-lg mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#48484a]" />
-            <input
-              type="text"
-              placeholder="Search toolkits..."
-              autoFocus
-              className="w-full rounded-2xl bg-white/[0.04] border border-white/[0.07] hover:border-white/[0.12] pl-11 pr-10 py-3 text-[14px] text-white outline-none focus:ring-2 focus:ring-white/20 focus:border-white/[0.18] smooth placeholder:text-[#48484a]"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              data-testid="input-search-toolkits"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#636366] hover:text-white smooth"
-                data-testid="btn-clear-search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <main className="relative max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
+      <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
         {/* HERO - personalized */}
-        <section className="mb-10 fade-in" data-testid="hero-welcome">
+        <section className="mb-12 fade-in" data-testid="hero-welcome">
+          <div className="flex items-center gap-2 mb-5 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80 pulse-soft" />
+            Okiru Hub
+          </div>
           <h1
-            className="text-[36px] leading-[1.05] sm:text-[52px] font-semibold tracking-tight text-white"
+            className="text-[40px] leading-[1.04] sm:text-[60px] font-semibold tracking-tight text-white"
             style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {greeting()},{' '}
             {authLoading ? (
-              <span className="skel inline-block h-[36px] w-40 align-middle rounded-md" />
+              <span className="skel inline-block h-[40px] w-44 align-middle rounded-md" />
             ) : (
               <button
                 type="button"
                 onClick={() => navigate(companyProfilePath('/hub'))}
-                className="text-white border-b border-dashed border-white/35 hover:border-violet-300/80 hover:text-violet-100 transition-colors pb-0.5"
+                className="text-white border-b border-dashed border-white/30 hover:border-violet-300/80 hover:text-violet-100 transition-colors pb-0.5"
                 data-testid="text-greeting-name"
               >
                 {displayName}
@@ -281,111 +364,121 @@ export default function HubLanding() {
             )}
             <span className="text-[#5a5a60]">.</span>
           </h1>
-          <div className="mt-3 text-[15px] text-[#8e8e93] leading-relaxed font-light max-w-2xl lg:max-w-3xl">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             {profileLoading ? (
-              <span className="inline-flex flex-col gap-1.5">
-                <span className="skel h-3.5 w-72 block" />
-                <span className="skel h-3.5 w-56 block" />
-              </span>
+              <span className="skel h-7 w-64 rounded-full" />
             ) : companyName ? (
               <>
-                You&apos;re signed in to{' '}
-                <span className="text-[#d1d1d6] font-medium">{companyNameFriendly}</span>.{' '}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[12px] text-[#d1d1d6]">
+                  <Building2 className="w-3 h-3 text-[#8e8e93]" />
+                  {companyNameFriendly}
+                </span>
                 <button
                   type="button"
                   onClick={() => navigate('/workspace')}
-                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/25 text-[12px] text-violet-200 hover:bg-violet-500/20 hover:border-violet-300/40 transition-colors"
                   data-testid="link-hero-workspace-signed-in"
                 >
-                  Invite your team in Workspace
-                </button>{' '}
-                when you&apos;re ready, or open a toolkit below.
+                  <Users className="w-3 h-3" />
+                  Invite your team
+                </button>
               </>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => navigate('/workspace')}
-                  className="text-violet-300/95 hover:text-violet-200 underline decoration-violet-400/40 underline-offset-2 font-medium"
-                  data-testid="link-hero-workspace-anon"
-                >
-                  Set up Workspace
-                </button>{' '}
-                for invites, or jump into a toolkit below.
-              </>
+              <button
+                type="button"
+                onClick={() => navigate('/workspace')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/25 text-[12px] text-violet-200 hover:bg-violet-500/20 hover:border-violet-300/40 transition-colors"
+                data-testid="link-hero-workspace-anon"
+              >
+                <Building2 className="w-3 h-3" />
+                Set up your workspace
+              </button>
             )}
           </div>
         </section>
 
-        {/* SCORECARD ACTIONS */}
-        <section className="mb-12" data-testid="scorecard-actions">
-          <SectionHeader title="B-BBEE Scorecard" count={2} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={() => navigate('/create-scorecard')}
-              className="group text-left rounded-2xl border border-white/[0.08] bg-white/[0.025] p-8 min-h-[220px]
-                hover:border-violet-400/30 hover:bg-violet-500/[0.06] transition-all duration-300
-                hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(124,58,237,0.25)] card-rise stagger-1"
-              data-testid="card-create-scorecard"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-300 flex items-center justify-center mb-5">
-                    <ClipboardList className="w-6 h-6" />
-                  </div>
-                  <h3
-                    className="text-[22px] font-semibold tracking-tight text-white"
-                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-                  >
-                    Create Scorecard
-                  </h3>
-                  <p className="text-[13.5px] text-[#8e8e93] mt-2 leading-relaxed max-w-md">
-                    Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
-                  </p>
+        {/* PRIMARY ACTIONS — Create / View scorecard */}
+        <section className="mb-14 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
+          <Link
+            href="/create-scorecard"
+            className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] overflow-hidden border border-violet-400/25 hover:border-violet-300/50 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-20px_rgba(139,92,246,0.45)] cursor-pointer"
+            style={{
+              backgroundImage:
+                'linear-gradient(135deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.08) 40%, rgba(255,255,255,0.02) 100%)',
+            }}
+            data-testid="action-create-scorecard"
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-20 -right-16 w-56 h-56 rounded-full opacity-60 blur-3xl"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(168,85,247,0.35) 0%, rgba(168,85,247,0) 70%)',
+              }}
+            />
+            <div className="relative flex flex-col h-full">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-violet-500/25 border border-violet-300/40 text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                  <Plus className="w-5 h-5" strokeWidth={2.4} />
                 </div>
-                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-violet-300 transition-colors shrink-0 mt-1" />
+                <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-violet-200/80">
+                  Primary
+                </span>
               </div>
-              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                <Sparkles className="w-3 h-3" /> New workbook
-              </div>
-            </button>
+              <h3
+                className="text-[24px] sm:text-[26px] font-semibold tracking-tight text-white leading-[1.1]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                Create Scorecard
+              </h3>
+              <p className="mt-2 text-[13.5px] text-[#d1d1d6]/90 leading-relaxed max-w-md">
+                Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+              </p>
+              <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-white">
+                New workbook
+                <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
+            </div>
+          </Link>
 
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard')}
-              className="group text-left rounded-2xl border border-white/[0.08] bg-white/[0.025] p-8 min-h-[220px]
-                hover:border-white/[0.16] hover:bg-white/[0.04] transition-all duration-300
-                hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.5)] card-rise stagger-2"
-              data-testid="card-view-scorecard"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-300 flex items-center justify-center mb-5">
-                    <BarChart3 className="w-6 h-6" />
-                  </div>
-                  <h3
-                    className="text-[22px] font-semibold tracking-tight text-white"
-                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-                  >
-                    View Scorecard
-                  </h3>
-                  <p className="text-[13.5px] text-[#8e8e93] mt-2 leading-relaxed max-w-md">
-                    Open saved companies, review scorecard summaries, and continue editing existing workbooks.
-                  </p>
+          <Link
+            href="/dashboard?tab=scorecards"
+            className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] bg-white/[0.03] backdrop-blur-md border border-white/[0.08] hover:border-white/[0.20] hover:bg-white/[0.05] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)] cursor-pointer"
+            data-testid="action-view-scorecard"
+          >
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-white/[0.06] border border-white/[0.14] text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <LineChart className="w-5 h-5" strokeWidth={2.2} />
                 </div>
-                <ArrowUpRight className="w-5 h-5 text-[#636366] group-hover:text-violet-300 transition-colors shrink-0 mt-1" />
+                <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#8e8e93]">
+                  Library
+                </span>
               </div>
-              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-[#636366] font-medium uppercase tracking-wider">
-                Saved companies <ChevronRight className="w-3 h-3" />
-              </div>
-            </button>
-          </div>
+              <h3
+                className="text-[24px] sm:text-[26px] font-semibold tracking-tight text-white leading-[1.1]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                View Scorecard
+              </h3>
+              <p className="mt-2 text-[13.5px] text-[#a1a1a6] leading-relaxed max-w-md">
+                Open saved companies, review scorecard summaries, and continue editing existing workbooks.
+              </p>
+              <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
+                Saved companies
+                <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
+            </div>
+          </Link>
         </section>
+
+        {/* Hairline divider — gives the page rhythm */}
+        <div aria-hidden className="mb-10 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+
 
         {/* FEATURED + ACTIVE TOOLKITS */}
         <section className="mb-12">
-          <SectionHeader title="Available now" count={filteredActive.length} />
+          <SectionHeader title="Open a toolkit" count={filteredActive.length} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {featured && (
               <FeaturedCard toolkit={featured} staggerClass="card-rise stagger-5" />
@@ -434,10 +527,27 @@ function FeaturedCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: 
     <Link
       href={toolkit.link}
       className={`${staggerClass || ''} lg:col-span-2 group relative block rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[260px]
-        bg-white/[0.025] border border-white/[0.07] hover:border-white/[0.16] transition-all duration-300
+        bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-white/[0.18] transition-all duration-300
         hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)]`}
       data-testid={`card-featured-${toolkit.id}`}
     >
+      {toolkit.backgroundImage && (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-no-repeat bg-cover bg-center transition-transform duration-700 group-hover:scale-[1.04]"
+            style={{ backgroundImage: `url(${toolkit.backgroundImage})`, opacity: 0.85 }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(105deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.15) 100%)',
+            }}
+          />
+        </>
+      )}
       <div className="relative flex flex-col h-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -491,8 +601,8 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
   return (
     <Link
       href={toolkit.link}
-      className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-white/[0.025] border border-white/[0.06]
-        hover:border-white/[0.14] hover:bg-white/[0.04] transition-all duration-250
+      className={`${staggerClass || ''} group relative block rounded-2xl p-5 bg-black/40 backdrop-blur-md border border-white/[0.07]
+        hover:border-white/[0.16] hover:bg-black/50 transition-all duration-250
         hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)] min-h-[180px] flex flex-col`}
       data-testid={`card-toolkit-${toolkit.id}`}
     >
@@ -535,32 +645,3 @@ function ActiveCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: st
   );
 }
 
-function UpcomingCard({ toolkit, staggerClass }: { toolkit: any; staggerClass?: string }) {
-  return (
-    <button
-      onClick={toolkit.action}
-      className={`${staggerClass || ''} text-left group relative rounded-xl p-4 bg-white/[0.015] border border-white/[0.04]
-        hover:bg-white/[0.03] hover:border-white/[0.08] transition-all duration-200 min-h-[130px] flex flex-col`}
-      data-testid={`card-toolkit-${toolkit.id}`}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className="w-8 h-8 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[#636366] flex items-center justify-center">
-          {toolkit.icon}
-        </div>
-        <Lock className="w-3 h-3 text-[#3a3a3c]" />
-      </div>
-      <h3 className="text-[13.5px] font-medium tracking-tight text-[#d1d1d6] leading-snug">
-        {toolkit.title}
-      </h3>
-      <p className="mt-1 text-[11.5px] text-[#636366] leading-relaxed line-clamp-2">
-        {toolkit.description}
-      </p>
-      <div className="mt-auto pt-3 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#48484a]">
-          {toolkit.tag}
-        </span>
-        <span className="text-[10px] text-[#48484a] group-hover:text-[#8e8e93] smooth">Notify me</span>
-      </div>
-    </button>
-  );
-}
