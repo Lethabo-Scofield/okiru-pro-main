@@ -9,6 +9,7 @@ import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixtu
 import { WorkbookModel, ClientModel } from "../shared/schema";
 import {
   validateWorkbook,
+  validateWorkbookForSubmit,
   formatWorkbookValidationSummary,
 } from "../src/components/workbook/workbookValidation";
 import {
@@ -1316,7 +1317,7 @@ export function registerWorkbookRoutes(app: Express): void {
           .json({ error: "Database unavailable — cannot submit workbook." });
       }
 
-      const validationIssues = validateWorkbook(wb.sections);
+      const validationIssues = validateWorkbookForSubmit(wb.sections);
       if (validationIssues.length > 0) {
         return res.status(400).json({
           error: "Workbook validation failed",

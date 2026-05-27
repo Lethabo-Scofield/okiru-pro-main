@@ -25,6 +25,7 @@ import { registerWorkbookRoutes } from "./workbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
 import { deleteWorkbookForClient } from "./workbookRoutes";
 import {
@@ -261,7 +262,7 @@ export async function registerRoutes(
       }
 
       const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
-      const safeRole = ALLOWED_ROLES.includes(role) ? role : "auditor";
+      const safeRole = ALLOWED_ROLES.includes(role) ? role : "analyst";
 
       const existing = await storage.getUserByUsername(trimmedUsername);
       if (existing && existing.isVerified) {
@@ -3241,6 +3242,7 @@ Respond ONLY with a valid JSON array.`;
   registerWorkbookRoutes(app);
   registerExcelImportRoutes(app);
   registerFeedbackRoutes(app, requireAuth);
+  registerAdminRollbackRoutes(app, requireAuth);
 
   logger.info("Route registration completed");
   return httpServer;

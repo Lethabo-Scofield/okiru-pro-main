@@ -90,9 +90,14 @@ describe("Financial Information rules", () => {
   const section = getSection("financial-information")!;
   const field = (k: string) => section.meta!.find((f) => f.key === k)!;
 
-  it("marks core financials as required", () => {
-    for (const k of ["revenue", "npat", "payroll", "forecastRevenue", "forecastNpat", "forecastPayroll"]) {
-      expect(field(k).required).toBe(true);
+  it("requires at least one of actual or forecast per financial pair", () => {
+    for (const pair of [
+      ["revenue", "forecastRevenue"],
+      ["npat", "forecastNpat"],
+      ["payroll", "forecastPayroll"],
+    ] as const) {
+      expect(field(pair[0]).required).toBeFalsy();
+      expect(field(pair[1]).required).toBeFalsy();
     }
   });
 

@@ -90,6 +90,14 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # Client/scorecard CRUD (web server owns /api/clients — only requireAuth, no RBAC)
+          - path: /api/clients
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # API backend routes (all other /api/*)
           - path: /api
             pathType: Prefix

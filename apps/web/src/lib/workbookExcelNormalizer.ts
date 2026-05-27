@@ -16,6 +16,7 @@ import {
 } from "@/components/workbook/sections";
 import {
   validateWorkbook,
+  isCriticalWorkbookIssue,
   type WorkbookValidationIssue,
 } from "@/components/workbook/workbookValidation";
 
@@ -44,18 +45,6 @@ const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   { sectionKey: "esd", hints: ["enterprise development", "supplier development", "esd", "es&sd"] },
   { sectionKey: "sed", hints: ["socioeconomic", "socio-economic", "socio economic", "sed", "csi"] },
 ];
-
-const CRITICAL_META_KEYS = new Set([
-  "companyName",
-  "industrySector",
-  "scorecardType",
-  "revenue",
-  "npat",
-  "payroll",
-  "forecastRevenue",
-  "forecastNpat",
-  "forecastPayroll",
-]);
 
 const RACE_MAP: Record<string, string> = {
   african: "African",
@@ -316,14 +305,7 @@ function emptySections(): WorkbookSectionsInput {
 }
 
 function hasCriticalGaps(issues: WorkbookValidationIssue[]): boolean {
-  return issues.some((issue) => {
-    if (issue.sectionKey === "company-information" || issue.sectionKey === "financial-information") {
-      if (issue.field && CRITICAL_META_KEYS.has(issue.field)) return true;
-      if (issue.message.toLowerCase().includes("required")) return true;
-    }
-    if (issue.message.toLowerCase().includes("scorecard type")) return true;
-    return false;
-  });
+  return issues.some(isCriticalWorkbookIssue);
 }
 
 export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {

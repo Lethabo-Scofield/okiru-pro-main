@@ -7,6 +7,7 @@ import {
 import { apiRequest } from '@toolkit/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavBack } from '@/components/AppNavBack';
+import { feedbackPillarLabel } from '@/lib/feedbackPillars';
 
 type Status = 'open' | 'in-progress' | 'resolved';
 type Category = 'bug' | 'feature' | 'general' | 'compliance';
@@ -15,6 +16,7 @@ interface FeedbackItem {
   id: string;
   message: string;
   category: Category;
+  pillar?: string | null;
   pageUrl: string | null;
   userName: string | null;
   userEmail: string | null;
@@ -288,6 +290,11 @@ export default function DevMode() {
                       {CATEGORY_ICON[item.category]}
                       {item.category}
                     </span>
+                    {item.pillar ? (
+                      <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-200">
+                        {feedbackPillarLabel(item.pillar)}
+                      </span>
+                    ) : null}
                     <span className="text-[10px] text-zinc-500">
                       {formatDate(item.createdAt)}
                     </span>

@@ -43,9 +43,20 @@ import {
   BookOpen,
   Info,
   CheckCircle2,
+  RotateCcw,
+  History,
 } from "lucide-react";
 
 // --- Types ---
+
+interface DeploymentRevision {
+  revision: number;
+  changeReason: string;
+  timestamp: string | null;
+  deployedBy: string | null;
+}
+
+type DeploymentsResponse = Record<string, DeploymentRevision[] | { error: string }>;
 
 interface AdminUser {
   id: string;
@@ -1178,6 +1189,9 @@ export default function SuperAdmin() {
   const [skip, setSkip] = useState(0);
   const limit = 50;
 
+  // Rollback state
+  const [rollbackTarget, setRollbackTarget] = useState<{ deployment: string; revision: number } | null>(null);
+
   const { data: usersResp, isLoading: usersLoading } = useQuery<UsersResponse>({
     queryKey: ["/api/admin/users", roleFilter, skip],
     queryFn: () => {
@@ -1209,6 +1223,30 @@ export default function SuperAdmin() {
       toast({ title: "Sectors re-seeded", description: `Total sectors: ${data.result?.totalSectors || "unknown"}` });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const { data: deploymentsData, isLoading: deploymentsLoading, refetch: refetchDeployments } = useQuery<DeploymentsResponse>({
+    queryKey: ["/api/admin/deployments"],
+    queryFn: () => apiRequest("GET", "/api/admin/deployments").then((r) => r.json()),
+    enabled: user?.role === "super_admin",
+    staleTime: 60_000,
+  });
+
+  const rollbackMutation = useMutation({
+    mutationFn: (payload: { deployment: string; revision: number }) =>
+      apiRequest("POST", "/api/admin/rollback", payload).then((r) => r.json()),
+    onSuccess: (data: any, vars) => {
+      setRollbackTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/deployments"] });
+      toast({
+        title: "Rollback initiated",
+        description: data.message ?? `Rolled back ${vars.deployment} to revision ${vars.revision}`,
+      });
+    },
+    onError: (err: any) => {
+      setRollbackTarget(null);
+      toast({ title: "Rollback failed", description: err.message, variant: "destructive" });
+    },
   });
 
   const users = Array.isArray(usersResp?.users) ? usersResp.users : [];
@@ -1515,6 +1553,173 @@ export default function SuperAdmin() {
             </div>
           )}
         </section>
+
+        {/* --- Deployment Rollback --- */}
+        <section>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="h-4 w-4 text-amber-400" />
+                  Deployment Rollback
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => refetchDeployments()}
+                  disabled={deploymentsLoading}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${deploymentsLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Roll back any Kubernetes deployment to a previous revision. This runs{" "}
+                <code className="font-mono bg-muted px-1 rounded">kubectl rollout undo</code> against the cluster.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {deploymentsLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !deploymentsData ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+                  <AlertCircle className="h-4 w-4" />
+                  Failed to load deployment history.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(["web", "api", "compute"] as const).map((depName) => {
+                    const entry = deploymentsData[depName];
+                    const isError = entry && "error" in entry;
+                    const revisions = isError ? [] : (entry as DeploymentRevision[]) ?? [];
+
+                    return (
+                      <div key={depName}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium capitalize">{depName}</span>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1">
+                            deployment/{depName}
+                          </Badge>
+                        </div>
+                        {isError ? (
+                          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 rounded px-3 py-2">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            {(entry as { error: string }).error}
+                          </div>
+                        ) : revisions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground px-1">No revisions found.</p>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs w-20">Revision</TableHead>
+                                <TableHead className="text-xs">Change reason</TableHead>
+                                <TableHead className="text-xs w-36">Deployed by</TableHead>
+                                <TableHead className="text-xs w-44">Timestamp</TableHead>
+                                <TableHead className="text-xs w-24 text-right">Action</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {revisions.map((rev, idx) => (
+                                <TableRow key={rev.revision}>
+                                  <TableCell className="text-xs font-mono">
+                                    #{rev.revision}
+                                    {idx === 0 && (
+                                      <Badge className="ml-1.5 text-[9px] h-3.5 px-1 bg-green-600/20 text-green-600 border-green-600/30">
+                                        current
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                                    {rev.changeReason || <span className="italic opacity-50">—</span>}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {rev.deployedBy ?? <span className="text-muted-foreground italic opacity-50">—</span>}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {rev.timestamp
+                                      ? new Date(rev.timestamp).toLocaleString()
+                                      : <span className="italic opacity-50">—</span>}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {idx === 0 ? (
+                                      <span className="text-xs text-muted-foreground italic">live</span>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                                        disabled={rollbackMutation.isPending}
+                                        onClick={() => setRollbackTarget({ deployment: depName, revision: rev.revision })}
+                                      >
+                                        <RotateCcw className="h-3 w-3 mr-1" />
+                                        Rollback
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Rollback confirmation dialog */}
+        <Dialog open={!!rollbackTarget} onOpenChange={(open) => { if (!open) setRollbackTarget(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-amber-500" />
+                Confirm Rollback
+              </DialogTitle>
+            </DialogHeader>
+            {rollbackTarget && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  You are about to roll back{" "}
+                  <span className="font-semibold text-foreground">deployment/{rollbackTarget.deployment}</span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-foreground">revision #{rollbackTarget.revision}</span>.
+                  This will immediately replace the running pods in production.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRollbackTarget(null)}
+                    disabled={rollbackMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    disabled={rollbackMutation.isPending}
+                    onClick={() => rollbackMutation.mutate(rollbackTarget)}
+                  >
+                    {rollbackMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Confirm Rollback
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );

@@ -88,6 +88,36 @@ function formatPct(n: number | null): string {
   return `${n.toFixed(n < 10 ? 1 : 0)}%`;
 }
 
+/** Render an em-dash in muted grey for missing/unknown values. */
+function MutedDash() {
+  return <span className="text-[#3a3a3c] text-[13px] select-none">—</span>;
+}
+
+/** Color-coded B-BBEE level badge (1 = best / green, 8 = worst / red). */
+function LevelBadge({ level }: { level: number | null }) {
+  if (level == null) return <MutedDash />;
+  const palette: Record<number, { color: string; bg: string }> = {
+    1: { color: '#22c55e', bg: 'rgba(34,197,94,0.14)' },
+    2: { color: '#4ade80', bg: 'rgba(74,222,128,0.12)' },
+    3: { color: '#86efac', bg: 'rgba(134,239,172,0.10)' },
+    4: { color: '#facc15', bg: 'rgba(250,204,21,0.12)' },
+    5: { color: '#fb923c', bg: 'rgba(251,146,60,0.12)' },
+    6: { color: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+    7: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+    8: { color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
+  };
+  const { color, bg } = palette[level] ?? { color: '#8e8e93', bg: 'rgba(142,142,147,0.10)' };
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide tabular-nums"
+      style={{ color, background: bg }}
+      title={`B-BBEE Level ${level}`}
+    >
+      L{level}
+    </span>
+  );
+}
+
 function StatusBadge({ status, expiryDate }: { status: CertificateRow['status']; expiryDate: string | null }) {
   const map = {
     valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
@@ -115,7 +145,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-purple-500/30 text-purple-200 rounded-sm px-0.5">{part}</mark>
+          <mark key={i} className="bg-[#6366f1]/30 text-[#c7d2fe] rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         ),
@@ -644,16 +674,24 @@ export default function CertificateHub() {
                   }
                 </p>
               ) : stats ? (
-                <p className="text-[12px] text-[#636366]">
-                  <span className="text-[#a1a1aa]">{filtered.length.toLocaleString()} shown</span>
-                  {stats.total > filtered.length && (
-                    <> · <span className="text-[#a1a1aa]">{stats.total.toLocaleString()} total in registry</span></>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.05] text-[#a1a1aa]">
+                    {filtered.length.toLocaleString()} shown
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[rgba(34,197,94,0.10)] text-[#22c55e]">
+                    {stats.valid} valid
+                  </span>
+                  {stats.expiring > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[rgba(245,158,11,0.10)] text-[#f59e0b]">
+                      {stats.expiring} expiring soon
+                    </span>
                   )}
-                  {' · '}
-                  <span className="text-[#22c55e]">{stats.valid} valid</span>
-                  {' · '}
-                  <span className="text-[#f59e0b]">{stats.expiring} expiring soon</span>
-                </p>
+                  {stats.expired > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[rgba(239,68,68,0.10)] text-[#ef4444]">
+                      {stats.expired} expired
+                    </span>
+                  )}
+                </div>
               ) : (
                 <p className="text-[12px] text-[#636366]">{filtered.length.toLocaleString()} certificates</p>
               )}
@@ -686,10 +724,11 @@ export default function CertificateHub() {
           />
         ) : (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="hidden md:grid grid-cols-[2fr_1.2fr_0.8fr_1.2fr_1fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="hidden md:grid grid-cols-[2fr_1fr_0.7fr_0.6fr_1fr_1fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div>Company</div>
               <div>VAT number</div>
               <div>Size</div>
+              <div>Level</div>
               <div>Ownership</div>
               <div>Expiry</div>
               <div />
@@ -700,6 +739,7 @@ export default function CertificateHub() {
                 cert={cert}
                 searchQuery={search}
                 isLast={idx === filtered.length - 1}
+                isEven={idx % 2 === 1}
                 isDownloading={downloadingFile === cert.name}
                 onDownload={() => downloadCertificate(cert.name)}
                 onPreview={() => setPreviewCert(cert)}
@@ -908,8 +948,14 @@ export default function CertificateHub() {
         </div>
       )}
 
-      {/* Local input styles for the upload modal */}
+      {/* Brand tokens + local input styles */}
       <style>{`
+        :root {
+          --cert-brand:       #6366f1;
+          --cert-brand-hover: #4f46e5;
+          --cert-brand-dim:   #818cf8;
+          --cert-brand-muted: #a5b4fc;
+        }
         .ok-cert-input {
           width: 100%;
           background: #0d0d10;
@@ -921,7 +967,7 @@ export default function CertificateHub() {
           outline: none;
           transition: border-color 0.15s;
         }
-        .ok-cert-input:focus { border-color: #6366f1; }
+        .ok-cert-input:focus { border-color: var(--cert-brand); }
         .ok-cert-input::placeholder { color: #48484a; }
       `}</style>
     </div>
@@ -938,91 +984,117 @@ function Field({ label, children }: { label: string; required?: boolean; childre
 }
 
 function CertRow({
-  cert, searchQuery, isLast, isDownloading, onDownload, onPreview,
+  cert, searchQuery, isLast, isEven, isDownloading, onDownload, onPreview,
 }: {
   cert: CertificateRow;
   searchQuery: string;
   isLast: boolean;
+  isEven: boolean;
   isDownloading: boolean;
   onDownload: () => void;
   onPreview: () => void;
 }) {
   return (
     <div
-      className="md:grid md:grid-cols-[2fr_1.2fr_0.8fr_1.2fr_1fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
-      style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)' }}
+      className="md:grid md:grid-cols-[2fr_1fr_0.7fr_0.6fr_1fr_1fr_auto] md:items-center md:gap-3 px-4 py-3 hover:bg-[#16161b] transition-colors"
+      style={{
+        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)',
+        background: isEven ? 'rgba(255,255,255,0.015)' : undefined,
+      }}
     >
-      {/* Mobile: stacked. Desktop: grid columns */}
+      {/* Company name — truncated with tooltip */}
       <div className="min-w-0">
-        <div className="text-[14px] text-white font-medium leading-snug flex items-center gap-1.5 flex-wrap">
-          {cert.slug ? (
-            <Link
-              href={`/certificates/${cert.slug}`}
-              className="text-white hover:text-[#a5b4fc] transition-colors"
-            >
+        <div className="flex items-center gap-1.5 min-w-0" title={cert.companyName}>
+          <span className="text-[14px] text-white font-medium leading-snug truncate min-w-0 max-w-full">
+            {cert.slug ? (
+              <Link
+                href={`/certificates/${cert.slug}`}
+                className="text-white hover:text-[#a5b4fc] transition-colors"
+              >
+                <HighlightMatch text={cert.companyName} query={searchQuery} />
+              </Link>
+            ) : (
               <HighlightMatch text={cert.companyName} query={searchQuery} />
-            </Link>
-          ) : (
-            <HighlightMatch text={cert.companyName} query={searchQuery} />
-          )}
+            )}
+          </span>
           {cert.verified && (
             <span
               title="Verified by an administrator"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
               style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.12)' }}
             >
               <ShieldCheck className="h-3 w-3" />
-              Verified
+              <span className="hidden lg:inline">Verified</span>
             </span>
           )}
         </div>
+        {/* Mobile: secondary info row */}
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
-          {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
-          {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
-          {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
-          {cert.expiryDate && <span><CalendarClock className="inline h-3 w-3 mr-0.5" /> {formatExpiry(cert.expiryDate)}</span>}
+          {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" />{cert.vatNumber}</span>}
+          {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" />{cert.companySize}</span>}
+          {cert.bbbeeLevel != null && <span><Award className="inline h-3 w-3 mr-0.5" />Level {cert.bbbeeLevel}</span>}
+          {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" />{formatPct(cert.blackOwnership)} black</span>}
+          {cert.expiryDate && <span><CalendarClock className="inline h-3 w-3 mr-0.5" />{formatExpiry(cert.expiryDate)}</span>}
         </div>
         <div className="md:hidden mt-1.5"><StatusBadge status={cert.status} expiryDate={cert.expiryDate} /></div>
       </div>
 
-      <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
-        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">-</span>}
+      {/* VAT number */}
+      <div className="hidden md:block text-[12px] text-[#a1a1aa] font-mono truncate">
+        {cert.vatNumber
+          ? <HighlightMatch text={cert.vatNumber} query={searchQuery} />
+          : <MutedDash />}
       </div>
-      <div className="hidden md:block text-[13px] text-[#a1a1aa]">
-        {cert.companySize || <span className="text-[#48484a]">-</span>}
+
+      {/* Company size */}
+      <div className="hidden md:block text-[12px] text-[#a1a1aa]">
+        {cert.companySize
+          ? <span className="truncate block max-w-full">{cert.companySize}</span>
+          : <MutedDash />}
       </div>
-      <div className="hidden md:block text-[13px] text-[#a1a1aa]">
+
+      {/* B-BBEE Level */}
+      <div className="hidden md:block">
+        <LevelBadge level={cert.bbbeeLevel} />
+      </div>
+
+      {/* Black ownership */}
+      <div className="hidden md:block text-[12px] text-[#a1a1aa]">
         {cert.blackOwnership != null ? (
           <span>
-            <span className="text-white">{formatPct(cert.blackOwnership)}</span>
+            <span className="text-white font-medium">{formatPct(cert.blackOwnership)}</span>
             {cert.blackWomenOwnership != null && (
-              <span className="text-[#636366] text-[11px] ml-1">· {formatPct(cert.blackWomenOwnership)} women</span>
+              <span className="text-[#4a4a55] text-[11px] ml-1">· {formatPct(cert.blackWomenOwnership)} W</span>
             )}
           </span>
         ) : (
-          <span className="text-[#48484a]">-</span>
+          <MutedDash />
         )}
       </div>
-      <div className="hidden md:flex items-center gap-2 text-[13px] text-[#a1a1aa]">
-        <span>{formatExpiry(cert.expiryDate)}</span>
+
+      {/* Expiry + status badge */}
+      <div className="hidden md:flex items-center gap-2 text-[12px] text-[#a1a1aa]">
+        <span className={cert.expiryDate ? '' : 'text-[#3a3a3c]'}>{formatExpiry(cert.expiryDate)}</span>
         <StatusBadge status={cert.status} expiryDate={cert.expiryDate} />
       </div>
+
+      {/* Action buttons */}
       <div className="hidden md:flex items-center justify-end gap-1">
         <button
           onClick={onPreview}
           aria-label={`Preview ${cert.companyName}`}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[12px]"
+          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[11px]"
         >
-          <Eye className="h-4 w-4" />
+          <Eye className="h-3.5 w-3.5" />
           <span className="hidden lg:inline">Preview</span>
         </button>
         <button
           onClick={onDownload}
           disabled={isDownloading}
           aria-label={`Download ${cert.fileName}`}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors text-[12px]"
+          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors text-[11px]"
         >
-          {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           <span className="hidden lg:inline">Download</span>
         </button>
       </div>
