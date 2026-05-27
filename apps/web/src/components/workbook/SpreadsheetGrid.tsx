@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus, Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
+import { Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
 import type { ColumnDef } from "./sections";
 import { applyPasteToRows, parseClipboardMatrix } from "@/lib/workbookGridParse";
 
@@ -20,6 +20,8 @@ interface Props {
   canAddRows?: boolean;
 }
 
+// Number of blank ghost rows always visible below the last real row.
+const MIN_EMPTY_ROWS = 25;
 const VIRTUAL_THRESHOLD = 50;
 const ROW_HEIGHT = 40;
 const DEFAULT_COL_WIDTH = 120;
@@ -120,10 +122,15 @@ export function SpreadsheetGrid({
   const fillDrag = useRef<{ startRow: number; endRow: number } | null>(null);
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
 
-  const useVirtual = rows.length > VIRTUAL_THRESHOLD;
+  // Total rows shown = real rows + ghost padding rows (in edit mode only).
+  const displayRowCount = readOnly
+    ? rows.length
+    : Math.max(rows.length + MIN_EMPTY_ROWS, MIN_EMPTY_ROWS);
+
+  const useVirtual = displayRowCount > VIRTUAL_THRESHOLD;
 
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: displayRowCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
@@ -212,19 +219,22 @@ export function SpreadsheetGrid({
     (rowIdx: number, colIdx: number): unknown => {
       const col = columns[colIdx];
       if (!col) return "";
-      return rows[rowIdx]?.[col.key];
+      return rows[rowIdx]?.[col.key] ?? "";
     },
     [columns, rows],
   );
 
+  // Materializes ghost rows up to rowIdx, then sets the cell value.
   const updateCell = useCallback(
     (rowIdx: number, colKey: string, value: unknown) => {
       if (readOnly) return;
       pushUndo(rows);
-      const next = rows.map((r, i) => (i === rowIdx ? { ...r, [colKey]: value } : r));
+      const next = [...rows];
+      while (next.length <= rowIdx) next.push(emptyRow(columns));
+      next[rowIdx] = { ...next[rowIdx], [colKey]: value };
       onChange(next);
     },
-    [rows, onChange, readOnly, pushUndo],
+    [rows, columns, onChange, readOnly, pushUndo],
   );
 
   const commitEdit = useCallback(
@@ -238,7 +248,11 @@ export function SpreadsheetGrid({
         } else if (col.type === "boolean") {
           value = editValue.toLowerCase() === "true" || editValue === "1";
         }
-        updateCell(editingCell.row, col.key, value);
+        // For ghost rows, only materialize if there's actual content.
+        const isEmpty = value === "" || value === null || value === undefined;
+        if (!isEmpty || editingCell.row < rows.length) {
+          updateCell(editingCell.row, col.key, value);
+        }
       }
       setEditingCell(null);
       setEditValue("");
@@ -247,7 +261,7 @@ export function SpreadsheetGrid({
         setSelectionEnd(moveTo);
       }
     },
-    [editingCell, editValue, columns, readOnly, updateCell],
+    [editingCell, editValue, columns, readOnly, updateCell, rows.length],
   );
 
   const startEdit = useCallback(
@@ -255,36 +269,18 @@ export function SpreadsheetGrid({
       if (readOnly) return;
       const col = columns[ref.col];
       if (!col || col.type === "boolean") return;
-      const v = getCellValue(ref.row, ref.col);
+      const v = ref.row < rows.length ? rows[ref.row][col.key] : "";
       setEditingCell(ref);
       setEditValue(initialValue ?? String(v ?? ""));
       setActiveCell(ref);
       setSelectionEnd(ref);
     },
-    [readOnly, columns, getCellValue],
-  );
-
-  const addRow = useCallback(
-    (atIdx?: number) => {
-      if (readOnly || !canAddRows) return;
-      pushUndo(rows);
-      const newRow = emptyRow(columns);
-      const idx = atIdx ?? rows.length;
-      const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
-      onChange(next);
-      setTimeout(() => {
-        const ref = { row: idx, col: 0 };
-        setActiveCell(ref);
-        setSelectionEnd(ref);
-        setSelectedRow(null);
-      }, 0);
-    },
-    [rows, columns, onChange, readOnly, canAddRows, pushUndo],
+    [readOnly, columns, rows],
   );
 
   const deleteRow = useCallback(
     (rowIdx: number) => {
-      if (readOnly || !canDeleteRows) return;
+      if (readOnly || !canDeleteRows || rowIdx >= rows.length) return;
       pushUndo(rows);
       onChange(rows.filter((_, i) => i !== rowIdx));
       setSelectedRow(null);
@@ -460,7 +456,8 @@ export function SpreadsheetGrid({
         if (e.key === "Enter") {
           e.preventDefault();
           const { row, col } = editingCell;
-          commitEdit({ row: Math.min(row + 1, rows.length - 1), col });
+          const nextRow = Math.min(row + 1, displayRowCount - 1);
+          commitEdit({ row: nextRow, col });
           return;
         }
         if (e.key === "Tab") {
@@ -468,6 +465,7 @@ export function SpreadsheetGrid({
           const { row, col } = editingCell;
           if (e.shiftKey && col > 0) commitEdit({ row, col: col - 1 });
           else if (!e.shiftKey && col < columns.length - 1) commitEdit({ row, col: col + 1 });
+          else if (!e.shiftKey && row < displayRowCount - 1) commitEdit({ row: row + 1, col: 0 });
           else commitEdit();
           return;
         }
@@ -501,7 +499,7 @@ export function SpreadsheetGrid({
 
       const { row, col } = activeCell;
       const lastCol = columns.length - 1;
-      const lastRow = rows.length - 1;
+      const lastRow = displayRowCount - 1;
 
       if (e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
@@ -510,7 +508,7 @@ export function SpreadsheetGrid({
           setActiveCell(next);
           setSelectionEnd(next);
           setExtraCells(new Set());
-        } else if (e.key === "Enter" && canAddRows && !readOnly) addRow();
+        }
       } else if (e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey)) {
         if (row > 0) {
           e.preventDefault();
@@ -541,17 +539,19 @@ export function SpreadsheetGrid({
           setSelectionEnd(next);
           setExtraCells(new Set());
         }
+      } else if (!readOnly && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        // Start editing on any printable character keystroke.
+        e.preventDefault();
+        startEdit(activeCell, e.key);
       }
     },
     [
       editingCell,
       activeCell,
       columns.length,
-      rows.length,
-      addRow,
-      undo,
-      canAddRows,
+      displayRowCount,
       readOnly,
+      undo,
       copySelection,
       clearSelection,
       startEdit,
@@ -596,11 +596,6 @@ export function SpreadsheetGrid({
   };
 
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (fillDrag.current) {
-        /* visual feedback handled via state on mouseup */
-      }
-    };
     const up = () => {
       if (fillDrag.current) {
         const { startRow, endRow } = fillDrag.current;
@@ -610,10 +605,8 @@ export function SpreadsheetGrid({
       isDragging.current = false;
       dragAnchor.current = null;
     };
-    window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", up);
     return () => {
-      window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", up);
     };
   }, [applyFill]);
@@ -783,6 +776,73 @@ export function SpreadsheetGrid({
     </tr>
   );
 
+  // Ghost rows are blank placeholder rows that give an infinite-spreadsheet feel.
+  // They become real rows only when the user actually enters data.
+  const renderGhostRow = (rIdx: number) => {
+    const isEditing = editingCell?.row === rIdx;
+    return (
+      <tr
+        key={`ghost-${rIdx}`}
+        className="hover:bg-white/[0.01]"
+        data-testid={`ghost-row-${rIdx}`}
+      >
+        <td
+          className="text-[#3a3a3c] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 select-none sticky left-0 bg-[#0e0e10] z-[1]"
+          onClick={() => handleRowSelect(rIdx)}
+          onContextMenu={(e) => handleContextMenu(e, rIdx)}
+        >
+          {rIdx + 1}
+        </td>
+        {columns.map((col, cIdx) => {
+          const selected = isCellSelected(rIdx, cIdx);
+          const active = isActiveCell(rIdx, cIdx);
+          const cellEditing = isEditing && editingCell?.col === cIdx;
+          return (
+            <td
+              key={col.key}
+              data-cell={`${rIdx}-${cIdx}`}
+              style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
+              className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+                selected ? "bg-blue-500/10" : ""
+              } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""}`}
+              onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
+              onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
+              onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
+              onContextMenu={(e) => handleContextMenu(e, rIdx)}
+            >
+              {cellEditing && col.type !== "boolean" ? (
+                <input
+                  ref={editInputRef}
+                  type={col.type === "number" ? "number" : "text"}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => commitEdit()}
+                  className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                  data-testid={`cell-edit-${rIdx}-${col.key}`}
+                />
+              ) : (
+                <div className="px-3 py-2 min-h-[36px]" />
+              )}
+              {active && showFillHandle && cIdx === selectionRange!.maxC && (
+                <span
+                  className="absolute -bottom-[3px] -right-[3px] w-2 h-2 bg-blue-500 border border-white cursor-crosshair z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    fillDrag.current = { startRow: rIdx, endRow: rIdx };
+                  }}
+                />
+              )}
+            </td>
+          );
+        })}
+        <td className="border-b border-[#2c2c2e] p-1 text-center" />
+      </tr>
+    );
+  };
+
+  const renderRow = (rIdx: number) =>
+    rIdx < rows.length ? renderDataRow(rows[rIdx], rIdx) : renderGhostRow(rIdx);
+
   const toolbar = (
     <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
       <div className="flex items-center gap-3 text-[12px] text-[#8e8e93]">
@@ -836,17 +896,6 @@ export function SpreadsheetGrid({
             </>
           )}
         </button>
-        {canAddRows && !readOnly && (
-          <button
-            type="button"
-            onClick={() => addRow()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold press-sm hover:bg-white/90 smooth"
-            data-testid="button-add-row"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add row
-          </button>
-        )}
       </div>
     </div>
   );
@@ -884,25 +933,14 @@ export function SpreadsheetGrid({
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td
-                colSpan={columns.length + 2}
-                className="text-center py-12 text-[#636366] text-[13px]"
-                data-testid="empty-state"
-              >
-                No rows yet. Click <span className="text-[#d1d1d6] font-medium">Add row</span> or paste from Excel.
-              </td>
-            </tr>
-          )}
-          {useVirtual && rows.length > 0 ? (
+          {useVirtual ? (
             <>
               {virtualizer.getVirtualItems().length > 0 && (
                 <tr style={{ height: virtualizer.getVirtualItems()[0]?.start ?? 0 }}>
                   <td colSpan={columns.length + 2} />
                 </tr>
               )}
-              {virtualizer.getVirtualItems().map((vRow) => renderDataRow(rows[vRow.index], vRow.index))}
+              {virtualizer.getVirtualItems().map((vRow) => renderRow(vRow.index))}
               {virtualizer.getVirtualItems().length > 0 && (
                 <tr
                   style={{
@@ -916,7 +954,7 @@ export function SpreadsheetGrid({
               )}
             </>
           ) : (
-            rows.map((row, rIdx) => renderDataRow(row, rIdx))
+            Array.from({ length: displayRowCount }, (_, rIdx) => renderRow(rIdx))
           )}
         </tbody>
       </table>
@@ -938,7 +976,11 @@ export function SpreadsheetGrid({
               type="button"
               className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
               onClick={() => {
-                addRow(contextMenu.row);
+                pushUndo(rows);
+                const idx = Math.min(contextMenu.row, rows.length);
+                const newRow = emptyRow(columns);
+                const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
+                onChange(next);
                 setContextMenu(null);
               }}
             >
@@ -948,7 +990,11 @@ export function SpreadsheetGrid({
               type="button"
               className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
               onClick={() => {
-                addRow(contextMenu.row + 1);
+                pushUndo(rows);
+                const idx = Math.min(contextMenu.row + 1, rows.length);
+                const newRow = emptyRow(columns);
+                const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
+                onChange(next);
                 setContextMenu(null);
               }}
             >
@@ -983,7 +1029,7 @@ export function SpreadsheetGrid({
             Paste
           </button>
         )}
-        {!readOnly && canDeleteRows && (
+        {!readOnly && canDeleteRows && contextMenu.row < rows.length && (
           <button
             type="button"
             className="w-full text-left px-3 py-1.5 text-[12px] text-status-error hover:bg-white/[0.06]"
@@ -1010,8 +1056,8 @@ export function SpreadsheetGrid({
       {gridTable}
       {!readOnly && (
         <p className="text-[11px] text-[#636366]">
-          Click to select · drag for range · Shift+click extend · Ctrl+click multi-select · F2/double-click edit ·
-          Ctrl+C copy · Ctrl+V paste · drag fill handle to copy down.
+          Click to select · drag for range · Shift+click extend · Ctrl+click multi-select · F2 or type to edit ·
+          Ctrl+C copy · Ctrl+V paste from Excel · drag fill handle to copy down · Ctrl+Z undo.
         </p>
       )}
       {contextMenuPortal}

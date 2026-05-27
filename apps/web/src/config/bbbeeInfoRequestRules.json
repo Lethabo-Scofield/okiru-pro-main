@@ -31,6 +31,7 @@
             "sheet": "Information Request",
             "type": "checklist_only",
             "description": "Financial information requested in the checklist. The workbook does not provide a dedicated financial input tab.",
+            "financial_pair_rule": "For revenue, NPAT, and payroll: provide at least one of actual (historical) OR forecast — not both required.",
             "fields": [
                 {
                     "field": "historical_revenue",

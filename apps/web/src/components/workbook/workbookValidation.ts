@@ -1,6 +1,7 @@
 import {
   SECTIONS,
   getScorecardTypeOptions,
+  validateFinancialMetaCrossFields,
   type ColumnDef,
   type SectionDef,
 } from "./sections";
@@ -225,9 +226,18 @@ export function validateWorkbook(
     if (!data) continue;
 
     if (section.meta) {
-      issues.push(
-        ...validateMetaFields(section, (data.meta ?? {}) as Record<string, unknown>),
-      );
+      const meta = (data.meta ?? {}) as Record<string, unknown>;
+      issues.push(...validateMetaFields(section, meta));
+      if (section.key === "financial-information") {
+        for (const [field, message] of Object.entries(validateFinancialMetaCrossFields(meta))) {
+          issues.push({
+            sectionKey: section.key,
+            sectionLabel: section.label,
+            field,
+            message,
+          });
+        }
+      }
       continue;
     }
 
@@ -282,9 +292,9 @@ export function validateWorkbook(
     issues.push({
       sectionKey: "financial-information",
       sectionLabel: "Financial Information",
-      field: "forecastPayroll",
+      field: "payroll",
       message:
-        "Forecast payroll (or leviable amount) is required when skills development rows are present",
+        "Payroll (actual or forecast) or leviable amount is required when skills development rows are present",
     });
   }
 
@@ -295,14 +305,50 @@ export function validateWorkbook(
     issues.push({
       sectionKey: "financial-information",
       sectionLabel: "Financial Information",
-      field: "forecastNpat",
-      message: "Forecast NPAT is required when ESD or SED rows are present",
+      field: "npat",
+      message: "NPAT (actual or forecast) is required when ESD or SED rows are present",
     });
   }
 
   issues.push(...validateOwnershipVotingRights(sections));
 
   return issues;
+}
+
+/** Issues that block workbook submit / scorecard sync (company + financials only). */
+export function isCriticalWorkbookIssue(issue: WorkbookValidationIssue): boolean {
+  if (issue.sectionKey === "company-information") {
+    if (
+      issue.field === "companyName" ||
+      issue.field === "industrySector" ||
+      issue.field === "scorecardType"
+    ) {
+      return true;
+    }
+    if (issue.message.toLowerCase().includes("required")) return true;
+    if (issue.message.toLowerCase().includes("scorecard type")) return true;
+  }
+  if (issue.sectionKey === "financial-information") {
+    if (issue.message.toLowerCase().includes("provide actual or forecast")) return true;
+    // Cross-field rules when pillar rows exist (TMPS, payroll, NPAT).
+    if (issue.field === "tmps" || issue.field === "payroll" || issue.field === "npat") {
+      return true;
+    }
+  }
+  if (issue.sectionKey === "ownership" && issue.field === "votingRights") {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Minimum validation for submit: compulsory client + financial meta only.
+ * Pillar grid row completeness is advisory — empty pillars score as zero.
+ */
+export function validateWorkbookForSubmit(
+  sections: WorkbookSectionsInput,
+): WorkbookValidationIssue[] {
+  return validateWorkbook(sections).filter(isCriticalWorkbookIssue);
 }
 
 export function formatWorkbookValidationSummary(

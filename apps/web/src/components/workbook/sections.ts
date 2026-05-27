@@ -782,3 +782,27 @@ export function getOrderedSectionKeysForSector(sectorCode?: string): string[] {
   }
   return out;
 }
+
+/**
+ * Cross-field validator for the financial-information meta section.
+ *
+ * Returns a map of { fieldKey: errorMessage } for fields that fail
+ * rules that depend on more than one field value.
+ *
+ * Currently enforced:
+ *  - payroll must be >= 0 because it is used as Leviable Amount for Skills
+ *    Development calculations.
+ */
+export function validateFinancialMetaCrossFields(
+  meta: Record<string, unknown>,
+): Record<string, string> {
+  const issues: Record<string, string> = {};
+
+  const payroll = typeof meta.payroll === "number" ? meta.payroll : undefined;
+  if (payroll !== undefined && payroll < 0) {
+    issues["payroll"] =
+      "Total Payroll (used as Leviable Amount for Skills) must be zero or positive.";
+  }
+
+  return issues;
+}

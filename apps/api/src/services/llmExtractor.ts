@@ -8,7 +8,7 @@
  */
 
 import { createLogger } from '../logger.js';
-import { extractCertificateData, type ExtractedCertificateData } from './certificateExtractor.js';
+import { extractCertificateData, isValidSupplierName, type ExtractedCertificateData } from './certificateExtractor.js';
 import {
   getAzureFastChatClient,
   isAzureOpenAIConfigured,
@@ -170,10 +170,13 @@ function validateAndMerge(
     return n;
   }
 
+  // SA VAT numbers are exactly 10 digits and always start with 4.
   function validateVat(v: unknown): string | null {
-    if (typeof v !== 'string') return null;
-    const digits = v.replace(/\D/g, '');
-    if (digits.length < 9 || digits.length > 12) return null;
+    const raw = typeof v === 'number' ? String(v) : typeof v === 'string' ? v : null;
+    if (!raw) return null;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length !== 10) return null;
+    if (!digits.startsWith('4')) return null;
     return digits;
   }
 
@@ -190,8 +193,12 @@ function validateAndMerge(
       ? (llmSize as CompanySize)
       : null;
 
+  const rawSupplier = validateStr(llm.supplierName);
+  const supplierName =
+    rawSupplier && isValidSupplierName(rawSupplier) ? rawSupplier.slice(0, 200) : null;
+
   return {
-    supplierName: validateStr(llm.supplierName) ?? regex.supplierName,
+    supplierName: supplierName ?? regex.supplierName,
     vatNumber: validateVat(llm.vatNumber) ?? regex.vatNumber,
     companySize: companySize ?? regex.companySize,
     bbbeeLevel: validateLevel(llm.bbbeeLevel) ?? regex.bbbeeLevel,

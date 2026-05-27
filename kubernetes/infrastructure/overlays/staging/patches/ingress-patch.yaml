@@ -11,6 +11,13 @@ spec:
     - host: okiru-staging.20.164.101.114.nip.io
       http:
         paths:
+          - path: /api/clients
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           - path: /api
             pathType: Prefix
             backend:

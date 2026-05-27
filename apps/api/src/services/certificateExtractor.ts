@@ -72,6 +72,20 @@ export interface ExtractedCertificateData {
   bbbeeScore: number | null;
 }
 
+/**
+ * Returns true when `name` looks like a genuine company name rather than
+ * garbage data (all digits, placeholders, single characters, etc.).
+ */
+export function isValidSupplierName(name: string): boolean {
+  const t = name.trim();
+  if (t.length < 3) return false;
+  if (/^\d+$/.test(t)) return false;                                   // pure number
+  if (/^[^a-zA-Z]+$/.test(t)) return false;                           // no letters at all
+  if ((t.match(/[a-zA-Z]/g) ?? []).length < 2) return false;          // fewer than 2 letters
+  if (/^(?:null|undefined|n\/a|none|unknown|n\.?a\.?)$/i.test(t)) return false;
+  return true;
+}
+
 /** @deprecated Prefer extractCertificateData — kept for call sites that only need date/level/name fields. */
 export type ExtractedDates = Pick<
   ExtractedCertificateData,
@@ -205,23 +219,47 @@ export function extractCertificateData(text: string, fileName: string): Extracte
   }
 
   const shortName = fileName.includes('/') ? fileName.split('/').pop()! : fileName;
-  const nameFromFile = shortName
-    .replace(/^\d{4}\s+\d{2}\s+\d{1,2}\s+/, '')
-    .replace(/\s*-\s*(EME|QSE|Generic|Large).*$/i, '')
-    .trim();
-  if (nameFromFile && nameFromFile !== shortName) {
-    result.supplierName = nameFromFile.replace(/\.[^/.]+$/, '');
+
+  // --- Supplier name: text patterns first, filename fallback ---
+  const textNamePatterns: RegExp[] = [
+    /(?:company\s*name|registered\s*(?:company\s*)?name|entity\s*(?:name)?|supplier\s*(?:name)?|organisation(?:al)?\s*(?:name)?|name\s*of\s*(?:entity|company|organisation))[:\s]+([^\n\r]{3,120})/i,
+    /(?:this\s+certificate\s+(?:is\s+)?issued\s+to|certificate\s+(?:is\s+)?issued\s+to|issued\s+to)[:\s]+([^\n\r]{3,120})/i,
+    /(?:trading\s+(?:as|name))[:\s]+([^\n\r]{3,120})/i,
+  ];
+  for (const p of textNamePatterns) {
+    const m = p.exec(normalised);
+    if (m) {
+      // Strip trailing noise: extra whitespace runs, leading label bleed
+      const raw = m[1].split(/\s{3,}|\t/)[0].replace(/[.,;:]+$/, '').trim();
+      if (isValidSupplierName(raw)) {
+        result.supplierName = raw.slice(0, 150);
+        break;
+      }
+    }
+  }
+  // Filename fallback: strip date prefix, size suffix, extension
+  if (!result.supplierName) {
+    const cleanName = shortName
+      .replace(/^\d{4}[\s_\-]+\d{2}[\s_\-]+\d{1,2}[\s_\-]+/, '')
+      .replace(/\s*-\s*(EME|QSE|Generic(?:\s*Enterprise)?|Large(?:\s*Enterprise)?)\s*$/i, '')
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[_]+/g, ' ')
+      .trim();
+    if (isValidSupplierName(cleanName)) {
+      result.supplierName = cleanName.slice(0, 150);
+    }
   }
 
   result.companySize = extractCompanySizeFromText(normalised) || extractCompanySizeFromFileName(shortName);
 
+  // SA VAT registration numbers are exactly 10 digits and always start with 4.
   const vatMatch =
-    /(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(\d{4}\s*\d{3}\s*\d{3}|\d{10})/i.exec(
+    /(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(4[\d\s]{9,13})/i.exec(
       normalised,
-    ) || /\b(?:vat|tin)\s*[#:]?\s*(\d{4}\s*\d{3}\s*\d{3}|\d{10})\b/i.exec(normalised);
+    ) || /\b(?:vat|tin)\s*[#:]?\s*(4[\d\s]{9,13})\b/i.exec(normalised);
   if (vatMatch) {
     const digits = vatMatch[1].replace(/\D/g, '');
-    if (digits.length >= 9 && digits.length <= 12) {
+    if (digits.length === 10 && digits.startsWith('4')) {
       result.vatNumber = digits;
     }
   }

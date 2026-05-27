@@ -658,7 +658,7 @@ export function BuildPillarsStep({
           )}
           <Button
             onClick={onNext}
-            disabled={pillarFormsLocked || completedCount === 0}
+            disabled={pillarFormsLocked}
             className="gap-2"
             title={pillarFormsLocked ? 'View-only access' : ''}
           >
