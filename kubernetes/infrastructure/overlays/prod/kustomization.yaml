@@ -19,11 +19,11 @@ patchesStrategicMerge:
 # Images - updated during deployment
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newTag: 26a81524-202605260922
+  newTag: b09db0fd-202605271052
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-  newTag: 26a81524-202605260922
+  newTag: b09db0fd-202605271052
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newTag: 2cf23c8d-202605260950
+  newTag: b09db0fd-202605271052
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
