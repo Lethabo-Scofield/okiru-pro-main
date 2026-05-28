@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
 
+/* ─────────────────────────────────────────────
+   GLOBAL CSS
+───────────────────────────────────────────── */
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
 
@@ -34,72 +37,166 @@ const GLOBAL_CSS = `
 
   /* ── NAV ── */
   .okiru-root .ok-nav {
-    position: fixed; top: 0; width: 100%; z-index: 200; height: 60px;
-    display: flex; align-items: center;
+    position: fixed; top: 0; width: 100%; z-index: 200;
     border-bottom: 1px solid rgba(255,255,255,0.07);
-    background: rgba(11,15,26,0.75); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: rgba(11,15,26,0.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    transition: background .3s;
   }
-  .okiru-root .ok-nav-w {
+  .okiru-root .ok-nav-inner {
     width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 48px;
-    display: flex; align-items: center; justify-content: space-between;
+    height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
   }
-  .okiru-root .ok-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
+  .okiru-root .ok-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; flex-shrink: 0; }
   .okiru-root .ok-brand-mark { width: 26px; height: 26px; display: block; transition: transform .35s ease; }
   .okiru-root .ok-brand:hover .ok-brand-mark { transform: rotate(8deg); }
   .okiru-root .ok-wordmark { font-family: var(--sans); font-weight: 500; font-size: 15px; color: var(--hi); letter-spacing: -0.02em; }
   .okiru-root .ok-wordmark strong { font-weight: 600; }
-  .okiru-root .ok-wordmark span { font-weight: 300; color: rgba(255,255,255,.6); }
+  .okiru-root .ok-wordmark span { font-weight: 300; color: rgba(255,255,255,.5); }
 
-  .okiru-root .ok-nav-links { display: flex; align-items: center; gap: 2px; }
+  .okiru-root .ok-nav-center { display: flex; align-items: center; gap: 2px; }
   .okiru-root .ok-nav-link {
     font-family: var(--sans); font-size: 13.5px; font-weight: 400;
-    color: rgba(255,255,255,0.62); background: none; border: none; cursor: pointer;
+    color: rgba(255,255,255,0.55); background: none; border: none; cursor: pointer;
     padding: 6px 13px; border-radius: 6px; transition: color .2s, background .2s; text-decoration: none;
+    white-space: nowrap;
   }
   .okiru-root .ok-nav-link:hover { color: var(--hi); background: rgba(255,255,255,0.05); }
+  .okiru-root .ok-nav-link.ok-nav-active { color: var(--hi); }
+  .okiru-root .ok-nav-div { width: 1px; height: 18px; background: rgba(255,255,255,0.1); margin: 0 4px; flex-shrink: 0; }
 
-  .okiru-root .ok-btn-demo {
+  .okiru-root .ok-nav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .okiru-root .ok-nav-signin {
+    font-family: var(--sans); font-size: 13px; font-weight: 400;
+    color: rgba(255,255,255,0.5); background: none; border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
+    padding: 7px 16px; border-radius: 6px; transition: color .2s, border-color .2s, background .2s;
+  }
+  .okiru-root .ok-nav-signin:hover { color: var(--hi); border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
+  .okiru-root .ok-nav-demo-btn {
     font-family: var(--sans); font-size: 13px; font-weight: 600;
     color: #fff; background: var(--coral); border: none; cursor: pointer;
     padding: 8px 18px; border-radius: 6px; letter-spacing: -0.01em;
     transition: background .2s, transform .15s;
-    display: inline-flex; align-items: center; gap: 7px;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   }
-  .okiru-root .ok-btn-demo:hover { background: #d4622f; transform: translateY(-1px); }
-  .okiru-root .ok-btn-demo .arr { display: inline-flex; transition: transform .2s; }
-  .okiru-root .ok-btn-demo:hover .arr { transform: translateX(3px); }
+  .okiru-root .ok-nav-demo-btn:hover { background: #d4622f; transform: translateY(-1px); }
+  .okiru-root .ok-nav-demo-btn .arr { display: inline-flex; transition: transform .2s; }
+  .okiru-root .ok-nav-demo-btn:hover .arr { transform: translateX(3px); }
 
   .okiru-root .ok-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 6px; color: var(--hi); }
   .okiru-root .ok-mobile-menu {
-    display: none; position: fixed; top: 60px; left: 0; right: 0; z-index: 199;
-    background: rgba(11,15,26,0.97); backdrop-filter: blur(24px);
-    border-bottom: 1px solid var(--rule); padding: 20px 24px; flex-direction: column; gap: 12px;
+    display: none; position: fixed; top: 62px; left: 0; right: 0; z-index: 199;
+    background: rgba(11,15,26,0.98); backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--rule); padding: 20px 24px 28px; flex-direction: column; gap: 4px;
   }
   .okiru-root .ok-mobile-menu.ok-menu-open { display: flex; }
+  .okiru-root .ok-mobile-link {
+    font-family: var(--sans); font-size: 15px; font-weight: 400;
+    color: rgba(255,255,255,.75); background: none; border: none; cursor: pointer;
+    padding: 12px 0; text-align: left; border-bottom: 1px solid rgba(255,255,255,.06); width: 100%;
+  }
+  .okiru-root .ok-mobile-link:last-of-type { border-bottom: none; }
+  .okiru-root .ok-mobile-link:hover { color: var(--hi); }
+  .okiru-root .ok-mobile-cta {
+    margin-top: 16px; width: 100%; padding: 14px; border-radius: 8px;
+    background: var(--coral); border: none; cursor: pointer; font-family: var(--sans);
+    font-size: 15px; font-weight: 600; color: #fff;
+  }
+
+  /* ── MODAL ── */
+  .okiru-root .ok-modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(5,8,18,0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    animation: okiru-fadeIn .2s ease;
+  }
+  @keyframes okiru-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes okiru-slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+  .okiru-root .ok-modal {
+    width: 100%; max-width: 540px; background: #0d1120;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+    animation: okiru-slideUp .25s ease;
+    overflow: hidden;
+  }
+  .okiru-root .ok-modal-head {
+    padding: 28px 32px 0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .okiru-root .ok-modal-title {
+    font-family: var(--serif); font-size: 1.55rem; color: var(--hi);
+    font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 6px;
+  }
+  .okiru-root .ok-modal-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .okiru-root .ok-modal-close {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; cursor: pointer; color: var(--muted); padding: 7px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background .2s, color .2s;
+  }
+  .okiru-root .ok-modal-close:hover { background: rgba(255,255,255,0.1); color: var(--hi); }
+
+  .okiru-root .ok-modal-body { padding: 24px 32px 32px; }
+  .okiru-root .ok-form { display: flex; flex-direction: column; gap: 16px; }
+  .okiru-root .ok-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .okiru-root .ok-field { display: flex; flex-direction: column; gap: 6px; }
+  .okiru-root .ok-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+  }
+  .okiru-root .ok-label .ok-req { color: var(--coral); margin-left: 2px; }
+  .okiru-root .ok-input, .okiru-root .ok-textarea {
+    font-family: var(--sans); font-size: 14px; font-weight: 400;
+    color: var(--hi); background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    padding: 11px 14px; outline: none; width: 100%;
+    transition: border-color .2s, background .2s;
+  }
+  .okiru-root .ok-input::placeholder, .okiru-root .ok-textarea::placeholder { color: rgba(255,255,255,0.2); }
+  .okiru-root .ok-input:focus, .okiru-root .ok-textarea:focus { border-color: rgba(99,102,241,0.55); background: rgba(99,102,241,0.04); }
+  .okiru-root .ok-input.ok-err { border-color: rgba(239,68,68,0.5); }
+  .okiru-root .ok-textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
+  .okiru-root .ok-field-err { font-size: 11.5px; color: #f87171; }
+  .okiru-root .ok-form-submit {
+    font-family: var(--sans); font-size: 15px; font-weight: 600; color: #fff;
+    background: var(--coral); border: none; cursor: pointer; padding: 14px 24px;
+    border-radius: 8px; transition: background .2s, transform .15s; display: flex;
+    align-items: center; justify-content: center; gap: 9px; margin-top: 4px;
+  }
+  .okiru-root .ok-form-submit:hover:not(:disabled) { background: #d4622f; transform: translateY(-1px); }
+  .okiru-root .ok-form-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+  .okiru-root .ok-modal-success {
+    padding: 48px 32px; text-align: center;
+  }
+  .okiru-root .ok-success-icon {
+    width: 52px; height: 52px; border-radius: 50%; background: rgba(52,211,153,.12);
+    border: 1px solid rgba(52,211,153,.25); display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px; color: var(--green);
+  }
+  .okiru-root .ok-success-title { font-family: var(--serif); font-size: 1.5rem; color: var(--hi); margin-bottom: 10px; }
+  .okiru-root .ok-success-sub { font-size: 14px; color: var(--muted); line-height: 1.75; max-width: 340px; margin: 0 auto; }
 
   /* ── CONTAINER ── */
   .okiru-root .ok-w { max-width: 1280px; margin: 0 auto; padding: 0 48px; }
 
   /* ── HERO ── */
   .okiru-root .ok-hero {
-    padding: 130px 0 52px; position: relative;
-    display: flex; align-items: center;
+    padding: 132px 0 52px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
-  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; background: var(--ink); }
+  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
   .okiru-root .ok-hero-beam {
     position: absolute; top: -10%; right: -5%; width: 55%; height: 120%;
     background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(180,210,255,0.055) 10deg, rgba(220,235,255,0.11) 18deg, rgba(200,220,255,0.07) 26deg, transparent 38deg);
-    pointer-events: none;
   }
   .okiru-root .ok-hero-beam-2 {
     position: absolute; top: -5%; right: 2%; width: 45%; height: 100%;
     background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(150,180,255,0.04) 6deg, rgba(180,205,255,0.08) 12deg, rgba(160,190,255,0.05) 18deg, transparent 28deg);
-    pointer-events: none;
   }
   .okiru-root .ok-hero-glow {
     position: absolute; top: -20%; right: -8%; width: 600px; height: 600px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 65%); pointer-events: none;
+    background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 65%);
   }
 
   .okiru-root .ok-hero-tag {
@@ -153,15 +250,6 @@ const GLOBAL_CSS = `
     padding: 13px 28px; border-radius: 999px; transition: border-color .2s, color .2s, background .2s;
   }
   .okiru-root .ok-btn-sec:hover { border-color: rgba(255,255,255,0.45); color: #fff; background: rgba(255,255,255,0.05); }
-  .okiru-root .ok-btn-main {
-    display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
-    font-size: 15px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.25); cursor: pointer; padding: 13px 28px;
-    border-radius: 999px; letter-spacing: -0.01em; transition: background .2s, border-color .2s;
-  }
-  .okiru-root .ok-btn-main:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.45); }
-  .okiru-root .ok-btn-main .arr { display: inline-flex; transition: transform .2s; }
-  .okiru-root .ok-btn-main:hover .arr { transform: translateX(3px); }
 
   /* ── SERVICE STRIP ── */
   .okiru-root .ok-services { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); }
@@ -173,7 +261,7 @@ const GLOBAL_CSS = `
 
   /* ── QUOTE ── */
   .okiru-root .ok-quote {
-    padding: 56px 0; border-bottom: 1px solid var(--rule);
+    padding: 56px 0 40px; border-bottom: 1px solid var(--rule);
     background: linear-gradient(to bottom, rgba(99,102,241,0.025) 0%, transparent 100%);
   }
   .okiru-root .ok-quote-inner { max-width: 820px; }
@@ -184,20 +272,16 @@ const GLOBAL_CSS = `
   }
   .okiru-root .ok-quote-text em { font-style: italic; color: var(--coral); }
 
-  /* ── SCROLL INDICATOR ── */
   .okiru-root .ok-scroll-ind {
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 36px;
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: rgba(255,255,255,0.25); width: 100%; margin-top: 40px;
+    color: rgba(255,255,255,0.2);
     animation: okiru-scrollBob 2.5s ease-in-out infinite;
   }
-  @keyframes okiru-scrollBob {
-    0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); }
-  }
+  @keyframes okiru-scrollBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
 
   /* ── SHARED SECTION STYLES ── */
   .okiru-root .ok-section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
-  .okiru-root .ok-section-sm { padding: 72px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-sec-num {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
     color: rgba(99,102,241,0.5); margin-bottom: 10px; display: block;
@@ -210,12 +294,10 @@ const GLOBAL_CSS = `
     font-family: var(--serif); font-size: clamp(1.9rem,3.2vw,2.8rem);
     color: var(--hi); font-weight: 400; letter-spacing: -0.025em; line-height: 1.08;
   }
-  .okiru-root .ok-h2 em { font-style: italic; color: var(--pur-l); }
   .okiru-root .ok-h3 {
     font-family: var(--serif); font-size: clamp(1.4rem,2.2vw,1.9rem);
     color: var(--hi); font-weight: 400; letter-spacing: -0.02em; line-height: 1.1;
   }
-  .okiru-root .ok-h3 em { font-style: italic; color: var(--coral); }
   .okiru-root .ok-lead { font-size: 15px; color: var(--body); line-height: 1.8; margin-top: 16px; }
   .okiru-root .ok-lead-l { font-size: 15px; color: var(--body); line-height: 1.8; margin-top: 16px; max-width: 42rem; }
 
@@ -223,73 +305,40 @@ const GLOBAL_CSS = `
   .okiru-root .ok-challenge-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; margin-top: 56px; }
   .okiru-root .ok-challenge-card {
     padding: 40px 36px; border: 1px solid var(--rule);
-    background: rgba(255,255,255,0.015); position: relative; overflow: hidden;
-    transition: background .3s;
+    background: rgba(255,255,255,0.015); position: relative; overflow: hidden; transition: background .3s;
   }
   .okiru-root .ok-challenge-card:hover { background: rgba(99,102,241,0.04); }
   .okiru-root .ok-challenge-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, var(--coral), transparent);
-    opacity: 0.6;
+    background: linear-gradient(90deg, var(--coral), transparent); opacity: 0.6;
   }
-  .okiru-root .ok-challenge-label {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--coral); margin-bottom: 14px; display: block;
-  }
-  .okiru-root .ok-challenge-title {
-    font-family: var(--serif); font-size: 1.3rem; color: var(--hi); font-weight: 400;
-    letter-spacing: -0.02em; margin-bottom: 10px;
-  }
-  .okiru-root .ok-challenge-stat {
-    font-family: var(--serif); font-size: 2.4rem; color: var(--hi); font-style: italic;
-    letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1;
-  }
-  .okiru-root .ok-challenge-stat-label {
-    font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em;
-    text-transform: uppercase; margin-bottom: 18px;
-  }
+  .okiru-root .ok-challenge-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--coral); margin-bottom: 14px; display: block; }
+  .okiru-root .ok-challenge-title { font-family: var(--serif); font-size: 1.3rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .okiru-root .ok-challenge-stat { font-family: var(--serif); font-size: 2.4rem; color: var(--hi); font-style: italic; letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1; }
+  .okiru-root .ok-challenge-stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
   .okiru-root .ok-challenge-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
 
   /* ── SECTION 03: WHO WE ARE ── */
   .okiru-root .ok-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; margin-top: 56px; }
-  .okiru-root .ok-about-pillars { display: flex; flex-direction: column; gap: 28px; margin-top: 40px; }
-  .okiru-root .ok-about-pillar {
-    display: grid; grid-template-columns: 56px 1fr; gap: 0;
-    padding: 28px 0; border-bottom: 1px solid var(--rule);
-  }
+  .okiru-root .ok-about-pillar { display: grid; grid-template-columns: 56px 1fr; padding: 28px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-about-pillar:last-child { border-bottom: none; }
-  .okiru-root .ok-about-pillar-num {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
-    text-transform: uppercase; color: rgba(99,102,241,.4); padding-top: 4px;
-  }
+  .okiru-root .ok-about-pillar-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); padding-top: 4px; }
   .okiru-root .ok-about-pillar-name { font-family: var(--serif); font-size: 1.1rem; color: var(--hi); font-weight: 400; margin-bottom: 5px; }
   .okiru-root .ok-about-pillar-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
   .okiru-root .ok-about-pillar-desc { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
   .okiru-root .ok-about-badges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
-  .okiru-root .ok-about-badge {
-    padding: 20px; border: 1px solid var(--rule); border-radius: 8px;
-    background: rgba(255,255,255,0.02);
-  }
+  .okiru-root .ok-about-badge { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: rgba(255,255,255,0.02); }
   .okiru-root .ok-about-badge-val { font-family: var(--serif); font-size: 1.8rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; }
   .okiru-root .ok-about-badge-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 5px; }
-  .okiru-root .ok-contact-strip {
-    margin-top: 36px; font-family: var(--mono); font-size: 11px;
-    color: rgba(255,255,255,0.35); letter-spacing: 0.06em;
-  }
-  .okiru-root .ok-contact-strip a { color: rgba(99,102,241,0.8); text-decoration: none; }
-  .okiru-root .ok-contact-strip a:hover { color: var(--pur-l); }
 
   /* ── SECTION 04: OKIRU DIFFERENCE ── */
   .okiru-root .ok-diff-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 0; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); margin-top: 56px; }
-  .okiru-root .ok-diff-card {
-    padding: 36px 32px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
-    transition: background .3s;
-  }
+  .okiru-root .ok-diff-card { padding: 36px 32px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); transition: background .3s; }
   .okiru-root .ok-diff-card:hover { background: rgba(99,102,241,0.03); }
   .okiru-root .ok-diff-idx { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(99,102,241,.4); margin-bottom: 14px; }
   .okiru-root .ok-diff-title { font-family: var(--serif); font-size: 1.15rem; color: var(--hi); font-weight: 400; margin-bottom: 10px; }
   .okiru-root .ok-diff-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
-  .okiru-root .ok-diff-stats { display: grid; grid-template-columns: repeat(6,1fr); border-top: 1px solid var(--rule); margin-top: 0; }
+  .okiru-root .ok-diff-stats { display: grid; grid-template-columns: repeat(6,1fr); border-top: 1px solid var(--rule); }
   .okiru-root .ok-diff-stat { padding: 28px 24px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-diff-stat:last-child { border-right: none; }
   .okiru-root .ok-diff-stat-n { font-family: var(--serif); font-size: 2rem; color: var(--hi); letter-spacing: -0.04em; line-height: 1; font-style: italic; }
@@ -298,57 +347,33 @@ const GLOBAL_CSS = `
   /* ── SECTION 05: TOOLKIT ── */
   .okiru-root .ok-toolkit-hdr { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-bottom: 56px; }
   .okiru-root .ok-toolkit-pillar-wrap { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; }
-  .okiru-root .ok-toolkit-pillar {
-    border: 1px solid var(--rule); padding: 32px 28px;
-    background: rgba(255,255,255,0.015); position: relative;
-  }
-  .okiru-root .ok-toolkit-pillar-letter {
-    font-family: var(--serif); font-style: italic; font-size: 3.5rem; line-height: 1;
-    letter-spacing: -0.05em; margin-bottom: 6px;
-  }
+  .okiru-root .ok-toolkit-pillar { border: 1px solid var(--rule); padding: 32px 28px; background: rgba(255,255,255,0.015); }
+  .okiru-root .ok-toolkit-pillar-letter { font-family: var(--serif); font-style: italic; font-size: 3.5rem; line-height: 1; letter-spacing: -0.05em; margin-bottom: 6px; }
   .okiru-root .ok-toolkit-pillar-name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .okiru-root .ok-toolkit-pillar-weight { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.35); letter-spacing: 0.04em; margin-bottom: 20px; }
   .okiru-root .ok-toolkit-items { list-style: none; display: flex; flex-direction: column; gap: 7px; }
   .okiru-root .ok-toolkit-items li { font-size: 12.5px; color: var(--muted); display: flex; align-items: flex-start; gap: 8px; line-height: 1.4; }
   .okiru-root .ok-toolkit-items li::before { content: '—'; color: rgba(99,102,241,.35); flex-shrink: 0; }
-  .okiru-root .ok-toolkit-bullets { display: flex; flex-direction: column; gap: 10px; margin-top: 40px; }
-  .okiru-root .ok-toolkit-bullet { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: rgba(255,255,255,.75); }
+  .okiru-root .ok-toolkit-bullet { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: rgba(255,255,255,.75); margin-bottom: 10px; }
   .okiru-root .ok-toolkit-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pur); box-shadow: 0 0 6px rgba(99,102,241,.5); flex-shrink: 0; margin-top: 8px; }
 
   /* ── SECTION 06: ARCHITECTURE ── */
   .okiru-root .ok-arch-layers { display: flex; flex-direction: column; gap: 2px; margin-top: 56px; }
-  .okiru-root .ok-arch-layer {
-    display: grid; grid-template-columns: 80px 1fr 1fr; gap: 0;
-    border: 1px solid var(--rule); background: rgba(255,255,255,0.015);
-    transition: background .3s;
-  }
+  .okiru-root .ok-arch-layer { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 0; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-arch-layer:hover { background: rgba(99,102,241,0.03); }
-  .okiru-root .ok-arch-num-col {
-    display: flex; align-items: center; justify-content: center;
-    border-right: 1px solid var(--rule); padding: 32px 16px;
-    font-family: var(--serif); font-size: 2.2rem; font-style: italic;
-    color: rgba(255,255,255,.15); letter-spacing: -0.04em;
-  }
+  .okiru-root .ok-arch-num-col { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--rule); padding: 32px 16px; font-family: var(--serif); font-size: 2.2rem; font-style: italic; color: rgba(255,255,255,.15); letter-spacing: -0.04em; }
   .okiru-root .ok-arch-main { padding: 32px 36px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-arch-detail { padding: 32px 36px; }
   .okiru-root .ok-arch-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 10px; }
   .okiru-root .ok-arch-title { font-family: var(--serif); font-size: 1.25rem; color: var(--hi); font-weight: 400; margin-bottom: 8px; }
   .okiru-root .ok-arch-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
   .okiru-root .ok-arch-sheets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-  .okiru-root .ok-arch-sheet {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em;
-    color: rgba(255,255,255,.4); background: rgba(255,255,255,.04);
-    border: 1px solid var(--rule); padding: 3px 8px; border-radius: 3px;
-  }
+  .okiru-root .ok-arch-sheet { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: rgba(255,255,255,.4); background: rgba(255,255,255,.04); border: 1px solid var(--rule); padding: 3px 8px; border-radius: 3px; }
 
   /* ── SECTION 07: FRAMEWORKS ── */
   .okiru-root .ok-fw-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; margin-top: 56px; }
-  .okiru-root .ok-fw-col-title {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--pur-l); margin-bottom: 20px; display: block;
-    padding-bottom: 12px; border-bottom: 1px solid var(--rule);
-  }
-  .okiru-root .ok-fw-items { list-style: none; display: flex; flex-direction: column; gap: 0; }
+  .okiru-root .ok-fw-col-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 20px; display: block; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+  .okiru-root .ok-fw-items { list-style: none; }
   .okiru-root .ok-fw-item { padding: 12px 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 3px; }
   .okiru-root .ok-fw-item:last-child { border-bottom: none; }
   .okiru-root .ok-fw-name { font-size: 13.5px; color: var(--hi); font-weight: 500; }
@@ -356,58 +381,36 @@ const GLOBAL_CSS = `
 
   /* ── SECTION 08: OUTCOMES ── */
   .okiru-root .ok-outcomes-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 2px; margin-top: 56px; }
-  .okiru-root .ok-outcome-card {
-    padding: 44px 40px; border: 1px solid var(--rule);
-    background: rgba(255,255,255,0.015); position: relative; overflow: hidden;
-    transition: background .3s;
-  }
+  .okiru-root .ok-outcome-card { padding: 44px 40px; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-outcome-card:hover { background: rgba(99,102,241,0.04); }
   .okiru-root .ok-outcome-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 14px; display: block; }
   .okiru-root .ok-outcome-title { font-family: var(--serif); font-size: 1.5rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 14px; }
   .okiru-root .ok-outcome-desc { font-size: 14px; color: var(--muted); line-height: 1.8; }
-  .okiru-root .ok-outcome-footer {
-    margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule);
-    font-family: var(--serif); font-style: italic; font-size: 13.5px; color: rgba(255,255,255,.4);
-  }
+  .okiru-root .ok-outcome-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); font-family: var(--serif); font-style: italic; font-size: 13.5px; color: rgba(255,255,255,.4); }
 
   /* ── SECTION 09: ENGAGEMENT ── */
   .okiru-root .ok-eng-hdr { display: grid; grid-template-columns: 1fr 2fr; gap: 80px; margin-bottom: 56px; }
   .okiru-root .ok-eng-phases { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; }
-  .okiru-root .ok-eng-phase {
-    padding: 36px 32px; border: 1px solid var(--rule);
-    background: rgba(255,255,255,0.015); position: relative;
-    transition: background .3s;
-  }
+  .okiru-root .ok-eng-phase { padding: 36px 32px; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); position: relative; transition: background .3s; }
   .okiru-root .ok-eng-phase:hover { background: rgba(99,102,241,0.04); }
-  .okiru-root .ok-eng-phase::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, var(--pur), transparent); opacity: 0.6;
-  }
+  .okiru-root .ok-eng-phase::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--pur), transparent); opacity: 0.6; }
   .okiru-root .ok-eng-phase-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); margin-bottom: 10px; }
   .okiru-root .ok-eng-phase-name { font-family: var(--serif); font-size: 1.25rem; color: var(--hi); font-weight: 400; margin-bottom: 4px; }
   .okiru-root .ok-eng-phase-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 20px; }
   .okiru-root .ok-eng-phase-items { list-style: none; display: flex; flex-direction: column; gap: 8px; }
   .okiru-root .ok-eng-phase-items li { font-size: 13px; color: rgba(255,255,255,.7); display: flex; align-items: flex-start; gap: 10px; }
   .okiru-root .ok-eng-phase-items li::before { content: '→'; color: rgba(99,102,241,.5); flex-shrink: 0; font-size: 12px; margin-top: 1px; }
-  .okiru-root .ok-eng-note { margin-top: 32px; font-size: 13.5px; color: var(--muted); line-height: 1.75; font-style: italic; }
 
-  /* ── SECTION 10: DASHBOARD SAMPLE ── */
+  /* ── SECTION 10: DASHBOARD ── */
   .okiru-root .ok-dash-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 40px; }
-  .okiru-root .ok-dash-score-card {
-    border: 1px solid var(--rule); border-radius: 8px; padding: 24px;
-    background: rgba(255,255,255,0.02);
-  }
+  .okiru-root .ok-dash-score-card { border: 1px solid var(--rule); border-radius: 8px; padding: 24px; background: rgba(255,255,255,0.02); }
   .okiru-root .ok-dash-score-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
   .okiru-root .ok-dash-score-val { font-family: var(--serif); font-size: 2rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; margin-bottom: 4px; }
   .okiru-root .ok-dash-score-status { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; }
   .okiru-root .ok-dash-score-gap { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .okiru-root .ok-dash-table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; }
   .okiru-root .ok-dash-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
-  .okiru-root .ok-dash-table th {
-    padding: 10px 14px; text-align: right; color: rgba(255,255,255,.35);
-    letter-spacing: 0.06em; text-transform: uppercase; background: rgba(255,255,255,.02);
-    border-bottom: 1px solid var(--rule); white-space: nowrap;
-  }
+  .okiru-root .ok-dash-table th { padding: 10px 14px; text-align: right; color: rgba(255,255,255,.35); letter-spacing: 0.06em; text-transform: uppercase; background: rgba(255,255,255,.02); border-bottom: 1px solid var(--rule); white-space: nowrap; }
   .okiru-root .ok-dash-table th:first-child { text-align: left; }
   .okiru-root .ok-dash-table td { padding: 10px 14px; text-align: right; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
   .okiru-root .ok-dash-table td:first-child { text-align: left; color: rgba(255,255,255,.6); }
@@ -420,30 +423,23 @@ const GLOBAL_CSS = `
   .okiru-root .ok-nz-target { border: 1px solid var(--rule); padding: 24px 20px; background: rgba(255,255,255,0.015); }
   .okiru-root .ok-nz-target-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
   .okiru-root .ok-nz-target-val { font-family: var(--serif); font-size: 1.7rem; color: var(--hi); letter-spacing: -0.03em; font-style: italic; line-height: 1; }
-  .okiru-root .ok-nz-table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; margin-bottom: 40px; }
   .okiru-root .ok-nz-milestones { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 40px; }
   .okiru-root .ok-nz-milestone { border: 1px solid var(--rule); border-radius: 8px; padding: 24px 20px; background: rgba(255,255,255,0.02); }
   .okiru-root .ok-nz-milestone-year { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--pur-l); margin-bottom: 6px; }
   .okiru-root .ok-nz-milestone-name { font-family: var(--serif); font-size: 1.1rem; color: var(--hi); font-weight: 400; margin-bottom: 8px; }
   .okiru-root .ok-nz-milestone-desc { font-size: 12.5px; color: var(--muted); line-height: 1.65; }
   .okiru-root .ok-nz-levers { display: flex; flex-wrap: wrap; gap: 10px; }
-  .okiru-root .ok-nz-lever {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
-    color: rgba(52,211,153,.8); background: rgba(52,211,153,.08);
-    border: 1px solid rgba(52,211,153,.2); padding: 6px 14px; border-radius: 4px;
-  }
+  .okiru-root .ok-nz-lever { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(52,211,153,.8); background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.2); padding: 6px 14px; border-radius: 4px; }
 
   /* ── SECTION 12: OKIRU PRO ── */
   .okiru-root .ok-pro-grid { display: grid; grid-template-columns: 5fr 7fr; gap: 0; border: 1px solid var(--rule); }
   .okiru-root .ok-pro-l { padding: 56px 52px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-pro-r { padding: 56px 52px; }
-  .okiru-root .ok-pro-steps { display: flex; flex-direction: column; gap: 0; margin-top: 28px; }
   .okiru-root .ok-pro-step { display: grid; grid-template-columns: 48px 1fr; padding: 22px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-pro-step:last-child { border-bottom: none; }
   .okiru-root .ok-pro-step-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); padding-top: 3px; }
   .okiru-root .ok-pro-step-title { font-family: var(--serif); font-size: 1.05rem; color: var(--hi); font-weight: 400; margin-bottom: 5px; }
   .okiru-root .ok-pro-step-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
-  .okiru-root .ok-hub-sectors { display: flex; flex-direction: column; gap: 0; }
   .okiru-root .ok-hub-sector { display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
   .okiru-root .ok-hub-sector:last-child { border-bottom: none; }
   .okiru-root .ok-hub-sector-code { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
@@ -464,13 +460,12 @@ const GLOBAL_CSS = `
   .okiru-root .ok-vs-table th:first-child { text-align: left; }
   .okiru-root .ok-vs-table th:last-child { border-right: none; }
   .okiru-root .ok-vs-table td { padding: 12px 16px; text-align: center; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,.04); border-right: 1px solid rgba(255,255,255,.04); font-size: 12.5px; }
-  .okiru-root .ok-vs-table td:first-child { text-align: left; color: rgba(255,255,255,.75); font-weight: 400; }
+  .okiru-root .ok-vs-table td:first-child { text-align: left; color: rgba(255,255,255,.75); }
   .okiru-root .ok-vs-table td:last-child { border-right: none; }
   .okiru-root .ok-vs-table tr:last-child td { border-bottom: none; }
-  .okiru-root .ok-vs-full { color: var(--green); font-weight: 600; }
+  .okiru-root .ok-vs-full { color: #34d399; font-weight: 600; }
   .okiru-root .ok-vs-basic { color: #fbbf24; }
   .okiru-root .ok-vs-none { color: rgba(255,255,255,.2); }
-  .okiru-root .ok-vs-okiru th:nth-child(2) { color: var(--hi); }
   .okiru-root .ok-vs-table-note { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.2); letter-spacing: 0.06em; margin-top: 12px; }
 
   /* ── SECTION 14: SECTORS ── */
@@ -491,12 +486,18 @@ const GLOBAL_CSS = `
   .okiru-root .ok-demo-contact-val { font-size: 14px; color: rgba(255,255,255,.75); }
   .okiru-root .ok-demo-contact-val a { color: var(--pur-l); text-decoration: none; }
   .okiru-root .ok-demo-contact-val a:hover { color: var(--hi); }
-  .okiru-root .ok-demo-agenda { display: flex; flex-direction: column; gap: 0; margin-top: 28px; }
   .okiru-root .ok-demo-agenda-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
   .okiru-root .ok-demo-agenda-item { display: grid; grid-template-columns: 100px 1fr; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
   .okiru-root .ok-demo-agenda-item:last-child { border-bottom: none; }
   .okiru-root .ok-demo-agenda-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.3); letter-spacing: 0.04em; padding-top: 1px; }
   .okiru-root .ok-demo-agenda-desc { font-size: 13.5px; color: rgba(255,255,255,.7); }
+
+  /* ── SCORECARD WIDGET ── */
+  .okiru-root .ok-sc-pillar-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .okiru-root .ok-sc-pillar-name { font-family: var(--sans); font-size: 11px; color: rgba(255,255,255,.55); letter-spacing: -0.01em; }
+  .okiru-root .ok-sc-pillar-val  { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.28); letter-spacing: .04em; }
+  .okiru-root .ok-sc-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.06); overflow: hidden; margin-bottom: 2px; }
+  .okiru-root .ok-sc-fill  { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(.22,1,.36,1); position: relative; overflow: hidden; }
 
   /* ── FOOTER ── */
   .okiru-root footer { padding: 40px 0; border-top: 1px solid var(--rule); }
@@ -513,13 +514,6 @@ const GLOBAL_CSS = `
   .okiru-root .ok-foot-link { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.35); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .2s ease; background: none; border: none; cursor: pointer; }
   .okiru-root .ok-foot-link:hover { color: var(--pur-l); }
 
-  /* ── SCORECARD WIDGET ── */
-  .okiru-root .ok-sc-pillar-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .okiru-root .ok-sc-pillar-name { font-family: var(--sans); font-size: 11px; color: rgba(255,255,255,.55); letter-spacing: -0.01em; }
-  .okiru-root .ok-sc-pillar-val  { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.28); letter-spacing: .04em; }
-  .okiru-root .ok-sc-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.06); overflow: hidden; margin-bottom: 2px; }
-  .okiru-root .ok-sc-fill  { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(.22,1,.36,1); position: relative; overflow: hidden; }
-
   /* ── REVEAL ── */
   .okiru-root .ok-reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .okiru-root .ok-reveal.ok-in { opacity: 1; transform: none; }
@@ -527,13 +521,15 @@ const GLOBAL_CSS = `
   .okiru-root .ok-d2 { transition-delay: .2s; }
   .okiru-root .ok-d3 { transition-delay: .3s; }
 
-  @keyframes okiru-slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
   .okiru-root .ok-anim-1 { opacity: 0; animation: okiru-slideUp .55s ease forwards .05s; }
   .okiru-root .ok-anim-2 { opacity: 0; animation: okiru-slideUp .7s ease forwards .18s; }
   .okiru-root .ok-anim-3 { opacity: 0; animation: okiru-slideUp .65s ease forwards .32s; }
   .okiru-root .ok-anim-4 { opacity: 0; animation: okiru-slideUp .6s ease forwards .46s; }
 
   /* ── RESPONSIVE ── */
+  @media (max-width: 1100px) {
+    .okiru-root .ok-nav-link { font-size: 13px; padding: 6px 10px; }
+  }
   @media (max-width: 1024px) {
     .okiru-root .ok-diff-grid { grid-template-columns: repeat(2,1fr); }
     .okiru-root .ok-diff-stats { grid-template-columns: repeat(3,1fr); }
@@ -546,7 +542,7 @@ const GLOBAL_CSS = `
     .okiru-root .ok-foot-grid { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 900px) {
-    .okiru-root .ok-nav-links { display: none; }
+    .okiru-root .ok-nav-center { display: none; }
     .okiru-root .ok-challenge-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-about-grid { grid-template-columns: 1fr; gap: 48px; }
     .okiru-root .ok-toolkit-hdr { grid-template-columns: 1fr; gap: 40px; }
@@ -561,17 +557,17 @@ const GLOBAL_CSS = `
     .okiru-root .ok-demo-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-demo-l { border-right: none; border-bottom: 1px solid var(--rule); }
     .okiru-root .ok-sectors-list { grid-template-columns: repeat(2,1fr); }
+    .okiru-root .ok-form-row { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
-    .okiru-root .ok-nav-w { padding: 0 20px; }
-    .okiru-root .ok-btn-demo { display: none; }
+    .okiru-root .ok-nav-inner { padding: 0 20px; }
+    .okiru-root .ok-nav-signin { display: none; }
+    .okiru-root .ok-nav-demo-btn { display: none; }
     .okiru-root .ok-hamburger { display: block; }
     .okiru-root .ok-w { padding: 0 20px; }
     .okiru-root .ok-hero { padding: 120px 0 48px; }
     .okiru-root .ok-h1 { font-size: clamp(2.4rem, 9vw, 3.2rem); }
-    .okiru-root .ok-hero-sub { font-size: 14px; }
     .okiru-root .ok-section { padding: 64px 0; }
-    .okiru-root .ok-section-sm { padding: 48px 0; }
     .okiru-root .ok-services { flex-direction: column; }
     .okiru-root .ok-service { border-right: none; border-bottom: 1px solid var(--rule); }
     .okiru-root .ok-service:last-child { border-bottom: none; }
@@ -580,7 +576,9 @@ const GLOBAL_CSS = `
     .okiru-root .ok-fw-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-sectors-list { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-foot-grid { grid-template-columns: 1fr; }
-    .okiru-root .ok-demo-grid { grid-template-columns: 1fr; }
+    .okiru-root .ok-modal { max-width: calc(100vw - 32px); }
+    .okiru-root .ok-modal-head { padding: 24px 24px 0; }
+    .okiru-root .ok-modal-body { padding: 20px 24px 24px; }
   }
   @media (max-width: 480px) {
     .okiru-root .ok-h1 { font-size: 2.2rem; }
@@ -592,6 +590,9 @@ const GLOBAL_CSS = `
   }
 `;
 
+/* ─────────────────────────────────────────────
+   CONSTANTS
+───────────────────────────────────────────── */
 const SERVICES = [
   { name: "B-BBEE", meta: "Certified experts" },
   { name: "ESG", meta: "Strategy & reporting" },
@@ -599,7 +600,16 @@ const SERVICES = [
   { name: "EE", meta: "Workforce equity" },
   { name: "WSP", meta: "Skills & reporting" },
 ];
-const NAV_LINKS = ["Toolkit", "Frameworks", "Engagement", "Net-Zero", "Why Okiru"];
+
+const NAV_LINKS = [
+  { label: "About", id: "sec-about" },
+  { label: "Toolkit", id: "sec-toolkit" },
+  { label: "Frameworks", id: "sec-frameworks" },
+  { label: "Net-Zero", id: "sec-netzero" },
+  { label: "Sectors", id: "sec-sectors" },
+  { label: "Contact", id: "sec-contact" },
+];
+
 const HUB_SECTORS = [
   { code: "RCOGP", name: "Retail, Construction, Oil & Gas, Property", meta: "2,985 nodes · 5,695 edges", color: "#60a5fa" },
   { code: "ICT", name: "Information & Communications Technology", meta: "5,193 nodes · 9,415 edges", color: "#a78bfa" },
@@ -607,14 +617,20 @@ const HUB_SECTORS = [
   { code: "AGRI", name: "Agriculture (AgriBEE)", meta: "3,281 nodes · 6,267 edges", color: "#34d399" },
 ];
 
+const PILLARS_SC = [
+  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f46e5,#818cf8)" },
+  { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#0ea5e9,#38bdf8)" },
+  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#34d399)" },
+  { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#d97706,#fbbf24)" },
+  { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#be185d,#f472b6)" },
+];
+
+/* ─────────────────────────────────────────────
+   SMALL ICONS
+───────────────────────────────────────────── */
 const ArrowRight = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-  </svg>
-);
-const Check = ({ size = 12 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
   </svg>
 );
 const MenuIcon = () => (
@@ -627,20 +643,20 @@ const CloseIcon = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+const CheckIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 const FullIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
-const PILLARS_SC = [
-  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f46e5,#818cf8)" },
-  { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#0ea5e9,#38bdf8)" },
-  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#34d399)" },
-  { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#d97706,#fbbf24)" },
-  { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#be185d,#f472b6)" },
-];
-
+/* ─────────────────────────────────────────────
+   HOOKS
+───────────────────────────────────────────── */
 function useReveal(threshold = 0.08) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -669,11 +685,17 @@ function useCountUp(target: number, active: boolean, duration = 900) {
   return val;
 }
 
+/* ─────────────────────────────────────────────
+   REVEAL WRAPPER
+───────────────────────────────────────────── */
 function Reveal({ children, delay = "", className = "" }: { children: React.ReactNode; delay?: string; className?: string }) {
   const [ref, visible] = useReveal();
   return <div ref={ref} className={`ok-reveal ${visible ? "ok-in" : ""} ${delay} ${className}`}>{children}</div>;
 }
 
+/* ─────────────────────────────────────────────
+   SCORECARD WIDGET
+───────────────────────────────────────────── */
 function PillarRow({ pillar, active }: { pillar: typeof PILLARS_SC[0]; active: boolean }) {
   const val = useCountUp(pillar.target, active, 900);
   return (
@@ -725,8 +747,7 @@ function Scorecard() {
         </div>
         <span style={{ fontSize:10, letterSpacing:".06em", color:"rgba(255,255,255,.22)" }}>scorecard.okiru.pro</span>
         <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:"rgba(255,255,255,.3)" }}>
-          <span style={{ width:5, height:5, borderRadius:"50%", background:"#6366f1", boxShadow:"0 0 6px #6366f1", animation:"okiru-scPulse 1.8s ease-in-out infinite", display:"block" }} />
-          live
+          <span style={{ width:5, height:5, borderRadius:"50%", background:"#6366f1", display:"block" }} />live
         </div>
       </div>
       <div style={{ padding: "20px 20px 18px" }}>
@@ -745,7 +766,7 @@ function Scorecard() {
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:14, borderTop:"1px solid rgba(255,255,255,0.05)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:10, color:"rgba(255,255,255,.3)", opacity:showFoot?1:0, transition:"opacity .5s" }}>
-            <Check size={12} /> Audit-ready
+            <CheckIcon /> Audit-ready
           </div>
           <button style={{ fontSize:10, color:"rgba(99,102,241,.7)", background:"none", border:"1px solid rgba(99,102,241,.2)", padding:"4px 11px", borderRadius:3, cursor:"pointer", fontFamily:"var(--mono)", letterSpacing:".04em", opacity:showFoot?1:0, transition:"opacity .5s" }}>Export Pack</button>
         </div>
@@ -754,9 +775,141 @@ function Scorecard() {
   );
 }
 
-export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
-  const goRegister = onNavigateRegister || onNavigateAuth;
+/* ─────────────────────────────────────────────
+   DEMO MODAL
+───────────────────────────────────────────── */
+interface DemoFormState {
+  name: string; company: string; email: string; phone: string; message: string;
+}
+interface DemoFormErrors {
+  name?: string; company?: string; email?: string;
+}
+
+function DemoModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState<DemoFormState>({ name: "", company: "", email: "", phone: "", message: "" });
+  const [errors, setErrors] = useState<DemoFormErrors>({});
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const set = (k: keyof DemoFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setForm(f => ({ ...f, [k]: e.target.value }));
+    if (errors[k as keyof DemoFormErrors]) setErrors(er => ({ ...er, [k]: undefined }));
+  };
+
+  const validate = () => {
+    const errs: DemoFormErrors = {};
+    if (!form.name.trim()) errs.name = "Name is required";
+    if (!form.company.trim()) errs.company = "Company is required";
+    if (!form.email.trim()) errs.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Enter a valid email";
+    return errs;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setLoading(true);
+    try {
+      await fetch("/api/demo-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      setSubmitted(true);
+    } catch {
+      setSubmitted(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  return (
+    <div className="ok-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ok-modal" role="dialog" aria-modal="true" aria-label="Book a demo">
+        {submitted ? (
+          <div className="ok-modal-success">
+            <div className="ok-success-icon"><CheckIcon /></div>
+            <div className="ok-success-title">Request received.</div>
+            <p className="ok-success-sub">
+              Thank you, <strong style={{ color:"var(--hi)" }}>{form.name}</strong>. We'll be in touch within one business day to confirm your 45-minute session.
+            </p>
+            <button className="ok-form-submit" style={{ marginTop:28, maxWidth:200, margin:"28px auto 0" }} onClick={onClose}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="ok-modal-head">
+              <div>
+                <div className="ok-modal-title">Book a 45-min demo</div>
+                <p className="ok-modal-sub">A working session — not a sales pitch. We'll walk through the live Okiru Toolkit mapped to your reporting cycle.</p>
+              </div>
+              <button className="ok-modal-close" onClick={onClose} aria-label="Close">
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="ok-modal-body">
+              <form className="ok-form" onSubmit={handleSubmit} noValidate>
+                <div className="ok-form-row">
+                  <div className="ok-field">
+                    <label className="ok-label">Name<span className="ok-req">*</span></label>
+                    <input className={`ok-input${errors.name ? " ok-err" : ""}`} value={form.name} onChange={set("name")} placeholder="Thabo Nkosi" autoFocus />
+                    {errors.name && <span className="ok-field-err">{errors.name}</span>}
+                  </div>
+                  <div className="ok-field">
+                    <label className="ok-label">Company<span className="ok-req">*</span></label>
+                    <input className={`ok-input${errors.company ? " ok-err" : ""}`} value={form.company} onChange={set("company")} placeholder="Acme Corp" />
+                    {errors.company && <span className="ok-field-err">{errors.company}</span>}
+                  </div>
+                </div>
+                <div className="ok-form-row">
+                  <div className="ok-field">
+                    <label className="ok-label">Email<span className="ok-req">*</span></label>
+                    <input type="email" className={`ok-input${errors.email ? " ok-err" : ""}`} value={form.email} onChange={set("email")} placeholder="you@company.co.za" />
+                    {errors.email && <span className="ok-field-err">{errors.email}</span>}
+                  </div>
+                  <div className="ok-field">
+                    <label className="ok-label">Phone <span style={{ opacity:.5, fontSize:9 }}>(optional)</span></label>
+                    <input className="ok-input" value={form.phone} onChange={set("phone")} placeholder="+27 78 000 0000" />
+                  </div>
+                </div>
+                <div className="ok-field">
+                  <label className="ok-label">Anything specific you'd like to cover? <span style={{ opacity:.5, fontSize:9 }}>(optional)</span></label>
+                  <textarea className="ok-textarea" value={form.message} onChange={set("message")} placeholder="e.g. We need to submit our B-BBEE certificate in Q1 and want to understand our Scope 2 exposure…" />
+                </div>
+                <button type="submit" className="ok-form-submit" disabled={loading}>
+                  {loading ? "Sending…" : <><span>Send request</span><span className="arr"><ArrowRight size={15} /></span></>}
+                </button>
+              </form>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────── */
+export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
+
+  const openDemo = () => { setDemoOpen(true); setMenuOpen(false); };
+
+  const scrollTo = (id: string) => {
+    setMenuOpen(false);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => {
     const id = "okiru-styles";
@@ -767,73 +920,72 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
   }, []);
 
   useEffect(() => {
-    if (menuOpen) {
-      document.body.style.overflow = "hidden";
-      const h = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
-      document.addEventListener("keydown", h);
-      return () => { document.body.style.overflow = ""; document.removeEventListener("keydown", h); };
-    }
-    document.body.style.overflow = "";
+    document.body.style.overflow = (menuOpen || demoOpen) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 761px)");
-    const h = () => { if (mq.matches) setMenuOpen(false); };
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
+  }, [menuOpen, demoOpen]);
 
   return (
     <div className="okiru-root">
-      <div className="okiru-grain" />
+      <div className="okiru-grain" aria-hidden />
+
+      {/* ── DEMO MODAL ── */}
+      {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
 
       {/* ── NAV ── */}
       <nav className="ok-nav">
-        <div className="ok-nav-w">
+        <div className="ok-nav-inner">
           <a href="/" className="ok-brand" aria-label="Okiru home">
             <img src={okiruLogo} alt="" className="ok-brand-mark" />
             <span className="ok-wordmark"><strong>Okiru</strong><span> Consulting</span></span>
           </a>
-          <div className="ok-nav-links">
-            {NAV_LINKS.map(link => (
-              <button key={link} className="ok-nav-link" onClick={link === "Toolkit" ? goRegister : undefined}>{link}</button>
+
+          <div className="ok-nav-center">
+            {NAV_LINKS.map((link, i) => (
+              <span key={link.id} style={{ display:"contents" }}>
+                {i === 5 && <div className="ok-nav-div" />}
+                <button className="ok-nav-link" onClick={() => scrollTo(link.id)}>
+                  {link.label}
+                </button>
+              </span>
             ))}
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <button className="ok-btn-demo" onClick={goRegister}>Book a demo <span className="arr"><ArrowRight size={13}/></span></button>
+
+          <div className="ok-nav-right">
+            <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
+            <button className="ok-nav-demo-btn" onClick={openDemo}>
+              Book a demo <span className="arr"><ArrowRight size={13} /></span>
+            </button>
             <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen}>
-              {menuOpen ? <CloseIcon/> : <MenuIcon/>}
+              {menuOpen ? <CloseIcon /> : <MenuIcon />}
             </button>
           </div>
         </div>
       </nav>
 
+      {/* ── MOBILE MENU ── */}
       <div className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
         {NAV_LINKS.map(link => (
-          <button key={link} className="ok-nav-link" style={{ textAlign:"left", padding:"12px 0", fontSize:16, color:"var(--hi)" }}
-            onClick={() => { setMenuOpen(false); if (link === "Toolkit") goRegister(); }}>{link}</button>
+          <button key={link.id} className="ok-mobile-link" onClick={() => scrollTo(link.id)}>{link.label}</button>
         ))}
-        <button className="ok-btn-demo" style={{ justifyContent:"center", borderRadius:6 }} onClick={() => { setMenuOpen(false); goRegister(); }}>
-          Book a demo <span className="arr"><ArrowRight size={13}/></span>
-        </button>
+        <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
+        <button className="ok-mobile-cta" onClick={openDemo}>Book a 45-min demo →</button>
       </div>
 
       <main>
         {/* ── 01: HERO ── */}
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <div className="ok-hero-beam"/><div className="ok-hero-beam-2"/><div className="ok-hero-glow"/>
+            <div className="ok-hero-beam" /><div className="ok-hero-beam-2" /><div className="ok-hero-glow" />
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-tag ok-anim-1">
-              <span className="ok-hero-tag-dot"/>
+              <span className="ok-hero-tag-dot" />
               ESG&nbsp;·&nbsp;B-BBEE&nbsp;·&nbsp;AI&nbsp;·&nbsp;Skills&nbsp;·&nbsp;WSP
-              <span className="ok-hero-tag-div"/>
+              <span className="ok-hero-tag-div" />
               <span className="ok-hero-tag-brand">Okiru Consulting&nbsp;&nbsp;·&nbsp;&nbsp;Est.&nbsp;2023</span>
             </div>
             <h1 className="ok-h1 ok-anim-2">
-              Transformation<br/>
+              Transformation<br />
               <span className="ok-h1-gradient">Toolkit.</span>
             </h1>
             <p className="ok-hero-sub ok-anim-3">
@@ -841,8 +993,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               businesses ready to transform. <strong>One toolkit. Every framework.</strong> Net-Zero ready.
             </p>
             <div className="ok-hero-btns ok-anim-4">
-              <button className="ok-btn-cta" onClick={goRegister}>Book a 45-min demo <span className="arr"><ArrowRight size={14}/></span></button>
-              <button className="ok-btn-sec" onClick={goRegister}>Explore the toolkit</button>
+              <button className="ok-btn-cta" onClick={openDemo}>
+                Book a 45-min demo <span className="arr"><ArrowRight size={14} /></span>
+              </button>
+              <button className="ok-btn-sec" onClick={() => scrollTo("sec-toolkit")}>Explore the toolkit</button>
             </div>
           </div>
         </section>
@@ -870,18 +1024,18 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           <div className="ok-scroll-ind" aria-hidden>
             <span>Scroll</span>
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="6" y1="1" x2="6" y2="13"/><polyline points="2 9 6 13 10 9"/>
+              <line x1="6" y1="1" x2="6" y2="13" /><polyline points="2 9 6 13 10 9" />
             </svg>
           </div>
         </section>
 
         {/* ── 02: THE CHALLENGE ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-challenge">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">02</span>
               <h2 className="ok-h2" style={{ marginBottom:12 }}>The Challenge</h2>
-              <p className="ok-h3" style={{ marginBottom:8 }}>Why most organisations<br/>can't get to Net Zero — and what Okiru solves.</p>
+              <p className="ok-h3" style={{ marginBottom:8 }}>Why most organisations can't get to Net Zero — and what Okiru solves.</p>
               <p className="ok-lead-l">Three structural gaps stand between South African organisations and credible, audit-grade transformation reporting.</p>
             </Reveal>
             <div className="ok-challenge-grid">
@@ -905,7 +1059,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
         </section>
 
         {/* ── 03: WHO WE ARE ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-about">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">03</span>
@@ -917,7 +1071,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                 <Reveal>
                   <h3 className="ok-h3">About Okiru Consulting</h3>
                   <p className="ok-lead" style={{ marginTop:14 }}>Founded in 2023, Okiru Consulting helps organisations turn ESG, B-BBEE, and compliance obligations into measurable, board-ready performance. Headquartered in Braamfontein, Johannesburg, our practice marries technology and human expertise to remove the friction between capturing data and disclosing it.</p>
-                  <p style={{ marginTop:16, fontSize:14, color:"var(--muted)", fontStyle:"italic", lineHeight:1.7 }}><strong style={{ color:"rgba(255,255,255,.7)", fontStyle:"normal" }}>Our Mission</strong><br/>To make transformation measurable, defensible and permanent for every South African organisation we serve.</p>
+                  <p style={{ marginTop:16, fontSize:14, color:"var(--muted)", lineHeight:1.7 }}><strong style={{ color:"rgba(255,255,255,.7)", fontStyle:"normal" }}>Our Mission</strong><br />To make transformation measurable, defensible and permanent for every South African organisation we serve.</p>
                 </Reveal>
                 <div className="ok-about-badges" style={{ marginTop:28 }}>
                   {[["Accuracy","Audit-grade outputs"],["Independence","Verifier-defensible"],["Transformation","Methodology-led"],["Innovation","60%+ time saved"]].map(([val, label]) => (
@@ -929,13 +1083,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                     </Reveal>
                   ))}
                 </div>
-                <div className="ok-contact-strip" style={{ marginTop:28 }}>
-                  <a href="mailto:contact@okiru.co.za">contact@okiru.co.za</a> · +27 78 104 6527 · <a href="https://okiru.co.za" target="_blank" rel="noopener">okiru.co.za</a>
-                  <div style={{ marginTop:6 }}>South Africa · 2050 · Built where transformation happens.</div>
-                </div>
               </div>
               <div>
-                <div className="ok-about-pillars">
+                <div style={{ display:"flex", flexDirection:"column" }}>
                   {[
                     { num:"01", name:"ESG Advisory", sub:"IFRS S1/S2 · GRI · TCFD · CDP · SBTi", desc:"Net-Zero strategy, GHG measurement, and board-ready sustainability disclosure for JSE-listed and private companies." },
                     { num:"02", name:"B-BBEE & Compliance", sub:"Generic & sector codes · Verification", desc:"Sector code strategy, EE Act compliance, Skills Development WSP/ATR, Employment Equity plans, and ownership advisory." },
@@ -994,7 +1144,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
         </section>
 
         {/* ── 05: THE TOOLKIT ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-toolkit">
           <div className="ok-w">
             <div className="ok-toolkit-hdr">
               <Reveal>
@@ -1003,9 +1153,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                 <p className="ok-lead" style={{ marginTop:8 }}>The measurement engine behind every Okiru engagement. Captures activity-based data at source, calculates emissions to international standards, and produces audit-grade outputs that feed directly into your sustainability reporting cycle.</p>
               </Reveal>
               <Reveal delay="ok-d1">
-                <div className="ok-toolkit-bullets">
+                <div style={{ marginTop:4 }}>
                   {["Scope 1, 2 & 3 activity-based measurement.","Linked to B-BBEE, WSP/ATR & EE plans.","IFRS S2 & King V aligned — board-ready."].map(b => (
-                    <div key={b} className="ok-toolkit-bullet"><div className="ok-toolkit-dot"/>{b}</div>
+                    <div key={b} className="ok-toolkit-bullet"><div className="ok-toolkit-dot" />{b}</div>
                   ))}
                 </div>
               </Reveal>
@@ -1067,7 +1217,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
         </section>
 
         {/* ── 07: FRAMEWORKS ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-frameworks">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">07</span>
@@ -1075,36 +1225,22 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               <p className="ok-lead-l" style={{ marginTop:8 }}>Globally recognised standards. Publicly defensible authority on every factor.</p>
             </Reveal>
             <div className="ok-fw-grid">
-              <div>
-                <Reveal>
-                  <span className="ok-fw-col-title">Global Disclosure Frameworks</span>
-                  <ul className="ok-fw-items">
-                    {[["GHG Protocol","Scope 1 / 2 / 3 inventory"],["IFRS S1 + S2","ISSB sustainability + climate"],["TCFD","6-family climate risk taxonomy"],["CDP","Climate + water disclosure"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["ISO 14083","Trip-level transport emissions"],["GRI","Topical standards"]].map(([n,d]) => (
-                      <li key={n} className="ok-fw-item"><span className="ok-fw-name">{n}</span><span className="ok-fw-desc">{d}</span></li>
-                    ))}
-                  </ul>
-                </Reveal>
-              </div>
-              <div>
-                <Reveal delay="ok-d1">
-                  <span className="ok-fw-col-title">South African Compliance</span>
-                  <ul className="ok-fw-items">
-                    {[["King V","Apply-or-Explain governance"],["B-BBEE Codes","All five pillars + sector forks"],["ISO 14001","Environmental management"],["EE / Skills Dev","EEA2/EEA4 · WSP/ATR"],["NEMWA","Waste classification & reporting"],["POPIA","Data protection compliance"]].map(([n,d]) => (
-                      <li key={n} className="ok-fw-item"><span className="ok-fw-name">{n}</span><span className="ok-fw-desc">{d}</span></li>
-                    ))}
-                  </ul>
-                </Reveal>
-              </div>
-              <div>
-                <Reveal delay="ok-d2">
-                  <span className="ok-fw-col-title">Emission Factors &amp; Standards</span>
-                  <ul className="ok-fw-items">
-                    {[["DEFRA 2024","GHG conversion factors — Scope 1 + 3"],["Eskom NERSA 2024","Scope 2 location-based, SA grid"],["GLEC Framework","80 gCO₂e/t·km road freight norm"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["IFRS S2","ISSB climate disclosure structure"],["King V","170-point Apply-or-Explain scorecard"]].map(([n,d]) => (
-                      <li key={n} className="ok-fw-item"><span className="ok-fw-name">{n}</span><span className="ok-fw-desc">{d}</span></li>
-                    ))}
-                  </ul>
-                </Reveal>
-              </div>
+              {[
+                { title:"Global Disclosure Frameworks", items:[["GHG Protocol","Scope 1 / 2 / 3 inventory"],["IFRS S1 + S2","ISSB sustainability + climate"],["TCFD","6-family climate risk taxonomy"],["CDP","Climate + water disclosure"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["ISO 14083","Trip-level transport emissions"],["GRI","Topical standards"]] },
+                { title:"South African Compliance", items:[["King V","Apply-or-Explain governance"],["B-BBEE Codes","All five pillars + sector forks"],["ISO 14001","Environmental management"],["EE / Skills Dev","EEA2/EEA4 · WSP/ATR"],["NEMWA","Waste classification & reporting"],["POPIA","Data protection compliance"]] },
+                { title:"Emission Factors & Standards", items:[["DEFRA 2024","GHG conversion factors — Scope 1 + 3"],["Eskom NERSA 2024","Scope 2 location-based, SA grid"],["GLEC Framework","80 gCO₂e/t·km road freight norm"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["IFRS S2","ISSB climate disclosure structure"],["King V","170-point Apply-or-Explain scorecard"]] },
+              ].map((col, ci) => (
+                <div key={col.title}>
+                  <Reveal delay={ci > 0 ? `ok-d${ci}` : ""}>
+                    <span className="ok-fw-col-title">{col.title}</span>
+                    <ul className="ok-fw-items">
+                      {col.items.map(([n,d]) => (
+                        <li key={n} className="ok-fw-item"><span className="ok-fw-name">{n}</span><span className="ok-fw-desc">{d}</span></li>
+                      ))}
+                    </ul>
+                  </Reveal>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -1123,14 +1259,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               { label:"Governance", title:"Single source of truth", desc:"One workbook. Every framework. Every number traces to a documented source row through a documented formula chain. The audit committee, auditor, JSE, and integrated report all see the same numbers calculated the same way." },
               { label:"Efficiency", title:"Clean data flows", desc:"Inputs captured once flow through to every framework simultaneously. No re-keying fleet litres into the GHG inventory, ISO 14083 register, Carbon Tax submission and CDP response separately." },
               { label:"Insight", title:"Embedded analytics", desc:"Year-on-year variance built in. Intensity ratios calculated automatically. Materiality flagged dynamically. The Stance toggle lets you stress-test performance under Lean, Standard and Strict scoring assumptions." },
-              { label:"Reporting", title:"Board-ready disclosure", desc:"Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function — not on a consultant's hard drive." },
+              { label:"Reporting", title:"Board-ready disclosure", desc:"Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function — not on a consultant's hard drive.", footer:"Not a portal. Not a certificate. A measurement system with people behind it." },
             ].map((o, i) => (
               <Reveal key={o.label} delay={i % 2 === 1 ? "ok-d1" : ""}>
                 <div className="ok-outcome-card">
                   <span className="ok-outcome-label">{o.label}</span>
                   <div className="ok-outcome-title">{o.title}</div>
                   <div className="ok-outcome-desc">{o.desc}</div>
-                  {i === 3 && <div className="ok-outcome-footer">Not a portal. Not a certificate. A measurement system with people behind it.</div>}
+                  {o.footer && <div className="ok-outcome-footer">{o.footer}</div>}
                 </div>
               </Reveal>
             ))}
@@ -1147,7 +1283,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               </Reveal>
               <Reveal delay="ok-d1">
                 <p className="ok-lead">From scoping session to live reporting cadence in three structured phases.</p>
-                <p className="ok-eng-note" style={{ marginTop:16 }}>Your team owns the data and the strategy. Okiru owns the methodology, data loading, and framework refresh as standards evolve.</p>
+                <p style={{ marginTop:16, fontSize:13.5, color:"var(--muted)", lineHeight:1.75, fontStyle:"italic" }}>Your team owns the data and the strategy. Okiru owns the methodology, data loading, and framework refresh as standards evolve.</p>
               </Reveal>
             </div>
             <div className="ok-eng-phases">
@@ -1200,10 +1336,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               <div className="ok-dash-table-wrap">
                 <table className="ok-dash-table">
                   <thead>
-                    <tr>
-                      <th>Scope</th>
-                      {["Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","YTD"].map(m => <th key={m}>{m}</th>)}
-                    </tr>
+                    <tr><th>Scope</th>{["Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","YTD"].map(m => <th key={m}>{m}</th>)}</tr>
                   </thead>
                   <tbody>
                     {[
@@ -1212,10 +1345,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                       { scope:"Scope 3 — Water", vals:["1.4","1.3","1.2","1.5","1.4","1.1","1.3","1.2","1.4","11.8"] },
                       { scope:"TOTAL Scope 1+2+3", vals:[457,436,419,409,389,394,376,431,436,"3,747"] },
                     ].map(r => (
-                      <tr key={r.scope}>
-                        <td>{r.scope}</td>
-                        {r.vals.map((v, i) => <td key={i}>{v}</td>)}
-                      </tr>
+                      <tr key={r.scope}><td>{r.scope}</td>{r.vals.map((v,i) => <td key={i}>{v}</td>)}</tr>
                     ))}
                   </tbody>
                 </table>
@@ -1226,7 +1356,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
         </section>
 
         {/* ── 11: NET-ZERO ROADMAP ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-netzero">
           <div className="ok-w">
             <div className="ok-nz-hdr">
               <Reveal>
@@ -1245,13 +1375,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               ))}
             </div>
             <Reveal>
-              <div className="ok-nz-table-wrap">
+              <div style={{ overflowX:"auto", border:"1px solid var(--rule)", borderRadius:8, marginBottom:40 }}>
                 <table className="ok-dash-table">
                   <thead>
-                    <tr>
-                      <th>Scope</th>
-                      {["Baseline","2026","2028","2030 (−50%)","2035 (−65%)","2050 Net-Zero"].map(h => <th key={h}>{h}</th>)}
-                    </tr>
+                    <tr><th>Scope</th>{["Baseline","2026","2028","2030 (−50%)","2035 (−65%)","2050 Net-Zero"].map(h => <th key={h}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
                     {[
@@ -1265,7 +1392,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                 </table>
               </div>
             </Reveal>
-            <div className="ok-nz-milestones" style={{ marginTop:32 }}>
+            <div className="ok-nz-milestones">
               {[
                 { year:"2025 · Pre-Recognised", name:"Baseline established", desc:"Baseline established. Submit SBTi commitment letter." },
                 { year:"2028 · Recognised", name:"−50% Scope 1+2", desc:"EV fleet phase-in. Solar at all depots." },
@@ -1303,7 +1430,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
             <div className="ok-pro-grid" style={{ marginTop:40 }}>
               <div className="ok-pro-l">
                 <Scorecard />
-                <div className="ok-pro-steps" style={{ marginTop:28 }}>
+                <div style={{ marginTop:28 }}>
                   {[
                     { num:"01", title:"Toolkit import", desc:"Our engine parses every sheet, maps every formula, and builds a full dependency graph — thousands of interconnected nodes per sector code." },
                     { num:"02", title:"Live scorecard", desc:"B-BBEE level, recognition percentage, and sub-minimum status update in real time across all five pillars against the latest sector codes." },
@@ -1323,7 +1450,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                 <Reveal>
                   <span className="ok-eyebrow">Okiru Hub · Sector Coverage</span>
                   <p className="ok-lead" style={{ marginTop:0 }}>Every sector code we've modelled — formula by formula.</p>
-                  <div className="ok-hub-sectors" style={{ marginTop:28 }}>
+                  <div style={{ marginTop:28 }}>
                     {HUB_SECTORS.map(s => (
                       <div key={s.code} className="ok-hub-sector">
                         <div className="ok-hub-sector-code" style={{ color:s.color }}>{s.code}</div>
@@ -1364,15 +1491,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
               ))}
             </div>
             <Reveal>
-              <p className="ok-eyebrow" style={{ marginBottom:16, marginTop:40 }}>Capability Matrix — Side-by-side · what each platform actually delivers</p>
+              <p className="ok-eyebrow" style={{ marginBottom:16, marginTop:40 }}>Capability Matrix</p>
               <div className="ok-vs-table-wrap">
-                <table className="ok-vs-table ok-vs-okiru">
+                <table className="ok-vs-table">
                   <thead>
                     <tr>
-                      <th>Capability</th>
-                      <th>Okiru B-BBEE + ESG</th>
-                      <th>BEE 123</th>
-                      <th>Updapt ESG Tech</th>
+                      <th>Capability</th><th>Okiru B-BBEE + ESG</th><th>BEE 123</th><th>Updapt ESG Tech</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1390,8 +1514,8 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                       <tr key={cap}>
                         <td>{cap}</td>
                         {vals.map((v, i) => (
-                          <td key={i} className={v === "Full" ? "ok-vs-full" : v === "Basic" || v === "B-BBEE only" || v === "B-BBEE codes" || v === "Cert. only" ? "ok-vs-basic" : "ok-vs-none"}>
-                            {v === "Full" ? <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}><FullIcon/> Full</span> : v === "—" ? "—" : v}
+                          <td key={i} className={v==="Full"?"ok-vs-full":v==="Basic"||v.includes("only")||v.includes("codes")?"ok-vs-basic":"ok-vs-none"}>
+                            {v==="Full"?<span style={{display:"inline-flex",alignItems:"center",gap:4}}><FullIcon/> Full</span>:v}
                           </td>
                         ))}
                       </tr>
@@ -1405,7 +1529,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
         </section>
 
         {/* ── 14: SECTORS ── */}
-        <section className="ok-section">
+        <section className="ok-section" id="sec-sectors">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">14</span>
@@ -1414,7 +1538,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
             </Reveal>
             <div className="ok-sectors-list">
               {[["01","Financial Services"],["02","Chemicals"],["03","Retail & Pharmacy"],["04","Public Sector"],["05","Logistics"],["06","Water & Utilities"],["07","Mid-Cap Corporates"],["08","JSE-Listed Corporates"]].map(([num, name], i) => (
-                <Reveal key={name} delay={i % 4 > 0 ? `ok-d${Math.min(i % 4, 3)}` : ""}>
+                <Reveal key={name} delay={i % 4 > 0 ? `ok-d${Math.min(i%4,3)}` : ""}>
                   <div className="ok-sector-item">
                     <div className="ok-sector-num">{num}</div>
                     <div className="ok-sector-name">{name}</div>
@@ -1426,15 +1550,15 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           </div>
         </section>
 
-        {/* ── 15: BOOK A DEMO ── */}
-        <section className="ok-section">
+        {/* ── 15: CONTACT / BOOK A DEMO ── */}
+        <section className="ok-section" id="sec-contact">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">15 · Book a Demo</span>
+              <span className="ok-sec-num">15 · Contact</span>
               <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>A 45-minute working session — not a sales pitch. We'll walk through the live Okiru Toolkit, map it to your reporting cycle, and show you the Net-Zero pathway implied by your own data.</p>
             </Reveal>
-            <div className="ok-demo-grid" style={{ marginTop:40 }}>
+            <div className="ok-demo-grid">
               <div className="ok-demo-l">
                 <h3 className="ok-h3" style={{ marginBottom:8 }}>Get in touch</h3>
                 <div className="ok-demo-contact">
@@ -1442,30 +1566,28 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
                     <div key={label} className="ok-demo-contact-item">
                       <span className="ok-demo-contact-label">{label}</span>
                       <span className="ok-demo-contact-val">
-                        {label === "Email" ? <a href={`mailto:${val}`}>{val}</a> : label === "Web" ? <a href={`https://${val}`} target="_blank" rel="noopener">{val}</a> : val}
+                        {label==="Email"?<a href={`mailto:${val}`}>{val}</a>:label==="Web"?<a href={`https://${val}`} target="_blank" rel="noopener">{val}</a>:val}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div style={{ marginTop:36 }}>
-                  <button className="ok-btn-cta" onClick={goRegister} style={{ fontSize:15 }}>
-                    Book a 45-min demo <span className="arr"><ArrowRight size={14}/></span>
+                  <button className="ok-btn-cta" onClick={openDemo}>
+                    Book a 45-min demo <span className="arr"><ArrowRight size={14} /></span>
                   </button>
                 </div>
               </div>
               <div className="ok-demo-r">
-                <div className="ok-demo-agenda">
-                  <div className="ok-demo-agenda-title">
-                    <span>Demo Agenda</span>
-                    <span style={{ color:"var(--pur-l)" }}>45 min</span>
-                  </div>
-                  {[["00:00 – 10:00","Your transformation reporting today"],["10:00 – 25:00","Live walkthrough · Okiru Toolkit"],["25:00 – 35:00","Net-Zero Roadmap · your data"],["35:00 – 45:00","Engagement model & next steps"]].map(([time, desc]) => (
-                    <div key={time} className="ok-demo-agenda-item">
-                      <span className="ok-demo-agenda-time">{time}</span>
-                      <span className="ok-demo-agenda-desc">{desc}</span>
-                    </div>
-                  ))}
+                <div className="ok-demo-agenda-title">
+                  <span>Demo Agenda</span>
+                  <span style={{ color:"var(--pur-l)" }}>45 min</span>
                 </div>
+                {[["00:00 – 10:00","Your transformation reporting today"],["10:00 – 25:00","Live walkthrough · Okiru Toolkit"],["25:00 – 35:00","Net-Zero Roadmap · your data"],["35:00 – 45:00","Engagement model & next steps"]].map(([time, desc]) => (
+                  <div key={time} className="ok-demo-agenda-item">
+                    <span className="ok-demo-agenda-time">{time}</span>
+                    <span className="ok-demo-agenda-desc">{desc}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1501,12 +1623,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           </div>
           <div className="ok-foot-bottom">
             <span className="ok-foot-wm">
-              <img src={okiruLogo} alt="" style={{ width:22, height:22, opacity:0.85 }}/>
+              <img src={okiruLogo} alt="" style={{ width:22, height:22, opacity:0.85 }} />
               Okiru Consulting
             </span>
             <span className="ok-foot-c">Compliance. Strategy. Growth. · Braamfontein, Johannesburg, South Africa</span>
             <div className="ok-foot-links">
-              <button className="ok-foot-link" onClick={onNavigateAuth} style={{ background:"none", border:"none", cursor:"pointer" }}>Sign in</button>
+              <button className="ok-foot-link" onClick={onNavigateAuth}>Sign in</button>
               <a href="/devmode" className="ok-foot-link" data-testid="link-devmode">{`{DevMode}`}</a>
             </div>
           </div>
@@ -1516,30 +1638,18 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
   );
 }
 
-const GLOBAL_KEYFRAMES = `
-  @keyframes okiru-scPulse {
-    0%,100% { opacity:1; box-shadow: 0 0 6px #6366f1; }
-    50% { opacity:.3; box-shadow: 0 0 2px #6366f1; }
-  }
-  @keyframes okiru-shimmer {
-    0% { left: -60%; } 100% { left: 120%; }
-  }
+/* Inject Scorecard keyframes once */
+const _KF = `
+  @keyframes okiru-scPulse { 0%,100%{opacity:1;box-shadow:0 0 6px #6366f1}50%{opacity:.3;box-shadow:0 0 2px #6366f1} }
+  .ok-sc-fill::after { content:''; position:absolute; top:0; left:-60%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: okiru-shimmer 2.2s ease-in-out infinite; }
+  @keyframes okiru-shimmer { 0%{left:-60%} 100%{left:120%} }
 `;
-
-// Inject keyframes needed by Scorecard inline styles
 if (typeof document !== "undefined") {
-  const id = "okiru-kf";
-  if (!document.getElementById(id)) {
-    const s = document.createElement("style"); s.id = id; s.textContent = GLOBAL_KEYFRAMES; document.head.appendChild(s);
-  }
-}
-
-// Pillar fill shimmer (used by inline scorecard)
-const _pillarsStyle = `.ok-sc-fill { position: relative; overflow: hidden; }
-.ok-sc-fill::after { content:''; position:absolute; top:0; left:-60%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent); animation: okiru-shimmer 2.2s ease-in-out infinite; }`;
-if (typeof document !== "undefined") {
-  const id = "okiru-sc-fill";
-  if (!document.getElementById(id)) {
-    const s = document.createElement("style"); s.id = id; s.textContent = _pillarsStyle; document.head.appendChild(s);
-  }
+  ["okiru-kf","okiru-sc-fill"].forEach((id, i) => {
+    if (!document.getElementById(id)) {
+      const s = document.createElement("style"); s.id = id; s.textContent = i === 0 ? _KF : ""; document.head.appendChild(s);
+    }
+  });
+  const kfEl = document.getElementById("okiru-kf");
+  if (kfEl && !kfEl.textContent?.includes("okiru-shimmer")) kfEl.textContent = _KF;
 }
