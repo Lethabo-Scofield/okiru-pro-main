@@ -14,7 +14,7 @@ import {
   canRestoreScorecard,
   normalizePillarScopes,
 } from "./scorecardCollaboration";
-import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, sendWorkspaceInviteEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
+import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, sendWorkspaceInviteEmail, sendDemoRequestEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel, OrganizationModel, UserModel } from "../shared/schema";
 import type { WorkspaceRole } from "../shared/schema";
 import { randomUUID } from "crypto";
@@ -144,6 +144,18 @@ export async function registerRoutes(
       uptime: process.uptime(),
       environment: isProduction ? 'production' : 'development',
     });
+  });
+
+  app.post('/api/demo-request', async (req: Request, res: Response) => {
+    const { name, company, email, phone, message } = req.body || {};
+    if (!name || !company || !email) {
+      return res.status(400).json({ error: 'name, company and email are required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    await sendDemoRequestEmail({ name: String(name).trim(), company: String(company).trim(), email: String(email).trim(), phone: phone ? String(phone).trim() : undefined, message: message ? String(message).trim() : undefined });
+    return res.json({ ok: true });
   });
 
   const REGISTERED_ORGANIZATIONS = [
