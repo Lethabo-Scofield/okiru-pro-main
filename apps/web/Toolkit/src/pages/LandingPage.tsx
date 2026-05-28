@@ -9,17 +9,25 @@ const GLOBAL_CSS = `
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
-    --ink:   #0b0f1a;
-    --ink2:  #0d1220;
-    --rule:  rgba(255,255,255,0.07);
-    --muted: rgba(255,255,255,0.32);
-    --body:  rgba(255,255,255,0.56);
-    --hi:    rgba(255,255,255,0.92);
-    --pur:   #6366f1;
-    --pur-d: #4338ca;
-    --pur-l: #818cf8;
-    --coral: #e8724a;
-    --green: #34d399;
+    --ink:    #0b0f1a;
+    --ink2:   #0d1220;
+    --rule:   rgba(255,255,255,0.07);
+    --muted:  rgba(255,255,255,0.32);
+    --body:   rgba(255,255,255,0.56);
+    --hi:     rgba(255,255,255,0.92);
+    /* Logo brand palette */
+    --orange: #e8441a;
+    --cyan:   #06b6d4;
+    --pur:    #9333ea;
+    --pur-d:  #7e22ce;
+    --pur-l:  #c084fc;
+    --coral:  #e8441a;
+    --green:  #34d399;
+    /* Logo gradient — orange → cyan → purple */
+    --grad:       linear-gradient(135deg, #e8441a 0%, #06b6d4 50%, #9333ea 100%);
+    --grad-r:     linear-gradient(135deg, #9333ea 0%, #06b6d4 50%, #e8441a 100%);
+    --grad-text:  linear-gradient(100deg, #e8441a 0%, #06b6d4 48%, #9333ea 95%);
+    --grad-h:     linear-gradient(90deg, #e8441a, #06b6d4, #9333ea);
     --mono:  'Geist Mono', monospace;
     --serif: 'Instrument Serif', serif;
     --sans:  'Geist', sans-serif;
@@ -27,7 +35,7 @@ const GLOBAL_CSS = `
     font-family: var(--sans); font-weight: 300;
     font-size: 15px; line-height: 1.65; overflow-x: hidden; min-height: 100%;
   }
-  .okiru-root ::selection { background: rgba(99,102,241,0.25); }
+  .okiru-root ::selection { background: rgba(6,182,212,0.22); }
 
   .okiru-root .okiru-grain {
     position: fixed; inset: 0; z-index: 500; pointer-events: none; opacity: 0.032;
@@ -73,12 +81,12 @@ const GLOBAL_CSS = `
   .okiru-root .ok-nav-signin:hover { color: var(--hi); border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
   .okiru-root .ok-nav-demo-btn {
     font-family: var(--sans); font-size: 13px; font-weight: 600;
-    color: #fff; background: var(--coral); border: none; cursor: pointer;
+    color: #fff; background: var(--grad); border: none; cursor: pointer;
     padding: 8px 18px; border-radius: 6px; letter-spacing: -0.01em;
-    transition: background .2s, transform .15s;
+    transition: opacity .2s, transform .15s;
     display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   }
-  .okiru-root .ok-nav-demo-btn:hover { background: #d4622f; transform: translateY(-1px); }
+  .okiru-root .ok-nav-demo-btn:hover { opacity: 0.88; transform: translateY(-1px); }
   .okiru-root .ok-nav-demo-btn .arr { display: inline-flex; transition: transform .2s; }
   .okiru-root .ok-nav-demo-btn:hover .arr { transform: translateX(3px); }
 
@@ -98,7 +106,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-mobile-link:hover { color: var(--hi); }
   .okiru-root .ok-mobile-cta {
     margin-top: 16px; width: 100%; padding: 14px; border-radius: 8px;
-    background: var(--coral); border: none; cursor: pointer; font-family: var(--sans);
+    background: var(--grad); border: none; cursor: pointer; font-family: var(--sans);
     font-size: 15px; font-weight: 600; color: #fff;
   }
 
@@ -153,17 +161,17 @@ const GLOBAL_CSS = `
     transition: border-color .2s, background .2s;
   }
   .okiru-root .ok-input::placeholder, .okiru-root .ok-textarea::placeholder { color: rgba(255,255,255,0.2); }
-  .okiru-root .ok-input:focus, .okiru-root .ok-textarea:focus { border-color: rgba(99,102,241,0.55); background: rgba(99,102,241,0.04); }
+  .okiru-root .ok-input:focus, .okiru-root .ok-textarea:focus { border-color: rgba(6,182,212,0.5); background: rgba(6,182,212,0.03); }
   .okiru-root .ok-input.ok-err { border-color: rgba(239,68,68,0.5); }
   .okiru-root .ok-textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
   .okiru-root .ok-field-err { font-size: 11.5px; color: #f87171; }
   .okiru-root .ok-form-submit {
     font-family: var(--sans); font-size: 15px; font-weight: 600; color: #fff;
-    background: var(--coral); border: none; cursor: pointer; padding: 14px 24px;
-    border-radius: 8px; transition: background .2s, transform .15s; display: flex;
+    background: var(--grad); border: none; cursor: pointer; padding: 14px 24px;
+    border-radius: 8px; transition: opacity .2s, transform .15s; display: flex;
     align-items: center; justify-content: center; gap: 9px; margin-top: 4px;
   }
-  .okiru-root .ok-form-submit:hover:not(:disabled) { background: #d4622f; transform: translateY(-1px); }
+  .okiru-root .ok-form-submit:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
   .okiru-root .ok-form-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
   .okiru-root .ok-modal-success {
@@ -188,15 +196,19 @@ const GLOBAL_CSS = `
   .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
   .okiru-root .ok-hero-beam {
     position: absolute; top: -10%; right: -5%; width: 55%; height: 120%;
-    background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(180,210,255,0.055) 10deg, rgba(220,235,255,0.11) 18deg, rgba(200,220,255,0.07) 26deg, transparent 38deg);
+    background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(6,182,212,0.06) 10deg, rgba(147,51,234,0.10) 18deg, rgba(232,68,26,0.05) 26deg, transparent 38deg);
   }
   .okiru-root .ok-hero-beam-2 {
     position: absolute; top: -5%; right: 2%; width: 45%; height: 100%;
-    background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(150,180,255,0.04) 6deg, rgba(180,205,255,0.08) 12deg, rgba(160,190,255,0.05) 18deg, transparent 28deg);
+    background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(232,68,26,0.04) 6deg, rgba(6,182,212,0.07) 12deg, rgba(147,51,234,0.04) 18deg, transparent 28deg);
   }
   .okiru-root .ok-hero-glow {
-    position: absolute; top: -20%; right: -8%; width: 600px; height: 600px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 65%);
+    position: absolute; top: -20%; right: -8%; width: 700px; height: 700px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, rgba(147,51,234,0.05) 40%, transparent 70%);
+  }
+  .okiru-root .ok-hero-glow-2 {
+    position: absolute; bottom: -10%; left: -5%; width: 500px; height: 500px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(232,68,26,0.06) 0%, transparent 65%);
   }
 
   .okiru-root .ok-hero-tag {
@@ -225,7 +237,7 @@ const GLOBAL_CSS = `
   }
   .okiru-root .ok-h1-gradient {
     display: block;
-    background: linear-gradient(100deg, #f97316 0%, #ef4444 38%, #a855f7 80%);
+    background: var(--grad-text);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-style: italic;
   }
   .okiru-root .ok-hero-sub {
@@ -237,11 +249,11 @@ const GLOBAL_CSS = `
 
   .okiru-root .ok-btn-cta {
     display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
-    font-size: 15px; font-weight: 600; color: #0b0f1a; background: rgba(255,255,255,0.94);
+    font-size: 15px; font-weight: 600; color: #fff; background: var(--grad);
     border: none; cursor: pointer; padding: 13px 28px; border-radius: 999px;
-    letter-spacing: -0.01em; transition: background .2s, transform .15s;
+    letter-spacing: -0.01em; transition: opacity .2s, transform .15s; position: relative;
   }
-  .okiru-root .ok-btn-cta:hover { background: #fff; transform: translateY(-1px); }
+  .okiru-root .ok-btn-cta:hover { opacity: 0.88; transform: translateY(-1px); }
   .okiru-root .ok-btn-cta .arr { display: inline-flex; transition: transform .2s; }
   .okiru-root .ok-btn-cta:hover .arr { transform: translateX(3px); }
   .okiru-root .ok-btn-sec {
@@ -262,7 +274,7 @@ const GLOBAL_CSS = `
   /* ── QUOTE ── */
   .okiru-root .ok-quote {
     padding: 56px 0 40px; border-bottom: 1px solid var(--rule);
-    background: linear-gradient(to bottom, rgba(99,102,241,0.025) 0%, transparent 100%);
+    background: linear-gradient(to bottom, rgba(6,182,212,0.025) 0%, transparent 100%);
   }
   .okiru-root .ok-quote-inner { max-width: 820px; }
   .okiru-root .ok-quote-text {
@@ -284,11 +296,12 @@ const GLOBAL_CSS = `
   .okiru-root .ok-section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-sec-num {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
-    color: rgba(99,102,241,0.5); margin-bottom: 10px; display: block;
+    background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 10px; display: inline-block;
   }
   .okiru-root .ok-eyebrow {
     font-family: var(--mono); font-size: 10px; text-transform: uppercase;
-    letter-spacing: 0.14em; color: var(--pur-l); margin-bottom: 16px; display: block;
+    letter-spacing: 0.14em; color: #22d3ee; margin-bottom: 16px; display: block;
   }
   .okiru-root .ok-h2 {
     font-family: var(--serif); font-size: clamp(1.9rem,3.2vw,2.8rem);
@@ -310,9 +323,9 @@ const GLOBAL_CSS = `
   .okiru-root .ok-challenge-card:hover { background: rgba(99,102,241,0.04); }
   .okiru-root .ok-challenge-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, var(--coral), transparent); opacity: 0.6;
+    background: var(--grad-h); opacity: 0.7;
   }
-  .okiru-root .ok-challenge-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--coral); margin-bottom: 14px; display: block; }
+  .okiru-root .ok-challenge-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #06b6d4; margin-bottom: 14px; display: block; }
   .okiru-root .ok-challenge-title { font-family: var(--serif); font-size: 1.3rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 10px; }
   .okiru-root .ok-challenge-stat { font-family: var(--serif); font-size: 2.4rem; color: var(--hi); font-style: italic; letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1; }
   .okiru-root .ok-challenge-stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
@@ -322,7 +335,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; margin-top: 56px; }
   .okiru-root .ok-about-pillar { display: grid; grid-template-columns: 56px 1fr; padding: 28px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-about-pillar:last-child { border-bottom: none; }
-  .okiru-root .ok-about-pillar-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); padding-top: 4px; }
+  .okiru-root .ok-about-pillar-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(6,182,212,.5); padding-top: 4px; }
   .okiru-root .ok-about-pillar-name { font-family: var(--serif); font-size: 1.1rem; color: var(--hi); font-weight: 400; margin-bottom: 5px; }
   .okiru-root .ok-about-pillar-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
   .okiru-root .ok-about-pillar-desc { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
@@ -335,7 +348,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-diff-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 0; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); margin-top: 56px; }
   .okiru-root .ok-diff-card { padding: 36px 32px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); transition: background .3s; }
   .okiru-root .ok-diff-card:hover { background: rgba(99,102,241,0.03); }
-  .okiru-root .ok-diff-idx { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(99,102,241,.4); margin-bottom: 14px; }
+  .okiru-root .ok-diff-idx { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(6,182,212,.5); margin-bottom: 14px; }
   .okiru-root .ok-diff-title { font-family: var(--serif); font-size: 1.15rem; color: var(--hi); font-weight: 400; margin-bottom: 10px; }
   .okiru-root .ok-diff-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
   .okiru-root .ok-diff-stats { display: grid; grid-template-columns: repeat(6,1fr); border-top: 1px solid var(--rule); }
@@ -353,9 +366,9 @@ const GLOBAL_CSS = `
   .okiru-root .ok-toolkit-pillar-weight { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.35); letter-spacing: 0.04em; margin-bottom: 20px; }
   .okiru-root .ok-toolkit-items { list-style: none; display: flex; flex-direction: column; gap: 7px; }
   .okiru-root .ok-toolkit-items li { font-size: 12.5px; color: var(--muted); display: flex; align-items: flex-start; gap: 8px; line-height: 1.4; }
-  .okiru-root .ok-toolkit-items li::before { content: '—'; color: rgba(99,102,241,.35); flex-shrink: 0; }
+  .okiru-root .ok-toolkit-items li::before { content: '—'; color: rgba(6,182,212,.4); flex-shrink: 0; }
   .okiru-root .ok-toolkit-bullet { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: rgba(255,255,255,.75); margin-bottom: 10px; }
-  .okiru-root .ok-toolkit-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pur); box-shadow: 0 0 6px rgba(99,102,241,.5); flex-shrink: 0; margin-top: 8px; }
+  .okiru-root .ok-toolkit-dot { width: 5px; height: 5px; border-radius: 50%; background: #06b6d4; box-shadow: 0 0 8px rgba(6,182,212,.6); flex-shrink: 0; margin-top: 8px; }
 
   /* ── SECTION 06: ARCHITECTURE ── */
   .okiru-root .ok-arch-layers { display: flex; flex-direction: column; gap: 2px; margin-top: 56px; }
@@ -364,7 +377,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-arch-num-col { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--rule); padding: 32px 16px; font-family: var(--serif); font-size: 2.2rem; font-style: italic; color: rgba(255,255,255,.15); letter-spacing: -0.04em; }
   .okiru-root .ok-arch-main { padding: 32px 36px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-arch-detail { padding: 32px 36px; }
-  .okiru-root .ok-arch-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 10px; }
+  .okiru-root .ok-arch-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #22d3ee; margin-bottom: 10px; }
   .okiru-root .ok-arch-title { font-family: var(--serif); font-size: 1.25rem; color: var(--hi); font-weight: 400; margin-bottom: 8px; }
   .okiru-root .ok-arch-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
   .okiru-root .ok-arch-sheets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
@@ -372,7 +385,7 @@ const GLOBAL_CSS = `
 
   /* ── SECTION 07: FRAMEWORKS ── */
   .okiru-root .ok-fw-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; margin-top: 56px; }
-  .okiru-root .ok-fw-col-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 20px; display: block; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+  .okiru-root .ok-fw-col-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #22d3ee; margin-bottom: 20px; display: block; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-fw-items { list-style: none; }
   .okiru-root .ok-fw-item { padding: 12px 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 3px; }
   .okiru-root .ok-fw-item:last-child { border-bottom: none; }
@@ -383,7 +396,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-outcomes-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 2px; margin-top: 56px; }
   .okiru-root .ok-outcome-card { padding: 44px 40px; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-outcome-card:hover { background: rgba(99,102,241,0.04); }
-  .okiru-root .ok-outcome-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pur-l); margin-bottom: 14px; display: block; }
+  .okiru-root .ok-outcome-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #22d3ee; margin-bottom: 14px; display: block; }
   .okiru-root .ok-outcome-title { font-family: var(--serif); font-size: 1.5rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 14px; }
   .okiru-root .ok-outcome-desc { font-size: 14px; color: var(--muted); line-height: 1.8; }
   .okiru-root .ok-outcome-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); font-family: var(--serif); font-style: italic; font-size: 13.5px; color: rgba(255,255,255,.4); }
@@ -393,13 +406,13 @@ const GLOBAL_CSS = `
   .okiru-root .ok-eng-phases { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; }
   .okiru-root .ok-eng-phase { padding: 36px 32px; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); position: relative; transition: background .3s; }
   .okiru-root .ok-eng-phase:hover { background: rgba(99,102,241,0.04); }
-  .okiru-root .ok-eng-phase::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--pur), transparent); opacity: 0.6; }
-  .okiru-root .ok-eng-phase-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); margin-bottom: 10px; }
+  .okiru-root .ok-eng-phase::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--grad-h); opacity: 0.65; }
+  .okiru-root .ok-eng-phase-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(6,182,212,.55); margin-bottom: 10px; }
   .okiru-root .ok-eng-phase-name { font-family: var(--serif); font-size: 1.25rem; color: var(--hi); font-weight: 400; margin-bottom: 4px; }
   .okiru-root .ok-eng-phase-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 20px; }
   .okiru-root .ok-eng-phase-items { list-style: none; display: flex; flex-direction: column; gap: 8px; }
   .okiru-root .ok-eng-phase-items li { font-size: 13px; color: rgba(255,255,255,.7); display: flex; align-items: flex-start; gap: 10px; }
-  .okiru-root .ok-eng-phase-items li::before { content: '→'; color: rgba(99,102,241,.5); flex-shrink: 0; font-size: 12px; margin-top: 1px; }
+  .okiru-root .ok-eng-phase-items li::before { content: '→'; color: #06b6d4; flex-shrink: 0; font-size: 12px; margin-top: 1px; }
 
   /* ── SECTION 10: DASHBOARD ── */
   .okiru-root .ok-dash-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 40px; }
@@ -425,11 +438,11 @@ const GLOBAL_CSS = `
   .okiru-root .ok-nz-target-val { font-family: var(--serif); font-size: 1.7rem; color: var(--hi); letter-spacing: -0.03em; font-style: italic; line-height: 1; }
   .okiru-root .ok-nz-milestones { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 40px; }
   .okiru-root .ok-nz-milestone { border: 1px solid var(--rule); border-radius: 8px; padding: 24px 20px; background: rgba(255,255,255,0.02); }
-  .okiru-root .ok-nz-milestone-year { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--pur-l); margin-bottom: 6px; }
+  .okiru-root .ok-nz-milestone-year { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: #22d3ee; margin-bottom: 6px; }
   .okiru-root .ok-nz-milestone-name { font-family: var(--serif); font-size: 1.1rem; color: var(--hi); font-weight: 400; margin-bottom: 8px; }
   .okiru-root .ok-nz-milestone-desc { font-size: 12.5px; color: var(--muted); line-height: 1.65; }
   .okiru-root .ok-nz-levers { display: flex; flex-wrap: wrap; gap: 10px; }
-  .okiru-root .ok-nz-lever { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(52,211,153,.8); background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.2); padding: 6px 14px; border-radius: 4px; }
+  .okiru-root .ok-nz-lever { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(6,182,212,.9); background: rgba(6,182,212,.07); border: 1px solid rgba(6,182,212,.2); padding: 6px 14px; border-radius: 4px; }
 
   /* ── SECTION 12: OKIRU PRO ── */
   .okiru-root .ok-pro-grid { display: grid; grid-template-columns: 5fr 7fr; gap: 0; border: 1px solid var(--rule); }
@@ -437,12 +450,12 @@ const GLOBAL_CSS = `
   .okiru-root .ok-pro-r { padding: 56px 52px; }
   .okiru-root .ok-pro-step { display: grid; grid-template-columns: 48px 1fr; padding: 22px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-pro-step:last-child { border-bottom: none; }
-  .okiru-root .ok-pro-step-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); padding-top: 3px; }
+  .okiru-root .ok-pro-step-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(6,182,212,.5); padding-top: 3px; }
   .okiru-root .ok-pro-step-title { font-family: var(--serif); font-size: 1.05rem; color: var(--hi); font-weight: 400; margin-bottom: 5px; }
   .okiru-root .ok-pro-step-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
   .okiru-root .ok-hub-sector { display: grid; grid-template-columns: 80px 1fr 1fr; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
   .okiru-root .ok-hub-sector:last-child { border-bottom: none; }
-  .okiru-root .ok-hub-sector-code { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+  .okiru-root .ok-hub-sector-code { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
   .okiru-root .ok-hub-sector-name { font-size: 13px; color: rgba(255,255,255,.65); }
   .okiru-root .ok-hub-sector-meta { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.25); letter-spacing: 0.04em; text-align: right; }
 
@@ -450,7 +463,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-vs-edges { display: flex; flex-direction: column; gap: 2px; margin-bottom: 56px; }
   .okiru-root .ok-vs-edge { display: grid; grid-template-columns: 80px 1fr; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-vs-edge:hover { background: rgba(99,102,241,.04); }
-  .okiru-root .ok-vs-edge-num { display: flex; align-items: flex-start; justify-content: center; padding: 28px 16px; border-right: 1px solid var(--rule); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); }
+  .okiru-root .ok-vs-edge-num { display: flex; align-items: flex-start; justify-content: center; padding: 28px 16px; border-right: 1px solid var(--rule); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(6,182,212,.5); }
   .okiru-root .ok-vs-edge-body { padding: 28px 36px; }
   .okiru-root .ok-vs-edge-title { font-family: var(--serif); font-size: 1.15rem; color: var(--hi); font-weight: 400; margin-bottom: 8px; }
   .okiru-root .ok-vs-edge-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
@@ -472,9 +485,9 @@ const GLOBAL_CSS = `
   .okiru-root .ok-sectors-list { display: grid; grid-template-columns: repeat(4,1fr); gap: 2px; margin-top: 48px; }
   .okiru-root .ok-sector-item { padding: 28px 24px; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-sector-item:hover { background: rgba(99,102,241,.04); }
-  .okiru-root .ok-sector-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(99,102,241,.4); margin-bottom: 10px; }
+  .okiru-root .ok-sector-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(6,182,212,.45); margin-bottom: 10px; }
   .okiru-root .ok-sector-name { font-family: var(--serif); font-size: 1.1rem; color: var(--hi); font-weight: 400; margin-bottom: 6px; }
-  .okiru-root .ok-sector-badge-sm { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--green); background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.2); padding: 2px 8px; border-radius: 3px; display: inline-block; }
+  .okiru-root .ok-sector-badge-sm { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: #06b6d4; background: rgba(6,182,212,.07); border: 1px solid rgba(6,182,212,.2); padding: 2px 8px; border-radius: 3px; display: inline-block; }
 
   /* ── SECTION 15: BOOK A DEMO ── */
   .okiru-root .ok-demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 56px; border: 1px solid var(--rule); }
@@ -512,7 +525,7 @@ const GLOBAL_CSS = `
   .okiru-root .ok-foot-c { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.15); letter-spacing: .06em; }
   .okiru-root .ok-foot-links { display: flex; align-items: center; gap: 14px; }
   .okiru-root .ok-foot-link { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.35); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .2s ease; background: none; border: none; cursor: pointer; }
-  .okiru-root .ok-foot-link:hover { color: var(--pur-l); }
+  .okiru-root .ok-foot-link:hover { color: #22d3ee; }
 
   /* ── REVEAL ── */
   .okiru-root .ok-reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
@@ -618,11 +631,11 @@ const HUB_SECTORS = [
 ];
 
 const PILLARS_SC = [
-  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#4f46e5,#818cf8)" },
-  { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#0ea5e9,#38bdf8)" },
-  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#059669,#34d399)" },
-  { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#d97706,#fbbf24)" },
-  { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#be185d,#f472b6)" },
+  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#e8441a,#f97316)" },
+  { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#e8441a,#06b6d4)" },
+  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#06b6d4,#22d3ee)" },
+  { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#06b6d4,#9333ea)" },
+  { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#9333ea,#c084fc)" },
 ];
 
 /* ─────────────────────────────────────────────
@@ -975,7 +988,8 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
         {/* ── 01: HERO ── */}
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <div className="ok-hero-beam" /><div className="ok-hero-beam-2" /><div className="ok-hero-glow" />
+            <div className="ok-hero-beam" /><div className="ok-hero-beam-2" />
+            <div className="ok-hero-glow" /><div className="ok-hero-glow-2" />
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-tag ok-anim-1">
