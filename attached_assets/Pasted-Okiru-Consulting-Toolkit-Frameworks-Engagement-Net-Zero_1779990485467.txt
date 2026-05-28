@@ -1,0 +1,538 @@
+Okiru Consulting
+Toolkit
+Frameworks
+Engagement
+Net-Zero
+Why Okiru
+Book a demo
+→
+01 · Overview
+02 · The Challenge
+03 · Who We Are
+04 · The Okiru Difference
+05 · The Toolkit
+06 · Architecture
+07 · Frameworks
+08 · Outcomes
+09 · Engagement Model
+10 · Dashboard Sample
+11 · Net-Zero Roadmap
+12 · Okiru Pro & Hub
+13 · Okiru vs Market
+14 · Sectors
+15 · Book a Demo
+
+ESG · B-BBEE · AI · Skills · WSP
+Okiru Consulting · Est. 2023
+Transformation
+Toolkit.
+Expert ESG, B-BBEE, AI & Skills Development advisory for South African businesses ready to transform. One toolkit. Every framework. Net-Zero ready.
+
+Book a 45-min demo
+→
+Explore the toolkit
+B-BBEE
+Certified experts
+ESG
+Strategy & reporting
+AI
+Integration & training
+EE
+Workforce equity
+WSP
+Skills & reporting
+"Every credible ESG strategy ends at Net Zero. Most begin without the data to get there."
+Scroll
+↓
+02
+The Challenge
+Why most organisations
+can't get to Net Zero — and what Okiru solves.
+Three structural gaps stand between South African organisations and credible, audit-grade transformation reporting.
+
+The Measurement Gap
+Scope 3 remains uncaptured
+70–90%
+of emissions sit in the supply chain
+Most organisations measure Scope 1 confidently, Scope 2 with effort, and Scope 3 with estimates. The majority of supply-chain emissions are the hardest to measure — and the largest opportunity to reduce.
+
+The Reporting Gap
+Frameworks are tightening
+IFRS S2
+CDP & SBTi are raising the bar
+IFRS S1 and S2 are mandatory in many jurisdictions. CDP penalises spend-based methodologies. SBTi requires activity-based targets. The bar for credible reporting rises every cycle.
+
+The Execution Gap
+Data lives in the wrong places
+5 silos
+→ one annual report
+Energy is in finance. Waste is in operations. Workforce is in HR. CSI is in marketing. Until these sources speak to each other, the ESG report is reconstructed from scratch every year.
+
+03
+Who We Are
+A South African transformation advisory. Methodology specialists. Disclosure-fluent.
+About Okiru Consulting
+Founded in 2023, Okiru Consulting helps organisations turn ESG, B-BBEE, and compliance obligations into measurable, board-ready performance. Headquartered in Braamfontein, Johannesburg, our practice marries technology and human expertise to remove the friction between capturing data and disclosing it.
+
+Our Mission
+To make transformation measurable, defensible and permanent for every South African organisation we serve.
+
+Accuracy
+Audit-grade outputs
+Independence
+Verifier-defensible
+Transformation
+Methodology-led
+Innovation
+60%+ time saved
+ESG Advisory
+01
+IFRS S1/S2 · GRI · TCFD · CDP · SBTi
+Net-Zero strategy, GHG measurement, and board-ready sustainability disclosure for JSE-listed and private companies.
+
+B-BBEE & Compliance
+02
+Generic & sector codes · Verification
+Sector code strategy, EE Act compliance, Skills Development WSP/ATR, Employment Equity plans, and ownership advisory.
+
+AI & Digital Tools
+03
+Zoho & Microsoft 365 automation
+AI-enabled compliance workflows and WSP integration for intelligent, scalable transformation reporting that cuts reporting time by 60%+.
+
+contact@okiru.co.za · +27 78 104 6527 · okiru.co.za
+
+South Africa · 2050
+Built where transformation happens.
+04
+The Okiru Difference
+Six reasons leading South African organisations choose our Transformation Toolkit.
+01
+One integrated toolkit
+ESG, B-BBEE, EE, and Skills Dev in one workbook. No re-keying, no reconciliation gaps, no separate platforms.
+
+02
+Activity-based accuracy
+DEFRA 2024, Eskom NERSA, SBTi CNZS 2.0. CDP-defensible, audit-grade outputs aligned to every major framework.
+
+03
+Deep local expertise
+Built for SA regulation: King V, B-BBEE Codes, EE Act, POPIA, JSE ESG Guidance, and sector-specific requirements.
+
+04
+AI-powered innovation
+AI-enabled workflows cut ESG reporting time by 60%+ and eliminate manual data consolidation risk.
+
+05
+Measurable business impact
+Improved B-BBEE scores, reduced verification risk, stronger investor ESG ratings, and compliance-led growth.
+
+06
+Built-in capability transfer
+Your team leaves every engagement knowing how to run the toolkit independently. We build capability, not dependency.
+
+By the numbers
+29
+Integrated sheets
+1,583
+Live formulas
+12
+Frameworks covered
+120
+Glossary entries
+0
+Reconciliation gaps
+60%+
+Time saved via AI
+05
+The Toolkit
+The measurement engine behind every Okiru engagement.
+The Okiru ESG Toolkit captures activity-based data at source, calculates emissions to international standards, and produces audit-grade outputs that feed directly into your sustainability reporting cycle.
+
+Pillar weighting
+E · 40%
+S · 30%
+G · 30%
+E
+Environment
+Pillar weight 40%
+Energy & Emissions (fleet, electricity, LPG, refrigerants)
+Renewable Generation (solar, PPA, RECs, REIPPPP)
+Water & Effluent (withdrawal, discharge, recycled)
+Waste & Circularity (tonnage, destination, NEMWA)
+Transport Emissions (ISO 14083, trip register)
+S
+Social
+Pillar weight 30%
+Workforce Profile (headcount, demographics, levels)
+Employment Equity (Black, women, PWD, EAP benchmark)
+Skills Development (WSP/ATR, learnerships, bursaries)
+Health & Safety (LTIFR, TRIFR, fatalities, near-miss)
+Socio-economic Dev (CSI register, beneficiaries, R spend)
+G
+Governance
+Pillar weight 30%
+Governance Scorecard (King V 16-principle, Apply-or-Explain)
+Materiality Matrix (18 risks, 6 TCFD families)
+Climate Risk (physical & transition, IFRS S2 flagged)
+Ethics & Conduct (POPIA, whistleblowing, conflicts)
+B-BBEE Compliance (all five elements, sector code forks)
+Scope 1, 2 & 3 activity-based measurement.
+Linked to B-BBEE, WSP/ATR & EE plans.
+IFRS S2 & King V aligned — board-ready.
+06
+Toolkit Architecture
+Three layers — capture once, score automatically, disclose everywhere.
+1
+Inputs Layer · 8 sheets
+Capture once
+Source data enters blue input cells: fuel cards, electricity meters, payroll records, waste invoices, governance documents. No re-keying across frameworks.
+
+Sheets
+E_Data · S_Data · G_Data · Fleet_Register · Waste_Register · Driver_Debrief · Financial_Summary · CSI_Register
+2
+Scoring Layer · 11 sheets
+Calculate, score & band
+Documented factors (DEFRA, Eskom NERSA), conditional banding, traffic-light flagging, pillar weighting. Validation sheet runs integrity checks before any output is used.
+
+Sheets
+E_Scorecard · S_Scorecard · G_Scorecard · EE_Scorecard · Materiality_Matrix · Carbon_Tax · B_BBEE_ESG · Validation
+3
+Disclosure Layer · 10 sheets
+Disclose & improve
+Pre-formatted blocks lift into your integrated annual report, B-BBEE submission, CDP response. Net-Zero Roadmap surfaces what to fix next cycle.
+
+Sheets
+ESG_Dashboard · IFRS_S1_S2 · GARP_GRAP · NetZero_Roadmap · Standards_Map · ISO_14083 · Assumptions · Audit_Log
+Stance Toggle
+Lean
+→
+Standard
+→
+Strict
+
+Three glass layers
+Each layer refracts the same source data into a different framework — without ever re-keying it.
+
+07
+Frameworks & Benchmarks
+Globally recognised standards. Publicly defensible authority on every factor.
+Global Disclosure Frameworks
+GHG Protocol
+Scope 1 / 2 / 3 inventory
+IFRS S1 + S2
+ISSB sustainability + climate
+TCFD
+6-family climate risk taxonomy
+CDP
+Climate + water disclosure
+SBTi CNZS 2.0
+Net-zero pathway alignment
+ISO 14083
+Trip-level transport emissions
+GRI
+Topical standards
+South African Compliance
+King V
+Apply-or-Explain governance
+B-BBEE Codes
+All five pillars + sector forks
+ISO 14001
+Environmental management
+EE / Skills Dev
+EEA2/EEA4 · WSP/ATR
+NEMWA
+Waste classification & reporting
+POPIA
+Data protection compliance
+Emission Factors & Standards
+DEFRA 2024
+GHG conversion factors — Scope 1 + 3
+Eskom NERSA 2024
+Scope 2 location-based, SA grid
+GLEC Framework
+80 gCO₂e/t·km road freight norm
+SBTi CNZS 2.0
+Net-zero pathway alignment
+IFRS S2
+ISSB climate disclosure structure
+King V
+170-point Apply-or-Explain scorecard
+08
+Operational Outcomes
+Four shifts that change how your ESG function works — permanently.
+Governance
+Single source of truth
+One workbook. Every framework. Every number traces to a documented source row through a documented formula chain. The audit committee, auditor, JSE, and integrated report all see the same numbers calculated the same way.
+
+Efficiency
+Clean data flows
+Inputs captured once flow through to every framework simultaneously. No re-keying fleet litres into the GHG inventory, ISO 14083 register, Carbon Tax submission and CDP response separately.
+
+Insight
+Embedded analytics
+Year-on-year variance built in. Intensity ratios calculated automatically. Materiality flagged dynamically. The Stance toggle lets you stress-test performance under Lean, Standard and Strict scoring assumptions.
+
+Reporting
+Board-ready disclosure
+Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function — not on a consultant's hard drive.
+
+Not a portal. Not a certificate. A measurement system with people behind it.
+
+09
+Engagement Model
+From scoping session to live reporting cadence in three structured phases.
+01
+Phase 1
+Scoping & Configuration
+2 weeks
+Deliverables
+Sector-configured workbook
+Data source map
+Methodology sign-off
+02
+Phase 2
+Data Migration
+3 weeks
+Deliverables
+Reconciled historical data
+Validation at zero errors
+First dashboard refresh
+03
+Phase 3
+Live Reporting Cadence
+Ongoing
+Deliverables
+Monthly refresh cycle
+Quarterly board pack
+Annual report support
+Your team owns the data and the strategy. Okiru owns the methodology, data loading, and framework refresh as standards evolve.
+
+10
+ESG Dashboard · Sample Output
+Board-ready executive view.
+FY2025/26 illustrative data. Numbers refresh automatically from the toolkit — no manual re-entry.
+
+Environmental
+74/108
+Good · 69%
+Behind target
+Key gap: GHG Scope 1+2 reduction · ISO 14001 pending
+Social
+61/100
+Good · 61%
+Behind target
+Key gap: EE targets · Black female management · WSP grant recovery
+Governance
+48/100
+Adequate · 48%
+Attention needed
+Key gap: King V full adoption · IFRS S2 disclosures · External assurance
+GHG Emissions Summary
+Scope 1 + 2 + 3 · 9 months actuals (tCO₂e)
+Dummy data for illustration
+Scope	Jul	Aug	Sep	Oct	Nov	Dec	Jan	Feb	Mar	YTD
+Scope 1 — Fleet Diesel	212	183	171	192	178	154	161	169	175	1,595
+Scope 2 — Electricity	240	252	247	215	210	238	214	261	258	2,135
+Scope 3 — Water	1.4	1.3	1.2	1.5	1.4	1.1	1.3	1.2	1.4	11.8
+TOTAL Scope 1+2+3	457	436	419	409	389	394	376	431	436	3,747
+Scores auto-update from the toolkit — no manual entry.
+Social: B-BBEE, EE & WSP tracked in real time.
+Governance: King V & IFRS S2 non-compliance flagged.
+11
+Net-Zero Roadmap · SBTi CNZS 2.0
+Auto-projected from GHG actuals. Baseline to 2050.
+Reduction trajectory, milestone bands, and the operational levers that get you there — derived directly from your live toolkit data.
+
+
+SBTi Reduction Trajectory
+4,200 → 233 tCO₂e
+Baseline
+4,200
+2030 (−50%)
+2,190
+2035 (−65%)
+1,516
+2050 Net-Zero
+233
+Reduction trajectory (tCO₂e)
+Dummy baseline 4,200
+Activity-based · SBTi CNZS 2.0
+Scope	Baseline	2026	2028	2030 (−50%)	2035 (−65%)	2050 Net-Zero
+Scope 1+2 (Fleet + Electricity)	3,750	3,563	3,000	1,875	1,313	188
+Scope 3 (Water + Value chain)	450	428	383	315	203	45
+TOTAL Scope 1+2+3	4,200	3,991	3,383	2,190	1,516	233
+Milestone bands
+2025
+Pre-Recognised
+Baseline established. Submit SBTi commitment letter.
+
+2028
+Recognised
+−50% Scope 1+2. EV fleet phase-in. Solar at all depots.
+
+2035
+Leadership
+−90% Scope 1+2 + −30% Scope 3. Full EV. 100% renewable.
+
+2050
+Net-Zero
+Net-Zero Scope 1+2+3. Zero fossil fleet. Residual credits only.
+
+Key Net-Zero levers
+EV Fleet (20% by 2030)
+Solar (50% renewable)
+Eco-Driving (−10% L/100km)
+Waste Diversion (≥75%)
+SBTi Commitment (Q1 FY2026)
+12
+Okiru Pro · AI-Powered B-BBEE Toolkit
+Same methodology. Powered by AI extraction.
+The same audit-grade workbook your finance team owns — accelerated by an AI engine that imports, scores, and verifies in minutes, not weeks.
+
+01
+Toolkit import
+Our engine parses every sheet, maps every formula, and builds a full dependency graph — thousands of interconnected nodes per sector code.
+
+02
+Live scorecard
+B-BBEE level, recognition percentage, and sub-minimum status update in real time across all five pillars against the latest sector codes.
+
+03
+AI extraction & verify
+AI-powered entity extraction pulls structured data using ontology-backed templates tuned to your sector. Review, correct, then lock.
+
+Okiru Hub · Sector Coverage
+Every sector code we've modelled — formula by formula.
+Live · expanding
+RCOGP
+Retail, Construction, Oil & Gas, Property
+
+Dependency graph
+2,985 nodes · 5,695 edges
+ICT
+Information & Communications Technology
+
+Dependency graph
+5,193 nodes · 9,415 edges
+FSC
+Financial Sector Code
+
+Dependency graph
+487 nodes · 689 edges
+AGRI
+Agriculture (AgriBEE)
+
+Dependency graph
+3,281 nodes · 6,267 edges
+13
+Okiru vs the Market
+We don't compete on cheaper software. We compete on what we own.
+Edge 01
+Only SA firm integrating B-BBEE + ESG in one toolkit
+BEE platforms score pillars. Okiru links your B-BBEE score to your GHG inventory, EE plan, and IFRS S2 disclosure — one source of truth for every framework simultaneously.
+
+Edge 02
+Methodology lives inside your business — not on our server
+Every formula, factor, and threshold is documented in your own workbook. When the engagement ends, your finance team owns the methodology. No platform lock-in. No annual licence.
+
+Edge 03
+Consultant accountability, not just software access
+BEE123 gives you a tool. Updapt tracks your ESG data. Okiru builds the strategy, loads the data, validates every number, and stands behind the output when your verifier asks questions.
+
+Capability Matrix
+Side-by-side · what each platform actually delivers
+Public information · May 2026
+Capability	Okiru B-BBEE + ESG	BEE 123	Updapt ESG Tech
+All 5 B-BBEE pillars scored	
+Full	
+Full	
+Full
+AI toolkit upload → instant scorecard	
+Full	—	—
+GHG Scope 1, 2 & 3 measurement	
+Full	—	—
+IFRS S1/S2, TCFD, CDP, GRI, SBTi	
+Full	—	—
+Net-Zero Roadmap (SBTi CNZS 2.0)	
+Full	—	—
+Employment Equity (EEA2/EEA4)	
+Full	Basic	—
+Dedicated consultant relationship	
+Full	—	
+Full
+Board-ready disclosure outputs	
+Full	B-BBEE only	Cert. only
+Annual framework refresh	
+Full	B-BBEE codes	—
+14
+Sectors We Serve
+Cross-sector advisory across South Africa's transformation economy.
+Client names withheld pending consent. Sectors below illustrate the range of where the Okiru Toolkit operates.
+
+01
+Financial Services
+Toolkit deployed
+02
+Chemicals
+Toolkit deployed
+03
+Retail & Pharmacy
+Toolkit deployed
+04
+Public Sector
+Toolkit deployed
+05
+Logistics
+Toolkit deployed
+06
+Water & Utilities
+Toolkit deployed
+07
+Mid-Cap Corporates
+Toolkit deployed
+08
+JSE-Listed Corporates
+Toolkit deployed
+15 · Book a Demo
+Let's make your transformation measurable.
+A 45-minute working session — not a sales pitch. We'll walk through the live Okiru Toolkit, map it to your reporting cycle, and show you the Net-Zero pathway implied by your own data.
+
+Email contact@okiru.co.za
+→
++27 78 104 6527
+Office
+Braamfontein, Johannesburg
+Web
+okiru.co.za
+Registration
+2023/597303/07
+Demo Agenda
+45 min
+00:00 – 10:00
+Your transformation reporting today
+10:00 – 25:00
+Live walkthrough · Okiru Toolkit
+25:00 – 35:00
+Net-Zero Roadmap · your data
+35:00 – 45:00
+Engagement model & next steps
+Okiru
+Okiru Consulting
+Confidential
+Okiru
+Okiru Consulting
+Compliance. Strategy. Growth. Braamfontein, Johannesburg, South Africa.
+
+Contact
+contact@okiru.co.za
++27 78 104 6527
+okiru.co.za
+Practice
+ESG Advisory
+B-BBEE & Compliance
+AI & Digital Tools
+Skills Development
+Frameworks
+IFRS S1/S2 · GRI · TCFD · CDP · SBTi CNZS 2.0 · King V · B-BBEE Codes · EE Act · ISO 14001 · POPIA · ISO 14083
+
