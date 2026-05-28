@@ -109,7 +109,7 @@ const GLOBAL_CSS = `
 
   /* hero */
   .okiru-root .ok-hero {
-    padding: 160px 0 100px; position: relative; min-height: 82vh;
+    padding: 130px 0 52px; position: relative;
     display: flex; align-items: center;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
@@ -160,7 +160,7 @@ const GLOBAL_CSS = `
     background: rgba(255,255,255,0.04);
     border-radius: 4px;
     padding: 6px 14px;
-    margin-bottom: 32px;
+    margin-bottom: 22px;
     font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
     text-transform: uppercase; color: rgba(255,255,255,0.55);
   }
@@ -184,11 +184,11 @@ const GLOBAL_CSS = `
   /* hero headline */
   .okiru-root .ok-h1 {
     font-family: var(--serif);
-    font-size: clamp(3.4rem, 7vw, 6.2rem);
-    line-height: 0.98; letter-spacing: -0.03em;
+    font-size: clamp(2.8rem, 5.8vw, 5.2rem);
+    line-height: 1.0; letter-spacing: -0.03em;
     color: #ffffff; font-weight: 400;
     max-width: min(60rem, 100%);
-    margin-bottom: 28px;
+    margin-bottom: 20px;
   }
   .okiru-root .ok-h1-gradient {
     display: block;
@@ -200,8 +200,8 @@ const GLOBAL_CSS = `
 
   .okiru-root .ok-hero-sub {
     max-width: min(44rem, 100%);
-    font-size: 16px; color: rgba(255,255,255,0.75); line-height: 1.8;
-    font-weight: 400; margin-bottom: 44px;
+    font-size: 15px; color: rgba(255,255,255,0.75); line-height: 1.75;
+    font-weight: 400; margin-bottom: 32px;
   }
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
 
@@ -251,7 +251,7 @@ const GLOBAL_CSS = `
     border-bottom: 1px solid var(--rule);
   }
   .okiru-root .ok-service {
-    flex: 1; padding: 28px 32px;
+    flex: 1; padding: 22px 32px;
     border-right: 1px solid var(--rule);
     transition: background .3s;
   }
@@ -268,7 +268,7 @@ const GLOBAL_CSS = `
 
   /* quote block */
   .okiru-root .ok-quote {
-    padding: 80px 0; border-bottom: 1px solid var(--rule);
+    padding: 56px 0; border-bottom: 1px solid var(--rule);
     background: linear-gradient(to bottom, rgba(99,102,241,0.025) 0%, transparent 100%);
   }
   .okiru-root .ok-quote-inner {
@@ -950,14 +950,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             </div>
           </div>
 
-          <div className="ok-scroll-ind" aria-hidden>
-            <span>SCROLL</span>
-            <ScrollArrow />
-          </div>
         </section>
 
         {/* ── Service strip ── */}
-        <div className="ok-services ok-anim-5">
+        <div className="ok-services">
           {SERVICES.map(s => (
             <div key={s.name} className="ok-service">
               <div className="ok-service-name">{s.name}</div>
@@ -975,6 +971,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 <em>Most begin without the data to get there.</em>"
               </p>
             </Reveal>
+          </div>
+          <div className="ok-scroll-ind" style={{ position: "relative", bottom: "auto", left: "auto", transform: "none", margin: "40px auto 0", display: "flex" }} aria-hidden>
+            <span>SCROLL</span>
+            <ScrollArrow />
           </div>
         </section>
 
