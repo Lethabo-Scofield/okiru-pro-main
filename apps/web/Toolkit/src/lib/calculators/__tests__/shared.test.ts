@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deepClone, safeRatio, clampScore, isBlackRace, BLACK_RACES } from '../shared';
+import { deepClone, safeRatio, clampScore, isBlackRace, BLACK_RACES, allowsRcogpDefaults, requireSectorConfig, SectorConfigError } from '../shared';
 
 describe('deepClone', () => {
   it('should create independent copies of objects', () => {
@@ -163,5 +163,39 @@ describe('BLACK_RACES', () => {
 
   it('should be a readonly tuple', () => {
     expect(Array.isArray(BLACK_RACES)).toBe(true);
+  });
+});
+
+describe('requireSectorConfig', () => {
+  it('allows empty pillar config when sector is unset (tests)', () => {
+    expect(requireSectorConfig(undefined, 'skills', undefined)).toEqual({});
+  });
+
+  it('allows empty pillar config for RCOGP Generic', () => {
+    expect(requireSectorConfig('RCOGP', 'skills', undefined, 'Generic')).toEqual({});
+  });
+
+  it('throws for non-RCOGP sector with missing pillar config', () => {
+    expect(() => requireSectorConfig('ICT', 'skills', undefined, 'Generic'))
+      .toThrow(SectorConfigError);
+    expect(() => requireSectorConfig('ICT', 'skills', {}, 'Generic'))
+      .toThrow(/missing skills config for sector ICT Generic/);
+  });
+
+  it('returns pillar config when present for non-RCOGP sector', () => {
+    const skills = { overallTarget: 0.03 };
+    expect(requireSectorConfig('ICT', 'skills', skills, 'Generic')).toBe(skills);
+  });
+});
+
+describe('allowsRcogpDefaults', () => {
+  it('returns true when sector is unset', () => {
+    expect(allowsRcogpDefaults(undefined)).toBe(true);
+  });
+
+  it('returns true only for RCOGP Generic', () => {
+    expect(allowsRcogpDefaults('RCOGP', 'Generic')).toBe(true);
+    expect(allowsRcogpDefaults('RCOGP', 'QSE')).toBe(false);
+    expect(allowsRcogpDefaults('ICT', 'Generic')).toBe(false);
   });
 });

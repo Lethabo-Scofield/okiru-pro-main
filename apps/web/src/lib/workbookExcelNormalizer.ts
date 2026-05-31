@@ -327,14 +327,18 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
     const sheet = wb.Sheets[sheetName];
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
 
+    // Sections may carry meta (key-value) and/or grid columns — e.g. Skills Development
+    // has leviable/EAP meta plus training-program rows. Parse both when present.
+    let payload: WorkbookSectionPayload = sections[sectionKey] ?? { rows: [] };
     if (def.meta) {
       const meta = parseMetaFromSheet(matrix, def.meta);
-      sections[sectionKey] = { rows: [], meta: { ...sections[sectionKey]?.meta, ...meta } };
-    } else if (def.columns) {
-      const rows = parseGridFromSheet(matrix, def.columns);
-      const existing = sections[sectionKey]?.rows || [];
-      sections[sectionKey] = { rows: [...existing, ...rows] };
+      payload = { ...payload, meta: { ...payload.meta, ...meta } };
     }
+    if (def.columns) {
+      const rows = parseGridFromSheet(matrix, def.columns);
+      payload = { ...payload, rows: [...(payload.rows ?? []), ...rows] };
+    }
+    sections[sectionKey] = payload;
   }
 
   // Strict select-option enforcement is on for the Excel import-preview path
@@ -350,4 +354,91 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
 export async function normalizeExcelFile(file: File): Promise<ExcelImportResult> {
   const buffer = await file.arrayBuffer();
   return normalizeExcelBuffer(buffer);
+}
+
+/**
+ * Full-workbook import with AI-assisted sheet→section recovery.
+ *
+ * Runs the deterministic {@link normalizeExcelBuffer} first, then asks the AI
+ * mapping service to classify any sheets whose names did not match a known
+ * section (e.g. renamed or non-standard tabs). Recovered grid sheets are parsed
+ * with the shared header matcher and appended — never replacing or dropping
+ * what deterministic parsing already found. Falls back to the deterministic
+ * result on any failure.
+ */
+export async function normalizeExcelFileWithAi(
+  file: File,
+  apiBase: string,
+): Promise<ExcelImportResult> {
+  const buffer = await file.arrayBuffer();
+  const base = normalizeExcelBuffer(buffer);
+
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  const unmapped = wb.SheetNames.filter((n) => !base.mappedSheets[n]);
+  if (unmapped.length === 0) return base;
+
+  const readMatrix = (name: string): unknown[][] =>
+    XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: "" }) as unknown[][];
+
+  const sheetSummaries = unmapped.map((name) => {
+    const matrix = readMatrix(name);
+    const headerIdx = findHeaderRow(matrix);
+    return {
+      name,
+      headers: (matrix[headerIdx] ?? []).map((c) => String(c ?? "").trim()),
+      sampleRows: matrix
+        .slice(headerIdx + 1, headerIdx + 4)
+        .map((r) => r.map((c) => String(c ?? ""))),
+    };
+  });
+
+  const sectionSummaries = SECTIONS.filter((s) => s.enabled).map((s) => ({
+    key: s.key,
+    label: s.label,
+    fields: (s.columns ?? s.meta ?? []).map((c) => ({ key: c.key, label: c.label })),
+  }));
+
+  try {
+    const { importMapSheets } = await import("@/lib/aiMappingClient");
+    const { sheetToSection, usedAi, notes } = await importMapSheets(
+      sheetSummaries,
+      sectionSummaries,
+      apiBase,
+    );
+
+    const sections = { ...base.sections };
+    const mappedSheets = { ...base.mappedSheets };
+    const warnings = [...base.warnings];
+    let recovered = 0;
+
+    for (const name of unmapped) {
+      const key = sheetToSection[name];
+      if (!key) continue;
+      const def = getSection(key);
+      if (!def?.columns) continue; // only grid sections support generic recovery
+      const rows = parseGridFromSheet(readMatrix(name), def.columns);
+      if (rows.length) {
+        sections[key] = { rows: [...(sections[key]?.rows ?? []), ...rows] };
+        mappedSheets[name] = key;
+        recovered++;
+        warnings.push(`Recovered "${name}" → ${def.label} (${rows.length} rows)${usedAi ? " via AI" : ""}.`);
+      }
+    }
+
+    if (recovered === 0) {
+      if (notes.length) base.warnings.push(...notes);
+      return base;
+    }
+
+    const validationIssues = validateWorkbook(sections, { strictSelectOptions: true });
+    return {
+      sections,
+      validationIssues,
+      criticalBlocked: hasCriticalGaps(validationIssues),
+      warnings: [...warnings, ...notes],
+      mappedSheets,
+    };
+  } catch {
+    return base;
+  }
 }

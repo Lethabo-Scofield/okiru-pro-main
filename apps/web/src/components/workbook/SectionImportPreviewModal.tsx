@@ -1,5 +1,8 @@
-import { Loader2, X } from "lucide-react";
+import { Loader2, Sparkles, X } from "lucide-react";
 import type { SectionImportDiff } from "@/lib/workbookSectionImportExport";
+import type { ColumnDef } from "./sections";
+import type { NormalizationResult } from "@/lib/tabularNormalize";
+import { MappingPreviewTable } from "./MappingPreviewTable";
 
 interface Props {
   open: boolean;
@@ -12,6 +15,10 @@ interface Props {
   importing: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** Target columns + normalized mapping result for the aligned preview. */
+  columns?: ColumnDef[];
+  normalization?: NormalizationResult | null;
+  usedAi?: boolean;
 }
 
 export function SectionImportPreviewModal({
@@ -25,8 +32,13 @@ export function SectionImportPreviewModal({
   importing,
   onClose,
   onConfirm,
+  columns,
+  normalization,
+  usedAi,
 }: Props) {
   if (!open) return null;
+
+  const showMapping = Boolean(columns?.length && normalization);
 
   return (
     <div
@@ -35,12 +47,20 @@ export function SectionImportPreviewModal({
       data-testid="section-import-preview-modal"
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl"
+        className={`w-full ${showMapping ? "max-w-4xl" : "max-w-lg"} max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/[0.06]">
           <div>
-            <h2 className="text-[16px] font-semibold text-white">Import {sectionLabel}</h2>
+            <h2 className="text-[16px] font-semibold text-white flex items-center gap-2">
+              Import {sectionLabel}
+              {usedAi && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-blue-400 font-normal">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI-assisted
+                </span>
+              )}
+            </h2>
             <p className="text-[12px] text-[#8e8e93] mt-0.5 truncate">{fileName}</p>
           </div>
           <button
@@ -53,7 +73,15 @@ export function SectionImportPreviewModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-4 overflow-y-auto">
+          {showMapping && normalization && columns && (
+            <MappingPreviewTable
+              columns={columns}
+              mapping={normalization.mapping}
+              rows={normalization.rows}
+              unmappedHeaders={normalization.unmappedHeaders}
+            />
+          )}
           {diff ? (
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">

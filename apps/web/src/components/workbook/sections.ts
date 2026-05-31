@@ -2,6 +2,10 @@
 // Source of truth for rules content: apps/web/src/config/bbbeeInfoRequestRules.json
 // (editable JSON copy of attached_assets/bbbee_info_request_rules_*.json).
 //
+// Excel toolkit convention (see docs/domain/sectors/sls-template.md §2): grey fill =
+// required user input (editable), not locked/read-only. White/unfilled cells are
+// optional or computed formula output. `required` flags here mirror grey cells.
+//
 // Field keys are intentionally preserved from previous versions to avoid breaking
 // persisted workbook data; only validators and `required` flags were tightened to
 // match the rules document.
@@ -36,6 +40,11 @@ export interface SectionDef {
   enabled: boolean;
   /** Optional single-record (meta) form. When set, the section is a key/value form, not a grid. */
   meta?: ColumnDef[];
+  /**
+   * Optional label for the grid (rows) portion of a hybrid section.
+   * Defaults to "Section entries" when not set.
+   */
+  gridLabel?: string;
   /**
    * Optional cross-field row validator. Returns a map of `{ columnKey: errorMessage }`
    * for any rule violations spanning multiple columns within the same row.
@@ -79,6 +88,8 @@ const SUPPLIER_SIZE_OPTIONS = ["Large", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
 const SKILLS_CATEGORY_OPTIONS = ["A", "B", "C", "D", "E", "F", "G"];
+
+const FSC_SUB_SECTOR_OPTIONS = ["Others", "Banks", "Long-Term Insurers", "Short-Term Insurers"];
 
 /**
  * Synonym maps consulted by the Excel normaliser when coercing a `select`
@@ -261,11 +272,39 @@ export function resolveScorecardTypeForSector(
 
 /** Company Information meta fields with scorecardType options filtered by sector. */
 export function getCompanyInfoMetaFields(sectorCode?: string): ColumnDef[] {
-  const sector = String(sectorCode ?? "").trim();
-  const options = sector ? getScorecardTypeOptions(sector) : [];
-  return COMPANY_INFO_META.map((f) =>
-    f.key === "scorecardType" ? { ...f, options } : f,
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  const scorecardOptions = sector ? getScorecardTypeOptions(sector) : [];
+  const base = COMPANY_INFO_META.map((f) =>
+    f.key === "scorecardType" ? { ...f, options: scorecardOptions } : f,
   );
+
+  const extras: ColumnDef[] = [];
+
+  // AGRI: farm workers qualify as a 5th Designated Group category (Ownership 4% EI target).
+  if (sector === "AGRI") {
+    extras.push({
+      key: "farmWorkersIncluded",
+      label: "Farm Workers included in Designated Groups?",
+      type: "boolean",
+      guidance:
+        "AgriBEE-specific. Tick if farm workers employed by the entity should be counted in the Designated Groups indicator for Ownership (4% EI target, 3 pts). Farm workers are a 5th qualifying category alongside ESOP, BBOS, Co-ops, and Black Designated Groups.",
+    });
+  }
+
+  // FSC: sub-sector picker drives which EF/AFS scorecard variant applies.
+  if (sector === "FSC") {
+    extras.push({
+      key: "fscSubSector",
+      label: "FSC Sub-Sector",
+      type: "select",
+      required: true,
+      options: FSC_SUB_SECTOR_OPTIONS,
+      guidance:
+        "Required for FSC. Determines the applicable scorecard variant: Others (FS700), Banks (FS701), Long-Term Insurers (FS702), or Short-Term Insurers (FS703). Currently only the 'Others' variant is fully scored.",
+    });
+  }
+
+  return extras.length > 0 ? [...base, ...extras] : base;
 }
 
 const sectorCodeValidator = (v: unknown): string | null => {
@@ -334,6 +373,15 @@ const integerNonNegValidator = (v: unknown): string | null => {
   if (Number.isNaN(n)) return "Must be a number";
   if (!Number.isInteger(n)) return "Must be a whole number";
   if (n < 0) return "Must be ≥ 0";
+  return null;
+};
+
+const positiveIntValidator = (v: unknown): string | null => {
+  if (isBlank(v)) return null;
+  const n = Number(v);
+  if (Number.isNaN(n)) return "Must be a number";
+  if (!Number.isInteger(n)) return "Must be a whole number";
+  if (n <= 0) return "Must be > 0";
   return null;
 };
 
@@ -409,6 +457,33 @@ const COMPANY_INFO_META: ColumnDef[] = [
     options: [...SCORECARD_TYPE_OPTIONS],
   },
   { key: "financialYearEnd", label: "Financial Year-End (yyyy-mm-dd)", type: "date", validate: dateValidator },
+  {
+    key: "measurementPeriodStart",
+    label: "Financial Period Start",
+    type: "date",
+    validate: dateValidator,
+    guidance: "Start date of the measured financial period. Drives period filters on Skills, PP, ESD, SED scorecards.",
+  },
+  {
+    key: "measurementPeriodEnd",
+    label: "Financial Period End",
+    type: "date",
+    validate: dateValidator,
+    guidance: "End date of the measured financial period.",
+  },
+  {
+    key: "groupLeviableAmount",
+    label: "Group Leviable Amount (R)",
+    type: "number",
+    validate: numericValidator,
+    guidance: "Required when measuring at group level. Total group payroll-based leviable amount (≥ 0). Leave blank for single-entity measurement.",
+  },
+  {
+    key: "combineExcoSenior",
+    label: "Combine Other Executive & Senior Management?",
+    type: "boolean",
+    guidance: "Toolkit Client Information toggle. When yes, Other Executive and Senior Management merge into one MC band (4 + 2 points). Total MC points unchanged.",
+  },
   { key: "physicalAddress", label: "Physical Address", type: "text" },
   { key: "postalAddress", label: "Postal Address", type: "text" },
   { key: "contactPerson", label: "Contact Person", type: "text" },
@@ -425,13 +500,55 @@ const COMPANY_INFO_META: ColumnDef[] = [
 // Amount". Legacy workbooks that still carry a `leviableAmount` value continue
 // to be honoured by the mapping fallback.
 const FINANCIAL_META: ColumnDef[] = [
-  { key: "revenue", label: "Revenue (R)", type: "number", required: true, validate: numericValidator },
-  { key: "npat", label: "NPAT — Net Profit After Tax (R)", type: "number", required: true, validate: signedNumericValidator },
-  { key: "payroll", label: "Total Payroll (R)", type: "number", required: true, validate: numericValidator },
-  { key: "tmps", label: "Total Measured Procurement Spend (R)", type: "number", validate: numericValidator },
-  { key: "forecastRevenue", label: "Forecast Revenue (R)", type: "number", required: true, validate: numericValidator },
-  { key: "forecastNpat", label: "Forecast NPAT (R)", type: "number", required: true, validate: signedNumericValidator },
-  { key: "forecastPayroll", label: "Forecast Payroll (R, used as Leviable Amount for Skills)", type: "number", required: true, validate: numericValidator },
+  { key: "revenue", label: "Revenue (R)", type: "number", validate: numericValidator },
+  { key: "npat", label: "NPAT — Net Profit After Tax (R)", type: "number", validate: signedNumericValidator },
+  { key: "payroll", label: "Total Payroll (R)", type: "number", validate: numericValidator },
+  {
+    key: "tmpsBasis",
+    label: "PP: Actual vs Projected TMPS",
+    type: "select",
+    options: ["Actual", "Projected"],
+    guidance: "Select which TMPS base the Preferential Procurement scorecard uses. Projected uses Forecast TMPS when supplied.",
+  },
+  { key: "tmps", label: "Total Measured Procurement Spend — Actual (R)", type: "number", validate: numericValidator },
+  {
+    key: "forecastTmps",
+    label: "Total Measured Procurement Spend — Projected (R)",
+    type: "number",
+    validate: numericValidator,
+    guidance: "Forecast / projected TMPS. Used when PP basis is set to Projected.",
+  },
+  {
+    key: "industryNormPercent",
+    label: "Industry Norm (% of revenue)",
+    type: "number",
+    validate: numericValidator,
+    guidance: "Industry norm margin (%). When actual NPAT margin falls below 25% of this norm, deemed NPAT (revenue × norm) drives SD/ED/SED targets.",
+  },
+  {
+    key: "deemedNpatOverride",
+    label: "Deemed NPAT Override (R)",
+    type: "number",
+    validate: signedNumericValidator,
+    guidance: "Optional manual deemed NPAT when the automatic industry-norm test is unsuitable. Leave blank to use actual NPAT or auto-deemed NPAT.",
+  },
+  {
+    key: "companyValueToUse",
+    label: "Company Value to Use (R)",
+    type: "number",
+    validate: numericValidator,
+    guidance: "Enterprise value for Ownership net-value scoring (NAV). Required when net-value points depend on share carrying values.",
+  },
+  {
+    key: "outstandingDebt",
+    label: "Outstanding Acquisition Debt (R)",
+    type: "number",
+    validate: numericValidator,
+    guidance: "Debt attributable to the measured entity for net-value calculations.",
+  },
+  { key: "forecastRevenue", label: "Forecast Revenue (R)", type: "number", validate: numericValidator },
+  { key: "forecastNpat", label: "Forecast NPAT (R)", type: "number", validate: signedNumericValidator },
+  { key: "forecastPayroll", label: "Forecast Payroll (R, used as Leviable Amount for Skills)", type: "number", validate: numericValidator },
 ];
 
 // ---------- Ownership ----------
@@ -445,6 +562,15 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   { key: "votingRights", label: "Voting Rights (%)", type: "number", width: 140, validate: percentValidator },
   { key: "economicInterest", label: "Economic Interest (%)", type: "number", width: 160, validate: percentValidator },
   { key: "shareholding", label: "Shareholding (%)", type: "number", width: 150, validate: percentValidator },
+  {
+    key: "shareValue",
+    label: "Share Carrying Value (R)",
+    type: "number",
+    width: 160,
+    validate: numericValidator,
+    guidance: "Carrying value of this shareholder's stake. Required with Company Value to Use for net-value scoring.",
+  },
+  { key: "yearsHeld", label: "Years Held", type: "number", width: 110, validate: integerNonNegValidator },
   { key: "modifiedFlowThrough", label: "Modified Flow-Through?", type: "boolean", width: 170 },
 ];
 
@@ -481,6 +607,87 @@ export const EMPLOYEE_COLUMNS: ColumnDef[] = [
 ];
 
 // ---------- Skills Development ----------
+
+const SELECT_PERIOD_OPTIONS = ["Current YTD", "Full Year", "Prior Year"];
+
+/**
+ * Single-record meta form for Skills Development aggregate (grey-cell) inputs.
+ * These correspond to the required inputs on the RCOGP Skills Scorecard tab and
+ * Skills Toolkit tab. Source of truth: docs/domain/sectors/rcogp/generic/sls.md §3 + §6.3.
+ */
+export const SKILLS_META: ColumnDef[] = [
+  {
+    key: "leviableAmount",
+    label: "Leviable Amount (R)",
+    type: "number",
+    required: true,
+    validate: (v: unknown): string | null => {
+      if (isBlank(v)) return null;
+      const n = parseAmount(v);
+      if (Number.isNaN(n)) return "Must be a number";
+      if (n <= 0) return "Must be > 0";
+      return null;
+    },
+    guidance: "Entity payroll-based leviable amount (> 0). Drives the 3.5%, 2.5%, and 0.3% spend targets. Overrides Forecast Payroll in Financial Information when set.",
+  },
+  {
+    key: "eapProvince",
+    label: "Applicable EAP Targets (Province)",
+    type: "select",
+    required: true,
+    options: PROVINCE_OPTIONS,
+    guidance: "Province for EAP demographic lookup. Required for bursary demographic splits and Management Control scoring.",
+  },
+  {
+    key: "eapYear",
+    label: "EAP Targets Year",
+    type: "number",
+    required: true,
+    validate: positiveIntValidator,
+    guidance: "Year matching a row in the EAP table (e.g. 2025). Triggers 'EAP targets Year selected?' validation in the toolkit.",
+  },
+  {
+    key: "headcount",
+    label: "Headcount (Total Employees)",
+    type: "number",
+    required: true,
+    validate: positiveIntValidator,
+    guidance: "Total employee headcount of the entity (positive integer). Used as the base for the LAI target: 5% × headcount.",
+  },
+  {
+    key: "trainingManagerSalary",
+    label: "Training Manager's Salary (R)",
+    type: "number",
+    required: true,
+    validate: numericValidator,
+    guidance: "Annual salary of the Skills Development Facilitator / Training Manager (≥ 0). Admin costs are capped at 15% of total skills spend.",
+  },
+  {
+    key: "trainingOverheadCost",
+    label: "Training Overhead Cost (R)",
+    type: "number",
+    required: true,
+    validate: numericValidator,
+    guidance: "Total training overhead costs (venue hire, admin, etc.) (≥ 0). Also subject to the 15% admin cost cap.",
+  },
+  {
+    key: "selectPeriod",
+    label: "Select Period",
+    type: "select",
+    required: true,
+    options: SELECT_PERIOD_OPTIONS,
+    guidance: "Set to 'Current YTD' for active year-to-date measurement. The Summary scorecard warns when not set.",
+  },
+  {
+    key: "dataDate",
+    label: "Data Date",
+    type: "date",
+    required: true,
+    validate: dateValidator,
+    guidance: "Reference date for this training dataset. Skills scorecard flags 'Data with no data date' when missing.",
+  },
+];
+
 // Rules require: program*, category*, learner*, gender*, race*. Costs ≥ 0.
 export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
@@ -570,6 +777,40 @@ export const SED_COLUMNS: ColumnDef[] = [
   { key: "dateOfTransaction", label: "Date of Transaction", type: "date", width: 160, validate: dateValidator },
 ];
 
+/**
+ * FSC-specific aggregate meta inputs for the SED & CE scorecard.
+ * Consumer Education (CE) is a separate scored pillar in the Financial Sector Code —
+ * it does not exist in RCOGP, AGRI, or ICT. These fields appear only when sector = FSC.
+ * Source of truth: docs/domain/sectors/fsc/generic/sls.md §6.7.
+ */
+export const FSC_SED_META: ColumnDef[] = [
+  {
+    key: "ceSpend",
+    label: "Consumer Education Contributions (R)",
+    type: "number",
+    required: true,
+    validate: numericValidator,
+    guidance:
+      "FSC-specific pillar. Total Consumer Education spend for the period (target 0.4% of NPAT = 2 pts). CE is scored separately from SED under the FSC 'SED & CE Scorecard'.",
+  },
+  {
+    key: "ceBonusSpend",
+    label: "Additional CE Contributions (R, bonus)",
+    type: "number",
+    validate: numericValidator,
+    guidance:
+      "Additional CE contributions above the 0.4% base target (threshold 0.1% of NPAT = 1 bonus pt). Leave blank if not achieved.",
+  },
+  {
+    key: "fundisaSpend",
+    label: "Fundisa Retail Fund Grant (R, bonus)",
+    type: "number",
+    validate: numericValidator,
+    guidance:
+      "Grant contribution to the Fundisa Retail Fund or a similar qualifying financial education initiative (target 0.2% of NPAT = 2 bonus pts).",
+  },
+];
+
 export const SECTIONS: SectionDef[] = [
   {
     key: "company-information",
@@ -611,6 +852,7 @@ export const SECTIONS: SectionDef[] = [
     label: "Skills Development",
     description: "Training programmes, learnerships, and spend.",
     enabled: true,
+    meta: SKILLS_META,
     columns: SKILLS_COLUMNS,
     rowValidate: (row) => {
       const errs: Record<string, string> = {};
@@ -693,24 +935,62 @@ export const SECTIONS: SectionDef[] = [
 ];
 
 /**
- * Looks up a section by key, optionally filtering its columns to match the
- * caller's sector. When `sectorCode` is supplied:
- *  - The SED "ICT-Specific?" column is only included for the ICT sector.
- * Other sectors get the section unmodified.
+ * Looks up a section by key, optionally filtering its columns and meta to match
+ * the caller's sector. Sector-aware transformations applied:
+ *  - SED "ICT-Specific?" column: only shown for ICT sector.
+ *  - SED section gets CE/Fundisa meta for FSC sector (hybrid: meta + columns).
+ *  - Ownership section gets "Farm Worker?" column for AGRI sector.
+ *  - Management Control EAP note differs for QSE vs Generic but columns are shared.
  */
 export function getSection(key: string, sectorCode?: string): SectionDef | undefined {
   const section = SECTIONS.find((s) => s.key === key);
   if (!section) return undefined;
   if (sectorCode === undefined) return section;
   const sector = String(sectorCode ?? "").trim().toUpperCase();
-  if (key === "sed" && section.columns) {
-    if (sector !== "ICT") {
+
+  if (key === "sed") {
+    let columns = section.columns;
+    // ICT-Specific initiative column: only for ICT
+    if (sector !== "ICT" && columns) {
+      columns = columns.filter((c) => c.key !== "ictSpecificInitiative");
+    }
+    // FSC: add Consumer Education aggregate meta (hybrid section)
+    if (sector === "FSC") {
       return {
         ...section,
-        columns: section.columns.filter((c) => c.key !== "ictSpecificInitiative"),
+        label: "SED & Consumer Education",
+        description:
+          "SED beneficiaries and contributions, plus Consumer Education and Fundisa aggregates (FSC-specific).",
+        meta: FSC_SED_META,
+        gridLabel: "SED & CE transaction entries",
+        columns: columns ?? section.columns,
+      };
+    }
+    if (columns !== section.columns) {
+      return { ...section, columns };
+    }
+    return section;
+  }
+
+  if (key === "ownership" && sector === "AGRI" && section.columns) {
+    // AgriBEE: farm workers qualify as a Designated Group for Ownership (4% EI target).
+    const farmWorkerCol: ColumnDef = {
+      key: "isFarmWorker",
+      label: "Farm Worker?",
+      type: "boolean",
+      width: 120,
+      guidance:
+        "AgriBEE-specific. Tick if this shareholder is a farm worker who qualifies under the Designated Groups indicator (combined EI target 4%, 3 pts). Farm workers are a 5th Designated Group category in AgriBEE.",
+    };
+    // Only add if not already present (prevents duplicate on re-render)
+    if (!section.columns.find((c) => c.key === "isFarmWorker")) {
+      return {
+        ...section,
+        columns: [...section.columns, farmWorkerCol],
       };
     }
   }
+
   return section;
 }
 
@@ -797,6 +1077,21 @@ export function validateFinancialMetaCrossFields(
   meta: Record<string, unknown>,
 ): Record<string, string> {
   const issues: Record<string, string> = {};
+
+  const pairs: Array<[string, string, string]> = [
+    ["revenue", "forecastRevenue", "Revenue"],
+    ["npat", "forecastNpat", "NPAT"],
+    ["payroll", "forecastPayroll", "Payroll"],
+  ];
+
+  for (const [actualKey, forecastKey, label] of pairs) {
+    const actualBlank = isBlank(meta[actualKey]);
+    const forecastBlank = isBlank(meta[forecastKey]);
+    if (actualBlank && forecastBlank) {
+      issues[actualKey] = `${label}: provide actual or forecast`;
+      issues[forecastKey] = `${label}: provide actual or forecast`;
+    }
+  }
 
   const payroll = typeof meta.payroll === "number" ? meta.payroll : undefined;
   if (payroll !== undefined && payroll < 0) {

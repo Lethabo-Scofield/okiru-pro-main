@@ -7,7 +7,7 @@
  */
 import type { ManagementData, Employee } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { isBlackRace, safeRatio, clampScore, round2 } from './shared';
+import { isBlackRace, safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, allowsRcogpDefaults } from './shared';
 import type { Province } from './eapTargets';
 import { getEAPTargets, normalizeProvince } from './eapTargets';
 
@@ -65,6 +65,36 @@ export interface ManagementResult {
 }
 
 export type DemoGroup = 'AM' | 'CM' | 'IM' | 'AF' | 'CF' | 'IF';
+
+/** RCOGP Generic defaults when no sector CalculatorConfig is supplied (tests / RCOGP Generic). */
+const MANAGEMENT_RCOGP_DEFAULTS = {
+  boardBlackTarget: 0.50,
+  boardBlackPoints: 2,
+  boardWomenTarget: 0.25,
+  boardWomenPoints: 1,
+  execBlackTarget: 0.50,
+  execBlackPoints: 2,
+  execWomenTarget: 0.25,
+  execWomenPoints: 1,
+  otherExecBlackTarget: 0.60,
+  otherExecBlackMaxPts: 2,
+  otherExecWomenTarget: 0.30,
+  otherExecBWMaxPts: 1,
+  seniorMaxPts: 2,
+  seniorBWMaxPts: 1,
+  middleMaxPts: 2,
+  middleBWMaxPts: 1,
+  juniorMaxPts: 1,
+  juniorBWMaxPts: 1,
+  disabledTarget: 0.02,
+  disabledMaxPts: 2,
+  maxPoints: 19,
+} as const;
+
+function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, useRcogp: boolean): T {
+  if (value !== undefined && value !== null) return value;
+  return useRcogp ? rcogpDefault : (value as T);
+}
 
 /**
  * National EAP proportions per demographic group (slide 100)
@@ -132,10 +162,22 @@ function pctOf(emps: Employee[], countFn: (e: Employee[]) => number): number {
 
 export function calculateManagementScore(
   data: ManagementData,
-  config: CalculatorConfig,
+  config?: CalculatorConfig,
   eapProvince?: string
 ): ManagementResult {
-  if (!config) throw new Error('CalculatorConfig is required for management score calculation');
+  const { sectorCode, scorecardType } = resolveSectorContext(config);
+  const management = requireSectorConfig(
+    sectorCode,
+    'management',
+    config?.management as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as Partial<NonNullable<CalculatorConfig['management']>>;
+  const managementControl = requireSectorConfig(
+    sectorCode,
+    'managementControl',
+    config?.managementControl as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as Partial<NonNullable<CalculatorConfig['managementControl']>>;
   const employees = data.employees || [];
   console.log('[SCORING-TRACE] calculateManagementScore received:', {
     employeeCount: employees.length,
@@ -143,37 +185,48 @@ export function calculateManagementScore(
     designations: [...new Set(employees.map(e => e.designation))].slice(0, 8),
   });
   const grouped = groupByDesignation(employees);
+  const combineExcoSenior = data.combineExcoSenior === true;
+  const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
+  const rcogp = MANAGEMENT_RCOGP_DEFAULTS;
 
-  const cfg = config.managementControl;
-  const boardBlackTarget = cfg?.boardBlackTarget ?? config.management.boardBlackTarget;
-  const boardWomenTarget = cfg?.boardBWTarget ?? config.management.boardWomenTarget;
-  const boardBlackMaxPts = cfg?.boardBlackMaxPts ?? config.management.boardBlackPoints;
-  const boardBWMaxPts = cfg?.boardBWMaxPts ?? config.management.boardWomenPoints;
+  const cfg = managementControl;
+  const boardBlackTarget = mgmtFallback(cfg?.boardBlackTarget ?? management.boardBlackTarget, rcogp.boardBlackTarget, useRcogp);
+  const boardWomenTarget = mgmtFallback(cfg?.boardBWTarget ?? management.boardWomenTarget, rcogp.boardWomenTarget, useRcogp);
+  const boardBlackMaxPts = mgmtFallback(cfg?.boardBlackMaxPts ?? management.boardBlackPoints, rcogp.boardBlackPoints, useRcogp);
+  const boardBWMaxPts = mgmtFallback(cfg?.boardBWMaxPts ?? management.boardWomenPoints, rcogp.boardWomenPoints, useRcogp);
   
-  const execBlackTarget = cfg?.execBlackTarget ?? config.management.execBlackTarget;
-  const execWomenTarget = cfg?.execBWTarget ?? config.management.execWomenTarget;
-  const execBlackMaxPts = cfg?.execBlackMaxPts ?? config.management.execBlackPoints;
-  const execBWMaxPts = cfg?.execBWMaxPts ?? config.management.execWomenPoints;
+  const execBlackTarget = mgmtFallback(cfg?.execBlackTarget ?? management.execBlackTarget, rcogp.execBlackTarget, useRcogp);
+  const execWomenTarget = mgmtFallback(cfg?.execBWTarget ?? management.execWomenTarget, rcogp.execWomenTarget, useRcogp);
+  const execBlackMaxPts = mgmtFallback(cfg?.execBlackMaxPts ?? management.execBlackPoints, rcogp.execBlackPoints, useRcogp);
+  const execBWMaxPts = mgmtFallback(cfg?.execBWMaxPts ?? management.execWomenPoints, rcogp.execWomenPoints, useRcogp);
   
-  const otherExecBlackTarget = cfg?.otherExecBlackTarget ?? 0.60;
-  const otherExecWomenTarget = cfg?.otherExecBWTarget ?? 0.30;
-  const otherExecBlackMaxPts = cfg?.otherExecBlackMaxPts ?? 2;
-  const otherExecBWMaxPts = cfg?.otherExecBWMaxPts ?? 1;
+  const otherExecBlackTarget = mgmtFallback(cfg?.otherExecBlackTarget, rcogp.otherExecBlackTarget, useRcogp);
+  const otherExecWomenTarget = mgmtFallback(cfg?.otherExecBWTarget, rcogp.otherExecWomenTarget, useRcogp);
+  const otherExecBlackMaxPts = mgmtFallback(cfg?.otherExecBlackMaxPts, rcogp.otherExecBlackMaxPts, useRcogp);
+  const otherExecBWMaxPts = mgmtFallback(cfg?.otherExecBWMaxPts, rcogp.otherExecBWMaxPts, useRcogp);
   
-  const seniorMaxPts = cfg?.seniorMaxPts ?? 2;
-  const seniorBWMaxPts = cfg?.seniorBWMaxPts ?? 1;
-  const middleMaxPts = cfg?.middleMaxPts ?? 2;
-  const middleBWMaxPts = cfg?.middleBWMaxPts ?? 1;
-  const juniorMaxPts = cfg?.juniorMaxPts ?? 1;
-  const juniorBWMaxPts = cfg?.juniorBWMaxPts ?? 1;
+  const seniorMaxPts = mgmtFallback(cfg?.seniorMaxPts, rcogp.seniorMaxPts, useRcogp);
+  const seniorBWMaxPts = mgmtFallback(cfg?.seniorBWMaxPts, rcogp.seniorBWMaxPts, useRcogp);
+  const middleMaxPts = mgmtFallback(cfg?.middleMaxPts, rcogp.middleMaxPts, useRcogp);
+  const middleBWMaxPts = mgmtFallback(cfg?.middleBWMaxPts, rcogp.middleBWMaxPts, useRcogp);
+  const juniorMaxPts = mgmtFallback(cfg?.juniorMaxPts, rcogp.juniorMaxPts, useRcogp);
+  const juniorBWMaxPts = mgmtFallback(cfg?.juniorBWMaxPts, rcogp.juniorBWMaxPts, useRcogp);
   
-  const disabledTarget = config.employmentEquity?.disabledTarget ?? cfg?.disabledTarget ?? config.management.disabledTarget ?? 0.02;
-  const disabledMaxPts = config.employmentEquity?.disabledMaxPts ?? cfg?.disabledMaxPts ?? 2;
+  const disabledTarget = mgmtFallback(
+    config?.employmentEquity?.disabledTarget ?? cfg?.disabledTarget ?? management.disabledTarget,
+    rcogp.disabledTarget,
+    useRcogp,
+  );
+  const disabledMaxPts = mgmtFallback(
+    config?.employmentEquity?.disabledMaxPts ?? cfg?.disabledMaxPts,
+    rcogp.disabledMaxPts,
+    useRcogp,
+  );
   
   const configuredMcMax = config?.pillarConfigs?.managementControl?.maxPoints;
   const maxTotal = (configuredMcMax != null && configuredMcMax > 0)
     ? configuredMcMax
-    : (config?.managementControl?.maxPoints ?? 19);
+    : mgmtFallback(config?.managementControl?.maxPoints, rcogp.maxPoints, useRcogp);
   const subMinPercent = config?.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
 
   // Get EAP targets based on province
@@ -226,13 +279,7 @@ export function calculateManagementScore(
   const boardVotingBWO = clampScore(safeRatio(boardBWOPct, boardWomenTarget, boardBWMaxPts), boardBWMaxPts);
   const execDirectorsBlack = clampScore(safeRatio(execBlackPct, execBlackTarget, execBlackMaxPts), execBlackMaxPts);
   const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
-  const otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
-  const otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
-  // Lake Trading Fix Plan §1 Bug 2 — match the Excel ground-truth template
-  // (and `apps/api/pipeline/rules/pillarCalculators.ts::calcManagement`) by
-  // scoring Black and BWO independently with simple safeRatio against the
-  // provincial EAP target. The per-demographic breakdown is still surfaced
-  // below for UI diagnostics. Junior includes Semi-skilled and Unskilled.
+
   const seniorTarget = cfg?.seniorBlackTarget ?? seniorEAP.blackTarget;
   const seniorBWTarget = seniorEAP.blackWomenTarget;
   const middleTarget = cfg?.middleBlackTarget ?? middleEAP.blackTarget;
@@ -240,12 +287,46 @@ export function calculateManagementScore(
   const juniorTarget = cfg?.juniorBlackTarget ?? juniorEAP.blackTarget;
   const juniorBWTarget = juniorEAP.blackWomenTarget;
 
+  // Toolkit toggle: merge Other Executive + Senior into one band (4 + 2 pts).
+  const combinedExcoSeniorEmps = [...otherExec, ...senior];
+  const combinedExcoBlackPct = pctOf(combinedExcoSeniorEmps, countBlack);
+  const combinedExcoBWOPct = pctOf(combinedExcoSeniorEmps, countBlackWomen);
+  const combinedExcoBlackMax = otherExecBlackMaxPts + seniorMaxPts;
+  const combinedExcoBWMax = otherExecBWMaxPts + seniorBWMaxPts;
+
+  let otherExecBlackScore: number;
+  let otherExecBWOScore: number;
+  let seniorBlack: number;
+  let seniorBWO: number;
+
+  if (combineExcoSenior) {
+    otherExecBlackScore = clampScore(
+      safeRatio(combinedExcoBlackPct, otherExecBlackTarget, combinedExcoBlackMax),
+      combinedExcoBlackMax,
+    );
+    otherExecBWOScore = clampScore(
+      safeRatio(combinedExcoBWOPct, otherExecWomenTarget, combinedExcoBWMax),
+      combinedExcoBWMax,
+    );
+    seniorBlack = 0;
+    seniorBWO = 0;
+  } else {
+    otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
+    otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
+    seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorTarget, seniorMaxPts), seniorMaxPts);
+    seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorBWTarget, seniorBWMaxPts), seniorBWMaxPts);
+  }
+
+  // Lake Trading Fix Plan §1 Bug 2 — match the Excel ground-truth template
+  // (and `apps/api/pipeline/rules/pillarCalculators.ts::calcManagement`) by
+  // scoring Black and BWO independently with simple safeRatio against the
+  // provincial EAP target. The per-demographic breakdown is still surfaced
+  // below for UI diagnostics. Junior includes Semi-skilled and Unskilled.
+
   const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
   const juniorCombinedBlackPct = pctOf(juniorCombined, countBlack);
   const juniorCombinedBWOPct = pctOf(juniorCombined, countBlackWomen);
 
-  const seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorTarget, seniorMaxPts), seniorMaxPts);
-  const seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorBWTarget, seniorBWMaxPts), seniorBWMaxPts);
   const middleBlack = clampScore(safeRatio(middleBlackPct, middleTarget, middleMaxPts), middleMaxPts);
   const middleBWO = clampScore(safeRatio(middleBWOPct, middleBWTarget, middleBWMaxPts), middleBWMaxPts);
   const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorTarget, juniorMaxPts), juniorMaxPts);

@@ -39,7 +39,7 @@ import {
   formatWorkbookValidationSummary,
 } from "@/components/workbook/workbookValidation";
 import {
-  normalizeExcelFile,
+  normalizeExcelFileWithAi,
   type WorkbookSectionsInput,
 } from "@/lib/workbookExcelNormalizer";
 import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
@@ -355,7 +355,7 @@ function CompanyPicker({
                 onImport={async (file) => {
                 const result = await importBeeGatheringExcel(file, API_BASE);
                 if (!result.extraction.isBeeGatheringFormat) {
-                  const fallback = await normalizeExcelFile(file);
+                  const fallback = await normalizeExcelFileWithAi(file, API_BASE);
                   if (fallback.criticalBlocked) {
                     toast({
                       title: "Import blocked — fix critical fields",
@@ -565,7 +565,7 @@ function CompanyPicker({
               onImport={async (file) => {
               const result = await importBeeGatheringExcel(file, API_BASE);
               if (!result.extraction.isBeeGatheringFormat) {
-                const fallback = await normalizeExcelFile(file);
+                const fallback = await normalizeExcelFileWithAi(file, API_BASE);
                 if (fallback.criticalBlocked) {
                   toast({
                     title: "Import blocked — fix critical fields",
@@ -1192,7 +1192,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       const bee = await importBeeGatheringExcel(file, API_BASE);
       const result = bee.extraction.isBeeGatheringFormat
         ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
-        : await normalizeExcelFile(file);
+        : await normalizeExcelFileWithAi(file, API_BASE);
 
       if (result.criticalBlocked) {
         toast({
@@ -1265,11 +1265,14 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const sectionStatus = (key: string): "empty" | "filled" => {
     const sec = workbook?.sections[key];
     if (!sec) return "empty";
-    const def = getSection(key);
+    const def = getSection(key, sectorCode);
     if (def?.meta) {
       const m = (sec.meta || {}) as Record<string, unknown>;
-      const has = Object.values(m).some((v) => v !== "" && v != null);
-      return has ? "filled" : "empty";
+      const hasMeta = Object.values(m).some((v) => v !== "" && v != null);
+      if (hasMeta) return "filled";
+      // For hybrid sections (meta + columns), also check rows.
+      if (def.columns && (sec.rows?.length || 0) > 0) return "filled";
+      return "empty";
     }
     return (sec.rows?.length || 0) > 0 ? "filled" : "empty";
   };
@@ -1477,7 +1480,49 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             </div>
           ) : activeSection ? (
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
-              {activeMetaFields ? (
+              {activeMetaFields && activeSection?.columns ? (
+                // Hybrid section: MetaForm for aggregate inputs + grid for data rows.
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                  </div>
+                  <div className="px-6 pt-5 pb-4 border-b border-white/[0.04]">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-4">
+                      Section inputs
+                    </p>
+                    {activeSectionPermissions.loading ? (
+                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
+                      </div>
+                    ) : (
+                      <MetaForm
+                        fields={activeMetaFields}
+                        value={activeMeta}
+                        readOnly={!activeSectionPermissions.canEdit}
+                        crossFieldErrors={activeMetaCrossFieldErrors}
+                        onChange={(next) => handleMetaChange(activeSection.key, next)}
+                      />
+                    )}
+                  </div>
+                  <div className="pt-2">
+                    <div className="px-6 pt-4 pb-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366]">
+                        {activeSection.gridLabel ?? "Training programme entries"}
+                      </p>
+                    </div>
+                    <ActiveSectionEditor
+                      section={activeSection}
+                      rows={activeRows}
+                      workspaceId={workspaceId}
+                      clientCreatedByUserId={company.createdByUserId}
+                      onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
+                    />
+                  </div>
+                </>
+              ) : activeMetaFields ? (
                 <>
                   <div className="px-6 py-4 border-b border-white/[0.06]">
                     <h2 className="text-[18px] font-bold tracking-tight text-white">

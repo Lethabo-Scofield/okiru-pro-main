@@ -62,9 +62,9 @@ describe('calculateManagementScore', () => {
       expect(result.rawStats).toHaveProperty('disabledBlackPct');
     });
 
-    it('should always return 13 subLines', () => {
+    it('should always return 15 subLines', () => {
       const result = calculateManagementScore(makeManagementData());
-      expect(result.subLines).toHaveLength(13);
+      expect(result.subLines).toHaveLength(15);
     });
   });
 

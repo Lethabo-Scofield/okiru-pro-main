@@ -160,8 +160,8 @@ describe('calculateProcurementScore', () => {
         ],
       }));
 
-      expect(result.rawStats.spendEME).toBe(100_000);
-      expect(result.rawStats.spendQSE).toBe(200_000);
+      expect(result.rawStats.spendEME).toBe(135_000);
+      expect(result.rawStats.spendQSE).toBe(270_000);
     });
   });
 });

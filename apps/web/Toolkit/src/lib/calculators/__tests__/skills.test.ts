@@ -237,13 +237,38 @@ describe('calculateSkillsScore', () => {
     });
   });
 
-  describe('custom config', () => {
-    it('should respect custom overallTarget config', () => {
-      const leviableAmount = 10_000_000;
-      const config = { skills: { overallTarget: 0.03, bursaryTarget: 0.01, subMinThreshold: 10 } };
-      const result = calculateSkillsScore(makeSkillsData({ leviableAmount }), config as any);
+  describe('workbook aggregate inputs', () => {
+    it('uses entity headcount for learnership target (not learner row count)', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        headcount: 100,
+        trainingPrograms: [
+          makeTrainingProgram({ category: 'learnership', cost: 10_000 }),
+        ],
+      }));
+      // 1 learner vs 5% of 100 headcount = 5 target → 1/5 × 6 pts ≈ 1.2
+      expect(result.learnerships).toBeCloseTo(1.2, 1);
+    });
 
-      expect(result.rawStats.targetOverall).toBeCloseTo(leviableAmount * 0.03, 0);
+    it('caps training manager salary and overhead at 15% of programme spend each', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        leviableAmount: 1_000_000,
+        trainingManagerSalary: 500_000,
+        trainingOverheadCost: 500_000,
+        trainingPrograms: [
+          makeTrainingProgram({ cost: 100_000 }),
+        ],
+      }));
+      // Programme 100k; each admin component capped at 15k → +30k recognised → 130k total
+      expect(result.rawStats.blackSpend).toBeCloseTo(130_000, 0);
+    });
+
+    it('prefers group leviable amount for spend targets when set', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        leviableAmount: 1_000_000,
+        groupLeviableAmount: 2_000_000,
+        trainingPrograms: [],
+      }));
+      expect(result.rawStats.targetOverall).toBeCloseTo(2_000_000 * 0.035, 0);
     });
   });
 });

@@ -11,7 +11,7 @@ import {
   type SearchResult as MongoSearchResult,
 } from '../services/mongoSearch.js';
 import { requireAuth } from '../middleware/auth.js';
-import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData } from '../services/certificateExtractor.js';
+import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData, cleanNameFromBlobPath } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
 import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
@@ -73,8 +73,9 @@ function getContainerClient(blobServiceClient: BlobServiceClient) {
 // Public API row shape — used by the certificates browse UI.
 // ============================================================================
 interface CertificateRow {
-  name: string;            // blob name (id key for /download)
-  fileName: string;        // displayable filename
+  name: string;            // blob name (id key for /download) — same value as blobName
+  blobName: string;        // explicit blob storage key; use as fallback display name source
+  fileName: string;        // displayable filename (without org-prefix path)
   companyName: string;
   vatNumber: string | null;
   companySize: string | null;
@@ -128,47 +129,24 @@ function statusFromExpiryDate(expiry: Date | string | null | undefined): Certifi
 }
 
 function deriveCompanyName(fileName: string): string {
+  const derived = cleanNameFromBlobPath(fileName);
+  if (derived) return derived;
+
+  // Legacy fallback for edge cases not handled by cleanNameFromBlobPath
   const base = fileName.split('/').pop() || fileName;
   const noExt = base.replace(/\.[a-z0-9]+$/i, '');
-  let working = noExt.replace(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
-    '',
-  );
-  const leadingPrefixPatterns = [
-    /^\d{4}[\s_\-]+\d{1,2}[\s_\-]+\d{1,2}[\s_\-]+/,
-    /^(?:19|20)\d{2}[\s._\-]+/,
-    /^[\s\[\(]*\d+[\s._\-:)\]]+/,
-  ];
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const pat of leadingPrefixPatterns) {
-      const next = working.replace(pat, '');
-      if (next !== working) {
-        working = next;
-        changed = true;
-      }
-    }
-  }
-  const trimmed = working
-    .replace(/[_]+/g, ' ')
+  const working = noExt
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, '')
+    .replace(/[_\-]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/\s*\b(EME|QSE|Generic|Large|Specialised|Specialized)\b.*$/i, '')
-    .replace(/\s*B[\s-]?BBEE.*$/i, '')
-    .replace(/\s*Certificate.*$/i, '')
-    .replace(/\s*Affidavit.*$/i, '')
-    .replace(/\s*Scorecard.*$/i, '')
-    .replace(/\s*Verification.*$/i, '')
-    .replace(/\s+BEE$/i, '')
-    .replace(/\s*\(?\d+\)?$/, '')
-    .replace(/[\s_\-–—]+$/u, '')
     .trim();
-  return trimmed || 'Unknown company';
+  return working || 'Unknown company';
 }
 
 function rowFromLocal(rec: CertificateRecord): CertificateRow {
   return {
     name: rec.blobName,
+    blobName: rec.blobName,
     fileName: rec.fileName,
     companyName: rec.companyName,
     vatNumber: rec.vatNumber,
@@ -192,6 +170,7 @@ function rowFromMongo(doc: any, blobLastModified: string | null = null, fileName
   const id = doc.id || null;
   return {
     name: doc.blobName,
+    blobName: doc.blobName,
     fileName,
     companyName,
     vatNumber: doc.vatNumber || null,
@@ -241,6 +220,7 @@ async function loadAllRows(): Promise<CertificateRow[]> {
         } else {
           rows.push({
             name: b.name,
+            blobName: b.name,
             fileName,
             companyName: deriveCompanyName(fileName),
             vatNumber: null,

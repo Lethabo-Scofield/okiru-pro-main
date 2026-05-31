@@ -906,6 +906,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // For trust / multi-beneficiary holders the workbook row can also carry an
   // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
   // Lake demo seed for the Family Trust shareholder); when present we prefer it.
+  const sectorCode = s(companyMeta.industrySector).trim().toUpperCase();
+  const farmWorkersIncluded = companyMeta.farmWorkersIncluded !== false;
+
   const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
     const race = s((r as any).race);
     const gender = s((r as any).gender);
@@ -918,6 +921,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const isDisabled = Boolean((r as any).isDisabled);
     // Lake demo writes `isNewEntrant` directly; default false otherwise.
     const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    // AGRI-specific: farm workers as a 5th Designated Group category.
+    const isFarmWorker = sectorCode === "AGRI" && Boolean((r as any).isFarmWorker) && farmWorkersIncluded;
 
     // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
     // supplies them (trust holders, multi-beneficiary shareholders). Fall back
@@ -955,10 +960,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
       // branch in calculateOwnershipScore so blackOwnership flows through.
       shares: Math.max(1, Math.round(sharePct * 10_000)),
-      shareValue: 1,
+      shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
-        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled,
+        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled || isFarmWorker,
+      isFarmWorker,
       blackNewEntrant: isNewEntrant,
       votingRightsPercent: votingPct,
       economicInterestPercent: eiPct,
@@ -1141,9 +1147,30 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     };
   });
 
-  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta);
+  const skillsMeta = (sec["skills-development"]?.meta ?? {}) as Record<string, unknown>;
+  const sedMeta = (sec["sed"]?.meta ?? {}) as Record<string, unknown>;
+  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta);
 
-  return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
+  const ownershipMeta = {
+    companyValue: financials.companyValue ?? 0,
+    outstandingDebt: financials.outstandingDebt ?? 0,
+    yearsHeld: Math.max(
+      0,
+      ...shareholders.map((sh) => num((sh as any).yearsHeld)),
+    ),
+  };
+
+  return {
+    shareholders,
+    employees,
+    trainingPrograms,
+    suppliers,
+    esdContributions,
+    sedContributions,
+    financials,
+    companyMeta,
+    ownershipMeta,
+  };
 }
 
 function requireSuperAdmin(req: Request, res: Response): boolean {
@@ -1356,9 +1383,20 @@ export function registerWorkbookRoutes(app: Express): void {
           };
           const f = projected.financials;
           if (f.revenue > 0) update.revenue = f.revenue;
-          if (typeof f.npat === "number") update.npat = f.npat;
           if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
           if (f.tmps > 0) update.tmps = f.tmps;
+          if (f.effectiveNpat != null) update.npat = f.effectiveNpat;
+          else if (typeof f.npat === "number") update.npat = f.npat;
+          if (projected.ownershipMeta?.companyValue > 0) {
+            update.companyValue = projected.ownershipMeta.companyValue;
+          } else if (f.companyValue != null && f.companyValue > 0) {
+            update.companyValue = f.companyValue;
+          }
+          if (projected.ownershipMeta?.outstandingDebt != null) {
+            update.outstandingDebt = projected.ownershipMeta.outstandingDebt;
+          } else if (f.outstandingDebt != null) {
+            update.outstandingDebt = f.outstandingDebt;
+          }
           if (f.industrySector) {
             update.industrySector = f.industrySector;
             update.sectorCode = f.industrySector;
@@ -1368,6 +1406,36 @@ export function registerWorkbookRoutes(app: Express): void {
             update.companySize = f.scorecardType;
           }
           if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
+          // Cover-sheet global inputs
+          if (f.measurementPeriodStart) update.measurementPeriodStart = f.measurementPeriodStart;
+          if (f.measurementPeriodEnd) update.measurementPeriodEnd = f.measurementPeriodEnd;
+          // Skills aggregate inputs — persist to dedicated client fields where they exist,
+          // and into the mixed `financials` blob for fields without a top-level column.
+          if (f.eapProvince) update.eapProvince = f.eapProvince;
+          if (f.headcount != null && f.headcount > 0) update.numberOfEmployees = f.headcount;
+          const skillsExtra: Record<string, unknown> = {};
+          if (f.deemedNpatUsed != null) skillsExtra.deemedNpatUsed = f.deemedNpatUsed;
+          if (f.deemedNpat != null) skillsExtra.deemedNpat = f.deemedNpat;
+          if (f.effectiveNpat != null) skillsExtra.effectiveNpat = f.effectiveNpat;
+          if (f.industryNormPercent != null) skillsExtra.industryNormPercent = f.industryNormPercent;
+          if (f.combineExcoSenior != null) skillsExtra.combineExcoSenior = f.combineExcoSenior;
+          if (f.headcount != null) skillsExtra.headcount = f.headcount;
+          if (f.groupLeviableAmount != null) skillsExtra.groupLeviableAmount = f.groupLeviableAmount;
+          if (f.eapYear != null) skillsExtra.eapYear = f.eapYear;
+          if (f.trainingManagerSalary != null) skillsExtra.trainingManagerSalary = f.trainingManagerSalary;
+          if (f.trainingOverheadCost != null) skillsExtra.trainingOverheadCost = f.trainingOverheadCost;
+          if (f.selectPeriod) skillsExtra.selectPeriod = f.selectPeriod;
+          if (f.dataDate) skillsExtra.dataDate = f.dataDate;
+          // AGRI-specific
+          if (f.farmWorkersIncluded !== undefined) skillsExtra.farmWorkersIncluded = f.farmWorkersIncluded;
+          // FSC-specific
+          if (f.fscSubSector) update.fscSubSector = f.fscSubSector;
+          if (f.ceSpend != null) skillsExtra.ceSpend = f.ceSpend;
+          if (f.ceBonusSpend != null) skillsExtra.ceBonusSpend = f.ceBonusSpend;
+          if (f.fundisaSpend != null) skillsExtra.fundisaSpend = f.fundisaSpend;
+          if (Object.keys(skillsExtra).length > 0) {
+            update.financials = { ...(update.financials ?? {}), ...skillsExtra };
+          }
           const cm = projected.companyMeta;
           for (const key of [
             "tradingName",

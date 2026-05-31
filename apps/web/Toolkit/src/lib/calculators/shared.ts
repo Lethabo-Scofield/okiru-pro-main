@@ -1,3 +1,58 @@
+export class SectorConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SectorConfigError';
+  }
+}
+
+/** True when no sector is set (unit tests) or sector is explicitly RCOGP Generic. */
+export function allowsRcogpDefaults(sector?: string, scorecardType?: string): boolean {
+  if (!sector) return true;
+  const code = sector.toUpperCase();
+  const type = scorecardType ?? 'Generic';
+  return code === 'RCOGP' && type === 'Generic';
+}
+
+function formatSectorLabel(sector: string, scorecardType?: string): string {
+  return `${sector.toUpperCase()} ${scorecardType ?? 'Generic'}`;
+}
+
+function hasPillarData(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  return Object.values(value as Record<string, unknown>).some(v => v != null);
+}
+
+/**
+ * Require pillar-specific config for non-RCOGP sectors.
+ * RCOGP Generic (or unset sector in tests) may use embedded RCOGP defaults.
+ */
+export function requireSectorConfig<T extends Record<string, unknown>>(
+  sector: string | undefined,
+  pillar: string,
+  config: T | undefined | null,
+  scorecardType?: string,
+): T {
+  if (allowsRcogpDefaults(sector, scorecardType)) {
+    return (config ?? {}) as T;
+  }
+  if (!hasPillarData(config)) {
+    throw new SectorConfigError(
+      `missing ${pillar} config for sector ${formatSectorLabel(sector!, scorecardType)}`,
+    );
+  }
+  return config as T;
+}
+
+export function resolveSectorContext(config?: {
+  sectorCode?: string;
+  scorecardType?: string;
+}): { sectorCode?: string; scorecardType?: string } {
+  return {
+    sectorCode: config?.sectorCode,
+    scorecardType: config?.scorecardType,
+  };
+}
+
 export const BLACK_RACES = ['African', 'Coloured', 'Indian'] as const;
 
 export type BlackRace = (typeof BLACK_RACES)[number];

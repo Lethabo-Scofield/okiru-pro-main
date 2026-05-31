@@ -23,6 +23,7 @@ import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
+import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
@@ -3241,6 +3242,7 @@ Respond ONLY with a valid JSON array.`;
 
   registerWorkbookRoutes(app);
   registerExcelImportRoutes(app);
+  registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);
 

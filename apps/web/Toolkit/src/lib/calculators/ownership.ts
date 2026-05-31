@@ -80,6 +80,9 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     designatedGroupsMax: oc?.designatedGroupsMax ?? 3,
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
+    // QSE: single combined "Black New Entrants or Designated Groups" indicator —
+    // a shareholder qualifies on EITHER criterion. (TOOLKIT-RESOLVED.md Q8.)
+    combinedNewEntrantsDesignated: oc?.combinedNewEntrantsDesignated === true,
     maxPts,
   };
 }
@@ -121,7 +124,12 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     totalBlackWomenVoting += pct * sh.blackWomenOwnership;
     totalEconomicInterest += pct * sh.blackOwnership;
     totalEconomicInterestBWO += pct * sh.blackWomenOwnership;
-    if (sh.isDesignatedGroup) {
+    // QSE combined indicator: a shareholder counts toward the designated-group
+    // economic-interest indicator if it is a designated group OR a new entrant.
+    const countsTowardDesignated = ot.combinedNewEntrantsDesignated
+      ? (sh.isDesignatedGroup || !!sh.blackNewEntrant)
+      : sh.isDesignatedGroup;
+    if (countsTowardDesignated) {
       totalDesignatedGroup += pct * sh.blackOwnership;
     }
 
@@ -192,7 +200,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO },
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
     { name: 'Economic interest of black females / ESOP bonus', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
-    { name: 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
+    { name: ot.combinedNewEntrantsDesignated ? 'Economic interest of black new entrants or designated groups' : 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
     { name: 'Economic interest of black new entrants', target: 'New entrant', weighting: ot.newEntrantsMaxPts, score: newEntrants },
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
   ];
