@@ -4,6 +4,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
 import type { ColumnDef } from "./sections";
 import { applyPasteToRows, parseClipboardMatrix } from "@/lib/workbookGridParse";
+import { toGridRows, type NormalizationResult } from "@/lib/tabularNormalize";
+import { normalizePaste } from "@/lib/aiMappingClient";
+import { MappingConfirmModal } from "./MappingConfirmModal";
+import { API_BASE } from "@toolkit/lib/config";
 
 type Row = Record<string, unknown> & { _id: string };
 type CellRef = { row: number; col: number };
@@ -113,6 +117,13 @@ export function SpreadsheetGrid({
   const [undoStack, setUndoStack] = useState<Row[][]>([]);
   const [pastePreview, setPastePreview] = useState<{ rows: number; cols: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: number } | null>(null);
+  const [mapPreview, setMapPreview] = useState<{
+    anchor: CellRef;
+    result: NormalizationResult | null;
+    usedAi: boolean;
+    notes: string[];
+    loading: boolean;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -368,30 +379,76 @@ export function SpreadsheetGrid({
     }
   }, [collectSelectedCells, columns, getCellValue]);
 
+  const applyMatrixPositional = useCallback(
+    (matrix: string[][], anchor: CellRef) => {
+      const firstRowLooksLikeHeaders = matrix[0]?.some((h) =>
+        columns.some((c) => c.label.toLowerCase().includes(h.trim().toLowerCase().slice(0, 6))),
+      );
+      pushUndo(rows);
+      const next = applyPasteToRows(rows, columns, matrix, anchor, Boolean(firstRowLooksLikeHeaders));
+      onChange(next);
+      setPastePreview({ rows: matrix.length, cols: matrix[0]?.length ?? 0 });
+      setTimeout(() => setPastePreview(null), 2000);
+    },
+    [columns, rows, onChange, pushUndo],
+  );
+
   const handlePaste = useCallback(
     (text: string) => {
       if (readOnly || !activeCell) return;
       const matrix = parseClipboardMatrix(text);
       if (matrix.length === 0) return;
 
-      const firstRowLooksLikeHeaders = matrix[0]?.some((h) =>
-        columns.some((c) => c.label.toLowerCase().includes(h.trim().toLowerCase().slice(0, 6))),
-      );
+      // Single-cell paste: apply immediately, no preview needed.
+      const isSingleCell = matrix.length === 1 && (matrix[0]?.length ?? 0) <= 1;
+      if (isSingleCell) {
+        applyMatrixPositional(matrix, activeCell);
+        return;
+      }
 
-      pushUndo(rows);
-      const next = applyPasteToRows(
-        rows,
-        columns,
-        matrix,
-        activeCell,
-        Boolean(firstRowLooksLikeHeaders),
-      );
-      onChange(next);
-      setPastePreview({ rows: matrix.length, cols: matrix[0]?.length ?? 0 });
-      setTimeout(() => setPastePreview(null), 2000);
+      // Tabular paste: normalize + validate, then show a confirm preview so the
+      // user can verify the column→field mapping and flagged cells before commit.
+      const anchor = activeCell;
+      setMapPreview({ anchor, result: null, usedAi: false, notes: [], loading: true });
+      normalizePaste(matrix, columns, API_BASE, { startColIndex: anchor.col })
+        .then(({ result, usedAi, notes }) => {
+          setMapPreview({ anchor, result, usedAi, notes, loading: false });
+        })
+        .catch(() => {
+          // Fall back to the legacy positional paste if normalization throws.
+          setMapPreview(null);
+          applyMatrixPositional(matrix, anchor);
+        });
     },
-    [readOnly, activeCell, columns, rows, onChange, pushUndo],
+    [readOnly, activeCell, columns, applyMatrixPositional],
   );
+
+  const confirmMapPreview = useCallback(() => {
+    if (!mapPreview?.result) return;
+    const { anchor, result } = mapPreview;
+    const pasted = toGridRows(result, columns);
+    if (pasted.length === 0) {
+      setMapPreview(null);
+      return;
+    }
+    pushUndo(rows);
+    const next = rows.map((r) => ({ ...r }));
+    const needed = anchor.row + pasted.length;
+    while (next.length < needed) next.push(emptyRow(columns));
+    const mappedKeys = result.mapping.filter((m) => m.targetKey).map((m) => m.targetKey as string);
+    for (let i = 0; i < pasted.length; i++) {
+      const targetIdx = anchor.row + i;
+      const target = { ...next[targetIdx] };
+      const preserveId = target._id;
+      for (const key of mappedKeys) target[key] = pasted[i][key];
+      target._id = preserveId;
+      next[targetIdx] = target;
+    }
+    onChange(next);
+    setPastePreview({ rows: pasted.length, cols: result.stats.mappedColumns });
+    setTimeout(() => setPastePreview(null), 2000);
+    setMapPreview(null);
+  }, [mapPreview, columns, rows, onChange, pushUndo]);
 
   const applyFill = useCallback(
     (fromRow: number, toRow: number) => {
@@ -1061,6 +1118,19 @@ export function SpreadsheetGrid({
         </p>
       )}
       {contextMenuPortal}
+      <MappingConfirmModal
+        open={Boolean(mapPreview)}
+        title={`Review pasted data${sectionLabel ? ` · ${sectionLabel}` : ""}`}
+        subtitle="Check that each column maps to the right field. Flagged cells were normalized or need review."
+        columns={columns}
+        result={mapPreview?.result ?? null}
+        usedAi={mapPreview?.usedAi}
+        notes={mapPreview?.notes}
+        loading={mapPreview?.loading}
+        confirmLabel="Paste into grid"
+        onClose={() => setMapPreview(null)}
+        onConfirm={confirmMapPreview}
+      />
     </div>
   );
 

@@ -9,6 +9,30 @@ import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
 import { API_BASE } from './config';
 import type { CalculatorConfig } from '../../../shared/schema';
+import {
+  RCOGP_GENERIC_CALCULATOR_CONFIG,
+  isRcogpGenericSector,
+} from './sectors/rcogp-generic';
+import {
+  RCOGP_QSE_CALCULATOR_CONFIG,
+  isRcogpQseSector,
+} from './sectors/rcogp-qse';
+import {
+  ICT_GENERIC_CALCULATOR_CONFIG,
+  isIctGenericSector,
+} from './sectors/ict-generic';
+import {
+  ICT_QSE_CALCULATOR_CONFIG,
+  isIctQseSector,
+} from './sectors/ict-qse';
+import {
+  FSC_GENERIC_CALCULATOR_CONFIG,
+  isFscGenericSector,
+} from './sectors/fsc-generic';
+import {
+  AGRI_GENERIC_CALCULATOR_CONFIG,
+  isAgriGenericSector,
+} from './sectors/agri-generic';
 
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
@@ -21,7 +45,7 @@ import {
   calculateTransportQseEmploymentEquity,
   isTransportQseSector,
 } from './calculators/transport';
-import { deepClone, round2 } from './calculators/shared';
+import { deepClone, round2, SectorConfigError, requireSectorConfig, allowsRcogpDefaults } from './calculators/shared';
 
 export interface ScenarioSnapshot {
   id: string;
@@ -475,12 +499,33 @@ function levelToRecognition(level: number, config?: CalculatorConfig | null): st
   return '0%';
 }
 
+function assertSectorConfigLoaded(cfg: CalculatorConfig, client: Client): void {
+  const sectorCode = cfg.sectorCode ?? client.sectorCode;
+  const scorecardType = cfg.scorecardType ?? client.scorecardType ?? client.companySize ?? 'Generic';
+
+  if (allowsRcogpDefaults(sectorCode, scorecardType)) return;
+
+  if (!hasValidPillarConfigs(cfg)) {
+    throw new SectorConfigError(
+      `Sector configuration not loaded for ${sectorCode} ${scorecardType}. Select a sector and wait for config to load before scoring.`,
+    );
+  }
+
+  requireSectorConfig(sectorCode, 'skills', cfg.skills as Record<string, unknown>, scorecardType);
+  requireSectorConfig(sectorCode, 'procurement', cfg.procurement as Record<string, unknown>, scorecardType);
+  requireSectorConfig(sectorCode, 'management', cfg.management as Record<string, unknown>, scorecardType);
+  requireSectorConfig(sectorCode, 'managementControl', cfg.managementControl as Record<string, unknown>, scorecardType);
+  requireSectorConfig(sectorCode, 'esd', cfg.esd as Record<string, unknown>, scorecardType);
+  requireSectorConfig(sectorCode, 'sed', cfg.sed as Record<string, unknown>, scorecardType);
+}
+
 function calculateScorecard(
   state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
   if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
+  assertSectorConfigLoaded(cfg, state.client);
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
 
@@ -814,6 +859,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       console.log(`[SCORING-TRACE] loadClientData(${clientId}) — fetching`);
       const data = await api.getClientData(clientId);
       
+      const finExtras = (data.client.financials ?? {}) as Record<string, unknown>;
+      const effectiveNpat =
+        finExtras.effectiveNpat != null
+          ? Number(finExtras.effectiveNpat)
+          : finExtras.deemedNpatUsed
+            ? Number(finExtras.deemedNpat ?? data.client.npat)
+            : data.client.npat || 0;
+
       const clientData: Client = {
         id: data.client.id,
         name: data.client.name,
@@ -831,11 +884,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         scorecardType: data.client.scorecardType || data.client.companySize || 'Generic',
         financialYear: data.client.financialYear || '',
         revenue: data.client.revenue || 0,
-        npat: data.client.npat || 0,
+        npat: effectiveNpat,
         leviableAmount: data.client.leviableAmount || 0,
         industry: data.client.industry || 'Generic',
-        eapProvince: data.client.eapProvince || 'National',
-        industryNorm: data.client.industryNorm,
+        eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
+        industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
         financialHistory: (data.financialYears || []).map((fy: any) => ({
           id: fy.id,
           year: fy.year,
@@ -886,8 +939,17 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
             normalizeFraction(sh.economicInterestPercent ?? sh.blackOwnership ?? 0),
         };
         }),
-        companyValue: data.ownership?.companyValue || clientData.revenue || 0,
-        outstandingDebt: data.ownership?.outstandingDebt || 0,
+        companyValue:
+          data.ownership?.companyValue ||
+          data.client.companyValue ||
+          (finExtras.companyValue as number | undefined) ||
+          clientData.revenue ||
+          0,
+        outstandingDebt:
+          data.ownership?.outstandingDebt ||
+          data.client.outstandingDebt ||
+          (finExtras.outstandingDebt as number | undefined) ||
+          0,
         yearsHeld: data.ownership?.yearsHeld || 0,
         ownershipScorePoints: data.ownership?.ownershipScorePoints || 0,
         ownershipScorePercent: data.ownership?.ownershipScorePercent || 0,
@@ -898,6 +960,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const managementState: ManagementData = {
         id: '',
         clientId,
+        combineExcoSenior: Boolean(finExtras.combineExcoSenior ?? data.client.combineExcoSenior),
         employees: (data.management?.employees || []).map((e: any) => ({
           id: e.id,
           name: e.name,
@@ -913,6 +976,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         id: '',
         clientId,
         leviableAmount: data.skills?.leviableAmount || clientData.leviableAmount || 0,
+        groupLeviableAmount: finExtras.groupLeviableAmount as number | undefined,
+        headcount:
+          (finExtras.headcount as number | undefined) ??
+          data.client.numberOfEmployees ??
+          undefined,
+        trainingManagerSalary: finExtras.trainingManagerSalary as number | undefined,
+        trainingOverheadCost: finExtras.trainingOverheadCost as number | undefined,
         trainingPrograms: (data.skills?.trainingPrograms || []).map((tp: any) => ({
           id: tp.id,
           name: tp.name,
@@ -986,6 +1056,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const sedState: SEDData = {
         id: '',
         clientId,
+        ceSpend: finExtras.ceSpend as number | undefined,
+        ceBonusSpend: finExtras.ceBonusSpend as number | undefined,
+        fundisaSpend: finExtras.fundisaSpend as number | undefined,
         contributions: (data.sed?.contributions || []).map((c: any) => ({
           id: c.id,
           beneficiary: c.beneficiary,
@@ -1160,6 +1233,48 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const sectorCode = client.sectorCode || 'RCOGP';
     const scorecardType = client.scorecardType || client.companySize || 'Generic';
 
+    if (isRcogpGenericSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled RCOGP Generic calculator config');
+      set({ calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
+    if (isRcogpQseSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled RCOGP QSE calculator config');
+      set({ calculatorConfig: RCOGP_QSE_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
+    if (isIctGenericSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled ICT Generic calculator config');
+      set({ calculatorConfig: ICT_GENERIC_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
+    if (isIctQseSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled ICT QSE calculator config');
+      set({ calculatorConfig: ICT_QSE_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
+    if (isAgriGenericSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
+      set({ calculatorConfig: AGRI_GENERIC_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
+    if (isFscGenericSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled FSC Generic (Others) calculator config');
+      set({ calculatorConfig: FSC_GENERIC_CALCULATOR_CONFIG });
+      get()._recalculateAll();
+      return;
+    }
+
     const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
 
     if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
@@ -1169,7 +1284,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
         employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
       });
-      set({ calculatorConfig: sectorConfig });
+      set({
+        calculatorConfig: {
+          ...sectorConfig,
+          sectorCode: sectorConfig.sectorCode ?? sectorCode,
+          scorecardType: sectorConfig.scorecardType ?? scorecardType,
+        },
+      });
       get()._recalculateAll();
       return;
     }
@@ -1198,7 +1319,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       set({ scorecard: result });
       console.log('[SCORING-TRACE] Final recalculated:', `${result.total.score} / ${result.total.weighting} = Level ${result.achievedLevel}`);
     } catch (error) {
-      console.error('[store] Calculation failed:', error);
+      if (import.meta.env?.DEV && error instanceof SectorConfigError) {
+        throw error;
+      }
+      const message = error instanceof SectorConfigError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Scorecard calculation failed';
+      console.error('[store] Calculation failed:', message, error);
     }
   },
 

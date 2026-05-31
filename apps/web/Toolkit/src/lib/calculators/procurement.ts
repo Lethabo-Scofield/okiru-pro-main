@@ -1,6 +1,6 @@
 import type { ProcurementData, Supplier } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2 } from './shared';
+import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
 
 /**
  * @domain-rule pillar:procurement, slides:56,57
@@ -48,8 +48,8 @@ export interface ProcurementResult {
   };
 }
 
-function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): number {
-  if (config.recognitionTable && Array.isArray(config.recognitionTable)) {
+function getRecognitionMultiplier(beeLevel: number, config?: CalculatorConfig): number {
+  if (config?.recognitionTable && Array.isArray(config.recognitionTable)) {
     const entry = config.recognitionTable.find(e => e.level === beeLevel);
     if (entry) return entry.multiplier;
   }
@@ -63,15 +63,20 @@ function getRecognitionMultiplier(beeLevel: number, config: CalculatorConfig): n
  * VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
  * CRITICAL FIXES: BO51 target 40%→50%, DG target 12%→2%, DG is bonus (excluded from sub-min)
  */
-export function calculateProcurementScore(data: ProcurementData, config: CalculatorConfig): ProcurementResult {
-  if (!config) throw new Error('CalculatorConfig is required for procurement score calculation');
+export function calculateProcurementScore(data: ProcurementData, config?: CalculatorConfig): ProcurementResult {
+  const { sectorCode, scorecardType } = resolveSectorContext(config);
+  const pc = requireSectorConfig(
+    sectorCode,
+    'procurement',
+    config?.procurement as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as NonNullable<CalculatorConfig['procurement']>;
   console.log('[SCORING-TRACE] calculateProcurementScore received:', {
     tmps: data.tmps,
     supplierCount: data.suppliers?.length ?? 0,
   });
   const { tmps } = data;
   const suppliers = data.suppliers || [];
-  const pc = config.procurement;
 
   const allSuppliersTarget = pc.allSuppliersTarget ?? 0.80;
   const allSuppliersMaxPts = pc.allSuppliersMaxPts ?? 5;
@@ -86,7 +91,7 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   const dgTarget = pc.dgTarget ?? 0.02;
   const dgMaxPts = pc.dgMaxPts ?? 2;
   
-  const blackWomenThreshold = config.procurement.blackWomenThreshold ?? 0.30;
+  const blackWomenThreshold = pc.blackWomenThreshold ?? 0.30;
   const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
   const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 

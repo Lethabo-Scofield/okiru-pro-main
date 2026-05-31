@@ -18,6 +18,7 @@ type CompanySize = typeof COMPANY_SIZES[number];
 
 interface CertificateRow {
   name: string;
+  blobName?: string | null;  // explicit blob storage key, alias of name
   fileName: string;
   companyName: string;
   vatNumber: string | null;
@@ -32,6 +33,59 @@ interface CertificateRow {
   id?: string | null;
   slug?: string | null;
   verified?: boolean;
+}
+
+/** Derive a human-readable company name from a blob/file name as a display fallback. */
+function cleanBlobDisplayName(blobOrFileName: string): string {
+  const base = blobOrFileName.includes('/') ? blobOrFileName.split('/').pop()! : blobOrFileName;
+  let w = base
+    // Strip UUID upload prefix
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, '')
+    // Strip file extension
+    .replace(/\.[^/.]+$/, '');
+
+  // Strip leading date prefixes
+  w = w
+    .replace(/^\d{4}[\s_\-]+\d{1,2}[\s_\-]+\d{1,2}[\s_\-]+/, '')
+    .replace(/^(?:19|20)\d{2}[\s._\-]+/, '');
+
+  // Repeatedly strip trailing noise (size codes, dates, B-BBEE noise)
+  let changed = true;
+  while (changed) {
+    const prev = w;
+    w = w
+      .replace(/[\s_\-]+(EME|QSE|GEN|Generic|Large|Specialised?)[\s_\-]*$/i, '')
+      .replace(/[\s_\-]+B[\s\-]?BBEE.*$/i, '')
+      .replace(/[\s_\-]+Certificate.*$/i, '')
+      .replace(/[\s_\-]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s_\-]?\d{2,4}$/i, '')
+      .replace(/[\s_\-]+20\d{2}$/, '')
+      .replace(/[\s_\-]+\d{2}$/, '')
+      .replace(/[\s_\-]*\(?\d+\)?$/, '');
+    changed = w !== prev;
+  }
+
+  // Normalise separators
+  w = w.replace(/[_\-]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+  // Title case
+  const ABBR = new Set(['PTY', 'LTD', 'CC', 'SA', 'NPC', 'RF', 'JV', 'LLC']);
+  w = w.replace(/\b(\w+)/g, (word) => {
+    const up = word.toUpperCase();
+    return ABBR.has(up) ? up : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  return w;
+}
+
+/** Mirrors server-side isValidSupplierName for client-side fallback display decisions. */
+function isValidDisplayName(name: string): boolean {
+  const t = name.trim();
+  if (t.length < 3) return false;
+  if (/^\d+$/.test(t)) return false;
+  if (/^[^a-zA-Z]+$/.test(t)) return false;
+  if ((t.match(/[a-zA-Z]/g) ?? []).length < 2) return false;
+  if (/^(?:null|undefined|n\/a|none|unknown|n\.?a\.?)$/i.test(t)) return false;
+  return true;
 }
 
 interface CertStats {
@@ -145,7 +199,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-[#6366f1]/30 text-[#c7d2fe] rounded-sm px-0.5">{part}</mark>
+          <mark key={i} className="bg-white/20 text-white rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         ),
@@ -170,9 +224,9 @@ function FilterPill({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors ${
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
           active
-            ? 'bg-white text-black'
+            ? 'bg-violet-500/15 border border-violet-400/35 text-violet-100'
             : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e]'
         }`}
       >
@@ -353,7 +407,8 @@ export default function CertificateHub() {
     const q = search.trim().toLowerCase();
     const out = allCerts.filter(c => {
       if (q) {
-        const hay = `${c.companyName} ${c.vatNumber || ''} ${c.fileName}`.toLowerCase();
+        const blobFallback = cleanBlobDisplayName(c.blobName || c.fileName || c.name);
+        const hay = `${c.companyName} ${c.vatNumber || ''} ${c.fileName} ${blobFallback}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (statusFilter && c.status !== statusFilter) return false;
@@ -521,7 +576,7 @@ export default function CertificateHub() {
             {isAuthenticated ? (
               <button
                 onClick={requireLoginToUpload}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] bg-violet-500 text-white hover:bg-violet-400 transition-colors font-medium shadow-[0_4px_14px_-4px_rgba(139,92,246,0.5)]"
               >
                 <Upload className="h-3.5 w-3.5" />
                 Upload
@@ -536,7 +591,7 @@ export default function CertificateHub() {
                 </Link>
                 <Link
                   href={gatedAuthPath({ mode: 'register', redirect: '/certificates' })}
-                  className="inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] bg-violet-500 text-white hover:bg-violet-400 transition-colors font-medium shadow-[0_4px_14px_-4px_rgba(139,92,246,0.5)]"
                 >
                   Get started
                 </Link>
@@ -549,8 +604,18 @@ export default function CertificateHub() {
       <main className="max-w-[1100px] mx-auto px-5 pt-10 pb-20">
 
         {/* ─── Hero ───────────────────────────────────────────── */}
-        <div className="mb-8">
-          <p className="text-[11px] tracking-[0.14em] uppercase text-[#818cf8] mb-3" style={{ fontFamily: "'Geist Mono', monospace" }}>
+        <div className="relative mb-8">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-20 left-1/2 w-[600px] h-[400px] rounded-full opacity-[0.08] blur-[120px] z-0"
+            style={{
+              background: 'radial-gradient(circle, rgba(168,85,247,0.5) 0%, rgba(168,85,247,0) 70%)',
+              transform: 'translate(-50%, 0)',
+            }}
+          />
+          <div className="relative z-[1]">
+          <p className="flex items-center gap-2 text-[11px] tracking-[0.14em] uppercase text-[#636366] mb-3" style={{ fontFamily: "'Geist Mono', monospace" }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80 pulse-soft shrink-0" />
             Public B-BBEE Certificate Registry · South Africa
           </p>
           <h1
@@ -559,11 +624,12 @@ export default function CertificateHub() {
           >
             {loading ? '…' : headlineCount.toLocaleString()} B-BBEE certificates
             <br />
-            <em style={{ color: '#a5b4fc' }}>available to the public.</em>
+            <em className="text-[#a1a1aa]">available to the public.</em>
           </h1>
           <p className="mt-4 text-[14px] text-[#a1a1aa] max-w-[640px] leading-relaxed">
             Search and verify South African B-BBEE compliance certificates. Filter by company size, ownership, and validity. Anyone can browse - sign in to add your own certificate to the registry.
           </p>
+          </div>
         </div>
 
         {/* ─── Hero search (primary CTA) ───────────────────── */}
@@ -574,7 +640,7 @@ export default function CertificateHub() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by company name, VAT number, or B-BBEE level…"
-            className="w-full bg-[#1c1c1e] rounded-xl pl-12 pr-12 py-4 text-[16px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#6366f1] transition-colors shadow-sm"
+            className="w-full bg-[#1c1c1e] rounded-xl pl-12 pr-12 py-4 text-[16px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-violet-400/50 transition-colors shadow-sm"
             autoComplete="off"
           />
           {search && (
@@ -594,7 +660,7 @@ export default function CertificateHub() {
               title="Total certificates"
               value={String(stats.total)}
               subtitle="across the registry"
-              iconColor="#818cf8"
+              iconColor="#8e8e93"
               icon={<FileText className="h-4 w-4" />}
             />
             <KpiCard
@@ -701,9 +767,9 @@ export default function CertificateHub() {
             {!hasActiveFilters && (
               <button
                 onClick={requireLoginToUpload}
-                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white border border-[#6366f1]/50 hover:bg-[#6366f1]/10 transition-colors"
+                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium bg-violet-500/10 border border-violet-400/25 text-violet-200 hover:bg-violet-500/20 hover:border-violet-300/40 transition-colors"
               >
-                <Upload className="h-3.5 w-3.5 text-[#a5b4fc]" />
+                <Upload className="h-3.5 w-3.5" />
                 Add Your Certificate
               </button>
             )}
@@ -750,11 +816,18 @@ export default function CertificateHub() {
 
         {/* ─── Upload your certificate CTA ────────────────── */}
         <section
-          className="mt-12 rounded-2xl border p-6 md:p-8"
-          style={{ borderColor: 'rgba(99,102,241,0.2)', background: 'linear-gradient(135deg, rgba(99,102,241,0.06), transparent 60%)' }}
+          className="relative mt-12 rounded-2xl border border-violet-400/20 p-6 md:p-8 overflow-hidden"
+          style={{
+            backgroundImage: 'linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.04) 50%, rgba(255,255,255,0.01) 100%)',
+          }}
         >
-          <div className="flex items-start gap-3 mb-4">
-            <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg" style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-16 -right-12 w-48 h-48 rounded-full opacity-60 blur-3xl"
+            style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.25) 0%, rgba(168,85,247,0) 70%)' }}
+          />
+          <div className="relative flex items-start gap-3 mb-4">
+            <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-violet-500/20 border border-violet-400/30 text-violet-300">
               <CloudUpload className="h-5 w-5" />
             </div>
             <div>
@@ -776,8 +849,8 @@ export default function CertificateHub() {
               { n: '2', title: 'Upload your certificate', body: 'PDF, image, or document. Add company name, VAT, size and ownership.' },
               { n: '3', title: 'Goes live in the registry', body: 'Anyone can search and verify. You can update or remove it any time.' },
             ].map(step => (
-              <li key={step.n} className="rounded-xl border border-[#1c1c1e] bg-[#0d0d10] p-4">
-                <div className="text-[10px] tracking-[0.14em] uppercase text-[#818cf8] mb-2" style={{ fontFamily: "'Geist Mono', monospace" }}>
+              <li key={step.n} className="rounded-xl border border-violet-400/15 bg-violet-500/[0.04] p-4">
+                <div className="text-[10px] tracking-[0.14em] uppercase text-violet-400/60 mb-2" style={{ fontFamily: "'Geist Mono', monospace" }}>
                   Step {step.n}
                 </div>
                 <div className="text-[14px] text-white font-medium mb-1">{step.title}</div>
@@ -789,7 +862,7 @@ export default function CertificateHub() {
           <div className="mt-5 flex items-center gap-3 flex-wrap">
             <button
               onClick={requireLoginToUpload}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium bg-violet-500 text-white hover:bg-violet-400 transition-colors shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)]"
             >
               <Upload className="h-4 w-4" />
               {isAuthenticated ? 'Add Your Certificate' : 'Sign in to upload'}
@@ -826,19 +899,19 @@ export default function CertificateHub() {
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
                   dragOver
-                    ? 'border-[#6366f1] bg-[#6366f1]/10'
-                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-white/[0.02]'
+                    ? 'border-violet-400/50 bg-violet-500/[0.05]'
+                    : 'border-[#2c2c2e] hover:border-violet-400/25 hover:bg-white/[0.02]'
                 }`}
               >
                 {uploadFile ? (
                   <div className="flex items-center justify-center gap-2 text-[13px] text-white">
-                    <FileUp className="h-4 w-4 text-[#a5b4fc]" />
+                    <FileUp className="h-4 w-4 text-[#8e8e93]" />
                     <span className="truncate max-w-[280px]">{uploadFile.name}</span>
                     <span className="text-[#636366]">· {(uploadFile.size / 1024).toFixed(0)} KB</span>
                   </div>
                 ) : (
                   <>
-                    <CloudUpload className={`h-8 w-8 mx-auto mb-2 ${dragOver ? 'text-[#6366f1]' : 'text-[#48484a]'}`} />
+                    <CloudUpload className={`h-8 w-8 mx-auto mb-2 ${dragOver ? 'text-white/60' : 'text-[#48484a]'}`} />
                     <p className="text-[13px] text-[#e5e5ea] mb-1">
                       {dragOver ? 'Drop file here' : 'Drag & drop or click to browse'}
                     </p>
@@ -929,7 +1002,7 @@ export default function CertificateHub() {
               <button
                 onClick={submitUpload}
                 disabled={uploading || !uploadFile || !form.companyName.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] bg-violet-500 text-white hover:bg-violet-400 transition-colors disabled:opacity-40 font-medium shadow-[0_4px_14px_-4px_rgba(139,92,246,0.5)]"
               >
                 {uploading ? (
                   <>
@@ -948,14 +1021,8 @@ export default function CertificateHub() {
         </div>
       )}
 
-      {/* Brand tokens + local input styles */}
+      {/* Local input styles */}
       <style>{`
-        :root {
-          --cert-brand:       #6366f1;
-          --cert-brand-hover: #4f46e5;
-          --cert-brand-dim:   #818cf8;
-          --cert-brand-muted: #a5b4fc;
-        }
         .ok-cert-input {
           width: 100%;
           background: #0d0d10;
@@ -967,7 +1034,7 @@ export default function CertificateHub() {
           outline: none;
           transition: border-color 0.15s;
         }
-        .ok-cert-input:focus { border-color: var(--cert-brand); }
+        .ok-cert-input:focus { border-color: rgba(139,92,246,0.5); }
         .ok-cert-input::placeholder { color: #48484a; }
       `}</style>
     </div>
@@ -994,6 +1061,12 @@ function CertRow({
   onDownload: () => void;
   onPreview: () => void;
 }) {
+  // Determine display name: prefer companyName if valid, else fall back to blob-derived name
+  const companyValid = isValidDisplayName(cert.companyName);
+  const blobFallback = companyValid ? null : cleanBlobDisplayName(cert.blobName || cert.fileName || cert.name);
+  const displayName = companyValid ? cert.companyName : (blobFallback || cert.companyName);
+  const isFallbackName = !companyValid && !!blobFallback;
+
   return (
     <div
       className="md:grid md:grid-cols-[2fr_1fr_0.7fr_0.6fr_1fr_1fr_auto] md:items-center md:gap-3 px-4 py-3 hover:bg-[#16161b] transition-colors"
@@ -1004,17 +1077,17 @@ function CertRow({
     >
       {/* Company name — truncated with tooltip */}
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0" title={cert.companyName}>
-          <span className="text-[14px] text-white font-medium leading-snug truncate min-w-0 max-w-full">
+        <div className="flex items-center gap-1.5 min-w-0" title={displayName}>
+          <span className={`text-[14px] font-medium leading-snug truncate min-w-0 max-w-full ${isFallbackName ? 'text-[#8e8e93] italic' : 'text-white'}`}>
             {cert.slug ? (
               <Link
                 href={`/certificates/${cert.slug}`}
-                className="text-white hover:text-[#a5b4fc] transition-colors"
+                className={`${isFallbackName ? 'text-[#8e8e93] hover:text-white' : 'text-white hover:text-[#d1d1d6]'} transition-colors`}
               >
-                <HighlightMatch text={cert.companyName} query={searchQuery} />
+                <HighlightMatch text={displayName} query={searchQuery} />
               </Link>
             ) : (
-              <HighlightMatch text={cert.companyName} query={searchQuery} />
+              <HighlightMatch text={displayName} query={searchQuery} />
             )}
           </span>
           {cert.verified && (
@@ -1183,8 +1256,15 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
       >
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 min-w-0">
-            <ShieldCheck className="h-4 w-4 text-[#a5b4fc] shrink-0" />
-            <h2 className="text-[15px] font-semibold text-white truncate">{cert.companyName}</h2>
+            <ShieldCheck className="h-4 w-4 text-[#8e8e93] shrink-0" />
+            {(() => {
+              const valid = isValidDisplayName(cert.companyName);
+              const fallback = valid ? null : cleanBlobDisplayName(cert.blobName || cert.fileName || cert.name);
+              const name = valid ? cert.companyName : (fallback || cert.companyName);
+              return (
+                <h2 className={`text-[15px] font-semibold truncate ${valid ? 'text-white' : 'text-[#a1a1aa] italic'}`}>{name}</h2>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {docUrl && (
@@ -1292,7 +1372,7 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
             {cert.slug && (
               <Link
                 href={`/certificates/${cert.slug}`}
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#a5b4fc] hover:text-white hover:underline"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[#8e8e93] hover:text-white hover:underline"
               >
                 View public certificate page
               </Link>
@@ -1330,7 +1410,7 @@ function EmptyState({
       <div className="py-16 text-center rounded-xl border border-[#1c1c1e]">
         <AlertCircle className="w-6 h-6 text-[#3a3a3c] mx-auto mb-3" />
         <p className="text-[14px] text-[#8e8e93] mb-2">No certificates match your filters</p>
-        <button onClick={onClearFilters} className="text-[13px] text-[#a5b4fc] hover:text-white transition-colors">
+        <button onClick={onClearFilters} className="text-[13px] text-[#8e8e93] hover:text-white transition-colors">
           Clear all filters
         </button>
       </div>
@@ -1343,7 +1423,7 @@ function EmptyState({
       <p className="text-[12px] text-[#636366] mb-4">Be the first to add a B-BBEE certificate.</p>
       <button
         onClick={onUpload}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] bg-violet-500 text-white hover:bg-violet-400 font-medium transition-colors shadow-[0_4px_14px_-4px_rgba(139,92,246,0.5)]"
       >
         <Upload className="h-3.5 w-3.5" />
         {isAuthenticated ? 'Upload the first certificate' : 'Sign in to upload'}

@@ -4,7 +4,7 @@
  */
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2 } from './shared';
+import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
 
 /**
  * @domain-rule pillar:skills_development, slide:86
@@ -91,13 +91,20 @@ interface SpendAccumulator {
   learnershipCount: number;
   absorbedCount: number;
   totalBlackLearners: number;
+  /** Count of unemployed Black learners — drives the AgriBEE headcount-based 2.1.2.2 indicator. */
+  unemployedCount: number;
   byCategory: Record<TrainingCategoryCode, number>;
+}
+
+function isUnemployed(prog: TrainingProgram): boolean {
+  return prog.employmentStatus === 'Unemployed' || prog.isEmployed === false;
 }
 
 function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   const acc: SpendAccumulator = {
     total: 0, bursary: 0, disabled: 0, blackPeople: 0,
     learnershipCount: 0, absorbedCount: 0, totalBlackLearners: 0,
+    unemployedCount: 0,
     byCategory: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 },
   };
 
@@ -113,6 +120,7 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
     if (prog.isDisabled) acc.disabled += cost;
     if (prog.category === 'learnership' || prog.category === 'internship' || catCode === 'B') acc.learnershipCount++;
+    if (isUnemployed(prog)) acc.unemployedCount++;
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
     if (prog.isAbsorbed) acc.absorbedCount++;
   }
@@ -155,6 +163,26 @@ function applyCapToSpend(
   return { totalRecognised, breakdown };
 }
 
+/** Apply 15% caps to training-manager salary and overhead (each vs programme spend). */
+function applyAdminCosts(
+  programmeRecognised: number,
+  programmeUncapped: number,
+  salary: number,
+  overhead: number,
+  adminCapPct: number = ADMIN_COST_CAP,
+): { adminRecognised: number; totalRecognised: number } {
+  const base = programmeUncapped > 0 ? programmeUncapped : programmeRecognised;
+  if (base <= 0) return { adminRecognised: 0, totalRecognised: programmeRecognised };
+  const capEach = base * adminCapPct;
+  const recognisedSalary = salary > 0 ? Math.min(salary, capEach) : 0;
+  const recognisedOverhead = overhead > 0 ? Math.min(overhead, capEach) : 0;
+  const adminRecognised = recognisedSalary + recognisedOverhead;
+  return {
+    adminRecognised,
+    totalRecognised: programmeRecognised + adminRecognised,
+  };
+}
+
 /**
  * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
  * Keeps the calculator usable in tests and as a safe fallback when sector
@@ -176,11 +204,24 @@ const SKILLS_DEFAULTS = {
 export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig): SkillsResult {
   console.log('[SCORING-TRACE] calculateSkillsScore received:', {
     leviableAmount: data.leviableAmount,
+    groupLeviableAmount: data.groupLeviableAmount,
+    headcount: data.headcount,
     programCount: data.trainingPrograms?.length ?? 0,
+    trainingManagerSalary: data.trainingManagerSalary,
+    trainingOverheadCost: data.trainingOverheadCost,
   });
-  const { leviableAmount } = data;
+  const leviableAmount =
+    (data.groupLeviableAmount != null && data.groupLeviableAmount > 0)
+      ? data.groupLeviableAmount
+      : data.leviableAmount;
   const trainingPrograms = data.trainingPrograms || [];
-  const sc = (config?.skills ?? {}) as Partial<NonNullable<CalculatorConfig['skills']>>;
+  const { sectorCode, scorecardType } = resolveSectorContext(config);
+  const sc = requireSectorConfig(
+    sectorCode,
+    'skills',
+    config?.skills as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as Partial<NonNullable<CalculatorConfig['skills']>>;
 
   const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget ?? SKILLS_DEFAULTS.overallTarget;
   const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget ?? SKILLS_DEFAULTS.bursaryTarget;
@@ -198,20 +239,40 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
 
   const learnershipTargetPct = sc.learnershipTargetPercent ?? SKILLS_DEFAULTS.learnershipTargetPercent;
   const absorptionTargetPct = sc.absorptionTargetPercent ?? SKILLS_DEFAULTS.absorptionTargetPercent;
+  // AgriBEE: the bursary slot models the "unemployed Black people in training"
+  // indicator (2.1.2.2), which is scored on a headcount basis, not spend.
+  const bursaryIsHeadcount = (sc as any).bursaryIsHeadcount === true;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
   const TARGET_DISABLED = leviableAmount * disabledTargetPct;
 
   const spend = accumulateSpend(trainingPrograms);
-  const { totalRecognised, breakdown } = applyCapToSpend(spend.byCategory, fgCap, adminCap);
+  const uncappedProgrammeSpend = Object.values(spend.byCategory).reduce((a, b) => a + b, 0);
+  const { totalRecognised: programmeRecognised, breakdown } = applyCapToSpend(spend.byCategory, fgCap, adminCap);
+  const adminResult = applyAdminCosts(
+    programmeRecognised,
+    uncappedProgrammeSpend,
+    data.trainingManagerSalary ?? 0,
+    data.trainingOverheadCost ?? 0,
+    adminCap,
+  );
+  const totalRecognised = adminResult.totalRecognised;
+
+  const entityHeadcount =
+    (data.headcount != null && data.headcount > 0)
+      ? data.headcount
+      : Math.max(spend.totalBlackLearners, 1);
 
   const learningScore = clampScore(safeRatio(totalRecognised, TARGET_OVERALL, learningMaxPts), learningMaxPts);
-  const bursaryScore = clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);
+  // AgriBEE 2.1.2.2: headcount of unemployed Black learners vs (entity headcount × target%).
+  const bursaryHeadcountTarget = Math.max(entityHeadcount * bursaryTargetPct, 1);
+  const bursaryScore = bursaryIsHeadcount
+    ? clampScore(safeRatio(spend.unemployedCount, bursaryHeadcountTarget, bursaryMaxPts), bursaryMaxPts)
+    : clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);
   const disabledScore = clampScore(safeRatio(spend.disabled, TARGET_DISABLED, disabledMaxPts), disabledMaxPts);
 
-  const totalEmployees = trainingPrograms.filter(p => p.isBlack).length;
-  const learnershipTarget = Math.max(totalEmployees * (learnershipTargetPct / 100), 1);
+  const learnershipTarget = Math.max(entityHeadcount * (learnershipTargetPct / 100), 1);
   const learnershipScore = clampScore(safeRatio(spend.learnershipCount, learnershipTarget, learnershipMaxPts), learnershipMaxPts);
 
   const absorptionRate = spend.totalBlackLearners > 0
@@ -228,7 +289,9 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
 
   const subLines: SkillsSubLine[] = [
     { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
-    { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
+    bursaryIsHeadcount
+      ? { name: "Number of unemployed Black people in training", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: bursaryScore }
+      : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
     { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: disabledScore },
     { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: learnershipScore },
     { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },

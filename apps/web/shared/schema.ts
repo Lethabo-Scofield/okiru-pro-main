@@ -13,6 +13,9 @@ export interface TemplateEntity {
 }
 
 export interface CalculatorConfig {
+  /** Populated by sectorConfigToCalculatorConfig — drives pillar config guards. */
+  sectorCode?: string;
+  scorecardType?: string;
   totalMaxPoints: number;
   ownership: {
     votingRightsMax: number;
@@ -29,6 +32,14 @@ export interface CalculatorConfig {
     newEntrantsMax?: number;
     designatedGroupsMax?: number;
     designatedGroupsTarget?: number;
+    /**
+     * QSE-only: the toolkit collapses "Black New Entrants" and "Designated Groups"
+     * into a single combined economic-interest indicator. When true, a shareholder
+     * qualifies for the designated-group indicator on EITHER criterion
+     * (isDesignatedGroup OR blackNewEntrant), and the separate new-entrants slot is 0.
+     * (TOOLKIT-RESOLVED.md Q8; RCOGP QSE / ICT QSE Ownership Scorecard r9.)
+     */
+    combinedNewEntrantsDesignated?: boolean;
   };
   management: {
     boardBlackTarget: number;
@@ -90,6 +101,14 @@ export interface CalculatorConfig {
     absorptionMaxPts?: number;
     learnershipTargetPercent?: number;
     absorptionTargetPercent?: number;
+    /**
+     * AgriBEE-only: the "unemployed Black people in training" indicator (2.1.2.2)
+     * is scored on a HEADCOUNT basis (count of unemployed Black learners vs a
+     * % -of-headcount target), not on a spend basis. When true, the bursary slot
+     * (bursaryMaxPts) is scored from the unemployed-learner headcount.
+     * (TOOLKIT-RESOLVED.md Q13; AGRI Skills Scorecard r39, header "Headcount".)
+     */
+    bursaryIsHeadcount?: boolean;
   };
   procurement: {
     baseMax: number;
@@ -116,10 +135,40 @@ export interface CalculatorConfig {
     enterpriseDevMax: number;
     supplierDevTarget: number;
     enterpriseDevTarget: number;
+    /** Max points for the ED graduation tick-box bonus (default 1). */
+    edGraduationBonusMax?: number;
+    /**
+     * Max points for the ED "jobs created" bonus (default 1). ICT awards a tiered
+     * bonus: ≤10% of workforce → 1 pt, ≥11% → 2 pts (mutually exclusive). Set to 2
+     * to enable the upper tier. (TOOLKIT-RESOLVED.md S6.)
+     */
+    edJobsBonusMax?: number;
+    /**
+     * FSC-only: separate ED bonus for "support of black stockbrokers / fund
+     * managers / intermediaries" (0.5% NPAT / 2 pts). Default 0. Scored from
+     * ESDData.stockbrokerSpend against npat × edStockbrokerTarget.
+     * (TOOLKIT-RESOLVED.md Q42; FSC ESD Scorecard r12.)
+     */
+    edStockbrokerBonusMax?: number;
+    /** FSC-only: NPAT fraction target for the stockbroker bonus (e.g. 0.005). */
+    edStockbrokerTarget?: number;
   };
   sed: {
     maxPoints: number;
     npatTarget: number;
+    /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
+    sedBaseMaxPts?: number;
+    /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */
+    sedNpatTarget?: number;
+    /** FSC: CE base max points from ceSpend meta. */
+    ceMaxPts?: number;
+    ceNpatTarget?: number;
+    /** FSC: additional CE bonus from ceBonusSpend meta. */
+    ceBonusMaxPts?: number;
+    ceBonusNpatTarget?: number;
+    /** FSC: Fundisa grant bonus from fundisaSpend meta. */
+    fundisaMaxPts?: number;
+    fundisaNpatTarget?: number;
   };
   yes?: {
     tier1Points: number;

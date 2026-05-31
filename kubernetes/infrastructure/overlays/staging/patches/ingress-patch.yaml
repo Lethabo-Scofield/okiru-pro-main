@@ -18,6 +18,30 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # Workbook data routes (web server owns ALL /api/workbook/* — NOT on api backend)
+          - path: /api/workbook
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Admin/demo routes on web: Lake Trading demo, rollback (NOT on api backend)
+          - path: /api/admin
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Excel import normalisation endpoint (web only)
+          - path: /api/excel-import
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           - path: /api
             pathType: Prefix
             backend:

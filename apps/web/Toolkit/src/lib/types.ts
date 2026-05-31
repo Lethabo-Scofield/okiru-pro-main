@@ -127,6 +127,8 @@ export interface ManagementData {
   id: string;
   clientId: string;
   employees: Employee[];
+  /** When true, merge Other Executive + Senior Management into one MC band (toolkit toggle). */
+  combineExcoSenior?: boolean;
 }
 
 export type TrainingCategoryCode = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
@@ -197,6 +199,15 @@ export interface SkillsData {
   // Tracking for YES absorption (cross-pillar linkage)
   yesCandidatesCount: number;  // From isYesEmployee flag
   yesAbsorbedCount: number;    // From isAbsorbed flag
+
+  /** Entity headcount (grey cell) — LAI / absorption / headcount-based indicators. */
+  headcount?: number;
+  /** Group-level leviable amount when measuring at group level (grey cell). */
+  groupLeviableAmount?: number;
+  /** Training manager / SDF salary — capped at 15% of total skills spend each. */
+  trainingManagerSalary?: number;
+  /** Training overhead — capped at 15% of total skills spend each. */
+  trainingOverheadCost?: number;
 }
 
 // YES 4 Youth Initiative
@@ -372,12 +383,28 @@ export interface ESDData {
   jobsCreatedBonus: boolean;
   jobsCreatedCount?: number;
   jobsCreatedEvidence?: string;
+  /**
+   * Jobs created as a fraction of the prior-year workforce. Drives the ICT
+   * two-tier jobs bonus: < 0.11 (≤10%) → 1 pt, ≥ 0.11 (≥11%) → 2 pts.
+   * Only applied when the sector config sets esd.edJobsBonusMax ≥ 2.
+   */
+  jobsCreatedPercent?: number;
+  /**
+   * FSC-only: recognised (benefit-adjusted) ED spend supporting black
+   * stockbrokers / fund managers / intermediaries. Scored against 0.5% of NPAT
+   * for the separate 2-pt FSC stockbroker bonus.
+   */
+  stockbrokerSpend?: number;
 }
 
 export interface SEDData {
   id: string;
   clientId: string;
   contributions: Contribution[];
+  /** FSC Consumer Education aggregate inputs (sed section meta — not SED rows). */
+  ceSpend?: number;
+  ceBonusSpend?: number;
+  fundisaSpend?: number;
 }
 
 export interface PillarScore {

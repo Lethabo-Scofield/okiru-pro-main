@@ -16,6 +16,7 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
       "@api": path.resolve(import.meta.dirname, "../api"),
+      "node:async_hooks": path.resolve(import.meta.dirname, "src/lib/stubs/async_hooks.ts"),
     },
   },
   css: {

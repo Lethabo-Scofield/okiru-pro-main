@@ -318,6 +318,34 @@ describe("validateScorecardTypeForSector", () => {
   });
 });
 
+describe("validateWorkbook — sector-aware meta", () => {
+  it("requires FSC sub-sector when sector is FSC", () => {
+    const issues = validateWorkbook({
+      "company-information": {
+        meta: { companyName: "Bank Co", industrySector: "FSC", scorecardType: "Generic" },
+      },
+      "financial-information": { meta: validFinancialMeta },
+    });
+    expect(issues.some((i) => i.field === "fscSubSector")).toBe(true);
+  });
+
+  it("requires FSC CE spend meta when sed section is present", () => {
+    const issues = validateWorkbookForSubmit({
+      "company-information": {
+        meta: {
+          companyName: "FSC Co",
+          industrySector: "FSC",
+          scorecardType: "Generic",
+          fscSubSector: "Others",
+        },
+      },
+      "financial-information": { meta: validFinancialMeta },
+      sed: { meta: {}, rows: [] },
+    });
+    expect(issues.some((i) => i.field === "ceSpend")).toBe(true);
+  });
+});
+
 describe("resolveScorecardTypeForSector", () => {
   it("keeps valid scorecard type when sector changes within same option set", () => {
     expect(resolveScorecardTypeForSector("RCOGP", "QSE")).toBe("QSE");

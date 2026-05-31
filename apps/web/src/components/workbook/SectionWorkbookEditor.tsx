@@ -7,9 +7,12 @@ import {
   diffSectionImport,
   exportSectionToXlsx,
   mergeSectionImport,
-  parseSectionFile,
+  readSectionMatrix,
   type SectionImportDiff,
 } from "@/lib/workbookSectionImportExport";
+import { normalizePaste } from "@/lib/aiMappingClient";
+import { toGridRows, type NormalizationResult } from "@/lib/tabularNormalize";
+import { API_BASE } from "@toolkit/lib/config";
 import { SectionImportPreviewModal } from "./SectionImportPreviewModal";
 
 type Row = Record<string, unknown> & { _id: string };
@@ -32,6 +35,8 @@ export function SectionWorkbookEditor({
   const [importDiff, setImportDiff] = useState<SectionImportDiff | null>(null);
   const [importMode, setImportMode] = useState<"append" | "replace">("append");
   const [importing, setImporting] = useState(false);
+  const [normalization, setNormalization] = useState<NormalizationResult | null>(null);
+  const [usedAi, setUsedAi] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const readOnly = !permissions.canEdit;
@@ -49,8 +54,16 @@ export function SectionWorkbookEditor({
       setImportOpen(true);
       setImportDiff(null);
       setImportMode("append");
+      setNormalization(null);
+      setUsedAi(false);
       try {
-        const parsed = await parseSectionFile(file, columns);
+        const matrix = await readSectionMatrix(file);
+        const { result, usedAi: ai } = await normalizePaste(matrix, columns, API_BASE, {
+          hasHeaderRow: true,
+        });
+        const parsed = toGridRows(result, columns);
+        setNormalization(result);
+        setUsedAi(ai);
         setImportDiff(diffSectionImport(rows, parsed, columns));
       } catch {
         setImportDiff({ added: [], updated: [], removed: [], unchanged: 0 });
@@ -60,20 +73,21 @@ export function SectionWorkbookEditor({
   );
 
   const confirmImport = useCallback(async () => {
-    if (!importFile || !importDiff || columns.length === 0) return;
+    if (!importFile || !importDiff || !normalization || columns.length === 0) return;
     setImporting(true);
     try {
-      const parsed = await parseSectionFile(importFile, columns);
+      const parsed = toGridRows(normalization, columns);
       const diff = diffSectionImport(rows, parsed, columns);
       const merged = mergeSectionImport(rows, parsed, importMode, diff);
       onChange(merged);
       setImportOpen(false);
       setImportFile(null);
       setImportDiff(null);
+      setNormalization(null);
     } finally {
       setImporting(false);
     }
-  }, [importFile, importDiff, columns, rows, importMode, onChange]);
+  }, [importFile, importDiff, normalization, columns, rows, importMode, onChange]);
 
   return (
     <>
@@ -147,11 +161,15 @@ export function SectionWorkbookEditor({
         onImportModeChange={setImportMode}
         canReplace={permissions.canReplaceOnImport}
         importing={importing}
+        columns={columns}
+        normalization={normalization}
+        usedAi={usedAi}
         onClose={() => {
           if (importing) return;
           setImportOpen(false);
           setImportFile(null);
           setImportDiff(null);
+          setNormalization(null);
         }}
         onConfirm={confirmImport}
       />

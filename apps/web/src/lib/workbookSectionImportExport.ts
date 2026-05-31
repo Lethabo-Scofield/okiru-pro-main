@@ -48,25 +48,29 @@ function parseGridMatrix(matrix: unknown[][], columns: ColumnDef[]): WorkbookGri
   return out;
 }
 
-export async function parseSectionFile(
-  file: File,
-  columns: ColumnDef[],
-): Promise<WorkbookGridRow[]> {
+/** Read the first sheet (or CSV) of a section file into a raw 2D matrix. */
+export async function readSectionMatrix(file: File): Promise<unknown[][]> {
   const buffer = await file.arrayBuffer();
   const name = file.name.toLowerCase();
 
   if (name.endsWith(".csv")) {
     const text = new TextDecoder().decode(buffer);
-    const matrix = text
+    return text
       .split(/\r?\n/)
       .filter((line) => line.trim())
       .map((line) => line.split(",").map((c) => c.trim()));
-    return parseGridMatrix(matrix, columns);
   }
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
+}
+
+export async function parseSectionFile(
+  file: File,
+  columns: ColumnDef[],
+): Promise<WorkbookGridRow[]> {
+  const matrix = await readSectionMatrix(file);
   return parseGridMatrix(matrix, columns);
 }
 

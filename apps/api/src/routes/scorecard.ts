@@ -434,6 +434,8 @@ function sectorConfigToCalculatorConfig(sc: any) {
   const catF = cw.find((c: any) => c.code === 'F');
 
   return {
+    sectorCode: sc.sectorCode,
+    scorecardType: sc.scorecardType,
     totalMaxPoints,
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,
