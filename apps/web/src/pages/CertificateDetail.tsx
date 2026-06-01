@@ -15,17 +15,20 @@ interface CertDetail {
   bbbeeScore: number | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
-  verificationAgency: string | null;
+  verificationAgency?: string | null;
+  agency?: string | null;
   certificateNumber: string | null;
   expiryDate: string | null;
   issueDate: string | null;
   blobName: string | null;
+  fileName?: string | null;
   status?: 'valid' | 'expiring' | 'expired' | 'unknown';
   updatedAt?: string | null;
   verified?: boolean;
   vatNumber?: string | null;
   companySize?: string | null;
   id?: string | null;
+  metadataComplete?: boolean;
 }
 
 interface VersionEntry {
@@ -242,6 +245,11 @@ export default function CertificateDetail({ slug }: { slug: string }) {
 
         {!loading && !error && data && (
           <>
+            {data.metadataComplete === false && (
+              <p className="mb-4 text-[13px] text-[#f59e0b] rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 py-2">
+                Metadata missing — some fields may be incomplete until this certificate is fully processed.
+              </p>
+            )}
             <div className="mb-8">
               <p className="text-[11px] tracking-[0.14em] uppercase text-[#818cf8] mb-3" style={{ fontFamily: "'Geist Mono', monospace" }}>
                 Public Certificate Record
@@ -274,40 +282,45 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-10">
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber || '-'} />
-              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize || '-'} />
-              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : '-'} />
-              <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : '-'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : '-'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : '-'} />
-              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Issue date" value={formatDate(data.issueDate)} />
-              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={formatDate(data.expiryDate)} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || '-'} />
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber || '-'} />
+              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber ?? 'Not on record'} />
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize ?? 'Not on record'} />
+              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Not on record'} />
+              <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : 'Not on record'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Not on record'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Not on record'} />
+              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Issue date" value={data.issueDate ? formatDate(data.issueDate) : 'Not on record'} />
+              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Not on record'} />
+              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || data.agency || 'Not on record'} />
+              <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber ?? 'Not on record'} />
             </div>
 
             <div className="flex items-center gap-2 flex-wrap mb-10">
               <button
                 onClick={handleDownload}
                 disabled={downloading || !data.blobName}
+                title={!data.blobName ? 'Download unavailable' : undefined}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 transition-colors"
               >
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Download certificate
+                {data.blobName ? 'Download certificate' : 'Download unavailable'}
               </button>
               <button
                 onClick={loadHistory}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] transition-colors"
+                disabled={!data.id}
+                title={!data.id ? 'Version history unavailable' : undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] disabled:opacity-40 transition-colors"
               >
                 <History className="h-4 w-4" />
-                View version history
+                {data.id ? 'View version history' : 'History unavailable'}
               </button>
               <button
                 onClick={() => { setReportSuccess(false); setShowReport(true); }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[#2c2c2e] transition-colors"
+                disabled={!data.id}
+                title={!data.id ? 'Report unavailable for this record' : undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-40 transition-colors"
               >
                 <Flag className="h-4 w-4" />
-                Report incorrect data
+                {data.id ? 'Report incorrect data' : 'Report unavailable'}
               </button>
             </div>
 
