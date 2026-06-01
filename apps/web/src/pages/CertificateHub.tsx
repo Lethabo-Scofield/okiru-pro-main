@@ -25,13 +25,24 @@ interface CertificateRow {
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
   bbbeeLevel: number | null;
+  certificateNumber?: string | null;
   expiryDate: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   lastModified: string | null;
-  // Phase 2 - public visibility
   id?: string | null;
   slug?: string | null;
   verified?: boolean;
+  metadataComplete?: boolean;
+}
+
+function certificateHaystack(c: CertificateRow): string {
+  return `
+    ${c.companyName || ''}
+    ${c.vatNumber || ''}
+    ${c.fileName || ''}
+    ${c.bbbeeLevel ?? ''}
+    ${c.certificateNumber || ''}
+  `.toLowerCase();
 }
 
 interface CertStats {
@@ -323,8 +334,7 @@ export default function CertificateHub() {
     const q = search.trim().toLowerCase();
     const out = allCerts.filter(c => {
       if (q) {
-        const hay = `${c.companyName} ${c.vatNumber || ''} ${c.fileName}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+        if (!certificateHaystack(c).includes(q)) return false;
       }
       if (statusFilter && c.status !== statusFilter) return false;
       if (sizeFilter && (c.companySize || '').toLowerCase() !== sizeFilter.toLowerCase()) return false;
@@ -686,9 +696,10 @@ export default function CertificateHub() {
           />
         ) : (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="hidden md:grid grid-cols-[2fr_1.2fr_0.8fr_1.2fr_1fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="hidden md:grid grid-cols-[2fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <div>Company</div>
               <div>VAT number</div>
+              <div>Level</div>
               <div>Size</div>
               <div>Ownership</div>
               <div>Expiry</div>
@@ -696,7 +707,7 @@ export default function CertificateHub() {
             </div>
             {filtered.map((cert, idx) => (
               <CertRow
-                key={cert.name}
+                key={cert.id || cert.name}
                 cert={cert}
                 searchQuery={search}
                 isLast={idx === filtered.length - 1}
@@ -725,7 +736,7 @@ export default function CertificateHub() {
                 Is your company B-BBEE certified?
               </h2>
               <p className="text-[13px] text-[#a1a1aa] mt-1 max-w-[620px] leading-relaxed">
-                Join {(stats?.total ?? 1600).toLocaleString()}+ companies. Upload your certificate to get found by procurement teams and clients evaluating B-BBEE suppliers.
+                Join {(stats?.total ?? allCerts.length ?? 0).toLocaleString()} companies in the registry. Upload your certificate to get found by procurement teams and clients evaluating B-BBEE suppliers.
               </p>
             </div>
           </div>
@@ -949,7 +960,7 @@ function CertRow({
 }) {
   return (
     <div
-      className="md:grid md:grid-cols-[2fr_1.2fr_0.8fr_1.2fr_1fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
+      className="md:grid md:grid-cols-[2fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
       style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)' }}
     >
       {/* Mobile: stacked. Desktop: grid columns */}
@@ -978,6 +989,7 @@ function CertRow({
         </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
+          {cert.bbbeeLevel != null && <span><Award className="inline h-3 w-3 mr-0.5" /> Level {cert.bbbeeLevel}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
           {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
           {cert.expiryDate && <span><CalendarClock className="inline h-3 w-3 mr-0.5" /> {formatExpiry(cert.expiryDate)}</span>}
@@ -986,10 +998,17 @@ function CertRow({
       </div>
 
       <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
-        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">-</span>}
+        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">—</span>}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
-        {cert.companySize || <span className="text-[#48484a]">-</span>}
+        {cert.bbbeeLevel != null ? (
+          <span className="text-white">Level {cert.bbbeeLevel}</span>
+        ) : (
+          <span className="text-[#48484a]">—</span>
+        )}
+      </div>
+      <div className="hidden md:block text-[13px] text-[#a1a1aa]">
+        {cert.companySize || <span className="text-[#48484a]">—</span>}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
         {cert.blackOwnership != null ? (

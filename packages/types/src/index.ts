@@ -328,6 +328,31 @@ export type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
 
 // Certificate Types
 export type CertificateStatus = 'valid' | 'expiring' | 'expired' | 'unknown';
+export type PublicCertificateSource = 'mongo' | 'azure' | 'local';
+
+/** Canonical public registry record (list, detail, SEO). */
+export interface PublicCertificate {
+  id: string | null;
+  slug: string | null;
+  companyName: string;
+  vatNumber: string | null;
+  companySize: string | null;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  certificateNumber: string | null;
+  issueDate: string | null;
+  expiryDate: string | null;
+  agency: string | null;
+  verified: boolean;
+  blobName: string | null;
+  fileName: string | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  source: PublicCertificateSource;
+  status: CertificateStatus;
+  metadataComplete: boolean;
+  lastModified: string | null;
+}
 
 export interface CertificateVersion {
   blobName: string;
