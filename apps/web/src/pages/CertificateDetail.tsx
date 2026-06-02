@@ -131,9 +131,12 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     return () => { cancelled = true; };
   }, [slug]);
 
+  const registryActionsAvailable =
+    !!data?.id && data.metadataComplete !== false && !String(data.id).startsWith('blob:');
+
   const loadHistory = useCallback(async () => {
-    if (!data?.id) {
-      toast({ title: 'No history available', description: 'This certificate has no version history yet.' });
+    if (!registryActionsAvailable) {
+      toast({ title: 'History unavailable', description: 'Version history requires full certificate metadata.' });
       return;
     }
     try {
@@ -145,7 +148,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     } catch (err: any) {
       toast({ title: 'Could not load history', description: err.message, variant: 'destructive' });
     }
-  }, [data?.id, toast]);
+  }, [registryActionsAvailable, data?.id, toast]);
 
   const handleDownload = useCallback(async () => {
     if (!data?.blobName) {
@@ -176,8 +179,8 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [data, toast]);
 
   const submitReport = useCallback(async () => {
-    if (!data?.id) {
-      toast({ title: 'Cannot report this certificate', description: 'No identifier available.', variant: 'destructive' });
+    if (!registryActionsAvailable) {
+      toast({ title: 'Cannot report this certificate', description: 'Reporting requires full certificate metadata.', variant: 'destructive' });
       return;
     }
     if (reportMessage.trim().length < 10) {
@@ -208,7 +211,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     } finally {
       setReportSubmitting(false);
     }
-  }, [data?.id, reportReason, reportMessage, reportEmail, toast]);
+  }, [registryActionsAvailable, data?.id, reportReason, reportMessage, reportEmail, toast]);
 
   return (
     <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
@@ -306,21 +309,21 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               </button>
               <button
                 onClick={loadHistory}
-                disabled={!data.id}
-                title={!data.id ? 'Version history unavailable' : undefined}
+                disabled={!registryActionsAvailable}
+                title={!registryActionsAvailable ? 'Version history unavailable' : undefined}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] disabled:opacity-40 transition-colors"
               >
                 <History className="h-4 w-4" />
-                {data.id ? 'View version history' : 'History unavailable'}
+                {registryActionsAvailable ? 'View version history' : 'History unavailable'}
               </button>
               <button
                 onClick={() => { setReportSuccess(false); setShowReport(true); }}
-                disabled={!data.id}
-                title={!data.id ? 'Report unavailable for this record' : undefined}
+                disabled={!registryActionsAvailable}
+                title={!registryActionsAvailable ? 'Report unavailable for this record' : undefined}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-40 transition-colors"
               >
                 <Flag className="h-4 w-4" />
-                {data.id ? 'Report incorrect data' : 'Report unavailable'}
+                {registryActionsAvailable ? 'Report incorrect data' : 'Report unavailable'}
               </button>
             </div>
 

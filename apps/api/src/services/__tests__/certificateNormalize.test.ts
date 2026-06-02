@@ -3,9 +3,11 @@ import {
   buildCertSlug,
   certificateSearchHaystack,
   dedupePublicCertificates,
+  normalizeFromBlobOnly,
   normalizeFromLocal,
   normalizeFromMongo,
   publicCertificateToListRow,
+  stableBlobRecordId,
 } from '../certificateNormalize.js';
 import type { CertificateRecord } from '../certificateStore.js';
 
@@ -21,9 +23,31 @@ describe('buildCertSlug', () => {
   });
 });
 
+describe('normalizeFromBlobOnly', () => {
+  it('creates a stable incomplete public row for blob-only files', () => {
+    const a = normalizeFromBlobOnly({ name: 'public/acme.pdf', lastModified: '2025-01-01T00:00:00.000Z' });
+    const b = normalizeFromBlobOnly({ name: 'public/acme.pdf', lastModified: null });
+    expect(a.id).toBe(stableBlobRecordId('public/acme.pdf'));
+    expect(a.id).toBe(b.id);
+    expect(a.metadataComplete).toBe(false);
+    expect(a.slug).toBeTruthy();
+    expect(a.blobName).toBe('public/acme.pdf');
+  });
+});
+
 describe('normalizeFromMongo', () => {
   it('returns null without mongo id', () => {
     expect(normalizeFromMongo({ blobName: 'public/x.pdf', supplierName: 'Co' })).toBeNull();
+  });
+
+  it('falls back to _id when id field is missing on legacy docs', () => {
+    const c = normalizeFromMongo({
+      _id: '507f1f77bcf86cd799439011',
+      blobName: 'public/legacy.pdf',
+      supplierName: 'Legacy Co',
+    });
+    expect(c?.id).toBe('507f1f77bcf86cd799439011');
+    expect(c?.companyName).toBe('Legacy Co');
   });
 
   it('builds canonical slug from id', () => {

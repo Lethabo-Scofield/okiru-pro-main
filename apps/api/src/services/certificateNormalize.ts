@@ -2,6 +2,7 @@
  * Canonical public certificate model — single source of truth for list, detail,
  * search, and SEO surfaces.
  */
+import { createHash } from 'crypto';
 import type { CertificateRecord as LocalStoreRecord } from './certificateStore.js';
 
 export type CertificateSource = 'mongo' | 'azure' | 'local';
@@ -115,9 +116,20 @@ export type ParsedCertificateFields = {
   certificateNumber?: string | null;
 };
 
-function mongoHasIdentity(doc: Record<string, unknown> | null | undefined): boolean {
-  if (!doc) return false;
-  return typeof doc.id === 'string' && doc.id.length > 0;
+/** Stable synthetic id for Azure blobs that have no Mongo metadata row yet. */
+export function stableBlobRecordId(blobName: string): string {
+  const hash = createHash('sha256').update(blobName).digest('hex').slice(0, 32);
+  return `blob:${hash}`;
+}
+
+export function isSyntheticBlobRecordId(id: string | null | undefined): boolean {
+  return typeof id === 'string' && id.startsWith('blob:');
+}
+
+function resolveMongoDocumentId(doc: Record<string, unknown>): string | null {
+  if (typeof doc.id === 'string' && doc.id.length > 0) return doc.id;
+  if (doc._id != null) return String(doc._id);
+  return null;
 }
 
 export function normalizeFromLocal(rec: LocalStoreRecord): PublicCertificate {
@@ -146,11 +158,44 @@ export function normalizeFromLocal(rec: LocalStoreRecord): PublicCertificate {
   };
 }
 
+/**
+ * Azure file with no Mongo metadata — shown in the registry as incomplete, not hidden.
+ */
+export function normalizeFromBlobOnly(blob: {
+  name: string;
+  lastModified: string | null;
+}): PublicCertificate {
+  const id = stableBlobRecordId(blob.name);
+  const fileName = blob.name.split('/').pop() || blob.name;
+  return {
+    id,
+    slug: buildCertSlug('unknown-company', id),
+    companyName: 'Unknown company',
+    vatNumber: null,
+    companySize: null,
+    bbbeeLevel: null,
+    bbbeeScore: null,
+    certificateNumber: null,
+    issueDate: null,
+    expiryDate: null,
+    agency: null,
+    verified: false,
+    blobName: blob.name,
+    fileName,
+    blackOwnership: null,
+    blackWomenOwnership: null,
+    source: 'azure',
+    status: 'unknown',
+    metadataComplete: false,
+    lastModified: blob.lastModified,
+  };
+}
+
 export function normalizeFromMongo(
   doc: Record<string, unknown>,
   opts: { blobLastModified?: string | null; fileNameFallback?: string } = {},
 ): PublicCertificate | null {
-  const id = typeof doc.id === 'string' ? doc.id : null;
+  const id = resolveMongoDocumentId(doc);
   if (!id) return null;
 
   const blobName = typeof doc.blobName === 'string' ? doc.blobName : null;
@@ -246,10 +291,13 @@ export function normalizeFromMongoAndParsed(
 }
 
 export function publicCertificateToListRow(c: PublicCertificate): CertificateListRow {
+  const displayName = c.metadataComplete
+    ? c.companyName
+    : 'Unknown company (metadata missing)';
   return {
     name: c.blobName || '',
     fileName: c.fileName || c.blobName?.split('/').pop() || '',
-    companyName: c.metadataComplete ? c.companyName : 'Unknown company',
+    companyName: displayName,
     vatNumber: c.vatNumber,
     companySize: c.companySize,
     blackOwnership: c.blackOwnership,
