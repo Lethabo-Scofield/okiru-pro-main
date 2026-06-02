@@ -10,7 +10,7 @@ import { CertificateMetadataModel } from '../../models.js';
 import { createLogger } from '../logger.js';
 import { normalizeVat } from './certificateStore.js';
 import { extractTextWithDocIntelligence, isDocumentIntelligenceConfigured } from './documentIntelligence.js';
-import { extractCertificateWithLLM } from './llmExtractor.js';
+import { extractCertificateWithLLM, extractCertificatePreviewWithLLM, type CertificatePreviewExtraction } from './llmExtractor.js';
 import { indexCertificate, isChromaConfigured } from './chromaStore.js';
 
 const logger = createLogger('CertExtractor');
@@ -545,5 +545,71 @@ export async function getCertificateStats(): Promise<{
     unknown: noExpiry + (extractionMap['failed'] || 0),
     processed: (extractionMap['completed'] || 0),
     pending: extractionMap['pending'] || 0,
+  };
+}
+
+function normalizePreviewCompanySize(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (/^eme$/i.test(s)) return 'EME';
+  if (/^qse$/i.test(s)) return 'QSE';
+  if (/generic/i.test(s)) return 'Generic';
+  if (/large/i.test(s)) return 'Large';
+  if (/special/i.test(s)) return 'Specialised';
+  return s;
+}
+
+/** Extract certificate fields from an uploaded file buffer (MAIA preview — no persistence). */
+export async function extractPreviewFromBuffer(
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string,
+): Promise<CertificatePreviewExtraction & { sectorDetected: boolean }> {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  let text = '';
+
+  if (ext === 'pdf' || mimeType === 'application/pdf') {
+    if (isDocumentIntelligenceConfigured()) {
+      text = await extractTextWithDocIntelligence(buffer, fileName);
+    }
+    if (!text.trim()) {
+      text = await extractTextFromPdf(buffer.buffer as ArrayBuffer);
+    }
+    if (!text.trim()) {
+      text = await ocrPdf(buffer, fileName);
+    }
+  } else if (['png', 'jpg', 'jpeg'].includes(ext) || mimeType.startsWith('image/')) {
+    if (isDocumentIntelligenceConfigured()) {
+      text = await extractTextWithDocIntelligence(buffer, fileName);
+    }
+    if (!text.trim()) {
+      text = await ocrImage(buffer);
+    }
+  }
+
+  const extracted = await extractCertificatePreviewWithLLM(text, fileName);
+  const sectorDetected = extracted.sectorConfidence === 'high' && !!extracted.sectorCode;
+
+  return {
+    ...extracted,
+    companySize: normalizePreviewCompanySize(extracted.companySize),
+    sectorDetected,
+  };
+}
+
+export function previewExtractionToFormJson(extracted: CertificatePreviewExtraction & { sectorDetected?: boolean }) {
+  return {
+    supplierName: extracted.supplierName,
+    vatNumber: extracted.vatNumber,
+    companySize: normalizePreviewCompanySize(extracted.companySize),
+    bbbeeLevel: extracted.bbbeeLevel,
+    blackOwnership: extracted.blackOwnership,
+    blackWomenOwnership: extracted.blackWomenOwnership,
+    expiryDate: extracted.expiryDate ? extracted.expiryDate.toISOString().slice(0, 10) : null,
+    issueDate: extracted.issueDate ? extracted.issueDate.toISOString().slice(0, 10) : null,
+    verificationAgency: extracted.verificationAgency,
+    certificateNumber: extracted.certificateNumber,
+    sectorCode: extracted.sectorDetected ? extracted.sectorCode : null,
+    sectorDetected: !!extracted.sectorDetected,
   };
 }

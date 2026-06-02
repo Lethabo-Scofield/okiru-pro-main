@@ -33,6 +33,18 @@ export interface CertificateRecord {
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   uploadedByUserId: string | null;
   organizationId: string | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
   // Phase 1 — verification + versioning
   verified?: boolean;
   verifiedBy?: string | null;
@@ -269,6 +281,18 @@ class CertificateStore {
     expiryDate?: string | null;
     uploadedByUserId?: string | null;
     organizationId?: string | null;
+    flowThroughBlackOwnership?: number | null;
+    blackDesignatedGroupOwnership?: number | null;
+    empoweringSupplier?: boolean | null;
+    firstProcurementDate?: string | null;
+    sizeAtFirstProcurement?: string | null;
+    sdRecipient?: boolean | null;
+    threeYearContract?: boolean | null;
+    annualSpend?: number | null;
+    location?: string | null;
+    businessUnit?: string | null;
+    sectorCode?: string | null;
+    sectorName?: string | null;
   }): CertificateRecord {
     this.load();
     ensureUploadDir();
@@ -309,6 +333,18 @@ class CertificateStore {
       status: statusFromExpiry(expiry),
       uploadedByUserId: input.uploadedByUserId || null,
       organizationId: input.organizationId || null,
+      flowThroughBlackOwnership: input.flowThroughBlackOwnership ?? null,
+      blackDesignatedGroupOwnership: input.blackDesignatedGroupOwnership ?? null,
+      empoweringSupplier: input.empoweringSupplier ?? null,
+      firstProcurementDate: input.firstProcurementDate ?? null,
+      sizeAtFirstProcurement: input.sizeAtFirstProcurement ?? null,
+      sdRecipient: input.sdRecipient ?? null,
+      threeYearContract: input.threeYearContract ?? null,
+      annualSpend: input.annualSpend ?? null,
+      location: input.location ?? null,
+      businessUnit: input.businessUnit ?? null,
+      sectorCode: input.sectorCode ?? null,
+      sectorName: input.sectorName ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -358,6 +394,18 @@ class CertificateStore {
     expiryDate?: string | null;
     uploadedByUserId?: string | null;
     organizationId?: string | null;
+    flowThroughBlackOwnership?: number | null;
+    blackDesignatedGroupOwnership?: number | null;
+    empoweringSupplier?: boolean | null;
+    firstProcurementDate?: string | null;
+    sizeAtFirstProcurement?: string | null;
+    sdRecipient?: boolean | null;
+    threeYearContract?: boolean | null;
+    annualSpend?: number | null;
+    location?: string | null;
+    businessUnit?: string | null;
+    sectorCode?: string | null;
+    sectorName?: string | null;
   }): CertificateRecord {
     this.load();
     const existing = this.getByBlobName(input.blobName);
@@ -391,6 +439,18 @@ class CertificateStore {
       status: statusFromExpiry(expiry),
       uploadedByUserId: input.uploadedByUserId || null,
       organizationId: input.organizationId || null,
+      flowThroughBlackOwnership: input.flowThroughBlackOwnership ?? null,
+      blackDesignatedGroupOwnership: input.blackDesignatedGroupOwnership ?? null,
+      empoweringSupplier: input.empoweringSupplier ?? null,
+      firstProcurementDate: input.firstProcurementDate ?? null,
+      sizeAtFirstProcurement: input.sizeAtFirstProcurement ?? null,
+      sdRecipient: input.sdRecipient ?? null,
+      threeYearContract: input.threeYearContract ?? null,
+      annualSpend: input.annualSpend ?? null,
+      location: input.location ?? null,
+      businessUnit: input.businessUnit ?? null,
+      sectorCode: input.sectorCode ?? null,
+      sectorName: input.sectorName ?? null,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };

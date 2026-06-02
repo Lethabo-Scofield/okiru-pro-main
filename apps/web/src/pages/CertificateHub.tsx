@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
@@ -12,9 +12,14 @@ import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { gatedAuthPath } from '@/lib/authRoutes';
+import {
+  CertificateUploadForm,
+  certificateFormToFormData,
+  type CertificateFormValues,
+} from '@/components/certificates/CertificateUploadForm';
+import { OKIRU_HUB_SECTORS, sectorDisplayLabel } from '@/lib/okiruHubSectors';
 
 const COMPANY_SIZES = ['EME', 'QSE', 'Generic', 'Large', 'Specialised'] as const;
-type CompanySize = typeof COMPANY_SIZES[number];
 
 interface CertificateRow {
   name: string;
@@ -33,6 +38,10 @@ interface CertificateRow {
   slug?: string | null;
   verified?: boolean;
   metadataComplete?: boolean;
+  sectorCode?: string | null;
+  sectorName?: string | null;
+  location?: string | null;
+  businessUnit?: string | null;
 }
 
 function certificateHaystack(c: CertificateRow): string {
@@ -42,6 +51,10 @@ function certificateHaystack(c: CertificateRow): string {
     ${c.fileName || ''}
     ${c.bbbeeLevel ?? ''}
     ${c.certificateNumber || ''}
+    ${c.sectorCode || ''}
+    ${c.sectorName || ''}
+    ${c.location || ''}
+    ${c.businessUnit || ''}
   `.toLowerCase();
 }
 
@@ -253,6 +266,7 @@ export default function CertificateHub() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sizeFilter, setSizeFilter] = useState('');
+  const [sectorFilter, setSectorFilter] = useState('');
   const [ownershipFilter, setOwnershipFilter] = useState('');
 
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
@@ -260,10 +274,7 @@ export default function CertificateHub() {
 
   // Upload modal state
   const [showUpload, setShowUpload] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-open upload modal when arriving with ?openUpload=1 (e.g. after onboarding)
   useEffect(() => {
@@ -277,15 +288,6 @@ export default function CertificateHub() {
       window.history.replaceState({}, '', cleanUrl);
     }
   }, [user, authLoading]);
-
-  const [form, setForm] = useState({
-    companyName: '',
-    vatNumber: '',
-    companySize: '' as CompanySize | '',
-    blackOwnership: '',
-    blackWomenOwnership: '',
-    expiryDate: '',
-  });
 
   const loadAllCerts = useCallback(async () => {
     setAllCertsLoading(true);
@@ -328,7 +330,7 @@ export default function CertificateHub() {
     setRefreshing(false);
   }, [loadAllCerts, loadStats]);
 
-  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || ownershipFilter);
+  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -338,6 +340,7 @@ export default function CertificateHub() {
       }
       if (statusFilter && c.status !== statusFilter) return false;
       if (sizeFilter && (c.companySize || '').toLowerCase() !== sizeFilter.toLowerCase()) return false;
+      if (sectorFilter && (c.sectorCode || '').toUpperCase() !== sectorFilter.toUpperCase()) return false;
       if (ownershipFilter) {
         const [minStr, maxStr] = ownershipFilter.split('-');
         const min = Number(minStr), max = Number(maxStr);
@@ -352,12 +355,13 @@ export default function CertificateHub() {
       if (av !== bv) return av ? -1 : 1;
       return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
-  }, [allCerts, search, statusFilter, sizeFilter, ownershipFilter]);
+  }, [allCerts, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter]);
 
   const clearAllFilters = () => {
     setSearch('');
     setStatusFilter('');
     setSizeFilter('');
+    setSectorFilter('');
     setOwnershipFilter('');
   };
 
@@ -369,56 +373,8 @@ export default function CertificateHub() {
     navigate(gatedAuthPath({ mode: 'register', redirect: '/certificates' }));
   }, [user, navigate]);
 
-  const handleFileSelected = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files);
-    if (arr.length === 0) return;
-    const f = arr[0];
-    if (f.size > 50 * 1024 * 1024) {
-      toast({ title: 'File too large', description: `${f.name} exceeds 50MB`, variant: 'destructive' });
-      return;
-    }
-    setUploadFile(f);
-    if (!form.companyName) {
-      const guess = f.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_\-]+/g, ' ').trim();
-      setForm(prev => ({ ...prev, companyName: guess.slice(0, 80) }));
-    }
-  }, [form.companyName, toast]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files.length > 0) handleFileSelected(e.dataTransfer.files);
-  }, [handleFileSelected]);
-
-  const closeUploadModal = useCallback(() => {
-    if (uploading) return;
-    setShowUpload(false);
-    setUploadFile(null);
-    setForm({
-      companyName: '', vatNumber: '', companySize: '',
-      blackOwnership: '', blackWomenOwnership: '', expiryDate: '',
-    });
-    setDragOver(false);
-  }, [uploading]);
-
-  const submitUpload = useCallback(async () => {
-    if (!uploadFile) {
-      toast({ title: 'Select a file', description: 'Add a certificate file before uploading.', variant: 'destructive' });
-      return;
-    }
-    if (!form.companyName.trim()) {
-      toast({ title: 'Company name required', description: 'Tell us which company this certificate belongs to.', variant: 'destructive' });
-      return;
-    }
-    const fd = new FormData();
-    fd.append('files', uploadFile);
-    fd.append('companyName', form.companyName.trim());
-    if (form.vatNumber.trim()) fd.append('vatNumber', form.vatNumber.trim());
-    if (form.companySize) fd.append('companySize', form.companySize);
-    if (form.blackOwnership) fd.append('blackOwnership', form.blackOwnership);
-    if (form.blackWomenOwnership) fd.append('blackWomenOwnership', form.blackWomenOwnership);
-    if (form.expiryDate) fd.append('expiryDate', form.expiryDate);
-
+  const submitUpload = useCallback(async (file: File, values: CertificateFormValues) => {
+    const fd = certificateFormToFormData(file, values);
     setUploading(true);
     try {
       const res = await fetch('/api/certificates/upload', { method: 'POST', body: fd });
@@ -431,15 +387,15 @@ export default function CertificateHub() {
         }
         throw new Error(data.message || `Upload failed (${res.status})`);
       }
-      toast({ title: 'Certificate uploaded', description: `${form.companyName} added to the public registry.` });
-      closeUploadModal();
+      toast({ title: 'Certificate uploaded', description: `${values.supplierName} added to the public registry.` });
+      setShowUpload(false);
       await Promise.all([loadAllCerts(), loadStats()]);
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message || 'Please try again', variant: 'destructive' });
     } finally {
       setUploading(false);
     }
-  }, [uploadFile, form, toast, closeUploadModal, loadAllCerts, loadStats, navigate]);
+  }, [toast, loadAllCerts, loadStats, navigate]);
 
   const downloadCertificate = useCallback(async (blobName: string) => {
     setDownloadingFile(blobName);
@@ -621,6 +577,12 @@ export default function CertificateHub() {
             onChange={setSizeFilter}
           />
           <FilterPill
+            label="Sector"
+            value={sectorFilter}
+            options={OKIRU_HUB_SECTORS.map(s => ({ value: s.code, label: s.code }))}
+            onChange={setSectorFilter}
+          />
+          <FilterPill
             label="Black ownership"
             value={ownershipFilter}
             options={OWNERSHIP_RANGES.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
@@ -696,8 +658,9 @@ export default function CertificateHub() {
           />
         ) : (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="hidden md:grid grid-cols-[2fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="hidden md:grid grid-cols-[2fr_1.1fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <div>Company</div>
+              <div>Sector</div>
               <div>VAT number</div>
               <div>Level</div>
               <div>Size</div>
@@ -780,171 +743,13 @@ export default function CertificateHub() {
 
       {/* ─── Upload modal ───────────────────────────────────── */}
       {showUpload && isAuthenticated && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-lg mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-[15px] font-semibold text-white">Upload certificate</h2>
-              <button onClick={closeUploadModal} disabled={uploading} className="text-[#636366] hover:text-white transition-colors disabled:opacity-50">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="px-5 py-4 overflow-y-auto">
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                  dragOver
-                    ? 'border-[#6366f1] bg-[#6366f1]/10'
-                    : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-white/[0.02]'
-                }`}
-              >
-                {uploadFile ? (
-                  <div className="flex items-center justify-center gap-2 text-[13px] text-white">
-                    <FileUp className="h-4 w-4 text-[#a5b4fc]" />
-                    <span className="truncate max-w-[280px]">{uploadFile.name}</span>
-                    <span className="text-[#636366]">· {(uploadFile.size / 1024).toFixed(0)} KB</span>
-                  </div>
-                ) : (
-                  <>
-                    <CloudUpload className={`h-8 w-8 mx-auto mb-2 ${dragOver ? 'text-[#6366f1]' : 'text-[#48484a]'}`} />
-                    <p className="text-[13px] text-[#e5e5ea] mb-1">
-                      {dragOver ? 'Drop file here' : 'Drag & drop or click to browse'}
-                    </p>
-                    <p className="text-[11px] text-[#48484a]">PDF, PNG, JPG, XLS, DOC · up to 50MB</p>
-                  </>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.doc,.docx"
-                  className="hidden"
-                  onChange={e => { if (e.target.files) handleFileSelected(e.target.files); e.target.value = ''; }}
-                />
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Company name *" required>
-                  <input
-                    type="text"
-                    value={form.companyName}
-                    onChange={e => setForm({ ...form, companyName: e.target.value })}
-                    placeholder="e.g. Acme Holdings (Pty) Ltd"
-                    className="ok-cert-input"
-                  />
-                </Field>
-                <Field label="VAT number">
-                  <input
-                    type="text"
-                    value={form.vatNumber}
-                    onChange={e => setForm({ ...form, vatNumber: e.target.value })}
-                    placeholder="e.g. 4123456789"
-                    className="ok-cert-input"
-                  />
-                </Field>
-                <Field label="Company size">
-                  <select
-                    value={form.companySize}
-                    onChange={e => setForm({ ...form, companySize: e.target.value as CompanySize | '' })}
-                    className="ok-cert-input"
-                  >
-                    <option value="">- Select -</option>
-                    {COMPANY_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </Field>
-                <Field label="Expiry date">
-                  <input
-                    type="date"
-                    value={form.expiryDate}
-                    onChange={e => setForm({ ...form, expiryDate: e.target.value })}
-                    className="ok-cert-input"
-                  />
-                </Field>
-                <Field label="Black ownership %">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.1}
-                    value={form.blackOwnership}
-                    onChange={e => setForm({ ...form, blackOwnership: e.target.value })}
-                    placeholder="e.g. 51"
-                    className="ok-cert-input"
-                  />
-                </Field>
-                <Field label="Black women ownership %">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.1}
-                    value={form.blackWomenOwnership}
-                    onChange={e => setForm({ ...form, blackWomenOwnership: e.target.value })}
-                    placeholder="e.g. 30"
-                    className="ok-cert-input"
-                  />
-                </Field>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <button
-                onClick={closeUploadModal}
-                disabled={uploading}
-                className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitUpload}
-                disabled={uploading || !uploadFile || !form.companyName.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors disabled:opacity-50"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Uploading…
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-3.5 w-3.5" />
-                    Add certificate
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CertificateUploadForm
+          uploading={uploading}
+          onClose={() => setShowUpload(false)}
+          onSubmit={submitUpload}
+        />
       )}
-
-      {/* Local input styles for the upload modal */}
-      <style>{`
-        .ok-cert-input {
-          width: 100%;
-          background: #0d0d10;
-          border: 1px solid #2c2c2e;
-          border-radius: 8px;
-          padding: 8px 10px;
-          font-size: 13px;
-          color: #fff;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .ok-cert-input:focus { border-color: #6366f1; }
-        .ok-cert-input::placeholder { color: #48484a; }
-      `}</style>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5 tracking-wide">{label}</span>
-      {children}
-    </label>
   );
 }
 
@@ -960,7 +765,7 @@ function CertRow({
 }) {
   return (
     <div
-      className="md:grid md:grid-cols-[2fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
+      className="md:grid md:grid-cols-[2fr_1.1fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
       style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)' }}
     >
       {/* Mobile: stacked. Desktop: grid columns */}
@@ -998,6 +803,7 @@ function CertRow({
         </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
+          {cert.sectorCode && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {sectorDisplayLabel(cert.sectorCode, cert.sectorName)}</span>}
           {cert.bbbeeLevel != null && <span><Award className="inline h-3 w-3 mr-0.5" /> Level {cert.bbbeeLevel}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
           {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
@@ -1006,6 +812,9 @@ function CertRow({
         <div className="md:hidden mt-1.5"><StatusBadge status={cert.status} expiryDate={cert.expiryDate} /></div>
       </div>
 
+      <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate" title={sectorDisplayLabel(cert.sectorCode, cert.sectorName)}>
+        {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : <span className="text-[#48484a]">-</span>}
+      </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
         {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">—</span>}
       </div>
@@ -1221,6 +1030,7 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <PreviewField label="Sector" value={sectorDisplayLabel(cert.sectorCode, cert.sectorName)} icon={<Building2 className="h-3.5 w-3.5" />} />
               <PreviewField label="VAT Number" value={cert.vatNumber ?? '-'} icon={<Hash className="h-3.5 w-3.5" />} />
               <PreviewField label="Company Size" value={cert.companySize ?? '-'} icon={<Building2 className="h-3.5 w-3.5" />} />
               <PreviewField

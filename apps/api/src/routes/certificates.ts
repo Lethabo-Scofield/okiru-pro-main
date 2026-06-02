@@ -11,7 +11,7 @@ import {
   type SearchResult as MongoSearchResult,
 } from '../services/mongoSearch.js';
 import { requireAuth } from '../middleware/auth.js';
-import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData } from '../services/certificateExtractor.js';
+import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData, extractPreviewFromBuffer, previewExtractionToFormJson } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
 import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
@@ -32,6 +32,8 @@ import {
 } from '../services/certificateNormalize.js';
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
+import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
+import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -240,6 +242,7 @@ function applyFilters(rows: CertificateRow[], q: {
   search?: string;
   status?: string;
   size?: string;
+  sector?: string;
   minOwnership?: number;
   maxOwnership?: number;
 }): CertificateRow[] {
@@ -253,6 +256,10 @@ function applyFilters(rows: CertificateRow[], q: {
         fileName: r.fileName,
         bbbeeLevel: r.bbbeeLevel,
         certificateNumber: r.certificateNumber,
+        sectorCode: r.sectorCode ?? null,
+        sectorName: r.sectorName ?? null,
+        location: r.location ?? null,
+        businessUnit: r.businessUnit ?? null,
       }).includes(s),
     );
   }
@@ -261,6 +268,9 @@ function applyFilters(rows: CertificateRow[], q: {
   }
   if (q.size && q.size !== 'all') {
     out = out.filter((r) => (r.companySize || '').toLowerCase() === q.size!.toLowerCase());
+  }
+  if (q.sector && q.sector !== 'all') {
+    out = out.filter((r) => (r.sectorCode || '').toUpperCase() === q.sector!.toUpperCase());
   }
   if (typeof q.minOwnership === 'number') {
     out = out.filter((r) => r.blackOwnership != null && r.blackOwnership >= q.minOwnership!);
@@ -371,6 +381,7 @@ router.get('/list', async (req: Request, res: Response) => {
     const search = (req.query.search as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const size = (req.query.size as string || '').trim();
+    const sector = (req.query.sector as string || '').trim();
     const minOwnership = req.query.minOwnership ? Number(req.query.minOwnership) : undefined;
     const maxOwnership = req.query.maxOwnership ? Number(req.query.maxOwnership) : undefined;
     const sort = String(req.query.sort || 'verified').toLowerCase();
@@ -383,12 +394,12 @@ router.get('/list', async (req: Request, res: Response) => {
     // Cache key includes every filter/sort/page parameter. Only cache the
     // unfiltered first page heavily — fully filtered queries get cached too
     // but with the same TTL since they're cheap to recompute on miss.
-    const cacheKey = `list:${search}|${status}|${size}|${minOwnership ?? ''}|${maxOwnership ?? ''}|${sort}|${limit ?? 'all'}|${offset}`;
+    const cacheKey = `list:${search}|${status}|${size}|${sector}|${minOwnership ?? ''}|${maxOwnership ?? ''}|${sort}|${limit ?? 'all'}|${offset}`;
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json(cached);
 
     const all = await loadAllRows();
-    const filtered = applyFilters(all, { search, status, size, minOwnership, maxOwnership });
+    const filtered = applyFilters(all, { search, status, size, sector, minOwnership, maxOwnership });
 
     // Sort. Default 'verified' surfaces verified certs first, then most-recent.
     const sorted = [...filtered].sort((a, b) => {
@@ -437,6 +448,7 @@ router.get('/list', async (req: Request, res: Response) => {
  * - q: search query (required)
  * - status: filter by status (valid|expiring|expired|unknown|all)
  * - size: filter by company size (EME|QSE|Generic|Large)
+ * - sector: filter by Okiru Hub sector code (RCOGP|ICT|FSC|AGRI)
  * - verified: 'true' to show only verified certificates
  * - limit: max results (default 50)
  * - skip: pagination offset
@@ -461,6 +473,7 @@ router.get('/search', async (req: Request, res: Response) => {
     const filters = {
       status: req.query.status as any,
       companySize: req.query.size as string,
+      sectorCode: req.query.sector as string,
       verifiedOnly: req.query.verified === 'true',
     };
 
@@ -482,6 +495,8 @@ router.get('/search', async (req: Request, res: Response) => {
       company_name: r.companyName,
       vat_number: r.vatNumber,
       company_size: r.companySize,
+      sector_code: r.sectorCode,
+      sector_name: r.sectorName,
       black_ownership: r.blackOwnership,
       black_women_ownership: r.blackWomenOwnership,
       bbbee_level: r.bbbeeLevel,
@@ -892,6 +907,41 @@ function isAdminSession(req: Request): boolean {
 }
 
 // ============================================================================
+// MAIA extract preview — parse uploaded file without persisting (upload form).
+// ============================================================================
+router.post('/extract-preview', requireAuth, (req: Request, res: Response, next: NextFunction) => {
+  upload.single('file')(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File too large. Maximum size is 50MB per file.' });
+      }
+      return res.status(400).json({ message: `Upload error: ${err.message}` });
+    }
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Upload failed' });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ message: 'No file provided' });
+    }
+    const extracted = await extractPreviewFromBuffer(file.buffer, file.originalname, file.mimetype);
+    const payload = previewExtractionToFormJson(extracted);
+    return res.json({
+      success: true,
+      data: payload,
+      sectorDetected: payload.sectorDetected,
+    });
+  } catch (err: any) {
+    logger.error('Certificate extract preview failed', err);
+    return res.status(500).json({ message: 'Could not extract certificate data from file' });
+  }
+});
+
+// ============================================================================
 // Upload — requires authentication. Accepts metadata fields alongside files.
 // Falls back to local disk + in-memory store when Azure isn't configured.
 //
@@ -923,20 +973,24 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     }
 
     const body = (req.body || {}) as Record<string, string>;
-    const companyName = (body.companyName || '').trim();
-    const vatNumber = (body.vatNumber || '').trim() || null;
+    const fields = parseCertificateFormBody(body);
+
+    if (!fields.companyName) {
+      return res.status(400).json({ message: 'Supplier name is required' });
+    }
+    if (!fields.sectorCode) {
+      return res.status(400).json({ message: 'Sector is required' });
+    }
+
+    const companyName = fields.companyName;
+    const vatNumber = fields.vatNumber;
     const vatNumberNormalized = normalizeVat(vatNumber);
-    const companySize = (body.companySize || '').trim() || null;
-    const blackOwnershipRaw = body.blackOwnership;
-    const blackWomenOwnershipRaw = body.blackWomenOwnership;
-    const expiryDate = (body.expiryDate || '').trim() || null;
-    const toFinite = (raw: unknown): number | null => {
-      if (raw == null || raw === '') return null;
-      const n = Number(raw);
-      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
-    };
-    const blackOwnership = toFinite(blackOwnershipRaw);
-    const blackWomenOwnership = toFinite(blackWomenOwnershipRaw);
+    const companySize = fields.companySize;
+    const blackOwnership = fields.blackOwnership;
+    const blackWomenOwnership = fields.blackWomenOwnership;
+    const expiryDate = fields.expiryDate;
+    const mongoExtras = parsedFormToMongoSet(fields);
+    const localExtras = parsedFormToLocalPatch(fields);
 
     const action = String(req.query.action || '').toLowerCase();
     const blobServiceClient = getBlobServiceClient();
@@ -1026,6 +1080,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
               $set: {
                 blobName: newBlobName,
                 fileName: file.originalname,
+                ...mongoExtras,
                 supplierName: companyName || doc.supplierName || deriveCompanyName(file.originalname),
                 vatNumber: vatNumber || doc.vatNumber,
                 vatNumberNormalized,
@@ -1075,6 +1130,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
             blackOwnership: blackOwnership ?? rec.blackOwnership,
             blackWomenOwnership: blackWomenOwnership ?? rec.blackWomenOwnership,
             expiryDate: expiryDate || rec.expiryDate,
+            ...localExtras,
           });
           results.push({ fileName: file.originalname, blobName: newBlobName, status: 'uploaded' });
           logger.info('Certificate version added (local)', { id: rec.id, blobName: newBlobName });
@@ -1133,6 +1189,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
                 {
                   blobName,
                   fileName: file.originalname,
+                  ...mongoExtras,
                   supplierName: companyName || deriveCompanyName(file.originalname),
                   vatNumber,
                   vatNumberNormalized,
@@ -1174,6 +1231,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
               expiryDate,
               uploadedByUserId: userId,
               organizationId: orgId,
+              ...localExtras,
             });
           }
 
@@ -1211,9 +1269,11 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
             companySize,
             blackOwnership,
             blackWomenOwnership,
+            bbbeeLevel: fields.bbbeeLevel,
             expiryDate,
             uploadedByUserId: userId,
             organizationId: orgId,
+            ...localExtras,
           });
           results.push({ fileName: file.originalname, blobName: rec.blobName, status: 'uploaded' });
           logger.info('Certificate uploaded (local)', { fileName: file.originalname, id: rec.id });
@@ -1656,23 +1716,45 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   const PATCHABLE = [
     'supplierName', 'vatNumber', 'companySize',
     'blackOwnership', 'blackWomenOwnership',
+    'flowThroughBlackOwnership', 'blackDesignatedGroupOwnership',
+    'empoweringSupplier', 'firstProcurementDate', 'sizeAtFirstProcurement',
+    'sdRecipient', 'threeYearContract', 'annualSpend',
+    'location', 'businessUnit', 'sectorCode', 'sectorName',
     'verificationAgency', 'certificateNumber',
     'bbbeeLevel', 'bbbeeScore',
     'issueDate', 'expiryDate',
   ] as const;
 
   const body = (req.body || {}) as Record<string, unknown>;
+  if ('companyName' in body && !('supplierName' in body)) {
+    body.supplierName = body.companyName;
+  }
   const updates: Record<string, unknown> = {};
 
   for (const key of PATCHABLE) {
     if (!(key in body)) continue;
     const v = body[key];
-    if (key === 'issueDate' || key === 'expiryDate') {
+    if (key === 'issueDate' || key === 'expiryDate' || key === 'firstProcurementDate') {
       if (v == null || v === '') { updates[key] = null; }
       else { const d = new Date(String(v)); if (!isNaN(d.getTime())) updates[key] = d; }
-    } else if (['blackOwnership', 'blackWomenOwnership', 'bbbeeLevel', 'bbbeeScore'].includes(key)) {
+    } else if ([
+      'blackOwnership', 'blackWomenOwnership', 'flowThroughBlackOwnership',
+      'blackDesignatedGroupOwnership', 'bbbeeLevel', 'bbbeeScore', 'annualSpend',
+    ].includes(key)) {
       if (v == null || v === '') { updates[key] = null; }
       else { const n = Number(v); if (Number.isFinite(n) && n >= 0) updates[key] = n; }
+    } else if (['empoweringSupplier', 'sdRecipient', 'threeYearContract'].includes(key)) {
+      if (v == null || v === '') { updates[key] = null; }
+      else {
+        const s = String(v).toLowerCase();
+        updates[key] = v === true || s === 'true' || s === '1' || s === 'yes';
+      }
+    } else if (key === 'sectorCode') {
+      const resolved = resolveOkiruHubSector(v);
+      updates.sectorCode = resolved?.sectorCode ?? null;
+      updates.sectorName = resolved?.sectorName ?? null;
+    } else if (key === 'sectorName') {
+      continue;
     } else {
       updates[key] = (v == null || v === '') ? null : String(v).trim() || null;
     }
@@ -1719,14 +1801,42 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
     return res.status(403).json(fail('Not authorised to edit this certificate', 'FORBIDDEN'));
   }
   const localPatch: Record<string, unknown> = {};
-  if ('supplierName' in updates) localPatch['companyName'] = updates['supplierName'];
-  if ('vatNumber' in updates) localPatch['vatNumber'] = updates['vatNumber'];
-  if ('companySize' in updates) localPatch['companySize'] = updates['companySize'];
-  if ('blackOwnership' in updates) localPatch['blackOwnership'] = updates['blackOwnership'];
-  if ('blackWomenOwnership' in updates) localPatch['blackWomenOwnership'] = updates['blackWomenOwnership'];
+  const localFieldMap: Record<string, string> = {
+    supplierName: 'companyName',
+    vatNumber: 'vatNumber',
+    companySize: 'companySize',
+    bbbeeLevel: 'bbbeeLevel',
+    blackOwnership: 'blackOwnership',
+    blackWomenOwnership: 'blackWomenOwnership',
+    flowThroughBlackOwnership: 'flowThroughBlackOwnership',
+    blackDesignatedGroupOwnership: 'blackDesignatedGroupOwnership',
+    empoweringSupplier: 'empoweringSupplier',
+    firstProcurementDate: 'firstProcurementDate',
+    sizeAtFirstProcurement: 'sizeAtFirstProcurement',
+    sdRecipient: 'sdRecipient',
+    threeYearContract: 'threeYearContract',
+    annualSpend: 'annualSpend',
+    location: 'location',
+    businessUnit: 'businessUnit',
+    sectorCode: 'sectorCode',
+    sectorName: 'sectorName',
+  };
+  for (const [mongoKey, localKey] of Object.entries(localFieldMap)) {
+    if (!(mongoKey in updates)) continue;
+    const v = updates[mongoKey];
+    if (mongoKey === 'expiryDate' || mongoKey === 'firstProcurementDate') {
+      localPatch[localKey] = v instanceof Date ? v.toISOString().slice(0, 10) : null;
+    } else {
+      localPatch[localKey] = v;
+    }
+  }
   if ('expiryDate' in updates) {
     const exp = updates['expiryDate'];
     localPatch['expiryDate'] = exp instanceof Date ? exp.toISOString().slice(0, 10) : null;
+  }
+  if ('firstProcurementDate' in updates) {
+    const d = updates['firstProcurementDate'];
+    localPatch['firstProcurementDate'] = d instanceof Date ? d.toISOString().slice(0, 10) : null;
   }
   certificateStore.patchRecord(id, localPatch as any);
   invalidateListAndStatsCache();

@@ -348,6 +348,18 @@ export interface PublicCertificate {
   fileName: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
   source: PublicCertificateSource;
   status: CertificateStatus;
   metadataComplete: boolean;
@@ -381,6 +393,18 @@ export interface Certificate {
   bbbeeScore: number | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
   verificationAgency: string | null;
   certificateNumber: string | null;
   expiryDate: string | null;
@@ -419,6 +443,7 @@ export interface CertificateListResponse {
     | 'id' | 'slug' | 'blobName' | 'fileName' | 'companyName'
     | 'vatNumber' | 'companySize' | 'bbbeeLevel' | 'blackOwnership'
     | 'blackWomenOwnership' | 'expiryDate' | 'status' | 'verified'
+    | 'sectorCode' | 'sectorName' | 'location' | 'businessUnit'
   > & { lastModified: string | null }>;
   total: number;
   limit: number;

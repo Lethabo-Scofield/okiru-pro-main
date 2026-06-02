@@ -3,10 +3,14 @@ import { useLocation } from 'wouter';
 import {
   Download, Loader2, ShieldCheck, AlertTriangle, Award,
   Building2, Hash, Users2, Percent, CalendarClock, History, Flag,
-  X, CheckCircle2,
+  X, CheckCircle2, Pencil, MapPin, Briefcase,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavBack } from '@/components/AppNavBack';
+import { useAuth } from '@toolkit/lib/auth';
+import { CertificateEditForm } from '@/components/certificates/CertificateEditForm';
+import { certificateFormToPatchBody, type CertificateFormValues } from '@/components/certificates/CertificateUploadForm';
+import { sectorDisplayLabel, OKIRU_HUB_SECTORS } from '@/lib/okiruHubSectors';
 
 interface CertDetail {
   slug: string;
@@ -29,6 +33,18 @@ interface CertDetail {
   companySize?: string | null;
   id?: string | null;
   metadataComplete?: boolean;
+  sectorCode?: string | null;
+  sectorName?: string | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
 }
 
 interface VersionEntry {
@@ -92,6 +108,7 @@ function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 export default function CertificateDetail({ slug }: { slug: string }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
 
   const [data, setData] = useState<CertDetail | null>(null);
@@ -108,6 +125,8 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   const [reportEmail, setReportEmail] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +152,52 @@ export default function CertificateDetail({ slug }: { slug: string }) {
 
   const registryActionsAvailable =
     !!data?.id && data.metadataComplete !== false && !String(data.id).startsWith('blob:');
+
+  const canEdit = !!user && registryActionsAvailable;
+
+  const saveEdit = useCallback(async (values: CertificateFormValues) => {
+    if (!data?.id) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(certificateFormToPatchBody(values)),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error?.message || `Update failed (${res.status})`);
+      }
+      setData((prev) => prev ? {
+        ...prev,
+        companyName: values.supplierName.trim(),
+        vatNumber: values.vatNumber.trim() || null,
+        sectorCode: values.sectorCode || null,
+        sectorName: OKIRU_HUB_SECTORS.find((s) => s.code === values.sectorCode)?.name ?? null,
+        location: values.location.trim() || null,
+        businessUnit: values.businessUnit.trim() || null,
+        companySize: values.companySize || null,
+        bbbeeLevel: values.bbbeeLevel ? Number(values.bbbeeLevel) : null,
+        empoweringSupplier: values.empoweringSupplier === 'yes' ? true : values.empoweringSupplier === 'no' ? false : null,
+        expiryDate: values.expiryDate || null,
+        blackOwnership: values.blackOwnership ? Number(values.blackOwnership) : null,
+        blackWomenOwnership: values.blackFemaleOwnership ? Number(values.blackFemaleOwnership) : null,
+        flowThroughBlackOwnership: values.flowThroughBlackOwnership ? Number(values.flowThroughBlackOwnership) : null,
+        blackDesignatedGroupOwnership: values.blackDesignatedGroupOwnership ? Number(values.blackDesignatedGroupOwnership) : null,
+        firstProcurementDate: values.firstProcurementDate || null,
+        sizeAtFirstProcurement: values.sizeAtFirstProcurement || null,
+        sdRecipient: values.sdRecipient === 'yes' ? true : values.sdRecipient === 'no' ? false : null,
+        threeYearContract: values.threeYearContract === 'yes' ? true : values.threeYearContract === 'no' ? false : null,
+        annualSpend: values.annualSpend ? Number(values.annualSpend) : null,
+      } : prev);
+      setShowEdit(false);
+      toast({ title: 'Certificate updated' });
+    } catch (err: any) {
+      toast({ title: 'Could not save changes', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [data?.id, toast]);
 
   const loadHistory = useCallback(async () => {
     if (!registryActionsAvailable) {
@@ -285,14 +350,25 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-10">
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Sector" value={sectorDisplayLabel(data.sectorCode, data.sectorName)} />
               <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber ?? 'Not on record'} />
+              <MetaRow icon={<MapPin className="h-4 w-4" />} label="Location" value={data.location ?? 'Not on record'} />
+              <MetaRow icon={<Briefcase className="h-4 w-4" />} label="Business unit" value={data.businessUnit ?? 'Not on record'} />
               <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize ?? 'Not on record'} />
               <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Not on record'} />
               <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : 'Not on record'} />
+              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Empowering supplier" value={data.empoweringSupplier == null ? 'Not on record' : data.empoweringSupplier ? 'Yes' : 'No'} />
               <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Not on record'} />
               <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Not on record'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Flow-through black ownership" value={data.flowThroughBlackOwnership != null ? `${data.flowThroughBlackOwnership}%` : 'Not on record'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black designated group ownership" value={data.blackDesignatedGroupOwnership != null ? `${data.blackDesignatedGroupOwnership}%` : 'Not on record'} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Issue date" value={data.issueDate ? formatDate(data.issueDate) : 'Not on record'} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Not on record'} />
+              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Date of first procurement" value={data.firstProcurementDate ? formatDate(data.firstProcurementDate) : 'Not on record'} />
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Size at first procurement" value={data.sizeAtFirstProcurement ?? 'Not on record'} />
+              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="SD recipient" value={data.sdRecipient == null ? 'Not on record' : data.sdRecipient ? 'Yes' : 'No'} />
+              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="3-year contract in place" value={data.threeYearContract == null ? 'Not on record' : data.threeYearContract ? 'Yes' : 'No'} />
+              <MetaRow icon={<Briefcase className="h-4 w-4" />} label="Annual spend" value={data.annualSpend != null ? `R ${data.annualSpend.toLocaleString('en-ZA')}` : 'Not on record'} />
               <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || data.agency || 'Not on record'} />
               <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber ?? 'Not on record'} />
             </div>
@@ -315,6 +391,15 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               >
                 <History className="h-4 w-4" />
                 {registryActionsAvailable ? 'View version history' : 'History unavailable'}
+              </button>
+              <button
+                onClick={() => setShowEdit(true)}
+                disabled={!canEdit}
+                title={!canEdit ? 'Sign in to edit this certificate' : undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] disabled:opacity-40 transition-colors"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit certificate
               </button>
               <button
                 onClick={() => { setReportSuccess(false); setShowReport(true); }}
@@ -462,6 +547,15 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             )}
           </div>
         </div>
+      )}
+
+      {showEdit && data && (
+        <CertificateEditForm
+          initial={data as unknown as Record<string, unknown>}
+          saving={savingEdit}
+          onClose={() => setShowEdit(false)}
+          onSave={saveEdit}
+        />
       )}
     </div>
   );
