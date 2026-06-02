@@ -26,6 +26,18 @@ export interface PublicCertificate {
   fileName: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
   source: CertificateSource;
   status: PublicCertificateStatus;
   /** False when the record would rely on filename-only guessing. */
@@ -51,6 +63,10 @@ export interface CertificateListRow {
   slug: string | null;
   verified: boolean;
   metadataComplete: boolean;
+  sectorCode?: string | null;
+  sectorName?: string | null;
+  location?: string | null;
+  businessUnit?: string | null;
 }
 
 export function slugifyCertificatePart(text: string | null | undefined): string {
@@ -132,6 +148,32 @@ function resolveMongoDocumentId(doc: Record<string, unknown>): string | null {
   return null;
 }
 
+function mongoHasIdentity(doc: Record<string, unknown> | null | undefined): doc is Record<string, unknown> {
+  return !!doc && !!resolveMongoDocumentId(doc);
+}
+
+function readExtendedFields(doc: Record<string, unknown>) {
+  const boolOrNull = (v: unknown): boolean | null =>
+    typeof v === 'boolean' ? v : null;
+  const strOrNull = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null;
+  const firstProc = doc.firstProcurementDate;
+  return {
+    flowThroughBlackOwnership: finiteNumber(doc.flowThroughBlackOwnership),
+    blackDesignatedGroupOwnership: finiteNumber(doc.blackDesignatedGroupOwnership),
+    empoweringSupplier: boolOrNull(doc.empoweringSupplier),
+    firstProcurementDate: firstProc ? isoDay(firstProc as string | Date) : null,
+    sizeAtFirstProcurement: strOrNull(doc.sizeAtFirstProcurement),
+    sdRecipient: boolOrNull(doc.sdRecipient),
+    threeYearContract: boolOrNull(doc.threeYearContract),
+    annualSpend: finiteNumber(doc.annualSpend),
+    location: strOrNull(doc.location),
+    businessUnit: strOrNull(doc.businessUnit),
+    sectorCode: strOrNull(doc.sectorCode),
+    sectorName: strOrNull(doc.sectorName),
+  };
+}
+
 export function normalizeFromLocal(rec: LocalStoreRecord): PublicCertificate {
   const slug = buildCertSlug(rec.companyName, rec.id);
   return {
@@ -151,6 +193,18 @@ export function normalizeFromLocal(rec: LocalStoreRecord): PublicCertificate {
     fileName: rec.fileName,
     blackOwnership: rec.blackOwnership ?? null,
     blackWomenOwnership: rec.blackWomenOwnership ?? null,
+    flowThroughBlackOwnership: rec.flowThroughBlackOwnership ?? null,
+    blackDesignatedGroupOwnership: rec.blackDesignatedGroupOwnership ?? null,
+    empoweringSupplier: rec.empoweringSupplier ?? null,
+    firstProcurementDate: rec.firstProcurementDate ?? null,
+    sizeAtFirstProcurement: rec.sizeAtFirstProcurement ?? null,
+    sdRecipient: rec.sdRecipient ?? null,
+    threeYearContract: rec.threeYearContract ?? null,
+    annualSpend: rec.annualSpend ?? null,
+    location: rec.location ?? null,
+    businessUnit: rec.businessUnit ?? null,
+    sectorCode: rec.sectorCode ?? null,
+    sectorName: rec.sectorName ?? null,
     source: 'local',
     status: rec.status,
     metadataComplete: true,
@@ -237,6 +291,7 @@ export function normalizeFromMongo(
     fileName,
     blackOwnership: finiteNumber(doc.blackOwnership),
     blackWomenOwnership: finiteNumber(doc.blackWomenOwnership),
+    ...readExtendedFields(doc),
     source: 'mongo',
     status,
     metadataComplete: !!supplierName,
@@ -311,6 +366,10 @@ export function publicCertificateToListRow(c: PublicCertificate): CertificateLis
     slug: c.slug,
     verified: c.verified,
     metadataComplete: c.metadataComplete,
+    sectorCode: c.sectorCode ?? null,
+    sectorName: c.sectorName ?? null,
+    location: c.location ?? null,
+    businessUnit: c.businessUnit ?? null,
   };
 }
 
@@ -325,6 +384,18 @@ export function publicCertificateToDetailJson(c: PublicCertificate) {
     bbbeeScore: c.bbbeeScore,
     blackOwnership: c.blackOwnership,
     blackWomenOwnership: c.blackWomenOwnership,
+    flowThroughBlackOwnership: c.flowThroughBlackOwnership ?? null,
+    blackDesignatedGroupOwnership: c.blackDesignatedGroupOwnership ?? null,
+    empoweringSupplier: c.empoweringSupplier ?? null,
+    firstProcurementDate: c.firstProcurementDate ?? null,
+    sizeAtFirstProcurement: c.sizeAtFirstProcurement ?? null,
+    sdRecipient: c.sdRecipient ?? null,
+    threeYearContract: c.threeYearContract ?? null,
+    annualSpend: c.annualSpend ?? null,
+    location: c.location ?? null,
+    businessUnit: c.businessUnit ?? null,
+    sectorCode: c.sectorCode ?? null,
+    sectorName: c.sectorName ?? null,
     verificationAgency: c.agency,
     agency: c.agency,
     certificateNumber: c.certificateNumber,
@@ -369,7 +440,7 @@ export function dedupePublicCertificates(certs: PublicCertificate[]): PublicCert
 
 export function certificateSearchHaystack(c: Pick<
   PublicCertificate,
-  'companyName' | 'vatNumber' | 'fileName' | 'bbbeeLevel' | 'certificateNumber'
+  'companyName' | 'vatNumber' | 'fileName' | 'bbbeeLevel' | 'certificateNumber' | 'sectorCode' | 'sectorName' | 'location' | 'businessUnit'
 >): string {
   return `
     ${c.companyName || ''}
@@ -377,5 +448,9 @@ export function certificateSearchHaystack(c: Pick<
     ${c.fileName || ''}
     ${c.bbbeeLevel ?? ''}
     ${c.certificateNumber || ''}
+    ${c.sectorCode || ''}
+    ${c.sectorName || ''}
+    ${c.location || ''}
+    ${c.businessUnit || ''}
   `.toLowerCase();
 }

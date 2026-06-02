@@ -7,7 +7,7 @@
  *
  * Supports:
  * - Full-text search across company name, VAT number, filename, extracted text
- * - Filter by status, company size, B-BBEE level
+ * - Filter by status, company size, sector, B-BBEE level
  * - Sort by relevance score (textScore) + expiry date
  * - Pagination
  */
@@ -23,6 +23,7 @@ const logger = createLogger('MongoSearch');
 export interface SearchFilters {
   status?: 'valid' | 'expiring' | 'expired' | 'unknown' | 'all';
   companySize?: string;
+  sectorCode?: string;
   minBbbeeLevel?: number;
   maxBbbeeLevel?: number;
   verifiedOnly?: boolean;
@@ -35,6 +36,8 @@ export interface SearchResult {
   companyName: string;
   vatNumber: string | null;
   companySize: string | null;
+  sectorCode: string | null;
+  sectorName: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
   bbbeeLevel: number | null;
@@ -74,6 +77,8 @@ export async function ensureSearchIndex(): Promise<void> {
         fileName: 'text',
         extractedText: 'text',
         companySize: 'text',
+        sectorCode: 'text',
+        sectorName: 'text',
       },
       {
         name: 'certificate_search_text',
@@ -82,6 +87,8 @@ export async function ensureSearchIndex(): Promise<void> {
           vatNumber: 8,        // High priority - exact match identifier
           fileName: 5,         // Medium priority
           extractedText: 3,    // Lower priority - body text
+          sectorName: 3,       // Sector name searches
+          sectorCode: 3,       // Sector code searches
           companySize: 2,      // Lowest - EME/QSE/Generic
         },
         default_language: 'english',
@@ -95,6 +102,7 @@ export async function ensureSearchIndex(): Promise<void> {
     await collection.createIndex({ bbbeeLevel: 1 });
     await collection.createIndex({ verified: 1 });
     await collection.createIndex({ companySize: 1 });
+    await collection.createIndex({ sectorCode: 1 });
     await collection.createIndex({ vatNumber: 1 });
 
     logger.info('MongoDB search indexes created successfully');
@@ -140,6 +148,9 @@ export async function searchCertificatesMongo(
     }
     if (filters?.companySize && filters.companySize !== 'all') {
       matchStage.companySize = { $regex: new RegExp(filters.companySize, 'i') };
+    }
+    if (filters?.sectorCode && filters.sectorCode !== 'all') {
+      matchStage.sectorCode = String(filters.sectorCode).toUpperCase();
     }
     if (filters?.minBbbeeLevel !== undefined) {
       matchStage.bbbeeLevel = { $gte: filters.minBbbeeLevel };
@@ -193,6 +204,8 @@ export async function searchCertificatesMongo(
       companyName: doc.supplierName || extractCompanyNameFromFileName(doc.fileName),
       vatNumber: doc.vatNumber || null,
       companySize: doc.companySize || null,
+      sectorCode: doc.sectorCode || null,
+      sectorName: doc.sectorName || null,
       blackOwnership: doc.blackOwnership ?? null,
       blackWomenOwnership: doc.blackWomenOwnership ?? null,
       bbbeeLevel: doc.bbbeeLevel ?? null,
@@ -254,6 +267,9 @@ export async function fuzzySearchCertificates(
   if (filters?.companySize && filters.companySize !== 'all') {
     matchStage.companySize = { $regex: new RegExp(filters.companySize, 'i') };
   }
+  if (filters?.sectorCode && filters.sectorCode !== 'all') {
+    matchStage.sectorCode = String(filters.sectorCode).toUpperCase();
+  }
 
   const pipeline: PipelineStage[] = [
     { $match: matchStage },
@@ -277,6 +293,8 @@ export async function fuzzySearchCertificates(
     companyName: doc.supplierName || extractCompanyNameFromFileName(doc.fileName),
     vatNumber: doc.vatNumber || null,
     companySize: doc.companySize || null,
+    sectorCode: doc.sectorCode || null,
+    sectorName: doc.sectorName || null,
     blackOwnership: doc.blackOwnership ?? null,
     blackWomenOwnership: doc.blackWomenOwnership ?? null,
     bbbeeLevel: doc.bbbeeLevel ?? null,
@@ -408,6 +426,8 @@ export async function getCertificateById(id: string): Promise<SearchResult | nul
     companyName: doc.supplierName || extractCompanyNameFromFileName(doc.fileName),
     vatNumber: doc.vatNumber || null,
     companySize: doc.companySize || null,
+    sectorCode: doc.sectorCode || null,
+    sectorName: doc.sectorName || null,
     blackOwnership: doc.blackOwnership ?? null,
     blackWomenOwnership: doc.blackWomenOwnership ?? null,
     bbbeeLevel: doc.bbbeeLevel ?? null,
@@ -486,6 +506,9 @@ function generateSnippet(doc: any, query: string): string {
   const metaParts: string[] = [];
   if (doc.companySize) {
     metaParts.push(doc.companySize);
+  }
+  if (doc.sectorCode || doc.sectorName) {
+    metaParts.push([doc.sectorCode, doc.sectorName].filter(Boolean).join(' - '));
   }
   if (doc.bbbeeLevel) {
     metaParts.push(`Level ${doc.bbbeeLevel}`);
