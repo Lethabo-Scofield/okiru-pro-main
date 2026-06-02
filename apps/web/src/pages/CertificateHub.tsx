@@ -976,6 +976,15 @@ function CertRow({
           ) : (
             <HighlightMatch text={cert.companyName} query={searchQuery} />
           )}
+          {cert.metadataComplete === false && (
+            <span
+              title="File is in storage but certificate metadata has not been linked yet"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
+              style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.12)' }}
+            >
+              Metadata missing
+            </span>
+          )}
           {cert.verified && (
             <span
               title="Verified by an administrator"

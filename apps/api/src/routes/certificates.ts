@@ -19,6 +19,7 @@ import {
   buildCertSlug,
   certificateSearchHaystack,
   dedupePublicCertificates,
+  normalizeFromBlobOnly,
   normalizeFromLocal,
   normalizeFromMongo,
   normalizeFromMongoAndParsed,
@@ -188,16 +189,19 @@ async function loadPublicCertificates(): Promise<PublicCertificate[]> {
       for (const b of azureBlobs) {
         if (seenBlobs.has(b.name)) continue;
         const md = mongoMap.get(b.name) as Record<string, unknown> | undefined;
-        if (!md) {
-          // Blob-only files are not public registry entries (no Mongo identity).
-          seenBlobs.add(b.name);
-          continue;
+        if (md) {
+          const normalized = normalizeFromMongo(md, {
+            blobLastModified: b.lastModified,
+            fileNameFallback: b.name.split('/').pop() || b.name,
+          });
+          if (normalized) {
+            certs.push({ ...normalized, source: 'azure' });
+          } else {
+            certs.push(normalizeFromBlobOnly(b));
+          }
+        } else {
+          certs.push(normalizeFromBlobOnly(b));
         }
-        const normalized = normalizeFromMongo(md, {
-          blobLastModified: b.lastModified,
-          fileNameFallback: b.name.split('/').pop() || b.name,
-        });
-        if (normalized) certs.push({ ...normalized, source: 'azure' });
         seenBlobs.add(b.name);
       }
     } catch (azureErr) {
@@ -645,7 +649,7 @@ router.get('/seo/list', async (_req: Request, res: Response) => {
   try {
     const certs = await getPublicCertificatesCached();
     const records = certs
-      .filter((c) => c.slug && c.metadataComplete)
+      .filter((c) => c.slug)
       .map(publicCertificateToSeoJson)
       .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     return res.json(records.slice(0, 1000));
