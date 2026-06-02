@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@toolkit/lib/queryClient";
@@ -25,11 +25,16 @@ import Workspace from "@/pages/Workspace";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
+import EsgClientSelector from "@/pages/EsgClientSelector";
+import EsgInformationRequest from "@/pages/EsgInformationRequest";
+import EsgScoreSummary from "@/pages/EsgScoreSummary";
+import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
 /** Legacy upload/build flows — super-admin only in production go-live. */
 function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
@@ -65,6 +70,23 @@ function LegacyOnboardingRedirect() {
   );
 }
 
+/** Legacy `/information-request` URLs → canonical create-scorecard flow. */
+function InformationRequestRedirect() {
+  const params = useParams<{ companyId?: string }>();
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    const id = params.companyId;
+    navigate(id ? `/create-scorecard/${encodeURIComponent(id)}` : "/create-scorecard", {
+      replace: true,
+    });
+  }, [params.companyId, navigate]);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function ToolkitLoader() {
   return (
     <Suspense fallback={
@@ -77,6 +99,33 @@ function ToolkitLoader() {
     }>
       <ToolkitView />
     </Suspense>
+  );
+}
+
+function EsgToolkitLoader() {
+  return (
+    <Suspense
+      fallback={
+        <div className="esg-theme min-h-screen flex items-center justify-center">
+          <div className="h-10 w-10 border-2 border-[#1de9a0] border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      }
+    >
+      <EsgToolkitView />
+    </Suspense>
+  );
+}
+
+/** /esg → company picker */
+function EsgHubRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate("/esg/clients", { replace: true });
+  }, [navigate]);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
+    </div>
   );
 }
 
@@ -117,10 +166,10 @@ function AppRouter() {
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
       <Route path="/information-request/:companyId">
-        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+        <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>
       </Route>
       <Route path="/information-request">
-        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+        <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>
       </Route>
       <Route path="/builder">
         <ProtectedRoute><SuperAdminOnlyRoute><EntityBuilder /></SuperAdminOnlyRoute></ProtectedRoute>
@@ -142,6 +191,21 @@ function AppRouter() {
       </Route>
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
+      </Route>
+      <Route path="/esg">
+        <ProtectedRoute><EsgPreviewRoute><EsgHubRedirect /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/clients">
+        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/create/:companyId/summary">
+        <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/create/:companyId">
+        <ProtectedRoute><EsgPreviewRoute><EsgInformationRequest /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/toolkit" nest>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/devmode">
         <ProtectedRoute><DevMode /></ProtectedRoute>

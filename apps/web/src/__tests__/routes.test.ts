@@ -38,4 +38,13 @@ describe("App.tsx route declarations", () => {
   it("does NOT declare /test (falls through to NotFound)", () => {
     expect(hasRoute("/test")).toBe(false);
   });
+
+  it("declares ESG flow routes behind EsgPreviewRoute (Phase 1)", () => {
+    expect(hasRoute("/esg")).toBe(true);
+    expect(hasRoute("/esg/clients")).toBe(true);
+    expect(hasRoute("/esg/create/:companyId")).toBe(true);
+    expect(hasRoute("/esg/create/:companyId/summary")).toBe(true);
+    expect(hasRoute("/esg/toolkit")).toBe(true);
+    expect(APP_TSX).toMatch(/EsgPreviewRoute/);
+  });
 });
