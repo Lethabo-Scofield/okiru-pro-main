@@ -188,6 +188,12 @@ spec:
                   name: app-config
                   key: APP_BASE_URL
                   optional: true
+            - name: ESG_PREVIEW_ALLOWLIST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ESG_PREVIEW_ALLOWLIST
+                  optional: true
           volumeMounts:
             - name: tmp-vol
               mountPath: /tmp

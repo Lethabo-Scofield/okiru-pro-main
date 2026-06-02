@@ -22,6 +22,7 @@ import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
+import { registerEsgWorkbookRoutes } from "./esgWorkbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
@@ -3253,6 +3254,7 @@ Respond ONLY with a valid JSON array.`;
   });
 
   registerWorkbookRoutes(app);
+  registerEsgWorkbookRoutes(app);
   registerExcelImportRoutes(app);
   registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);

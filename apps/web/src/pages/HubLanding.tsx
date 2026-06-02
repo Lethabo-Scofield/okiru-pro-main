@@ -13,6 +13,7 @@ import {
   Sparkles, Plus, LineChart, UserCog, ChevronDown,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
+import { useEsgAccess } from '@/hooks/useEsgAccess';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
@@ -37,6 +38,7 @@ function firstName(full?: string | null, username?: string | null): string {
 
 export default function HubLanding() {
   const { user, isLoading: authLoading } = useAuth();
+  const { allowed: esgAllowed } = useEsgAccess();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
 
@@ -99,7 +101,8 @@ export default function HubLanding() {
     toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
   };
 
-  const toolkits = useMemo(() => ([
+  const toolkits = useMemo(() => {
+    const items = [
     {
       id: 'bbbee-cert',
       title: 'B-BBEE Certificate Hub',
@@ -113,11 +116,18 @@ export default function HubLanding() {
       featured: true,
       backgroundImage: certCardBg,
     },
-    {
-      id: 'esg', title: 'ESG Toolkit', tag: 'ESG', aiBadge: 'AI-Insights',
-      icon: <Leaf className="w-4 h-4" />, action: handleComingSoon,
-      description: 'Carbon, social and governance reporting aligned to GRI, TCFD and SASB.',
-    },
+    ...(esgAllowed
+      ? [{
+      id: 'esg',
+      title: 'ESG Intelligence Toolkit',
+      tag: 'ESG',
+      aiBadge: 'AI-Insights',
+      icon: <Leaf className="w-4 h-4" />,
+      link: '/esg/clients',
+      description: 'Carbon, social and governance scoring aligned to King V, IFRS S1/S2 and GRI.',
+      features: ['GHG inventory & carbon tax', 'E/S/G scorecards', 'Net-zero roadmap'],
+    }]
+      : []),
     {
       id: 'employment-equity', title: 'Employment Equity', tag: 'HR & PEOPLE', aiBadge: 'AI-Analytics',
       icon: <Users className="w-4 h-4" />, action: handleComingSoon,
@@ -133,8 +143,10 @@ export default function HubLanding() {
       icon: <Briefcase className="w-4 h-4" />, action: handleComingSoon,
       description: 'Audit evidence repository, finding tracker and risk-based planning.',
     },
+  ];
+    return items;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ]), []);
+  }, [esgAllowed]);
 
   const active = toolkits.filter((t) => 'link' in t && t.link);
 
@@ -397,8 +409,8 @@ export default function HubLanding() {
           </div>
         </section>
 
-        {/* PRIMARY ACTIONS — Create / View scorecard */}
-        <section className="mb-14 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="hero-primary-actions">
+        {/* PRIMARY ACTIONS — Create / View scorecard / ESG */}
+        <section className="mb-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="hero-primary-actions">
           <Link
             href="/create-scorecard"
             className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] overflow-hidden border border-violet-400/25 hover:border-violet-300/50 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-20px_rgba(139,92,246,0.45)] cursor-pointer"
@@ -470,6 +482,42 @@ export default function HubLanding() {
               </span>
             </div>
           </Link>
+
+          {esgAllowed && (
+          <Link
+            href="/esg/clients"
+            className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] overflow-hidden border border-emerald-400/20 hover:border-emerald-300/40 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-20px_rgba(29,233,160,0.25)] cursor-pointer"
+            style={{
+              backgroundImage:
+                'linear-gradient(135deg, rgba(29,233,160,0.12) 0%, rgba(29,233,160,0.04) 40%, rgba(255,255,255,0.02) 100%)',
+            }}
+            data-testid="action-create-esg"
+          >
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 flex items-center justify-center">
+                  <Leaf className="w-5 h-5" strokeWidth={2.2} />
+                </div>
+                <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-emerald-200/70">
+                  ESG
+                </span>
+              </div>
+              <h3
+                className="text-[24px] sm:text-[26px] font-semibold tracking-tight text-white leading-[1.1]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                ESG Toolkit
+              </h3>
+              <p className="mt-2 text-[13.5px] text-[#a1a1a6] leading-relaxed max-w-md">
+                Environmental, social and governance inputs, summary, and dashboard for your company.
+              </p>
+              <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-emerald-100/90 group-hover:text-white">
+                Start ESG assessment
+                <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
+            </div>
+          </Link>
+          )}
         </section>
 
         {/* Hairline divider — gives the page rhythm */}
