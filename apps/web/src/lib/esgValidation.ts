@@ -31,6 +31,7 @@ export function validateEsgWorkbook(workbook: EsgWorkbookData | null): EsgValida
   const eScore = readEsgCell(workbook, "e-data", "D30") ?? 0;
   const sScore = readEsgCell(workbook, "s-data", "D28") ?? 0;
   const gScore = readEsgCell(workbook, "g-data", "D26") ?? 0;
+  const king5Filled = countKing5Checklist(workbook);
 
   return [
     monthCheck("e-diesel", "E_Data: Fleet diesel months (9)", dieselMonths, 9),
@@ -47,7 +48,20 @@ export function validateEsgWorkbook(workbook: EsgWorkbookData | null): EsgValida
     scoreCheck("e-score", "E_Scorecard: Total score >0", eScore),
     scoreCheck("s-score", "S_Scorecard: Total score >0", sScore),
     scoreCheck("g-score", "G_Scorecard: Total score >0", gScore),
+    {
+      id: "king5-checklist",
+      label: "King5: Checklist items (17 target)",
+      severity: "warning",
+      pass: king5Filled >= 7,
+      expected: "17",
+      actual: String(king5Filled),
+    },
   ];
+}
+
+function countKing5Checklist(workbook: EsgWorkbookData): number {
+  const cells = workbook.sections?.king5?.cells ?? {};
+  return Object.keys(cells).filter((k) => k.startsWith("E") && cells[k] != null).length;
 }
 
 function monthCheck(

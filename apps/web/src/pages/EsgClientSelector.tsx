@@ -7,8 +7,7 @@ import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
-import { esgFlowStepHref, setEsgActiveCompany } from "@/lib/esgRoutes";
-import { EsgFlowStepper } from "@/components/esg/EsgFlowStepper";
+import { esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import "@/styles/esg-glass.css";
 
 interface CompanyRow {
@@ -55,7 +54,7 @@ export default function EsgClientSelector() {
     const id = c.clientId || c.id || "";
     if (!id) return;
     setEsgActiveCompany(id);
-    navigate(esgFlowStepHref("inputs", id));
+    navigate(esgToolkitHref(id));
   };
 
   const createCompany = async () => {
@@ -100,8 +99,6 @@ export default function EsgClientSelector() {
         <UserAccountMenu variant="hub" />
       </header>
 
-      <EsgFlowStepper />
-
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8" data-testid="esg-client-selector">
         <h1
           className="text-[28px] sm:text-[32px] font-semibold tracking-tight text-[var(--esg-text)]"
@@ -110,7 +107,7 @@ export default function EsgClientSelector() {
           Select a company
         </h1>
         <p className="text-[14px] text-[var(--esg-text2)] mt-2 mb-8">
-          Reuses your workspace companies — same API as B-BBEE scorecards. ESG workbook data ships in Phase 1.
+          Reuses your workspace companies — opens the ESG toolkit with inputs, scores, and dashboard in one place.
         </p>
 
         <div className="esg-glass p-5 mb-6">

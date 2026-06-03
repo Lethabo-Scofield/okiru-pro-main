@@ -1,0 +1,100 @@
+import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+
+/** SG Consumer v1.7 live workbook cells — golden scorecard parity. */
+export const SG_CONSUMER_GOLDEN_CELLS: Record<string, Record<string, string | number>> = {
+  assumptions: {
+    B9: 0.5,
+    B43: 0.1,
+    B44: 0.2,
+    B46: 0.05,
+    B48: 75,
+    B50: 0.6,
+    B51: 0.3,
+    B52: 0.02,
+    B53: 40,
+    B54: 0.8,
+    B55: 2,
+    B107: 2050,
+    B37: 236,
+    B38: 640,
+    B39: 0.6,
+    B112: 1.3333333333,
+  },
+  "e-data": {
+    L19: 589465.53,
+    L46: 2589578.44,
+    L63: 4356.41,
+    L75: 1579.7676204,
+    L76: 5.8454552,
+    L77: 3.4428,
+    L78: 2.8243274,
+    L82: 2123.1843168,
+    B90: 0,
+    F90: 1592.2601192,
+    _months_C_K: 9,
+  },
+  "s-data": {
+    L12: 0,
+    G35: 0,
+    G28: 0,
+    C59: 1,
+    G29: 1,
+    B45: "No",
+    B46: "No",
+    B44: 0,
+    B49: 0,
+    _initiatives_count: 6,
+  },
+  ee: {
+    B9: "Yes",
+    B10: "Yes",
+    B12: "Yes",
+    B5: 0,
+    B8: 0,
+  },
+  "g-data": {
+    B5: 7,
+    B6: 5,
+    B13: "Yes",
+    B14: "No",
+    B15: "Yes",
+    B16: "Yes",
+    B17: "Partial",
+    B18: "Partial",
+    B19: "No",
+    B20: "Yes",
+    B21: "Partial",
+    B22: 0,
+    B23: "Partial",
+    B24: "Partial",
+    B25: "",
+    F5: 5,
+    F6: 5,
+    F13: 5,
+    F14: 0,
+    F15: 5,
+    F16: 5,
+    F17: 2.5,
+    F18: 2.5,
+    F19: 0,
+    F20: 5,
+    F21: 2.5,
+    F23: 2.5,
+  },
+  king5: { E21: 135 },
+  waste: { B16: 91.1, B17: 12.4, B18: 1.16 },
+  "driver-debrief": { _active: 1 },
+  ifrs: { _yes_count: 0, _total: 10 },
+};
+
+export function buildSgConsumerGoldenWorkbook(): EsgWorkbookData {
+  const sections: EsgWorkbookData["sections"] = {};
+  for (const [id, cells] of Object.entries(SG_CONSUMER_GOLDEN_CELLS)) {
+    sections[id] = { cells };
+  }
+  return {
+    companyId: "golden-sg-consumer",
+    sections,
+    updatedAt: new Date().toISOString(),
+  };
+}

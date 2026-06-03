@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { EsgAppRoutes } from "../../EsgToolkit/src/App";
+import { EsgToolkitShell } from "../../EsgToolkit/src/pages/EsgToolkitShell";
 import "@/styles/esg-glass.css";
 
 export default function EsgToolkitView() {
@@ -11,7 +11,7 @@ export default function EsgToolkitView() {
         </div>
       }
     >
-      <EsgAppRoutes />
+      <EsgToolkitShell />
     </Suspense>
   );
 }
