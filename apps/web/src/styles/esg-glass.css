@@ -1,18 +1,18 @@
 /**
- * ESG glass theme — tokens from docs/esg/okiru_esg_glass (2).html
- * Applied on /esg/* routes via class .esg-theme on a root wrapper.
+ * ESG theme — aligned with B-BBEE hub / InformationRequest (bg-black, neutral chrome).
+ * E/S/G accent tokens are for badges and charts only, not page wash.
  */
 .esg-theme {
-  --esg-bg: #080e14;
-  --esg-bg2: #0d1520;
-  --esg-glass: rgba(255, 255, 255, 0.04);
-  --esg-glass-hover: rgba(255, 255, 255, 0.07);
-  --esg-glass-border: rgba(255, 255, 255, 0.09);
-  --esg-glass-border-hover: rgba(255, 255, 255, 0.18);
-  --esg-glass-strong: rgba(255, 255, 255, 0.1);
-  --esg-text: #f0ede8;
-  --esg-text2: #8a9aaa;
-  --esg-text3: #4a5a6a;
+  --esg-bg: #000000;
+  --esg-bg2: #0a0a0a;
+  --esg-glass: rgba(255, 255, 255, 0.03);
+  --esg-glass-hover: rgba(255, 255, 255, 0.06);
+  --esg-glass-border: #2c2c2e;
+  --esg-glass-border-hover: #3a3a3c;
+  --esg-glass-strong: rgba(255, 255, 255, 0.06);
+  --esg-text: #ffffff;
+  --esg-text2: #8e8e93;
+  --esg-text3: #636366;
   --esg-acc-e: #1de9a0;
   --esg-acc-s: #f5a623;
   --esg-acc-g: #9b6bff;
@@ -20,32 +20,32 @@
   --esg-hdr-h: 52px;
   color: var(--esg-text);
   background-color: var(--esg-bg);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(29, 233, 160, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(155, 107, 255, 0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(245, 166, 35, 0.03) 0%, transparent 70%);
 }
 
 .esg-theme .esg-glass {
   background: var(--esg-glass);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--esg-glass-border);
   border-radius: 14px;
 }
 
 .esg-theme .esg-glass-sm {
   background: var(--esg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--esg-glass-border);
   border-radius: 10px;
 }
 
 .esg-theme .esg-glass-strong {
   background: var(--esg-glass-strong);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--esg-glass-border);
   border-radius: 14px;
+}
+
+.esg-theme .esg-pillar-e {
+  color: var(--esg-acc-e);
+}
+.esg-theme .esg-pillar-s {
+  color: var(--esg-acc-s);
+}
+.esg-theme .esg-pillar-g {
+  color: var(--esg-acc-g);
 }

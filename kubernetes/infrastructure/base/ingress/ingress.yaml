@@ -106,6 +106,14 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # ESG workbook routes (web server owns ALL /api/esg/* — NOT on api backend)
+          - path: /api/esg
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # Admin/demo routes on web: Lake Trading demo, rollback (NOT on api backend)
           - path: /api/admin
             pathType: Prefix
