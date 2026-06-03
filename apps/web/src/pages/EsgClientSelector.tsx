@@ -7,7 +7,7 @@ import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
-import { esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
+import { esgCreateHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import "@/styles/esg-glass.css";
 
 interface CompanyRow {
@@ -54,7 +54,7 @@ export default function EsgClientSelector() {
     const id = c.clientId || c.id || "";
     if (!id) return;
     setEsgActiveCompany(id);
-    navigate(esgToolkitHref(id));
+    navigate(esgCreateHref(id));
   };
 
   const createCompany = async () => {
@@ -107,7 +107,7 @@ export default function EsgClientSelector() {
           Select a company
         </h1>
         <p className="text-[14px] text-[var(--esg-text2)] mt-2 mb-8">
-          Reuses your workspace companies — opens the ESG toolkit with inputs, scores, and dashboard in one place.
+          Reuses your workspace companies — start with the ESG workbook, then summary and toolkit.
         </p>
 
         <div className="esg-glass p-5 mb-6">

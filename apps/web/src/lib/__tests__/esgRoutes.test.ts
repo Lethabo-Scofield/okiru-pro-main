@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { esgToolkitHref, esgLegacyCreateRedirect } from "../esgRoutes";
+import { esgCreateHref, esgSummaryHref, esgToolkitHref } from "../esgRoutes";
 
 describe("esgRoutes", () => {
-  it("builds toolkit path with company id", () => {
-    expect(esgToolkitHref("co-123")).toBe("/esg/toolkit/co-123");
+  it("builds create and summary paths", () => {
+    expect(esgCreateHref("co-123")).toBe("/esg/create/co-123");
+    expect(esgSummaryHref("co-123")).toBe("/esg/create/co-123/summary");
   });
 
-  it("redirects legacy create URLs to toolkit", () => {
-    expect(esgLegacyCreateRedirect("co-abc")).toBe("/esg/toolkit/co-abc");
-    expect(esgLegacyCreateRedirect("co-abc", true)).toBe("/esg/toolkit/co-abc");
+  it("builds toolkit path with company id", () => {
+    expect(esgToolkitHref("co-123")).toBe("/esg/toolkit/co-123");
   });
 });

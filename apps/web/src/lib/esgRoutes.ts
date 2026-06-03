@@ -1,6 +1,14 @@
-/** Canonical ESG paths — clients → toolkit (no stepper flow). */
+/** Canonical ESG paths — clients → inputs → summary → toolkit. */
 
 export const ESG_ACTIVE_COMPANY_KEY = "okiru-esg-active-company";
+
+export function esgCreateHref(companyId: string): string {
+  return `/esg/create/${encodeURIComponent(companyId)}`;
+}
+
+export function esgSummaryHref(companyId: string): string {
+  return `/esg/create/${encodeURIComponent(companyId)}/summary`;
+}
 
 export function esgToolkitHref(companyId?: string): string {
   if (companyId) {
@@ -8,12 +16,6 @@ export function esgToolkitHref(companyId?: string): string {
   }
   const stored = getEsgActiveCompany();
   return stored ? `/esg/toolkit/${encodeURIComponent(stored)}` : "/esg/toolkit";
-}
-
-/** Legacy create/summary URLs → toolkit section. */
-export function esgLegacyCreateRedirect(companyId: string, wasSummary?: boolean): string {
-  void wasSummary;
-  return esgToolkitHref(companyId);
 }
 
 export function setEsgActiveCompany(companyId: string): void {

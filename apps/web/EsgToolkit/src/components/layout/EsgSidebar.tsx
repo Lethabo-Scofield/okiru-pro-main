@@ -1,5 +1,6 @@
 import { useLocation, Link } from "wouter";
 import { cn } from "@toolkit/lib/utils";
+import { esgCreateHref } from "@/lib/esgRoutes";
 import { useEsgStore } from "../../lib/esgStore";
 
 export type EsgNavItem = {
@@ -8,6 +9,7 @@ export type EsgNavItem = {
   href: string;
   pillar?: "e" | "s" | "g" | "overview" | "data";
   scoreKey?: "environmental" | "social" | "governance";
+  externalWorkbook?: boolean;
 };
 
 const NAV_SECTIONS: { title: string; items: EsgNavItem[] }[] = [
@@ -17,39 +19,13 @@ const NAV_SECTIONS: { title: string; items: EsgNavItem[] }[] = [
       { id: "dashboard", label: "Dashboard", href: "/", pillar: "overview" },
       { id: "net-zero", label: "Net-Zero Roadmap", href: "/net-zero", pillar: "overview" },
       { id: "carbon-tax", label: "Carbon Tax", href: "/carbon-tax", pillar: "overview" },
-    ],
-  },
-  {
-    title: "Environmental",
-    items: [
-      { id: "e-dashboard", label: "E Dashboard", href: "/environmental", pillar: "e", scoreKey: "environmental" },
-      { id: "ghg", label: "GHG & Energy", href: "/ghg", pillar: "e" },
-      { id: "fleet", label: "Fleet Register", href: "/fleet", pillar: "e" },
-      { id: "waste", label: "Waste Register", href: "/waste", pillar: "e" },
       { id: "iso-14083", label: "ISO 14083", href: "/iso-14083", pillar: "e" },
     ],
   },
   {
-    title: "Social",
+    title: "Workbook",
     items: [
-      { id: "s-dashboard", label: "S Dashboard", href: "/social", pillar: "s", scoreKey: "social" },
-      { id: "ee", label: "EE Scorecard", href: "/ee-scorecard", pillar: "s" },
-    ],
-  },
-  {
-    title: "Governance",
-    items: [
-      { id: "g-dashboard", label: "G Dashboard", href: "/governance", pillar: "g", scoreKey: "governance" },
-      { id: "king5", label: "King V", href: "/king5", pillar: "g" },
-      { id: "ifrs", label: "IFRS S1/S2", href: "/ifrs", pillar: "g" },
-      { id: "garp", label: "GARP/ERM", href: "/garp", pillar: "g" },
-    ],
-  },
-  {
-    title: "Data",
-    items: [
-      { id: "assumptions", label: "Assumptions", href: "/assumptions", pillar: "data" },
-      { id: "import", label: "Data Import", href: "/import", pillar: "data" },
+      { id: "edit-inputs", label: "Edit ESG inputs", href: "__workbook__", pillar: "data", externalWorkbook: true },
     ],
   },
 ];
@@ -70,6 +46,7 @@ function pillarAccent(pillar?: EsgNavItem["pillar"]): string {
 export function EsgSidebar() {
   const [location] = useLocation();
   const scorecard = useEsgStore((s) => s.scorecard);
+  const companyId = useEsgStore((s) => s.companyId);
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/" || location === "";
@@ -80,6 +57,12 @@ export function EsgSidebar() {
     if (!key || !scorecard) return "—";
     const pts = scorecard[key].score;
     return `${pts.toFixed(0)}`;
+  };
+
+  const resolveHref = (item: EsgNavItem) => {
+    if (item.externalWorkbook && companyId) return esgCreateHref(companyId);
+    if (item.externalWorkbook) return "/esg/clients";
+    return item.href;
   };
 
   return (
@@ -93,11 +76,12 @@ export function EsgSidebar() {
             {section.title}
           </div>
           {section.items.map((item) => {
-            const active = isActive(item.href);
+            const href = resolveHref(item);
+            const active = item.externalWorkbook ? false : isActive(item.href);
             return (
               <Link
                 key={item.id}
-                href={item.href}
+                href={href}
                 className={cn(
                   "flex items-center gap-2 px-3.5 py-2 text-[12px] w-full border-l-2 transition-colors",
                   active
@@ -117,6 +101,27 @@ export function EsgSidebar() {
           })}
         </div>
       ))}
+      {scorecard ? (
+        <div className="px-4 pt-6 pb-2 space-y-2">
+          <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--esg-text3)]">
+            Pillar scores
+          </div>
+          {(
+            [
+              { key: "environmental" as const, label: "E", color: "var(--esg-acc-e)" },
+              { key: "social" as const, label: "S", color: "var(--esg-acc-s)" },
+              { key: "governance" as const, label: "G", color: "var(--esg-acc-g)" },
+            ] as const
+          ).map((p) => (
+            <div key={p.key} className="flex justify-between text-[11px] text-[var(--esg-text2)]">
+              <span>{p.label}</span>
+              <span className="font-bold tabular-nums" style={{ color: p.color }}>
+                {scorecard[p.key].score.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </nav>
   );
 }
