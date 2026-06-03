@@ -26,6 +26,13 @@ import {
   EE_MATURITY_ROWS,
   G_DATA_MATURITY_ROWS,
   S_DATA_SCALAR_FIELDS,
+  WASTE_SCALAR_FIELDS,
+  eDataBusinessCarRows,
+  eDataGeneratorRows,
+  eDataLpgRows,
+  eDataSolarRows,
+  eDataWasteRows,
+  eDataWaterRows,
 } from "./esgSectionConfigs";
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -149,7 +156,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           tabs={[
             {
               id: "scope-1a",
-              label: "Scope 1A Fleet",
+              label: "1A Fleet Diesel",
               content: (
                 <EsgMonthlyGrid
                   rows={eDataDepotRows()}
@@ -163,18 +170,116 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
               ),
             },
             {
+              id: "scope-1b",
+              label: "1B Generators",
+              content: (
+                <EsgMonthlyGrid
+                  rows={eDataGeneratorRows()}
+                  cellPrefix="s1b"
+                  emissionFactor={Number(draft.B4 ?? 2.68)}
+                  unitLabel="L diesel"
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              ),
+            },
+            {
+              id: "scope-1c",
+              label: "1C LPG Forklifts",
+              content: (
+                <EsgMonthlyGrid
+                  rows={eDataLpgRows()}
+                  cellPrefix="s1c"
+                  emissionFactor={Number(draft.B6 ?? 1.51)}
+                  unitLabel="kg"
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              ),
+            },
+            {
+              id: "scope-1d",
+              label: "1D Business Cars",
+              content: (
+                <EsgMonthlyGrid
+                  rows={eDataBusinessCarRows()}
+                  cellPrefix="s1d"
+                  emissionFactor={Number(draft.B5 ?? 2.31)}
+                  unitLabel="L petrol"
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              ),
+            },
+            {
               id: "scope-2",
               label: "Scope 2 Electricity",
               content: (
                 <EsgMonthlyGrid
                   rows={eDataDepotRows()}
                   cellPrefix="s2"
-                  emissionFactor={Number(draft.B7 ?? 0.99)}
+                  emissionFactor={Number(draft.B7 ?? 0.82)}
                   unitLabel="kWh"
                   values={draft}
                   onChange={updateDraft}
                   readOnly={locked}
                 />
+              ),
+            },
+            {
+              id: "solar",
+              label: "Solar Offset",
+              content: (
+                <EsgMonthlyGrid
+                  rows={eDataSolarRows()}
+                  cellPrefix="solar"
+                  emissionFactor={Number(draft.B8 ?? 0.025)}
+                  unitLabel="kWh"
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              ),
+            },
+            {
+              id: "water",
+              label: "Water",
+              content: (
+                <EsgMonthlyGrid
+                  rows={eDataWaterRows()}
+                  cellPrefix="water"
+                  emissionFactor={Number(draft.B9 ?? 0.000344) * 1000}
+                  unitLabel="kL"
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              ),
+            },
+            {
+              id: "waste",
+              label: "Waste",
+              content: (
+                <div className="space-y-4">
+                  <EsgMonthlyGrid
+                    rows={eDataWasteRows()}
+                    cellPrefix="waste"
+                    emissionFactor={0}
+                    unitLabel="%"
+                    values={draft}
+                    onChange={updateDraft}
+                    readOnly={locked}
+                  />
+                  <EsgScalarForm
+                    fields={WASTE_SCALAR_FIELDS}
+                    values={draft}
+                    onChange={updateDraft}
+                    readOnly={locked}
+                  />
+                </div>
               ),
             },
             {
