@@ -2,6 +2,23 @@
 
 export const ESG_ACTIVE_COMPANY_KEY = "okiru-esg-active-company";
 
+export const ESG_CLIENTS_PATH = "/esg/clients";
+
+export function esgClientsHref(): string {
+  return ESG_CLIENTS_PATH;
+}
+
+/** True when href targets the parent app router (outside nested /esg/toolkit/:id). */
+export function isEsgAppPath(path: string): boolean {
+  return path.startsWith("/esg/");
+}
+
+/** Full-page navigation — escapes nested wouter routers (e.g. toolkit nest). */
+export function navigateToAppPath(path: string): void {
+  const target = path.startsWith("/") ? path : `/${path}`;
+  window.location.assign(target);
+}
+
 export function esgCreateHref(companyId: string, section?: string): string {
   const base = `/esg/create/${encodeURIComponent(companyId)}`;
   if (!section) return base;

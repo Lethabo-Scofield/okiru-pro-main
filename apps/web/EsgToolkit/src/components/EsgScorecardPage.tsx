@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "wouter";
+import { EsgAppLink } from "@/components/EsgAppLink";
 import { esgCreateHref } from "@/lib/esgRoutes";
 import type { EsgScorecardIndicator } from "@/lib/esg/esgScorecardDefinitions";
 import { useEsgStore } from "../lib/esgStore";
@@ -74,13 +74,13 @@ export function EsgScorecardPage({
           {rows.length} indicators · {rows.filter((r) => r.score >= r.maxPoints).length} fully met
         </div>
         {companyId ? (
-          <Link
+          <EsgAppLink
             href={esgCreateHref(companyId)}
             className="ml-auto text-[11px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
             data-testid="esg-edit-inputs-link"
           >
             Edit inputs →
-          </Link>
+          </EsgAppLink>
         ) : null}
       </div>
 

@@ -1,6 +1,6 @@
-import { Link } from "wouter";
 import { Upload } from "lucide-react";
-import { esgCreateHref } from "@/lib/esgRoutes";
+import { EsgAppLink } from "@/components/EsgAppLink";
+import { esgClientsHref, esgCreateHref } from "@/lib/esgRoutes";
 import { useEsgStore } from "../lib/esgStore";
 
 export default function EsgImport() {
@@ -31,23 +31,24 @@ export default function EsgImport() {
             back to this toolkit automatically.
           </p>
           {companyId ? (
-            <Link
+            <EsgAppLink
               href={esgCreateHref(companyId)}
               className="inline-flex text-[12px] px-4 py-2 rounded-lg bg-[var(--esg-acc-blue,#4aa8ff)] text-[#080e14] font-semibold"
               data-testid="esg-import-open-create"
             >
               Open input layer →
-            </Link>
+            </EsgAppLink>
           ) : (
-            <Link
-              href="/esg/clients"
+            <EsgAppLink
+              href={esgClientsHref()}
               className="inline-flex text-[12px] px-4 py-2 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)]"
             >
               Select a company
-            </Link>
+            </EsgAppLink>
           )}
         </div>
       </div>
     </div>
   );
+
 }
