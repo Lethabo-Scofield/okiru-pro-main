@@ -86,8 +86,11 @@ export default function EsgClientSelector() {
   };
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col">
-      <header className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.85)] backdrop-blur-xl">
+    <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
+      <header
+        className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 bg-black"
+        style={{ borderBottom: "1px solid #2c2c2e" }}
+      >
         <div className="flex items-center gap-3">
           <AppNavBack href="/hub" eyebrow="Hub" label="Okiru Hub" variant="dark" size="compact" />
           <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
@@ -110,7 +113,7 @@ export default function EsgClientSelector() {
           Reuses your workspace companies — start with the ESG workbook, then summary and toolkit.
         </p>
 
-        <div className="esg-glass p-5 mb-6">
+        <div className="rounded-2xl border border-[#2c2c2e] bg-white/[0.02] p-5 mb-6">
           <label htmlFor="esg-new-company" className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--esg-text3)] mb-2">
             New company
           </label>
@@ -137,7 +140,7 @@ export default function EsgClientSelector() {
           </div>
         </div>
 
-        <div className="esg-glass p-5">
+        <div className="rounded-2xl border border-[#2c2c2e] bg-white/[0.02] p-5">
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[14px] font-semibold text-[var(--esg-text)]">Your companies</h2>
             <div className="relative w-full max-w-[220px]">

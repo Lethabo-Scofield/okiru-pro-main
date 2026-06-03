@@ -164,8 +164,11 @@ export default function EsgInformationRequest() {
       : "Not saved yet";
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col bg-[#080e14]">
-      <header className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.85)] backdrop-blur-xl">
+    <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
+      <header
+        className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 bg-black"
+        style={{ borderBottom: "1px solid #2c2c2e" }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <AppNavBack href="/hub" eyebrow="Hub" label="Okiru Hub" variant="dark" size="compact" />
           <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
@@ -260,6 +263,7 @@ export default function EsgInformationRequest() {
 
         <p className="text-[13px] text-[var(--esg-text2)] mb-6 -mt-2">
           Complete each section — scores update as you save. Open the toolkit from Summary when validation passes.
+          See <span className="text-[#8e8e93]">docs/esg/ESG_FLOW_ONTOLOGY.md</span> in the repo for the full consultant flow.
         </p>
 
         <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -300,7 +304,7 @@ export default function EsgInformationRequest() {
               onSelectSection={setActiveSectionId}
             />
             <div
-              className="rounded-xl border border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.5)] p-2"
+              className="rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] p-2"
               data-testid="esg-workbook-tabs"
             >
               {ESG_INPUT_SECTIONS.map((section) => {
@@ -333,7 +337,7 @@ export default function EsgInformationRequest() {
           </aside>
 
           <section
-            className="flex-1 min-w-0 rounded-2xl border border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.45)] overflow-hidden"
+            className="flex-1 min-w-0 rounded-2xl border border-[var(--esg-glass-border)] bg-white/[0.02] overflow-hidden"
             data-testid={`section-panel-${activeSection?.id ?? "unknown"}`}
           >
             {loading ? (
@@ -342,6 +346,11 @@ export default function EsgInformationRequest() {
               </div>
             ) : activeSection ? (
               <div className="p-5 sm:p-6">
+                {activeSection.note ? (
+                  <p className="text-[12px] text-[var(--esg-text3)] mb-4" title={`See ESG_FLOW_ONTOLOGY.md § section-${activeSection.id}`}>
+                    {activeSection.note}
+                  </p>
+                ) : null}
                 <EsgWorkbookSectionEditor
                   key={activeSection.id}
                   ref={editorRef}

@@ -64,8 +64,11 @@ export default function EsgScoreSummary() {
   };
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col bg-[#080e14]">
-      <header className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.85)] backdrop-blur-xl">
+    <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
+      <header
+        className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 bg-black"
+        style={{ borderBottom: "1px solid #2c2c2e" }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <AppNavBack
             href={esgCreateHref(companyId)}

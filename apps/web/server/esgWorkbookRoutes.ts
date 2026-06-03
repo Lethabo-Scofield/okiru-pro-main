@@ -8,6 +8,7 @@ import { getClient as memGetClient } from "./clientsMemoryStore";
 import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
 import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
+import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -191,6 +192,13 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     (wb.sections.assumptions.cells as Record<string, unknown>)["_submittedAt"] = iso;
     await persistEsgWorkbook(wb);
     res.json({ ok: true, submittedAt: iso });
+  });
+
+  app.get("/api/esg/workbook/:companyId/scores", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    const scores = computeEsgScores(wb);
+    res.json({ companyId: wb.companyId, scores });
   });
 
   app.get("/api/esg/workbook/:companyId/export", requireAuth, async (req, res) => {
