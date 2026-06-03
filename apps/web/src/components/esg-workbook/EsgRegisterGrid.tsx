@@ -25,12 +25,13 @@ type Props = {
   sectionId: EsgGridSectionId;
   title?: string;
   autosave?: boolean;
+  toolkitMode?: boolean;
   canAddRows?: boolean;
   canDeleteRows?: boolean;
 };
 
 export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function EsgRegisterGrid(
-  { sectionId, title, autosave = true, canAddRows, canDeleteRows },
+  { sectionId, title, autosave = true, toolkitMode = false, canAddRows, canDeleteRows },
   ref,
 ) {
   const def = esgGridSectionDef(sectionId)!;
@@ -93,12 +94,17 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
   };
 
   return (
-    <div className={ESG_PANEL} data-testid={`esg-register-${sectionId}`}>
-      <header className={ESG_PANEL_HEADER}>
-        <h2 className="text-[16px] font-bold text-[var(--esg-text)]">{title ?? def.sheet}</h2>
-        <p className="text-[12px] text-[var(--esg-text2)] mt-0.5">{def.description}</p>
-      </header>
-      <div className="p-4 overflow-hidden bg-[var(--esg-input-bg,#0e0e10)]">
+    <div
+      className={toolkitMode ? "esg-inp-tbl" : ESG_PANEL}
+      data-testid={`esg-register-${sectionId}`}
+    >
+      {!toolkitMode ? (
+        <header className={ESG_PANEL_HEADER}>
+          <h2 className="text-[16px] font-bold text-[var(--esg-text)]">{title ?? def.sheet}</h2>
+          <p className="text-[12px] text-[var(--esg-text2)] mt-0.5">{def.description}</p>
+        </header>
+      ) : null}
+      <div className={`${toolkitMode ? "p-2" : "p-4"} overflow-hidden bg-[var(--esg-input-bg,#0e0e10)]`}>
         <SpreadsheetGrid
           columns={columns}
           rows={rows}
@@ -110,18 +116,24 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
           canDeleteRows={!locked && delRows}
         />
       </div>
-      <div className="px-4 pb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void persist()}
-          disabled={locked || saving === sectionId}
-          className={ESG_SAVE_BTN}
-          data-testid={`esg-save-${sectionId}`}
-        >
-          {saving === sectionId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save section
-        </button>
-      </div>
+      {!toolkitMode ? (
+        <div className="px-4 pb-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void persist()}
+            disabled={locked || saving === sectionId}
+            className={ESG_SAVE_BTN}
+            data-testid={`esg-save-${sectionId}`}
+          >
+            {saving === sectionId ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save section
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 });

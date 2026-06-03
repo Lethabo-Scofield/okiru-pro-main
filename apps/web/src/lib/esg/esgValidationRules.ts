@@ -30,7 +30,7 @@ export type EsgRuleEvaluation = {
   actual: string;
 };
 
-export type EsgRulesMode = "live" | "submit";
+export type EsgRulesMode = "live" | "submit" | "silent";
 
 function isTouched(touched: EsgTouchedState, sectionId: string, fieldRef?: string): boolean {
   if (!fieldRef) return Boolean(touched[sectionId] && Object.keys(touched[sectionId]).length > 0);
@@ -368,6 +368,10 @@ export function evaluateEsgRules(
   touched: EsgTouchedState = {},
   mode: EsgRulesMode = "live",
 ): EsgRuleEvaluation[] {
+  if (mode === "silent") {
+    return [];
+  }
+
   if (!workbook) {
     return [
       {

@@ -101,6 +101,16 @@ export function registryByInputSection(sectionId: string): EsgRegistryBlock[] {
   return [];
 }
 
+/** Resolve toolkit route → workbook input section key. */
+export function toolkitRouteSectionKey(route: string): string | undefined {
+  const entry = ESG_SECTION_REGISTRY.flatMap((s) =>
+    (s.blocks ?? []).map((b) => ({ sheet: s.sheet, block: b, toolkitPage: s.toolkitPage ?? b.toolkitPage })),
+  ).find((x) => x.toolkitPage === route);
+  if (entry?.block.inputSectionKey) return entry.block.inputSectionKey;
+  const sheet = ESG_SECTION_REGISTRY.find((s) => s.toolkitPage === route);
+  return sheet?.inputSectionKey;
+}
+
 export function parityStats(): { total: number; complete: number; partial: number; readonly: number; pct: number } {
   const total = ESG_SECTION_REGISTRY.length;
   const complete = ESG_SECTION_REGISTRY.filter((s) => s.status === "complete").length;

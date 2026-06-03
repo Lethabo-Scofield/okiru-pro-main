@@ -1,38 +1,32 @@
-/**
- * Toolkit is results-only — no workbook section editor routes.
- */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
+import { allToolkitHrefs } from "@/lib/esg/esgToolkitNav";
 
-const APP_TSX = readFileSync(
-  path.resolve(__dirname, "../App.tsx"),
-  "utf8",
-);
+const APP_TSX = readFileSync(path.resolve(__dirname, "../App.tsx"), "utf8");
 
-describe("EsgToolkit App routes (results only)", () => {
-  it("does not mount EsgSectionEditor or register input routes", () => {
-    expect(APP_TSX).not.toMatch(/EsgSectionEditor/);
-    expect(APP_TSX).not.toMatch(/EsgRegisterGridEditor/);
-    expect(APP_TSX).not.toMatch(/esg-environmental-data/);
-    expect(APP_TSX).not.toMatch(/path="\/assumptions"/);
-    expect(APP_TSX).not.toMatch(/path="\/ghg"/);
-    expect(APP_TSX).not.toMatch(/path="\/fleet"/);
-    expect(APP_TSX).not.toMatch(/path="\/king5"/);
+describe("EsgToolkit App routes", () => {
+  const hrefs = allToolkitHrefs();
+
+  it("registers a Route for every nav href", () => {
+    for (const href of hrefs) {
+      const pattern = href === "/" ? 'path="/"' : `path="${href}"`;
+      expect(APP_TSX, `missing route for ${href}`).toMatch(pattern);
+    }
   });
 
-  it("only exposes dashboard, scorecards, and analysis views", () => {
-    expect(APP_TSX).toMatch(/EsgDashboard/);
-    expect(APP_TSX).toMatch(/path="\/environmental"/);
-    expect(APP_TSX).toMatch(/path="\/social"/);
-    expect(APP_TSX).toMatch(/path="\/governance"/);
-    expect(APP_TSX).toMatch(/path="\/net-zero"/);
-    expect(APP_TSX).toMatch(/path="\/carbon-tax"/);
-    expect(APP_TSX).toMatch(/path="\/iso-14083"/);
-    expect(APP_TSX).toMatch(/path="\/bbbee-bridge"/);
+  it("includes inline editor and hierarchical nav", () => {
+    expect(APP_TSX).toMatch(/EsgToolkitSectionPage/);
+    expect(APP_TSX).toMatch(/EsgToolkitInlineEditor|path="\/environmental\/ghg"/);
+    expect(APP_TSX).toMatch(/setStance/);
+    expect(APP_TSX).toMatch(/esg-hdr-overall/);
   });
 
-  it("links workbook edits to main app create flow", () => {
-    expect(APP_TSX).toMatch(/esgCreateHref/);
+  it("covers all pillar subsection routes", () => {
+    expect(hrefs).toContain("/environmental/ghg");
+    expect(hrefs).toContain("/social/management");
+    expect(hrefs).toContain("/governance/king5");
+    expect(hrefs).toContain("/import");
+    expect(hrefs.length).toBe(23);
   });
 });

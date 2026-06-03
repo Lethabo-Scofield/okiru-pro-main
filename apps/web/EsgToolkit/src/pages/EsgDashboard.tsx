@@ -3,7 +3,7 @@ import { API_BASE } from "@toolkit/lib/config";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
-import { EsgValidationPanel } from "@/components/esg/EsgValidationPanel";
+import { EsgToolkitValidationStrip } from "../components/EsgToolkitValidationStrip";
 import { useEsgStore } from "../lib/esgStore";
 import { computeEsgDashboard } from "../lib/calculators/dashboard";
 import type { EsgPillarRow } from "../lib/calculators/dashboard";
@@ -71,7 +71,7 @@ export default function EsgDashboard() {
           ESG Intelligence
         </p>
         <h1 className="text-[26px] font-semibold tracking-tight text-[var(--esg-text)]">
-          Dashboard
+          ESG Dashboard
         </h1>
         <p className="text-[12px] text-[var(--esg-text2)] mt-1">
           Live scores from workbook calculators (ESG_Dashboard parity).
@@ -176,7 +176,7 @@ export default function EsgDashboard() {
         ) : null}
       </div>
 
-      <EsgValidationPanel workbook={workbook} />
+      <EsgToolkitValidationStrip />
     </div>
   );
 }
