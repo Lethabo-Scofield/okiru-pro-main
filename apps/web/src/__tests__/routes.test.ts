@@ -35,13 +35,16 @@ describe("App.tsx route declarations", () => {
     expect(hasRoute("/test")).toBe(false);
   });
 
-  it("declares ESG routes — clients, toolkit, legacy redirects", () => {
+  it("declares ESG routes — clients, inputs, summary, toolkit", () => {
     expect(hasRoute("/esg")).toBe(true);
     expect(hasRoute("/esg/clients")).toBe(true);
     expect(hasRoute("/esg/toolkit")).toBe(true);
     expect(hasRoute("/esg/toolkit/:companyId")).toBe(true);
     expect(hasRoute("/esg/create/:companyId")).toBe(true);
-    expect(APP_TSX).toMatch(/EsgToolkitRedirect/);
+    expect(hasRoute("/esg/create/:companyId/summary")).toBe(true);
+    expect(APP_TSX).toMatch(/EsgInformationRequest/);
+    expect(APP_TSX).toMatch(/EsgScoreSummary/);
+    expect(APP_TSX).not.toMatch(/EsgToolkitRedirect/);
     expect(APP_TSX).not.toMatch(/EsgFlowStepper/);
     expect(APP_TSX).toMatch(/EsgPreviewRoute/);
   });

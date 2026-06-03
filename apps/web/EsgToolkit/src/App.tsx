@@ -3,14 +3,31 @@ import { Leaf } from "lucide-react";
 import { Link } from "wouter";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
-import { esgToolkitHref } from "@/lib/esgRoutes";
+import { esgCreateHref, esgSummaryHref, esgToolkitHref } from "@/lib/esgRoutes";
 import { EsgSidebar } from "./components/layout/EsgSidebar";
-import { EsgSectionEditor } from "./components/EsgSectionEditor";
 import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
 import EsgNetZero from "./pages/EsgNetZero";
 import EsgIso14083 from "./pages/EsgIso14083";
 import { useEsgStore } from "./lib/esgStore";
+
+function EsgToolkitNotFound() {
+  const companyId = useEsgStore((s) => s.companyId);
+  return (
+    <div className="text-[13px] text-[var(--esg-text3)]">
+      Section not found.{" "}
+      {companyId ? (
+        <Link href={esgCreateHref(companyId)} className="text-[var(--esg-acc-e)] underline">
+          Edit workbook inputs
+        </Link>
+      ) : (
+        <Link href="/esg/clients" className="text-[var(--esg-acc-e)] underline">
+          Select a company
+        </Link>
+      )}
+    </div>
+  );
+}
 
 function EsgToolkitHeader() {
   const companyId = useEsgStore((s) => s.companyId);
@@ -35,6 +52,24 @@ function EsgToolkitHeader() {
         </span>
       ) : null}
       <div className="flex-1" />
+      {companyId ? (
+        <>
+          <Link
+            href={esgCreateHref(companyId)}
+            className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
+            data-testid="esg-link-edit-workbook"
+          >
+            Edit workbook
+          </Link>
+          <Link
+            href={esgSummaryHref(companyId)}
+            className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)] hidden sm:inline"
+            data-testid="esg-link-summary"
+          >
+            Summary
+          </Link>
+        </>
+      ) : null}
       <Link
         href={esgToolkitHref(companyId)}
         className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
@@ -44,10 +79,6 @@ function EsgToolkitHeader() {
       </Link>
     </header>
   );
-}
-
-function SectionRoute({ sectionId, title }: { sectionId: string; title?: string }) {
-  return <EsgSectionEditor sectionId={sectionId} title={title} />;
 }
 
 export function EsgAppRoutes() {
@@ -61,51 +92,9 @@ export function EsgAppRoutes() {
             <Route path="/" component={EsgDashboard} />
             <Route path="/net-zero" component={EsgNetZero} />
             <Route path="/carbon-tax" component={EsgCarbonTax} />
-            <Route path="/environmental">
-              <SectionRoute sectionId="e-data" title="Environmental dashboard" />
-            </Route>
-            <Route path="/ghg">
-              <SectionRoute sectionId="e-data" title="GHG & Energy (E_Data)" />
-            </Route>
-            <Route path="/fleet">
-              <SectionRoute sectionId="fleet" />
-            </Route>
-            <Route path="/waste">
-              <SectionRoute sectionId="waste" />
-            </Route>
-            <Route path="/social">
-              <SectionRoute sectionId="s-data" title="Social (S_Data)" />
-            </Route>
-            <Route path="/ee-scorecard">
-              <SectionRoute sectionId="ee" />
-            </Route>
-            <Route path="/governance">
-              <SectionRoute sectionId="g-data" title="Governance (G_Data)" />
-            </Route>
-            <Route path="/king5">
-              <SectionRoute sectionId="king5" title="King V checklist" />
-            </Route>
-            <Route path="/ifrs">
-              <SectionRoute sectionId="ifrs" title="IFRS S1/S2 disclosures" />
-            </Route>
-            <Route path="/garp">
-              <SectionRoute sectionId="garp" title="GARP / GRAP" />
-            </Route>
-            <Route path="/saq">
-              <SectionRoute sectionId="saq" title="SAQ Supplier" />
-            </Route>
-            <Route path="/assumptions">
-              <SectionRoute sectionId="assumptions" />
-            </Route>
-            <Route path="/iso-tracker">
-              <SectionRoute sectionId="iso-tracker" />
-            </Route>
             <Route path="/iso-14083" component={EsgIso14083} />
-            <Route path="/import">
-              <SectionRoute sectionId="e-data" title="Data import — E_Data" />
-            </Route>
             <Route>
-              <div className="text-[13px] text-[var(--esg-text3)]">Section not found.</div>
+              <EsgToolkitNotFound />
             </Route>
           </Switch>
         </main>
