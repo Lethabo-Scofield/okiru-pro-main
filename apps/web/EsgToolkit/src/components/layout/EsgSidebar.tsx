@@ -1,3 +1,4 @@
+import type React from "react";
 import { useLocation, Link } from "wouter";
 import { cn } from "@toolkit/lib/utils";
 import {
@@ -86,15 +87,31 @@ function NavPillarButton({
     Boolean(item.children?.some((c) => isActivePath(location, c.href)));
   const childActive = item.children?.some((c) => isActivePath(location, c.href));
 
-  const accentStyle =
+  const accentStyle: React.CSSProperties | undefined =
     item.pillar === "e"
-      ? "color:var(--esg-acc-e);border-color:rgba(29,233,160,.25);background:rgba(29,233,160,.08)"
+      ? {
+          color: "var(--esg-acc-e)",
+          borderColor: "rgba(29,233,160,.25)",
+          background: "rgba(29,233,160,.08)",
+        }
       : item.pillar === "s"
-        ? "color:var(--esg-acc-s);border-color:rgba(245,166,35,.25);background:rgba(245,166,35,.08)"
+        ? {
+            color: "var(--esg-acc-s)",
+            borderColor: "rgba(245,166,35,.25)",
+            background: "rgba(245,166,35,.08)",
+          }
         : item.pillar === "g"
-          ? "color:var(--esg-acc-g);border-color:rgba(155,107,255,.25);background:rgba(155,107,255,.08)"
+          ? {
+              color: "var(--esg-acc-g)",
+              borderColor: "rgba(155,107,255,.25)",
+              background: "rgba(155,107,255,.08)",
+            }
           : item.pillar === "data"
-            ? "color:var(--esg-acc-blue,#4aa8ff);border-color:rgba(74,168,255,.25);background:rgba(74,168,255,.08)"
+            ? {
+                color: "var(--esg-acc-blue,#4aa8ff)",
+                borderColor: "rgba(74,168,255,.25)",
+                background: "rgba(74,168,255,.08)",
+              }
             : undefined;
 
   return (
