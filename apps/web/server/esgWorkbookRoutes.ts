@@ -1,12 +1,13 @@
 import type { Express, Request, Response } from "express";
 import mongoose from "mongoose";
-import * as XLSX from "xlsx";
 import { requireAuth } from "./routes";
 import { canAccessEsgToolkit } from "./esgAccess";
 import { createLogger } from "./logger";
 import { ClientModel } from "../shared/schema";
 import { getClient as memGetClient } from "./clientsMemoryStore";
 import { ESG_SECTION_IDS } from "../src/lib/esgSections";
+import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
+import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -129,22 +130,6 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
   }
 }
 
-const SHEET_NAMES: Record<string, string> = {
-  assumptions: "Assumptions",
-  "e-data": "E_Data",
-  "s-data": "S_Data",
-  "g-data": "G_Data",
-  ee: "EE_Scorecard",
-  fleet: "Fleet_Register",
-  waste: "Waste_Register",
-  "driver-debrief": "Driver_Debrief",
-  "iso-tracker": "ISO_Tracker",
-  king5: "King5_Scorecard",
-  ifrs: "IFRS_S1_S2",
-  garp: "GARP_GRAP",
-  saq: "SAQ_Supplier",
-};
-
 export function registerEsgWorkbookRoutes(app: Express): void {
   app.get("/api/esg/access", requireAuth, (req: Request, res: Response) => {
     const user = (req as any).user;
@@ -193,6 +178,13 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     if (wb.submittedAt) {
       return res.json({ ok: true, submittedAt: wb.submittedAt });
     }
+    const validation = validateEsgWorkbookForSubmit(wb);
+    if (!validation.ok) {
+      return res.status(400).json({
+        error: "Workbook validation failed",
+        blockers: validation.blockers,
+      });
+    }
     const iso = new Date().toISOString();
     wb.submittedAt = iso;
     wb.sections.assumptions = wb.sections.assumptions ?? { cells: {} };
@@ -204,15 +196,7 @@ export function registerEsgWorkbookRoutes(app: Express): void {
   app.get("/api/esg/workbook/:companyId/export", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
-    const book = XLSX.utils.book_new();
-    for (const key of SECTION_KEYS) {
-      const cells = wb.sections[key]?.cells ?? {};
-      const rows = Object.entries(cells).map(([cell, value]) => ({ Cell: cell, Value: value }));
-      if (rows.length === 0) rows.push({ Cell: "A1", Value: "" });
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(book, sheet, SHEET_NAMES[key] ?? key);
-    }
-    const buf = XLSX.write(book, { type: "buffer", bookType: "xlsx" });
+    const buf = buildEsgWorkbookXlsx(wb);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="esg-workbook-${wb.companyId}.xlsx"`,
