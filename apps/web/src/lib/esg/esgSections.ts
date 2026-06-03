@@ -19,8 +19,8 @@ export type EsgSectionDef = {
 
 export const ESG_INPUT_SECTIONS: EsgSectionDef[] = [
   {
-    id: "cover",
-    title: "Cover",
+    id: "company-reporting-setup",
+    title: "Company & Reporting Setup",
     sheet: "Cover",
     note: "Entity, reporting period, sector",
     phase1: true,

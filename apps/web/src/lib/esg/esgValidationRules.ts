@@ -54,35 +54,51 @@ function countPositiveMonths(workbook: EsgWorkbookData, sectionId: string): numb
 
 export const ESG_PHASE1_RULES: EsgRule[] = [
   {
-    id: "cover.entity-required",
+    id: "company-reporting-setup.entity-required",
     scope: "field",
-    sectionId: "cover",
+    sectionId: "company-reporting-setup",
     fieldRef: "entity",
     severity: "warning",
     trigger: "submit",
     message: "Entity name required",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "cover", "entity") ?? "").trim()),
+    evaluate: (wb) =>
+      Boolean(
+        String(
+          readEsgCell(wb, "company-reporting-setup", "entity") ??
+            readEsgCell(wb, "cover", "entity") ??
+            "",
+        ).trim(),
+      ),
   },
   {
-    id: "cover.period-required",
+    id: "company-reporting-setup.period-required",
     scope: "field",
-    sectionId: "cover",
+    sectionId: "company-reporting-setup",
     fieldRef: "period",
     severity: "warning",
     trigger: "submit",
     message: "Reporting period required",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "cover", "period") ?? "").trim()),
+    evaluate: (wb) =>
+      Boolean(
+        String(
+          readEsgCell(wb, "company-reporting-setup", "period") ??
+            readEsgCell(wb, "cover", "period") ??
+            "",
+        ).trim(),
+      ),
   },
   {
-    id: "cover.baseline-year-valid",
+    id: "company-reporting-setup.baseline-year-valid",
     scope: "field",
-    sectionId: "cover",
+    sectionId: "company-reporting-setup",
     fieldRef: "baselineYear",
     severity: "warning",
     trigger: "touched",
     message: "Baseline year should be between 2018 and 2030",
     evaluate: (wb) => {
-      const y = readEsgCell(wb, "cover", "baselineYear");
+      const y =
+        readEsgCell(wb, "company-reporting-setup", "baselineYear") ??
+        readEsgCell(wb, "cover", "baselineYear");
       if (y == null || y === "") return true;
       const n = Number(y);
       return Number.isFinite(n) && n >= 2018 && n <= 2030;

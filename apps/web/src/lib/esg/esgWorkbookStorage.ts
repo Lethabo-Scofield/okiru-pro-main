@@ -64,8 +64,12 @@ export async function saveEsgWorkbookSection(
   companyId: string,
   sectionId: string,
   cells: Record<string, string | number | boolean | null>,
+  baseWorkbook?: EsgWorkbookData | null,
 ): Promise<EsgWorkbookData> {
-  const current = (await fetchEsgWorkbook(companyId)) ?? emptyEsgWorkbook(companyId);
+  const current =
+    baseWorkbook ??
+    loadEsgWorkbookLocal(companyId) ??
+    emptyEsgWorkbook(companyId);
   const next: EsgWorkbookData = {
     ...current,
     companyId,
@@ -76,15 +80,17 @@ export async function saveEsgWorkbookSection(
     updatedAt: new Date().toISOString(),
   };
   saveEsgWorkbookLocal(next);
-  try {
-    await fetch(`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/section/${sectionId}`, {
+  const res = await fetch(
+    `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/section/${sectionId}`,
+    {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cells }),
-    });
-  } catch {
-    // local save still succeeded
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`ESG section save failed (${res.status})`);
   }
   return next;
 }

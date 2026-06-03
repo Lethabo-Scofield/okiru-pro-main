@@ -36,7 +36,7 @@ type EsgStoreState = {
   seedDemo: (companyId: string) => Promise<void>;
 };
 
-const LOAD_GUARD_MS = 30_000;
+const LOAD_GUARD_MS = 60_000;
 
 export const useEsgStore = create<EsgStoreState>((set, get) => ({
   companyId: "",
@@ -85,14 +85,27 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
 
   async updateSectionCells(sectionId, cells) {
     const { companyId, workbook } = get();
-    if (!companyId) return;
-    set({ saving: sectionId });
+    if (!companyId || !workbook) return;
+    const optimistic: EsgWorkbookData = {
+      ...workbook,
+      sections: {
+        ...workbook.sections,
+        [sectionId]: { cells },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    set({
+      saving: sectionId,
+      workbook: optimistic,
+      scorecard: computeEsgScorecard(optimistic),
+    });
     try {
-      const next = await saveEsgWorkbookSection(companyId, sectionId, cells);
+      const next = await saveEsgWorkbookSection(companyId, sectionId, cells, optimistic);
       const scorecard = computeEsgScorecard(next);
       set({ workbook: next, scorecard, saving: null, workbookLoadedAt: Date.now() });
     } catch {
       set({ saving: null });
+      throw new Error("save failed");
     }
   },
 

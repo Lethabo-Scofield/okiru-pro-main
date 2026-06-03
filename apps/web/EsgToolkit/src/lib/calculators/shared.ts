@@ -1,14 +1,14 @@
 /** Scoring primitives — workbook v1.7 (Assumptions B9 stance floor). */
 
-export type EsgStance = "lean" | "standard" | "strict";
+export {
+  STANCE_FLOOR,
+  type EsgStanceKey as EsgStance,
+  stanceFloorFromWorkbook,
+} from "../esgConfig/consumer-goods";
 
-export const STANCE_FLOOR: Record<EsgStance, number> = {
-  lean: 0.3,
-  standard: 0.5,
-  strict: 0.7,
-};
+import { STANCE_FLOOR, type EsgStanceKey } from "../esgConfig/consumer-goods";
 
-export function stanceFloor(stance: EsgStance = "standard"): number {
+export function stanceFloor(stance: EsgStanceKey = "standard"): number {
   return STANCE_FLOOR[stance];
 }
 

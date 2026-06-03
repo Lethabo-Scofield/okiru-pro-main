@@ -4,6 +4,7 @@ import { ESG_SECTION_IDS } from "../../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../../src/lib/esgValidation";
 import { buildSgConsumerGoldenWorkbook } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
 import { buildGoldenSections } from "../esgGoldenFixture";
+import { countGoldenCells } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
 
 /** Registered HTTP paths (must match esgWorkbookRoutes.ts and ingress /api/esg → web). */
 export const ESG_API_ROUTE_PATHS = [
@@ -43,6 +44,20 @@ describe("esgGoldenFixture", () => {
     expect(Object.keys(sections).length).toBeGreaterThanOrEqual(9);
     expect(sections["e-data"]?.cells).toBeDefined();
     expect(sections.king5?.cells).toBeDefined();
+    expect(countGoldenCells()).toBeGreaterThan(200);
+  });
+
+  it("seed-demo headcount matrix sums to L12 total", () => {
+    const cells = buildGoldenSections()["s-data"]?.cells ?? {};
+    let matrixSum = 0;
+    for (let ri = 0; ri < 7; ri++) {
+      for (let ci = 0; ci < 10; ci++) {
+        const v = cells[`hc_${ri}_${ci}`];
+        if (typeof v === "number") matrixSum += v;
+      }
+    }
+    const l12 = Number(cells.L12 ?? 0);
+    expect(matrixSum).toBe(l12);
   });
 });
 

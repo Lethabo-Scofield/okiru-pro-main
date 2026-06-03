@@ -1,4 +1,5 @@
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { PILLAR_MAX_GOVERNANCE } from "../esgConfig/consumer-goods";
 import { minCap } from "./shared";
 
 export type GovernanceScoreResult = {
@@ -41,5 +42,5 @@ export function scoreGovernance(workbook: EsgWorkbookData): GovernanceScoreResul
 
   const rows = { d5, d6, d7, d9, d10, d12, d14, d16, d17, d19, d20, d22, d24, d25 };
   const score = Object.values(rows).reduce((a, b) => a + b, 0);
-  return { score: minCap(score, 100), max: 100, rows };
+  return { score: minCap(score, PILLAR_MAX_GOVERNANCE), max: PILLAR_MAX_GOVERNANCE, rows };
 }

@@ -4,7 +4,8 @@ import { readEsgGridRows, writeEsgGridCells, type EsgGridRow } from "./esgGridRo
 import { ESG_GRID_SECTIONS, isEsgGridSection, type EsgGridSectionId } from "./esgGridSections";
 
 const SHEET_TO_SECTION: Record<string, string> = {
-  cover: "cover",
+  Cover: "company-reporting-setup",
+  cover: "company-reporting-setup",
   assumptions: "assumptions",
   edata: "e-data",
   sdata: "s-data",
@@ -108,8 +109,9 @@ export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPre
     }
   }
 
-  if (sections.cover && sections.assumptions?.cells?.B8 == null) {
-    const sector = sections.cover.cells.sector ?? sections.cover.cells.C11;
+  const reporting = sections["company-reporting-setup"] ?? sections.cover;
+  if (reporting && sections.assumptions?.cells?.B8 == null) {
+    const sector = reporting.cells.sector ?? reporting.cells.C11;
     if (sector) {
       sections.assumptions = sections.assumptions ?? { cells: {} };
       sections.assumptions.cells.B8 = sector;

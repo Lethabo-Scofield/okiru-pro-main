@@ -1,4 +1,10 @@
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import {
+  CARBON_ANNUALISE_FACTOR,
+  CARBON_TAX_ALLOWANCE,
+  CARBON_TAX_RATE_TIER1,
+  CARBON_TAX_RATE_TIER2,
+} from "../esgConfig/consumer-goods";
 
 export type CarbonTaxResult = {
   taxableTco2e: number;
@@ -9,10 +15,10 @@ export type CarbonTaxResult = {
 };
 
 export function computeCarbonTax(workbook: EsgWorkbookData): CarbonTaxResult {
-  const annualise = readEsgCell(workbook, "assumptions", "B112") ?? 1.3333333333;
-  const allowance = readEsgCell(workbook, "assumptions", "B39") ?? 0.6;
-  const rate1 = readEsgCell(workbook, "assumptions", "B37") ?? 236;
-  const rate2 = readEsgCell(workbook, "assumptions", "B38") ?? 640;
+  const annualise = readEsgCell(workbook, "assumptions", "B112") ?? CARBON_ANNUALISE_FACTOR;
+  const allowance = readEsgCell(workbook, "assumptions", "B39") ?? CARBON_TAX_ALLOWANCE;
+  const rate1 = readEsgCell(workbook, "assumptions", "B37") ?? CARBON_TAX_RATE_TIER1;
+  const rate2 = readEsgCell(workbook, "assumptions", "B38") ?? CARBON_TAX_RATE_TIER2;
 
   const scopes = ["L75", "L76", "L77", "L78", "L82"] as const;
   let ytd = 0;

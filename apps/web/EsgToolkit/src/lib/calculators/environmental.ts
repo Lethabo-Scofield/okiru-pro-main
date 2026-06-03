@@ -1,5 +1,12 @@
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
-import { minCap, pr, stanceFloor } from "./shared";
+import {
+  PILLAR_MAX_ENVIRONMENTAL,
+  SBTI_TARGET_YEAR,
+  THR_GHG_YOY,
+  THR_WASTE,
+  stanceFloorFromWorkbook,
+} from "../esgConfig/consumer-goods";
+import { minCap, pr } from "./shared";
 
 export type EnvironmentalScoreResult = {
   score: number;
@@ -16,10 +23,13 @@ function waste(wb: EsgWorkbookData, ref: string): number {
 }
 
 export function scoreEnvironmental(workbook: EsgWorkbookData): EnvironmentalScoreResult {
-  const floor = stanceFloor("standard");
-  const thrWaste = readEsgCell(workbook, "assumptions", "B48") ?? 75;
+  const floor = stanceFloorFromWorkbook(
+    workbook.sections?.assumptions?.cells?.B6,
+    readEsgCell(workbook, "assumptions", "B9"),
+  );
+  const thrWaste = readEsgCell(workbook, "assumptions", "B48") ?? THR_WASTE;
   const thrRenew = readEsgCell(workbook, "assumptions", "B44") ?? 0.2;
-  const sbtiYear = readEsgCell(workbook, "assumptions", "B107") ?? 0;
+  const sbtiYear = readEsgCell(workbook, "assumptions", "B107") ?? SBTI_TARGET_YEAR;
 
   const l19 = num(workbook, "L19");
   const l46 = num(workbook, "L46");
@@ -31,7 +41,7 @@ export function scoreEnvironmental(workbook: EsgWorkbookData): EnvironmentalScor
   let d6 = 0;
   if (b90 > 0) {
     const yoy = (b90 - f90) / b90;
-    const thr = readEsgCell(workbook, "assumptions", "B43") ?? 0.1;
+    const thr = readEsgCell(workbook, "assumptions", "B43") ?? THR_GHG_YOY;
     d6 = pr(yoy, thr, 10, floor);
   }
   const d7 = 0;
@@ -57,5 +67,5 @@ export function scoreEnvironmental(workbook: EsgWorkbookData): EnvironmentalScor
 
   const rows = { d5, d6, d7, d8, d9, d11, d12, d13, d15, d16, d17, d19, d20, d21, d23, d24, d26, d27, d28, d29 };
   const score = Object.values(rows).reduce((a, b) => a + b, 0);
-  return { score: minCap(score, 108), max: 108, rows };
+  return { score: minCap(score, PILLAR_MAX_ENVIRONMENTAL), max: PILLAR_MAX_ENVIRONMENTAL, rows };
 }
