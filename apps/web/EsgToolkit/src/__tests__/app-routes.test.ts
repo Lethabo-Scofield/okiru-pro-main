@@ -21,11 +21,15 @@ describe("EsgToolkit App routes (results only)", () => {
     expect(APP_TSX).not.toMatch(/path="\/king5"/);
   });
 
-  it("only exposes dashboard and analysis views", () => {
+  it("only exposes dashboard, scorecards, and analysis views", () => {
     expect(APP_TSX).toMatch(/EsgDashboard/);
+    expect(APP_TSX).toMatch(/path="\/environmental"/);
+    expect(APP_TSX).toMatch(/path="\/social"/);
+    expect(APP_TSX).toMatch(/path="\/governance"/);
     expect(APP_TSX).toMatch(/path="\/net-zero"/);
     expect(APP_TSX).toMatch(/path="\/carbon-tax"/);
     expect(APP_TSX).toMatch(/path="\/iso-14083"/);
+    expect(APP_TSX).toMatch(/path="\/bbbee-bridge"/);
   });
 
   it("links workbook edits to main app create flow", () => {

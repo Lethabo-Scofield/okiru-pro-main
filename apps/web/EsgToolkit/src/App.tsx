@@ -9,6 +9,10 @@ import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
 import EsgNetZero from "./pages/EsgNetZero";
 import EsgIso14083 from "./pages/EsgIso14083";
+import EsgEnvironmental from "./pages/EsgEnvironmental";
+import EsgSocial from "./pages/EsgSocial";
+import EsgGovernance from "./pages/EsgGovernance";
+import EsgBbbeeBridge from "./pages/EsgBbbeeBridge";
 import { useEsgStore } from "./lib/esgStore";
 
 function EsgToolkitNotFound() {
@@ -90,9 +94,13 @@ export function EsgAppRoutes() {
         <main className="flex-1 overflow-y-auto p-6 sm:p-7">
           <Switch>
             <Route path="/" component={EsgDashboard} />
+            <Route path="/environmental" component={EsgEnvironmental} />
+            <Route path="/social" component={EsgSocial} />
+            <Route path="/governance" component={EsgGovernance} />
             <Route path="/net-zero" component={EsgNetZero} />
             <Route path="/carbon-tax" component={EsgCarbonTax} />
             <Route path="/iso-14083" component={EsgIso14083} />
+            <Route path="/bbbee-bridge" component={EsgBbbeeBridge} />
             <Route>
               <EsgToolkitNotFound />
             </Route>
