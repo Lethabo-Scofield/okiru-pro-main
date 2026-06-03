@@ -37,5 +37,6 @@ export function computeEsgScorecard(workbook: EsgWorkbookData | null): EsgScorec
 }
 
 export { computeCarbonTax } from "./carbonTax";
+export { computeNetZeroRoadmap } from "./netZero";
 export { computeBbbeeBridge } from "./bbbeeBridge";
 export * from "./shared";

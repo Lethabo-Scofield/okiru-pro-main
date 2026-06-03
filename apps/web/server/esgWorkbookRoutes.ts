@@ -139,14 +139,24 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     res.json({ allowed: canAccessEsgToolkit(user) });
   });
 
+  function normalizeLegacySections(wb: EsgWorkbookData): void {
+    const legacy = wb.sections?.cover;
+    if (legacy?.cells && !wb.sections["company-reporting-setup"]) {
+      wb.sections["company-reporting-setup"] = legacy;
+      delete wb.sections.cover;
+    }
+  }
+
   app.get("/api/esg/workbook/:companyId", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
+    normalizeLegacySections(wb);
     res.json(wb);
   });
 
   app.put("/api/esg/workbook/:companyId/section/:sectionKey", requireAuth, async (req, res) => {
-    const { sectionKey } = req.params;
+    let { sectionKey } = req.params;
+    if (sectionKey === "cover") sectionKey = "company-reporting-setup";
     if (!SECTION_KEYS.includes(sectionKey)) {
       return res.status(400).json({ error: "Unknown section key" });
     }

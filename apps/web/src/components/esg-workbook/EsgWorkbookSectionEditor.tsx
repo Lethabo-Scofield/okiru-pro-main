@@ -124,7 +124,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
     );
 
     let body: ReactNode = null;
-    if (sectionId === "cover") {
+    if (sectionId === "company-reporting-setup") {
       body = (
         <EsgScalarForm fields={COVER_FIELDS} values={draft} onChange={updateDraft} readOnly={locked} />
       );

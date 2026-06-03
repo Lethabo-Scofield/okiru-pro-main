@@ -11,7 +11,10 @@ export function suggestEsgAutofillPatches(workbook: EsgWorkbookData | null): Esg
   if (!workbook) return [];
   const patches: EsgAutofillPatch[] = [];
 
-  const sector = readEsgCell(workbook, "cover", "sector") ?? readEsgCell(workbook, "assumptions", "B8");
+  const sector =
+    readEsgCell(workbook, "company-reporting-setup", "sector") ??
+    readEsgCell(workbook, "cover", "sector") ??
+    readEsgCell(workbook, "assumptions", "B8");
   const assumptionsSector = readEsgCell(workbook, "assumptions", "B8");
   if (sector && !assumptionsSector) {
     patches.push({

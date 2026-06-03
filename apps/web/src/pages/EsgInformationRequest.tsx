@@ -26,7 +26,7 @@ import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
 import "@/styles/esg-glass.css";
 
-const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "cover";
+const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "company-reporting-setup";
 
 function sectionFromQuery(): string | null {
   if (typeof window === "undefined") return null;
@@ -56,7 +56,7 @@ export default function EsgInformationRequest() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
-  const prevSectionRef = useRef(activeSectionId);
+  const [sectionBusy, setSectionBusy] = useState(false);
 
   useEffect(() => {
     if (!companyId) {
@@ -91,18 +91,32 @@ export default function EsgInformationRequest() {
     };
   }, [companyId, load, navigate, setCompanyName]);
 
-  useEffect(() => {
-    if (prevSectionRef.current === activeSectionId) return;
-    const prev = prevSectionRef.current;
-    prevSectionRef.current = activeSectionId;
-    void editorRef.current?.flush();
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("section", activeSectionId);
-      window.history.replaceState(null, "", url.pathname + url.search);
-    }
-    void prev;
-  }, [activeSectionId]);
+  const changeSection = useCallback(
+    async (nextId: string) => {
+      if (nextId === activeSectionId || sectionBusy) return;
+      setSectionBusy(true);
+      try {
+        const ok = (await editorRef.current?.flush()) ?? true;
+        if (!ok) {
+          toast({
+            title: "Save failed",
+            description: "Could not save the current section before switching.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setActiveSectionId(nextId);
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("section", nextId);
+          window.history.replaceState(null, "", url.pathname + url.search);
+        }
+      } finally {
+        setSectionBusy(false);
+      }
+    },
+    [activeSectionId, sectionBusy, toast],
+  );
 
   const activeSection = useMemo(
     () => ESG_INPUT_SECTIONS.find((s) => s.id === activeSectionId) ?? ESG_INPUT_SECTIONS[0],
@@ -338,7 +352,7 @@ export default function EsgInformationRequest() {
             <EsgValidationPanel
               workbook={workbook}
               activeSectionId={activeSectionId}
-              onSelectSection={setActiveSectionId}
+              onSelectSection={(id) => void changeSection(id)}
             />
             <div className="overflow-x-auto -mx-1 px-1">
               <div className="flex gap-1.5 min-w-max pb-1" data-testid="esg-workbook-mobile-tabs">
@@ -348,7 +362,7 @@ export default function EsgInformationRequest() {
                     <button
                       key={section.id}
                       type="button"
-                      onClick={() => setActiveSectionId(section.id)}
+                      onClick={() => void changeSection(section.id)}
                       className={`shrink-0 px-3 py-2 rounded-lg text-[12px] whitespace-nowrap ${
                         active
                           ? "bg-white/[0.08] text-[var(--esg-text)]"
@@ -368,7 +382,7 @@ export default function EsgInformationRequest() {
             <EsgValidationPanel
               workbook={workbook}
               activeSectionId={activeSectionId}
-              onSelectSection={setActiveSectionId}
+              onSelectSection={(id) => void changeSection(id)}
             />
             <div
               className="rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] p-2"
@@ -381,7 +395,7 @@ export default function EsgInformationRequest() {
                   <button
                     key={section.id}
                     type="button"
-                    onClick={() => setActiveSectionId(section.id)}
+                    onClick={() => void changeSection(section.id)}
                     className={`w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between ${
                       active
                         ? "bg-white/[0.08] text-[var(--esg-text)]"
