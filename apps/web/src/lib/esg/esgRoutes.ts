@@ -2,8 +2,15 @@
 
 export const ESG_ACTIVE_COMPANY_KEY = "okiru-esg-active-company";
 
-export function esgCreateHref(companyId: string): string {
-  return `/esg/create/${encodeURIComponent(companyId)}`;
+export function esgCreateHref(companyId: string, section?: string): string {
+  const base = `/esg/create/${encodeURIComponent(companyId)}`;
+  if (!section) return base;
+  return `${base}?section=${encodeURIComponent(section)}`;
+}
+
+/** Deep-link to a workbook section in the input layer. */
+export function esgCreateSectionHref(companyId: string, section: string): string {
+  return esgCreateHref(companyId, section);
 }
 
 export function esgSummaryHref(companyId: string): string {

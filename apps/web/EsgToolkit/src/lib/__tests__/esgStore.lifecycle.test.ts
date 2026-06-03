@@ -17,6 +17,7 @@ beforeEach(() => {
     workbookLoadedAt: 0,
     touched: {},
     submitAttempted: false,
+    validationExpanded: false,
   });
 });
 

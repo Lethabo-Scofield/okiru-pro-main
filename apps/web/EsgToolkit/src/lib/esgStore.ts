@@ -10,6 +10,8 @@ import { API_BASE } from "@toolkit/lib/config";
 
 type LoadOptions = { force?: boolean };
 
+export type EsgStanceLabel = "Lean" | "Standard" | "Strict";
+
 type EsgStoreState = {
   companyId: string;
   companyName: string;
@@ -21,6 +23,7 @@ type EsgStoreState = {
   workbookLoadedAt: number;
   touched: EsgTouchedState;
   submitAttempted: boolean;
+  validationExpanded: boolean;
   load: (companyId: string, companyName?: string, options?: LoadOptions) => Promise<void>;
   setCompanyName: (name: string) => void;
   updateSectionCells: (
@@ -28,11 +31,14 @@ type EsgStoreState = {
     cells: Record<string, string | number | boolean | null>,
   ) => Promise<void>;
   recalculate: () => void;
+  getStance: () => EsgStanceLabel;
+  setStance: (stance: EsgStanceLabel) => Promise<void>;
   setSubmittedAt: (iso: string | null) => void;
   markTouched: (sectionId: string, fieldRef: string) => void;
   resetTouched: (sectionId?: string) => void;
   isTouched: (sectionId: string, fieldRef: string) => boolean;
   setSubmitAttempted: (v: boolean) => void;
+  setValidationExpanded: (v: boolean) => void;
   seedDemo: (companyId: string) => Promise<void>;
 };
 
@@ -49,6 +55,7 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
   workbookLoadedAt: 0,
   touched: {},
   submitAttempted: false,
+  validationExpanded: false,
 
   async load(companyId, companyName = "", options = {}) {
     const state = get();
@@ -114,6 +121,21 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
     set({ scorecard: computeEsgScorecard(workbook) });
   },
 
+  getStance() {
+    const raw = get().workbook?.sections?.assumptions?.cells?.B6;
+    const v = String(raw ?? "Standard");
+    if (v === "Lean" || v === "Strict") return v;
+    return "Standard";
+  },
+
+  async setStance(stance) {
+    const { workbook, companyId } = get();
+    if (!workbook || !companyId) return;
+    const cells = { ...(workbook.sections?.assumptions?.cells ?? {}), B6: stance };
+    await get().updateSectionCells("assumptions", cells);
+    get().recalculate();
+  },
+
   setSubmittedAt(iso) {
     set({ submittedAt: iso });
   },
@@ -145,6 +167,10 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
 
   setSubmitAttempted(v) {
     set({ submitAttempted: v });
+  },
+
+  setValidationExpanded(v) {
+    set({ validationExpanded: v });
   },
 
   async seedDemo(companyId) {

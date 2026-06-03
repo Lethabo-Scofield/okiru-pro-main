@@ -4,16 +4,21 @@ import { Link } from "wouter";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
 import { esgCreateHref, esgSummaryHref, esgToolkitHref } from "@/lib/esgRoutes";
+import { formatEsgPercent } from "@/lib/esgCalculators";
+import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { EsgSidebar } from "./components/layout/EsgSidebar";
 import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
 import EsgNetZero from "./pages/EsgNetZero";
-import EsgIso14083 from "./pages/EsgIso14083";
 import EsgEnvironmental from "./pages/EsgEnvironmental";
 import EsgSocial from "./pages/EsgSocial";
 import EsgGovernance from "./pages/EsgGovernance";
 import EsgBbbeeBridge from "./pages/EsgBbbeeBridge";
-import { useEsgStore } from "./lib/esgStore";
+import EsgToolkitSectionPage from "./pages/EsgToolkitSectionPage";
+import EsgImport from "./pages/EsgImport";
+import { useEsgStore, type EsgStanceLabel } from "./lib/esgStore";
+
+const STANCES: EsgStanceLabel[] = ["Lean", "Standard", "Strict"];
 
 function EsgToolkitNotFound() {
   const companyId = useEsgStore((s) => s.companyId);
@@ -21,8 +26,8 @@ function EsgToolkitNotFound() {
     <div className="text-[13px] text-[var(--esg-text3)]">
       Section not found.{" "}
       {companyId ? (
-        <Link href={esgCreateHref(companyId)} className="text-[var(--esg-acc-e)] underline">
-          Edit workbook inputs
+        <Link href={esgToolkitHref(companyId)} className="text-[var(--esg-acc-e)] underline">
+          Back to dashboard
         </Link>
       ) : (
         <Link href="/esg/clients" className="text-[var(--esg-acc-e)] underline">
@@ -36,6 +41,9 @@ function EsgToolkitNotFound() {
 function EsgToolkitHeader() {
   const companyId = useEsgStore((s) => s.companyId);
   const companyName = useEsgStore((s) => s.companyName);
+  const scorecard = useEsgStore((s) => s.scorecard);
+  const stance = useEsgStore((s) => s.getStance());
+  const setStance = useEsgStore((s) => s.setStance);
 
   return (
     <header
@@ -56,8 +64,57 @@ function EsgToolkitHeader() {
         </span>
       ) : null}
       <div className="flex-1" />
+      <div className="hidden md:flex items-center gap-2 mr-2" data-testid="esg-header-scores">
+        <div
+          className="text-[22px] font-bold tracking-tight text-[var(--esg-acc-e)] tabular-nums"
+          data-testid="esg-hdr-overall"
+        >
+          {scorecard ? formatEsgPercent(scorecard.overallPercent) : "—"}
+        </div>
+        {(
+          [
+            { key: "environmental" as const, color: "var(--esg-acc-e)" },
+            { key: "social" as const, color: "var(--esg-acc-s)" },
+            { key: "governance" as const, color: "var(--esg-acc-g)" },
+          ] as const
+        ).map((p) => (
+          <span
+            key={p.key}
+            className="text-[10px] font-semibold tabular-nums px-2 py-0.5 rounded-full border border-[var(--esg-glass-border)]"
+            style={{ color: p.color }}
+            data-testid={`esg-hdr-${p.key}`}
+          >
+            {scorecard ? scorecard[p.key].score.toFixed(0) : "—"}/
+            {ESG_PILLAR_MAX[p.key]}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1 mr-2" data-testid="esg-stance-row">
+        {STANCES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => void setStance(s)}
+            className={`text-[10px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
+              stance === s
+                ? "bg-white/10 border-white/20 text-[var(--esg-text)] font-semibold"
+                : "border-[var(--esg-glass-border)] text-[var(--esg-text3)] hover:text-[var(--esg-text2)]"
+            }`}
+            data-testid={`esg-stance-${s.toLowerCase()}`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
       {companyId ? (
         <>
+          <Link
+            href={esgToolkitHref(companyId)}
+            className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
+            data-testid="esg-link-dashboard"
+          >
+            Dashboard
+          </Link>
           <Link
             href={esgCreateHref(companyId)}
             className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
@@ -74,13 +131,6 @@ function EsgToolkitHeader() {
           </Link>
         </>
       ) : null}
-      <Link
-        href={esgToolkitHref(companyId)}
-        className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
-        data-testid="esg-link-dashboard"
-      >
-        Dashboard
-      </Link>
     </header>
   );
 }
@@ -94,13 +144,28 @@ export function EsgAppRoutes() {
         <main className="flex-1 overflow-y-auto p-6 sm:p-7">
           <Switch>
             <Route path="/" component={EsgDashboard} />
-            <Route path="/environmental" component={EsgEnvironmental} />
-            <Route path="/social" component={EsgSocial} />
-            <Route path="/governance" component={EsgGovernance} />
             <Route path="/net-zero" component={EsgNetZero} />
             <Route path="/carbon-tax" component={EsgCarbonTax} />
-            <Route path="/iso-14083" component={EsgIso14083} />
             <Route path="/bbbee-bridge" component={EsgBbbeeBridge} />
+            <Route path="/environmental" component={EsgEnvironmental} />
+            <Route path="/environmental/ghg" component={EsgToolkitSectionPage} />
+            <Route path="/environmental/energy" component={EsgToolkitSectionPage} />
+            <Route path="/environmental/fleet" component={EsgToolkitSectionPage} />
+            <Route path="/environmental/waste" component={EsgToolkitSectionPage} />
+            <Route path="/environmental/water" component={EsgToolkitSectionPage} />
+            <Route path="/environmental/iso" component={EsgToolkitSectionPage} />
+            <Route path="/social" component={EsgSocial} />
+            <Route path="/social/management" component={EsgToolkitSectionPage} />
+            <Route path="/social/wsp" component={EsgToolkitSectionPage} />
+            <Route path="/social/health-safety" component={EsgToolkitSectionPage} />
+            <Route path="/social/community" component={EsgToolkitSectionPage} />
+            <Route path="/governance" component={EsgGovernance} />
+            <Route path="/governance/board" component={EsgToolkitSectionPage} />
+            <Route path="/governance/king5" component={EsgToolkitSectionPage} />
+            <Route path="/governance/ifrs" component={EsgToolkitSectionPage} />
+            <Route path="/governance/garp" component={EsgToolkitSectionPage} />
+            <Route path="/governance/ethics" component={EsgToolkitSectionPage} />
+            <Route path="/import" component={EsgImport} />
             <Route>
               <EsgToolkitNotFound />
             </Route>
