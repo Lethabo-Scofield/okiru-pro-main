@@ -9,6 +9,8 @@ import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
 import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
+import { buildGoldenSections } from "./esgGoldenFixture";
+import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -215,4 +217,57 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     );
     res.send(buf);
   });
+
+  app.post("/api/esg/workbook/:companyId/seed-demo", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    if (wb.submittedAt) {
+      return res.status(423).json({ error: "Workbook is submitted and locked" });
+    }
+    try {
+      wb.sections = buildGoldenSections();
+      await persistEsgWorkbook(wb);
+      res.json({ ok: true, sectionCount: Object.keys(wb.sections).length, updatedAt: wb.updatedAt });
+    } catch (err) {
+      logger.error("Failed to seed ESG demo", err);
+      res.status(500).json({ error: "Failed to seed demo workbook" });
+    }
+  });
+
+  app.post(
+    "/api/esg/workbook/:companyId/import",
+    requireAuth,
+    async (req, res) => {
+      const wb = await authorizeEsgWorkbook(req, res);
+      if (!wb) return;
+      if (wb.submittedAt) {
+        return res.status(423).json({ error: "Workbook is submitted and locked" });
+      }
+      try {
+        let buffer: Buffer | null = null;
+        const body = req.body as { fileBase64?: string; confirm?: boolean; sections?: Record<string, { cells: Record<string, unknown> }> };
+        if (body?.confirm && body.sections) {
+          for (const [sectionKey, payload] of Object.entries(body.sections)) {
+            if (!SECTION_KEYS.includes(sectionKey)) continue;
+            wb.sections[sectionKey] = { cells: payload.cells ?? {} };
+          }
+          await persistEsgWorkbook(wb);
+          return res.json({ ok: true, updatedAt: wb.updatedAt });
+        }
+        if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+          buffer = req.body;
+        } else if (body?.fileBase64) {
+          buffer = Buffer.from(body.fileBase64, "base64");
+        }
+        if (!buffer?.length) {
+          return res.status(400).json({ error: "Missing xlsx file (multipart binary or fileBase64)" });
+        }
+        const preview = parseEsgWorkbookXlsx(buffer);
+        res.json(preview);
+      } catch (err) {
+        logger.error("Failed to import ESG workbook", err);
+        res.status(500).json({ error: "Failed to parse xlsx" });
+      }
+    },
+  );
 }

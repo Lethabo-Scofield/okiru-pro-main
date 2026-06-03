@@ -204,4 +204,25 @@ describe("normalizeMatrix — full pipeline", () => {
     const result = normalizeMatrix([header, ...body], COLUMNS);
     expect(result.rows).toHaveLength(2000);
   });
+
+  it("normalizeMatrix preserves empty middle cells", () => {
+    const cols: ColumnDef[] = [
+      { key: "first", label: "First", type: "text" },
+      { key: "middle", label: "Middle", type: "text" },
+      { key: "last", label: "Last", type: "text" },
+    ];
+    const result = normalizeMatrix([["a", "", "b"]], cols, { hasHeaderRow: false, startColIndex: 0 });
+    const rows = toGridRows(result, cols);
+    expect(rows[0]).toMatchObject({ first: "a", middle: "", last: "b" });
+  });
+
+  it("does not treat a single-column designation paste as a header row", () => {
+    const designationCols: ColumnDef[] = [
+      { key: "designation", label: "Designation", type: "select", options: ["Senior Manager", "Middle Manager"] },
+    ];
+    const matrix = [["Senior Manager"], ["Middle Manager"], ["Junior Manager"]];
+    const result = normalizeMatrix(matrix, designationCols, { startColIndex: 0 });
+    expect(result.headerRowDetected).toBe(false);
+    expect(result.rows).toHaveLength(3);
+  });
 });
