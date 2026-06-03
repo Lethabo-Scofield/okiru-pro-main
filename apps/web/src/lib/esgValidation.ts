@@ -1,4 +1,5 @@
 import { readEsgCell, type EsgWorkbookData } from "./esgWorkbookStorage";
+import { countKing5Principles } from "./esgGridRows";
 
 export type EsgValidationIssue = {
   id: string;
@@ -7,6 +8,12 @@ export type EsgValidationIssue = {
   pass: boolean;
   expected: string;
   actual: string;
+};
+
+export type EsgValidationAggregate = {
+  ok: boolean;
+  issues: EsgValidationIssue[];
+  blockers: EsgValidationIssue[];
 };
 
 /** Critical rules from Validation sheet rows 5–11 (Phase 1 subset). */
@@ -31,7 +38,7 @@ export function validateEsgWorkbook(workbook: EsgWorkbookData | null): EsgValida
   const eScore = readEsgCell(workbook, "e-data", "D30") ?? 0;
   const sScore = readEsgCell(workbook, "s-data", "D28") ?? 0;
   const gScore = readEsgCell(workbook, "g-data", "D26") ?? 0;
-  const king5Filled = countKing5Checklist(workbook);
+  const king5Filled = countKing5Principles(workbook);
 
   return [
     monthCheck("e-diesel", "E_Data: Fleet diesel months (9)", dieselMonths, 9),
@@ -49,19 +56,27 @@ export function validateEsgWorkbook(workbook: EsgWorkbookData | null): EsgValida
     scoreCheck("s-score", "S_Scorecard: Total score >0", sScore),
     scoreCheck("g-score", "G_Scorecard: Total score >0", gScore),
     {
-      id: "king5-checklist",
-      label: "King5: Checklist items (17 target)",
-      severity: "warning",
-      pass: king5Filled >= 7,
+      id: "king5-principles",
+      label: "King5: All 17 principles have status",
+      severity: "critical",
+      pass: king5Filled === 17,
       expected: "17",
       actual: String(king5Filled),
     },
   ];
 }
 
-function countKing5Checklist(workbook: EsgWorkbookData): number {
-  const cells = workbook.sections?.king5?.cells ?? {};
-  return Object.keys(cells).filter((k) => k.startsWith("E") && cells[k] != null).length;
+/** Submit gate — Validation C12: COUNTA(King5!C4:C30) must equal 17. */
+export function validateEsgWorkbookForSubmit(
+  workbook: EsgWorkbookData | null,
+): EsgValidationAggregate {
+  const issues = validateEsgWorkbook(workbook);
+  const blockers = issues.filter((i) => !i.pass && i.severity === "critical");
+  return {
+    ok: blockers.length === 0,
+    issues,
+    blockers,
+  };
 }
 
 function monthCheck(

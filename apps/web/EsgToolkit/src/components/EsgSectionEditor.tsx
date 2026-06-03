@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { ESG_INPUT_SECTIONS, type EsgSectionDef } from "@/lib/esgSections";
+import { isEsgGridSection } from "@/lib/esgGridSections";
 import { useEsgStore } from "../lib/esgStore";
+import { EsgRegisterGridEditor } from "./EsgRegisterGridEditor";
 
 type FieldDef = { cell: string; label: string; type?: "number" | "text" | "select"; options?: string[] };
 
@@ -47,17 +49,6 @@ const SECTION_FIELDS: Record<string, FieldDef[]> = {
     { cell: "B12", label: "EE targets set", type: "select", options: ["Yes", "Partial", "No"] },
     { cell: "B5", label: "% Black employees", type: "number" },
   ],
-  king5: [{ cell: "E21", label: "King V total (/170)", type: "number" }],
-  waste: [
-    { cell: "B16", label: "Diversion %", type: "number" },
-    { cell: "B17", label: "Cardboard %", type: "number" },
-    { cell: "B18", label: "Landfill tCO₂e", type: "number" },
-  ],
-  "driver-debrief": [{ cell: "_active", label: "Programme active (1/0)", type: "number" }],
-  ifrs: [
-    { cell: "_yes_count", label: "IFRS Yes count", type: "number" },
-    { cell: "_total", label: "IFRS disclosures total", type: "number" },
-  ],
 };
 
 interface Props {
@@ -67,6 +58,17 @@ interface Props {
 
 export function EsgSectionEditor({ sectionId, title }: Props) {
   const section = ESG_INPUT_SECTIONS.find((s) => s.id === sectionId);
+  if (isEsgGridSection(sectionId)) {
+    return <EsgRegisterGridEditor sectionId={sectionId} title={title ?? section?.title} />;
+  }
+  return <EsgScalarSectionEditor sectionId={sectionId} title={title} section={section} />;
+}
+
+function EsgScalarSectionEditor({
+  sectionId,
+  title,
+  section,
+}: Props & { section: EsgSectionDef | undefined }) {
   const { workbook, submittedAt, saving, updateSectionCells, recalculate } = useEsgStore();
   const [draft, setDraft] = useState<Record<string, string | number | boolean | null>>({});
   const locked = Boolean(submittedAt);
@@ -101,7 +103,7 @@ export function EsgSectionEditor({ sectionId, title }: Props) {
 
       {fields.length === 0 ? (
         <div className="esg-glass p-5 text-[13px] text-[var(--esg-text2)]">
-          Grid editor for {section.sheet} — add rows via Data Import or paste in a later release.
+          No scalar fields configured for {section.sheet}.
         </div>
       ) : (
         <div className="esg-glass p-5 grid gap-4 sm:grid-cols-2">

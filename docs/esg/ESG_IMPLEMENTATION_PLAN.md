@@ -15,12 +15,14 @@
 | Phase 0 — Hub + shell | **Done** | `/esg/clients`, glass theme, allowlist |
 | Phase 1 — Input layer | **Done** | Section editors, GET/PUT workbook, validation subset |
 | Phase 2 — Scoring engine | **Done** | `EsgToolkit/src/lib/calculators/*`, golden test E=36 S=33 G≈64.85 |
-| Phase 3 — Polish | **Done** | Submit lock, XLSX export (values), validation in toolkit dashboard |
-| Phase 4 — Extended | **MVP** | Carbon Tax, Net-Zero, King5/IFRS/GARP pages; ISO_14083 reporting-only; B-BBEE bridge calc |
+| Phase 3 — Polish | **Done** | Submit lock, XLSX export (values + scorecards), validation in toolkit dashboard |
+| Phase 4 — Extended | **Done (MVP)** | Register SpreadsheetGrid editors, paste import, King5 submit gate (17/17), export v1.7 sheets |
 
 **UX (pass 3):** No `EsgFlowStepper`. Flow is `/esg/clients` → `/esg/toolkit/:companyId` (inputs + scores + dashboard in sidebar).
 
-**Deferred:** Carbon credits UI, byte-identical xlsx template export, full SpreadsheetGrid per register row, Arango ingestion.
+**Done (June 2026 pass 4):** Fleet / Waste / Driver_Debrief / ISO_Tracker / King5 / IFRS / GARP / SAQ row grids via `SpreadsheetGrid`; `esgGridParse` paste; `buildEsgWorkbookXlsx` (28 sheets, computed E/S/G scorecard values); `validateEsgWorkbookForSubmit` blocks submit unless King5 C4:C30 = 17 statuses.
+
+**Deferred:** Carbon credits UI (no workbook sheet in v1.7), byte-identical xlsx template export, Arango ingestion.
 
 ---
 

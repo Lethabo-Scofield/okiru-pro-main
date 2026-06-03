@@ -2,7 +2,7 @@ import { useState } from "react";
 import { API_BASE } from "@toolkit/lib/config";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
-import { validateEsgWorkbook } from "@/lib/esgValidation";
+import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
 import { EsgValidationPanel } from "@/components/esg/EsgValidationPanel";
 import { useEsgStore } from "../lib/esgStore";
 import { buildSgConsumerGoldenWorkbook } from "../lib/fixtures/esg-consumer-golden";
@@ -35,8 +35,7 @@ export default function EsgDashboard() {
     }
   };
 
-  const issues = validateEsgWorkbook(workbook);
-  const blockers = issues.filter((i) => !i.pass && i.severity === "critical");
+  const { issues, blockers } = validateEsgWorkbookForSubmit(workbook);
 
   return (
     <div className="space-y-5" data-testid="esg-dashboard">
