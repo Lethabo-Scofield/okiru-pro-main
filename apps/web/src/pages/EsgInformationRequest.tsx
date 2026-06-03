@@ -21,11 +21,12 @@ import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import { esgSummaryHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
-import { validateEsgWorkbook } from "@/lib/esgValidation";
-import { buildSgConsumerGoldenWorkbook } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
+import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
+import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
 import "@/styles/esg-glass.css";
 
-const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "assumptions";
+const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "cover";
 
 function sectionFromQuery(): string | null {
   if (typeof window === "undefined") return null;
@@ -44,10 +45,16 @@ export default function EsgInformationRequest() {
   const workbook = useEsgStore((s) => s.workbook);
   const loading = useEsgStore((s) => s.loading);
   const saving = useEsgStore((s) => s.saving);
-  const updateSectionCells = useEsgStore((s) => s.updateSectionCells);
   const submittedAt = useEsgStore((s) => s.submittedAt);
+  const seedDemo = useEsgStore((s) => s.seedDemo);
+  const setSubmitAttempted = useEsgStore((s) => s.setSubmitAttempted);
+  const touched = useEsgStore((s) => s.touched);
 
   const [activeSectionId, setActiveSectionId] = useState(DEFAULT_SECTION);
+  const [importPreview, setImportPreview] = useState<EsgImportPreview | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
   const prevSectionRef = useRef(activeSectionId);
 
@@ -102,9 +109,6 @@ export default function EsgInformationRequest() {
     [activeSectionId],
   );
 
-  const validationIssues = useMemo(() => validateEsgWorkbook(workbook), [workbook]);
-  const criticalFails = validationIssues.filter((i) => i.severity === "critical" && !i.pass);
-
   const cellCount = useCallback(
     (sectionId: string) => Object.keys(workbook?.sections?.[sectionId]?.cells ?? {}).length,
     [workbook],
@@ -113,12 +117,58 @@ export default function EsgInformationRequest() {
   const sectionStatus = (sectionId: string) => (cellCount(sectionId) > 0 ? "filled" : "empty");
 
   const loadGoldenDemo = async () => {
-    const golden = buildSgConsumerGoldenWorkbook();
-    golden.companyId = companyId;
-    for (const [sectionId, { cells }] of Object.entries(golden.sections)) {
-      await updateSectionCells(sectionId, cells);
+    try {
+      await seedDemo(companyId);
+      await load(companyId, companyName, { force: true });
+      toast({ title: "Demo loaded", description: "All sections seeded from golden fixture." });
+    } catch {
+      toast({ title: "Demo load failed", variant: "destructive" });
     }
-    await load(companyId, companyName);
+  };
+
+  const handleImportFile = async (file: File) => {
+    const buf = await file.arrayBuffer();
+    const res = await fetch(
+      `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: buf,
+      },
+    );
+    if (!res.ok) {
+      toast({ title: "Import failed", variant: "destructive" });
+      return;
+    }
+    const preview = (await res.json()) as EsgImportPreview;
+    setImportPreview(preview);
+    setImportOpen(true);
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: true, sections: importPreview.sections }),
+        },
+      );
+      if (!res.ok) throw new Error("confirm failed");
+      setImportOpen(false);
+      setImportPreview(null);
+      await load(companyId, companyName, { force: true });
+      toast({ title: "Import complete" });
+    } catch {
+      toast({ title: "Import failed", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleManualSave = async () => {
@@ -144,10 +194,12 @@ export default function EsgInformationRequest() {
       });
       return;
     }
-    if (criticalFails.length > 0) {
+    setSubmitAttempted(true);
+    const gate = validateEsgWorkbookForSubmit(workbook, touched);
+    if (!gate.ok) {
       toast({
-        title: "Fix critical validation issues",
-        description: `${criticalFails.length} blocker(s) must pass before summary.`,
+        title: "Fix validation blockers",
+        description: `${gate.blockers.length} blocker(s) must pass before summary.`,
         variant: "destructive",
       });
       return;
@@ -236,6 +288,26 @@ export default function EsgInformationRequest() {
             >
               Load demo data
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImportFile(f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={Boolean(submittedAt) || loading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+              data-testid="button-esg-import-xlsx"
+            >
+              Import xlsx
+            </button>
             <a
               href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
@@ -246,14 +318,9 @@ export default function EsgInformationRequest() {
             <button
               type="button"
               onClick={() => void handleContinueToSummary()}
-              disabled={loading || !workbook || criticalFails.length > 0}
+              disabled={loading || !workbook}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[13px] disabled:opacity-50"
               data-testid="button-esg-continue-summary"
-              title={
-                criticalFails.length > 0
-                  ? `${criticalFails.length} critical validation issue(s) remaining`
-                  : undefined
-              }
             >
               Continue to Summary
               <ChevronRight className="h-4 w-4" />
@@ -336,8 +403,19 @@ export default function EsgInformationRequest() {
             </div>
           </aside>
 
+          <EsgImportPreviewModal
+            open={importOpen}
+            preview={importPreview}
+            onClose={() => {
+              setImportOpen(false);
+              setImportPreview(null);
+            }}
+            onConfirm={() => void confirmImport()}
+            confirming={importing}
+          />
+
           <section
-            className="flex-1 min-w-0 rounded-2xl border border-[var(--esg-glass-border)] bg-white/[0.02] overflow-hidden"
+            className="flex-1 min-w-0 rounded-2xl border border-white/[0.06] bg-[var(--esg-section-bg,#141416)] overflow-hidden"
             data-testid={`section-panel-${activeSection?.id ?? "unknown"}`}
           >
             {loading ? (

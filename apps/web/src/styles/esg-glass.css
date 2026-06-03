@@ -16,6 +16,9 @@
   --esg-acc-e: #1de9a0;
   --esg-acc-s: #f5a623;
   --esg-acc-g: #9b6bff;
+  --esg-section-bg: #141416;
+  --esg-input-bg: #0e0e10;
+  --esg-input-border: #2c2c2e;
   --esg-nav-w: 220px;
   --esg-hdr-h: 52px;
   color: var(--esg-text);

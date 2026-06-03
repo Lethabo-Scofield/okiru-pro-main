@@ -37,7 +37,7 @@ export function EsgToolkitShell() {
         // ignore
       }
       if (!cancelled) {
-        await load(companyId, name);
+        await load(companyId, name, { force: false });
         if (name) setCompanyName(name);
       }
     })();
