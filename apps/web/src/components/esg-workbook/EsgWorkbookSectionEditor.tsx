@@ -306,7 +306,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           tabs={[
             {
               id: "headcount",
-              label: "EE Headcount",
+              label: "EE Headcount (EEA2)",
               content: (
                 <EsgHeadcountGrid values={draft} onChange={updateDraft} readOnly={locked} />
               ),

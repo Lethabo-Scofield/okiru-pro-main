@@ -52,6 +52,8 @@ export const ESG_GRID_SECTION_IDS = [
   "ifrs",
   "garp",
   "saq",
+  "s-data-ofo",
+  "s-data-csi",
 ] as const;
 
 export type EsgGridSectionId = (typeof ESG_GRID_SECTION_IDS)[number];
@@ -205,6 +207,36 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
       { key: "foodSafety", label: "Food Safety", type: "select", options: [...SAQ_SCORE], width: 100 },
       { key: "invoicing", label: "Correct Invoicing", type: "select", options: [...SAQ_SCORE], width: 120 },
       { key: "backup", label: "Backup Support", type: "select", options: [...SAQ_SCORE], width: 110 },
+    ],
+  },
+  "s-data-ofo": {
+    sectionId: "s-data-ofo",
+    sheet: "S_Data",
+    description: "OFO codes — training interventions (S_Data rows 57–68)",
+    startRow: 59,
+    columns: [
+      { key: "ofoCode",    label: "OFO Code",       type: "text",   required: true, width: 90 },
+      { key: "occupation", label: "Occupation",      type: "text",   required: true, width: 200 },
+      { key: "learners",   label: "Learners (#)",    type: "number", width: 95 },
+      { key: "programme",  label: "Programme",       type: "text",   width: 200 },
+      { key: "duration",   label: "Duration",        type: "text",   width: 90 },
+      { key: "seta",       label: "SETA",            type: "text",   width: 90 },
+      { key: "status",     label: "Status",          type: "text",   width: 90 },
+      { key: "netZeroLink",label: "Net-Zero Link",   type: "text",   width: 140 },
+    ],
+  },
+  "s-data-csi": {
+    sectionId: "s-data-csi",
+    sheet: "S_Data",
+    description: "Community & Social Investment register (S_Data rows 70–82)",
+    startRow: 72,
+    columns: [
+      { key: "initiative",  label: "Initiative",      type: "text",   required: true, width: 200 },
+      { key: "month",       label: "Month",           type: "text",   width: 80 },
+      { key: "beneficiaries", label: "Beneficiaries", type: "text",   width: 200 },
+      { key: "spend",       label: "Spend (R)",       type: "number", width: 95 },
+      { key: "category",    label: "Category",        type: "text",   width: 130 },
+      { key: "netZeroLink", label: "Net-Zero Link",   type: "text",   width: 120 },
     ],
   },
 };

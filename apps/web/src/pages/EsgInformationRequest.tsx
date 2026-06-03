@@ -23,7 +23,6 @@ import { esgSummaryHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
-import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
 import "@/styles/esg-glass.css";
 
 const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "company-reporting-setup";
@@ -209,15 +208,6 @@ export default function EsgInformationRequest() {
       return;
     }
     setSubmitAttempted(true);
-    const gate = validateEsgWorkbookForSubmit(workbook, touched);
-    if (!gate.ok) {
-      toast({
-        title: "Fix validation blockers",
-        description: `${gate.blockers.length} blocker(s) must pass before summary.`,
-        variant: "destructive",
-      });
-      return;
-    }
     navigate(esgSummaryHref(companyId));
   };
 

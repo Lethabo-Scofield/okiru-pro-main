@@ -14,18 +14,22 @@ function PillarTable({ rows }: { rows: EsgPillarRow[] }) {
       <thead>
         <tr className="text-[var(--esg-text3)] text-left border-b border-[var(--esg-glass-border)]">
           <th className="py-2 pr-2">Indicator</th>
-          <th className="py-2 pr-2">Score</th>
-          <th className="py-2 pr-2">Max</th>
-          <th className="py-2">% Achieved</th>
+          <th className="py-2 pr-2 text-right">Actual</th>
+          <th className="py-2 pr-2 text-right">Target</th>
+          <th className="py-2 pr-2 text-right">Max Pts</th>
+          <th className="py-2 pr-2 text-right">Score</th>
+          <th className="py-2 text-right">% Achieved</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.indicator} className="border-b border-[var(--esg-glass-border)]/50">
             <td className="py-1.5 pr-2 text-[var(--esg-text2)]">{r.indicator}</td>
-            <td className="py-1.5 pr-2 tabular-nums">{r.score.toFixed(1)}</td>
-            <td className="py-1.5 pr-2 tabular-nums">{r.maxPoints}</td>
-            <td className="py-1.5 tabular-nums">{r.achievementPct.toFixed(0)}%</td>
+            <td className="py-1.5 pr-2 tabular-nums text-right">{r.actual}</td>
+            <td className="py-1.5 pr-2 tabular-nums text-right">{r.target}</td>
+            <td className="py-1.5 pr-2 tabular-nums text-right">{r.maxPoints}</td>
+            <td className="py-1.5 pr-2 tabular-nums text-right">{r.score.toFixed(1)}</td>
+            <td className="py-1.5 tabular-nums text-right">{r.achievementPct.toFixed(0)}%</td>
           </tr>
         ))}
       </tbody>
