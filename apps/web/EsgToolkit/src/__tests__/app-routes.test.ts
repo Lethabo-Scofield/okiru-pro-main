@@ -29,4 +29,10 @@ describe("EsgToolkit App routes", () => {
     expect(hrefs).toContain("/import");
     expect(hrefs.length).toBe(23);
   });
+
+  it("uses app-root href for back to companies", () => {
+    expect(APP_TSX).toMatch(/AppNavBack[\s\S]*href=\{esgClientsHref\(\)\}/);
+    expect(APP_TSX).toMatch(/external/);
+    expect(APP_TSX).not.toMatch(/AppNavBack\s+href="\/esg\/clients"/);
+  });
 });

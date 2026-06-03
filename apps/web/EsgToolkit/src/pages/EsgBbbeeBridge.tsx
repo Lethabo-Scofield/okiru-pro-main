@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { EsgAppLink } from "@/components/EsgAppLink";
 import { esgCreateHref } from "@/lib/esgRoutes";
 import { computeBbbeeBridge } from "../lib/calculators/bbbeeBridge";
 import { useEsgStore } from "../lib/esgStore";
@@ -53,13 +53,13 @@ export default function EsgBbbeeBridge() {
       )}
 
       {companyId ? (
-        <Link
+        <EsgAppLink
           href={esgCreateHref(companyId)}
           className="inline-flex text-[12px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
           data-testid="esg-edit-inputs-link"
         >
           Edit inputs →
-        </Link>
+        </EsgAppLink>
       ) : null}
     </div>
   );
