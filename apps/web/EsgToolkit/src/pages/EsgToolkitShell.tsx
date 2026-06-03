@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { API_BASE } from "@toolkit/lib/config";
 import { getEsgActiveCompany, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { useEsgStore } from "../lib/esgStore";
@@ -7,10 +7,17 @@ import { EsgAppRoutes } from "../App";
 
 export function EsgToolkitShell() {
   const params = useParams<{ companyId?: string }>();
+  const [location, navigate] = useLocation();
   const companyId = params.companyId || getEsgActiveCompany();
   const load = useEsgStore((s) => s.load);
   const setCompanyName = useEsgStore((s) => s.setCompanyName);
   const loading = useEsgStore((s) => s.loading);
+
+  useEffect(() => {
+    if (!companyId && (location === "/esg/toolkit" || location.startsWith("/esg/toolkit/"))) {
+      navigate("/esg/clients", { replace: true });
+    }
+  }, [companyId, location, navigate]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -42,13 +49,7 @@ export function EsgToolkitShell() {
   if (!companyId) {
     return (
       <div className="esg-theme min-h-screen flex items-center justify-center p-6">
-        <p className="text-[14px] text-[var(--esg-text2)]">
-          Select a company from{" "}
-          <a href="/esg/clients" className="text-[var(--esg-acc-e)] underline">
-            ESG clients
-          </a>
-          .
-        </p>
+        <div className="h-10 w-10 border-2 border-[var(--esg-acc-e)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
