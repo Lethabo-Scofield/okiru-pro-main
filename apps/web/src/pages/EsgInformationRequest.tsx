@@ -1,15 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "wouter";
-import { Building2, ChevronRight, Download, Leaf, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useParams } from "wouter";
+import {
+  Building2,
+  ChevronRight,
+  Download,
+  Leaf,
+  Loader2,
+  Save,
+} from "lucide-react";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
-import { EsgValidationPanel } from "@/components/esg/EsgValidationPanel";
-import { EsgSectionEditor } from "../../EsgToolkit/src/components/EsgSectionEditor";
+import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
+import {
+  EsgWorkbookSectionEditor,
+  type EsgWorkbookSectionEditorHandle,
+} from "@/components/esg-workbook/EsgWorkbookSectionEditor";
 import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
 import { API_BASE } from "@toolkit/lib/config";
+import { useToast } from "@/hooks/use-toast";
 import { esgSummaryHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
+import { validateEsgWorkbook } from "@/lib/esgValidation";
 import { buildSgConsumerGoldenWorkbook } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
 import "@/styles/esg-glass.css";
 
@@ -25,6 +37,7 @@ export default function EsgInformationRequest() {
   const params = useParams<{ companyId: string }>();
   const companyId = params.companyId ?? "";
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const load = useEsgStore((s) => s.load);
   const setCompanyName = useEsgStore((s) => s.setCompanyName);
   const companyName = useEsgStore((s) => s.companyName);
@@ -35,6 +48,8 @@ export default function EsgInformationRequest() {
   const submittedAt = useEsgStore((s) => s.submittedAt);
 
   const [activeSectionId, setActiveSectionId] = useState(DEFAULT_SECTION);
+  const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
+  const prevSectionRef = useRef(activeSectionId);
 
   useEffect(() => {
     if (!companyId) {
@@ -69,10 +84,26 @@ export default function EsgInformationRequest() {
     };
   }, [companyId, load, navigate, setCompanyName]);
 
+  useEffect(() => {
+    if (prevSectionRef.current === activeSectionId) return;
+    const prev = prevSectionRef.current;
+    prevSectionRef.current = activeSectionId;
+    void editorRef.current?.flush();
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("section", activeSectionId);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+    void prev;
+  }, [activeSectionId]);
+
   const activeSection = useMemo(
     () => ESG_INPUT_SECTIONS.find((s) => s.id === activeSectionId) ?? ESG_INPUT_SECTIONS[0],
     [activeSectionId],
   );
+
+  const validationIssues = useMemo(() => validateEsgWorkbook(workbook), [workbook]);
+  const criticalFails = validationIssues.filter((i) => i.severity === "critical" && !i.pass);
 
   const cellCount = useCallback(
     (sectionId: string) => Object.keys(workbook?.sections?.[sectionId]?.cells ?? {}).length,
@@ -90,15 +121,53 @@ export default function EsgInformationRequest() {
     await load(companyId, companyName);
   };
 
-  const goSummary = () => navigate(esgSummaryHref(companyId));
+  const handleManualSave = async () => {
+    const ok = await editorRef.current?.flush();
+    if (ok === false) {
+      toast({
+        title: "Save failed",
+        description: "Check your connection and try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Saved", description: "Workbook section saved." });
+    }
+  };
+
+  const handleContinueToSummary = async () => {
+    const ok = await editorRef.current?.flush();
+    if (ok === false) {
+      toast({
+        title: "Could not save latest edits",
+        description: "Fix the save error before continuing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (criticalFails.length > 0) {
+      toast({
+        title: "Fix critical validation issues",
+        description: `${criticalFails.length} blocker(s) must pass before summary.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    navigate(esgSummaryHref(companyId));
+  };
 
   if (!companyId) return null;
+
+  const saveStatusText = saving
+    ? "Saving…"
+    : workbook?.updatedAt
+      ? `Saved ${new Date(workbook.updatedAt).toLocaleTimeString()}`
+      : "Not saved yet";
 
   return (
     <div className="esg-theme min-h-screen flex flex-col bg-[#080e14]">
       <header className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.85)] backdrop-blur-xl">
         <div className="flex items-center gap-3 min-w-0">
-          <AppNavBack href="/esg/clients" eyebrow="ESG" label="Companies" variant="dark" size="compact" />
+          <AppNavBack href="/hub" eyebrow="Hub" label="Okiru Hub" variant="dark" size="compact" />
           <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
           <span className="text-[15px] font-semibold text-[var(--esg-text)] truncate flex items-center gap-2">
             <Leaf className="h-4 w-4 text-[var(--esg-acc-e)] shrink-0" />
@@ -108,7 +177,30 @@ export default function EsgInformationRequest() {
         <UserAccountMenu variant="hub" />
       </header>
 
-      <main className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6" data-testid="esg-information-request">
+      <main
+        className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6"
+        data-testid="esg-information-request"
+      >
+        <nav
+          className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--esg-text3)] mb-4"
+          aria-label="Breadcrumb"
+          data-testid="esg-breadcrumb"
+        >
+          <Link href="/hub" className="hover:text-[var(--esg-text2)]">
+            Hub
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <Link href="/esg/clients" className="hover:text-[var(--esg-text2)]">
+            ESG
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-[var(--esg-text2)] truncate max-w-[140px]">
+            {companyName || companyId}
+          </span>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-[var(--esg-text)] font-medium">Inputs</span>
+        </nav>
+
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div className="flex items-center gap-3 min-w-0">
             <Building2 className="h-4 w-4 text-[var(--esg-text3)] shrink-0" />
@@ -120,11 +212,18 @@ export default function EsgInformationRequest() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {saving ? (
-              <span className="text-[11px] text-[var(--esg-text3)] flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> Saving…
-              </span>
-            ) : null}
+            <span className="text-[11px] text-[var(--esg-text3)]" data-testid="esg-save-status">
+              {saveStatusText}
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleManualSave()}
+              disabled={loading || Boolean(submittedAt)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+              data-testid="button-esg-save"
+            >
+              <Save className="h-3.5 w-3.5" /> Save
+            </button>
             <button
               type="button"
               onClick={() => void loadGoldenDemo()}
@@ -143,10 +242,15 @@ export default function EsgInformationRequest() {
             </a>
             <button
               type="button"
-              onClick={goSummary}
-              disabled={loading || !workbook}
+              onClick={() => void handleContinueToSummary()}
+              disabled={loading || !workbook || criticalFails.length > 0}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[13px] disabled:opacity-50"
               data-testid="button-esg-continue-summary"
+              title={
+                criticalFails.length > 0
+                  ? `${criticalFails.length} critical validation issue(s) remaining`
+                  : undefined
+              }
             >
               Continue to Summary
               <ChevronRight className="h-4 w-4" />
@@ -155,12 +259,16 @@ export default function EsgInformationRequest() {
         </div>
 
         <p className="text-[13px] text-[var(--esg-text2)] mb-6 -mt-2">
-          Complete each section — scores update as you save. Open the toolkit from Summary when ready.
+          Complete each section — scores update as you save. Open the toolkit from Summary when validation passes.
         </p>
 
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="lg:hidden w-full space-y-3">
-            <EsgValidationPanel workbook={workbook} />
+            <EsgValidationPanel
+              workbook={workbook}
+              activeSectionId={activeSectionId}
+              onSelectSection={setActiveSectionId}
+            />
             <div className="overflow-x-auto -mx-1 px-1">
               <div className="flex gap-1.5 min-w-max pb-1" data-testid="esg-workbook-mobile-tabs">
                 {ESG_INPUT_SECTIONS.map((section) => {
@@ -186,8 +294,15 @@ export default function EsgInformationRequest() {
           </div>
 
           <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto space-y-3">
-            <EsgValidationPanel workbook={workbook} />
-            <div className="rounded-xl border border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.5)] p-2" data-testid="esg-workbook-tabs">
+            <EsgValidationPanel
+              workbook={workbook}
+              activeSectionId={activeSectionId}
+              onSelectSection={setActiveSectionId}
+            />
+            <div
+              className="rounded-xl border border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.5)] p-2"
+              data-testid="esg-workbook-tabs"
+            >
               {ESG_INPUT_SECTIONS.map((section) => {
                 const active = activeSectionId === section.id;
                 const status = sectionStatus(section.id);
@@ -218,16 +333,21 @@ export default function EsgInformationRequest() {
           </aside>
 
           <section
-            className="flex-1 min-w-0"
+            className="flex-1 min-w-0 rounded-2xl border border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.45)] overflow-hidden"
             data-testid={`section-panel-${activeSection?.id ?? "unknown"}`}
           >
             {loading ? (
-              <div className="esg-glass p-12 flex items-center justify-center gap-2 text-[var(--esg-text2)] text-[13px]">
+              <div className="p-12 flex items-center justify-center gap-2 text-[var(--esg-text2)] text-[13px]">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading workbook…
               </div>
             ) : activeSection ? (
-              <div className="esg-glass p-5 sm:p-6">
-                <EsgSectionEditor sectionId={activeSection.id} title={activeSection.title} />
+              <div className="p-5 sm:p-6">
+                <EsgWorkbookSectionEditor
+                  key={activeSection.id}
+                  ref={editorRef}
+                  sectionId={activeSection.id}
+                  title={activeSection.title}
+                />
                 {submittedAt ? (
                   <p className="mt-4 text-[12px] text-[var(--esg-acc-s)]">
                     Workbook submitted — inputs are locked. Unlock via admin if needed.

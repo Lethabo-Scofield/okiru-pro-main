@@ -93,7 +93,7 @@ export default function EsgClientSelector() {
           <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
           <span className="text-[15px] font-semibold text-[var(--esg-text)] flex items-center gap-2">
             <Leaf className="h-4 w-4 text-[var(--esg-acc-e)]" />
-            ESG Toolkit
+            ESG Companies
           </span>
         </div>
         <UserAccountMenu variant="hub" />

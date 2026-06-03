@@ -43,7 +43,9 @@ describe("App.tsx route declarations", () => {
     expect(hasRoute("/esg/create/:companyId")).toBe(true);
     expect(hasRoute("/esg/create/:companyId/summary")).toBe(true);
     expect(APP_TSX).toMatch(/EsgInformationRequest/);
+    expect(APP_TSX).not.toMatch(/path="\/esg\/create.*nest/);
     expect(APP_TSX).toMatch(/EsgScoreSummary/);
+    expect(APP_TSX).not.toMatch(/EsgSectionEditor/);
     expect(APP_TSX).not.toMatch(/EsgToolkitRedirect/);
     expect(APP_TSX).not.toMatch(/EsgFlowStepper/);
     expect(APP_TSX).toMatch(/EsgPreviewRoute/);

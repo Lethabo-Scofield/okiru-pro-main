@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "wouter";
-import { ChevronRight, Leaf, Loader2, ScanLine } from "lucide-react";
+import { Link, useLocation, useParams } from "wouter";
+import { Award, ChevronRight, Leaf, Loader2, ScanLine } from "lucide-react";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
-import { EsgValidationPanel } from "@/components/esg/EsgValidationPanel";
+import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
 import { API_BASE } from "@toolkit/lib/config";
 import { computeEsgScores, formatEsgPercent, ESG_PILLAR_MAX } from "@/lib/esgCalculators";
 import { esgCreateHref, esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
@@ -53,12 +53,18 @@ export default function EsgScoreSummary() {
   }, [companyId, navigate]);
 
   const scores = useMemo(() => computeEsgScores(workbook), [workbook]);
-  const { blockers } = useMemo(() => validateEsgWorkbookForSubmit(workbook), [workbook]);
+  const { ok: validationOk, blockers } = useMemo(
+    () => validateEsgWorkbookForSubmit(workbook),
+    [workbook],
+  );
 
-  const openToolkit = () => navigate(esgToolkitHref(companyId));
+  const openToolkit = () => {
+    if (!validationOk) return;
+    navigate(esgToolkitHref(companyId));
+  };
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col">
+    <div className="esg-theme min-h-screen flex flex-col bg-[#080e14]">
       <header className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.85)] backdrop-blur-xl">
         <div className="flex items-center gap-3 min-w-0">
           <AppNavBack
@@ -77,20 +83,51 @@ export default function EsgScoreSummary() {
         <UserAccountMenu variant="hub" />
       </header>
 
-      <main className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-8" data-testid="esg-score-summary">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8" data-testid="esg-score-summary">
+        <nav
+          className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--esg-text3)] mb-4"
+          aria-label="Breadcrumb"
+          data-testid="esg-summary-breadcrumb"
+        >
+          <Link href="/hub" className="hover:text-[var(--esg-text2)]">
+            Hub
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <Link href="/esg/clients" className="hover:text-[var(--esg-text2)]">
+            ESG
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-[var(--esg-text2)] truncate max-w-[140px]">
+            {companyName || companyId}
+          </span>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-[var(--esg-text)] font-medium">Summary</span>
+        </nav>
+
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-[var(--esg-text3)]" />
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-[26px] font-semibold text-[var(--esg-text)]">{companyName}</h1>
-              <p className="text-[13px] text-[var(--esg-text2)] mt-1 mb-6">
-                Review pillar scores and validation before opening the ESG toolkit.
-              </p>
+            <div className="flex-1 min-w-0 space-y-6">
+              <div>
+                <h1 className="text-[24px] font-bold text-[var(--esg-text)] tracking-tight">
+                  ESG Score Summary
+                </h1>
+                <p className="text-[14px] text-[var(--esg-text2)] mt-1">
+                  High-level results for{" "}
+                  <span className="text-[var(--esg-text)] font-medium">{companyName}</span>
+                </p>
+              </div>
 
-              <div className="esg-glass p-6 mb-4">
+              <div className="esg-glass p-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Award className="h-5 w-5 text-[var(--esg-acc-e)]" />
+                  <span className="text-[11px] uppercase tracking-wider text-[var(--esg-text3)]">
+                    Overall
+                  </span>
+                </div>
                 <div
                   className="text-[48px] font-bold text-[var(--esg-acc-e)] leading-none"
                   data-testid="esg-summary-overall"
@@ -100,7 +137,7 @@ export default function EsgScoreSummary() {
                 <div className="text-[11px] text-[var(--esg-text3)] mt-2">Overall ESG score</div>
               </div>
 
-              <div className="grid sm:grid-cols-3 gap-3 mb-6">
+              <div className="grid sm:grid-cols-3 gap-3">
                 {(
                   [
                     {
@@ -135,15 +172,17 @@ export default function EsgScoreSummary() {
               </div>
 
               {blockers.length > 0 ? (
-                <div
-                  className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[13px] text-red-200"
+                <ul
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[13px] text-red-200 space-y-1"
                   data-testid="esg-summary-blockers"
                 >
-                  {blockers.length} validation blocker(s) — fix inputs before submit in the toolkit.
-                </div>
+                  {blockers.map((b) => (
+                    <li key={b.id}>{b.label}</li>
+                  ))}
+                </ul>
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => navigate(esgCreateHref(companyId))}
@@ -155,8 +194,14 @@ export default function EsgScoreSummary() {
                 <button
                   type="button"
                   onClick={openToolkit}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[14px]"
+                  disabled={!validationOk}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[14px] disabled:opacity-50"
                   data-testid="button-esg-open-toolkit"
+                  title={
+                    !validationOk
+                      ? "Resolve critical validation issues in the workbook first"
+                      : undefined
+                  }
                 >
                   <ScanLine className="h-4 w-4" />
                   Open ESG Toolkit
