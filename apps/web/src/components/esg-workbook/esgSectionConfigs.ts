@@ -2,6 +2,8 @@ import type { EsgFieldDef } from "./EsgScalarForm";
 import type { MaturityRowDef } from "./EsgMaturityGrid";
 import { ESG_DEFAULT_DEPOTS } from "./EsgMonthlyGrid";
 
+const ESG_SOLAR_SOURCES = ["ISANDO (JHB)", "DBN (EDGE)", "CPT", "BLOEM", "PE"] as const;
+
 export const COVER_FIELDS: EsgFieldDef[] = [
   { cell: "entity", label: "Entity" },
   { cell: "period", label: "Reporting period" },
@@ -79,3 +81,42 @@ export const EE_MATURITY_ROWS: MaturityRowDef[] = [
 export function eDataDepotRows() {
   return ESG_DEFAULT_DEPOTS.map((depot) => ({ depot, months: [] as (number | "")[] }));
 }
+
+export function eDataGeneratorRows() {
+  return ESG_DEFAULT_DEPOTS.map((depot) => ({
+    depot: `Generator – ${depot}`,
+    months: [] as (number | "")[],
+  }));
+}
+
+export function eDataLpgRows() {
+  return [{ depot: "LPG Forklifts – DBN", months: [] as (number | "")[] }];
+}
+
+export function eDataBusinessCarRows() {
+  return [{ depot: "Solly's Car – ISANDO", months: [] as (number | "")[] }];
+}
+
+export function eDataSolarRows() {
+  return ESG_SOLAR_SOURCES.map((src) => ({
+    depot: `Solar – ${src}`,
+    months: [] as (number | "")[],
+  }));
+}
+
+export function eDataWaterRows() {
+  return ESG_DEFAULT_DEPOTS.map((depot) => ({
+    depot: `SG Consumer – ${depot}`,
+    months: [] as (number | "")[],
+  }));
+}
+
+export function eDataWasteRows() {
+  return [{ depot: "% Waste Recycled (all depots)", months: [] as (number | "")[] }];
+}
+
+export const WASTE_SCALAR_FIELDS: EsgFieldDef[] = [
+  { cell: "L68", label: "CPT Oricol – Total Waste (kg)", type: "number" },
+  { cell: "L69", label: "CPT Oricol – % Landfill", type: "number" },
+  { cell: "L70", label: "CPT Oricol – % Diversion (recycled + recovery)", type: "number" },
+];
