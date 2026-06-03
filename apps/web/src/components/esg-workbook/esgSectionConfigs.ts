@@ -45,7 +45,7 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
   { cell: "B55", label: "LTIFR threshold", type: "number" },
 ];
 
-export const S_DATA_SCALAR_FIELDS: EsgFieldDef[] = [
+export const S_DATA_HS_FIELDS: EsgFieldDef[] = [
   { cell: "C26", label: "Total employees Q1 (Jul-Sep)", type: "number" },
   { cell: "D26", label: "Total employees Q2 (Oct-Dec)", type: "number" },
   { cell: "E26", label: "Total employees Q3 (Jan-Mar)", type: "number" },
@@ -86,9 +86,12 @@ export const S_DATA_SCALAR_FIELDS: EsgFieldDef[] = [
   { cell: "D38", label: "% employees H&S induction Q2", type: "number" },
   { cell: "E38", label: "% employees H&S induction Q3", type: "number" },
   { cell: "F38", label: "% employees H&S induction Q4", type: "number" },
+  { cell: "G35", label: "LTIFR (computed)", type: "number" },
+];
+
+export const S_DATA_TRAINING_FIELDS: EsgFieldDef[] = [
   { cell: "B45", label: "WSP submitted (Y/N)", type: "select", options: ["Yes", "No", "Partial"] },
   { cell: "B46", label: "ATR submitted (Y/N)", type: "select", options: ["Yes", "No", "Partial"] },
-  { cell: "B43", label: "Leviable payroll (R)", type: "number" },
   { cell: "B47", label: "Mandatory grant claimed (R)", type: "number" },
   { cell: "B49", label: "Total training hours delivered", type: "number" },
   { cell: "B50", label: "Training spend (R)", type: "number" },
@@ -99,12 +102,39 @@ export const S_DATA_SCALAR_FIELDS: EsgFieldDef[] = [
   { cell: "B55", label: "PWD employees trained (%)", type: "number" },
 ];
 
+export const S_DATA_PAYROLL_FIELDS: EsgFieldDef[] = [
+  { cell: "B43", label: "Leviable payroll (R)", type: "number" },
+  { cell: "B44", label: "NPAT (R)", type: "number" },
+  { cell: "B71", label: "SDL levy paid (1% of payroll)", type: "number" },
+];
+
+/** @deprecated Use split field groups (S_DATA_HS_FIELDS, etc.) */
+export const S_DATA_SCALAR_FIELDS: EsgFieldDef[] = [
+  ...S_DATA_HS_FIELDS,
+  ...S_DATA_TRAINING_FIELDS.filter((f) => f.cell !== "B43"),
+  ...S_DATA_PAYROLL_FIELDS,
+];
+
+export const E_DATA_GHG_SUMMARY_FIELDS: EsgFieldDef[] = [
+  { cell: "L75", label: "Scope 1A Fleet Diesel YTD (tCO₂e)", type: "number" },
+  { cell: "L76", label: "Scope 1B Generator YTD (tCO₂e)", type: "number" },
+  { cell: "L77", label: "Scope 1C LPG YTD (tCO₂e)", type: "number" },
+  { cell: "L78", label: "Scope 1D Business cars YTD (tCO₂e)", type: "number" },
+  { cell: "L79", label: "SCOPE 1 TOTAL (tCO₂e)", type: "number" },
+  { cell: "L82", label: "SCOPE 2 NET (tCO₂e)", type: "number" },
+  { cell: "L84", label: "Scope 3 — Water (tCO₂e)", type: "number" },
+  { cell: "L86", label: "TOTAL GHG (Scope 1+2+3) tCO₂e", type: "number" },
+];
+
+export const E_DATA_NZ_FIELDS: EsgFieldDef[] = [
+  { cell: "B90", label: "Net-zero baseline tCO₂e (Scope 1+2)", type: "number" },
+  { cell: "F90", label: "Current YTD Scope 1+2 (derived)", type: "number" },
+  { cell: "G90", label: "On track for SBTi target (Y/N)", type: "select", options: ["Yes", "No", "Partial"] },
+];
+
 export const E_DATA_SUMMARY_FIELDS: EsgFieldDef[] = [
-  { cell: "L19", label: "Fleet diesel YTD", type: "number" },
-  { cell: "L46", label: "Electricity kWh YTD", type: "number" },
-  { cell: "L63", label: "Water kL YTD", type: "number" },
-  { cell: "B90", label: "Net-zero baseline tCO₂e", type: "number" },
-  { cell: "_months_C_K", label: "Months with data", type: "number" },
+  ...E_DATA_GHG_SUMMARY_FIELDS,
+  ...E_DATA_NZ_FIELDS,
 ];
 
 export const G_DATA_MATURITY_ROWS: MaturityRowDef[] = [

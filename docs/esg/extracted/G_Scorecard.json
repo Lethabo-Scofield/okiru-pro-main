@@ -1,0 +1,911 @@
+{
+  "sheet_name": "G_Scorecard",
+  "sanitized_name": "G_Scorecard",
+  "dimensions": {
+    "max_row": 26,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 43,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "G SCORECARD — Governance vs 100 pts  |  King V · IFRS S1/S2 · GARP/GRAP · POPIA · ISO 27001"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Indicator"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Max\nPts"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Actual"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Score"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Data Source"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Status"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Standard Ref"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "Action"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Audit / Calculation"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "── King V ──"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "King V: Score ≥70% (Apply & Explain)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "25"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 19.8529411765,
+          "formula": "=King5_Scorecard!E21/170*25"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 19.8529411765,
+          "formula": "=MIN(C5,B5)"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "King5_Scorecard"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D5>=B5,\"✓ Met\",IF(D5>=B5*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "King V all 17 principles"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Board apply & explain all principles"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "King V total (King5_Scorecard E21) ÷ 170 × 25. THR_KING (70%) is the rating threshold."
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "King V: Social & Ethics Committee established"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 5,
+          "formula": "=G_Data!F13"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C6,B6)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D6>=B6,\"✓ Met\",IF(D6>=B6*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "King V P5 / Companies Act s72"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "S&EC ToR and meetings minutes"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "S&E Committee active (G_Data F13). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "King V: ESG-linked executive remuneration"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 0,
+          "formula": "=G_Data!F14"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C7,B7)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D7>=B7,\"✓ Met\",IF(D7>=B7*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "King V P6 / GRI 201"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "ESG KPIs in exec contracts"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "ESG-linked remuneration (G_Data F14). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "── IFRS ──"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "IFRS: S1/S2 disclosures prepared"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "10"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(10*COUNTIF(IFRS_S1_S2!D4:D40,\"Yes\")/MAX(1,COUNTA(IFRS_S1_S2!A4:A40)-COUNTBLANK(IFRS_S1_S2!A4:A40)),0)"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C9,B9)"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "IFRS_S1_S2"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D9>=B9,\"✓ Met\",IF(D9>=B9*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "IFRS S1/S2 / TCFD"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Annual ESG/integrated report"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "Count of \"Yes\" disclosures (IFRS_S1_S2 D4:D40) ÷ total rows × max 10 pts"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "IFRS: Climate risk in board agenda"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": 2.5,
+          "formula": "=G_Data!F23"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 2.5,
+          "formula": "=MIN(C10,B10)"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "IFRS_S1_S2"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D10>=B10,\"✓ Met\",IF(D10>=B10*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "IFRS S2 / King V P10"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Quarterly risk review"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": "Climate risk in register (G_Data F23). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "── GARP ──"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "GARP: ERM framework includes ESG/climate risks"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 8,
+          "formula": "=IF(G_Data!F21>0,IF(G_Data!F23>0,8,4),0)"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 8,
+          "formula": "=MIN(C12,B12)"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "GARP_GRAP"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D12>=B12,\"✓ Met\",IF(D12>=B12*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "GARP ERM / IFRS S1"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "10 material ESG risks identified"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "Risk register updated (G_Data F21) AND climate risk included (F23) → full 8; only one → 4; neither → 0"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "── GRAP ──"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "GARP: GRAP public interest compliance"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(G_Data!F5>0,5,0)"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C14,B14)"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "GARP_GRAP"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D14>=B14,\"✓ Met\",IF(D14>=B14*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "Companies Act s93"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "PI score ≥500 monitored"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": "Board structure exists (G_Data F5 board count). 5 pts if board > 0."
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "── ISO 27001 ──"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "ISO 27001: POPIA Information Officer appointed"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 2.5,
+          "formula": "=G_Data!F17"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 2.5,
+          "formula": "=MIN(C16,B16)"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D16>=B16,\"✓ Met\",IF(D16>=B16*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "POPIA Act / ISO 27001"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "s55 appointment letter"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": "POPIA Info Officer appointed (G_Data F17). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "ISO 27001: Cyber/data risk assessed"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 2.5,
+          "formula": "=G_Data!F18"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 2.5,
+          "formula": "=MIN(C17,B17)"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D17>=B17,\"✓ Met\",IF(D17>=B17*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "ISO 27001 / King V P9"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "Annual cyber risk assessment"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": "POPIA impact assessment done (G_Data F18). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "── Reporting ──"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Transparency: ESG/Integrated report published"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 8,
+          "formula": "=G_Data!F20*8/5"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 8,
+          "formula": "=MIN(C19,B19)"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D19>=B19,\"✓ Met\",IF(D19>=B19*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "King V P8/P15 / GRI 2-3"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "Annual publication commitment"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "Integrated report published (G_Data F20). Rescaled from /5 to /8."
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Transparency: External assurance of ESG report"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 0,
+          "formula": "=G_Data!F19"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C20,B20)"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D20>=B20,\"✓ Met\",IF(D20>=B20*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "ISAE 3000 / King V P11"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Assurance provider engaged"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "External assurance of ESG report (G_Data F19). Scaled to max 5 pts."
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "── Ethics ──"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Ethics: Code of ethics + hotline active"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": 4,
+          "formula": "=(G_Data!F15+G_Data!F16)/2*4/5"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": 4,
+          "formula": "=MIN(C22,B22)"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D22>=B22,\"✓ Met\",IF(D22>=B22*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "King V P1 / GRI 205"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "Confidential hotline operational"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": "Avg of code of ethics (G_Data F15) + whistleblower hotline (F16). Rescaled to /4."
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "── Compliance ──"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Compliance: Legal register maintained"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 2.5,
+          "formula": "=G_Data!F21"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 2.5,
+          "formula": "=MIN(C24,B24)"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D24>=B24,\"✓ Met\",IF(D24>=B24*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "ISO 14001/45001 / King V P12"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "Quarterly compliance review"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": "Legal/risk register maintained (G_Data F21). Scaled to max 5 pts. Refinement: link directly to ISO_Tracker."
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Compliance: No material regulatory penalties"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(G_Data!B25=\"\",5,IF(G_Data!B25=0,5,0))"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C25,B25)"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D25>=B25,\"✓ Met\",IF(D25>=B25*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "Companies Act / NEMA"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "Zero-tolerance compliance"
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": "Material penalties counter (G_Data B25). Blank or 0 = full 5 pts; any penalties = 0"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "G SCORECARD TOTAL"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 64.8529411765,
+          "formula": "=SUM(D5,D6,D7,D9,D10,D12,D14,D16,D17,D19,D20,D22,D24,D25)"
+        }
+      }
+    }
+  ]
+}

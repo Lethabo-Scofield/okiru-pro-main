@@ -1,0 +1,645 @@
+{
+  "sheet_name": "Waste_Register",
+  "sanitized_name": "Waste_Register",
+  "dimensions": {
+    "max_row": 20,
+    "max_column": 10
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B20"
+    }
+  ],
+  "formula_count": 12,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "WASTE REGISTER — Oricol Environmental | Oracle | Valour Brands | Cority  [GRI 306 | ISO 14001 | Net-Zero]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "WASTE STREAMS — Monthly data entry [Source: Waste contractors + Cority cardboard data]"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Month"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Depot"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Waste Type"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Total kg"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Recycled kg"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Landfill kg"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Diverted %"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Landfill tCO₂e"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "Contractor"
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": "Invoice Ref"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Mar-26"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "CPT"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Commercial/Industrial (landfill)"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 2000
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 2000
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E5/D5,0)"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": 1.16,
+          "formula": "=F5*0.58/1000"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Oricol Environmental"
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": "Mar-26 actual"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Mar-26"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "CPT"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Commercial/Industrial (recycled)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 6580
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 6580
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 1,
+          "formula": "=IFERROR(E6/D6,0)"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 0,
+          "formula": "=F6*0.58/1000"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "Oricol Environmental"
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": "Mar-26 actual"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Mar-26"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "CPT"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Paper/Cardboard K4"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 1100
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 1100
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 1,
+          "formula": "=IFERROR(E7/D7,0)"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 0,
+          "formula": "=F7*0.58/1000"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "Oricol Environmental"
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": "Mar-26 actual"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Mar-26"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "CPT"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "LDPE Shrinkwrap"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 880
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 880
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 1,
+          "formula": "=IFERROR(E8/D8,0)"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 0,
+          "formula": "=F8*0.58/1000"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "Oricol Environmental"
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": "Mar-26 actual"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Mar-26"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "ALL"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "TOTAL (Oricol Big Numbers)"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 22470
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 20470
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 2000
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "91.1%"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 1.16,
+          "formula": "=F9*0.58/1000"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "Oricol Environmental"
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": "Oricol Big Numbers"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "CORITY CARDBOARD RECYCLING % — Monthly (from Mariette Dashboard waste sheet)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Month"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Jul-25"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Aug-25"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Sep-25"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Oct-25"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "Nov-25"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "Dec-25"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Jan-26"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "Feb-26"
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": "Mar-26"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "% Recycled (all depots)"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": 0.1065
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": 0.1624
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 0.1106
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 0.0889
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 0.2642
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": 0.1068
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": 0.046
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": 0.1373
+        },
+        "10": {
+          "coord": "J13",
+          "col": 10,
+          "value": 0.0956
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "WASTE SCORECARD — vs ISO 14001 + Net-Zero targets"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Oricol CPT diversion rate (Mar-26)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": 0.911,
+          "formula": "=91.1%"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "≥90%"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "✓ Met"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 5
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Average monthly % recycled (Cority)"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": 0.1242555556,
+          "formula": "=AVERAGE(B13:J13)"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "≥25%"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 4
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "Total landfill tCO₂e YTD"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": 2.320153236,
+          "formula": "=SUMIF(F4:F40,\">0\",F4:F40)*0.58/1000"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "Minimise"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 3
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Waste contractor sustainability rating"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "IMS-T-149 Oricol score"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "≥80%"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 3
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "ISO 14001 waste aspect managed"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Yes"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": 3
+        }
+      }
+    }
+  ]
+}

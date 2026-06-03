@@ -19,7 +19,16 @@ const NAV_SECTIONS: { title: string; items: EsgNavItem[] }[] = [
       { id: "dashboard", label: "Dashboard", href: "/", pillar: "overview" },
       { id: "net-zero", label: "Net-Zero Roadmap", href: "/net-zero", pillar: "overview" },
       { id: "carbon-tax", label: "Carbon Tax", href: "/carbon-tax", pillar: "overview" },
+      { id: "bbbee-bridge", label: "B-BBEE Bridge", href: "/bbbee-bridge", pillar: "overview" },
       { id: "iso-14083", label: "ISO 14083", href: "/iso-14083", pillar: "e" },
+    ],
+  },
+  {
+    title: "Scorecards",
+    items: [
+      { id: "environmental", label: "E Scorecard", href: "/environmental", pillar: "e", scoreKey: "environmental" },
+      { id: "social", label: "S Scorecard", href: "/social", pillar: "s", scoreKey: "social" },
+      { id: "governance", label: "G Scorecard", href: "/governance", pillar: "g", scoreKey: "governance" },
     ],
   },
   {

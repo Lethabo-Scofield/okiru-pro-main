@@ -1,0 +1,1773 @@
+{
+  "sheet_name": "Standards_Map",
+  "sanitized_name": "Standards_Map",
+  "dimensions": {
+    "max_row": 37,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 0,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "STANDARDS CROSS-REFERENCE MAP  |  All indicators mapped across GRI · IFRS S1/S2 · King V · ISO · B-BBEE · SBTi"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "ESG Indicator"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "GRI Ref"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "IFRS S1"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "IFRS S2"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "King V"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "ISO Std"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "B-BBEE"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "SBTi"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Toolkit Sheet"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Fleet Diesel — Scope 1 tCO₂e"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "GRI 305-1"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "S1.5(a)"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "P4/P10/P15"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "ISO14001 c9.1"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Near-term target"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Generator Diesel — Scope 1"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "GRI 305-1"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "S1.5(a)"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "ISO14001 c6.1.2"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Near-term"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "LPG Forklifts — Scope 1 (DBN)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "GRI 305-1"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "S1.5(a)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "ISO14001"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Near-term"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Business Cars — Scope 1"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "GRI 305-1"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "S1.5(a)"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "ISO14001"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Near-term"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Electricity Grid — Scope 2"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "GRI 305-2"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "S1.5(a)"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "S2.30"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "ISO14001 c6.2"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Near-term"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Solar PV offset — Scope 2"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "GRI 302-4"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "S1.33"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "S2.32"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "ISO14001"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "RE100"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Water consumption"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "GRI 303-1"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "S1.5"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "ISO14001 c6.1.2"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Waste diversion % (Oricol)"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "GRI 306-3"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "ISO14001 c8.1"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": "Waste_Register"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Fleet L/100km vs norm"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "GRI 302-3"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "SASB TR-AU"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Scope 1 lever"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "Fleet_Register"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "EV Fleet mix %"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "GRI 302-4"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "S1.33"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "S2.34"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "P4/P13"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Scope 1&3"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "Fleet_Register"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "ISO 14001 certification"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "GRI 307-1"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "S1.22"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "P12"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "ISO14001"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": "ISO_Tracker"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Energy intensity kWh/tonne-km"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "GRI 302-3"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "P14"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "SASB TR-AU"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "E_Data + tonnage"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "EE: % Black employees"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "GRI 405-1"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "S1.5(b)"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "P7"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "ISO26000 s6.4"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "MC/EE"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": "EE_Scorecard"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "EE: % Black female management"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "GRI 405-1"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "S1.5(b)"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "P7"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "ISO26000"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "MC/EE"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": "EE_Scorecard"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "EE: Persons with Disabilities"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "GRI 405-1"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "P7"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "ISO26000"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "EE/PWD"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "WSP: Training hours/employee"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "GRI 404-1"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "S1.5(b)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "P3/P6"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "ISO26000 s6.4"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "SD 15pts"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "WSP: SDL levy & grant recovery"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "GRI 401-2"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "ISO26000"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "SD"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "H&S: LTIFR"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "GRI 403-9"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "S1.5(b)"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "ISO45001 c9.1"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "H&S: Fatalities"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "GRI 403-9"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "ISO45001"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Driver Debrief — customer hit %"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "GRI 416-1"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "P14"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "ISO45001"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "Scope1 km"
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": "Driver_Debrief"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Driver excess km (waste)"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "GRI 302-3"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "P4"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "ISO14001"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "Scope1 reduction"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": "Driver_Debrief"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "CSI/SED spend"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "GRI 413-1"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "P2"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "ISO26000 s6.8"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "SED 5pts"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Supplier H&S rating (IMS-T-149)"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "GRI 308-1"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "S1.17"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "P11"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "ISO26000"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "ESD"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": "SAQ_Supplier"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Sanulac sustainability compliance"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "GRI 308-1"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "P11"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "ISO22000"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I27",
+          "col": 9,
+          "value": "SAQ_Supplier"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Cold chain food safety"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "GRI 416-1"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "P3"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "ISO22000"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I28",
+          "col": 9,
+          "value": "SAQ_Supplier"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "King V Apply & Explain score"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "GRI 2-17"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "S1.5(c)"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "S2.6"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "P1-P17"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H29",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "King5_Scorecard"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "IFRS S1/S2 disclosures"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "GRI 2-22"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "S1.6"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "S2.29"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "P8/P15"
+        },
+        "6": {
+          "coord": "F30",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G30",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H30",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I30",
+          "col": 9,
+          "value": "IFRS_S1_S2"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "GARP ERM — climate risks"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "GRI 2-25"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "S1.17"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "S2.9"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "P10"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": "ISO31000"
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H31",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I31",
+          "col": 9,
+          "value": "GARP_GRAP"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "POPIA / ISO 27001"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "GRI 418-1"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "S1.22"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": "P9"
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": "ISO27001"
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H32",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I32",
+          "col": 9,
+          "value": "ISO_Tracker"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "Board composition diversity"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "GRI 2-18"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "S1.5(c)"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": "P3/P7"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": "MC"
+        },
+        "8": {
+          "coord": "H33",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I33",
+          "col": 9,
+          "value": "G_Data"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "Social & Ethics Committee"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "GRI 2-20"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "S1.5(c)"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": "P5"
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": "ISO26000"
+        },
+        "7": {
+          "coord": "G34",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H34",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I34",
+          "col": 9,
+          "value": "G_Data"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "External ESG assurance"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "GRI 2-5"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "S1.27"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": "P11"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": "ISAE3000"
+        },
+        "7": {
+          "coord": "G35",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H35",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I35",
+          "col": 9,
+          "value": "G_Data"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "ESG-linked remuneration"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "GRI 2-20"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "S1.5(c)"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": "P6"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H36",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I36",
+          "col": 9,
+          "value": "G_Data"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "Net-Zero commitment (SBTi)"
+        },
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "GRI 305-5"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "S1.33"
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": "S2.32"
+        },
+        "5": {
+          "coord": "E37",
+          "col": 5,
+          "value": "P4/P15"
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G37",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H37",
+          "col": 8,
+          "value": "CNZS 2.0"
+        },
+        "9": {
+          "coord": "I37",
+          "col": 9,
+          "value": "NetZero_Roadmap"
+        }
+      }
+    }
+  ]
+}

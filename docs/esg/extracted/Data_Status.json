@@ -1,0 +1,1533 @@
+{
+  "sheet_name": "Data_Status",
+  "sanitized_name": "Data_Status",
+  "dimensions": {
+    "max_row": 36,
+    "max_column": 8
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 0,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "📊  DATA STATUS TRACKER  —  SG Consumer ESG Toolkit  |  Live data tracker for net-zero & sustainability reporting"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Use this sheet to track every data field. Update Status & Last Refresh when data lands. Cells link back to the toolkit fields. Filter by Status = Outstanding for the next data request."
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Summary:"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "14 Confirmed | 15 Outstanding | 3 Estimated  (Total: 32 fields tracked)"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Field"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Toolkit Location"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Pillar"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Data Source / Owner"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Current Value"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Status"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Last Refresh"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Notes / Outstanding Asks"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Total payroll (incl. benefits, excl. labour brokers)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "S_Data!B43"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Coba — HR Payroll"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "R10,331,940.87"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Monthly refresh from HR system"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "SDL levy paid (1% of payroll)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "S_Data!B44"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "Auto-calc from B43"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "Auto"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Cross-check vs SARS SDL return"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "FTE headcount (excl. labour brokers)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "S_Data!C26:F26"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "Coba — HR"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "426"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Quarterly refresh needed; LB headcount separate ask"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "EEA2 headcount split (race × gender × level)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "S_Data!B5:K11"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Coba — HR / EE Plan"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "Not supplied"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "CRITICAL: blocks EE_Scorecard & B-BBEE Mgmt Control. Request EEA2/EEA4 from HR."
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Group board: total directors"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "G_Data!B5"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "Coba — Co Sec"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "7"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "2 Exec + 5 Ind NED"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Group board: % Black"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "G_Data!B8"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "Coba — Co Sec"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "42.9% (3/7 SA Black)"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "Estimated"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Confirm SA-EEA classification (esp. Chitalu Zambian status)"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Group board: % Female"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "G_Data!B9"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "Coba — Co Sec"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "14.3% (1/7)"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "Mnisi only. Material gender gap vs King V P4"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Audit Committee meetings YTD"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "G_Data!B11"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Coba — Co Sec"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "4 (assumed)"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "Estimated"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Confirm actual count from minutes (Cathrall chairs)"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Risk Committee active"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "G_Data!B12"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "Coba — Co Sec"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Cathrall chairs Risk + Audit"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Social & Ethics Committee active"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "G_Data!B13"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "CSI/SED Policy §7"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "Prior"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "No change"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Whistleblower hotline (Be Heard)"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "G_Data!B16"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Coba — Code of Ethics"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Case count & response time requested from HO (confidential at Group)"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "POPIA Information Officer"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "G_Data!B17"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "Group Compliance"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Partial"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "Formal IO appointment letter required"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "POPIA Impact Assessment documentation"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "G_Data!B18"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "Group Compliance"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "Partial"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "Active consent process exists; formal PIA documents needed"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "Integrated Report (Group)"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "G_Data!B20"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "SG Holdings JSE"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "Per CSI/SED Policy §15(b)(v)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "CSI/SED beneficiary list"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "S_Data!A72:F81"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Coba"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "10 programmes"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "8 CSI + 2 SED"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "CSI/SED spend per project"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "S_Data!D72:D81"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Finance"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "R45k budget (allocation TBC)"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Per-project spend split + POPs required from Finance"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "CSI/SED MOUs / payment confirmations"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "External evidence file"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "Finance"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "Not supplied"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": "Required for B-BBEE SED audit trail"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "LTI count YTD"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "S_Data!C29:F29"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "SHE register"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "4 (Q1:1, Q2:2, Q3:1, Q4:0)"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "Monthly refresh from SHE register"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "MTI count YTD"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "S_Data!C30:F30"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "SHE register"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "3 (all Q3)"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "Includes back strain, finger scratch, eye burn"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Vehicle accidents YTD"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "S_Data!C33:F33"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "SHE register"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "8"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "5 of 8 involve 3rd-party transporters — supplier H&S review"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Fatalities YTD"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "S_Data!C28:F28"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "SHE register"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "0"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "Confirmed"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "2026-05-27"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "Zero — on target"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Hours worked YTD"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "S_Data!C27:F27"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "HR / Payroll"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "Not supplied"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "BLOCKS LTIFR/TRIFR calculation. Need quarterly hours."
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Scope 3 — Business travel flights (passenger-km)"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "E_Data Scope 3 block"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "Travel agency / Expense system"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "Not supplied"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": "Requested from HO per Coba submission. Critical for SBTi baseline."
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Fleet diesel (litres)"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "E_Data!L19"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "Fleet system"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": "9 months actuals needed Jul-25 to Mar-26"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Electricity (kWh) per depot"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "E_Data!L46"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "Utility bills"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H29",
+          "col": 8,
+          "value": "5 depots: JHB, DBN, CPT, BLOEM, PE"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Solar generation (kWh)"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "E_Data Solar"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "Graeme Barand / Ops"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F30",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G30",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H30",
+          "col": 8,
+          "value": "JHB confirmed; DBN EDGE pending; CPT/BLOEM/PE assess"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "Waste streams (Oricol / Oracle / Cority)"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "Waste_Register"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "Mariette / SHEQ"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H31",
+          "col": 8,
+          "value": "Per-depot tonnes diverted vs landfilled"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "Carbon credits / OER register"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "NetZero_Roadmap"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "E"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "Okiru"
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H32",
+          "col": 8,
+          "value": "EDGE DBN + Solar JHB credits to log"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "ISO 14001 / 45001 / 27001 certification"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "ISO_Tracker"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "SHEQ"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": "TBC"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H33",
+          "col": 8,
+          "value": "Current cert status per depot"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "SBTi commitment letter"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "IFRS_S1_S2"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "G"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "Richard / Okiru"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": "Pending"
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G34",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H34",
+          "col": 8,
+          "value": "Target Q1 FY2026"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "Training hours / WSP delivery"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "S_Data WSP block"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "S"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "HR / TETA / WRSETA"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": "OFO list confirmed"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": "Estimated"
+        },
+        "7": {
+          "coord": "G35",
+          "col": 7,
+          "value": "Prior"
+        },
+        "8": {
+          "coord": "H35",
+          "col": 8,
+          "value": "Refresh once Training Matrix 2026 actuals land"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "Materiality matrix scoring"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "Materiality_Matrix"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "All"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "Okiru workshop"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": "Default"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "Outstanding"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H36",
+          "col": 8,
+          "value": "Workshop required with SG Consumer leadership"
+        }
+      }
+    }
+  ]
+}

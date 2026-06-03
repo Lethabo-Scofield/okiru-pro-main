@@ -1,0 +1,2879 @@
+{
+  "sheet_name": "SAQ_Supplier",
+  "sanitized_name": "SAQ_Supplier",
+  "dimensions": {
+    "max_row": 46,
+    "max_column": 11
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "E16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"5,4,3,2,1,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H16"
+    }
+  ],
+  "formula_count": 24,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "SUPPLIER ESG ASSESSMENT  |  IMS-T-149-02 | JDE Environmental SAQ | Sanulac Sustainability  [Source: MARIA + MAXINE]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "IMS-T-149-02 — EXTERNAL SERVICE PROVIDER EVALUATIONS  (Score 1–5 per criterion; Rating A>90%, B>80%, C<80%)"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Supplier Name"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "On-Time Del"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Quality"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "H&S\n(Safety File)"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Environmental\n(EMS/Waste/Spill)"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Food Safety\n(COA/Policy)"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Correct\nInvoicing"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Backup\nSupport"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "% Score"
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": "Rating"
+        },
+        "11": {
+          "coord": "K4",
+          "col": 11,
+          "value": "ESG Net-Zero Link"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Fuel Supplier — ENGEN (BLOEM)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B5:H5)/(COUNTIF(B5:H5,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I5>=90,\"A\",IF(I5>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": "LPG/diesel Scope 1"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Electricity Landlord — KAVOD (BLOEM)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B6:H6)/(COUNTIF(B6:H6,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I6>=90,\"A\",IF(I6>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": "Scope 2 electricity"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Electricity Landlord — EXCELLERATE (DBN)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B7:H7)/(COUNTIF(B7:H7,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I7>=90,\"A\",IF(I7>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": "Scope 2 electricity"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Electricity Landlord — LEXSHELL (ISANDO)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B8:H8)/(COUNTIF(B8:H8,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I8>=90,\"A\",IF(I8>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": "Scope 2 electricity"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Waste Contractor — Oricol Environmental"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B9:H9)/(COUNTIF(B9:H9,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I9>=90,\"A\",IF(I9>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": "Waste diversion/Scope 3"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Fleet Maintenance — Hino/Scania dealer"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B10:H10)/(COUNTIF(B10:H10,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J10",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I10>=90,\"A\",IF(I10>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K10",
+          "col": 11,
+          "value": "Fleet efficiency/Scope 1"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Telematics — I-CAM / Mix Telematics"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B11:H11)/(COUNTIF(B11:H11,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J11",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I11>=90,\"A\",IF(I11>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K11",
+          "col": 11,
+          "value": "Fleet data quality"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Safety System — Accidently"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B12:H12)/(COUNTIF(B12:H12,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I12>=90,\"A\",IF(I12>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K12",
+          "col": 11,
+          "value": "LTIFR data/ISO 45001"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "EV Supplier — MAXUS (planned)"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B13:H13)/(COUNTIF(B13:H13,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J13",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I13>=90,\"A\",IF(I13>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K13",
+          "col": 11,
+          "value": "EV transition/net-zero"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Cold Chain — Transfrig (fridge units)"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B14:H14)/(COUNTIF(B14:H14,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J14",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I14>=90,\"A\",IF(I14>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K14",
+          "col": 11,
+          "value": "Cold chain food safety"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "JDE (warehousing client)"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B15:H15)/(COUNTIF(B15:H15,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J15",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I15>=90,\"A\",IF(I15>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K15",
+          "col": 11,
+          "value": "Client ESG SAQ requirements"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Sanulac/Lactalis (FMCG client)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": 3
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 3
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 3
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": 60,
+          "formula": "=IFERROR(SUM(B16:H16)/(COUNTIF(B16:H16,\"<>\"&\"N/A\")*5)*100,0)"
+        },
+        "10": {
+          "coord": "J16",
+          "col": 10,
+          "value": "C",
+          "formula": "=IF(I16>=90,\"A\",IF(I16>=80,\"B\",\"C\"))"
+        },
+        "11": {
+          "coord": "K16",
+          "col": 11,
+          "value": "Client sustainability reporting"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "SANULAC / LACTALIS SUSTAINABILITY DATA  [Source: Maxine/Sanulac Sustainability report.xlsx]"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Depot"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "Period"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "Elec kWh"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Rate R/kWh"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Solar"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "Solar Owner"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "Generator"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "Forklift Type"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "Lithium #"
+        },
+        "10": {
+          "coord": "J19",
+          "col": 10,
+          "value": "Lead-acid #"
+        },
+        "11": {
+          "coord": "K19",
+          "col": 11,
+          "value": "Fuel Tank L"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Gauteng (JHB)"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "H1 2025"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 5701
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 3.97
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "SG-owned"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": 19
+        },
+        "10": {
+          "coord": "J20",
+          "col": 10,
+          "value": 40
+        },
+        "11": {
+          "coord": "K20",
+          "col": 11,
+          "value": 83000
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Gauteng (JHB)"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "H2 2025"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": 4712
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": 4.33
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "SG-owned"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": 21
+        },
+        "10": {
+          "coord": "J21",
+          "col": 10,
+          "value": 40
+        },
+        "11": {
+          "coord": "K21",
+          "col": 11,
+          "value": 83000
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Cape Town"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "H1 2025"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": 646
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": 2.24
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "Landlord (SPEAR)"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": 3
+        },
+        "10": {
+          "coord": "J22",
+          "col": 10,
+          "value": 9
+        },
+        "11": {
+          "coord": "K22",
+          "col": 11,
+          "value": 0
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Cape Town"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "H2 2025"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 510
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 2.75
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "Yes"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "Landlord (SPEAR)"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": 3
+        },
+        "10": {
+          "coord": "J23",
+          "col": 10,
+          "value": 9
+        },
+        "11": {
+          "coord": "K23",
+          "col": 11,
+          "value": 0
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Port Elizabeth"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "H1 2025"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 3.36
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "None"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": 2
+        },
+        "10": {
+          "coord": "J24",
+          "col": 10,
+          "value": 6
+        },
+        "11": {
+          "coord": "K24",
+          "col": 11,
+          "value": 0
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Durban"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "H1 2025"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": 5.53
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "None"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": 4
+        },
+        "10": {
+          "coord": "J25",
+          "col": 10,
+          "value": 8
+        },
+        "11": {
+          "coord": "K25",
+          "col": 11,
+          "value": 0
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Bloemfontein"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "H1 2025"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 5.87
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "None"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "Yes (diesel)"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "Electric (Li)"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": 3
+        },
+        "10": {
+          "coord": "J26",
+          "col": 10,
+          "value": 3
+        },
+        "11": {
+          "coord": "K26",
+          "col": 11,
+          "value": 13000
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "JDE ENVIRONMENTAL SAQ — Key Questions  [Source: Maxine/JDE/ENVIRONMENTAL Q AND A.xlsx]"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "SAQ Question"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "Category"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "Response"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "Score"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Formalised Environmental policy in place?"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "Policy"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "Yes — company-wide policy"
+        },
+        "9": {
+          "coord": "I30",
+          "col": 9,
+          "value": 5
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "GHG/Energy reduction targets set?"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "Commitments"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "Yes — SBTi CNZS 2.0 net-zero by 2050"
+        },
+        "9": {
+          "coord": "I31",
+          "col": 9,
+          "value": 5
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "Water reduction targets?"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "Commitments"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "Yes — CT dam project; DBN monitoring"
+        },
+        "9": {
+          "coord": "I32",
+          "col": 9,
+          "value": 4
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "Waste reduction/diversion targets?"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "Commitments"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "Yes — Oricol 91% diversion rate (Mar-26)"
+        },
+        "9": {
+          "coord": "I33",
+          "col": 9,
+          "value": 5
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "ISO 14001 certified?"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "Management"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "In progress — target date TBC with Maria"
+        },
+        "9": {
+          "coord": "I34",
+          "col": 9,
+          "value": 2
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "GHG measurement methodology?"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "Measurement"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "DEFRA 2024 / Eskom NERSA 2024 emission factors"
+        },
+        "9": {
+          "coord": "I35",
+          "col": 9,
+          "value": 5
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "Physical climate risks experienced?"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "Climate"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "Yes — Durban floods 2022, heat impact on drivers"
+        },
+        "9": {
+          "coord": "I36",
+          "col": 9,
+          "value": 4
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "Transition plan for net-zero?"
+        },
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "Transition"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "Yes — SBTi CNZS 2.0, EV fleet plan, solar expansion"
+        },
+        "9": {
+          "coord": "I37",
+          "col": 9,
+          "value": 4
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "1": {
+          "coord": "A38",
+          "col": 1,
+          "value": "Biodiversity policy?"
+        },
+        "2": {
+          "coord": "B38",
+          "col": 2,
+          "value": "Policy"
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": "Under development"
+        },
+        "9": {
+          "coord": "I38",
+          "col": 9,
+          "value": 1
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "1": {
+          "coord": "A39",
+          "col": 1,
+          "value": "Chemicals/spill control procedures?"
+        },
+        "2": {
+          "coord": "B39",
+          "col": 2,
+          "value": "Operations"
+        },
+        "3": {
+          "coord": "C39",
+          "col": 3,
+          "value": "Yes — depot spill kits, emergency response plans"
+        },
+        "9": {
+          "coord": "I39",
+          "col": 9,
+          "value": 4
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "SUPPLIER CODE OF CONDUCT — Control Framework"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "1": {
+          "coord": "A42",
+          "col": 1,
+          "value": "Document"
+        },
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "Super Group Supplier Code of Conduct and Ethics (Rev 2, 30 Jan 2023)"
+        },
+        "10": {
+          "coord": "J42",
+          "col": 10,
+          "value": "Public"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "1": {
+          "coord": "A43",
+          "col": 1,
+          "value": "Coverage"
+        },
+        "2": {
+          "coord": "B43",
+          "col": 2,
+          "value": "Labour & Human Rights · Business Ethics & Integrity · Health & Safety · Environment & Sustainability"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "Whistleblower"
+        },
+        "2": {
+          "coord": "B44",
+          "col": 2,
+          "value": "Be Heard hotline 0800-007-117 — available to suppliers, employees and contractors (24/365 anonymous)"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "Enforcement"
+        },
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": "SG reserves right to terminate non-compliant suppliers; mandatory self-reporting of breaches"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "B-BBEE certificate"
+        },
+        "2": {
+          "coord": "B46",
+          "col": 2,
+          "value": "All suppliers must hold valid B-BBEE certificate or affidavit (Supplier Code §6)"
+        }
+      }
+    }
+  ]
+}

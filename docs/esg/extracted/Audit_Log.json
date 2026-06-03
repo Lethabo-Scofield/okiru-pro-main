@@ -1,0 +1,768 @@
+{
+  "sheet_name": "Audit_Log",
+  "sanitized_name": "Audit_Log",
+  "dimensions": {
+    "max_row": 30,
+    "max_column": 6
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 0,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "📋  AUDIT LOG  —  Version control · change history · sign-offs"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Log every formula change, threshold update, scope extension. Critical for ISAE 3000 / external assurance trail."
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "VERSION HISTORY"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Version"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Date"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Author"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Section"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Change Description"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Signed off by"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "v1.0"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "2025-09-01"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Khethiwe Nkuna"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "All sheets"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "Initial toolkit build for SG Consumer FY25/26 baseline"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "C Myezwa"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "v1.1"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "2025-11-15"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "E_Data"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "Added SCOPE 1B–1D (generator, LPG, business cars)"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "Z Mnanzana"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "v1.2"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "2026-01-10"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Fleet_Register"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "Added 134-vehicle register with L/100km norms by class"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Z Mnanzana"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "v1.3"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "2026-02-22"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "King5_Scorecard"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "Migrated to Apply & Explain methodology — all 17 principles"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "C Myezwa"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "v1.4"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "NetZero_Roadmap"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "Added SBTi CNZS 2.0 pathway and OER tier mapping"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "C Myezwa"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "v1.5"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "2026-05-14"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "Engine rebuild"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "Full scoring engine rebuild: Assumptions sheet, banded scoring, audit columns, dashboard charts, Materiality_Matrix, B_BBEE_ESG, Carbon_Tax. Productised template + SG Consumer live instance."
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "[pending]"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "v1.6"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "2026-05-25"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Okiru Consulting"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "G_Data, King5_Scorecard, IFRS_S1_S2, GARP_GRAP, ISO_Tracker, SAQ_Supplier"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Populated governance evidence from SG Consumer policy stack (Code of Ethics, CSI/SED, EE & Workplace Diversity, Supplier Code — all Rev 2 dated 30 Jan 2023) + SG Consumer POPI Act Consent (Jan 2026). Updates: G_Data Y/N flags with traceable source notes; King V Apply/Explain status for 17 principles; IFRS S1/S2 Partially Disclosed flags where policy commitments exist without operational evidence; GARP_GRAP control evidence column populated; ISO 14001/45001/26000/27001 clause-level status. No formulas changed."
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "[pending C Myezwa]"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "2026-05-27"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "v1.7"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "SG Consumer data load — Coba 27 May 2026 submission"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "Payroll R10,331,940.87; FTE 426; Board comp (Group, 7 directors); CSI/SED beneficiaries (10 programmes, R45k budget); H&S incidents (19 from SHE register); Be Heard hotline confirmed"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Okiru Consulting"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "Outstanding: EEA2 race/gender split for 426 FTE; Scope 3 business travel km; CSI per-project spend split; POPIA case data (HO)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "FORMULA CHANGE LOG — v1.5 engine rebuild (target counts; populated in Step 2)"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Sheet"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Cells touched"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "From"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "To"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Rationale"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Tested"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "E_Scorecard"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "C6:C29"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "17 hardcoded zeros"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "Banded scoring referencing E_Data + Assumptions"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Engine rebuild — every score must trace to source"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "S_Scorecard"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "C6:C27"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "16 hardcoded zeros"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "Banded scoring referencing S_Data + Assumptions"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "Engine rebuild"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "G_Scorecard"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "C6:C25"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "13 hardcoded zeros"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "Banded scoring referencing G_Data + Assumptions"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "Engine rebuild"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "G_Data"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "F5:F24"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "All zeros (no logic)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Banded Y/N + count scoring"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Wire governance data to G_Scorecard"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "GARP_GRAP"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "F:H"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "No formulas"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Severity × Likelihood scoring; control modifier"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "Materiality matrix feed"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "ESG_Dashboard"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "B25,B27:B29,B31"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "Hardcoded =0"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "Live pulls from data + scorecard sheets"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "Make KPI tiles real"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Standards_Map"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "I column"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "References still valid"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "Add Audit_Log + Assumptions cross-refs"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "Complete the map"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "pending"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "SIGN-OFF — required before publishing to client"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Role"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "Name"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "Date"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "Signature"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "Scope of approval"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Senior ESG Consultant"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "Khethiwe Nkuna"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "Technical accuracy of E/S/G scoring"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Managing Director"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "Chengetai Myezwa"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "Client suitability and risk"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Senior B-BBEE Consultant"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "Zoleka Mnanzana"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "B-BBEE Generic Code element alignment"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Client representative"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "[Client name]"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "Acceptance and data accuracy"
+        }
+      }
+    }
+  ]
+}

@@ -22,10 +22,13 @@ import { ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
 import {
   ASSUMPTIONS_FIELDS,
   COVER_FIELDS,
-  E_DATA_SUMMARY_FIELDS,
+  E_DATA_GHG_SUMMARY_FIELDS,
+  E_DATA_NZ_FIELDS,
   EE_MATURITY_ROWS,
   G_DATA_MATURITY_ROWS,
-  S_DATA_SCALAR_FIELDS,
+  S_DATA_HS_FIELDS,
+  S_DATA_PAYROLL_FIELDS,
+  S_DATA_TRAINING_FIELDS,
   WASTE_SCALAR_FIELDS,
   eDataBusinessCarRows,
   eDataGeneratorRows,
@@ -34,6 +37,7 @@ import {
   eDataWasteRows,
   eDataWaterRows,
 } from "./esgSectionConfigs";
+import { E_DATA_SUBTABS, S_DATA_SUBTABS } from "@/lib/esg/esgSectionRegistry";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -146,6 +150,10 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
       );
     } else if (sectionId === "e-data") {
       const activeSub = (draft._activeSubtab as string) || subTab;
+      const eTab = (id: string, content: ReactNode) => {
+        const def = E_DATA_SUBTABS.find((t) => t.id === id);
+        return { id, label: def?.label ?? id, content };
+      };
       body = (
         <EsgSubtabContainer
           activeTab={activeSub}
@@ -154,175 +162,178 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
             updateDraft({ _activeSubtab: id });
           }}
           tabs={[
-            {
-              id: "scope-1a",
-              label: "1A Fleet Diesel",
-              content: (
+            eTab(
+              "scope-1a",
+              <EsgMonthlyGrid
+                rows={eDataDepotRows()}
+                cellPrefix="s1a"
+                emissionFactor={Number(draft.B4 ?? 2.68)}
+                unitLabel="L diesel"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "scope-1b",
+              <EsgMonthlyGrid
+                rows={eDataGeneratorRows()}
+                cellPrefix="s1b"
+                emissionFactor={Number(draft.B4 ?? 2.68)}
+                unitLabel="L diesel"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "scope-1c",
+              <EsgMonthlyGrid
+                rows={eDataLpgRows()}
+                cellPrefix="s1c"
+                emissionFactor={Number(draft.B6 ?? 1.51)}
+                unitLabel="kg"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "scope-1d",
+              <EsgMonthlyGrid
+                rows={eDataBusinessCarRows()}
+                cellPrefix="s1d"
+                emissionFactor={Number(draft.B5 ?? 2.31)}
+                unitLabel="L petrol"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "scope-2",
+              <EsgMonthlyGrid
+                rows={eDataDepotRows()}
+                cellPrefix="s2"
+                emissionFactor={Number(draft.B7 ?? 0.82)}
+                unitLabel="kWh"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "solar",
+              <EsgMonthlyGrid
+                rows={eDataSolarRows()}
+                cellPrefix="solar"
+                emissionFactor={Number(draft.B8 ?? 0.025)}
+                unitLabel="kWh"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "water",
+              <EsgMonthlyGrid
+                rows={eDataWaterRows()}
+                cellPrefix="water"
+                emissionFactor={Number(draft.B9 ?? 0.000344) * 1000}
+                unitLabel="kL"
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            eTab(
+              "waste",
+              <div className="space-y-4">
                 <EsgMonthlyGrid
-                  rows={eDataDepotRows()}
-                  cellPrefix="s1a"
-                  emissionFactor={Number(draft.B4 ?? 2.68)}
-                  unitLabel="L diesel"
+                  rows={eDataWasteRows()}
+                  cellPrefix="waste"
+                  emissionFactor={0}
+                  unitLabel="%"
                   values={draft}
                   onChange={updateDraft}
                   readOnly={locked}
                 />
-              ),
-            },
-            {
-              id: "scope-1b",
-              label: "1B Generators",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataGeneratorRows()}
-                  cellPrefix="s1b"
-                  emissionFactor={Number(draft.B4 ?? 2.68)}
-                  unitLabel="L diesel"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "scope-1c",
-              label: "1C LPG Forklifts",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataLpgRows()}
-                  cellPrefix="s1c"
-                  emissionFactor={Number(draft.B6 ?? 1.51)}
-                  unitLabel="kg"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "scope-1d",
-              label: "1D Business Cars",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataBusinessCarRows()}
-                  cellPrefix="s1d"
-                  emissionFactor={Number(draft.B5 ?? 2.31)}
-                  unitLabel="L petrol"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "scope-2",
-              label: "Scope 2 Electricity",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataDepotRows()}
-                  cellPrefix="s2"
-                  emissionFactor={Number(draft.B7 ?? 0.82)}
-                  unitLabel="kWh"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "solar",
-              label: "Solar Offset",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataSolarRows()}
-                  cellPrefix="solar"
-                  emissionFactor={Number(draft.B8 ?? 0.025)}
-                  unitLabel="kWh"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "water",
-              label: "Water",
-              content: (
-                <EsgMonthlyGrid
-                  rows={eDataWaterRows()}
-                  cellPrefix="water"
-                  emissionFactor={Number(draft.B9 ?? 0.000344) * 1000}
-                  unitLabel="kL"
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
-            {
-              id: "waste",
-              label: "Waste",
-              content: (
-                <div className="space-y-4">
-                  <EsgMonthlyGrid
-                    rows={eDataWasteRows()}
-                    cellPrefix="waste"
-                    emissionFactor={0}
-                    unitLabel="%"
-                    values={draft}
-                    onChange={updateDraft}
-                    readOnly={locked}
-                  />
-                  <EsgScalarForm
-                    fields={WASTE_SCALAR_FIELDS}
-                    values={draft}
-                    onChange={updateDraft}
-                    readOnly={locked}
-                  />
-                </div>
-              ),
-            },
-            {
-              id: "summary",
-              label: "Summary / NZ",
-              content: (
                 <EsgScalarForm
-                  fields={E_DATA_SUMMARY_FIELDS}
+                  fields={WASTE_SCALAR_FIELDS}
                   values={draft}
                   onChange={updateDraft}
                   readOnly={locked}
                 />
-              ),
-            },
+              </div>,
+            ),
+            eTab(
+              "ghg-summary",
+              <div className="space-y-3">
+                <p className="text-[12px] text-[var(--esg-text3)]">
+                  Auto-calculated from scope tabs above. Override only when reconciling to audited totals.
+                </p>
+                <EsgScalarForm
+                  fields={E_DATA_GHG_SUMMARY_FIELDS}
+                  values={draft}
+                  onChange={updateDraft}
+                  readOnly={locked}
+                />
+              </div>,
+            ),
+            eTab(
+              "nz-targets",
+              <EsgScalarForm
+                fields={E_DATA_NZ_FIELDS}
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
           ]}
         />
       );
     } else if (sectionId === "s-data") {
       const activeSub = (draft._activeSubtab as string) || "headcount";
+      const sTab = (id: string, content: ReactNode) => {
+        const def = S_DATA_SUBTABS.find((t) => t.id === id);
+        return { id, label: def?.label ?? id, content };
+      };
       body = (
         <EsgSubtabContainer
           activeTab={activeSub}
           onTabChange={(id) => updateDraft({ _activeSubtab: id })}
           tabs={[
-            {
-              id: "headcount",
-              label: "EE Headcount (EEA2)",
-              content: (
-                <EsgHeadcountGrid values={draft} onChange={updateDraft} readOnly={locked} />
-              ),
-            },
-            {
-              id: "hs-training",
-              label: "H&S / Training / Payroll",
-              content: (
-                <EsgScalarForm
-                  fields={S_DATA_SCALAR_FIELDS}
-                  values={draft}
-                  onChange={updateDraft}
-                  readOnly={locked}
-                />
-              ),
-            },
+            sTab(
+              "headcount",
+              <EsgHeadcountGrid values={draft} onChange={updateDraft} readOnly={locked} />,
+            ),
+            sTab(
+              "hs",
+              <EsgScalarForm
+                fields={S_DATA_HS_FIELDS}
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            sTab(
+              "training",
+              <EsgScalarForm
+                fields={S_DATA_TRAINING_FIELDS}
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
+            sTab(
+              "payroll",
+              <EsgScalarForm
+                fields={S_DATA_PAYROLL_FIELDS}
+                values={draft}
+                onChange={updateDraft}
+                readOnly={locked}
+              />,
+            ),
           ]}
         />
       );

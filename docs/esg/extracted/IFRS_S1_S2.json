@@ -1,0 +1,1241 @@
+{
+  "sheet_name": "IFRS_S1_S2",
+  "sanitized_name": "IFRS_S1_S2",
+  "dimensions": {
+    "max_row": 30,
+    "max_column": 8
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D19"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D20"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D21"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D22"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D23"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D24"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D26"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D27"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Disclosed,Partially Disclosed,Not Disclosed,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D28"
+    }
+  ],
+  "formula_count": 24,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "IFRS S1 + S2 CLIMATE DISCLOSURE TRACKER  |  TCFD Framework  |  GHG Protocol  [Links: E_Data GHG, NetZero_Roadmap]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "IFRS S1 — General Sustainability-Related Financial Information"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Disclosure Requirement"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Pillar"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Data Source"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Current Status / Evidence"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Action Required"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Board oversight of climate risks"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Governance"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D5=\"Disclosed\",5,IF(D5=\"Partially Disclosed\",3,IF(D5=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "G_Data / King V P10"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "Group Social and Ethics Committee mandate covers environment (CSI/SED Policy); explicit climate mandate to be confirmed"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Embed explicit climate-risk oversight into S&EC charter"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "Management role in climate risk"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Governance"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "Not Disclosed"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D6=\"Disclosed\",5,IF(D6=\"Partially Disclosed\",3,IF(D6=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "G_Data"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Management climate KPIs not disclosed in supplied policies"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Assign exec climate risk owner with KPIs"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "Climate risks to business model"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Strategy"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D7=\"Disclosed\",5,IF(D7=\"Partially Disclosed\",3,IF(D7=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "E_Data / Risk Register"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "Code of Ethics §11 acknowledges vehicle emissions; physical/transition risk assessment to be formalised"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Document physical and transition climate risk assessment"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Climate opportunities identified"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "Strategy"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D8=\"Disclosed\",5,IF(D8=\"Partially Disclosed\",3,IF(D8=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Fleet_Register / E_Data"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "Code of Ethics §11 commits to energy efficiency and cleaner fuel partnerships; explicit opportunity register required"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Build opportunity register; EV fleet, solar expansion business case"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Scenario analysis (1.5°C/2°C/4°C)"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Strategy"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "Not Disclosed"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D9=\"Disclosed\",5,IF(D9=\"Partially Disclosed\",3,IF(D9=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "NetZero_Roadmap"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "Climate scenario analysis not evidenced in supplied policies"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Commission 1.5°C/2°C/4°C scenario analysis"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Climate risk identification process"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Risk Management"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D10=\"Disclosed\",5,IF(D10=\"Partially Disclosed\",3,IF(D10=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "G_Data"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "Code of Ethics §11 \"pragmatic, risk-based approach\" — formal identification process to be documented"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Document climate risk identification methodology"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "Climate risk integration into ERM"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Risk Management"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D11=\"Disclosed\",5,IF(D11=\"Partially Disclosed\",3,IF(D11=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "G_Data"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "ERM integration of climate risks requires confirmation"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "Update risk register to include climate physical & transition risks"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Absolute Scope 1 GHG tCO₂e"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Metrics & Targets"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D12=\"Disclosed\",5,IF(D12=\"Partially Disclosed\",3,IF(D12=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "E_Data GHG_GRAND_ROW"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "Fleet diesel + generator + LPG"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Absolute Scope 2 GHG tCO₂e"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Metrics & Targets"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D13=\"Disclosed\",5,IF(D13=\"Partially Disclosed\",3,IF(D13=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "E_Data ELEC_TOTAL"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "Grid electricity per depot"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "Scope 3 GHG material categories"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "Metrics & Targets"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D14=\"Disclosed\",5,IF(D14=\"Partially Disclosed\",3,IF(D14=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "E_Data Scope3"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "Water, value chain transport"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "GHG reduction targets"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Metrics & Targets"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Partially Disclosed"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D15=\"Disclosed\",5,IF(D15=\"Partially Disclosed\",3,IF(D15=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "NetZero_Roadmap"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "Code of Ethics §11 commits to GHG quantification and target-setting; numerical SBTi-aligned targets to be confirmed (SBTi CNZS 2.0 net-zero by 2050 — toolkit Assumptions)"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Submit SBTi commitment letter; publish FY25/26 baseline and near-term targets"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "Transition plan (net-zero pathway)"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "Metrics & Targets"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D16=\"Disclosed\",5,IF(D16=\"Partially Disclosed\",3,IF(D16=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "NetZero_Roadmap"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "OER tiers, EV fleet, solar expansion"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "IFRS S2 — Climate-Related Disclosures"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "Disclosure Requirement"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "Pillar"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "Data Source"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "Current Status / Evidence"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "Action Required"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "Physical climate risks in board agenda"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "Governance"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Not Disclosed"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D19=\"Disclosed\",5,IF(D19=\"Partially Disclosed\",3,IF(D19=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "G_Data"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "Board agenda climate physical risk integration not evidenced"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "Add quarterly climate physical risk to board agenda"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Transition climate risks in board agenda"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Governance"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Not Disclosed"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D20=\"Disclosed\",5,IF(D20=\"Partially Disclosed\",3,IF(D20=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "G_Data"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "Board agenda climate transition risk integration not evidenced"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Add carbon tax / EV transition risk to board agenda"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "Financial effect of climate risks (R)"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "Strategy"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D21=\"Disclosed\",5,IF(D21=\"Partially Disclosed\",3,IF(D21=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "E_Data cost data"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "Fuel cost sensitivity, stranded fleet risk"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Resilience of strategy to climate scenarios"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "Strategy"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D22=\"Disclosed\",5,IF(D22=\"Partially Disclosed\",3,IF(D22=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "NetZero_Roadmap"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "Net-zero pathway documented"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "Energy intensity (kWh/tonne-km)"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D23=\"Disclosed\",5,IF(D23=\"Partially Disclosed\",3,IF(D23=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "E_Data / tonnage data"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "Electricity and fuel per tonne delivered"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "Fleet CO₂ intensity (tCO₂e/tonne-km)"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D24=\"Disclosed\",5,IF(D24=\"Partially Disclosed\",3,IF(D24=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "E_Data + tonnage"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "Scope 1 fleet per tonne-km"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "% renewable energy"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D25=\"Disclosed\",5,IF(D25=\"Partially Disclosed\",3,IF(D25=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "E_Data solar rows"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "Solar kWh / total electricity kWh"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "Carbon credits/offsets used"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D26=\"Disclosed\",5,IF(D26=\"Partially Disclosed\",3,IF(D26=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "Carbon_Credits_Register"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "OER tier — credits register"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "Internal carbon price (R/tCO₂e)"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D27=\"Disclosed\",5,IF(D27=\"Partially Disclosed\",3,IF(D27=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "Management decision"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "Used for investment decisions?"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "Climate-related capex planned (R)"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "Metrics"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D28=\"Disclosed\",5,IF(D28=\"Partially Disclosed\",3,IF(D28=\"N/A\",5,0)))"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "NetZero_Roadmap"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "EV fleet, solar, insulation investments"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "IFRS S1+S2 TOTAL SCORE"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": 18,
+          "formula": "=SUMIF(E5:E28,\"<>0\",E5:E28)"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": 0.1636363636,
+          "formula": "=IFERROR(E29/110,0)"
+        }
+      }
+    }
+  ]
+}

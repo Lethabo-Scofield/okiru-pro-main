@@ -1,0 +1,2785 @@
+{
+  "sheet_name": "Assumptions",
+  "sanitized_name": "Assumptions",
+  "dimensions": {
+    "max_row": 112,
+    "max_column": 6
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Lean,Standard,Strict\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Generic,FMCG / Distribution,Transport / Logistics,Manufacturing,Financial Services,ICT / Technology,Agriculture,Mining,Construction,Retail,Hospitality,Healthcare,Education,Public Sector\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"King V + IFRS S1/S2,GRI Standards,IFRS S1+S2 only,ESRS (EU CSRD),TCFD,Combined (all)\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Single (financial — IFRS),Double (financial + impact — ESRS),Dynamic\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"ZAR,USD,EUR,GBP,KES,NGN,BWP,ZMW,GHS,EGP,XOF,MAD\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Current Tier 1 only,Escalated Tier 2 only,Both (current + escalated)\"",
+      "formula2": "0",
+      "allow_blank": false,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B13"
+    }
+  ],
+  "formula_count": 2,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "⚙  ASSUMPTIONS  —  Single source of truth for thresholds, weights, emission factors, targets"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Edit values in the BLUE cells to retune the toolkit. All scorecards reference this sheet — one edit cascades everywhere."
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "🔒  THIS INSTANCE IS CONFIGURED FOR SUPERGROUP  —  Transport / FMCG Distribution  |  Sector-locked deep build"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "To deploy for a different sector (ICT, Financial Services, Mining, etc.) start from the Generic template — do not retrofit by changing the Sector toggle below. Each sector fork has bespoke depth (e.g. ISO 14083 for transport, task-based emissions for ICT, financed emissions for FinServ)."
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "BLOCK 0 — STRATEGY TOGGLES  ★  PRIMARY CONTROLS — change these to retune the whole toolkit"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Setting"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "Active value"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Options"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "Code"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "Effect on toolkit"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "Cell ref"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Scoring stance"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Standard"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "Lean / Standard / Strict"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "STANCE"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "Drives the banding floor (Lean 30% / Std 50% / Strict 70%) for partial credit on all quantitative indicators"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Assumptions!B6"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Banding floor (auto from stance)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 0.5,
+          "formula": "=IF(B8=\"Lean\",0.3,IF(B8=\"Strict\",0.7,0.5))"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "0.30 / 0.50 / 0.70"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "STANCE_FLR"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "Below Actual/Target × this %, score = 0. Above, pro-rata."
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "Assumptions!B7"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Sector"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Transport / FMCG Distribution"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "See list →"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "SECTOR"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "🔒 Sector-locked for this SuperGroup instance. The toolkit is configured around transport/distribution logic (ISO 14083, Fleet_Register, Driver_Debrief). To use for another sector, fork from the Generic template — do not change this dropdown."
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "Assumptions!B8"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Primary reporting standard"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "King V + IFRS S1/S2"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "SA / IFRS / GRI / ESRS / TCFD"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "STD_PRIMARY"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "Determines emphasis in dashboard, executive summary, and standards map"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "Assumptions!B9"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Materiality basis"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Single (financial — IFRS)"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Single / Double / Dynamic"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "MAT_BASIS"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Single: financial only (IFRS). Double: financial + impact (ESRS). Dynamic: both, evolving over time."
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "Assumptions!B10"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Reporting currency"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "ZAR"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "See list →"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "CCY"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Drives currency symbol on CSI, Carbon Tax, training spend, and procurement"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "Assumptions!B11"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Currency symbol (auto)"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Carbon tax display"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Both (current + escalated)"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Current / Escalated / Both"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "TAX_MODE"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Side-by-side liability view: Tier 1 (current) vs Tier 2 (escalated forward-looking)"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Assumptions!B13"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "★ How toggles work: change a value in column B → all scorecards and the dashboard recompute. The current scoring stance (\"Standard\") gives 50% banding floor; switch to \"Lean\" to use 30% (encourages early progress); switch to \"Strict\" for 70% (closer to B-BBEE binary)."
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "BLOCK 1 — EMISSION FACTORS  (DEFRA 2024 · Eskom NERSA 2024 · GHG Protocol)"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Factor"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "Unit"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "Code"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "Source / Reference"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "Last Updated"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Diesel — road freight"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": 2.68
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "kgCO₂e/L"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "EF_DIESEL"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "DEFRA 2024 — Mobile combustion, HGV diesel"
+        },
+        "6": {
+          "coord": "F30",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "Petrol — business vehicles"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": 2.31
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "kgCO₂e/L"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "EF_PETROL"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "DEFRA 2024 — Passenger car petrol"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "LPG — forklifts"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": 1.51
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "kgCO₂e/kg"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "EF_LPG"
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": "DEFRA 2024 — LPG combustion"
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "Electricity — Eskom grid"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": 0.82
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "kgCO₂e/kWh"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "EF_ELEC"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": "Eskom NERSA 2024 — grid emission factor"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "Solar PV — onsite generation"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": 0.025
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "kgCO₂e/kWh"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "EF_SOLAR"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": "IEA / GHG Protocol — solar PV lifecycle"
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "Municipal water"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": 0.000344
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "tCO₂e/kL"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "EF_WATER"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": "GHG Protocol — water supply & treatment"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "Waste to landfill"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": 0.58
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "tCO₂e/tonne"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "EF_LANDFILL"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": "DEFRA 2024 — landfilled commercial waste"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "Carbon Tax Tier 1 rate (ZAR)"
+        },
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": 236
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "ZAR/tCO₂e"
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": "TAX_T1"
+        },
+        "5": {
+          "coord": "E37",
+          "col": 5,
+          "value": "SA Carbon Tax Act — Tier 1 rate 2025 (taxable above threshold)"
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "1": {
+          "coord": "A38",
+          "col": 1,
+          "value": "Carbon Tax Tier 2 rate (ZAR)"
+        },
+        "2": {
+          "coord": "B38",
+          "col": 2,
+          "value": 640
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": "ZAR/tCO₂e"
+        },
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": "TAX_T2"
+        },
+        "5": {
+          "coord": "E38",
+          "col": 5,
+          "value": "SA Carbon Tax Act — projected escalation 2026"
+        },
+        "6": {
+          "coord": "F38",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "1": {
+          "coord": "A39",
+          "col": 1,
+          "value": "Carbon Tax basic allowance"
+        },
+        "2": {
+          "coord": "B39",
+          "col": 2,
+          "value": 0.6
+        },
+        "3": {
+          "coord": "C39",
+          "col": 3,
+          "value": "% exempt"
+        },
+        "4": {
+          "coord": "D39",
+          "col": 4,
+          "value": "TAX_ALLOW"
+        },
+        "5": {
+          "coord": "E39",
+          "col": 5,
+          "value": "SA Carbon Tax Act s7 — basic 60% tax-free allowance"
+        },
+        "6": {
+          "coord": "F39",
+          "col": 6,
+          "value": "2025-01-01"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "BLOCK 2 — SCORING THRESHOLDS  (used by E/S/G scorecards for banded scoring)"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "1": {
+          "coord": "A42",
+          "col": 1,
+          "value": "Threshold"
+        },
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C42",
+          "col": 3,
+          "value": "Unit"
+        },
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": "Code"
+        },
+        "5": {
+          "coord": "E42",
+          "col": 5,
+          "value": "Used by / Applies to"
+        },
+        "6": {
+          "coord": "F42",
+          "col": 6,
+          "value": "Rationale"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "1": {
+          "coord": "A43",
+          "col": 1,
+          "value": "Scope 1+2 YoY reduction target"
+        },
+        "2": {
+          "coord": "B43",
+          "col": 2,
+          "value": 0.1
+        },
+        "3": {
+          "coord": "C43",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D43",
+          "col": 4,
+          "value": "THR_GHG_YOY"
+        },
+        "5": {
+          "coord": "E43",
+          "col": 5,
+          "value": "E_Scorecard row 6"
+        },
+        "6": {
+          "coord": "F43",
+          "col": 6,
+          "value": "SBTi near-term: minimum 4.2% pa for 1.5°C; 10% stretch target"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "Renewable electricity minimum"
+        },
+        "2": {
+          "coord": "B44",
+          "col": 2,
+          "value": 0.2
+        },
+        "3": {
+          "coord": "C44",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D44",
+          "col": 4,
+          "value": "THR_RE"
+        },
+        "5": {
+          "coord": "E44",
+          "col": 5,
+          "value": "E_Scorecard row 13"
+        },
+        "6": {
+          "coord": "F44",
+          "col": 6,
+          "value": "RE100 entry threshold; SBTi Scope 2 lever"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "Fleet L/100km tolerance over norm"
+        },
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": 1.05
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": "multiplier"
+        },
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": "THR_FUEL_TOL"
+        },
+        "5": {
+          "coord": "E45",
+          "col": 5,
+          "value": "Fleet_Register, E_Scorecard row 15"
+        },
+        "6": {
+          "coord": "F45",
+          "col": 6,
+          "value": "5% tolerance above OEM norm before flagged"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "EV fleet % minimum (current)"
+        },
+        "2": {
+          "coord": "B46",
+          "col": 2,
+          "value": 0.05
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": "THR_EV_MIN"
+        },
+        "5": {
+          "coord": "E46",
+          "col": 5,
+          "value": "E_Scorecard row 17"
+        },
+        "6": {
+          "coord": "F46",
+          "col": 6,
+          "value": "Min credible EV transition stake"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "1": {
+          "coord": "A47",
+          "col": 1,
+          "value": "EV fleet % target 2030"
+        },
+        "2": {
+          "coord": "B47",
+          "col": 2,
+          "value": 0.2
+        },
+        "3": {
+          "coord": "C47",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D47",
+          "col": 4,
+          "value": "THR_EV_2030"
+        },
+        "5": {
+          "coord": "E47",
+          "col": 5,
+          "value": "NetZero_Roadmap"
+        },
+        "6": {
+          "coord": "F47",
+          "col": 6,
+          "value": "SBTi-aligned transport transition"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "1": {
+          "coord": "A48",
+          "col": 1,
+          "value": "Waste diversion target"
+        },
+        "2": {
+          "coord": "B48",
+          "col": 2,
+          "value": 0.75
+        },
+        "3": {
+          "coord": "C48",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D48",
+          "col": 4,
+          "value": "THR_WASTE"
+        },
+        "5": {
+          "coord": "E48",
+          "col": 5,
+          "value": "E_Scorecard row 19, Waste_Register"
+        },
+        "6": {
+          "coord": "F48",
+          "col": 6,
+          "value": "ISO 14001 / NEMWA hierarchy alignment"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "1": {
+          "coord": "A49",
+          "col": 1,
+          "value": "Waste diversion excellence"
+        },
+        "2": {
+          "coord": "B49",
+          "col": 2,
+          "value": 0.9
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D49",
+          "col": 4,
+          "value": "THR_WASTE_X"
+        },
+        "5": {
+          "coord": "E49",
+          "col": 5,
+          "value": "E_Scorecard row 19"
+        },
+        "6": {
+          "coord": "F49",
+          "col": 6,
+          "value": "Best-practice diversion (Oricol CPT benchmark)"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "% Black employees target"
+        },
+        "2": {
+          "coord": "B50",
+          "col": 2,
+          "value": 0.6
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D50",
+          "col": 4,
+          "value": "THR_BLACK"
+        },
+        "5": {
+          "coord": "E50",
+          "col": 5,
+          "value": "EE_Scorecard, S_Scorecard row 5"
+        },
+        "6": {
+          "coord": "F50",
+          "col": 6,
+          "value": "EEA s27 demographic alignment; B-BBEE Mgt Control"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "1": {
+          "coord": "A51",
+          "col": 1,
+          "value": "% Black female mgmt target"
+        },
+        "2": {
+          "coord": "B51",
+          "col": 2,
+          "value": 0.3
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D51",
+          "col": 4,
+          "value": "THR_BFM"
+        },
+        "5": {
+          "coord": "E51",
+          "col": 5,
+          "value": "EE_Scorecard, S_Scorecard row 6"
+        },
+        "6": {
+          "coord": "F51",
+          "col": 6,
+          "value": "B-BBEE Mgt Control sub-target"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "1": {
+          "coord": "A52",
+          "col": 1,
+          "value": "% Persons with Disabilities target"
+        },
+        "2": {
+          "coord": "B52",
+          "col": 2,
+          "value": 0.02
+        },
+        "3": {
+          "coord": "C52",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D52",
+          "col": 4,
+          "value": "THR_PWD"
+        },
+        "5": {
+          "coord": "E52",
+          "col": 5,
+          "value": "EE_Scorecard, S_Scorecard row 8"
+        },
+        "6": {
+          "coord": "F52",
+          "col": 6,
+          "value": "EEA s6 / Code of Good Practice on PWD"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "1": {
+          "coord": "A53",
+          "col": 1,
+          "value": "Training hours per employee target"
+        },
+        "2": {
+          "coord": "B53",
+          "col": 2,
+          "value": 40
+        },
+        "3": {
+          "coord": "C53",
+          "col": 3,
+          "value": "hours"
+        },
+        "4": {
+          "coord": "D53",
+          "col": 4,
+          "value": "THR_TRAIN_HR"
+        },
+        "5": {
+          "coord": "E53",
+          "col": 5,
+          "value": "S_Scorecard row 14"
+        },
+        "6": {
+          "coord": "F53",
+          "col": 6,
+          "value": "GRI 404-1; B-BBEE SD typical benchmark"
+        }
+      }
+    },
+    {
+      "row": 54,
+      "cells": {
+        "1": {
+          "coord": "A54",
+          "col": 1,
+          "value": "Mandatory grant recovery target"
+        },
+        "2": {
+          "coord": "B54",
+          "col": 2,
+          "value": 0.8
+        },
+        "3": {
+          "coord": "C54",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D54",
+          "col": 4,
+          "value": "THR_GRANT"
+        },
+        "5": {
+          "coord": "E54",
+          "col": 5,
+          "value": "S_Scorecard row 15"
+        },
+        "6": {
+          "coord": "F54",
+          "col": 6,
+          "value": "SDL Act — full grant recovery achievable"
+        }
+      }
+    },
+    {
+      "row": 55,
+      "cells": {
+        "1": {
+          "coord": "A55",
+          "col": 1,
+          "value": "LTIFR maximum (target ≤)"
+        },
+        "2": {
+          "coord": "B55",
+          "col": 2,
+          "value": 2
+        },
+        "3": {
+          "coord": "C55",
+          "col": 3,
+          "value": "rate"
+        },
+        "4": {
+          "coord": "D55",
+          "col": 4,
+          "value": "THR_LTIFR"
+        },
+        "5": {
+          "coord": "E55",
+          "col": 5,
+          "value": "S_Scorecard row 17"
+        },
+        "6": {
+          "coord": "F55",
+          "col": 6,
+          "value": "GRI 403-9; ISO 45001 leading practice"
+        }
+      }
+    },
+    {
+      "row": 56,
+      "cells": {
+        "1": {
+          "coord": "A56",
+          "col": 1,
+          "value": "CSI/SED spend minimum"
+        },
+        "2": {
+          "coord": "B56",
+          "col": 2,
+          "value": 0.01
+        },
+        "3": {
+          "coord": "C56",
+          "col": 3,
+          "value": "% of NPAT"
+        },
+        "4": {
+          "coord": "D56",
+          "col": 4,
+          "value": "THR_CSI"
+        },
+        "5": {
+          "coord": "E56",
+          "col": 5,
+          "value": "S_Scorecard row 22"
+        },
+        "6": {
+          "coord": "F56",
+          "col": 6,
+          "value": "B-BBEE SED target = 1% NPAT"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "1": {
+          "coord": "A57",
+          "col": 1,
+          "value": "Local labour procurement target"
+        },
+        "2": {
+          "coord": "B57",
+          "col": 2,
+          "value": 0.4
+        },
+        "3": {
+          "coord": "C57",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D57",
+          "col": 4,
+          "value": "THR_LOCAL"
+        },
+        "5": {
+          "coord": "E57",
+          "col": 5,
+          "value": "S_Scorecard row 24"
+        },
+        "6": {
+          "coord": "F57",
+          "col": 6,
+          "value": "B-BBEE ESD / local content alignment"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "1": {
+          "coord": "A58",
+          "col": 1,
+          "value": "Supplier H&S compliance minimum"
+        },
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": 0.8
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D58",
+          "col": 4,
+          "value": "THR_SUP_HS"
+        },
+        "5": {
+          "coord": "E58",
+          "col": 5,
+          "value": "S_Scorecard row 26"
+        },
+        "6": {
+          "coord": "F58",
+          "col": 6,
+          "value": "IMS-T-149 supplier safety threshold"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "1": {
+          "coord": "A59",
+          "col": 1,
+          "value": "King V score minimum (Apply&Explain)"
+        },
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": 0.7
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D59",
+          "col": 4,
+          "value": "THR_KING"
+        },
+        "5": {
+          "coord": "E59",
+          "col": 5,
+          "value": "G_Scorecard row 5, King5_Scorecard"
+        },
+        "6": {
+          "coord": "F59",
+          "col": 6,
+          "value": "Apply 70%+ for \"Good\" rating"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "1": {
+          "coord": "A60",
+          "col": 1,
+          "value": "Public Interest score threshold"
+        },
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": 500
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": "points"
+        },
+        "4": {
+          "coord": "D60",
+          "col": 4,
+          "value": "THR_PI"
+        },
+        "5": {
+          "coord": "E60",
+          "col": 5,
+          "value": "GARP_GRAP, G_Scorecard row 14"
+        },
+        "6": {
+          "coord": "F60",
+          "col": 6,
+          "value": "Companies Act s93 — mandatory S&EC at 500+"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "1": {
+          "coord": "A61",
+          "col": 1,
+          "value": "Material risks identified minimum"
+        },
+        "2": {
+          "coord": "B61",
+          "col": 2,
+          "value": 10
+        },
+        "3": {
+          "coord": "C61",
+          "col": 3,
+          "value": "count"
+        },
+        "4": {
+          "coord": "D61",
+          "col": 4,
+          "value": "THR_RISKS"
+        },
+        "5": {
+          "coord": "E61",
+          "col": 5,
+          "value": "GARP_GRAP"
+        },
+        "6": {
+          "coord": "F61",
+          "col": 6,
+          "value": "Credible ERM coverage"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "1": {
+          "coord": "A62",
+          "col": 1,
+          "value": "ESG Rating — Excellent (≥)"
+        },
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": 0.85
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D62",
+          "col": 4,
+          "value": "RTG_EXC"
+        },
+        "5": {
+          "coord": "E62",
+          "col": 5,
+          "value": "ESG_Dashboard pillar ratings"
+        },
+        "6": {
+          "coord": "F62",
+          "col": 6,
+          "value": "★★★ tier"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "1": {
+          "coord": "A63",
+          "col": 1,
+          "value": "ESG Rating — Good (≥)"
+        },
+        "2": {
+          "coord": "B63",
+          "col": 2,
+          "value": 0.7
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D63",
+          "col": 4,
+          "value": "RTG_GOOD"
+        },
+        "5": {
+          "coord": "E63",
+          "col": 5,
+          "value": "ESG_Dashboard pillar ratings"
+        },
+        "6": {
+          "coord": "F63",
+          "col": 6,
+          "value": "★★ tier"
+        }
+      }
+    },
+    {
+      "row": 64,
+      "cells": {
+        "1": {
+          "coord": "A64",
+          "col": 1,
+          "value": "ESG Rating — Adequate (≥)"
+        },
+        "2": {
+          "coord": "B64",
+          "col": 2,
+          "value": 0.5
+        },
+        "3": {
+          "coord": "C64",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D64",
+          "col": 4,
+          "value": "RTG_ADEQ"
+        },
+        "5": {
+          "coord": "E64",
+          "col": 5,
+          "value": "ESG_Dashboard pillar ratings"
+        },
+        "6": {
+          "coord": "F64",
+          "col": 6,
+          "value": "★ tier"
+        }
+      }
+    },
+    {
+      "row": 65,
+      "cells": {
+        "1": {
+          "coord": "A65",
+          "col": 1,
+          "value": "Pillar target (FY26)"
+        },
+        "2": {
+          "coord": "B65",
+          "col": 2,
+          "value": 0.75
+        },
+        "3": {
+          "coord": "C65",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D65",
+          "col": 4,
+          "value": "TGT_PILLAR"
+        },
+        "5": {
+          "coord": "E65",
+          "col": 5,
+          "value": "ESG_Dashboard column I"
+        },
+        "6": {
+          "coord": "F65",
+          "col": 6,
+          "value": "Internal stretch target"
+        }
+      }
+    },
+    {
+      "row": 67,
+      "cells": {
+        "1": {
+          "coord": "A67",
+          "col": 1,
+          "value": "BLOCK 3 — B-BBEE GENERIC CODES  (Statement 000 — Generic Scorecard weights — for B_BBEE_ESG sheet)"
+        }
+      }
+    },
+    {
+      "row": 68,
+      "cells": {
+        "1": {
+          "coord": "A68",
+          "col": 1,
+          "value": "Ownership"
+        },
+        "2": {
+          "coord": "B68",
+          "col": 2,
+          "value": 25
+        },
+        "3": {
+          "coord": "C68",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D68",
+          "col": 4,
+          "value": "BB_OWN"
+        },
+        "5": {
+          "coord": "E68",
+          "col": 5,
+          "value": "Statement 100"
+        },
+        "6": {
+          "coord": "F68",
+          "col": 6,
+          "value": "Governance"
+        }
+      }
+    },
+    {
+      "row": 69,
+      "cells": {
+        "1": {
+          "coord": "A69",
+          "col": 1,
+          "value": "Management Control"
+        },
+        "2": {
+          "coord": "B69",
+          "col": 2,
+          "value": 19
+        },
+        "3": {
+          "coord": "C69",
+          "col": 3,
+          "value": "Black 60%, BlackFem 30%"
+        },
+        "4": {
+          "coord": "D69",
+          "col": 4,
+          "value": "BB_MC"
+        },
+        "5": {
+          "coord": "E69",
+          "col": 5,
+          "value": "Statement 200"
+        },
+        "6": {
+          "coord": "F69",
+          "col": 6,
+          "value": "Social"
+        }
+      }
+    },
+    {
+      "row": 70,
+      "cells": {
+        "1": {
+          "coord": "A70",
+          "col": 1,
+          "value": "Skills Development"
+        },
+        "2": {
+          "coord": "B70",
+          "col": 2,
+          "value": 25
+        },
+        "3": {
+          "coord": "C70",
+          "col": 3,
+          "value": "6% payroll spend"
+        },
+        "4": {
+          "coord": "D70",
+          "col": 4,
+          "value": "BB_SD"
+        },
+        "5": {
+          "coord": "E70",
+          "col": 5,
+          "value": "Statement 300"
+        },
+        "6": {
+          "coord": "F70",
+          "col": 6,
+          "value": "Social"
+        }
+      }
+    },
+    {
+      "row": 71,
+      "cells": {
+        "1": {
+          "coord": "A71",
+          "col": 1,
+          "value": "Enterprise & Supplier Development"
+        },
+        "2": {
+          "coord": "B71",
+          "col": 2,
+          "value": 40
+        },
+        "3": {
+          "coord": "C71",
+          "col": 3,
+          "value": "PP 25/QSE 15"
+        },
+        "4": {
+          "coord": "D71",
+          "col": 4,
+          "value": "BB_ESD"
+        },
+        "5": {
+          "coord": "E71",
+          "col": 5,
+          "value": "Statement 400"
+        },
+        "6": {
+          "coord": "F71",
+          "col": 6,
+          "value": "Social/Governance"
+        }
+      }
+    },
+    {
+      "row": 72,
+      "cells": {
+        "1": {
+          "coord": "A72",
+          "col": 1,
+          "value": "Socio-Economic Development"
+        },
+        "2": {
+          "coord": "B72",
+          "col": 2,
+          "value": 5
+        },
+        "3": {
+          "coord": "C72",
+          "col": 3,
+          "value": "1% NPAT"
+        },
+        "4": {
+          "coord": "D72",
+          "col": 4,
+          "value": "BB_SED"
+        },
+        "5": {
+          "coord": "E72",
+          "col": 5,
+          "value": "Statement 500"
+        },
+        "6": {
+          "coord": "F72",
+          "col": 6,
+          "value": "Social"
+        }
+      }
+    },
+    {
+      "row": 73,
+      "cells": {
+        "1": {
+          "coord": "A73",
+          "col": 1,
+          "value": "TOTAL POINTS"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "BLOCK 4 — B-BBEE STATUS LEVELS  (Generic Code — used by B_BBEE_ESG status formula)"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "Level 1"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": 100
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": "135%"
+        },
+        "4": {
+          "coord": "D76",
+          "col": 4,
+          "value": "LVL_1"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Level 2"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": 95
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": "125%"
+        },
+        "4": {
+          "coord": "D77",
+          "col": 4,
+          "value": "LVL_2"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Level 3"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": 90
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": "110%"
+        },
+        "4": {
+          "coord": "D78",
+          "col": 4,
+          "value": "LVL_3"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "Level 4"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "Level 5"
+        },
+        "2": {
+          "coord": "B80",
+          "col": 2,
+          "value": 75
+        },
+        "3": {
+          "coord": "C80",
+          "col": 3,
+          "value": "80%"
+        },
+        "4": {
+          "coord": "D80",
+          "col": 4,
+          "value": "LVL_5"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "Level 6"
+        }
+      }
+    },
+    {
+      "row": 82,
+      "cells": {
+        "1": {
+          "coord": "A82",
+          "col": 1,
+          "value": "Level 7"
+        },
+        "2": {
+          "coord": "B82",
+          "col": 2,
+          "value": 55
+        },
+        "3": {
+          "coord": "C82",
+          "col": 3,
+          "value": "50%"
+        },
+        "4": {
+          "coord": "D82",
+          "col": 4,
+          "value": "LVL_7"
+        }
+      }
+    },
+    {
+      "row": 83,
+      "cells": {
+        "1": {
+          "coord": "A83",
+          "col": 1,
+          "value": "Level 8"
+        },
+        "2": {
+          "coord": "B83",
+          "col": 2,
+          "value": 40
+        },
+        "3": {
+          "coord": "C83",
+          "col": 3,
+          "value": "10%"
+        },
+        "4": {
+          "coord": "D83",
+          "col": 4,
+          "value": "LVL_8"
+        }
+      }
+    },
+    {
+      "row": 84,
+      "cells": {
+        "1": {
+          "coord": "A84",
+          "col": 1,
+          "value": "Non-compliant"
+        },
+        "2": {
+          "coord": "B84",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C84",
+          "col": 3,
+          "value": "0%"
+        },
+        "4": {
+          "coord": "D84",
+          "col": 4,
+          "value": "LVL_NC"
+        }
+      }
+    },
+    {
+      "row": 86,
+      "cells": {
+        "1": {
+          "coord": "A86",
+          "col": 1,
+          "value": "BLOCK 5 — SCORING RUBRIC  (universal banding logic applied across all scorecards)"
+        }
+      }
+    },
+    {
+      "row": 87,
+      "cells": {
+        "1": {
+          "coord": "A87",
+          "col": 1,
+          "value": "Quantitative — target met"
+        },
+        "2": {
+          "coord": "B87",
+          "col": 2,
+          "value": "Actual ≥ Target"
+        },
+        "3": {
+          "coord": "C87",
+          "col": 3,
+          "value": "Full points"
+        },
+        "4": {
+          "coord": "D87",
+          "col": 4,
+          "value": "✓ Met"
+        },
+        "5": {
+          "coord": "E87",
+          "col": 5,
+          "value": "Diversion 91% vs 75% → full 5 pts"
+        },
+        "6": {
+          "coord": "F87",
+          "col": 6,
+          "value": "Linear ramp up to max"
+        }
+      }
+    },
+    {
+      "row": 88,
+      "cells": {
+        "1": {
+          "coord": "A88",
+          "col": 1,
+          "value": "Quantitative — partial"
+        },
+        "2": {
+          "coord": "B88",
+          "col": 2,
+          "value": "50% ≤ Actual/Target < 100%"
+        },
+        "3": {
+          "coord": "C88",
+          "col": 3,
+          "value": "Pro-rata (50-99%)"
+        },
+        "4": {
+          "coord": "D88",
+          "col": 4,
+          "value": "⚠ Partial"
+        },
+        "5": {
+          "coord": "E88",
+          "col": 5,
+          "value": "Diversion 60% vs 75% → 4 pts"
+        },
+        "6": {
+          "coord": "F88",
+          "col": 6,
+          "value": "MIN(Max, Actual/Target × Max)"
+        }
+      }
+    },
+    {
+      "row": 89,
+      "cells": {
+        "1": {
+          "coord": "A89",
+          "col": 1,
+          "value": "Quantitative — gap"
+        },
+        "2": {
+          "coord": "B89",
+          "col": 2,
+          "value": "Actual/Target < 50%"
+        },
+        "3": {
+          "coord": "C89",
+          "col": 3,
+          "value": "Zero"
+        },
+        "4": {
+          "coord": "D89",
+          "col": 4,
+          "value": "✗ Gap"
+        },
+        "5": {
+          "coord": "E89",
+          "col": 5,
+          "value": "Diversion 30% vs 75% → 0 pts"
+        },
+        "6": {
+          "coord": "F89",
+          "col": 6,
+          "value": "No partial credit below 50%"
+        }
+      }
+    },
+    {
+      "row": 90,
+      "cells": {
+        "1": {
+          "coord": "A90",
+          "col": 1,
+          "value": "Inverse metric (lower better)"
+        },
+        "2": {
+          "coord": "B90",
+          "col": 2,
+          "value": "Actual ≤ Target"
+        },
+        "3": {
+          "coord": "C90",
+          "col": 3,
+          "value": "Full points"
+        },
+        "4": {
+          "coord": "D90",
+          "col": 4,
+          "value": "✓ Met"
+        },
+        "5": {
+          "coord": "E90",
+          "col": 5,
+          "value": "LTIFR 1.5 vs 2.0 → full 8 pts"
+        },
+        "6": {
+          "coord": "F90",
+          "col": 6,
+          "value": "For LTIFR, fatalities, gaps"
+        }
+      }
+    },
+    {
+      "row": 91,
+      "cells": {
+        "1": {
+          "coord": "A91",
+          "col": 1,
+          "value": "Inverse — partial"
+        },
+        "2": {
+          "coord": "B91",
+          "col": 2,
+          "value": "Target < Actual ≤ 2×Target"
+        },
+        "3": {
+          "coord": "C91",
+          "col": 3,
+          "value": "Pro-rata"
+        },
+        "4": {
+          "coord": "D91",
+          "col": 4,
+          "value": "⚠ Partial"
+        },
+        "5": {
+          "coord": "E91",
+          "col": 5,
+          "value": "LTIFR 3.0 vs 2.0 → 4 pts"
+        },
+        "6": {
+          "coord": "F91",
+          "col": 6,
+          "value": "MAX(0, Max × (2-Actual/Target))"
+        }
+      }
+    },
+    {
+      "row": 92,
+      "cells": {
+        "1": {
+          "coord": "A92",
+          "col": 1,
+          "value": "Inverse — gap"
+        },
+        "2": {
+          "coord": "B92",
+          "col": 2,
+          "value": "Actual > 2× Target"
+        },
+        "3": {
+          "coord": "C92",
+          "col": 3,
+          "value": "Zero"
+        },
+        "4": {
+          "coord": "D92",
+          "col": 4,
+          "value": "✗ Gap"
+        },
+        "5": {
+          "coord": "E92",
+          "col": 5,
+          "value": "LTIFR 5.0 vs 2.0 → 0 pts"
+        },
+        "6": {
+          "coord": "F92",
+          "col": 6,
+          "value": "Hard floor"
+        }
+      }
+    },
+    {
+      "row": 93,
+      "cells": {
+        "1": {
+          "coord": "A93",
+          "col": 1,
+          "value": "Binary (Y/N)"
+        },
+        "2": {
+          "coord": "B93",
+          "col": 2,
+          "value": "Yes = full / Partial = 50% / No = 0"
+        },
+        "3": {
+          "coord": "C93",
+          "col": 3,
+          "value": "Full / Half / Zero"
+        },
+        "4": {
+          "coord": "D93",
+          "col": 4,
+          "value": "✓/⚠/✗"
+        },
+        "5": {
+          "coord": "E93",
+          "col": 5,
+          "value": "EE Plan submitted → 5 pts"
+        },
+        "6": {
+          "coord": "F93",
+          "col": 6,
+          "value": "For policy/compliance items"
+        }
+      }
+    },
+    {
+      "row": 94,
+      "cells": {
+        "1": {
+          "coord": "A94",
+          "col": 1,
+          "value": "Existence (count > 0)"
+        },
+        "2": {
+          "coord": "B94",
+          "col": 2,
+          "value": "Source > 0 → full; else 0"
+        },
+        "3": {
+          "coord": "C94",
+          "col": 3,
+          "value": "Full or zero"
+        },
+        "4": {
+          "coord": "D94",
+          "col": 4,
+          "value": "✓ Met / ✗ Gap"
+        },
+        "5": {
+          "coord": "E94",
+          "col": 5,
+          "value": "Fleet diesel logged → 5 pts"
+        },
+        "6": {
+          "coord": "F94",
+          "col": 6,
+          "value": "For \"baseline established\" items"
+        }
+      }
+    },
+    {
+      "row": 95,
+      "cells": {
+        "1": {
+          "coord": "A95",
+          "col": 1,
+          "value": "Trend (YoY)"
+        },
+        "2": {
+          "coord": "B95",
+          "col": 2,
+          "value": "≥ target reduction"
+        },
+        "3": {
+          "coord": "C95",
+          "col": 3,
+          "value": "Full points"
+        },
+        "4": {
+          "coord": "D95",
+          "col": 4,
+          "value": "✓ Met"
+        },
+        "5": {
+          "coord": "E95",
+          "col": 5,
+          "value": "10% YoY → full 10 pts"
+        },
+        "6": {
+          "coord": "F95",
+          "col": 6,
+          "value": "Requires prior-year baseline"
+        }
+      }
+    },
+    {
+      "row": 97,
+      "cells": {
+        "1": {
+          "coord": "A97",
+          "col": 1,
+          "value": "BLOCK 6 — PILLAR WEIGHTS  (used to compute overall ESG score)"
+        }
+      }
+    },
+    {
+      "row": 98,
+      "cells": {
+        "1": {
+          "coord": "A98",
+          "col": 1,
+          "value": "Environmental (E)"
+        },
+        "2": {
+          "coord": "B98",
+          "col": 2,
+          "value": 0.4
+        },
+        "3": {
+          "coord": "C98",
+          "col": 3,
+          "value": 108
+        },
+        "4": {
+          "coord": "D98",
+          "col": 4,
+          "value": "WT_E"
+        },
+        "5": {
+          "coord": "E98",
+          "col": 5,
+          "value": "GHG-weighted; FMCG/Distribution is fuel-intensive"
+        }
+      }
+    },
+    {
+      "row": 99,
+      "cells": {
+        "1": {
+          "coord": "A99",
+          "col": 1,
+          "value": "Social (S)"
+        },
+        "2": {
+          "coord": "B99",
+          "col": 2,
+          "value": 0.3
+        },
+        "3": {
+          "coord": "C99",
+          "col": 3,
+          "value": 100
+        },
+        "4": {
+          "coord": "D99",
+          "col": 4,
+          "value": "WT_S"
+        },
+        "5": {
+          "coord": "E99",
+          "col": 5,
+          "value": "Strong EE Act + SDL exposure in SA market"
+        }
+      }
+    },
+    {
+      "row": 100,
+      "cells": {
+        "1": {
+          "coord": "A100",
+          "col": 1,
+          "value": "Governance (G)"
+        },
+        "2": {
+          "coord": "B100",
+          "col": 2,
+          "value": 0.3
+        },
+        "3": {
+          "coord": "C100",
+          "col": 3,
+          "value": 100
+        },
+        "4": {
+          "coord": "D100",
+          "col": 4,
+          "value": "WT_G"
+        },
+        "5": {
+          "coord": "E100",
+          "col": 5,
+          "value": "King V mandatory for JSE-aligned firms"
+        }
+      }
+    },
+    {
+      "row": 101,
+      "cells": {
+        "1": {
+          "coord": "A101",
+          "col": 1,
+          "value": "TOTAL"
+        },
+        "2": {
+          "coord": "B101",
+          "col": 2,
+          "value": 1
+        },
+        "3": {
+          "coord": "C101",
+          "col": 3,
+          "value": 308
+        },
+        "4": {
+          "coord": "D101",
+          "col": 4,
+          "value": "WT_TOT"
+        },
+        "5": {
+          "coord": "E101",
+          "col": 5,
+          "value": "Must sum to 100%"
+        }
+      }
+    },
+    {
+      "row": 103,
+      "cells": {
+        "1": {
+          "coord": "A103",
+          "col": 1,
+          "value": "BLOCK 7 — ENTITY & REPORTING SETTINGS  (overrides Cover sheet — toggle for template vs live instance)"
+        }
+      }
+    },
+    {
+      "row": 104,
+      "cells": {
+        "1": {
+          "coord": "A104",
+          "col": 1,
+          "value": "Entity name"
+        },
+        "2": {
+          "coord": "B104",
+          "col": 2,
+          "value": "SG Consumer / SuperGroup SG Consumer (Pty) Ltd"
+        },
+        "4": {
+          "coord": "D104",
+          "col": 4,
+          "value": "ENT_NAME"
+        },
+        "5": {
+          "coord": "E104",
+          "col": 5,
+          "value": "Replace with client name on fork"
+        }
+      }
+    },
+    {
+      "row": 105,
+      "cells": {
+        "1": {
+          "coord": "A105",
+          "col": 1,
+          "value": "Reporting period"
+        },
+        "2": {
+          "coord": "B105",
+          "col": 2,
+          "value": "FY 2025/2026  |  Jul 2025 – Jun 2026"
+        },
+        "4": {
+          "coord": "D105",
+          "col": 4,
+          "value": "ENT_FY"
+        },
+        "5": {
+          "coord": "E105",
+          "col": 5,
+          "value": "Used in headers and exports"
+        }
+      }
+    },
+    {
+      "row": 106,
+      "cells": {
+        "1": {
+          "coord": "A106",
+          "col": 1,
+          "value": "Baseline year (SBTi)"
+        },
+        "2": {
+          "coord": "B106",
+          "col": 2,
+          "value": "FY 2025/26"
+        },
+        "4": {
+          "coord": "D106",
+          "col": 4,
+          "value": "ENT_BASE"
+        },
+        "5": {
+          "coord": "E106",
+          "col": 5,
+          "value": "Locks Scope 1+2 baseline for YoY"
+        }
+      }
+    },
+    {
+      "row": 107,
+      "cells": {
+        "1": {
+          "coord": "A107",
+          "col": 1,
+          "value": "Net-zero target year"
+        },
+        "2": {
+          "coord": "B107",
+          "col": 2,
+          "value": 2050
+        },
+        "4": {
+          "coord": "D107",
+          "col": 4,
+          "value": "ENT_NZ"
+        },
+        "5": {
+          "coord": "E107",
+          "col": 5,
+          "value": "SBTi CNZS 2.0"
+        }
+      }
+    },
+    {
+      "row": 108,
+      "cells": {
+        "1": {
+          "coord": "A108",
+          "col": 1,
+          "value": "B-BBEE sector code"
+        },
+        "2": {
+          "coord": "B108",
+          "col": 2,
+          "value": "Generic Code (Statement 000)"
+        },
+        "4": {
+          "coord": "D108",
+          "col": 4,
+          "value": "ENT_BBEE"
+        },
+        "5": {
+          "coord": "E108",
+          "col": 5,
+          "value": "Toggle: Generic / Transport / Agri / etc."
+        }
+      }
+    },
+    {
+      "row": 109,
+      "cells": {
+        "1": {
+          "coord": "A109",
+          "col": 1,
+          "value": "Currency"
+        },
+        "2": {
+          "coord": "B109",
+          "col": 2,
+          "value": "ZAR"
+        },
+        "4": {
+          "coord": "D109",
+          "col": 4,
+          "value": "ENT_CCY"
+        },
+        "5": {
+          "coord": "E109",
+          "col": 5,
+          "value": "For Carbon Tax + CSI"
+        }
+      }
+    },
+    {
+      "row": 110,
+      "cells": {
+        "1": {
+          "coord": "A110",
+          "col": 1,
+          "value": "Consultant"
+        },
+        "2": {
+          "coord": "B110",
+          "col": 2,
+          "value": "Okiru Consulting  |  www.okiru.co.za"
+        },
+        "4": {
+          "coord": "D110",
+          "col": 4,
+          "value": "ENT_CONS"
+        },
+        "5": {
+          "coord": "E110",
+          "col": 5,
+          "value": "Branding"
+        }
+      }
+    },
+    {
+      "row": 111,
+      "cells": {
+        "1": {
+          "coord": "A111",
+          "col": 1,
+          "value": "Number of data months (current)"
+        },
+        "2": {
+          "coord": "B111",
+          "col": 2,
+          "value": 9
+        },
+        "4": {
+          "coord": "D111",
+          "col": 4,
+          "value": "ENT_MOS"
+        },
+        "5": {
+          "coord": "E111",
+          "col": 5,
+          "value": "Used to annualise YTD for full-year projection"
+        }
+      }
+    },
+    {
+      "row": 112,
+      "cells": {
+        "1": {
+          "coord": "A112",
+          "col": 1,
+          "value": "Annualisation factor"
+        },
+        "2": {
+          "coord": "B112",
+          "col": 2,
+          "value": 1.3333333333,
+          "formula": "=12/B111"
+        },
+        "4": {
+          "coord": "D112",
+          "col": 4,
+          "value": "ENT_ANN"
+        },
+        "5": {
+          "coord": "E112",
+          "col": 5,
+          "value": "Auto: 12 ÷ months entered"
+        }
+      }
+    }
+  ]
+}

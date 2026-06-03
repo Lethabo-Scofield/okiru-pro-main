@@ -1,0 +1,704 @@
+{
+  "sheet_name": "Carbon_Tax",
+  "sanitized_name": "Carbon_Tax",
+  "dimensions": {
+    "max_row": 29,
+    "max_column": 6
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 46,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "💰  CARBON TAX LIABILITY CALCULATOR  |  SA Carbon Tax Act, Section 12  |  Tier 1 + Tier 2 sensitivity"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Liability = (Scope 1+2 tCO₂e × (1 - Basic Allowance)) × Carbon Tax Rate. Display mode controlled by Assumptions!B13. Currency follows Assumptions!B11."
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "EMISSIONS BASE — pulled from E_Data GHG Summary"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Scope"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Activity"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "tCO₂e YTD"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Annualised"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Taxable (after 60% allow.)"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Source"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Scope 1A"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "Fleet diesel"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 589465.53,
+          "formula": "=IFERROR(E_Data!L75,0)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 785954.04,
+          "formula": "=C6*Assumptions!$B$112"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 314381.616,
+          "formula": "=D6*(1-Assumptions!$B$39)"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "E_Data row 75 (annualised × 40% taxable)"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Scope 1B"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "Generator diesel"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 2181.14,
+          "formula": "=IFERROR(E_Data!L76,0)"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 2908.1866666667,
+          "formula": "=C7*Assumptions!$B$112"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 1163.2746666667,
+          "formula": "=D7*(1-Assumptions!$B$39)"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "E_Data row 76"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Scope 1C"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "LPG (forklifts)"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 2280,
+          "formula": "=IFERROR(E_Data!L77,0)"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 3040,
+          "formula": "=C8*Assumptions!$B$112"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 1216,
+          "formula": "=D8*(1-Assumptions!$B$39)"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "E_Data row 77"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Scope 1D"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Business cars"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 1053.82,
+          "formula": "=IFERROR(E_Data!L78,0)"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 1405.0933333333,
+          "formula": "=C9*Assumptions!$B$112"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 562.0373333333,
+          "formula": "=D9*(1-Assumptions!$B$39)"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "E_Data row 78"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Scope 2"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Electricity (grid, net of solar)"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": 2589578.44,
+          "formula": "=IFERROR(E_Data!L82,0)"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 3452771.25333333,
+          "formula": "=C10*Assumptions!$B$112"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 1381108.50133333,
+          "formula": "=D10*(1-Assumptions!$B$39)"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "E_Data row 82 (Scope 2 NET, after solar offset)"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "TOTAL TAXABLE"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": 3184558.93,
+          "formula": "=SUM(C6:C10)"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 4246078.57333333,
+          "formula": "=SUM(D6:D10)"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 1698431.42933333,
+          "formula": "=SUM(E6:E10)"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "LIABILITY CALCULATION — TIER 1 (CURRENT) vs TIER 2 (ESCALATED)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Metric"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "Tier 1 (Current)"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "Tier 2 (Escalated)"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "Delta"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "Display?"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "Notes"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Rate (currency/tCO₂e)"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": 236,
+          "formula": "=Assumptions!B37"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 640,
+          "formula": "=Assumptions!B38"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 404,
+          "formula": "=C15-B15"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Both",
+          "formula": "=IF(Assumptions!$B$15=\"Both (current + escalated)\",\"Both\",IF(Assumptions!$B$15=\"Escalated Tier 2 only\",\"Tier 2 only\",\"Tier 1 only\"))"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Rate from Assumptions TAX_T1 / TAX_T2"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Annual liability (taxable × rate)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": 400829817.322667,
+          "formula": "=E11*B15"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 1086996114.77333,
+          "formula": "=E11*C15"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 686166297.450667,
+          "formula": "=C16-B16"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "Annualised taxable tCO₂e × rate per tCO₂e"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Annual liability (formatted)"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": " 400,829,817",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(B16,\"#,##0\")"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": " 1,086,996,115",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(C16,\"#,##0\")"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": " 686,166,297",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(D16,\"#,##0\")"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "MITIGATION SCENARIOS — what-if liability reduction"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Scenario"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Tier 1 saving"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Tier 2 saving"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Capex est."
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "Payback"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "Notes"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Solar PV → 20% of grid demand"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": 65188321.2629333,
+          "formula": "=IFERROR(E10*0.2*B15,0)"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": 176781888.170667,
+          "formula": "=IFERROR(E10*0.2*C15,0)"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": 4500000
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 0.0293008304,
+          "formula": "=IFERROR(D21/MAX(1,B21+C21/2),\"\")"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "Capex assumed R4.5M for 5-depot PV roll-out (R900k per depot)"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Eco-driving training → -10% L/100km"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": 7419406.1376,
+          "formula": "=IFERROR(E6*0.1*B15,0)"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": 20120423.424,
+          "formula": "=IFERROR(E6*0.1*C15,0)"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": 350000
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": 0.020023321,
+          "formula": "=IFERROR(D22/MAX(1,B22+C22/2),\"\")"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "Training cost ~R4,500 per driver × 77 drivers"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "EV fleet → 20% transition"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": 14838812.2752,
+          "formula": "=IFERROR(E6*0.2*B15,0)"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 40240846.848,
+          "formula": "=IFERROR(E6*0.2*C15,0)"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 18000000
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": 0.5148853984,
+          "formula": "=IFERROR(D23/MAX(1,B23+C23/2),\"\")"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "Capex est: 27 vehicles × R670k diff vs diesel"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "TOTAL MITIGATION POTENTIAL"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": 87446539.6757333,
+          "formula": "=SUM(B21:B23)"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 237143158.442667,
+          "formula": "=SUM(C21:C23)"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 22850000,
+          "formula": "=SUM(D21:D23)"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "NET LIABILITY POSITION — pre and post mitigation"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Pre-mitigation annual liability"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": " 400,829,817",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(B16,\"#,##0\")"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": " 1,086,996,115",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(C16,\"#,##0\")"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Post-mitigation (all 3 scenarios)"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": " 313,383,278",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(MAX(0,B16-B24),\"#,##0\")"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": " 849,852,956",
+          "formula": "=Assumptions!$B$14&\" \"&TEXT(MAX(0,C16-C24),\"#,##0\")"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "% reduction"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": 0.218163759,
+          "formula": "=IFERROR(B24/B16,0)"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": 0.218163759,
+          "formula": "=IFERROR(C24/C16,0)"
+        }
+      }
+    }
+  ]
+}

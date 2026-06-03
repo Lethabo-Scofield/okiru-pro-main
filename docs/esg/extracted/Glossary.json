@@ -1,0 +1,2303 @@
+{
+  "sheet_name": "Glossary",
+  "sanitized_name": "Glossary",
+  "dimensions": {
+    "max_row": 101,
+    "max_column": 5
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 0,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "📖  GLOSSARY  —  Technical terminology, definitions, and source citations"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Every technical term used in this toolkit with its plain-English definition and authoritative source. Cell comments throughout the workbook point back to this glossary. Where a term has both an international standard reference and a South African legal reference, both are cited."
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Term"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Acronym"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Definition"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Source / Standard"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "See also"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "GHG / EMISSIONS"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Greenhouse Gas"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "GHG"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Atmospheric gases that trap heat: CO₂, CH₄ (methane), N₂O (nitrous oxide), HFCs, PFCs, SF₆, NF₃."
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Kyoto Protocol; IPCC AR6"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Carbon dioxide equivalent"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "CO₂e / tCO₂e"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Common unit for GHGs. Converts each gas to equivalent warming impact of CO₂ over 100 years using GWP factors."
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "IPCC AR6 GWP100"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "GWP"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Global Warming Potential"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "GWP"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Multiplier converting non-CO₂ gases to CO₂e. CH₄ = 27.9, N₂O = 273, SF₆ = 25,200."
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "IPCC AR6"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Scope 1 emissions"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Scope 1"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "Direct emissions from owned/controlled sources. Fleet fuel, generators, on-site combustion, refrigerant leaks."
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "GHG Protocol Corp. Standard Ch. 4"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "GHG Protocol"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Scope 2 emissions"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Scope 2"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Indirect emissions from purchased electricity, steam, heating, cooling."
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "GHG Protocol Scope 2 Guidance"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "Location-based, Market-based"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Scope 3 emissions"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Scope 3"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "All other indirect emissions across the value chain (15 categories incl. purchased goods, business travel, employee commute, waste, water, downstream transport)."
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "GHG Protocol Corp. Value Chain Standard"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "15 Scope 3 categories"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Emission Factor"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "EF"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Coefficient converting activity data (litres, kWh, kg) into emissions (kgCO₂e). e.g. diesel = 2.68 kgCO₂e/L."
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "DEFRA 2024; IPCC; Eskom NERSA"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "GHG Protocol"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "World Resources Institute/WBCSD standard for corporate GHG accounting. The foundational reference for Scope 1/2/3 classification."
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "ghgprotocol.org"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Science Based Targets initiative"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "SBTi"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Voluntary framework defining \"credible\" emissions reduction targets aligned to limiting warming to 1.5°C / well-below 2°C."
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "sciencebasedtargets.org"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "CNZS 2.0"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Corporate Net Zero Standard"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "CNZS 2.0"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "SBTi standard requiring ≥90% emissions reduction across all scopes by long-term target year, with residuals neutralised via permanent removals."
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "SBTi CNZS v2.0 (2024)"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "Net-zero, Neutralisation"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "RE100"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Global initiative committing members to 100% renewable electricity."
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "there100.org"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Carbon Tax (SA)"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "South African Carbon Tax Act 15 of 2019, Section 12L. Levy on Scope 1+2 emissions above the basic 60% tax-free allowance. Tier 1 rate R236/tCO₂e (2025); escalating."
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "Carbon Tax Act 15 of 2019"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Section 12L allowance"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Section 12L allowance"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "12L"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "Income Tax Act §12L. 60% basic tax-free emissions allowance for industrial/commercial firms. Reduces taxable Scope 1+2 base."
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "Income Tax Act s12L; SARS guidance"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "TRANSPORT EMISSIONS (ISO 14083 / GLEC)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "ISO 14083"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "International standard for quantifying GHG emissions from transport chains. Defines journey-level calculation, allocation methods, and intensity metrics."
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "ISO 14083:2023"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "GLEC, tonne-km"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "GLEC Framework"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "GLEC"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Global Logistics Emissions Council framework. The practical methodology that operationalises ISO 14083 for industry. Maintained by Smart Freight Centre."
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "smartfreightcentre.org"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "ISO 14083"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Tonne-kilometre"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "t·km / TKM"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "Activity unit for transport emissions: 1 tonne of cargo moved 1 km. Calculated as Load (t) × Distance (km)."
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "ISO 14083 §6.2"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Emissions intensity (transport)"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "gCO₂e/t·km"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "Grams of CO₂e per tonne-kilometre. Standard transport KPI. Benchmark for heavy road freight: 80 g/t·km (GLEC)."
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "GLEC Framework v3.0"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "TKM"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Fuel-based method"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "ISO 14083 preferred method. Calculate emissions from actual fuel consumed × emission factor. Highest data quality."
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "ISO 14083 §7.2"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Distance-based method"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "Fallback when fuel data unavailable. Multiplies distance × vehicle-class default emission factor."
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "ISO 14083 §7.3"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Allocation (transport)"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "Splitting trip emissions across multiple customers/shipments. Bases: weight, volume, distance, revenue, equal-share."
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "ISO 14083 §8"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Backhaul / Empty trip"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "Unloaded return leg. Emissions of an empty trip are typically allocated to the loaded trip(s)."
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "GLEC Framework"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "ESG REPORTING STANDARDS"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Environmental, Social, Governance"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "ESG"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "Three-pillar framework for non-financial corporate performance disclosure."
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "IFRS S1"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "S1"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "IFRS Sustainability Disclosure Standard 1: General requirements for sustainability-related financial disclosures."
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "ISSB IFRS S1 (2023)"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "IFRS S2"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "S2"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "IFRS Sustainability Disclosure Standard 2: Climate-related disclosures. Incorporates TCFD recommendations."
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "ISSB IFRS S2 (2023)"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "TCFD"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "TCFD"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "TCFD"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "Task Force on Climate-related Financial Disclosures. Four-pillar climate disclosure framework: Governance, Strategy, Risk Management, Metrics & Targets. Subsumed by IFRS S2 from 2024."
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "TCFD Recommendations (2017)"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "IFRS S2"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "GRI Standards"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "GRI"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "Global Reporting Initiative — most widely used voluntary sustainability disclosure standard. Universal (GRI 1-3) + Topic (200/300/400 series)."
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "globalreporting.org"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "ESRS"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "ESRS"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "European Sustainability Reporting Standards. Mandatory under EU CSRD. Stricter than IFRS — requires double materiality."
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "EFRAG / EU CSRD"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": "CSRD, Double Materiality"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "CSRD"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "CSRD"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "Corporate Sustainability Reporting Directive (EU). Phased mandate from 2024. Requires ESRS-compliant reporting + assurance."
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "EU Directive 2022/2464"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": "ESRS"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "Single materiality"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "Financial materiality only — what impacts the company. IFRS approach."
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "IFRS S1"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "Double materiality"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "Financial materiality + impact materiality (how company impacts environment/society). ESRS approach."
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "EFRAG / ESRS 1"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "Materiality"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "Information is material if its omission/misstatement would influence stakeholder decisions. Quantified via materiality matrix."
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": "IASB Conceptual Framework"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "1": {
+          "coord": "A38",
+          "col": 1,
+          "value": "Materiality Matrix"
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": "Plot of issues by impact (x-axis) vs likelihood/stakeholder interest (y-axis). Highlights priority topics."
+        },
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": "GRI 3 (2021)"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "1": {
+          "coord": "A39",
+          "col": 1,
+          "value": "GOVERNANCE (KING V / SA)"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "1": {
+          "coord": "A40",
+          "col": 1,
+          "value": "King V Code"
+        },
+        "2": {
+          "coord": "B40",
+          "col": 2,
+          "value": "King V"
+        },
+        "3": {
+          "coord": "C40",
+          "col": 3,
+          "value": "South African corporate governance code. 17 principles applying \"Apply & Explain\" methodology. Mandatory for JSE-listed firms."
+        },
+        "4": {
+          "coord": "D40",
+          "col": 4,
+          "value": "IoDSA King V Report (2024)"
+        },
+        "5": {
+          "coord": "E40",
+          "col": 5,
+          "value": "Apply & Explain"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "Apply & Explain"
+        },
+        "3": {
+          "coord": "C41",
+          "col": 3,
+          "value": "King V methodology: governing body either confirms application of a principle (and explains how) or explains non-application."
+        },
+        "4": {
+          "coord": "D41",
+          "col": 4,
+          "value": "King V Code"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "1": {
+          "coord": "A42",
+          "col": 1,
+          "value": "Public Interest Score"
+        },
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "PI Score"
+        },
+        "3": {
+          "coord": "C42",
+          "col": 3,
+          "value": "Companies Act §1 calculation determining audit/S&EC requirements. Based on turnover, employee count, beneficial holders, third-party liabilities. ≥500 = mandatory S&EC + independent audit."
+        },
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": "Companies Act 71 of 2008 §1"
+        },
+        "5": {
+          "coord": "E42",
+          "col": 5,
+          "value": "S&EC"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "1": {
+          "coord": "A43",
+          "col": 1,
+          "value": "Social & Ethics Committee"
+        },
+        "2": {
+          "coord": "B43",
+          "col": 2,
+          "value": "S&EC"
+        },
+        "3": {
+          "coord": "C43",
+          "col": 3,
+          "value": "Mandatory committee for companies with PI score ≥500 or listed. Monitors EE, B-BBEE, anti-corruption, consumer relations, CSI, environment."
+        },
+        "4": {
+          "coord": "D43",
+          "col": 4,
+          "value": "Companies Act s72; Reg 43"
+        },
+        "5": {
+          "coord": "E43",
+          "col": 5,
+          "value": "PI Score"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "King V Principle 10"
+        },
+        "2": {
+          "coord": "B44",
+          "col": 2,
+          "value": "P10"
+        },
+        "3": {
+          "coord": "C44",
+          "col": 3,
+          "value": "Risk Governance — board oversight of opportunities and risks (incl. ESG/climate)."
+        },
+        "4": {
+          "coord": "D44",
+          "col": 4,
+          "value": "King V P10"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "King V Principle 15"
+        },
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": "P15"
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": "Disclosure — transparent reporting on the organisation's performance and prospects."
+        },
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": "King V P15"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "Combined Assurance"
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": "Coordinated assurance from management, internal audit, external audit, and specialists across the same risk areas."
+        },
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": "King V P11"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "1": {
+          "coord": "A47",
+          "col": 1,
+          "value": "B-BBEE / TRANSFORMATION"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "1": {
+          "coord": "A48",
+          "col": 1,
+          "value": "Broad-Based Black Economic Empowerment"
+        },
+        "2": {
+          "coord": "B48",
+          "col": 2,
+          "value": "B-BBEE"
+        },
+        "3": {
+          "coord": "C48",
+          "col": 3,
+          "value": "South African legislation driving economic transformation. Generic Scorecard has 5 elements + bonus = 114 points."
+        },
+        "4": {
+          "coord": "D48",
+          "col": 4,
+          "value": "B-BBEE Act 53 of 2003 (amended 2013)"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "1": {
+          "coord": "A49",
+          "col": 1,
+          "value": "Generic Code (Statement 000)"
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "Default B-BBEE scorecard applicable to firms not under a sector charter. 5 elements: Ownership, MC, SD, ESD, SED."
+        },
+        "4": {
+          "coord": "D49",
+          "col": 4,
+          "value": "Codes of Good Practice (2013, amended 2019)"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "Ownership"
+        },
+        "2": {
+          "coord": "B50",
+          "col": 2,
+          "value": "BB_OWN"
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": "B-BBEE Element 1 (25 pts). % Black ownership in entity. Statement 100."
+        },
+        "4": {
+          "coord": "D50",
+          "col": 4,
+          "value": "Statement 100"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "1": {
+          "coord": "A51",
+          "col": 1,
+          "value": "Management Control"
+        },
+        "2": {
+          "coord": "B51",
+          "col": 2,
+          "value": "MC"
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": "B-BBEE Element 2 (19 pts). Black representation at board/senior management. Statement 200."
+        },
+        "4": {
+          "coord": "D51",
+          "col": 4,
+          "value": "Statement 200"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "1": {
+          "coord": "A52",
+          "col": 1,
+          "value": "Skills Development"
+        },
+        "2": {
+          "coord": "B52",
+          "col": 2,
+          "value": "SD"
+        },
+        "3": {
+          "coord": "C52",
+          "col": 3,
+          "value": "B-BBEE Element 3 (25 pts). 6% payroll spend on Black training. Statement 300."
+        },
+        "4": {
+          "coord": "D52",
+          "col": 4,
+          "value": "Statement 300"
+        },
+        "5": {
+          "coord": "E52",
+          "col": 5,
+          "value": "SDL, WSP, ATR"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "1": {
+          "coord": "A53",
+          "col": 1,
+          "value": "Enterprise & Supplier Development"
+        },
+        "2": {
+          "coord": "B53",
+          "col": 2,
+          "value": "ESD"
+        },
+        "3": {
+          "coord": "C53",
+          "col": 3,
+          "value": "B-BBEE Element 4 (40 pts). Preferential procurement + supplier dev contributions. Statement 400."
+        },
+        "4": {
+          "coord": "D53",
+          "col": 4,
+          "value": "Statement 400"
+        },
+        "5": {
+          "coord": "E53",
+          "col": 5,
+          "value": "Preferential Procurement"
+        }
+      }
+    },
+    {
+      "row": 54,
+      "cells": {
+        "1": {
+          "coord": "A54",
+          "col": 1,
+          "value": "Socio-Economic Development"
+        },
+        "2": {
+          "coord": "B54",
+          "col": 2,
+          "value": "SED"
+        },
+        "3": {
+          "coord": "C54",
+          "col": 3,
+          "value": "B-BBEE Element 5 (5 pts). 1% NPAT spend on CSI for Black beneficiaries. Statement 500."
+        },
+        "4": {
+          "coord": "D54",
+          "col": 4,
+          "value": "Statement 500"
+        },
+        "5": {
+          "coord": "E54",
+          "col": 5,
+          "value": "CSI, NPAT"
+        }
+      }
+    },
+    {
+      "row": 55,
+      "cells": {
+        "1": {
+          "coord": "A55",
+          "col": 1,
+          "value": "Modified Flow-Through"
+        },
+        "2": {
+          "coord": "B55",
+          "col": 2,
+          "value": "MFT"
+        },
+        "3": {
+          "coord": "C55",
+          "col": 3,
+          "value": "Ownership calculation method. Where a Black-owned entity holds ≥51% of a measured entity, treat that holding as 100% Black for one level only."
+        },
+        "4": {
+          "coord": "D55",
+          "col": 4,
+          "value": "Statement 100 §3.2.10"
+        },
+        "5": {
+          "coord": "E55",
+          "col": 5,
+          "value": "Flow-Through"
+        }
+      }
+    },
+    {
+      "row": 56,
+      "cells": {
+        "1": {
+          "coord": "A56",
+          "col": 1,
+          "value": "Flow-Through Principle"
+        },
+        "3": {
+          "coord": "C56",
+          "col": 3,
+          "value": "Default ownership calculation — multiply Black % through each level of holding company structure."
+        },
+        "4": {
+          "coord": "D56",
+          "col": 4,
+          "value": "Statement 100 §3.2.9"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "1": {
+          "coord": "A57",
+          "col": 1,
+          "value": "Exempt Micro Enterprise"
+        },
+        "2": {
+          "coord": "B57",
+          "col": 2,
+          "value": "EME"
+        },
+        "3": {
+          "coord": "C57",
+          "col": 3,
+          "value": "Annual turnover ≤R10m. Auto-Level 4 (Generic) or Level 2 (≥51% Black-owned). Affidavit-based."
+        },
+        "4": {
+          "coord": "D57",
+          "col": 4,
+          "value": "B-BBEE Codes"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "1": {
+          "coord": "A58",
+          "col": 1,
+          "value": "Qualifying Small Enterprise"
+        },
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": "QSE"
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": "Annual turnover R10m–R50m. Simplified scorecard with 4 elements."
+        },
+        "4": {
+          "coord": "D58",
+          "col": 4,
+          "value": "B-BBEE Codes"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "1": {
+          "coord": "A59",
+          "col": 1,
+          "value": "Affidavit"
+        },
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": "AFR"
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": "Sworn statement confirming EME/QSE status. Replaces verified certificate for EMEs."
+        },
+        "4": {
+          "coord": "D59",
+          "col": 4,
+          "value": "B-BBEE Practice Note"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "1": {
+          "coord": "A60",
+          "col": 1,
+          "value": "Preferential Procurement"
+        },
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": "PP"
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": "B-BBEE points awarded for buying from Level 1-8 suppliers. 25 of the 40 ESD points."
+        },
+        "4": {
+          "coord": "D60",
+          "col": 4,
+          "value": "Statement 400"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "1": {
+          "coord": "A61",
+          "col": 1,
+          "value": "EMPLOYMENT EQUITY / SKILLS"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "1": {
+          "coord": "A62",
+          "col": 1,
+          "value": "Employment Equity Act"
+        },
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": "EEA"
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": "South African legislation requiring designated employers to eliminate unfair discrimination and implement affirmative action."
+        },
+        "4": {
+          "coord": "D62",
+          "col": 4,
+          "value": "EEA 55 of 1998 (amended 2022)"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "1": {
+          "coord": "A63",
+          "col": 1,
+          "value": "EEA2 Report"
+        },
+        "2": {
+          "coord": "B63",
+          "col": 2,
+          "value": "EEA2"
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": "Annual employment equity report submitted to Department of Employment & Labour (DoEL). Breaks down workforce by race, gender, disability across 6 occupational levels."
+        },
+        "4": {
+          "coord": "D63",
+          "col": 4,
+          "value": "EEA s21"
+        }
+      }
+    },
+    {
+      "row": 64,
+      "cells": {
+        "1": {
+          "coord": "A64",
+          "col": 1,
+          "value": "Occupational Levels"
+        },
+        "2": {
+          "coord": "B64",
+          "col": 2,
+          "value": "EEA2 L1-L6"
+        },
+        "3": {
+          "coord": "C64",
+          "col": 3,
+          "value": "Standard SA occupational level classification: L1 Top Mgmt, L2 Senior Mgmt, L3 Professionally Qualified, L4 Skilled Technical, L5 Semi-Skilled, L6 Unskilled."
+        },
+        "4": {
+          "coord": "D64",
+          "col": 4,
+          "value": "EEA2 schedule"
+        }
+      }
+    },
+    {
+      "row": 65,
+      "cells": {
+        "1": {
+          "coord": "A65",
+          "col": 1,
+          "value": "Persons with Disabilities"
+        },
+        "2": {
+          "coord": "B65",
+          "col": 2,
+          "value": "PWD"
+        },
+        "3": {
+          "coord": "C65",
+          "col": 3,
+          "value": "EEA-recognised disabled persons. Target: ≥2% of workforce."
+        },
+        "4": {
+          "coord": "D65",
+          "col": 4,
+          "value": "EEA s6 + Code of Good Practice on PWD"
+        }
+      }
+    },
+    {
+      "row": 66,
+      "cells": {
+        "1": {
+          "coord": "A66",
+          "col": 1,
+          "value": "Workplace Skills Plan"
+        },
+        "2": {
+          "coord": "B66",
+          "col": 2,
+          "value": "WSP"
+        },
+        "3": {
+          "coord": "C66",
+          "col": 3,
+          "value": "Annual training plan submitted to SETA by 30 April. Sets out training to be delivered."
+        },
+        "4": {
+          "coord": "D66",
+          "col": 4,
+          "value": "Skills Development Act 97 of 1998 s10"
+        },
+        "5": {
+          "coord": "E66",
+          "col": 5,
+          "value": "SETA, ATR"
+        }
+      }
+    },
+    {
+      "row": 67,
+      "cells": {
+        "1": {
+          "coord": "A67",
+          "col": 1,
+          "value": "Annual Training Report"
+        },
+        "2": {
+          "coord": "B67",
+          "col": 2,
+          "value": "ATR"
+        },
+        "3": {
+          "coord": "C67",
+          "col": 3,
+          "value": "Annual report on training actually delivered. Submitted with WSP by 30 April."
+        },
+        "4": {
+          "coord": "D67",
+          "col": 4,
+          "value": "SDL Act s10"
+        },
+        "5": {
+          "coord": "E67",
+          "col": 5,
+          "value": "WSP"
+        }
+      }
+    },
+    {
+      "row": 68,
+      "cells": {
+        "1": {
+          "coord": "A68",
+          "col": 1,
+          "value": "Sector Education & Training Authority"
+        },
+        "2": {
+          "coord": "B68",
+          "col": 2,
+          "value": "SETA"
+        },
+        "3": {
+          "coord": "C68",
+          "col": 3,
+          "value": "Industry-specific authority for skills development. TETA (Transport), WRSETA (Wholesale & Retail), etc."
+        },
+        "4": {
+          "coord": "D68",
+          "col": 4,
+          "value": "SDL Act s9"
+        }
+      }
+    },
+    {
+      "row": 69,
+      "cells": {
+        "1": {
+          "coord": "A69",
+          "col": 1,
+          "value": "Skills Development Levy"
+        },
+        "2": {
+          "coord": "B69",
+          "col": 2,
+          "value": "SDL"
+        },
+        "3": {
+          "coord": "C69",
+          "col": 3,
+          "value": "1% of payroll levy paid to SARS, distributed to SETAs. WSP/ATR submission unlocks mandatory grant recovery (20% of levy)."
+        },
+        "4": {
+          "coord": "D69",
+          "col": 4,
+          "value": "SDL Act 9 of 1999"
+        }
+      }
+    },
+    {
+      "row": 70,
+      "cells": {
+        "1": {
+          "coord": "A70",
+          "col": 1,
+          "value": "OFO Code"
+        },
+        "2": {
+          "coord": "B70",
+          "col": 2,
+          "value": "OFO"
+        },
+        "3": {
+          "coord": "C70",
+          "col": 3,
+          "value": "Organising Framework for Occupations. National occupation classification used in WSP/ATR submissions. e.g. 911101 = Heavy Motor Vehicle Drivers."
+        },
+        "4": {
+          "coord": "D70",
+          "col": 4,
+          "value": "DoEL OFO 2023"
+        }
+      }
+    },
+    {
+      "row": 71,
+      "cells": {
+        "1": {
+          "coord": "A71",
+          "col": 1,
+          "value": "Mandatory Grant"
+        },
+        "3": {
+          "coord": "C71",
+          "col": 3,
+          "value": "20% of SDL levy returned to employer for compliant WSP/ATR submission."
+        },
+        "4": {
+          "coord": "D71",
+          "col": 4,
+          "value": "SDL Act s11"
+        }
+      }
+    },
+    {
+      "row": 72,
+      "cells": {
+        "1": {
+          "coord": "A72",
+          "col": 1,
+          "value": "Discretionary Grant"
+        },
+        "3": {
+          "coord": "C72",
+          "col": 3,
+          "value": "Up to 49.5% of SDL levy available for SETA-approved training projects (learnerships, bursaries)."
+        },
+        "4": {
+          "coord": "D72",
+          "col": 4,
+          "value": "SDL Act"
+        }
+      }
+    },
+    {
+      "row": 73,
+      "cells": {
+        "1": {
+          "coord": "A73",
+          "col": 1,
+          "value": "HEALTH & SAFETY"
+        }
+      }
+    },
+    {
+      "row": 74,
+      "cells": {
+        "1": {
+          "coord": "A74",
+          "col": 1,
+          "value": "Occupational Health & Safety Act"
+        },
+        "2": {
+          "coord": "B74",
+          "col": 2,
+          "value": "OHS Act"
+        },
+        "3": {
+          "coord": "C74",
+          "col": 3,
+          "value": "South African statute setting workplace H&S obligations."
+        },
+        "4": {
+          "coord": "D74",
+          "col": 4,
+          "value": "OHSA 85 of 1993"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "Lost Time Injury Frequency Rate"
+        },
+        "2": {
+          "coord": "B75",
+          "col": 2,
+          "value": "LTIFR"
+        },
+        "3": {
+          "coord": "C75",
+          "col": 3,
+          "value": "Number of lost-time injuries per 1,000,000 hours worked. Target ≤2.0. = (LTIs × 1,000,000) / hours worked."
+        },
+        "4": {
+          "coord": "D75",
+          "col": 4,
+          "value": "GRI 403-9; ISO 45001"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "Total Recordable Injury Frequency Rate"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": "TRIFR"
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": "Number of LTI + MTI (medical-treatment injuries) per 1,000,000 hours worked. Target ≤4.0."
+        },
+        "4": {
+          "coord": "D76",
+          "col": 4,
+          "value": "GRI 403-9"
+        },
+        "5": {
+          "coord": "E76",
+          "col": 5,
+          "value": "LTI, MTI"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Lost Time Injury"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": "LTI"
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": "Workplace injury resulting in ≥1 shift of lost work."
+        },
+        "4": {
+          "coord": "D77",
+          "col": 4,
+          "value": "GRI 403-9"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Medical Treatment Injury"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": "MTI"
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": "Workplace injury requiring more than first-aid treatment but not lost time."
+        },
+        "4": {
+          "coord": "D78",
+          "col": 4,
+          "value": "GRI 403-9"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "ISO 45001"
+        },
+        "3": {
+          "coord": "C79",
+          "col": 3,
+          "value": "International standard for occupational H&S management systems. Replaced OHSAS 18001 in 2018."
+        },
+        "4": {
+          "coord": "D79",
+          "col": 4,
+          "value": "ISO 45001:2018"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "ENVIRONMENTAL MANAGEMENT"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "ISO 14001"
+        },
+        "3": {
+          "coord": "C81",
+          "col": 3,
+          "value": "International standard for environmental management systems. Plan-Do-Check-Act cycle with aspects register, legal compliance, continuous improvement."
+        },
+        "4": {
+          "coord": "D81",
+          "col": 4,
+          "value": "ISO 14001:2015"
+        },
+        "5": {
+          "coord": "E81",
+          "col": 5,
+          "value": "EMS, Aspects Register"
+        }
+      }
+    },
+    {
+      "row": 82,
+      "cells": {
+        "1": {
+          "coord": "A82",
+          "col": 1,
+          "value": "Environmental Aspect"
+        },
+        "3": {
+          "coord": "C82",
+          "col": 3,
+          "value": "Element of an organisation's activities that interacts with the environment (e.g. fleet diesel combustion = air emissions aspect)."
+        },
+        "4": {
+          "coord": "D82",
+          "col": 4,
+          "value": "ISO 14001 §3.2.2"
+        }
+      }
+    },
+    {
+      "row": 83,
+      "cells": {
+        "1": {
+          "coord": "A83",
+          "col": 1,
+          "value": "NEMA"
+        },
+        "3": {
+          "coord": "C83",
+          "col": 3,
+          "value": "National Environmental Management Act — SA framework act for environmental governance. Section 28 = duty of care."
+        },
+        "4": {
+          "coord": "D83",
+          "col": 4,
+          "value": "NEMA 107 of 1998"
+        }
+      }
+    },
+    {
+      "row": 84,
+      "cells": {
+        "1": {
+          "coord": "A84",
+          "col": 1,
+          "value": "NEMWA"
+        },
+        "3": {
+          "coord": "C84",
+          "col": 3,
+          "value": "National Environmental Management: Waste Act. Defines waste hierarchy, licensing for waste activities."
+        },
+        "4": {
+          "coord": "D84",
+          "col": 4,
+          "value": "NEMWA 59 of 2008"
+        }
+      }
+    },
+    {
+      "row": 85,
+      "cells": {
+        "1": {
+          "coord": "A85",
+          "col": 1,
+          "value": "National Water Act"
+        },
+        "2": {
+          "coord": "B85",
+          "col": 2,
+          "value": "NWA"
+        },
+        "3": {
+          "coord": "C85",
+          "col": 3,
+          "value": "SA legislation governing water use. Section 21 = water use licensing."
+        },
+        "4": {
+          "coord": "D85",
+          "col": 4,
+          "value": "NWA 36 of 1998"
+        }
+      }
+    },
+    {
+      "row": 86,
+      "cells": {
+        "1": {
+          "coord": "A86",
+          "col": 1,
+          "value": "Waste Diversion Rate"
+        },
+        "3": {
+          "coord": "C86",
+          "col": 3,
+          "value": "% of total waste diverted from landfill via recycling, recovery, reuse. Target ≥75% (ISO 14001 / NEMWA hierarchy)."
+        },
+        "4": {
+          "coord": "D86",
+          "col": 4,
+          "value": "NEMWA Waste Hierarchy"
+        }
+      }
+    },
+    {
+      "row": 87,
+      "cells": {
+        "1": {
+          "coord": "A87",
+          "col": 1,
+          "value": "INFORMATION GOVERNANCE"
+        }
+      }
+    },
+    {
+      "row": 88,
+      "cells": {
+        "1": {
+          "coord": "A88",
+          "col": 1,
+          "value": "POPIA"
+        },
+        "3": {
+          "coord": "C88",
+          "col": 3,
+          "value": "Protection of Personal Information Act. SA equivalent of GDPR. Effective from July 2021."
+        },
+        "4": {
+          "coord": "D88",
+          "col": 4,
+          "value": "POPIA 4 of 2013"
+        }
+      }
+    },
+    {
+      "row": 89,
+      "cells": {
+        "1": {
+          "coord": "A89",
+          "col": 1,
+          "value": "Information Officer"
+        },
+        "2": {
+          "coord": "B89",
+          "col": 2,
+          "value": "IO"
+        },
+        "3": {
+          "coord": "C89",
+          "col": 3,
+          "value": "POPIA-mandated role accountable for compliance. Must be registered with Information Regulator."
+        },
+        "4": {
+          "coord": "D89",
+          "col": 4,
+          "value": "POPIA s55"
+        }
+      }
+    },
+    {
+      "row": 90,
+      "cells": {
+        "1": {
+          "coord": "A90",
+          "col": 1,
+          "value": "ISO 27001"
+        },
+        "3": {
+          "coord": "C90",
+          "col": 3,
+          "value": "International standard for information security management systems. ISMS controls aligned to Annex A."
+        },
+        "4": {
+          "coord": "D90",
+          "col": 4,
+          "value": "ISO 27001:2022"
+        }
+      }
+    },
+    {
+      "row": 91,
+      "cells": {
+        "1": {
+          "coord": "A91",
+          "col": 1,
+          "value": "ISO 26000"
+        },
+        "3": {
+          "coord": "C91",
+          "col": 3,
+          "value": "International guidance standard for social responsibility. Not certifiable. 7 core subjects."
+        },
+        "4": {
+          "coord": "D91",
+          "col": 4,
+          "value": "ISO 26000:2010"
+        }
+      }
+    },
+    {
+      "row": 92,
+      "cells": {
+        "1": {
+          "coord": "A92",
+          "col": 1,
+          "value": "RISK MANAGEMENT"
+        }
+      }
+    },
+    {
+      "row": 93,
+      "cells": {
+        "1": {
+          "coord": "A93",
+          "col": 1,
+          "value": "GARP"
+        },
+        "3": {
+          "coord": "C93",
+          "col": 3,
+          "value": "Global Association of Risk Professionals. Source of widely-adopted ERM framework for financial and operational risk."
+        },
+        "4": {
+          "coord": "D93",
+          "col": 4,
+          "value": "garp.org"
+        },
+        "5": {
+          "coord": "E93",
+          "col": 5,
+          "value": "ERM"
+        }
+      }
+    },
+    {
+      "row": 94,
+      "cells": {
+        "1": {
+          "coord": "A94",
+          "col": 1,
+          "value": "GRAP"
+        },
+        "3": {
+          "coord": "C94",
+          "col": 3,
+          "value": "Generally Recognised Accounting Practices. Public sector accounting framework in SA. Used here for \"public interest\" risk alignment."
+        },
+        "4": {
+          "coord": "D94",
+          "col": 4,
+          "value": "ASB GRAP"
+        }
+      }
+    },
+    {
+      "row": 95,
+      "cells": {
+        "1": {
+          "coord": "A95",
+          "col": 1,
+          "value": "Enterprise Risk Management"
+        },
+        "2": {
+          "coord": "B95",
+          "col": 2,
+          "value": "ERM"
+        },
+        "3": {
+          "coord": "C95",
+          "col": 3,
+          "value": "Integrated framework for identifying, assessing, treating, and monitoring risks across the enterprise."
+        },
+        "4": {
+          "coord": "D95",
+          "col": 4,
+          "value": "COSO ERM (2017); ISO 31000"
+        }
+      }
+    },
+    {
+      "row": 96,
+      "cells": {
+        "1": {
+          "coord": "A96",
+          "col": 1,
+          "value": "ISO 31000"
+        },
+        "3": {
+          "coord": "C96",
+          "col": 3,
+          "value": "International standard for risk management principles and guidelines."
+        },
+        "4": {
+          "coord": "D96",
+          "col": 4,
+          "value": "ISO 31000:2018"
+        }
+      }
+    },
+    {
+      "row": 97,
+      "cells": {
+        "1": {
+          "coord": "A97",
+          "col": 1,
+          "value": "FINANCIAL & CORPORATE"
+        }
+      }
+    },
+    {
+      "row": 98,
+      "cells": {
+        "1": {
+          "coord": "A98",
+          "col": 1,
+          "value": "Net Profit After Tax"
+        },
+        "2": {
+          "coord": "B98",
+          "col": 2,
+          "value": "NPAT"
+        },
+        "3": {
+          "coord": "C98",
+          "col": 3,
+          "value": "After-tax profit attributable to shareholders. Base for SED 1% target."
+        }
+      }
+    },
+    {
+      "row": 99,
+      "cells": {
+        "1": {
+          "coord": "A99",
+          "col": 1,
+          "value": "CSI / SED"
+        },
+        "3": {
+          "coord": "C99",
+          "col": 3,
+          "value": "Corporate Social Investment / Socio-Economic Development spend. B-BBEE SED target = 1% NPAT."
+        },
+        "4": {
+          "coord": "D99",
+          "col": 4,
+          "value": "B-BBEE Statement 500"
+        }
+      }
+    },
+    {
+      "row": 100,
+      "cells": {
+        "1": {
+          "coord": "A100",
+          "col": 1,
+          "value": "ISAE 3000"
+        },
+        "3": {
+          "coord": "C100",
+          "col": 3,
+          "value": "International Standard on Assurance Engagements for non-financial assurance (sustainability reports, ESG disclosures)."
+        },
+        "4": {
+          "coord": "D100",
+          "col": 4,
+          "value": "IAASB ISAE 3000"
+        }
+      }
+    },
+    {
+      "row": 101,
+      "cells": {
+        "1": {
+          "coord": "A101",
+          "col": 1,
+          "value": "JSE Listings Requirements"
+        },
+        "3": {
+          "coord": "C101",
+          "col": 3,
+          "value": "Johannesburg Stock Exchange rulebook. Section 8.63 = ESG/sustainability reporting; King V mandatory."
+        },
+        "4": {
+          "coord": "D101",
+          "col": 4,
+          "value": "JSE Listings Requirements"
+        }
+      }
+    }
+  ]
+}

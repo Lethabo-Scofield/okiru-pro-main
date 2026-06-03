@@ -1,0 +1,2829 @@
+{
+  "sheet_name": "S_Data",
+  "sanitized_name": "S_Data",
+  "dimensions": {
+    "max_row": 82,
+    "max_column": 12
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 71,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "S_DATA — SOCIAL RAW DATA  |  H&S · EE Headcount · Training · Community  [Sources: Accidently / HR / SETA / Cority]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "EMPLOYMENT EQUITY — HEADCOUNT BY OCCUPATIONAL LEVEL & RACE  [EEA2 format | Source: HR payroll system]"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Occupational Level"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Af M"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Col M"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Ind M"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Wht M"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Af F"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Col F"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Ind F"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "Wht F"
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": "For M"
+        },
+        "11": {
+          "coord": "K4",
+          "col": 11,
+          "value": "For F"
+        },
+        "12": {
+          "coord": "L4",
+          "col": 12,
+          "value": "TOTAL"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Top Management (EEA2 L1)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B5:K5)"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Senior Management (EEA2 L2)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B6:K6)"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Professionally Qualified (EEA2 L3)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B7:K7)"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Skilled Technical (EEA2 L4)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B8:K8)"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Semi-Skilled (EEA2 L5)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B9:K9)"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Unskilled (EEA2 L6)"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J10",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K10",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L10",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B10:K10)"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Non-Permanent"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J11",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K11",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L11",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(B11:K11)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "TOTAL ALL LEVELS"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": 0,
+          "formula": "=SUM(B5,B6,B7,B8,B9,B10,B11)"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 0,
+          "formula": "=SUM(C5,C6,C7,C8,C9,C10,C11)"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 0,
+          "formula": "=SUM(D5,D6,D7,D8,D9,D10,D11)"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 0,
+          "formula": "=SUM(E5,E6,E7,E8,E9,E10,E11)"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 0,
+          "formula": "=SUM(F5,F6,F7,F8,F9,F10,F11)"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(G5,G6,G7,G8,G9,G10,G11)"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": 0,
+          "formula": "=SUM(H5,H6,H7,H8,H9,H10,H11)"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": 0,
+          "formula": "=SUM(I5,I6,I7,I8,I9,I10,I11)"
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": 0,
+          "formula": "=SUM(J5,J6,J7,J8,J9,J10,J11)"
+        },
+        "11": {
+          "coord": "K12",
+          "col": 11,
+          "value": 0,
+          "formula": "=SUM(K5,K6,K7,K8,K9,K10,K11)"
+        },
+        "12": {
+          "coord": "L12",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(L5,L6,L7,L8,L9,L10,L11)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "EE TARGETS & GAP ANALYSIS  [EEA Section 20 targets]"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Level"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Total"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "% Black"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Target % Black"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "% Black Female"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Target % BlkF"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "% PWD"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Target % PWD"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "Gap Black"
+        },
+        "10": {
+          "coord": "J15",
+          "col": 10,
+          "value": "Score /10"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Top Management (EEA2 L1)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L5"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B5+S_Data!C5+S_Data!D5+S_Data!F5+S_Data!G5+S_Data!H5)/S_Data!L5,0)"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F5+S_Data!G5+S_Data!H5)/S_Data!L5,0)"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C16-D16"
+        },
+        "10": {
+          "coord": "J16",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C16/D16)))"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Senior Management (EEA2 L2)"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L6"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B6+S_Data!C6+S_Data!D6+S_Data!F6+S_Data!G6+S_Data!H6)/S_Data!L6,0)"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F6+S_Data!G6+S_Data!H6)/S_Data!L6,0)"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C17-D17"
+        },
+        "10": {
+          "coord": "J17",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C17/D17)))"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "Professionally Qualified (EEA2 L3)"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L7"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B7+S_Data!C7+S_Data!D7+S_Data!F7+S_Data!G7+S_Data!H7)/S_Data!L7,0)"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F7+S_Data!G7+S_Data!H7)/S_Data!L7,0)"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C18-D18"
+        },
+        "10": {
+          "coord": "J18",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C18/D18)))"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Skilled Technical (EEA2 L4)"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L8"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B8+S_Data!C8+S_Data!D8+S_Data!F8+S_Data!G8+S_Data!H8)/S_Data!L8,0)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F8+S_Data!G8+S_Data!H8)/S_Data!L8,0)"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C19-D19"
+        },
+        "10": {
+          "coord": "J19",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C19/D19)))"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Semi-Skilled (EEA2 L5)"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L9"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B9+S_Data!C9+S_Data!D9+S_Data!F9+S_Data!G9+S_Data!H9)/S_Data!L9,0)"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F9+S_Data!G9+S_Data!H9)/S_Data!L9,0)"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C20-D20"
+        },
+        "10": {
+          "coord": "J20",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C20/D20)))"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Unskilled (EEA2 L6)"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!L10"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B10+S_Data!C10+S_Data!D10+S_Data!F10+S_Data!G10+S_Data!H10)/S_Data!L10,0)"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": 0.55
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!F10+S_Data!G10+S_Data!H10)/S_Data!L10,0)"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": 0.3
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": 0,
+          "formula": "=0"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": 0.02
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": -0.55,
+          "formula": "=C21-D21"
+        },
+        "10": {
+          "coord": "J21",
+          "col": 10,
+          "value": 0,
+          "formula": "=MAX(0,MIN(10,10*(C21/D21)))"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "10": {
+          "coord": "J22",
+          "col": 10,
+          "value": 0,
+          "formula": "=AVERAGE(J16,J17,J18,J19,J20,J21)"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "HEALTH & SAFETY  [ISO 45001 | Source: Accidently system | Cority report | Driver debrief]"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "H&S Metric"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "Q1 Jul-Sep"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "Q2 Oct-Dec"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "Q3 Jan-Mar"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "Q4 Apr-Jun"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "YTD"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "Target"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Total employees (for LTIFR calc)"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "headcount"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": 426
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 426
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": 426
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": 426
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": 426
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "< 2.0"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": "Source: Coba HR data, 426 FTE excl. labour brokers (constant across quarters pending monthly updates)"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Hours worked YTD"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "hours"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C27:F27)"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Fatalities YTD"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Lost Time Injuries YTD"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": 1
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": 2
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": 1
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": 4,
+          "formula": "=SUM(C29:F29)"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "Source: SHE Incidents register Jul-25 to Apr-26 (Wallace Arends, Ndumiso Mkhize, Joseph Sebeko, Tendani Matumba)"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Medical Treatment Injuries (MTI)"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F30",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G30",
+          "col": 7,
+          "value": 3,
+          "formula": "=SUM(C30:F30)"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "First Aid Cases"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C31:F31)"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "Near Miss incidents"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": 1
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": 1,
+          "formula": "=SUM(C32:F32)"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "Vehicle accidents (fleet)"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": 1
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": 4
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": 3
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": 8,
+          "formula": "=SUM(C33:F33)"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "Driver fatigue incidents (debrief)"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "count"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G34",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C34:F34)"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "LTIFR (auto-calc)"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "rate"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G35",
+          "col": 7,
+          "value": "Awaiting hours worked",
+          "formula": "=IF(SUM(C27:F27)>0,SUM(C29:F29)*1000000/SUM(C27:F27),\"Awaiting hours worked\")"
+        },
+        "8": {
+          "coord": "H35",
+          "col": 8,
+          "value": "< 2.0"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "TRIFR (LTI+MTI per M hrs)"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "rate"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": "Awaiting hours worked",
+          "formula": "=IF(SUM(C27:F27)>0,(SUM(C29:F29)+SUM(C30:F30))*1000000/SUM(C27:F27),\"Awaiting hours worked\")"
+        },
+        "8": {
+          "coord": "H36",
+          "col": 8,
+          "value": "< 4.0"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "H&S training hours YTD"
+        },
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "hours"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E37",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G37",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C37:F37)"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "1": {
+          "coord": "A38",
+          "col": 1,
+          "value": "% employees with H&S induction"
+        },
+        "2": {
+          "coord": "B38",
+          "col": 2,
+          "value": "percent"
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E38",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F38",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G38",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C38:F38)"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "1": {
+          "coord": "A39",
+          "col": 1,
+          "value": "Safety files active (all suppliers)"
+        },
+        "2": {
+          "coord": "B39",
+          "col": 2,
+          "value": "Yes/No"
+        },
+        "3": {
+          "coord": "C39",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D39",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E39",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F39",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G39",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(C39:F39)"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "WSP / ATR — WORKPLACE SKILLS PLAN & ANNUAL TRAINING REPORT  [Source: HR | SETA submission | SDL returns]"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "1": {
+          "coord": "A42",
+          "col": 1,
+          "value": "Metric"
+        },
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C42",
+          "col": 3,
+          "value": "Target/Requirement"
+        },
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": "Score /5"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "1": {
+          "coord": "A43",
+          "col": 1,
+          "value": "Leviable payroll (R)"
+        },
+        "2": {
+          "coord": "B43",
+          "col": 2,
+          "value": 10331940.87
+        },
+        "3": {
+          "coord": "C43",
+          "col": 3,
+          "value": "SDL Act s3"
+        },
+        "5": {
+          "coord": "E43",
+          "col": 5,
+          "value": "Source: SG Consumer (Coba) HR data — payroll excl. labour brokers, 27 May 2026"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "SDL levy paid (1% of payroll)"
+        },
+        "2": {
+          "coord": "B44",
+          "col": 2,
+          "value": 103319.4087,
+          "formula": "=IFERROR(B43*0.01,0)"
+        },
+        "3": {
+          "coord": "C44",
+          "col": 3,
+          "value": "1% mandatory"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "WSP submitted to SETA (Y/N)"
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": "Yes by 30 Apr"
+        },
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": 0,
+          "formula": "=IF(B45=\"Yes\",5,0)"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "ATR submitted to SETA (Y/N)"
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": "Yes by 30 Apr"
+        },
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": 0,
+          "formula": "=IF(B46=\"Yes\",5,0)"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "1": {
+          "coord": "A47",
+          "col": 1,
+          "value": "Mandatory grant claimed (R)"
+        },
+        "3": {
+          "coord": "C47",
+          "col": 3,
+          "value": "20% of SDL levy"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "1": {
+          "coord": "A48",
+          "col": 1,
+          "value": "Discretionary grant applied (R)"
+        },
+        "3": {
+          "coord": "C48",
+          "col": 3,
+          "value": "Up to 49.5%"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "1": {
+          "coord": "A49",
+          "col": 1,
+          "value": "Total training hours delivered"
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "≥40 hrs/employee"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "Training spend (R)"
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": "≥1% payroll"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "1": {
+          "coord": "A51",
+          "col": 1,
+          "value": "% employees with training YTD"
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": "≥80%"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "1": {
+          "coord": "A52",
+          "col": 1,
+          "value": "Black employees trained (%)"
+        },
+        "3": {
+          "coord": "C52",
+          "col": 3,
+          "value": "≥70% of trained"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "1": {
+          "coord": "A53",
+          "col": 1,
+          "value": "Female employees trained (%)"
+        },
+        "3": {
+          "coord": "C53",
+          "col": 3,
+          "value": "≥50% of trained"
+        }
+      }
+    },
+    {
+      "row": 54,
+      "cells": {
+        "1": {
+          "coord": "A54",
+          "col": 1,
+          "value": "Youth (≤35) trained (%)"
+        },
+        "3": {
+          "coord": "C54",
+          "col": 3,
+          "value": "≥30% of trained"
+        }
+      }
+    },
+    {
+      "row": 55,
+      "cells": {
+        "1": {
+          "coord": "A55",
+          "col": 1,
+          "value": "PWD employees trained (%)"
+        },
+        "3": {
+          "coord": "C55",
+          "col": 3,
+          "value": "≥2% of trained"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "1": {
+          "coord": "A57",
+          "col": 1,
+          "value": "OFO CODES — TRAINING INTERVENTIONS  [WSP mandatory — aligned to SETA OFO database]"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "1": {
+          "coord": "A58",
+          "col": 1,
+          "value": "OFO Code"
+        },
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": "Occupation"
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": "Learners (#)"
+        },
+        "4": {
+          "coord": "D58",
+          "col": 4,
+          "value": "Programme"
+        },
+        "5": {
+          "coord": "E58",
+          "col": 5,
+          "value": "Duration"
+        },
+        "6": {
+          "coord": "F58",
+          "col": 6,
+          "value": "SETA"
+        },
+        "7": {
+          "coord": "G58",
+          "col": 7,
+          "value": "Status"
+        },
+        "8": {
+          "coord": "H58",
+          "col": 8,
+          "value": "Net-Zero Link"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "1": {
+          "coord": "A59",
+          "col": 1,
+          "value": "911101"
+        },
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": "Heavy Motor Vehicle Drivers"
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": 77
+        },
+        "4": {
+          "coord": "D59",
+          "col": 4,
+          "value": "Fatigue Risk Management"
+        },
+        "5": {
+          "coord": "E59",
+          "col": 5,
+          "value": "2 days"
+        },
+        "6": {
+          "coord": "F59",
+          "col": 6,
+          "value": "TETA"
+        },
+        "7": {
+          "coord": "G59",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H59",
+          "col": 8,
+          "value": "Scope 1 fuel efficiency"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "1": {
+          "coord": "A60",
+          "col": 1,
+          "value": "911101"
+        },
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": "Heavy Motor Vehicle Drivers"
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": 77
+        },
+        "4": {
+          "coord": "D60",
+          "col": 4,
+          "value": "Defensive/Eco Driving"
+        },
+        "5": {
+          "coord": "E60",
+          "col": 5,
+          "value": "1 day"
+        },
+        "6": {
+          "coord": "F60",
+          "col": 6,
+          "value": "TETA"
+        },
+        "7": {
+          "coord": "G60",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H60",
+          "col": 8,
+          "value": "Fleet CO₂ reduction"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "1": {
+          "coord": "A61",
+          "col": 1,
+          "value": "334101"
+        },
+        "2": {
+          "coord": "B61",
+          "col": 2,
+          "value": "SHEQ Officers"
+        },
+        "3": {
+          "coord": "C61",
+          "col": 3,
+          "value": 5
+        },
+        "4": {
+          "coord": "D61",
+          "col": 4,
+          "value": "ISO 14001 Environmental Audit"
+        },
+        "5": {
+          "coord": "E61",
+          "col": 5,
+          "value": "5 days"
+        },
+        "6": {
+          "coord": "F61",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G61",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H61",
+          "col": 8,
+          "value": "Environmental compliance"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "1": {
+          "coord": "A62",
+          "col": 1,
+          "value": "334101"
+        },
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": "SHEQ Officers"
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": 5
+        },
+        "4": {
+          "coord": "D62",
+          "col": 4,
+          "value": "ISO 45001 H&S Management"
+        },
+        "5": {
+          "coord": "E62",
+          "col": 5,
+          "value": "3 days"
+        },
+        "6": {
+          "coord": "F62",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G62",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H62",
+          "col": 8,
+          "value": "H&S compliance"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "1": {
+          "coord": "A63",
+          "col": 1,
+          "value": "241301"
+        },
+        "2": {
+          "coord": "B63",
+          "col": 2,
+          "value": "HR Practitioners"
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": 3
+        },
+        "4": {
+          "coord": "D63",
+          "col": 4,
+          "value": "EEA Reporting & EE Plan"
+        },
+        "5": {
+          "coord": "E63",
+          "col": 5,
+          "value": "2 days"
+        },
+        "6": {
+          "coord": "F63",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G63",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H63",
+          "col": 8,
+          "value": "Social — EE Act"
+        }
+      }
+    },
+    {
+      "row": 64,
+      "cells": {
+        "1": {
+          "coord": "A64",
+          "col": 1,
+          "value": "121101"
+        },
+        "2": {
+          "coord": "B64",
+          "col": 2,
+          "value": "Operations Managers"
+        },
+        "3": {
+          "coord": "C64",
+          "col": 3,
+          "value": 8
+        },
+        "4": {
+          "coord": "D64",
+          "col": 4,
+          "value": "ESG Reporting & Net-Zero"
+        },
+        "5": {
+          "coord": "E64",
+          "col": 5,
+          "value": "3 days"
+        },
+        "6": {
+          "coord": "F64",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G64",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H64",
+          "col": 8,
+          "value": "All pillars"
+        }
+      }
+    },
+    {
+      "row": 65,
+      "cells": {
+        "1": {
+          "coord": "A65",
+          "col": 1,
+          "value": "413201"
+        },
+        "2": {
+          "coord": "B65",
+          "col": 2,
+          "value": "Data Capturers"
+        },
+        "3": {
+          "coord": "C65",
+          "col": 3,
+          "value": 10
+        },
+        "4": {
+          "coord": "D65",
+          "col": 4,
+          "value": "ESG Data Management"
+        },
+        "5": {
+          "coord": "E65",
+          "col": 5,
+          "value": "2 days"
+        },
+        "6": {
+          "coord": "F65",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G65",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H65",
+          "col": 8,
+          "value": "Data quality"
+        }
+      }
+    },
+    {
+      "row": 66,
+      "cells": {
+        "1": {
+          "coord": "A66",
+          "col": 1,
+          "value": "732101"
+        },
+        "2": {
+          "coord": "B66",
+          "col": 2,
+          "value": "Forklift Operators"
+        },
+        "3": {
+          "coord": "C66",
+          "col": 3,
+          "value": 25
+        },
+        "4": {
+          "coord": "D66",
+          "col": 4,
+          "value": "Electric Forklift Certification"
+        },
+        "5": {
+          "coord": "E66",
+          "col": 5,
+          "value": "2 days"
+        },
+        "6": {
+          "coord": "F66",
+          "col": 6,
+          "value": "TETA"
+        },
+        "7": {
+          "coord": "G66",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H66",
+          "col": 8,
+          "value": "EV transition"
+        }
+      }
+    },
+    {
+      "row": 67,
+      "cells": {
+        "1": {
+          "coord": "A67",
+          "col": 1,
+          "value": "912101"
+        },
+        "2": {
+          "coord": "B67",
+          "col": 2,
+          "value": "Warehouse Workers"
+        },
+        "3": {
+          "coord": "C67",
+          "col": 3,
+          "value": 50
+        },
+        "4": {
+          "coord": "D67",
+          "col": 4,
+          "value": "Environmental Awareness"
+        },
+        "5": {
+          "coord": "E67",
+          "col": 5,
+          "value": "1 day"
+        },
+        "6": {
+          "coord": "F67",
+          "col": 6,
+          "value": "WRSETA"
+        },
+        "7": {
+          "coord": "G67",
+          "col": 7,
+          "value": "WSP"
+        },
+        "8": {
+          "coord": "H67",
+          "col": 8,
+          "value": "ISO 14001 awareness"
+        }
+      }
+    },
+    {
+      "row": 68,
+      "cells": {
+        "7": {
+          "coord": "G68",
+          "col": 7,
+          "value": "Add more rows below →"
+        }
+      }
+    },
+    {
+      "row": 70,
+      "cells": {
+        "1": {
+          "coord": "A70",
+          "col": 1,
+          "value": "COMMUNITY & SOCIAL INVESTMENT  [CSI | Social Calendar 2026 | ISO 26000]"
+        }
+      }
+    },
+    {
+      "row": 71,
+      "cells": {
+        "1": {
+          "coord": "A71",
+          "col": 1,
+          "value": "Initiative"
+        },
+        "2": {
+          "coord": "B71",
+          "col": 2,
+          "value": "Month"
+        },
+        "3": {
+          "coord": "C71",
+          "col": 3,
+          "value": "Beneficiaries"
+        },
+        "4": {
+          "coord": "D71",
+          "col": 4,
+          "value": "Spend (R)"
+        },
+        "5": {
+          "coord": "E71",
+          "col": 5,
+          "value": "Category"
+        },
+        "6": {
+          "coord": "F71",
+          "col": 6,
+          "value": "Net-Zero Link"
+        }
+      }
+    },
+    {
+      "row": 72,
+      "cells": {
+        "1": {
+          "coord": "A72",
+          "col": 1,
+          "value": "Mandela Day"
+        },
+        "2": {
+          "coord": "B72",
+          "col": 2,
+          "value": "Jul-25"
+        },
+        "3": {
+          "coord": "C72",
+          "col": 3,
+          "value": "Community service (90-100% Black beneficiaries)"
+        },
+        "5": {
+          "coord": "E72",
+          "col": 5,
+          "value": "CSI — Community"
+        },
+        "6": {
+          "coord": "F72",
+          "col": 6,
+          "value": "GRI 413"
+        }
+      }
+    },
+    {
+      "row": 73,
+      "cells": {
+        "1": {
+          "coord": "A73",
+          "col": 1,
+          "value": "Casual Day Stickers (Kerin)"
+        },
+        "2": {
+          "coord": "B73",
+          "col": 2,
+          "value": "Sep-25"
+        },
+        "3": {
+          "coord": "C73",
+          "col": 3,
+          "value": "Persons with disabilities (75-90% Black)"
+        },
+        "5": {
+          "coord": "E73",
+          "col": 5,
+          "value": "CSI — Disability"
+        },
+        "6": {
+          "coord": "F73",
+          "col": 6,
+          "value": "Social inclusion"
+        }
+      }
+    },
+    {
+      "row": 74,
+      "cells": {
+        "1": {
+          "coord": "A74",
+          "col": 1,
+          "value": "Mobility Golf Day"
+        },
+        "2": {
+          "coord": "B74",
+          "col": 2,
+          "value": "Oct-25"
+        },
+        "3": {
+          "coord": "C74",
+          "col": 3,
+          "value": "Charitable fundraiser (75-90% Black)"
+        },
+        "5": {
+          "coord": "E74",
+          "col": 5,
+          "value": "CSI — Fundraiser"
+        },
+        "6": {
+          "coord": "F74",
+          "col": 6,
+          "value": "GRI 413"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "CHOC Foundation"
+        },
+        "2": {
+          "coord": "B75",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C75",
+          "col": 3,
+          "value": "Childhood cancer support (75-90% Black)"
+        },
+        "5": {
+          "coord": "E75",
+          "col": 5,
+          "value": "CSI — Health"
+        },
+        "6": {
+          "coord": "F75",
+          "col": 6,
+          "value": "Social impact"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "SA Guide Dog Association"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": "Visually impaired mobility (70-85% Black)"
+        },
+        "5": {
+          "coord": "E76",
+          "col": 5,
+          "value": "CSI — Disability"
+        },
+        "6": {
+          "coord": "F76",
+          "col": 6,
+          "value": "Social inclusion"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Friends of Valkenburg Trust"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": "Mental health support (75-90% Black)"
+        },
+        "5": {
+          "coord": "E77",
+          "col": 5,
+          "value": "CSI — Mental Health"
+        },
+        "6": {
+          "coord": "F77",
+          "col": 6,
+          "value": "GRI 413"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Blanket Drive (Stephanie / SG Mktg)"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": "May-26"
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": "Winter relief, in-kind (90-100% Black)"
+        },
+        "5": {
+          "coord": "E78",
+          "col": 5,
+          "value": "CSI — Community Relief"
+        },
+        "6": {
+          "coord": "F78",
+          "col": 6,
+          "value": "GRI 413"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "Wings of Inspiration"
+        },
+        "2": {
+          "coord": "B79",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C79",
+          "col": 3,
+          "value": "Charitable movement (90-100% Black)"
+        },
+        "5": {
+          "coord": "E79",
+          "col": 5,
+          "value": "CSI — Community"
+        },
+        "6": {
+          "coord": "F79",
+          "col": 6,
+          "value": "GRI 413"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "Gerald Fitzpatrick Donations"
+        },
+        "2": {
+          "coord": "B80",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C80",
+          "col": 3,
+          "value": "Elderly women care home (75-90% Black)"
+        },
+        "5": {
+          "coord": "E80",
+          "col": 5,
+          "value": "SED — Enterprise Dev"
+        },
+        "6": {
+          "coord": "F80",
+          "col": 6,
+          "value": "B-BBEE SED"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "Jicama 89"
+        },
+        "2": {
+          "coord": "B81",
+          "col": 2,
+          "value": "Ongoing"
+        },
+        "3": {
+          "coord": "C81",
+          "col": 3,
+          "value": "Children with visual impairments (100% Black)"
+        },
+        "5": {
+          "coord": "E81",
+          "col": 5,
+          "value": "SED — Enterprise Dev"
+        },
+        "6": {
+          "coord": "F81",
+          "col": 6,
+          "value": "B-BBEE SED"
+        }
+      }
+    },
+    {
+      "row": 82,
+      "cells": {
+        "1": {
+          "coord": "A82",
+          "col": 1,
+          "value": "TOTAL CSI/SED SPEND YTD (R)"
+        },
+        "4": {
+          "coord": "D82",
+          "col": 4,
+          "value": 0,
+          "formula": "=SUM(D72:D81)"
+        },
+        "5": {
+          "coord": "E82",
+          "col": 5,
+          "value": "Budget allocation R45,000 (Coba May 2026)"
+        }
+      }
+    }
+  ]
+}

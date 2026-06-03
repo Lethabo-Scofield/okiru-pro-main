@@ -1,0 +1,463 @@
+{
+  "sheet_name": "B_BBEE_ESG",
+  "sanitized_name": "B_BBEE_ESG",
+  "dimensions": {
+    "max_row": 18,
+    "max_column": 8
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 20,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "⚖  B-BBEE GENERIC CODE — ESG ELEMENT MAPPING  |  Statement 000 Series"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Generic Scorecard (Statement 000): 109 points + 5 bonus = 114 total. Auto-pulled from E/S/G data where possible. Status level driven by total points."
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "GENERIC SCORECARD — 5 elements"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Element"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Weight"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Sub-target"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Actual"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Points Earned"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Source / Logic"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "ESG Pillar"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "OWNERSHIP  (Statement 100)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 25
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "≥25.1% Black ownership"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(IF(D6>=0.251,25,IF(D6>=0.251*Assumptions!$B$9,25*D6/0.251,0)),0)"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "Manual entry — confirm with share register / Modified Flow-Through"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Governance"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 25,
+          "formula": "=B6-E6"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "MANAGEMENT CONTROL  (Statement 200)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 19
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Black 60% / Black Female 30%"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0.35,
+          "formula": "=IFERROR(EE_Scorecard!E15/100,0)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 6.65,
+          "formula": "=IFERROR(D7*19,0)"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "EE_Scorecard E15 total/100 × 19 pts (weighted scorecard already aligned)"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "Social"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 12.35,
+          "formula": "=B7-E7"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "SKILLS DEVELOPMENT  (Statement 300)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 25
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "6% payroll spend on Black training"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(S_Data!B50/MAX(1,S_Data!B43),0)"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(IF(D8>=0.06,25,IF(D8>=0.06*Assumptions!$B$9,25*D8/0.06,0)),0)"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Training spend (S_Data B50) ÷ Leviable payroll (B43); target 6%"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "Social"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 25,
+          "formula": "=B8-E8"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "ENTERPRISE & SUPPLIER DEVELOPMENT  (Statement 400)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 40
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "PP 25 + ESD 15 sub-targets"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(D9*40,0)"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "Manual entry — % recognition vs PP 25 + ESD 15 sub-targets"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "Social / Governance"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 40,
+          "formula": "=B9-E9"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "SOCIO-ECONOMIC DEVELOPMENT  (Statement 500)"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": 5
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "1% NPAT contribution"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(IF(D10>=Assumptions!$B$56,5,IF(D10>=Assumptions!$B$56*Assumptions!$B$9,5*D10/Assumptions!$B$56,0)),0)"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "CSI spend ÷ NPAT; target 1% (THR_CSI)"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "Social"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": 5,
+          "formula": "=B10-E10"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "BONUS POINTS  (net job creation, value-adding)"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": 5
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Up to 5 bonus pts"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 0,
+          "formula": "=MIN(5,D11)"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "Manual — claim up to 5 bonus points (net job creation / value-add)"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": 5,
+          "formula": "=B11-E11"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "TOTAL POINTS"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": 119,
+          "formula": "=SUM(B6:B11)"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 6.65,
+          "formula": "=SUM(E6:E11)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "STATUS LEVEL — Auto-determined from total points"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Current Level"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Level 4",
+          "formula": "=IF(E12>=Assumptions!$B$76,\"Level 1\",IF(E12>=Assumptions!$B$77,\"Level 2\",IF(E12>=Assumptions!$B$78,\"Level 3\",IF(E12>=Assumptions!$B$79,\"Level 4\",IF(E12>=Assumptions!$B$80,\"Level 5\",IF(E12>=Assumptions!$B$81,\"Level 6\",IF(E12>=Assumptions!$B$82,\"Level 7\",IF(E12>=Assumptions!$B$83,\"Level 8\",\"Non-compliant\"))))))))"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Procurement Recognition"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(E12>=Assumptions!$B$76,Assumptions!$C$76,IF(E12>=Assumptions!$B$77,Assumptions!$C$77,IF(E12>=Assumptions!$B$78,Assumptions!$C$78,IF(E12>=Assumptions!$B$79,Assumptions!$C$79,IF(E12>=Assumptions!$B$80,Assumptions!$C$80,IF(E12>=Assumptions!$B$81,Assumptions!$C$81,IF(E12>=Assumptions!$B$82,Assumptions!$C$82,IF(E12>=Assumptions!$B$83,Assumptions!$C$83,Assumptions!$C$84))))))))"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "GAP TO NEXT LEVEL"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "Points to next level"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": 83.35,
+          "formula": "=IF(E12>=Assumptions!$B$76,0,IF(E12>=Assumptions!$B$77,Assumptions!$B$76-E12,IF(E12>=Assumptions!$B$78,Assumptions!$B$77-E12,IF(E12>=Assumptions!$B$79,Assumptions!$B$78-E12,IF(E12>=Assumptions!$B$80,Assumptions!$B$79-E12,IF(E12>=Assumptions!$B$81,Assumptions!$B$80-E12,IF(E12>=Assumptions!$B$82,Assumptions!$B$81-E12,IF(E12>=Assumptions!$B$83,Assumptions!$B$82-E12,Assumptions!$B$83-E12))))))))"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "Biggest opportunity"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "ENTERPRISE & SUPPLIER DEVELOPMENT  (Statement 400)",
+          "formula": "=INDEX(A6:A11,MATCH(MAX(H6:H11),H6:H11,0))"
+        }
+      }
+    }
+  ]
+}

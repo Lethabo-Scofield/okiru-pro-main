@@ -1,0 +1,34 @@
+# S_Scorecard
+
+- Rows scanned: up to 200
+- Formulas: 54
+
+## Sample rows (first 30)
+R1: A1=S SCORECARD — Social Performance vs 100 pts  |  EE · WSP/ATR · H&S · Community  |  Links: S_Data
+R3: A3=Indicator | B3=Max
+Pts | C3=Actual | D3=Score | E3=Data Source | F3=Status | G3=Standard Ref | H3=EE/WSP Action
+R4: A4=── EE ──
+R5: A5=EE: % Black employees (all levels) vs 60% target | B5=8 | C5=0 [=IFERROR(IF(EE_Scorecard!$B$5>=Assumptions!$B$50,8,IF(EE_Scorecard!$B$5>=Assumptions!$B$50*Assumptions!$B$9,8*EE_Scorecard!$B$5/Assumptions!$B$50,0)),0)] | D5=0 [=MIN(C5,B5)] | E5=EE_Scorecard | F5=✗ Gap [=IF(D5>=B5,"✓ Met",IF(D5>=B5*0.5,"⚠ Partial","✗ Gap"))] | G5=EEA s27 / GRI 405-1 | H5=EE act compliance
+R6: A6=EE: % Black female management (L1-L3) vs 30% | B6=6 | C6=0 [=IFERROR(IF((S_Data!$L$5+S_Data!$L$6)=0,0,IF((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6)>=Assumptions!$B$51,6,IF((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6)>=Assumptions!$B$51*Assumptions!$B$9,6*((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6))/Assumptions!$B$51,0))),0)] | D6=0 [=MIN(C6,B6)] | E6=S_Data EE | F6=✗ Gap [=IF(D6>=B6,"✓ Met",IF(D6>=B6*0.5,"⚠ Partial","✗ Gap"))] | G6=EEA s27 / B-BBEE Mgt Control | H6=Pipeline — promote Black females
+R7: A7=EE: EE Plan submitted & compliant | B7=5 | C7=5 [=IF(EE_Scorecard!$B$9="Yes",5,IF(EE_Scorecard!$B$9="Partial",2.5,0))] | D7=5 [=MIN(C7,B7)] | E7=S_Data WSP | F7=⚠ Partial [=IF(D7>=B7,"✓ Met",IF(D7>=B7*0.5,"⚠ Partial","✗ Gap"))] | G7=EEA s20/21 | H7=Annual DoEL submission
+R8: A8=EE: % Persons with Disabilities vs 2% | B8=5 | C8=0 [=IFERROR(IF(EE_Scorecard!$B$8>=Assumptions!$B$52,5,IF(EE_Scorecard!$B$8>=Assumptions!$B$52*Assumptions!$B$9,5*EE_Scorecard!$B$8/Assumptions!$B$52,0)),0)] | D8=0 [=MIN(C8,B8)] | E8=S_Data EE | F8=✗ Gap [=IF(D8>=B8,"✓ Met",IF(D8>=B8*0.5,"⚠ Partial","✗ Gap"))] | G8=EEA s6 | H8=PWD target per level
+R9: A9=EE: EE forum/TD consultation active | B9=3 | C9=3 [=IF(EE_Scorecard!$B$10="Yes",3,IF(EE_Scorecard!$B$10="Partial",1.5,0))] | D9=3 [=MIN(C9,B9)] | E9=S_Data | F9=⚠ Partial [=IF(D9>=B9,"✓ Met",IF(D9>=B9*0.5,"⚠ Partial","✗ Gap"))] | G9=EEA s16 | H9=Monthly TDs meeting
+R10: A10=EE: EE numerical targets set and tracked | B10=3 | C10=3 [=IF(EE_Scorecard!$B$12="Yes",3,IF(EE_Scorecard!$B$12="Partial",1.5,0))] | D10=3 [=MIN(C10,B10)] | E10=S_Data | F10=⚠ Partial [=IF(D10>=B10,"✓ Met",IF(D10>=B10*0.5,"⚠ Partial","✗ Gap"))] | G10=EEA s20(2)(b) | H10=Targets per level/race/gender
+R11: A11=── WSP ──
+R12: A12=WSP: WSP submitted to SETA on time | B12=5 | C12=0 [=IF(S_Data!B45="Yes",5,0)] | D12=0 [=MIN(C12,B12)] | E12=S_Data WSP | F12=✗ Gap [=IF(D12>=B12,"✓ Met",IF(D12>=B12*0.5,"⚠ Partial","✗ Gap"))] | G12=SDL Act s10 / GRI 404 | H12=Deadline: 30 April annually
+R13: A13=WSP: ATR submitted on time | B13=5 | C13=0 [=IF(S_Data!B46="Yes",5,0)] | D13=0 [=MIN(C13,B13)] | E13=S_Data WSP | F13=✗ Gap [=IF(D13>=B13,"✓ Met",IF(D13>=B13*0.5,"⚠ Partial","✗ Gap"))] | G13=SDL Act s10 / GRI 404 | H13=Annual training report
+R14: A14=WSP: Training hours per employee ≥40 hours | B14=5 | C14=0 [=IFERROR(IF(S_Data!$L$12=0,0,IF(S_Data!$B$49/S_Data!$L$12>=Assumptions!$B$53,5,IF(S_Data!$B$49/S_Data!$L$12>=Assumptions!$B$53*Assumptions!$B$9,5*(S_Data!$B$49/S_Data!$L$12)/Assumptions!$B$53,0))),0)] | D14=0 [=MIN(C14,B14)] | E14=S_Data WSP | F14=✗ Gap [=IF(D14>=B14,"✓ Met",IF(D14>=B14*0.5,"⚠ Partial","✗ Gap"))] | G14=GRI 404-1 | H14=Net-zero + EE-aligned programmes
+R15: A15=WSP: Mandatory grant recovery ≥80% | B15=5 | C15=0 [=IFERROR(IF(S_Data!$B$44=0,0,IF(S_Data!$B$47/S_Data!$B$44>=Assumptions!$B$54,5,IF(S_Data!$B$47/S_Data!$B$44>=Assumptions!$B$54*Assumptions!$B$9,5*(S_Data!$B$47/S_Data!$B$44)/Assumptions!$B$54,0))),0)] | D15=0 [=MIN(C15,B15)] | E15=S_Data WSP | F15=✗ Gap [=IF(D15>=B15,"✓ Met",IF(D15>=B15*0.5,"⚠ Partial","✗ Gap"))] | G15=SDL Act s11 | H15=Mandatory grant claim deadline
+R16: A16=── H&S ──
+R17: A17=H&S: LTIFR ≤ 2.0 | B17=8 | C17=0 [=IFERROR(IF(S_Data!$G$35=0,0,IF(S_Data!$G$35<=Assumptions!$B$55,8,IF(S_Data!$G$35<=Assumptions!$B$55/Assumptions!$B$9,MAX(0,8*(1+Assumptions!$B$9-S_Data!$G$35/Assumptions!$B$55)),0))),0)] | D17=0 [=MIN(C17,B17)] | E17=S_Data H&S | F17=✗ Gap [=IF(D17>=B17,"✓ Met",IF(D17>=B17*0.5,"⚠ Partial","✗ Gap"))] | G17=ISO 45001 / GRI 403-9 | H17=Fatigue management key lever
+R18: A18=H&S: Zero fatalities | B18=8 | C18=8 [=IFERROR(IF(OR(S_Data!$G$28=0,S_Data!$G$28="—",S_Data!$G$28=""),8,0),0)] | D18=8 [=MIN(C18,B18)] | E18=S_Data H&S | F18=⚠ Partial [=IF(D18>=B18,"✓ Met",IF(D18>=B18*0.5,"⚠ Partial","✗ Gap"))] | G18=GRI 403-9 / OHS Act | H18=Absolute priority
+R19: A19=H&S: Driver fatigue programme active | B19=5 | C19=5 [=IF(S_Data!$C$59>0,5,0)] | D19=5 [=MIN(C19,B19)] | E19=Driver_Debrief | F19=⚠ Partial [=IF(D19>=B19,"✓ Met",IF(D19>=B19*0.5,"⚠ Partial","✗ Gap"))] | G19=ISO 45001 / TETA | H19=All 77 drivers trained annually
+R20: A20=H&S: Incident investigation rate 100% | B20=4 | C20=4 [=IF(SUM(S_Data!$G$29:$G$33)>0,4,0)] | D20=4 [=MIN(C20,B20)] | E20=S_Data H&S | F20=⚠ Partial [=IF(D20>=B20,"✓ Met",IF(D20>=B20*0.5,"⚠ Partial","✗ Gap"))] | G20=ISO 45001 / OHS Act | H20=Accidently system all depots
+R21: A21=── Community ──
+R22: A22=Community: CSI/SED spend ≥1% NPAT | B22=5 | C22=0 | D22=0 [=MIN(C22,B22)] | E22=S_Data Community | F22=✗ Gap [=IF(D22>=B22,"✓ Met",IF(D22>=B22*0.5,"⚠ Partial","✗ Gap"))] | G22=GRI 413-1 / B-BBEE SED | H22=Align to social calendar
+R23: A23=Community: Social calendar initiatives ≥6 pa | B23=5 | C23=5 [=IFERROR(IF(COUNTA(S_Data!$A$72:$A$79)>=6,5,IF(COUNTA(S_Data!$A$72:$A$79)>=6*Assumptions!$B$9,5*COUNTA(S_Data!$A$72:$A$79)/6,0)),0)] | D23=5 [=MIN(C23,B23)] | E23=S_Data Community | F23=⚠ Partial [=IF(D23>=B23,"✓ Met",IF(D23>=B23*0.5,"⚠ Partial","✗ Gap"))] | G23=ISO 26000 / King V P2 | H23=2026 calendar active
+R24: A24=Community: Local labour procurement ≥40% | B24=5 | C24=0 | D24=0 [=MIN(C24,B24)] | E24=S_Data | F24=✗ Gap [=IF(D24>=B24,"✓ Met",IF(D24>=B24*0.5,"⚠ Partial","✗ Gap"))] | G24=B-BBEE ESD / GRI 204 | H24=Preferential procurement
+R25: A25=── Supplier ──
+R26: A26=Supplier: IMS-T-149 H&S compliance ≥80% | B26=5 | C26=0 | D26=0 [=MIN(C26,B26)] | E26=SAQ_Supplier | F26=✗ Gap [=IF(D26>=B26,"✓ Met",IF(D26>=B26*0.5,"⚠ Partial","✗ Gap"))] | G26=GRI 308 / ISO 26000 | H26=Safety file check each supplier
+R27: A27=Supplier: Supplier food safety rating | B27=5 | C27=0 | D27=0 [=MIN(C27,B27)] | E27=SAQ_Supplier | F27=✗ Gap [=IF(D27>=B27,"✓ Met",IF(D27>=B27*0.5,"⚠ Partial","✗ Gap"))] | G27=ISO 22000 / GRI 416 | H27=Cold chain quality standards
+R28: A28=S SCORECARD TOTAL | D28=33 [=SUM(D5,D6,D7,D8,D9,D10,D12,D13,D14,D15,D17,D18,D19,D20,D22,D23,D24,D26,D27)]

@@ -1,0 +1,1013 @@
+{
+  "sheet_name": "NetZero_Roadmap",
+  "sanitized_name": "NetZero_Roadmap",
+  "dimensions": {
+    "max_row": 27,
+    "max_column": 13
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 50,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "NET-ZERO ROADMAP — SBTi CNZS 2.0 | OER Tiers | 2030/2040/2050 Milestones  [Links: E_Data GHG actual]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "SBTi CNZS 2.0 — SCIENCE-BASED TARGETS (Corporate Net-Zero Standard)"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Scope / Metric"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Baseline"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "2025"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "2026"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "2027"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "2028"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "2029"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "2030"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "2035"
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": "2040"
+        },
+        "11": {
+          "coord": "K4",
+          "col": 11,
+          "value": "2045"
+        },
+        "12": {
+          "coord": "L4",
+          "col": 12,
+          "value": "2050"
+        },
+        "13": {
+          "coord": "M4",
+          "col": 13,
+          "value": "Net-Zero\nBy 2050"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Scope 1+2 tCO₂e (baseline → 2050)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0),0)"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.05),0)"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.12),0)"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.2),0)"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.35),0)"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.5),0)"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.65),0)"
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.78),0)"
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.9),0)"
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(B5*(1-0.95),0)"
+        },
+        "13": {
+          "coord": "M5",
+          "col": 13,
+          "value": "Link to E_Data GHG total"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "  Scope 1 — Fleet + Gen + LPG"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0),0)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.05),0)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.12),0)"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.2),0)"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.35),0)"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.5),0)"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.65),0)"
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.78),0)"
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.9),0)"
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(B6*(1-0.95),0)"
+        },
+        "13": {
+          "coord": "M6",
+          "col": 13,
+          "value": "EV fleet transition key lever"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "  Scope 2 Net — Electricity (grid-solar)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0),0)"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.05),0)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.12),0)"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.2),0)"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.35),0)"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.5),0)"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.65),0)"
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.78),0)"
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.9),0)"
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(B7*(1-0.95),0)"
+        },
+        "13": {
+          "coord": "M7",
+          "col": 13,
+          "value": "Solar expansion at all depots"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "Scope 3 tCO₂e (30% by 2030)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0),0)"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.05),0)"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.1),0)"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.15),0)"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.22),0)"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.3),0)"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.45),0)"
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.6),0)"
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.75),0)"
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(B8*(1-0.9),0)"
+        },
+        "13": {
+          "coord": "M8",
+          "col": 13,
+          "value": "Water, value chain, business travel"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "Carbon Credits / Offsets (OER)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(B9*(1-0),0)"
+        },
+        "13": {
+          "coord": "M9",
+          "col": 13,
+          "value": "OER Pre-recognised → Recognised 2028"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "OER TIER MILESTONES — SBTi CNZS 2.0 OER (Ongoing Emissions Reductions)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Tier"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Target Year"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "GHG Requirement"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Key Initiative"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Carbon Credits"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "SG Consumer Action"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Pre-Recognised (Current)"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "2025"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Commit to SBTi near-term target"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "Submit SBTi commitment letter"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Any"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "Baseline established: FY2025/26"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Recognised"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "2028"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "−50% Scope 1+2 from baseline"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "EV fleet phase-in; solar expansion"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "Carbon credits optional"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "KPI: 50% S1+2 reduction from baseline"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Leadership"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "2035"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "−90% Scope 1+2 + 30% S3 + residual offsets"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Full EV fleet; 100% renewable energy"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "High-quality carbon credits for residual"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "Publish net-zero report"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Net-Zero"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "2050"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "Net-Zero across Scope 1+2+3"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "Zero fossil fleet; all renewable"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Only residual credits allowed"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "Legacy net-zero organisation"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "KEY NET-ZERO LEVERS — SG Consumer Action Plan"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Lever"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "Action"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "Data Sheet"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Target"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Timeline"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "Owner"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "EV Fleet Transition"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "MAXUS eDeliver 3/5 — CPT & PE urban routes first"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Fleet_Register"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "20% EV by 2030"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "FY2026/27"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "Maxine / Fleet Mgr"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Solar Expansion"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "JHB Graeme Barand confirmed; DBN EDGE cert pending; CPT/BLOEM/PE to assess"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "E_Data Solar"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "50% renewable by 2030"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "FY2025/26"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "Graeme Barand / Ops"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Eco-Driving Training"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Reduce fleet L/100km by 10% via driver training"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "Fleet_Register"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "L/100km ≤ norm"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "Q3 FY2025"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "WSP training plan"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Waste Diversion"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "Extend Oricol CPT 91% diversion to all depots"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "Waste_Register"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "≥75% all depots"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "FY2026"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "Mariette / SHEQ"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Water Conservation"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "CT dam project; DBN 20kL mezzanine; IE monitoring"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "E_Data Water"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "Reduce 10% YoY"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "Ongoing"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "Mariette / Richard"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Generator Replacement"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "DBN & BLOEM generators → solar/UPS"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "E_Data Gen"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "Zero generator by 2030"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "FY2028"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "Facilities"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "SBTi Commitment"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "Submit near-term targets commitment letter"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "IFRS_S1_S2"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "Submitted 2026"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "Q1 FY2026"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "Richard / Okiru"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Carbon Credits Register"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "EDGE DBN credit + solar JHB credit tracking"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "Carbon_Credits_Register"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "OER Recognised 2028"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "FY2027"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "Okiru Consulting"
+        }
+      }
+    }
+  ]
+}

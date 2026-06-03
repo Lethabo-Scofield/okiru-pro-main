@@ -1,0 +1,1130 @@
+{
+  "sheet_name": "EE_Scorecard",
+  "sanitized_name": "EE_Scorecard",
+  "dimensions": {
+    "max_row": 25,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B14"
+    }
+  ],
+  "formula_count": 82,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "EE SCORECARD — Employment Equity Act | EEA2 Reporting | GRI 405  [Links: S_Data headcount]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "EE SCORE CARD — Weighted scoring aligned to EEA & B-BBEE Management Control"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "EE Indicator"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Actual"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Target"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Weight"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Score"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Max"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Status"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Standard Ref"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "% Black (all levels combined)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B5+S_Data!C5+S_Data!D5+S_Data!F5+S_Data!G5+S_Data!H5)/(S_Data!L5)*1,0)"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "60%"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 20
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(MIN(20,ROUND(B5/0.6*20,2)),0)"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 20
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "✗ Gap",
+          "formula": "=IF(E5>=F5*0.9,\"✓ Met\",IF(E5>=F5*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "EEA s27 / GRI 405"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "% Black female (all levels)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 0,
+          "formula": "=0"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "30%"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 15
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(MIN(15,ROUND(B6/0.3*15,2)),0)"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 15
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "✗ Gap",
+          "formula": "=IF(E6>=F6*0.9,\"✓ Met\",IF(E6>=F6*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "EEA s27 / GRI 405"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "% Black Top/Senior Mgmt (L1+L2)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR((S_Data!B5+ S_Data!B6)/S_Data!L12,0)"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "50%"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 20
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(MIN(20,ROUND(B7/0.5*20,2)),0)"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 20
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "✗ Gap",
+          "formula": "=IF(E7>=F7*0.9,\"✓ Met\",IF(E7>=F7*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "EEA s27 / King V P4"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "% Persons with Disabilities"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 0,
+          "formula": "=0"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "2%"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 10
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(MIN(10,ROUND(B8/0.02*10,2)),0)"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 10
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "✗ Gap",
+          "formula": "=IF(E8>=F8*0.9,\"✓ Met\",IF(E8>=F8*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "EEA s6 / GRI 405"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "EE Plan submitted to DoEL (Y/N)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 10
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(B9=\"Yes\",10,IF(B9=\"Partial\",5,0))"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 10
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E9>=F9*0.9,\"✓ Met\",IF(E9>=F9*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "EEA s20/21"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "EE forum/TDs consulted (Y/N)"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 5
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(B10=\"Yes\",5,IF(B10=\"Partial\",2,0))"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 5
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E10>=F10*0.9,\"✓ Met\",IF(E10>=F10*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "EEA s16"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "EE monitoring & reporting (Y/N)"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 5
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(B11=\"Yes\",5,IF(B11=\"Partial\",2,0))"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 5
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E11>=F11*0.9,\"✓ Met\",IF(E11>=F11*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "EEA s19"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Numerical targets set (Y/N)"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 5
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(B12=\"Yes\",5,IF(B12=\"Partial\",2,0))"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 5
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E12>=F12*0.9,\"✓ Met\",IF(E12>=F12*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "EEA s20(2)(b)"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Barriers to EE removed (Y/N)"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 5
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(B13=\"Yes\",5,IF(B13=\"Partial\",2,0))"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 5
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E13>=F13*0.9,\"✓ Met\",IF(E13>=F13*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "EEA s20(2)(c)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Affirmative measures implemented"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 5
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(B14=\"Yes\",5,IF(B14=\"Partial\",2,0))"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 5
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "✓ Met",
+          "formula": "=IF(E14>=F14*0.9,\"✓ Met\",IF(E14>=F14*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "EEA s15"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "EE TOTAL SCORE (out of 100)"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 35,
+          "formula": "=SUM(E5,E6,E7,E8,E9,E10,E11,E12,E13,E14)"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "100"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "Needs Attention",
+          "formula": "=IF(E15>=85,\"Excellent\",IF(E15>=70,\"Good\",IF(E15>=50,\"Adequate\",\"Needs Attention\")))"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "EE HEADCOUNT SUMMARY  (from S_Data — update headcount there)"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "Level"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "Af M"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "Col M"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "Ind M"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "Wht M"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "Af F"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "Col F"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "Ind F"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": "Wht F"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Top Mgmt"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B5"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C5"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D5"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E5"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F5"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G5"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H5"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I5"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Senior Mgmt"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B6"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C6"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D6"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E6"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F6"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G6"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H6"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I6"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Prof Qualified"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B7"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C7"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D7"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E7"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F7"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G7"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H7"
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I7"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Skilled Tech"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B8"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C8"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D8"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E8"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F8"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G8"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H8"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I8"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Semi-Skilled"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B9"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C9"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D9"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E9"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F9"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G9"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H9"
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I9"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Unskilled"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B10"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C10"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D10"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E10"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F10"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G10"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H10"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I10"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "TOTAL"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B12"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": 0,
+          "formula": "=S_Data!C12"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": 0,
+          "formula": "=S_Data!D12"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": 0,
+          "formula": "=S_Data!E12"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": 0,
+          "formula": "=S_Data!F12"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": 0,
+          "formula": "=S_Data!G12"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": 0,
+          "formula": "=S_Data!H12"
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": 0,
+          "formula": "=S_Data!I12"
+        }
+      }
+    }
+  ]
+}

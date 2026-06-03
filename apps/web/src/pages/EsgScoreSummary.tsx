@@ -59,7 +59,6 @@ export default function EsgScoreSummary() {
   );
 
   const openToolkit = () => {
-    if (!validationOk) return;
     navigate(esgToolkitHref(companyId));
   };
 
@@ -197,12 +196,11 @@ export default function EsgScoreSummary() {
                 <button
                   type="button"
                   onClick={openToolkit}
-                  disabled={!validationOk}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[14px] disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[14px]"
                   data-testid="button-esg-open-toolkit"
                   title={
                     !validationOk
-                      ? "Resolve critical validation issues in the workbook first"
+                      ? "Validation warnings remain — resolve before submit & lock"
                       : undefined
                   }
                 >

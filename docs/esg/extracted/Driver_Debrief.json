@@ -1,0 +1,1086 @@
+{
+  "sheet_name": "Driver_Debrief",
+  "sanitized_name": "Driver_Debrief",
+  "dimensions": {
+    "max_row": 51,
+    "max_column": 13
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 43,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "DRIVER DEBRIEF — Route Completion | Customer Hit % | Planned vs Actual km | Net-Zero km Efficiency  [Source: DriverDebriefSummary.xlsx]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Date"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Depot"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Driver Name"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Vehicle Reg"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Route"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Cust Hit%"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Plan Stops"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "Act Stops"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Variance"
+        },
+        "10": {
+          "coord": "J3",
+          "col": 10,
+          "value": "Plan km"
+        },
+        "11": {
+          "coord": "K3",
+          "col": 11,
+          "value": "Act km"
+        },
+        "12": {
+          "coord": "L3",
+          "col": 12,
+          "value": "km Excess"
+        },
+        "13": {
+          "coord": "M3",
+          "col": 13,
+          "value": "Net-Zero Note / Action"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "SGTPE"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Hubrey Malgas"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "KZ00LRGP"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "010426EJ002"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": 1
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": 1
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": 1
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": 2
+        },
+        "11": {
+          "coord": "K4",
+          "col": 11,
+          "value": 2
+        },
+        "12": {
+          "coord": "L4",
+          "col": 12,
+          "value": 0,
+          "formula": "=K4-J4"
+        },
+        "13": {
+          "coord": "M4",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "SGTPE"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "NO DATA"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "LC09YVGP"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "010426EJ005"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 1
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 1
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": 1
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": 1
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": 1
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": 0,
+          "formula": "=K5-J5"
+        },
+        "13": {
+          "coord": "M5",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "SGTPE"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Hubrey Malgas"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "KZ00LRGP"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "010426EL001"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 1
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 3
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": 3
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": 37
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": 37
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": 0,
+          "formula": "=K6-J6"
+        },
+        "13": {
+          "coord": "M6",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "SGTPE"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "James Jantjies"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "LC22HRGP"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "010426EL003"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 0.85
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 7
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": 6
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 1
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": 55
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": 55
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": 0,
+          "formula": "=K7-J7"
+        },
+        "13": {
+          "coord": "M7",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "TG Kwababa"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "LB45BMGP"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "010426FC001"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 1
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 4
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": 4
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": 449
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": 449
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": 0,
+          "formula": "=K8-J8"
+        },
+        "13": {
+          "coord": "M8",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "G Kwababa"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "LB45BMGP"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "010426FL001"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 1
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": 2
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": 2
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": 28
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": 28
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": 0,
+          "formula": "=K9-J9"
+        },
+        "13": {
+          "coord": "M9",
+          "col": 13,
+          "value": "✓ On route"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "2026-04-01"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Osbar Naka"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "KZ97BKGP"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "010426GC001"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 0.66
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": 15
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": 10
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": 5
+        },
+        "10": {
+          "coord": "J10",
+          "col": 10,
+          "value": 847
+        },
+        "11": {
+          "coord": "K10",
+          "col": 11,
+          "value": 972
+        },
+        "12": {
+          "coord": "L10",
+          "col": 12,
+          "value": 125,
+          "formula": "=K10-J10"
+        },
+        "13": {
+          "coord": "M10",
+          "col": 13,
+          "value": "⚠ 66% hit rate — 5 stops missed, 125km excess — fatigue/routing review required"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "→ ADD NEW DEBRIEF ROWS BELOW (paste from DriverDebriefSummary.xlsx export)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "12": {
+          "coord": "L12",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K12-J12,0)"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "12": {
+          "coord": "L13",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K13-J13,0)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "12": {
+          "coord": "L14",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K14-J14,0)"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "12": {
+          "coord": "L15",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K15-J15,0)"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "12": {
+          "coord": "L16",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K16-J16,0)"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "12": {
+          "coord": "L17",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K17-J17,0)"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "12": {
+          "coord": "L18",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K18-J18,0)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "12": {
+          "coord": "L19",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K19-J19,0)"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "12": {
+          "coord": "L20",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K20-J20,0)"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "12": {
+          "coord": "L21",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K21-J21,0)"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "12": {
+          "coord": "L22",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K22-J22,0)"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "12": {
+          "coord": "L23",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K23-J23,0)"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "12": {
+          "coord": "L24",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K24-J24,0)"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "12": {
+          "coord": "L25",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K25-J25,0)"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "12": {
+          "coord": "L26",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K26-J26,0)"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "12": {
+          "coord": "L27",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K27-J27,0)"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "12": {
+          "coord": "L28",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K28-J28,0)"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "12": {
+          "coord": "L29",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K29-J29,0)"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "12": {
+          "coord": "L30",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K30-J30,0)"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "12": {
+          "coord": "L31",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K31-J31,0)"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "12": {
+          "coord": "L32",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K32-J32,0)"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "12": {
+          "coord": "L33",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K33-J33,0)"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "12": {
+          "coord": "L34",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K34-J34,0)"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "12": {
+          "coord": "L35",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K35-J35,0)"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "12": {
+          "coord": "L36",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K36-J36,0)"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "12": {
+          "coord": "L37",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K37-J37,0)"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "12": {
+          "coord": "L38",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K38-J38,0)"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "12": {
+          "coord": "L39",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K39-J39,0)"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "12": {
+          "coord": "L40",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K40-J40,0)"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "12": {
+          "coord": "L41",
+          "col": 12,
+          "value": 0,
+          "formula": "=IFERROR(K41-J41,0)"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "DEBRIEF KPI SUMMARY — feeds S_Scorecard and Net-Zero km efficiency"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "KPI"
+        },
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": "Benchmark"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "Average Customer Hit %"
+        },
+        "2": {
+          "coord": "B46",
+          "col": 2,
+          "value": 0.93,
+          "formula": "=IFERROR(AVERAGEIF(F4:F40,\">0\",F4:F40),0)"
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": "≥95% = full score"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "1": {
+          "coord": "A47",
+          "col": 1,
+          "value": "Total Excess km (waste driving)"
+        },
+        "2": {
+          "coord": "B47",
+          "col": 2,
+          "value": 125,
+          "formula": "=IFERROR(SUM(L4:L40),0)"
+        },
+        "3": {
+          "coord": "C47",
+          "col": 3,
+          "value": "Target: 0 excess km"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "1": {
+          "coord": "A48",
+          "col": 1,
+          "value": "Excess km as % of total planned"
+        },
+        "2": {
+          "coord": "B48",
+          "col": 2,
+          "value": 0.0880902044,
+          "formula": "=IFERROR(SUM(L4:L40)/SUM(J4:J40),0)"
+        },
+        "3": {
+          "coord": "C48",
+          "col": 3,
+          "value": "Target: <2%"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "1": {
+          "coord": "A49",
+          "col": 1,
+          "value": "Estimated Scope 1 from excess km"
+        },
+        "2": {
+          "coord": "B49",
+          "col": 2,
+          "value": 0.375,
+          "formula": "=IFERROR(SUM(L4:L40)*0.003,0)"
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "Fleet avg CO₂/km estimate"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "Routes <80% customer hit rate"
+        },
+        "2": {
+          "coord": "B50",
+          "col": 2,
+          "value": 1,
+          "formula": "=IFERROR(COUNTIF(F4:F40,\"<0.8\"),0)"
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": "Target: 0"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "1": {
+          "coord": "A51",
+          "col": 1,
+          "value": "Driver fatigue flags this period"
+        },
+        "2": {
+          "coord": "B51",
+          "col": 2,
+          "value": 0,
+          "formula": "=0"
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": "Target: 0"
+        }
+      }
+    }
+  ]
+}

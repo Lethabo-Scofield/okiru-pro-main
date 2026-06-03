@@ -1,0 +1,1240 @@
+{
+  "sheet_name": "King5_Scorecard",
+  "sanitized_name": "King5_Scorecard",
+  "dimensions": {
+    "max_row": 22,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C4"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C17"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C18"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C19"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Applied,Explained,Partially Applied,Not Applied\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "C20"
+    }
+  ],
+  "formula_count": 38,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "KING V GOVERNANCE SCORECARD — Apply & Explain Methodology  |  All 17 Principles"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "#"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Principle"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Status\n(Apply/Explain/Not)"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Weight"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Score\n/10"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Weighted\nScore"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Evidence Required"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "Current Status / Evidence"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Action Required"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "1"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "[Chapter 1] Ethical leadership and organisational ethics"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": 8
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C4=\"Applied\",10,IF(C4=\"Explained\",7,IF(C4=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": 8,
+          "formula": "=E4*D4/10"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Ethics policy, code of conduct, ethics hotline"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Super Group Code of Business Standards and Ethics (Rev 2, 30 Jan 2023) approved by Executive Committee; Be Heard whistleblower hotline 0800-007-117 (24/365); zero-tolerance anti-bribery framework"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "Annual ethics training programme to be evidenced; ethics committee minutes"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "2"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "[Chapter 2] Responsible corporate citizenship"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C5=\"Applied\",10,IF(C5=\"Explained\",7,IF(C5=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 6,
+          "formula": "=E5*D5/10"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "CSI report, community engagement log, B-BBEE"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Super Group CSI and SED Policy (Rev 2, 30 Jan 2023) — SED budget 1% NPAT, CSI ≤0.25% NPAT; three-pronged approach (Central/Decentralised/Volunteerism); approval & monitoring by Group Social and Ethics Committee"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Publish FY25/26 CSI spend and beneficiary report"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "3"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "[Chapter 3] Board composition — skills, diversity, independence"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "Explained"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 7,
+          "formula": "=IF(C6=\"Applied\",10,IF(C6=\"Explained\",7,IF(C6=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 4.2,
+          "formula": "=E6*D6/10"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Board skills matrix, diversity stats, appointments"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Board composition not disclosed in supplied policy stack — listed SG Trading directors (6) and SG Consumer divisional executives (5) per POPI consent block"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "Provide board skills matrix, diversity stats, independence declarations"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "4"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "[Chapter 4] Board roles, function and performance"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Explained"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 7,
+          "formula": "=IF(C7=\"Applied\",10,IF(C7=\"Explained\",7,IF(C7=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 4.2,
+          "formula": "=E7*D7/10"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "Board charter, director induction, evaluations"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Board charter not provided in supplied policies"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "Provide board charter, director induction records, performance evaluations"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "5"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "[Chapter 5] Committees — Audit, Risk, Remco, S&E Committee"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "Partially Applied"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 8
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(C8=\"Applied\",10,IF(C8=\"Explained\",7,IF(C8=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 4,
+          "formula": "=E8*D8/10"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "Committee ToRs, meeting minutes, composition"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Group Social and Ethics Committee confirmed (CSI/SED Policy §7); Audit/Risk/Remco committee ToRs and composition not provided"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "Provide ToRs and minutes for Audit, Risk, Remco committees"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "6"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "[Chapter 6] Remuneration policy — ESG-linked KPIs"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Explained"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 7,
+          "formula": "=IF(C9=\"Applied\",10,IF(C9=\"Explained\",7,IF(C9=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 4.2,
+          "formula": "=E9*D9/10"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "Remco report, ESG KPIs in exec contracts"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Remco report and ESG-linked exec remuneration not disclosed in supplied policies"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "Provide Remco report; embed ESG KPIs in executive contracts"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "7"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "[Chapter 7] Stakeholder engagement and inclusivity"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C10=\"Applied\",10,IF(C10=\"Explained\",7,IF(C10=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 6,
+          "formula": "=E10*D10/10"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "Stakeholder register, material issues, IAR"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "CSI/SED Policy §15 details internal (intranet, Exco, MCFs, newsletters) and external (website, Integrated Report, PR, tender docs) communication plan; Supplier Code engages full supply chain"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": "Maintain stakeholder register; document material issues per IAR"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "8"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "[Chapter 8] Reporting — integrated reporting, materiality"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 8
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C11=\"Applied\",10,IF(C11=\"Explained\",7,IF(C11=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 8,
+          "formula": "=E11*D11/10"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "Integrated/ESG report, GRI index, materiality matrix"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "CSI/SED Policy §15(b)(v) confirms Group Integrated Report including ESG Report as external communication channel"
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": "Provide latest Integrated Report; complete materiality matrix in toolkit"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "9"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "[Chapter 9] Technology and information governance"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C12=\"Applied\",10,IF(C12=\"Explained\",7,IF(C12=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 6,
+          "formula": "=E12*D12/10"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "IT governance policy, POPIA compliance, cyber risk"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Code of Ethics §6 (Protection of Company Property — IP, confidential information, POPI Act compliance); active SG Consumer POPI consent process (Jan 2026)"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "ISO 27001 certification path; formal POPIA Info Officer appointment letter; annual cyber risk assessment"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "10"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "[Chapter 10] Risk governance — ERM including climate risk"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Partially Applied"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 8
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(C13=\"Applied\",10,IF(C13=\"Explained\",7,IF(C13=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 4,
+          "formula": "=E13*D13/10"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "Risk register with climate risks, ERM policy"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Code of Ethics §11 commits to \"pragmatic, risk-based approach\" for environmental performance with GHG/waste/water targets; explicit climate risk integration into ERM register requires confirmation"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "Formal climate risk integration into ERM register; quarterly board review of climate risks"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "11"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "[Chapter 11] Internal audit and combined assurance"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "Partially Applied"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(C14=\"Applied\",10,IF(C14=\"Explained\",7,IF(C14=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 3,
+          "formula": "=E14*D14/10"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "Internal audit plan, combined assurance model"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "Code of Ethics §8 confirms active Internal Audit Department (reactive + proactive); combined assurance model details not provided"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": "Document combined assurance model; provide internal audit annual plan"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "12"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "[Chapter 12] Governing compliance — legal, regulatory, ESG"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 8
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C15=\"Applied\",10,IF(C15=\"Explained\",7,IF(C15=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 8,
+          "formula": "=E15*D15/10"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "Legal compliance register, ESG compliance tracker"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Code of Ethics §3-4 commits to ethical compliance with all applicable laws; Supplier Code §5 enforces legislative compliance across supply chain; EE Policy aligns to EEA Chapter 3; multi-statute framework evidenced (Companies Act, POPI, EEA, OHS, NEMA, PRECCA, FICA)"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "Maintain quarterly legal compliance register"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "13"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "[Chapter 13] Strategy — six capitals and value creation"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "Explained"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 7,
+          "formula": "=IF(C16=\"Applied\",10,IF(C16=\"Explained\",7,IF(C16=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 4.2,
+          "formula": "=E16*D16/10"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "Strategy doc with six capitals, materiality"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "Six-capitals strategy framing not explicit in supplied policies; corporate strategy and value-creation model in Integrated Report (not provided)"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": "Provide strategy doc with six capitals; align to materiality matrix"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "14"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "[Chapter 14] Performance — financial and non-financial"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "Explained"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 7,
+          "formula": "=IF(C17=\"Applied\",10,IF(C17=\"Explained\",7,IF(C17=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 4.2,
+          "formula": "=E17*D17/10"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "Board performance pack with ESG KPIs"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "Board performance pack with ESG KPIs not provided in supplied policies"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": "Embed E/S/G KPIs in board reporting pack; align to ESG scorecard"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "15"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "[Chapter 15] Disclosure — transparent and balanced reporting"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C18=\"Applied\",10,IF(C18=\"Explained\",7,IF(C18=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 6,
+          "formula": "=E18*D18/10"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "ESG/Integrated report published, TCFD alignment"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "CSI/SED Policy §15(b)(v) confirms Integrated Report including ESG Report; all four supplied policies publicly or internally disclosed with clear authorship and approval (Executive Committee)"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": "Align disclosure to TCFD/IFRS S2; provide GRI content index"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "16"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "[Chapter 16] Non-financial outcomes — ESG, Ubuntu-Botho"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "Partially Applied"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 6
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(C19=\"Applied\",10,IF(C19=\"Explained\",7,IF(C19=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 3,
+          "formula": "=E19*D19/10"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "E, S, G scorecards; net-zero roadmap"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "Multiple ESG policies committing to non-financial outcomes (CSI/SED, EE, Code of Ethics §11 environmental commitments); operational data and outcome tracking via this toolkit"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "Complete operational data entry; publish FY25/26 ESG outcomes"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "17"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "[King III] Residual — specific SA context requirements"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Applied"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 4
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": 10,
+          "formula": "=IF(C20=\"Applied\",10,IF(C20=\"Explained\",7,IF(C20=\"Partially Applied\",5,0)))"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": 4,
+          "formula": "=E20*D20/10"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "Companies Act compliance, MOI, AGM"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Companies Act compliance evidenced (Social & Ethics Committee per s72; Code of Ethics aligns to Companies Act principles); SA regulatory framework throughout (EEA, BCEA, SDL, POPIA, NEMA, OHS Act, PRECCA, FICA)"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "Confirm MOI alignment; AGM evidence"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "KING V TOTAL SCORE"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 135,
+          "formula": "=SUM(E4,E5,E6,E7,E8,E9,E10,E11,E12,E13,E14,E15,E16,E17,E18,E19,E20)"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": 87,
+          "formula": "=SUM(F4,F5,F6,F7,F8,F9,F10,F11,F12,F13,F14,F15,F16,F17,F18,F19,F20)"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "Max theoretical: 1100"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": 0.7941176471,
+          "formula": "=IFERROR(E21/170,0)"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "Adequate",
+          "formula": "=IF(F21>=120,\"Excellent\",IF(F21>=90,\"Good\",IF(F21>=60,\"Adequate\",\"Needs Attention\")))"
+        }
+      }
+    }
+  ]
+}

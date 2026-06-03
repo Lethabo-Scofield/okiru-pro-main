@@ -13,8 +13,10 @@ describe("EsgInformationRequest (input layer)", () => {
     expect(PAGE).not.toMatch(/EsgToolkit\/src\/components\/EsgSectionEditor/);
   });
 
-  it("gates continue to summary on critical validation", () => {
-    expect(PAGE).toMatch(/criticalFails\.length/);
-    expect(PAGE).toMatch(/validateEsgWorkbook/);
+  it("never blocks Continue to Summary on validation", () => {
+    expect(PAGE).toMatch(/Continue to Summary/);
+    expect(PAGE).toMatch(/handleContinueToSummary/);
+    expect(PAGE).not.toMatch(/criticalFails\.length/);
+    expect(PAGE).not.toMatch(/disabled=\{.*validationOk/);
   });
 });

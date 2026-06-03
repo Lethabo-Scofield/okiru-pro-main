@@ -1,0 +1,1142 @@
+{
+  "sheet_name": "S_Scorecard",
+  "sanitized_name": "S_Scorecard",
+  "dimensions": {
+    "max_row": 28,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 54,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "S SCORECARD — Social Performance vs 100 pts  |  EE · WSP/ATR · H&S · Community  |  Links: S_Data"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Indicator"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Max\nPts"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Actual"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Score"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Data Source"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Status"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Standard Ref"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "EE/WSP Action"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Audit / Calculation"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "── EE ──"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "EE: % Black employees (all levels) vs 60% target"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(EE_Scorecard!$B$5>=Assumptions!$B$50,8,IF(EE_Scorecard!$B$5>=Assumptions!$B$50*Assumptions!$B$9,8*EE_Scorecard!$B$5/Assumptions!$B$50,0)),0)"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C5,B5)"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "EE_Scorecard"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D5>=B5,\"✓ Met\",IF(D5>=B5*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "EEA s27 / GRI 405-1"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "EE act compliance"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "% Black (EE_Scorecard B5) ÷ THR_BLACK (60%). Banded × stance."
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "EE: % Black female management (L1-L3) vs 30%"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "6"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF((S_Data!$L$5+S_Data!$L$6)=0,0,IF((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6)>=Assumptions!$B$51,6,IF((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6)>=Assumptions!$B$51*Assumptions!$B$9,6*((S_Data!$F$5+S_Data!$F$6+S_Data!$G$5+S_Data!$G$6+S_Data!$H$5+S_Data!$H$6)/(S_Data!$L$5+S_Data!$L$6))/Assumptions!$B$51,0))),0)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C6,B6)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "S_Data EE"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D6>=B6,\"✓ Met\",IF(D6>=B6*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "EEA s27 / B-BBEE Mgt Control"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Pipeline — promote Black females"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "% Black female at L1+L2 (S_Data) ÷ THR_BFM (30%). Banded × stance."
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "EE: EE Plan submitted & compliant"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(EE_Scorecard!$B$9=\"Yes\",5,IF(EE_Scorecard!$B$9=\"Partial\",2.5,0))"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C7,B7)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "S_Data WSP"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D7>=B7,\"✓ Met\",IF(D7>=B7*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "EEA s20/21"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Annual DoEL submission"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "EE Plan submitted (EE_Scorecard B9). Yes=5, Partial=2.5, No=0"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "EE: % Persons with Disabilities vs 2%"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(EE_Scorecard!$B$8>=Assumptions!$B$52,5,IF(EE_Scorecard!$B$8>=Assumptions!$B$52*Assumptions!$B$9,5*EE_Scorecard!$B$8/Assumptions!$B$52,0)),0)"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C8,B8)"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "S_Data EE"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D8>=B8,\"✓ Met\",IF(D8>=B8*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "EEA s6"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "PWD target per level"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "% PWD (EE_Scorecard B8) ÷ THR_PWD (2%). Banded."
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "EE: EE forum/TD consultation active"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "3"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 3,
+          "formula": "=IF(EE_Scorecard!$B$10=\"Yes\",3,IF(EE_Scorecard!$B$10=\"Partial\",1.5,0))"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 3,
+          "formula": "=MIN(C9,B9)"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "S_Data"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D9>=B9,\"✓ Met\",IF(D9>=B9*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "EEA s16"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Monthly TDs meeting"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "EE forum active (EE_Scorecard B10). Y/N."
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "EE: EE numerical targets set and tracked"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "3"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": 3,
+          "formula": "=IF(EE_Scorecard!$B$12=\"Yes\",3,IF(EE_Scorecard!$B$12=\"Partial\",1.5,0))"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 3,
+          "formula": "=MIN(C10,B10)"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "S_Data"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D10>=B10,\"✓ Met\",IF(D10>=B10*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "EEA s20(2)(b)"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Targets per level/race/gender"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": "EE numerical targets set (EE_Scorecard B12). Y/N."
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "── WSP ──"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "WSP: WSP submitted to SETA on time"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 0,
+          "formula": "=IF(S_Data!B45=\"Yes\",5,0)"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C12,B12)"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "S_Data WSP"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D12>=B12,\"✓ Met\",IF(D12>=B12*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "SDL Act s10 / GRI 404"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Deadline: 30 April annually"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "WSP submitted Y/N (S_Data B45). Yes=5, No=0"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "WSP: ATR submitted on time"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": 0,
+          "formula": "=IF(S_Data!B46=\"Yes\",5,0)"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C13,B13)"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "S_Data WSP"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D13>=B13,\"✓ Met\",IF(D13>=B13*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "SDL Act s10 / GRI 404"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Annual training report"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "ATR submitted Y/N (S_Data B46). Yes=5, No=0"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "WSP: Training hours per employee ≥40 hours"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(S_Data!$L$12=0,0,IF(S_Data!$B$49/S_Data!$L$12>=Assumptions!$B$53,5,IF(S_Data!$B$49/S_Data!$L$12>=Assumptions!$B$53*Assumptions!$B$9,5*(S_Data!$B$49/S_Data!$L$12)/Assumptions!$B$53,0))),0)"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C14,B14)"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "S_Data WSP"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D14>=B14,\"✓ Met\",IF(D14>=B14*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "GRI 404-1"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "Net-zero + EE-aligned programmes"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": "Total training hrs (S_Data B49) ÷ total employees (L12). Target = THR_TRAIN_HR (40). Banded."
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "WSP: Mandatory grant recovery ≥80%"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(S_Data!$B$44=0,0,IF(S_Data!$B$47/S_Data!$B$44>=Assumptions!$B$54,5,IF(S_Data!$B$47/S_Data!$B$44>=Assumptions!$B$54*Assumptions!$B$9,5*(S_Data!$B$47/S_Data!$B$44)/Assumptions!$B$54,0))),0)"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C15,B15)"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "S_Data WSP"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D15>=B15,\"✓ Met\",IF(D15>=B15*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "SDL Act s11"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Mandatory grant claim deadline"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "Grant claimed (S_Data B47) ÷ SDL levy (B44). Target = THR_GRANT (80%). Banded."
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "── H&S ──"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "H&S: LTIFR ≤ 2.0"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(S_Data!$G$35=0,0,IF(S_Data!$G$35<=Assumptions!$B$55,8,IF(S_Data!$G$35<=Assumptions!$B$55/Assumptions!$B$9,MAX(0,8*(1+Assumptions!$B$9-S_Data!$G$35/Assumptions!$B$55)),0))),0)"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C17,B17)"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "S_Data H&S"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D17>=B17,\"✓ Met\",IF(D17>=B17*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "ISO 45001 / GRI 403-9"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "Fatigue management key lever"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": "LTIFR (S_Data G35). Target ≤ THR_LTIFR (2.0). Inverse banded × stance."
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "H&S: Zero fatalities"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": 8,
+          "formula": "=IFERROR(IF(OR(S_Data!$G$28=0,S_Data!$G$28=\"—\",S_Data!$G$28=\"\"),8,0),0)"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 8,
+          "formula": "=MIN(C18,B18)"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "S_Data H&S"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D18>=B18,\"✓ Met\",IF(D18>=B18*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": "GRI 403-9 / OHS Act"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "Absolute priority"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": "Fatalities YTD (S_Data G28). Zero = full 8 pts; any fatality = 0 (absolute priority)."
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "H&S: Driver fatigue programme active"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(S_Data!$C$59>0,5,0)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C19,B19)"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Driver_Debrief"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D19>=B19,\"✓ Met\",IF(D19>=B19*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "ISO 45001 / TETA"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "All 77 drivers trained annually"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "Driver fatigue training learners count (S_Data C59) > 0 → full 5 pts"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "H&S: Incident investigation rate 100%"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 4,
+          "formula": "=IF(SUM(S_Data!$G$29:$G$33)>0,4,0)"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 4,
+          "formula": "=MIN(C20,B20)"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "S_Data H&S"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D20>=B20,\"✓ Met\",IF(D20>=B20*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "ISO 45001 / OHS Act"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Accidently system all depots"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "Incidents being logged (S_Data G29:G33 sum > 0) → full 4 pts. Refinement: link to G_Data investigation Y/N."
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "── Community ──"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Community: CSI/SED spend ≥1% NPAT"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C22,B22)"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "S_Data Community"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D22>=B22,\"✓ Met\",IF(D22>=B22*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "GRI 413-1 / B-BBEE SED"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "Align to social calendar"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": "Pending: requires NPAT input in G_Data + sum of S_Data D72:D79 (CSI spend). Currently 0."
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Community: Social calendar initiatives ≥6 pa"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 5,
+          "formula": "=IFERROR(IF(COUNTA(S_Data!$A$72:$A$79)>=6,5,IF(COUNTA(S_Data!$A$72:$A$79)>=6*Assumptions!$B$9,5*COUNTA(S_Data!$A$72:$A$79)/6,0)),0)"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C23,B23)"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "S_Data Community"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D23>=B23,\"✓ Met\",IF(D23>=B23*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "ISO 26000 / King V P2"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "2026 calendar active"
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": "Count of CSI initiatives (S_Data A72:A79). Target = 6 pa. Banded."
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Community: Local labour procurement ≥40%"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C24,B24)"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "S_Data"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D24>=B24,\"✓ Met\",IF(D24>=B24*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "B-BBEE ESD / GRI 204"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "Preferential procurement"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": "Pending: requires local procurement % input in S_Data. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "── Supplier ──"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Supplier: IMS-T-149 H&S compliance ≥80%"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C26,B26)"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "SAQ_Supplier"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D26>=B26,\"✓ Met\",IF(D26>=B26*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "GRI 308 / ISO 26000"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "Safety file check each supplier"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": "Pending: SAQ_Supplier aggregate score required. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Supplier: Supplier food safety rating"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C27,B27)"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "SAQ_Supplier"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D27>=B27,\"✓ Met\",IF(D27>=B27*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "ISO 22000 / GRI 416"
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": "Cold chain quality standards"
+        },
+        "9": {
+          "coord": "I27",
+          "col": 9,
+          "value": "Pending: SAQ_Supplier food safety aggregate required. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "S SCORECARD TOTAL"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": 33,
+          "formula": "=SUM(D5,D6,D7,D8,D9,D10,D12,D13,D14,D15,D17,D18,D19,D20,D22,D23,D24,D26,D27)"
+        }
+      }
+    }
+  ]
+}
