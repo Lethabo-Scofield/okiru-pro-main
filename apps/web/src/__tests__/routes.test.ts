@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
+import { ESG_CLIENTS_PATH, esgClientsHref } from "@/lib/esgRoutes";
 
 const APP_TSX = readFileSync(
   path.resolve(__dirname, "../App.tsx"),
@@ -49,5 +50,10 @@ describe("App.tsx route declarations", () => {
     expect(APP_TSX).not.toMatch(/EsgToolkitRedirect/);
     expect(APP_TSX).not.toMatch(/EsgFlowStepper/);
     expect(APP_TSX).toMatch(/EsgPreviewRoute/);
+  });
+
+  it("exports companies href for toolkit back navigation", () => {
+    expect(ESG_CLIENTS_PATH).toBe("/esg/clients");
+    expect(esgClientsHref()).toBe("/esg/clients");
   });
 });
