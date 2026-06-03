@@ -1,5 +1,5 @@
 import { API_BASE } from "@toolkit/lib/config";
-import { ESG_PHASE1_SECTION_IDS } from "./esgSections";
+import { ESG_SECTION_IDS } from "./esgSections";
 
 export type EsgWorkbookSection = {
   cells: Record<string, string | number | boolean | null>;
@@ -9,6 +9,7 @@ export type EsgWorkbookData = {
   companyId: string;
   sections: Record<string, EsgWorkbookSection>;
   updatedAt: string;
+  submittedAt?: string | null;
 };
 
 const LS_PREFIX = "okiru-esg-workbook:";
@@ -37,7 +38,7 @@ export function saveEsgWorkbookLocal(data: EsgWorkbookData): void {
 
 export function emptyEsgWorkbook(companyId: string): EsgWorkbookData {
   const sections: Record<string, EsgWorkbookSection> = {};
-  for (const id of ESG_PHASE1_SECTION_IDS) {
+  for (const id of ESG_SECTION_IDS) {
     sections[id] = { cells: {} };
   }
   return { companyId, sections, updatedAt: new Date().toISOString() };

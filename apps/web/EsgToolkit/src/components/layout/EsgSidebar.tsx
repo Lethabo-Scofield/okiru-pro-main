@@ -1,12 +1,13 @@
 import { useLocation, Link } from "wouter";
 import { cn } from "@toolkit/lib/utils";
+import { useEsgStore } from "../../lib/esgStore";
 
 export type EsgNavItem = {
   id: string;
   label: string;
   href: string;
   pillar?: "e" | "s" | "g" | "overview" | "data";
-  score?: string;
+  scoreKey?: "environmental" | "social" | "governance";
 };
 
 const NAV_SECTIONS: { title: string; items: EsgNavItem[] }[] = [
@@ -15,35 +16,39 @@ const NAV_SECTIONS: { title: string; items: EsgNavItem[] }[] = [
     items: [
       { id: "dashboard", label: "Dashboard", href: "/", pillar: "overview" },
       { id: "net-zero", label: "Net-Zero Roadmap", href: "/net-zero", pillar: "overview" },
+      { id: "carbon-tax", label: "Carbon Tax", href: "/carbon-tax", pillar: "overview" },
     ],
   },
   {
     title: "Environmental",
     items: [
-      { id: "e-dashboard", label: "E Dashboard", href: "/environmental", pillar: "e", score: "—" },
+      { id: "e-dashboard", label: "E Dashboard", href: "/environmental", pillar: "e", scoreKey: "environmental" },
       { id: "ghg", label: "GHG & Energy", href: "/ghg", pillar: "e" },
       { id: "fleet", label: "Fleet Register", href: "/fleet", pillar: "e" },
       { id: "waste", label: "Waste Register", href: "/waste", pillar: "e" },
+      { id: "iso-14083", label: "ISO 14083", href: "/iso-14083", pillar: "e" },
     ],
   },
   {
     title: "Social",
     items: [
-      { id: "s-dashboard", label: "S Dashboard", href: "/social", pillar: "s", score: "—" },
+      { id: "s-dashboard", label: "S Dashboard", href: "/social", pillar: "s", scoreKey: "social" },
       { id: "ee", label: "EE Scorecard", href: "/ee-scorecard", pillar: "s" },
     ],
   },
   {
     title: "Governance",
     items: [
-      { id: "g-dashboard", label: "G Dashboard", href: "/governance", pillar: "g", score: "—" },
+      { id: "g-dashboard", label: "G Dashboard", href: "/governance", pillar: "g", scoreKey: "governance" },
       { id: "king5", label: "King V", href: "/king5", pillar: "g" },
       { id: "ifrs", label: "IFRS S1/S2", href: "/ifrs", pillar: "g" },
+      { id: "garp", label: "GARP/ERM", href: "/garp", pillar: "g" },
     ],
   },
   {
     title: "Data",
     items: [
+      { id: "assumptions", label: "Assumptions", href: "/assumptions", pillar: "data" },
       { id: "import", label: "Data Import", href: "/import", pillar: "data" },
     ],
   },
@@ -64,10 +69,17 @@ function pillarAccent(pillar?: EsgNavItem["pillar"]): string {
 
 export function EsgSidebar() {
   const [location] = useLocation();
+  const scorecard = useEsgStore((s) => s.scorecard);
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/" || location === "";
     return location === href || location.startsWith(`${href}/`);
+  };
+
+  const badge = (key?: EsgNavItem["scoreKey"]) => {
+    if (!key || !scorecard) return "—";
+    const pts = scorecard[key].score;
+    return `${pts.toFixed(0)}`;
   };
 
   return (
@@ -95,8 +107,10 @@ export function EsgSidebar() {
                 data-testid={`esg-nav-${item.id}`}
               >
                 <span className="truncate">{item.label}</span>
-                {item.score != null && (
-                  <span className="ml-auto text-[9px] font-bold tabular-nums opacity-70">{item.score}</span>
+                {item.scoreKey != null && (
+                  <span className="ml-auto text-[9px] font-bold tabular-nums opacity-70">
+                    {badge(item.scoreKey)}
+                  </span>
                 )}
               </Link>
             );

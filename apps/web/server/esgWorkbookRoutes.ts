@@ -1,10 +1,12 @@
 import type { Express, Request, Response } from "express";
 import mongoose from "mongoose";
+import * as XLSX from "xlsx";
 import { requireAuth } from "./routes";
 import { canAccessEsgToolkit } from "./esgAccess";
 import { createLogger } from "./logger";
 import { ClientModel } from "../shared/schema";
 import { getClient as memGetClient } from "./clientsMemoryStore";
+import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -15,9 +17,10 @@ export type EsgWorkbookData = {
   ownerOrganizationId: string | null;
   sections: Record<string, EsgWorkbookSection>;
   updatedAt: string;
+  submittedAt?: string | null;
 };
 
-const SECTION_KEYS = ["assumptions", "e-data", "s-data", "g-data"] as const;
+const SECTION_KEYS = ESG_SECTION_IDS;
 
 const esgWorkbookSchema = new mongoose.Schema(
   {
@@ -25,6 +28,7 @@ const esgWorkbookSchema = new mongoose.Schema(
     ownerUserId: { type: String, required: true, index: true },
     ownerOrganizationId: { type: String, default: null, index: true },
     sections: { type: mongoose.Schema.Types.Mixed, default: {} },
+    submittedAt: { type: Date, default: null },
     updatedAt: { type: Date, default: Date.now },
   },
   { collection: "esg_workbooks", minimize: false },
@@ -33,7 +37,7 @@ const esgWorkbookSchema = new mongoose.Schema(
 const EsgWorkbookModel =
   mongoose.models.EsgWorkbook || mongoose.model("EsgWorkbook", esgWorkbookSchema);
 
-const memoryStore = new Map<string, EsgWorkbookData>();
+const memoryStore = new Map<string, EsgWorkbookData & { submittedAt?: string | null }>();
 
 function mongoReady(): boolean {
   return mongoose.connection.readyState === 1;
@@ -83,6 +87,9 @@ async function authorizeEsgWorkbook(req: Request, res: Response): Promise<EsgWor
         ownerOrganizationId: (doc as any).ownerOrganizationId ?? null,
         sections: ((doc as any).sections ?? {}) as Record<string, EsgWorkbookSection>,
         updatedAt: new Date((doc as any).updatedAt).toISOString(),
+        submittedAt: (doc as any).submittedAt
+          ? new Date((doc as any).submittedAt).toISOString()
+          : null,
       };
     }
   } else {
@@ -96,6 +103,7 @@ async function authorizeEsgWorkbook(req: Request, res: Response): Promise<EsgWor
       ownerOrganizationId: userOrgId,
       sections: {},
       updatedAt: new Date().toISOString(),
+      submittedAt: null,
     };
   }
   return wb;
@@ -111,6 +119,7 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
         ownerUserId: wb.ownerUserId,
         ownerOrganizationId: wb.ownerOrganizationId,
         sections: wb.sections,
+        submittedAt: wb.submittedAt ?? null,
         updatedAt: new Date(wb.updatedAt),
       },
       { upsert: true, new: true },
@@ -119,6 +128,22 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
     memoryStore.set(wb.companyId, wb);
   }
 }
+
+const SHEET_NAMES: Record<string, string> = {
+  assumptions: "Assumptions",
+  "e-data": "E_Data",
+  "s-data": "S_Data",
+  "g-data": "G_Data",
+  ee: "EE_Scorecard",
+  fleet: "Fleet_Register",
+  waste: "Waste_Register",
+  "driver-debrief": "Driver_Debrief",
+  "iso-tracker": "ISO_Tracker",
+  king5: "King5_Scorecard",
+  ifrs: "IFRS_S1_S2",
+  garp: "GARP_GRAP",
+  saq: "SAQ_Supplier",
+};
 
 export function registerEsgWorkbookRoutes(app: Express): void {
   app.get("/api/esg/access", requireAuth, (req: Request, res: Response) => {
@@ -134,11 +159,14 @@ export function registerEsgWorkbookRoutes(app: Express): void {
 
   app.put("/api/esg/workbook/:companyId/section/:sectionKey", requireAuth, async (req, res) => {
     const { sectionKey } = req.params;
-    if (!SECTION_KEYS.includes(sectionKey as (typeof SECTION_KEYS)[number])) {
+    if (!SECTION_KEYS.includes(sectionKey)) {
       return res.status(400).json({ error: "Unknown section key" });
     }
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
+    if (wb.submittedAt) {
+      return res.status(423).json({ error: "Workbook is submitted and locked" });
+    }
     const cells = (req.body as any)?.cells;
     if (!cells || typeof cells !== "object") {
       return res.status(400).json({ error: "Missing cells payload" });
@@ -151,5 +179,48 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       logger.error("Failed to save ESG section", err);
       res.status(500).json({ error: "Failed to save section" });
     }
+  });
+
+  app.post("/api/esg/workbook/:companyId/validate", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    res.json({ ok: true, companyId: wb.companyId });
+  });
+
+  app.post("/api/esg/workbook/:companyId/submit", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    if (wb.submittedAt) {
+      return res.json({ ok: true, submittedAt: wb.submittedAt });
+    }
+    const iso = new Date().toISOString();
+    wb.submittedAt = iso;
+    wb.sections.assumptions = wb.sections.assumptions ?? { cells: {} };
+    (wb.sections.assumptions.cells as Record<string, unknown>)["_submittedAt"] = iso;
+    await persistEsgWorkbook(wb);
+    res.json({ ok: true, submittedAt: iso });
+  });
+
+  app.get("/api/esg/workbook/:companyId/export", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    const book = XLSX.utils.book_new();
+    for (const key of SECTION_KEYS) {
+      const cells = wb.sections[key]?.cells ?? {};
+      const rows = Object.entries(cells).map(([cell, value]) => ({ Cell: cell, Value: value }));
+      if (rows.length === 0) rows.push({ Cell: "A1", Value: "" });
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(book, sheet, SHEET_NAMES[key] ?? key);
+    }
+    const buf = XLSX.write(book, { type: "buffer", bookType: "xlsx" });
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="esg-workbook-${wb.companyId}.xlsx"`,
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.send(buf);
   });
 }

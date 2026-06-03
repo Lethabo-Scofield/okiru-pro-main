@@ -3,13 +3,18 @@ import { Leaf } from "lucide-react";
 import { Link } from "wouter";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
+import { esgToolkitHref } from "@/lib/esgRoutes";
 import { EsgSidebar } from "./components/layout/EsgSidebar";
+import { EsgSectionEditor } from "./components/EsgSectionEditor";
 import EsgDashboard from "./pages/EsgDashboard";
-import { EsgPlaceholderPage } from "./pages/EsgPlaceholderPage";
-import { getEsgActiveCompany } from "@/lib/esgRoutes";
+import EsgCarbonTax from "./pages/EsgCarbonTax";
+import EsgNetZero from "./pages/EsgNetZero";
+import EsgIso14083 from "./pages/EsgIso14083";
+import { useEsgStore } from "./lib/esgStore";
 
 function EsgToolkitHeader() {
-  const companyId = getEsgActiveCompany();
+  const companyId = useEsgStore((s) => s.companyId);
+  const companyName = useEsgStore((s) => s.companyName);
 
   return (
     <header
@@ -20,7 +25,9 @@ function EsgToolkitHeader() {
       <img src={logoCircle} alt="Okiru" className="h-7 w-7 rounded-md opacity-90" />
       <div className="flex items-center gap-2 min-w-0">
         <Leaf className="h-4 w-4 text-[var(--esg-acc-e)] shrink-0" />
-        <span className="text-[14px] font-semibold text-[var(--esg-text)] truncate">ESG Toolkit</span>
+        <span className="text-[14px] font-semibold text-[var(--esg-text)] truncate">
+          {companyName || "ESG Toolkit"}
+        </span>
       </div>
       {companyId ? (
         <span className="text-[10px] text-[var(--esg-text3)] font-mono truncate hidden sm:inline">
@@ -29,14 +36,18 @@ function EsgToolkitHeader() {
       ) : null}
       <div className="flex-1" />
       <Link
-        href={companyId ? `/esg/create/${encodeURIComponent(companyId)}` : "/esg/clients"}
+        href={esgToolkitHref(companyId)}
         className="text-[11px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] px-3 py-1.5 rounded-full border border-[var(--esg-glass-border)]"
-        data-testid="esg-link-inputs"
+        data-testid="esg-link-dashboard"
       >
-        Edit inputs
+        Dashboard
       </Link>
     </header>
   );
+}
+
+function SectionRoute({ sectionId, title }: { sectionId: string; title?: string }) {
+  return <EsgSectionEditor sectionId={sectionId} title={title} />;
 }
 
 export function EsgAppRoutes() {
@@ -48,53 +59,53 @@ export function EsgAppRoutes() {
         <main className="flex-1 overflow-y-auto p-6 sm:p-7">
           <Switch>
             <Route path="/" component={EsgDashboard} />
-            <Route path="/net-zero">
-              <EsgPlaceholderPage
-                title="Net-Zero Roadmap"
-                description="Milestone gaps from NetZero_Roadmap sheet — Phase 2."
-              />
-            </Route>
+            <Route path="/net-zero" component={EsgNetZero} />
+            <Route path="/carbon-tax" component={EsgCarbonTax} />
             <Route path="/environmental">
-              <EsgPlaceholderPage
-                title="Environmental"
-                description="E_Data monthly grid and E_Scorecard outputs — Phase 1."
-              />
+              <SectionRoute sectionId="e-data" title="Environmental dashboard" />
             </Route>
             <Route path="/ghg">
-              <EsgPlaceholderPage title="GHG & Energy" description="Scope 1–3 from E_Data — Phase 1." />
+              <SectionRoute sectionId="e-data" title="GHG & Energy (E_Data)" />
             </Route>
             <Route path="/fleet">
-              <EsgPlaceholderPage title="Fleet Register" description="Fleet_Register grid — Phase 1." />
+              <SectionRoute sectionId="fleet" />
             </Route>
             <Route path="/waste">
-              <EsgPlaceholderPage title="Waste Register" description="Waste_Register grid — Phase 1." />
+              <SectionRoute sectionId="waste" />
             </Route>
             <Route path="/social">
-              <EsgPlaceholderPage title="Social" description="S_Data and S_Scorecard — Phase 1." />
+              <SectionRoute sectionId="s-data" title="Social (S_Data)" />
             </Route>
             <Route path="/ee-scorecard">
-              <EsgPlaceholderPage
-                title="EE Scorecard"
-                description="EE_Scorecard feeds S_Scorecard rows 5–10 — required for social scoring."
-              />
+              <SectionRoute sectionId="ee" />
             </Route>
             <Route path="/governance">
-              <EsgPlaceholderPage
-                title="Governance"
-                description="G_Data column F uses 0–5 maturity scores (not HTML Yes/Partial/No)."
-              />
+              <SectionRoute sectionId="g-data" title="Governance (G_Data)" />
             </Route>
             <Route path="/king5">
-              <EsgPlaceholderPage title="King V" description="King5_Scorecard checklist — Phase 1." />
+              <SectionRoute sectionId="king5" title="King V checklist" />
             </Route>
             <Route path="/ifrs">
-              <EsgPlaceholderPage title="IFRS S1/S2" description="IFRS_S1_S2 disclosures — Phase 1." />
+              <SectionRoute sectionId="ifrs" title="IFRS S1/S2 disclosures" />
             </Route>
+            <Route path="/garp">
+              <SectionRoute sectionId="garp" title="GARP / GRAP" />
+            </Route>
+            <Route path="/saq">
+              <SectionRoute sectionId="saq" title="SAQ Supplier" />
+            </Route>
+            <Route path="/assumptions">
+              <SectionRoute sectionId="assumptions" />
+            </Route>
+            <Route path="/iso-tracker">
+              <SectionRoute sectionId="iso-tracker" />
+            </Route>
+            <Route path="/iso-14083" component={EsgIso14083} />
             <Route path="/import">
-              <EsgPlaceholderPage title="Data Import" description="Paste and Excel import — Phase 1." />
+              <SectionRoute sectionId="e-data" title="Data import — E_Data" />
             </Route>
             <Route>
-              <EsgPlaceholderPage title="Not found" description="This ESG section is not available yet." />
+              <div className="text-[13px] text-[var(--esg-text3)]">Section not found.</div>
             </Route>
           </Switch>
         </main>

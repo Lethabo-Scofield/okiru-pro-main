@@ -1,9 +1,5 @@
 /**
  * Regression — route table (Task #4 verification).
- *
- * Source-level smoke test on `apps/web/src/App.tsx`. We don't spin up wouter
- * or React (no RTL in this project's vitest setup) — we assert the route
- * declarations are present (or absent) by inspecting the JSX text.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -39,12 +35,14 @@ describe("App.tsx route declarations", () => {
     expect(hasRoute("/test")).toBe(false);
   });
 
-  it("declares ESG flow routes behind EsgPreviewRoute (Phase 1)", () => {
+  it("declares ESG routes — clients, toolkit, legacy redirects", () => {
     expect(hasRoute("/esg")).toBe(true);
     expect(hasRoute("/esg/clients")).toBe(true);
-    expect(hasRoute("/esg/create/:companyId")).toBe(true);
-    expect(hasRoute("/esg/create/:companyId/summary")).toBe(true);
     expect(hasRoute("/esg/toolkit")).toBe(true);
+    expect(hasRoute("/esg/toolkit/:companyId")).toBe(true);
+    expect(hasRoute("/esg/create/:companyId")).toBe(true);
+    expect(APP_TSX).toMatch(/EsgToolkitRedirect/);
+    expect(APP_TSX).not.toMatch(/EsgFlowStepper/);
     expect(APP_TSX).toMatch(/EsgPreviewRoute/);
   });
 });

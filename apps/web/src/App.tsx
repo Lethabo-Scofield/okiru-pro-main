@@ -26,8 +26,7 @@ import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
 import EsgClientSelector from "@/pages/EsgClientSelector";
-import EsgInformationRequest from "@/pages/EsgInformationRequest";
-import EsgScoreSummary from "@/pages/EsgScoreSummary";
+import EsgToolkitRedirect from "@/pages/EsgToolkitRedirect";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
@@ -199,10 +198,13 @@ function AppRouter() {
         <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
-        <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitRedirect /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId">
-        <ProtectedRoute><EsgPreviewRoute><EsgInformationRequest /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitRedirect /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/toolkit/:companyId" nest>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/toolkit" nest>
         <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
