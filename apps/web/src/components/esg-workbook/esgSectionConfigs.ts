@@ -32,17 +32,174 @@ export const COVER_FIELDS: EsgFieldDef[] = [
   },
 ];
 
+const REPORTING_STANDARD_OPTIONS = [
+  "King V + IFRS S1/S2",
+  "GRI Standards",
+  "IFRS S1+S2 only",
+  "ESRS (EU CSRD)",
+  "TCFD",
+  "Combined (all)",
+] as const;
+
+const MATERIALITY_OPTIONS = [
+  "Single (financial — IFRS)",
+  "Double (financial + impact — ESRS)",
+  "Dynamic",
+] as const;
+
+const CURRENCY_OPTIONS = [
+  "ZAR",
+  "USD",
+  "EUR",
+  "GBP",
+  "KES",
+  "NGN",
+  "BWP",
+  "ZMW",
+  "GHS",
+  "EGP",
+  "XOF",
+  "MAD",
+] as const;
+
+const CARBON_TAX_MODE_OPTIONS = [
+  "Current Tier 1 only",
+  "Escalated Tier 2 only",
+  "Both (current + escalated)",
+] as const;
+
 export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
   {
     cell: "B6",
     label: "Scoring stance",
     type: "select",
     options: ["Lean", "Standard", "Strict"],
+    helpText:
+      "Sets the banding floor for partial credit on quantitative Environmental, Social, and Governance (ESG) indicators (Lean 30% / Standard 50% / Strict 70%).",
   },
-  { cell: "B8", label: "Sector", type: "select", options: COVER_FIELDS[4].options },
-  { cell: "B9", label: "Stance floor (B9)", type: "number" },
-  { cell: "B107", label: "Net-zero target year", type: "number" },
-  { cell: "B55", label: "LTIFR threshold", type: "number" },
+  {
+    cell: "B8",
+    label: "Sector",
+    type: "select",
+    options: COVER_FIELDS[4].options,
+    helpText:
+      "Industry sector for sector-specific norms (e.g. fleet litres per 100 km, International Organization for Standardization (ISO) trackers).",
+  },
+  {
+    cell: "B9",
+    label: "Primary reporting standard",
+    type: "select",
+    options: [...REPORTING_STANDARD_OPTIONS],
+    helpText:
+      "Main disclosure framework: King Code of Governance (King V), International Financial Reporting Standards (IFRS) S1/S2 climate disclosures, Global Reporting Initiative (GRI), European Sustainability Reporting Standards (ESRS), or Task Force on Climate-related Financial Disclosures (TCFD).",
+  },
+  {
+    cell: "B10",
+    label: "Materiality basis",
+    type: "select",
+    options: [...MATERIALITY_OPTIONS],
+    helpText:
+      "Single = financial materiality (IFRS); Double = financial plus impact (ESRS); Dynamic = both over time.",
+  },
+  {
+    cell: "B11",
+    label: "Reporting currency",
+    type: "select",
+    options: [...CURRENCY_OPTIONS],
+    helpText: "Currency for Corporate Social Investment (CSI), carbon tax, training spend, and procurement figures.",
+  },
+  {
+    cell: "B13",
+    label: "Carbon tax display",
+    type: "select",
+    options: [...CARBON_TAX_MODE_OPTIONS],
+    helpText:
+      "Shows current Tier 1 greenhouse gas (GHG) tax liability, escalated Tier 2 forward view, or both side by side.",
+  },
+  {
+    cell: "B43",
+    label: "Scope 1+2 year-on-year reduction target (THR_GHG_YOY)",
+    type: "number",
+    helpText:
+      "Minimum annual reduction % for Scope 1 and Scope 2 emissions — aligned with Science Based Targets initiative (SBTi) near-term pace (threshold code THR_GHG_YOY).",
+  },
+  {
+    cell: "B44",
+    label: "Renewable electricity minimum (THR_RE)",
+    type: "number",
+    helpText:
+      "Minimum renewable energy share of grid electricity (kilowatt-hours, kWh) — threshold code THR_RE.",
+  },
+  {
+    cell: "B45",
+    label: "Fleet fuel tolerance over norm (THR_FUEL_TOL)",
+    type: "number",
+    helpText: "Multiplier above original equipment manufacturer (OEM) litres per 100 km before flagged — THR_FUEL_TOL.",
+  },
+  {
+    cell: "B46",
+    label: "Electric vehicle fleet % minimum (THR_EV_MIN)",
+    type: "number",
+    helpText: "Minimum electric vehicle (EV) share of fleet — threshold code THR_EV_MIN.",
+  },
+  {
+    cell: "B48",
+    label: "Waste diversion target (THR_WASTE)",
+    type: "number",
+    helpText: "Minimum waste diverted from landfill (75% default) — threshold code THR_WASTE.",
+  },
+  {
+    cell: "B50",
+    label: "Black employees target (THR_BLACK)",
+    type: "number",
+    helpText: "Target % Black employees (Employment Equity, EE) — threshold code THR_BLACK.",
+  },
+  {
+    cell: "B51",
+    label: "Black female management target (THR_BFM)",
+    type: "number",
+    helpText: "Target % Black female at management levels L1+L2 — threshold code THR_BFM.",
+  },
+  {
+    cell: "B52",
+    label: "Persons with disabilities target (THR_PWD)",
+    type: "number",
+    helpText: "Target % employees with disabilities (PWD) — threshold code THR_PWD.",
+  },
+  {
+    cell: "B55",
+    label: "Lost Time Injury Frequency Rate maximum (THR_LTIFR)",
+    type: "number",
+    helpText:
+      "Maximum Lost Time Injury Frequency Rate (LTIFR) per 200,000 hours worked — threshold code THR_LTIFR.",
+  },
+  {
+    cell: "B56",
+    label: "CSI / SED spend minimum (THR_CSI)",
+    type: "number",
+    helpText:
+      "Minimum Corporate Social Investment (CSI) / Socio-Economic Development (SED) spend as % of Net Profit After Tax (NPAT) — B-BBEE target 1% (THR_CSI).",
+  },
+  {
+    cell: "B58",
+    label: "King V Apply & Explain minimum (THR_KING)",
+    type: "number",
+    helpText: "Minimum % King V principles at Apply & Explain maturity — threshold code THR_KING.",
+  },
+  {
+    cell: "B60",
+    label: "Public interest score minimum (THR_PI)",
+    type: "number",
+    helpText:
+      "Minimum public interest score for Governance, Accountability, Risk and Performance (GARP) / Generally Recognised Accounting Practice (GRAP) — THR_PI.",
+  },
+  {
+    cell: "B107",
+    label: "Net-zero target year (SBTi CNZS)",
+    type: "number",
+    helpText:
+      "Target year for net-zero greenhouse gas (GHG) emissions under Science Based Targets initiative (SBTi) Corporate Net-Zero Standard (CNZS) 2.0 (typically 2050).",
+  },
 ];
 
 export const S_DATA_HS_FIELDS: EsgFieldDef[] = [

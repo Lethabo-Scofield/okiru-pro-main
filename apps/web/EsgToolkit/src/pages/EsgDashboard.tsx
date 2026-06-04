@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { API_BASE } from "@toolkit/lib/config";
+import { toolkitPillarHref } from "@/lib/esg/esgToolkitNav";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
@@ -98,8 +100,15 @@ export default function EsgDashboard() {
           ).map((p) => {
             const pts = scorecard?.[p.key]?.score;
             const max = ESG_PILLAR_MAX[p.key];
+            const href = toolkitPillarHref(p.key);
             return (
-              <div key={p.key} className="esg-glass-sm p-3" data-testid={`esg-pillar-${p.key}`}>
+              <Link
+                key={p.key}
+                href={href}
+                className="esg-glass-sm p-3 block hover:bg-white/[0.04] transition-colors cursor-pointer"
+                data-testid={`esg-pillar-${p.key}`}
+                data-esg-pillar-href={href}
+              >
                 <div className="text-[9px] uppercase tracking-wider text-[var(--esg-text3)]">
                   {p.label}
                 </div>
@@ -107,7 +116,7 @@ export default function EsgDashboard() {
                   {pts != null ? pts.toFixed(1) : "—"}
                   <span className="text-[12px] text-[var(--esg-text3)] font-normal"> / {max}</span>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -115,15 +124,40 @@ export default function EsgDashboard() {
 
       {dash?.kpis?.length ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2" data-testid="esg-kpi-grid">
-          {dash.kpis.map((k) => (
-            <div key={k.id} className="esg-glass-sm p-3" data-testid={`esg-kpi-${k.id}`}>
-              <div className="text-[9px] uppercase tracking-wider text-[var(--esg-text3)]">
-                {k.label}
+          {dash.kpis.map((k) => {
+            const pillarHref =
+              k.id === "e-score" || k.id === "rating-e"
+                ? toolkitPillarHref("environmental")
+                : k.id === "s-score" || k.id === "rating-s"
+                  ? toolkitPillarHref("social")
+                  : k.id === "g-score" || k.id === "rating-g"
+                    ? toolkitPillarHref("governance")
+                    : null;
+            const inner = (
+              <>
+                <div className="text-[9px] uppercase tracking-wider text-[var(--esg-text3)]">
+                  {k.label}
+                </div>
+                <div className="text-[15px] font-semibold mt-1 text-[var(--esg-text)]">{k.value}</div>
+                {k.sub ? <div className="text-[10px] text-[var(--esg-text3)] mt-0.5">{k.sub}</div> : null}
+              </>
+            );
+            return pillarHref ? (
+              <Link
+                key={k.id}
+                href={pillarHref}
+                className="esg-glass-sm p-3 block hover:bg-white/[0.04] transition-colors"
+                data-testid={`esg-kpi-${k.id}`}
+                data-esg-pillar-href={pillarHref}
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div key={k.id} className="esg-glass-sm p-3" data-testid={`esg-kpi-${k.id}`}>
+                {inner}
               </div>
-              <div className="text-[15px] font-semibold mt-1 text-[var(--esg-text)]">{k.value}</div>
-              {k.sub ? <div className="text-[10px] text-[var(--esg-text3)] mt-0.5">{k.sub}</div> : null}
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
@@ -135,14 +169,23 @@ export default function EsgDashboard() {
               { key: "social" as const, title: "S scorecard" },
               { key: "governance" as const, title: "G scorecard" },
             ] as const
-          ).map((p) => (
-            <div key={p.key} className="esg-glass p-4" data-testid={`esg-pillar-table-${p.key}`}>
-              <h2 className="text-[11px] font-bold uppercase text-[var(--esg-text3)] mb-3">
-                {p.title}
-              </h2>
-              <PillarTable rows={dash.pillarRows[p.key]} />
-            </div>
-          ))}
+          ).map((p) => {
+            const href = toolkitPillarHref(p.key);
+            return (
+              <Link
+                key={p.key}
+                href={href}
+                className="esg-glass p-4 block hover:bg-white/[0.03] transition-colors"
+                data-testid={`esg-pillar-table-${p.key}`}
+                data-esg-pillar-href={href}
+              >
+                <h2 className="text-[11px] font-bold uppercase text-[var(--esg-text3)] mb-3">
+                  {p.title}
+                </h2>
+                <PillarTable rows={dash.pillarRows[p.key]} />
+              </Link>
+            );
+          })}
         </div>
       ) : null}
 

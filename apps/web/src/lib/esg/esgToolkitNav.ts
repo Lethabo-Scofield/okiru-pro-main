@@ -235,6 +235,21 @@ export const ESG_TOOLKIT_NAV_TREE: EsgToolkitNavItem[] = [
   ...ESG_TOOLKIT_DATA_NAV,
 ];
 
+/** Pillar dashboard routes (glass HTML `e-dash` / `s-dash` / `g-dash` parity). */
+export const ESG_TOOLKIT_PILLAR_HREFS = {
+  environmental: "/environmental",
+  social: "/social",
+  governance: "/governance",
+} as const;
+
+export type EsgToolkitPillarScoreKey = keyof typeof ESG_TOOLKIT_PILLAR_HREFS;
+
+export function toolkitPillarHref(
+  pillar: EsgToolkitPillarScoreKey,
+): (typeof ESG_TOOLKIT_PILLAR_HREFS)[EsgToolkitPillarScoreKey] {
+  return ESG_TOOLKIT_PILLAR_HREFS[pillar];
+}
+
 /** Flat list of every registered toolkit href (for route tests). */
 export function allToolkitHrefs(): string[] {
   const hrefs = new Set<string>();

@@ -11,7 +11,11 @@ import {
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
-import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
+import { EsgSectionMissingPanel } from "@/components/esg-workbook/EsgSectionMissingPanel";
+import {
+  esgSectionHasMissingRequired,
+  missingIssuesForEsgSection,
+} from "@/lib/esgValidation";
 import {
   EsgWorkbookSectionEditor,
   type EsgWorkbookSectionEditorHandle,
@@ -90,6 +94,11 @@ export default function EsgInformationRequest() {
     };
   }, [companyId, load, navigate, setCompanyName]);
 
+  const activeSection = useMemo(
+    () => ESG_INPUT_SECTIONS.find((s) => s.id === activeSectionId) ?? ESG_INPUT_SECTIONS[0],
+    [activeSectionId],
+  );
+
   const changeSection = useCallback(
     async (nextId: string) => {
       if (nextId === activeSectionId || sectionBusy) return;
@@ -104,6 +113,13 @@ export default function EsgInformationRequest() {
           });
           return;
         }
+        const leavingMissing = missingIssuesForEsgSection(workbook, touched, activeSectionId);
+        if (leavingMissing.length > 0) {
+          toast({
+            title: "Section incomplete",
+            description: `${leavingMissing.length} required item(s) still missing on “${activeSection.title}”.`,
+          });
+        }
         setActiveSectionId(nextId);
         if (typeof window !== "undefined") {
           const url = new URL(window.location.href);
@@ -114,12 +130,7 @@ export default function EsgInformationRequest() {
         setSectionBusy(false);
       }
     },
-    [activeSectionId, sectionBusy, toast],
-  );
-
-  const activeSection = useMemo(
-    () => ESG_INPUT_SECTIONS.find((s) => s.id === activeSectionId) ?? ESG_INPUT_SECTIONS[0],
-    [activeSectionId],
+    [activeSection.title, activeSectionId, sectionBusy, toast, touched, workbook],
   );
 
   const cellCount = useCallback(
@@ -207,9 +218,19 @@ export default function EsgInformationRequest() {
       });
       return;
     }
+    const currentMissing = missingIssuesForEsgSection(workbook, touched, activeSectionId);
+    if (currentMissing.length > 0) {
+      toast({
+        title: "This section has gaps",
+        description: `${currentMissing.length} required field(s) still empty — you can continue, but scores may be incomplete.`,
+      });
+    }
     setSubmitAttempted(true);
     navigate(esgSummaryHref(companyId));
   };
+
+  const showSectionMissingBadge = (sectionId: string) =>
+    Boolean(touched[sectionId]) && esgSectionHasMissingRequired(workbook, touched, sectionId);
 
   if (!companyId) return null;
 
@@ -339,21 +360,23 @@ export default function EsgInformationRequest() {
 
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="lg:hidden w-full space-y-3">
-            <EsgValidationPanel
+            <EsgSectionMissingPanel
               workbook={workbook}
-              activeSectionId={activeSectionId}
-              onSelectSection={(id) => void changeSection(id)}
+              touched={touched}
+              sectionId={activeSectionId}
+              sectionTitle={activeSection?.title}
             />
             <div className="overflow-x-auto -mx-1 px-1">
               <div className="flex gap-1.5 min-w-max pb-1" data-testid="esg-workbook-mobile-tabs">
                 {ESG_INPUT_SECTIONS.map((section) => {
                   const active = activeSectionId === section.id;
+                  const needsAttention = showSectionMissingBadge(section.id);
                   return (
                     <button
                       key={section.id}
                       type="button"
                       onClick={() => void changeSection(section.id)}
-                      className={`shrink-0 px-3 py-2 rounded-lg text-[12px] whitespace-nowrap ${
+                      className={`shrink-0 px-3 py-2 rounded-lg text-[12px] whitespace-nowrap flex items-center gap-1.5 ${
                         active
                           ? "bg-white/[0.08] text-[var(--esg-text)]"
                           : "text-[var(--esg-text2)] hover:bg-white/[0.04]"
@@ -361,6 +384,13 @@ export default function EsgInformationRequest() {
                       data-testid={`tab-${section.id}`}
                     >
                       {section.title}
+                      {needsAttention ? (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0"
+                          aria-label="Required fields missing"
+                          data-testid={`tab-missing-${section.id}`}
+                        />
+                      ) : null}
                     </button>
                   );
                 })}
@@ -369,10 +399,11 @@ export default function EsgInformationRequest() {
           </div>
 
           <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto space-y-3">
-            <EsgValidationPanel
+            <EsgSectionMissingPanel
               workbook={workbook}
-              activeSectionId={activeSectionId}
-              onSelectSection={(id) => void changeSection(id)}
+              touched={touched}
+              sectionId={activeSectionId}
+              sectionTitle={activeSection?.title}
             />
             <div
               className="rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] p-2"
@@ -381,25 +412,39 @@ export default function EsgInformationRequest() {
               {ESG_INPUT_SECTIONS.map((section) => {
                 const active = activeSectionId === section.id;
                 const status = sectionStatus(section.id);
+                const needsAttention = showSectionMissingBadge(section.id);
                 return (
                   <button
                     key={section.id}
                     type="button"
                     onClick={() => void changeSection(section.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between gap-2 ${
                       active
                         ? "bg-white/[0.08] text-[var(--esg-text)]"
                         : "text-[var(--esg-text2)] hover:bg-white/[0.04] hover:text-[var(--esg-text)]"
                     }`}
                     data-testid={`tab-${section.id}`}
                   >
-                    <span className="truncate">{section.title}</span>
+                    <span className="truncate flex items-center gap-1.5 min-w-0">
+                      {section.title}
+                      {needsAttention ? (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0"
+                          aria-label="Required fields missing"
+                          data-testid={`tab-missing-${section.id}`}
+                        />
+                      ) : null}
+                    </span>
                     <span
-                      className={`text-[10px] tabular-nums ${
-                        status === "filled" ? "text-[var(--esg-acc-e)]" : "text-[var(--esg-text3)]"
+                      className={`text-[10px] tabular-nums shrink-0 ${
+                        needsAttention
+                          ? "text-amber-300"
+                          : status === "filled"
+                            ? "text-[var(--esg-acc-e)]"
+                            : "text-[var(--esg-text3)]"
                       }`}
                     >
-                      {status === "filled" ? cellCount(section.id) : "—"}
+                      {needsAttention ? "!" : status === "filled" ? cellCount(section.id) : "—"}
                     </span>
                   </button>
                 );
