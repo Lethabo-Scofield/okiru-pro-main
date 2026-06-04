@@ -19,4 +19,9 @@ describe("EsgInformationRequest (input layer)", () => {
     expect(PAGE).not.toMatch(/criticalFails\.length/);
     expect(PAGE).not.toMatch(/disabled=\{.*validationOk/);
   });
+
+  it("shows per-section missing hints instead of full validation sidebar", () => {
+    expect(PAGE).toMatch(/EsgSectionMissingPanel/);
+    expect(PAGE).not.toMatch(/EsgValidationPanel/);
+  });
 });

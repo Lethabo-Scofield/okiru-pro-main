@@ -3,6 +3,8 @@ import { ESG_INPUT, ESG_PANEL } from "./esgEditorChrome";
 export type EsgFieldDef = {
   cell: string;
   label: string;
+  /** Plain-language explanation shown under the label (abbreviations spelled out). */
+  helpText?: string;
   type?: "number" | "text" | "select";
   options?: string[];
 };
@@ -19,10 +21,13 @@ export function EsgScalarForm({ fields, values, onChange, onTouch, readOnly }: P
   return (
     <div className={`${ESG_PANEL} p-5 grid gap-4 sm:grid-cols-2`}>
       {fields.map((f) => (
-        <label key={f.cell} className="block">
+        <label key={f.cell} className="block" data-testid={`esg-field-${f.cell}`}>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--esg-text3)]">
             {f.label}
           </span>
+          {f.helpText ? (
+            <p className="text-[11px] text-[var(--esg-text2)] mt-0.5 leading-snug">{f.helpText}</p>
+          ) : null}
           {f.type === "select" ? (
             <select
               value={String(values[f.cell] ?? "")}

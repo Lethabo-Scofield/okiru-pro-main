@@ -59,3 +59,22 @@ export function validateEsgWorkbookForSubmit(
     blockers,
   };
 }
+
+/** Actionable gaps for one input section (submit rules, excluding pending). */
+export function missingIssuesForEsgSection(
+  workbook: EsgWorkbookData | null,
+  touched: EsgTouchedState | undefined,
+  sectionId: string,
+): EsgValidationIssue[] {
+  return validateEsgWorkbook(workbook, touched, "submit").filter(
+    (i) => i.sectionId === sectionId && !i.pass && !i.pending,
+  );
+}
+
+export function esgSectionHasMissingRequired(
+  workbook: EsgWorkbookData | null,
+  touched: EsgTouchedState | undefined,
+  sectionId: string,
+): boolean {
+  return missingIssuesForEsgSection(workbook, touched, sectionId).length > 0;
+}

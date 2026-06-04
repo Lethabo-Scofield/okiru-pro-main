@@ -5,6 +5,7 @@ import {
   ESG_TOOLKIT_DATA_NAV,
   ESG_TOOLKIT_OVERVIEW_NAV,
   ESG_TOOLKIT_PILLAR_NAV,
+  ESG_TOOLKIT_PILLAR_HREFS,
   formatNavBadge,
   pillarAccentClass,
   sumScoreGroup,
@@ -166,11 +167,27 @@ function NavOverviewLink({ item, location }: { item: EsgToolkitNavItem; location
   );
 }
 
-function NavSectionHeader({ title }: { title: string }) {
-  return (
-    <div className="px-4 pt-4 pb-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--esg-text3)]">
+function NavSectionHeader({
+  title,
+  href,
+}: {
+  title: string;
+  href?: string;
+}) {
+  const label = (
+    <span className="px-4 pt-4 pb-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--esg-text3)] block">
       {title}
-    </div>
+    </span>
+  );
+  if (!href) return label;
+  return (
+    <Link
+      href={href}
+      className="block hover:text-[var(--esg-text2)] transition-colors"
+      data-testid={`esg-nav-section-${title.toLowerCase()}`}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -203,7 +220,18 @@ export function EsgSidebar() {
       {ESG_TOOLKIT_PILLAR_NAV.map((pillar, idx) => (
         <div key={pillar.id}>
           <NavDivider />
-          <NavSectionHeader title={PILLAR_SECTION_TITLES[pillar.pillar]} />
+          <NavSectionHeader
+            title={PILLAR_SECTION_TITLES[pillar.pillar]}
+            href={
+              pillar.pillar === "e"
+                ? ESG_TOOLKIT_PILLAR_HREFS.environmental
+                : pillar.pillar === "s"
+                  ? ESG_TOOLKIT_PILLAR_HREFS.social
+                  : pillar.pillar === "g"
+                    ? ESG_TOOLKIT_PILLAR_HREFS.governance
+                    : undefined
+            }
+          />
           <NavPillarButton item={pillar} location={location} />
         </div>
       ))}

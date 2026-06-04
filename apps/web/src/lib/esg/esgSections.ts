@@ -30,7 +30,7 @@ export const ESG_INPUT_SECTIONS: EsgSectionDef[] = [
     id: "assumptions",
     title: "Assumptions",
     sheet: "Assumptions",
-    note: "Sector, stance floor (B9), thresholds",
+    note: "Sector, scoring stance, Science Based Targets initiative (SBTi) net-zero year, threshold registry (THR_* codes)",
     phase1: true,
     editorType: "scalar",
   },
