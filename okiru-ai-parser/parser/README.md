@@ -30,13 +30,36 @@ Document upload
 
 ## API
 
+### Upload And Resolve A File
+
+```http
+POST /api/parser/resolve-file
+Content-Type: multipart/form-data
+```
+
+Use multipart field name `file`. Supported inputs:
+
+- PDF
+- DOCX
+- XLSX / XLS
+- CSV / TXT
+- PNG / JPEG / TIFF / WebP images
+
+Example:
+
+```bash
+curl -F "file=@supplier_certificate.pdf" http://127.0.0.1:3200/api/parser/resolve-file
+```
+
+The service first extracts text/tables from the uploaded file, then runs the same strict parser pipeline.
+
 ### Resolve Parser Output
 
 ```http
 POST /api/parser/resolve
 ```
 
-Body is the raw extraction result produced by the existing extraction phase:
+Body is the raw extraction result produced by an external extraction phase:
 
 ```json
 {
@@ -109,6 +132,12 @@ Run the service:
 
 ```bash
 pnpm dev
+```
+
+Then upload a file:
+
+```bash
+curl -F "file=@C:/path/to/certificate.pdf" http://127.0.0.1:3200/api/parser/resolve-file
 ```
 
 ## Integration Points

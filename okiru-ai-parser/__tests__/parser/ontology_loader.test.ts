@@ -42,4 +42,29 @@ describe('ontology loader', () => {
     expect(first.records).toBe(second.records);
     expect(docs).toHaveLength(1);
   });
+
+  it('loads document requirements and JSON fields from the bundled B-BBEE matrix', () => {
+    const records = buildOntologyRecordsFromWorkbook('ontology/BBBEE_Verification_Document_Matrix_v3.xlsx');
+    const saId = records.find((record) => record.document.name.includes('SA ID document / certified copy'));
+    const cipc = records.find((record) => record.document.name.includes('CIPC registration documents'));
+
+    expect(records.length).toBeGreaterThan(100);
+    expect(saId?.fields.map((field) => field.field.name)).toEqual(expect.arrayContaining([
+      'id_number',
+      'citizenship_status',
+      'certified_date',
+      'certification_within_3_months',
+      'photo_legible',
+      'race_declared',
+      'exceptions',
+    ]));
+    expect(cipc?.fields.map((field) => field.field.name)).toEqual(expect.arrayContaining([
+      'entity_name',
+      'registration_number',
+      'incorporation_date',
+      'entity_type',
+      'registered_address',
+      'cipc_stamp_present',
+    ]));
+  });
 });
