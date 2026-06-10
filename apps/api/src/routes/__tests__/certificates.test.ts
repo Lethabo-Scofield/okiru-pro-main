@@ -162,7 +162,7 @@ async function upload(
   opts: { auth?: string; fileName?: string } = {},
 ): Promise<{ status: number; body: any }> {
   const { body, contentType } = buildMultipart(
-    { companyName: 'Upload Co', ...fields },
+    { companyName: 'Upload Co', sectorCode: 'ICT', ...fields },
     [{ filename: opts.fileName ?? 'cert.pdf', content: Buffer.from('%PDF-1.4 test') }],
   );
   const headers: Record<string, string> = { 'Content-Type': contentType };
