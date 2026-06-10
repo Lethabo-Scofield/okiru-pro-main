@@ -165,12 +165,15 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
       // absorptionMaxPts → 2.1.3 absorption bonus (5 pts)
       generalMax: sk.learningProgrammesMaxPts,
       bursaryMax: sk.bursaryMaxPts,
-      overallTarget: sk.overallSpendPercent,
-      bursaryTarget: sk.bursarySpendPercent,
+      // SectorConfig stores spend targets as percentages (6.0 = 6%), but the skills
+      // calculator multiplies leviableAmount * target directly (expects a fraction like
+      // 0.060, not 6.0). Divide by 100 to match the calculator's expectation.
+      overallTarget: sk.overallSpendPercent / 100,         // 6.0% → 0.060
+      bursaryTarget: sk.bursarySpendPercent / 100,         // 0.0% → 0.000
       subMinThreshold: skillsSubMin,
-      overallSpendPercent: sk.overallSpendPercent,
-      bursarySpendPercent: sk.bursarySpendPercent,
-      disabledSpendPercent: sk.disabledSpendPercent,
+      overallSpendPercent: sk.overallSpendPercent / 100,   // 0.060 (fraction)
+      bursarySpendPercent: sk.bursarySpendPercent / 100,   // 0.000 (fraction)
+      disabledSpendPercent: sk.disabledSpendPercent / 100, // 0.003 (fraction)
       categoryECap: catE?.cap,
       categoryFCap: catF?.cap,
       learningProgrammesMaxPts: sk.learningProgrammesMaxPts,

@@ -4,7 +4,8 @@
  */
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
+import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, normalizeSpendFraction, isBlackRace } from './shared';
+import { buildDemographicBreakdown, getEAPTargets, normalizeProvince, type DemographicBreakdown, type Province } from './eapTargets';
 
 /**
  * @domain-rule pillar:skills_development, slide:86
@@ -43,6 +44,9 @@ export interface SkillsResult {
   subMinimumMet: boolean;
   categoryBreakdown: CategoryBreakdown[];
   subLines: SkillsSubLine[];
+  /** Per-management-level EAP demographic breakdown keyed by spend indicator index (0–2). */
+  eapBreakdowns: Record<number, Record<'senior' | 'middle' | 'junior', DemographicBreakdown[]>>;
+  eapProvince: string;
   rawStats: {
     blackSpend: number;
     bursarySpend: number;
@@ -163,6 +167,81 @@ function applyCapToSpend(
   return { totalRecognised, breakdown };
 }
 
+const SKILLS_EAP_LEVELS = ['senior', 'middle', 'junior'] as const;
+type SkillsEAPLevel = (typeof SKILLS_EAP_LEVELS)[number];
+
+const SKILLS_EAP_OCC_LEVEL: Record<SkillsEAPLevel, 'Senior' | 'Middle' | 'Junior'> = {
+  senior: 'Senior',
+  middle: 'Middle',
+  junior: 'Junior',
+};
+
+function filterProgramsForSpendIndicator(
+  programs: TrainingProgram[],
+  indicatorIdx: number,
+): TrainingProgram[] {
+  const black = programs.filter(p => (p.isBlack ?? isBlackRace(p.race)) && !p.isForeign);
+  if (indicatorIdx === 0) return black;
+  if (indicatorIdx === 1) {
+    return black.filter(p => p.categoryCode === 'A' || p.category === 'bursary' || p.isBursary);
+  }
+  if (indicatorIdx === 2) return black.filter(p => p.isDisabled);
+  return [];
+}
+
+function buildSkillsEAPBreakdowns(
+  programs: TrainingProgram[],
+  province: Province,
+): Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> {
+  const result: Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> = {};
+  for (const indicatorIdx of [0, 1, 2]) {
+    const filtered = filterProgramsForSpendIndicator(programs, indicatorIdx);
+    const byLevel = {} as Record<SkillsEAPLevel, DemographicBreakdown[]>;
+    for (const level of SKILLS_EAP_LEVELS) {
+      // Provincial aggregate EAP is level-specific; per-demographic proportions are national.
+      getEAPTargets(province, SKILLS_EAP_OCC_LEVEL[level]);
+      byLevel[level] = buildDemographicBreakdown(
+        filtered.map(p => ({ gender: p.gender, race: p.race })),
+      );
+    }
+    result[indicatorIdx] = byLevel;
+  }
+  return result;
+}
+
+/**
+ * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
+ */
+const SKILLS_DEFAULTS = {
+  overallTarget: 0.035,
+  bursaryTarget: 0.025,
+  subMinThreshold: 40,
+  generalMax: 6,
+  bursaryMax: 4,
+  disabledLearningMaxPts: 4,
+  learnershipsMaxPts: 6,
+  absorptionMaxPts: 5,
+  learnershipTargetPercent: 5.0,
+  absorptionTargetPercent: 2.5,
+} as const;
+
+/** Resolve spend-target fractions from calculator config (handles percent vs fraction). */
+export function resolveSkillsSpendTargets(
+  sc?: Partial<NonNullable<CalculatorConfig['skills']>>,
+): { overallTargetPct: number; bursaryTargetPct: number; disabledTargetPct: number } {
+  return {
+    overallTargetPct: normalizeSpendFraction(
+      sc?.overallSpendPercent ?? sc?.overallTarget,
+      SKILLS_DEFAULTS.overallTarget,
+    ),
+    bursaryTargetPct: normalizeSpendFraction(
+      sc?.bursarySpendPercent ?? sc?.bursaryTarget,
+      SKILLS_DEFAULTS.bursaryTarget,
+    ),
+    disabledTargetPct: normalizeSpendFraction(sc?.disabledSpendPercent, 0.003),
+  };
+}
+
 /** Apply 15% caps to training-manager salary and overhead (each vs programme spend). */
 function applyAdminCosts(
   programmeRecognised: number,
@@ -183,25 +262,11 @@ function applyAdminCosts(
   };
 }
 
-/**
- * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
- * Keeps the calculator usable in tests and as a safe fallback when sector
- * configuration is still loading. Mirrors the RCOGP Generic Codes (Statement 300).
- */
-const SKILLS_DEFAULTS = {
-  overallTarget: 0.035,
-  bursaryTarget: 0.025,
-  subMinThreshold: 40,
-  generalMax: 6,
-  bursaryMax: 4,
-  disabledLearningMaxPts: 4,
-  learnershipsMaxPts: 6,
-  absorptionMaxPts: 5,
-  learnershipTargetPercent: 5.0,
-  absorptionTargetPercent: 2.5,
-} as const;
-
-export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig): SkillsResult {
+export function calculateSkillsScore(
+  data: SkillsData,
+  config?: CalculatorConfig,
+  eapProvince?: string,
+): SkillsResult {
   console.log('[SCORING-TRACE] calculateSkillsScore received:', {
     leviableAmount: data.leviableAmount,
     groupLeviableAmount: data.groupLeviableAmount,
@@ -223,9 +288,7 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
     scorecardType,
   ) as Partial<NonNullable<CalculatorConfig['skills']>>;
 
-  const overallTargetPct = sc.overallSpendPercent ?? sc.overallTarget ?? SKILLS_DEFAULTS.overallTarget;
-  const bursaryTargetPct = sc.bursarySpendPercent ?? sc.bursaryTarget ?? SKILLS_DEFAULTS.bursaryTarget;
-  const disabledTargetPct = sc.disabledSpendPercent ?? 0.003;
+  const { overallTargetPct, bursaryTargetPct, disabledTargetPct } = resolveSkillsSpendTargets(sc);
   const fgCap = (sc as any).categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
   const adminCap = (sc as any).adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
   const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? SKILLS_DEFAULTS.subMinThreshold;
@@ -300,6 +363,12 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
   const skillsTotal = round2(totalScore);
   console.log(`[SCORING-TRACE] calculateSkillsScore result: ${skillsTotal} / ${maxPoints}`);
 
+  const province = normalizeProvince(eapProvince || 'National') as Province;
+  const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
+  const eapBreakdowns = isQse
+    ? {}
+    : buildSkillsEAPBreakdowns(trainingPrograms, province);
+
   return {
     learningProgrammes: round2(learningScore),
     bursaries: round2(bursaryScore),
@@ -311,6 +380,8 @@ export function calculateSkillsScore(data: SkillsData, config?: CalculatorConfig
       subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : false,
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
+    eapBreakdowns,
+    eapProvince: province,
     rawStats: {
       blackSpend: round2(totalRecognised),
       bursarySpend: round2(spend.bursary),

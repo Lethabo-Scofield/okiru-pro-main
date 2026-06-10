@@ -90,14 +90,11 @@ describe("Financial Information rules", () => {
   const section = getSection("financial-information")!;
   const field = (k: string) => section.meta!.find((f) => f.key === k)!;
 
-  it("requires at least one of actual or forecast per financial pair", () => {
-    for (const pair of [
-      ["revenue", "forecastRevenue"],
-      ["npat", "forecastNpat"],
-      ["payroll", "forecastPayroll"],
-    ] as const) {
-      expect(field(pair[0]).required).toBeFalsy();
-      expect(field(pair[1]).required).toBeFalsy();
+  it("financial meta fields are optional (no forecast pair requirement)", () => {
+    for (const key of ["revenue", "npat", "payroll", "tmps", "forecastTmps"] as const) {
+      const f = section.meta!.find((col) => col.key === key);
+      expect(f, key).toBeDefined();
+      expect(f!.required).toBeFalsy();
     }
   });
 
@@ -136,7 +133,8 @@ describe("Management Control rules", () => {
     expect(errs.race).toBe("Required");
     expect(errs.gender).toBe("Required");
     expect(errs.designation).toBe("Required");
-    expect(errs.votingRights).toBe("Required");
+    // votingRights is required only for board-level directors, not every row
+    expect(errs.votingRights).toBeUndefined();
   });
 
   it("whitespace-only required fields are flagged as Required", () => {
@@ -237,11 +235,12 @@ describe("Skills Development rules", () => {
     expect(errs.gender).toBe("Required");
   });
 
-  it("age must be a non-negative integer", () => {
-    const col = section.columns!.find((c) => c.key === "age")!;
-    expect(col.validate!(-1)).toMatch(/≥ 0/);
-    expect(col.validate!(2.5)).toMatch(/whole/);
-    expect(col.validate!(30)).toBeNull();
+  it("does not expose a standalone Age column (derived from ID when needed)", () => {
+    expect(section.columns!.find((c) => c.key === "age")).toBeUndefined();
+  });
+
+  it("sums total training cost in gridTotals", () => {
+    expect(section.gridTotals?.some((t) => t.columnKey === "totalCost")).toBe(true);
   });
 });
 
@@ -256,14 +255,14 @@ describe("Procurement rules", () => {
     expect(col.options).toEqual(["Large", "QSE", "EME"]);
   });
 
-  it("requires certificate expiry when a B-BBEE level is set", () => {
+  it("does not require certificate expiry when a B-BBEE level is set", () => {
     const r = newRow(section);
     r.supplierName = "Acme Ltd";
     r.currentSize = "QSE";
     r.spend = 50000;
     r.bbbeeLevel = "4";
     const errs = validateGridRow(section, r);
-    expect(errs.certificateExpiryDate).toMatch(/Required when B-BBEE level/);
+    expect(errs.certificateExpiryDate).toBeUndefined();
   });
 
   it("no cert-expiry error when no B-BBEE level is set", () => {
@@ -343,10 +342,11 @@ describe("ESD rules", () => {
 // Section catalogue sanity
 // --------------------------------------------------------------------------
 describe("Section catalogue", () => {
-  it("exposes the expected 9 sections in order (procurement merged with suppliers)", () => {
+  it("exposes core sections in order (incl. disabled afs-additions placeholder)", () => {
     expect(SECTIONS.map((s) => s.key)).toEqual([
       "company-information",
       "financial-information",
+      "afs-additions",
       "ownership",
       "management-control",
       "employees",

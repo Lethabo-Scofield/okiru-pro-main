@@ -147,6 +147,7 @@ export function SectionWorkbookEditor({
         rowValidate={section.rowValidate}
         sectionLabel={section.label}
         sectionDescription={section.description}
+        gridTotals={section.gridTotals}
         readOnly={readOnly}
         canDeleteRows={permissions.canDelete}
         canAddRows={permissions.canEdit}

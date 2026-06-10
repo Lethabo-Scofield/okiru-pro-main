@@ -4,6 +4,8 @@ import {
   validateWorkbookForSubmit,
   isCriticalWorkbookIssue,
   validateScorecardTypeForSector,
+  aggregateWorkbookValidation,
+  formatValidationIssueLine,
 } from "../workbookValidation";
 import {
   getScorecardTypeOptions,
@@ -14,9 +16,7 @@ const validFinancialMeta = {
   revenue: 1_000_000,
   npat: 100_000,
   payroll: 500_000,
-  forecastRevenue: 1_100_000,
-  forecastNpat: 110_000,
-  forecastPayroll: 550_000,
+  industryNormPercent: 6,
 };
 
 const validCompanyMeta = {
@@ -82,21 +82,22 @@ describe("validateWorkbook", () => {
     expect(issues).toHaveLength(0);
   });
 
-  it("accepts forecast-only financial meta", () => {
+  it("accepts actual-only financial meta", () => {
     const issues = validateWorkbook({
       "company-information": { meta: validCompanyMeta },
       "financial-information": {
         meta: {
-          forecastRevenue: 1_100_000,
-          forecastNpat: 110_000,
-          forecastPayroll: 550_000,
+          revenue: 1_000_000,
+          npat: 100_000,
+          payroll: 500_000,
+          industryNormPercent: 6,
         },
       },
     });
     expect(issues).toHaveLength(0);
   });
 
-  it("accepts actual-only financial meta", () => {
+  it("does not require industryNormPercent on financial meta", () => {
     const issues = validateWorkbook({
       "company-information": { meta: validCompanyMeta },
       "financial-information": {
@@ -107,34 +108,16 @@ describe("validateWorkbook", () => {
         },
       },
     });
-    expect(issues).toHaveLength(0);
+    expect(issues.some((i) => i.field === "industryNormPercent")).toBe(false);
   });
 
-  it("requires at least one of actual or forecast for each financial pair", () => {
-    const issues = validateWorkbook({
-      "company-information": { meta: validCompanyMeta },
-      "financial-information": {
-        meta: {
-          revenue: 1_000_000,
-          npat: "",
-          forecastNpat: "",
-          payroll: 500_000,
-        },
-      },
-    });
-    expect(issues.some((i) => i.field === "npat" && i.message.includes("actual or forecast"))).toBe(true);
-    expect(issues.some((i) => i.field === "forecastNpat")).toBe(true);
-  });
-
-  it("requires payroll or leviable amount when skills rows are present", () => {
+  it("requires payroll when skills rows are present (leviable amount derived as 1% of payroll)", () => {
     const issues = validateWorkbook({
       "company-information": { meta: validCompanyMeta },
       "financial-information": {
         meta: {
           ...validFinancialMeta,
-          forecastPayroll: "",
           payroll: "",
-          leviableAmount: "",
         },
       },
       "skills-development": {
@@ -181,13 +164,12 @@ describe("validateWorkbook", () => {
     expect(issues.some((i) => i.field === "payroll")).toBe(false);
   });
 
-  it("requires NPAT (actual or forecast) when ESD rows are present", () => {
+  it("requires NPAT when ESD rows are present", () => {
     const issues = validateWorkbook({
       "company-information": { meta: validCompanyMeta },
       "financial-information": {
         meta: {
           ...validFinancialMeta,
-          forecastNpat: "",
           npat: "",
         },
       },
@@ -282,7 +264,7 @@ describe("validateWorkbook", () => {
     expect(critical).toHaveLength(0);
   });
 
-  it("isCriticalWorkbookIssue flags company and financial cross-field gaps only", () => {
+  it("isCriticalWorkbookIssue flags company identity only — pillar/financial gaps are advisory", () => {
     expect(
       isCriticalWorkbookIssue({
         sectionKey: "ownership",
@@ -295,8 +277,16 @@ describe("validateWorkbook", () => {
       isCriticalWorkbookIssue({
         sectionKey: "financial-information",
         sectionLabel: "Financial Information",
-        field: "forecastNpat",
-        message: "NPAT: provide actual or forecast",
+        field: "npat",
+        message: "NPAT is required when ESD or SED rows are present",
+      }),
+    ).toBe(false);
+    expect(
+      isCriticalWorkbookIssue({
+        sectionKey: "company-information",
+        sectionLabel: "Company Information",
+        field: "companyName",
+        message: "Company Name: Required",
       }),
     ).toBe(true);
   });
@@ -329,7 +319,7 @@ describe("validateWorkbook — sector-aware meta", () => {
     expect(issues.some((i) => i.field === "fscSubSector")).toBe(true);
   });
 
-  it("requires FSC CE spend meta when sed section is present", () => {
+  it("FSC CE spend meta is advisory when sed section is present", () => {
     const issues = validateWorkbookForSubmit({
       "company-information": {
         meta: {
@@ -342,7 +332,41 @@ describe("validateWorkbook — sector-aware meta", () => {
       "financial-information": { meta: validFinancialMeta },
       sed: { meta: {}, rows: [] },
     });
-    expect(issues.some((i) => i.field === "ceSpend")).toBe(true);
+    expect(issues.some((i) => i.field === "ceSpend")).toBe(false);
+    const all = validateWorkbook({
+      "company-information": {
+        meta: {
+          companyName: "FSC Co",
+          industrySector: "FSC",
+          scorecardType: "Generic",
+          fscSubSector: "Others",
+        },
+      },
+      "financial-information": { meta: validFinancialMeta },
+      sed: { meta: {}, rows: [] },
+    });
+    expect(all.some((i) => i.field === "ceSpend")).toBe(true);
+  });
+
+  it("aggregateWorkbookValidation groups issues with row numbers", () => {
+    const aggregate = aggregateWorkbookValidation({
+      "company-information": { meta: validCompanyMeta },
+      "financial-information": { meta: validFinancialMeta },
+      "management-control": {
+        rows: [
+          { _id: "r1", name: "Jane", surname: "Doe", race: "", gender: "Female", designation: "" },
+          { _id: "r2", name: "John", surname: "Smith", race: "African", gender: "", designation: "Senior Manager" },
+        ],
+      },
+    });
+    expect(aggregate.totalIssues).toBeGreaterThan(0);
+    const mc = aggregate.sections.find((s) => s.sectionKey === "management-control");
+    expect(mc).toBeDefined();
+    expect(mc!.issues.some((i) => i.rowNumber === 1 || i.rowNumber === 2)).toBe(true);
+    const line = mc!.issues.find((i) => i.rowNumber === 1);
+    if (line) {
+      expect(formatValidationIssueLine(line)).toContain("Row 1");
+    }
   });
 });
 

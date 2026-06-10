@@ -278,16 +278,39 @@ const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognitio
   recognition,
 }));
 
-// FSC uses scaled (non-integer) thresholds based on sub-sector total (from Excel)
-const FSC_LEVELS = [
-  { level: 1, minPoints: 95.50, recognition: 135 },
-  { level: 2, minPoints: 90.72, recognition: 125 },
-  { level: 3, minPoints: 85.95, recognition: 110 },
-  { level: 4, minPoints: 76.40, recognition: 100 },
-  { level: 5, minPoints: 71.62, recognition: 80 },
-  { level: 6, minPoints: 66.85, recognition: 60 },
-  { level: 7, minPoints: 52.52, recognition: 50 },
-  { level: 8, minPoints: 38.20, recognition: 10 },
+// FSC level thresholds vary by sub-sector (Scoring Scale sheet — FSC-FULL-ANALYSIS §3)
+const FSC_LEVELS_OTHERS = [
+  { level: 1, minPoints: 92.79, recognition: 135 },
+  { level: 2, minPoints: 88.15, recognition: 125 },
+  { level: 3, minPoints: 83.51, recognition: 110 },
+  { level: 4, minPoints: 74.23, recognition: 100 },
+  { level: 5, minPoints: 69.59, recognition: 80 },
+  { level: 6, minPoints: 64.95, recognition: 60 },
+  { level: 7, minPoints: 51.04, recognition: 50 },
+  { level: 8, minPoints: 37.12, recognition: 10 },
+];
+
+/** Banks and LTI share identical thresholds. */
+const FSC_LEVELS_BANKS_LTI = [
+  { level: 1, minPoints: 108.11, recognition: 135 },
+  { level: 2, minPoints: 102.70, recognition: 125 },
+  { level: 3, minPoints: 97.30, recognition: 110 },
+  { level: 4, minPoints: 86.49, recognition: 100 },
+  { level: 5, minPoints: 81.08, recognition: 80 },
+  { level: 6, minPoints: 75.68, recognition: 60 },
+  { level: 7, minPoints: 59.46, recognition: 50 },
+  { level: 8, minPoints: 43.24, recognition: 10 },
+];
+
+const FSC_LEVELS_STI = [
+  { level: 1, minPoints: 103.60, recognition: 135 },
+  { level: 2, minPoints: 98.42, recognition: 125 },
+  { level: 3, minPoints: 93.24, recognition: 110 },
+  { level: 4, minPoints: 82.88, recognition: 100 },
+  { level: 5, minPoints: 77.70, recognition: 80 },
+  { level: 6, minPoints: 72.52, recognition: 60 },
+  { level: 7, minPoints: 56.98, recognition: 50 },
+  { level: 8, minPoints: 41.44, recognition: 10 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -659,7 +682,7 @@ export const FSC_GENERIC: SectorConfig = {
     esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
     sed: { spendPercent: 1.0, maxPts: 8 }, // SED+CE combined for Others sub-sector
   },
-  levelThresholds: FSC_LEVELS,
+  levelThresholds: FSC_LEVELS_OTHERS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
@@ -671,7 +694,265 @@ export const FSC_GENERIC: SectorConfig = {
 // PP targets (FSC-specific): QSE 18%, EME 12%, BO51 30%, BWO30 10%
 // FSC uses scaled level thresholds: L1=95.5, L2=90.7, ... L8=38.2
 // FSC has sub-variants: Banks (FS701), Long-Term Insurers (FS702), Short-Term Insurers (FS703), Others (Generic)
-// EF is "NOT Applicable" for Others sub-sector; Banks/LTI need separate SectorConfig entries (TODO: Bug #6)
+
+// ---------------------------------------------------------------------------
+// FSC Banks (FS701) — Empowerment Financing + AFS: Banks
+// Grand total: 130 pts (25+21+23+24+10+7+12+8)
+//   SD target: 1.8% NPAT (not 2%); ED target: 0.2% NPAT (not 1%)
+//   No stockbroker bonus (not on Banks EF&ESD sheet)
+//   EF Targeted Investments + Transaction Financing = 0 pts (Q44: blank in template)
+//   AFS Banks = 12 pts (6 geographic/access indicators)
+// ---------------------------------------------------------------------------
+
+export const FSC_BANKS: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Banks — FS701)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+7(ED no stockbroker)+12(AFS)+8 = 130
+  totalMaxPoints: 130,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    // Banks ED: 5 base + 1 grad + 1 jobs = 7 (no stockbroker row on Banks EF sheet)
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // EF: point values = 0 per Q44 (template defaults to Others sub-sector — all EF cells blank)
+    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // AFS Banks = 12 pts (verified from AFS Scorecard - Banks sheet)
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // Banks SD: 1.8% NPAT (vs 2% Others); ED: 0.2% NPAT (vs 1% Others); no stockbroker bonus
+    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_BANKS_LTI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC Banks verified: 25+21+23+24+10+7+12+8 = 130 (Banks sub-sector, EF=0 per Q44) ✓
+// SD target 1.8%, ED target 0.2%; no stockbroker bonus (not on Banks EF&ESD sheet)
+// AFS: Transaction Point(5km,1pt) + Service Point(10km,1pt) + Sales Point(15km,2pts)
+//      + Electronic Access(2pts) + Point of Presence(3pts) + Active Accounts(3pts) = 12 ✓
+
+// ---------------------------------------------------------------------------
+// FSC Long-Term Insurers (FS702) — Empowerment Financing + AFS: Long Term
+// Grand total: 132 pts (25+21+23+24+10+9+12+8)
+//   SD target: 1.8% NPAT; ED target: 0.2% NPAT + stockbroker support (0.5% / 2 pts)
+//   EF Targeted Investments + Transaction Financing = 0 pts (Q44)
+//   AFS LTI = 12 pts (Appropriate Products 3 + Market Penetration 7 + Transactional Access 2)
+// ---------------------------------------------------------------------------
+
+export const FSC_LTI: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+9(ED with stockbroker)+12(AFS)+8 = 132
+  totalMaxPoints: 132,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    // LTI ED: 5 base + 1 grad + 1 jobs + 2 stockbroker = 9 (stockbroker on LTI EF sheet)
+    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // LTI SD: 1.8% NPAT; ED: 0.2% NPAT; stockbroker bonus 0.5% NPAT / 2 pts (on EF sheet)
+    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_BANKS_LTI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC LTI verified: 25+21+23+24+10+9+12+8 = 132 (LTI sub-sector, EF=0 per Q44) ✓
+// SD target 1.8%, ED target 0.2%, stockbroker bonus 0.5%/2pts included
+// AFS: Appropriate Products(3pts) + Market Penetration(7pts) + Transactional Access(80%/2pts) = 12 ✓
+
+// ---------------------------------------------------------------------------
+// FSC Short-Term Insurers (FS703) — AFS: Short Term only (no EF)
+// Grand total: 132 pts (25+21+23+24+10+9+12+8)
+//   Standard SD/ED targets (same as Others: SD 2%, ED 1%, stockbroker 0.5%)
+//   No EF pillar (STI: EF = N/A per SLS §2)
+//   AFS STI = 12 pts (Commercial Products 2 + Insurance Policies 10)
+// ---------------------------------------------------------------------------
+
+export const FSC_STI: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+9+12+8 = 132 (same as LTI, EF=N/A for STI)
+  totalMaxPoints: 132,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // No EF for STI (N/A per SLS §2)
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // STI: standard SD/ED (same targets as Others — 2% and 1%)
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_STI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC STI verified: 25+21+23+24+10+9+12+8 = 132 (STI sub-sector) ✓
+// Standard SD 2%/10pts and ED 1%/5pts+bonuses (same as Generic Others)
+// No EF pillar for STI
+// AFS: Commercial Products (2pts) + Insurance Policies (100%/10pts) = 12 ✓
 
 // ---------------------------------------------------------------------------
 // AGRI Generic (AgriBEE Sector Code — Amended AgriBEE Sector Codes: Generic)
@@ -1389,7 +1670,8 @@ function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'
 // ---------------------------------------------------------------------------
 
 const ALL_CONFIGS: SectorConfig[] = [
-  RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
+  RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, FSC_BANKS, FSC_LTI, FSC_STI,
+  AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
 ].map(attachSubElements);
 

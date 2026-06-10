@@ -1,4 +1,4 @@
-/** Client-side ESG preview gate — keep in sync with apps/web/server/esgAccess.ts */
+/** Client-side ESG access — keep in sync with apps/web/server/esgAccess.ts */
 
 export type EsgAccessUser = {
   email?: string | null;
@@ -31,10 +31,8 @@ function normalizeEmail(user: EsgAccessUser | null | undefined): string {
   return (user?.email || user?.username || "").trim().toLowerCase();
 }
 
+/** All authenticated users with an email or username may access the ESG toolkit. */
 export function canAccessEsgToolkit(user: EsgAccessUser | null | undefined): boolean {
   if (!user) return false;
-  const email = normalizeEmail(user);
-  if (!email) return false;
-  if (email.includes("brian")) return true;
-  return getEsgPreviewAllowlist().includes(email);
+  return Boolean(normalizeEmail(user));
 }

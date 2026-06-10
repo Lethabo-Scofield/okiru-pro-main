@@ -3,7 +3,7 @@ import {
   Client, OwnershipData, ManagementData, SkillsData, 
   ProcurementData, ESDData, SEDData, ScorecardResult,
   Shareholder, Employee, TrainingProgram, Supplier, Contribution, FinancialYear,
-  TrainingCategoryCode
+  TrainingCategoryCode, AfsData,
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
@@ -30,6 +30,19 @@ import {
   isFscGenericSector,
 } from './sectors/fsc-generic';
 import {
+  FSC_BANKS_CALCULATOR_CONFIG,
+  isFscBanksSector,
+} from './sectors/fsc-banks';
+import {
+  FSC_LTI_CALCULATOR_CONFIG,
+  isFscLtiSector,
+} from './sectors/fsc-lti';
+import {
+  FSC_STI_CALCULATOR_CONFIG,
+  isFscStiSector,
+} from './sectors/fsc-sti';
+import { normalizeFscSubSector } from './sectors/fsc-utils';
+import {
   AGRI_GENERIC_CALCULATOR_CONFIG,
   isAgriGenericSector,
 } from './sectors/agri-generic';
@@ -40,12 +53,21 @@ import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
+import { calculateAfsScore } from './calculators/afs';
 import {
   calculateTransportQseManagement,
   calculateTransportQseEmploymentEquity,
   isTransportQseSector,
 } from './calculators/transport';
-import { deepClone, round2, SectorConfigError, requireSectorConfig, allowsRcogpDefaults } from './calculators/shared';
+import {
+  deepClone,
+  round2,
+  SectorConfigError,
+  requireSectorConfig,
+  allowsRcogpDefaults,
+  normalizeRace,
+  normalizeDesignationForScoring,
+} from './calculators/shared';
 
 export interface ScenarioSnapshot {
   id: string;
@@ -69,6 +91,7 @@ interface PillarState {
   procurement: ProcurementData;
   esd: ESDData;
   sed: SEDData;
+  afs: AfsData;
   scorecard: ScorecardResult;
 }
 
@@ -81,6 +104,7 @@ function snapshotPillarState(state: PillarState): PillarState {
     procurement: deepClone(state.procurement),
     esd: deepClone(state.esd),
     sed: deepClone(state.sed),
+    afs: deepClone(state.afs),
     scorecard: deepClone(state.scorecard),
   };
 }
@@ -119,6 +143,7 @@ const emptySkills: SkillsData = {
 const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppliers: [] };
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
+const emptyAfs: AfsData = { id: '', clientId: '' };
 
 /**
  * Factory function to build an empty scorecard from calculatorConfig.
@@ -300,6 +325,11 @@ interface BbeeState extends PillarState {
 
   addSedContribution: (contribution: Contribution) => void;
   removeSedContribution: (id: string) => void;
+
+  /** FSC sub-sector AFS data updates (Banks/LTI/STI). */
+  updateAfs: (data: Partial<AfsData>) => void;
+  /** FSC sub-sector picker: update fscSubSector and reload calculator config. */
+  setFscSubSector: (subSector: 'Others' | 'Banks' | 'LTI' | 'STI') => void;
 
   // Issue 3: Removed updateProcurementBonuses - bonuses are ED only
   updateEsdBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, jobsCreatedCount?: number, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
@@ -566,7 +596,7 @@ function calculateScorecard(
     leviableAmount: state.skills.leviableAmount,
     programs: state.skills.trainingPrograms?.length ?? 0,
   });
-  const skillScore = calculateSkillsScore(state.skills, cfg);
+  const skillScore = calculateSkillsScore(state.skills, cfg, state.client.eapProvince);
   console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
 
   console.log('[SCORING-TRACE] Calculator input for procurement:', {
@@ -582,9 +612,19 @@ function calculateScorecard(
     npat: state.client.npat,
   });
   const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
-  const sedScore = calculateSedScore(state.sed, state.client.npat, cfg);
+  const sedScore = calculateSedScore(state.sed, state.client.npat, cfg, {
+    isReinsurer: Boolean(state.client.fscReinsurer),
+  });
   console.log('[SCORING-TRACE] Calculator output for esd:', { sd: esdScore.sdTotal, ed: esdScore.edTotal });
   console.log('[SCORING-TRACE] Calculator output for sed:', { score: sedScore.total });
+
+  // FSC sub-sector AFS scoring (Banks/LTI/STI only)
+  const afsScore = cfg.accessToFinancialServices
+    ? calculateAfsScore(state.afs, cfg)
+    : null;
+  if (afsScore) {
+    console.log('[SCORING-TRACE] Calculator output for AFS:', { score: afsScore.total, subSector: afsScore.subSector });
+  }
   // CRITICAL: Wire YES calculator - construct YESData from skills and management state
   // Training programs with isYesEmployee=true are treated as YES candidates
   const yesCandidates = state.skills.trainingPrograms
@@ -710,10 +750,11 @@ function calculateScorecard(
   const sedForTotal = electiveScoreForTotal('socioEconomicDevelopment', sedScore.total);
 
   const sdForTotal = sdTarget > 0 ? esdScore.sdTotal : 0;
+  const afsForTotal = afsScore?.total ?? 0;
 
   const compulsoryTotal = ownScore.total + mgtScoreTotal + (eeTarget > 0 ? eeScoreTotal : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
-  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + yesScore.score + yesScore.yesBonusPoints;
+  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + yesScore.score + yesScore.yesBonusPoints;
 
   const totalTarget = cfg?.totalMaxPoints ?? (
     ownTarget + mcTarget + eeTarget +
@@ -815,6 +856,13 @@ function calculateScorecard(
       ...mkElectiveMeta('socioEconomicDevelopment'),
     },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: yesTarget, weighting: yesTarget },
+    ...(afsScore ? {
+      accessToFinancialServices: {
+        score: round2(afsScore.total),
+        target: afsScore.maxPoints,
+        weighting: afsScore.maxPoints,
+      },
+    } : {}),
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: level,
     discountedLevel,
@@ -844,6 +892,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   procurement: emptyProcurement,
   esd: emptyESD,
   sed: emptySED,
+  afs: emptyAfs,
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
@@ -887,6 +936,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         npat: effectiveNpat,
         leviableAmount: data.client.leviableAmount || 0,
         industry: data.client.industry || 'Generic',
+        fscSubSector: normalizeFscSubSector(data.client.fscSubSector ?? finExtras.fscSubSector) as Client['fscSubSector'],
+        fscReinsurer: Boolean(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
         financialHistory: (data.financialYears || []).map((fy: any) => ({
@@ -965,8 +1016,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           id: e.id,
           name: e.name,
           gender: e.gender,
-          race: e.race,
-          designation: e.designation || mapJobTitleToDesignation(e.occupationalLevel),
+          race: normalizeRace(e.race) || e.race,
+          designation: normalizeDesignationForScoring(
+            e.designation || e.occupationalLevel || mapJobTitleToDesignation(e.occupationalLevel),
+          ),
           isDisabled: e.isDisabled || false,
         })),
       };
@@ -1085,6 +1138,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         procurement: procurementState,
         esd: esdState,
         sed: sedState,
+        afs: {
+          id: data.afs?.id ?? '',
+          clientId,
+          ...(data.afs ?? finExtras.afs ?? {}),
+        } as AfsData,
         scenarios: scenariosData,
         isScenarioMode: false,
         activeScenarioId: null,
@@ -1117,6 +1175,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       procurement: emptyProcurement,
       esd: emptyESD,
       sed: emptySED,
+      afs: emptyAfs,
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
@@ -1138,6 +1197,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       procurement: emptyProcurement,
       esd: emptyESD,
       sed: emptySED,
+      afs: emptyAfs,
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,
@@ -1268,11 +1328,33 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       return;
     }
 
-    if (isFscGenericSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled FSC Generic (Others) calculator config');
-      set({ calculatorConfig: FSC_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
-      return;
+    if (sectorCode.toUpperCase() === 'FSC') {
+      const fscSub = get().client.fscSubSector || 'Others';
+      if (isFscBanksSector(sectorCode, fscSub)) {
+        console.log('[SCORING-TRACE] Using bundled FSC Banks (FS701) calculator config');
+        set({ calculatorConfig: FSC_BANKS_CALCULATOR_CONFIG });
+        get()._recalculateAll();
+        return;
+      }
+      if (isFscLtiSector(sectorCode, fscSub)) {
+        console.log('[SCORING-TRACE] Using bundled FSC LTI (FS702) calculator config');
+        set({ calculatorConfig: FSC_LTI_CALCULATOR_CONFIG });
+        get()._recalculateAll();
+        return;
+      }
+      if (isFscStiSector(sectorCode, fscSub)) {
+        console.log('[SCORING-TRACE] Using bundled FSC STI (FS703) calculator config');
+        set({ calculatorConfig: FSC_STI_CALCULATOR_CONFIG });
+        get()._recalculateAll();
+        return;
+      }
+      // Default to Generic/Others
+      if (isFscGenericSector(sectorCode, scorecardType)) {
+        console.log('[SCORING-TRACE] Using bundled FSC Generic (Others) calculator config');
+        set({ calculatorConfig: FSC_GENERIC_CALCULATOR_CONFIG });
+        get()._recalculateAll();
+        return;
+      }
     }
 
     const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
@@ -1505,6 +1587,21 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     set((state) => ({ sed: { ...state.sed, contributions: state.sed.contributions.filter(c => c.id !== id) } }));
     get()._recalculateAll();
     api.deleteSedContribution(id).catch(console.error);
+  },
+
+  updateAfs: (data) => {
+    set((state) => ({ afs: { ...state.afs, ...data } }));
+    get()._recalculateAll();
+  },
+
+  setFscSubSector: (subSector) => {
+    const normalized = normalizeFscSubSector(subSector) as Client['fscSubSector'];
+    set((state) => ({ client: { ...state.client, fscSubSector: normalized } }));
+    const clientId = get().activeClientId;
+    if (clientId) {
+      api.updateClient(clientId, { fscSubSector: normalized }).catch(console.error);
+    }
+    get().loadCalculatorConfig(clientId || '');
   },
 
   // Issue 3: Removed updateProcurementBonuses - bonuses are ED only

@@ -20,6 +20,7 @@ import {
   type SectionDef,
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
+import { isBlackRace, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
@@ -43,6 +44,7 @@ export type WorkbookData = {
 const SECTION_KEYS = [
   "company-information",
   "financial-information",
+  "afs-additions",
   "ownership",
   "management-control",
   "skills-development",
@@ -628,7 +630,7 @@ export function buildInstructionsSheet(): XLSX.WorkSheet {
   aoa.push(["Measured Under", "CoGP (Codes of Good Practice) or RCoGP (Revised CoGP)."]);
   aoa.push(["Empowering Supplier?", "Yes / No. Required for points from Apr 2025 onwards."]);
   aoa.push(["Black / Black Female Ownership", "Percentage 0–100 (e.g. 51 for 51%). Black Female cannot exceed Black."]);
-  aoa.push(["Certificate Expiry Date", "Required whenever B-BBEE Level is supplied; must match the certificate / sworn affidavit on file."]);
+  aoa.push(["Certificate Expiry Date", "Optional. When supplied (especially with a B-BBEE Level), must match the certificate / sworn affidavit on file and helps the AI parser extract supplier data."]);
   aoa.push([""]);
 
   aoa.push(["Enterprise & Supplier Development — Contribution Type"]);
@@ -821,32 +823,9 @@ async function authorizeWorkbookAccess(
 
 // ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
 
-// Lake Trading Fix Plan â”¬Âº1 Bug 1 (ownership) helpers
-const BLACK_RACES = new Set(["African", "Coloured", "Indian"]);
-
-// Lake Trading Fix Plan â”¬Âº1 Bug 2 (designations) Î“Ã‡Ã¶ workbook label Î“Ã¥Ã† calculator enum
-const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
-  "Executive Director": "Executive Director",
-  "Non-executive Director": "Board",
-  "Other Executive Manager": "Other Executive Management",
-  "Senior Manager": "Senior",
-  "Middle Manager": "Middle",
-  "Junior Manager": "Junior",
-  "Semi-skilled": "Semi-skilled",
-  "Unskilled": "Unskilled",
-  // pass-through for direct enum values already used elsewhere
-  Board: "Board",
-  Executive: "Executive",
-  "Other Executive Management": "Other Executive Management",
-  Senior: "Senior",
-  Middle: "Middle",
-  Junior: "Junior",
-  "Skilled Technical": "Skilled Technical",
-};
-
+// Lake Trading Fix Plan — ownership helpers (race/designation normalisation in shared.ts)
 function mapDesignation(raw: string): string {
-  const trimmed = (raw ?? "").trim();
-  return WORKBOOK_TO_DESIGNATION[trimmed] ?? trimmed;
+  return normalizeDesignationForScoring(raw);
 }
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 4 + 5 (ESD/SED type)
@@ -867,9 +846,10 @@ function mapContributionType(raw: string): string {
 }
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
-  const t = (raw ?? "").toLowerCase();
-  if (t.startsWith("enterprise")) return "enterprise_development";
-  // Lake Trading Fix Plan â”¬Âº1 Bug 4: safe default Î“Ã‡Ã¶ counts toward SD sub-min
+  const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (t === "ed" || t.startsWith("enterprise")) return "enterprise_development";
+  if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
+  // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
   return "supplier_development";
 }
 
@@ -910,9 +890,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const farmWorkersIncluded = companyMeta.farmWorkersIncluded !== false;
 
   const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
-    const race = s((r as any).race);
+    const race = normalizeRace(s((r as any).race));
     const gender = s((r as any).gender);
-    const isBlack = BLACK_RACES.has(race);
+    const isBlack = isBlackRace(race);
     const isFemale = gender === "Female";
     const votingPct = pctToFraction((r as any).votingRights);
     const eiPct = pctToFraction((r as any).economicInterest);
@@ -959,11 +939,18 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // Use integer "shares" derived from shareholding %; only relative weight matters
       // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
       // branch in calculateOwnershipScore so blackOwnership flows through.
-      shares: Math.max(1, Math.round(sharePct * 10_000)),
+      shares:
+        num((r as any).numberOfShares) > 0
+          ? Math.round(num((r as any).numberOfShares))
+          : Math.max(1, Math.round(sharePct * 10_000)),
       shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
-        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled || isFarmWorker,
+        Boolean((r as any).isDesignatedGroup) ||
+        pctToFraction((r as any).designatedGroupOwnership) > 0 ||
+        isYouth ||
+        isDisabled ||
+        isFarmWorker,
       isFarmWorker,
       blackNewEntrant: isNewEntrant,
       votingRightsPercent: votingPct,
@@ -989,7 +976,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         surname: s((r as any).surname),
         fullName: joinName(r as any),
         idNumber: s((r as any).idNumber),
-        race: s((r as any).race),
+        race: normalizeRace(s((r as any).race)) || s((r as any).race),
         gender: s((r as any).gender),
         occupationalLevel,
         designation,
@@ -1024,9 +1011,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       trainingProvider: s((r as any).trainingProvider),
       learnerName: s((r as any).learnerName),
       idNumber: s((r as any).idNumber),
-      race: s((r as any).race),
+      race: normalizeRace(s((r as any).race)) || s((r as any).race),
       gender: s((r as any).gender),
-      isBlack: ["African", "Coloured", "Indian"].includes(s((r as any).race)),
+      isBlack: isBlackRace(s((r as any).race)),
       isDisabled: Boolean((r as any).isDisabled),
       isForeign: Boolean((r as any).isForeign),
       employed: Boolean((r as any).employed),
@@ -1149,7 +1136,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
 
   const skillsMeta = (sec["skills-development"]?.meta ?? {}) as Record<string, unknown>;
   const sedMeta = (sec["sed"]?.meta ?? {}) as Record<string, unknown>;
-  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta);
+  const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
+  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
 
   const ownershipMeta = {
     companyValue: financials.companyValue ?? 0,
@@ -1322,10 +1310,7 @@ export function registerWorkbookRoutes(app: Express): void {
 
   // Submit the workbook Î“Ã¥Ã† write its contents into the associated client record
   // so the scorecard pipeline can pick it up. Returns row counts of what was synced.
-  app.post(
-    "/api/workbook/:companyId/submit",
-    requireAuth,
-    async (req: Request, res: Response) => {
+  const handleWorkbookScorecardSync = async (req: Request, res: Response) => {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
@@ -1344,14 +1329,8 @@ export function registerWorkbookRoutes(app: Express): void {
           .json({ error: "Database unavailable — cannot submit workbook." });
       }
 
-      const validationIssues = validateWorkbookForSubmit(wb.sections);
-      if (validationIssues.length > 0) {
-        return res.status(400).json({
-          error: "Workbook validation failed",
-          issues: validationIssues,
-          summary: formatWorkbookValidationSummary(validationIssues),
-        });
-      }
+      const allValidationIssues = validateWorkbook(wb.sections);
+      const blockingIssues = validateWorkbookForSubmit(wb.sections);
 
       const projected = projectWorkbookToClient(wb);
       console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
@@ -1430,9 +1409,13 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.farmWorkersIncluded !== undefined) skillsExtra.farmWorkersIncluded = f.farmWorkersIncluded;
           // FSC-specific
           if (f.fscSubSector) update.fscSubSector = f.fscSubSector;
+          if (f.fscReinsurer !== undefined) update.fscReinsurer = f.fscReinsurer;
+          if (f.afs) skillsExtra.afs = f.afs;
           if (f.ceSpend != null) skillsExtra.ceSpend = f.ceSpend;
           if (f.ceBonusSpend != null) skillsExtra.ceBonusSpend = f.ceBonusSpend;
           if (f.fundisaSpend != null) skillsExtra.fundisaSpend = f.fundisaSpend;
+          // FSC-specific: prior year revenue for FSC SED/income scoring.
+          if (f.priorYearRevenue != null) skillsExtra.priorYearRevenue = f.priorYearRevenue;
           if (Object.keys(skillsExtra).length > 0) {
             update.financials = { ...(update.financials ?? {}), ...skillsExtra };
           }
@@ -1489,6 +1472,9 @@ export function registerWorkbookRoutes(app: Express): void {
               sedContributions: projected.sedContributions.length,
             },
             submittedAt,
+            validationIssues: allValidationIssues,
+            blockingIssues,
+            warnings: allValidationIssues.filter((i) => !blockingIssues.includes(i)),
           });
         }
 
@@ -1531,11 +1517,124 @@ export function registerWorkbookRoutes(app: Express): void {
             sedContributions: projected.sedContributions.length,
           },
           submittedAt: new Date().toISOString(),
+          validationIssues: allValidationIssues,
+          blockingIssues,
+          warnings: allValidationIssues.filter((i) => !blockingIssues.includes(i)),
         });
       } catch (err: any) {
         logger.error("Failed to submit workbook", err);
         res.status(500).json({ error: "Failed to submit workbook" });
       }
-    },
-  );
+  };
+
+  app.post("/api/workbook/:companyId/submit", requireAuth, handleWorkbookScorecardSync);
+  app.post("/api/workbook/:companyId/sync", requireAuth, handleWorkbookScorecardSync);
+
+  // ---------------------------------------------------------------------------
+  // POST /api/workbook/suggest-value
+  // AI fallback for single-cell normalization when the deterministic engine
+  // can't produce a confident suggestion. Returns { suggestion, explanation }.
+  // ---------------------------------------------------------------------------
+  app.post("/api/workbook/suggest-value", requireAuth, async (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const fieldKey = typeof body.fieldKey === "string" ? body.fieldKey.trim() : "";
+      const fieldLabel = typeof body.fieldLabel === "string" ? body.fieldLabel.trim() : fieldKey;
+      const rawValue = typeof body.rawValue === "string" ? body.rawValue.trim() : "";
+      const fieldType = typeof body.fieldType === "string" ? body.fieldType.trim() : "text";
+      const allowedValues: string[] = Array.isArray(body.allowedValues)
+        ? body.allowedValues.map(String)
+        : [];
+
+      if (!rawValue) {
+        return res.status(400).json({ message: "rawValue is required" });
+      }
+
+      if (fieldType === "select" && allowedValues.length > 0) {
+        const { suggestSelectOption, FUZZY_SELECT_HINT } = await import("../src/lib/selectOptionMatch");
+        const match = suggestSelectOption(rawValue, allowedValues, fieldKey || undefined);
+        if (match.suggestion && match.confidence >= FUZZY_SELECT_HINT) {
+          return res.json({
+            suggestion: match.suggestion,
+            explanation: `Did you mean "${match.suggestion}"?`,
+          });
+        }
+      }
+
+      const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+      const apiKey = process.env.AZURE_OPENAI_API_KEY;
+      const deployment =
+        process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.AZURE_OPENAI_DEPLOYMENT;
+      const openaiKey = process.env.OPENAI_API_KEY;
+
+      if (!((endpoint && apiKey && deployment) || openaiKey)) {
+        return res.status(503).json({ message: "AI not configured" });
+      }
+
+      const { AzureOpenAI, default: OpenAI } = await import("openai");
+      let client: InstanceType<typeof OpenAI>;
+      let model: string;
+      if (endpoint && apiKey && deployment) {
+        client = new AzureOpenAI({
+          endpoint,
+          apiKey,
+          deployment,
+          apiVersion: process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview",
+        });
+        model = deployment;
+      } else {
+        client = new OpenAI({ apiKey: openaiKey! });
+        model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+      }
+
+      const validationMessage =
+        typeof body.validationMessage === "string" ? body.validationMessage.trim() : "";
+      const dateFormat = typeof body.dateFormat === "string" ? body.dateFormat.trim() : "";
+      const allowedList =
+        allowedValues.length > 0
+          ? `Allowed values: ${allowedValues.map((v) => `"${v}"`).join(", ")}.`
+          : "";
+      const system = [
+        "You normalize a single user-entered value for a South African B-BBEE scorecard field.",
+        "Return JSON only: { \"suggestion\": string|null, \"explanation\": string }.",
+        "suggestion should be the best normalized value, or null if you cannot confidently normalize.",
+        "explanation should be a single short sentence (≤20 words) explaining the normalization.",
+        "Never invent values that aren't in the allowed list (when provided).",
+        dateFormat ? `Dates must use format ${dateFormat}.` : "",
+        validationMessage ? `Validation rule: ${validationMessage}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const user =
+        `Field: "${fieldLabel}" (type: ${fieldType}). ${allowedList}\n` +
+        (validationMessage ? `Rule: ${validationMessage}\n` : "") +
+        (dateFormat ? `Format: ${dateFormat}\n` : "") +
+        `User typed: "${rawValue}"\n` +
+        `What is the correct normalized value?`;
+
+      const response = await client.chat.completions.create({
+        model,
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      });
+      const text = response.choices?.[0]?.message?.content;
+      if (!text) return res.json({ suggestion: null, explanation: "" });
+
+      const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
+      const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
+      const validSuggestion =
+        suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
+          ? suggestion
+          : null;
+
+      return res.json({ suggestion: validSuggestion, explanation: parsed.explanation ?? "" });
+    } catch (err) {
+      logger.error("suggest-value failed", err);
+      return res.status(500).json({ message: "suggest-value failed" });
+    }
+  });
 }

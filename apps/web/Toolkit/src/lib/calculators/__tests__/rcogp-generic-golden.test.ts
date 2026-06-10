@@ -117,7 +117,7 @@ describe('RCOGP Generic — CalculatorConfig completeness', () => {
   });
 
   it('exposes skills and procurement targets without undefined gaps', () => {
-    expect(CONFIG.skills.overallSpendPercent).toBe(3.5);
+    expect(CONFIG.skills.overallSpendPercent).toBeCloseTo(0.035, 4); // stored as fraction after /100
     expect(CONFIG.skills.learningProgrammesMaxPts).toBe(6);
     expect(CONFIG.procurement.bo51MaxPts).toBe(11);
     expect(CONFIG.procurement.bo51Target).toBe(0.5);

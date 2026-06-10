@@ -420,9 +420,9 @@ export function validateEsgWorkbookForSubmit(...): EsgValidationAggregate;
 |------|---------------------|
 | EsgInformationRequest | Mirrors InformationRequest UX (section nav, save, import) |
 | EsgScoreSummary | Shows pillar scores + validation blockers before toolkit |
-| Submit flow | `submittedAt` locks workbook; validation must pass |
-| XLSX export | Export reproduces v1.7 sheet names and key values |
-| Registers | Fleet_Register + Waste_Register grids functional |
+| Submit flow | ✅ `submittedAt` lock; King5 17/17 required (critical) |
+| XLSX export | ✅ 28 v1.7 sheets + computed E/S/G scorecard values |
+| Registers | ✅ Fleet, Waste, Driver_Debrief, ISO_Tracker, King5, IFRS, GARP, SAQ grids |
 
 ### Phase 4 — Extended disclosure (2+ weeks)
 

@@ -719,12 +719,6 @@
             ],
             "cross_field_rules": [
                 {
-                    "rule_id": "PP_CERT_001",
-                    "description": "If a B-BBEE level is supplied, a certificate expiry date should be supplied.",
-                    "condition": "bbbee_level != null",
-                    "assert": "certificate_expiry_date != null"
-                },
-                {
                     "rule_id": "PP_OWN_001",
                     "description": "Black female ownership cannot exceed total black ownership when both values are supplied.",
                     "condition": "current_black_ownership != null && current_black_female_ownership != null",

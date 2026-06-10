@@ -11,6 +11,7 @@ import {
 import { determineBeeLevel, LEVEL_POINTS_THRESHOLDS } from './levelDetermination.js';
 import { generateSuggestions } from './suggestions.js';
 import { resolveIndustryNorm } from './industryNorms.js';
+import { resolveNpatForTargets } from './npatResolution.js';
 
 function _isBlack(r: string) { return ['African', 'Coloured', 'Indian'].includes(r); }
 
@@ -41,10 +42,16 @@ export function buildPipelineResult(parsed: ParseResult, filename: string): Pipe
 
   const industryNorm = resolveIndustryNorm(parsed.client.industrySector || '', parsed.client.name || '');
 
+  const npatResolved = resolveNpatForTargets({
+    currentRevenue: revenue,
+    currentNpat: npat,
+    industryNormPercent: industryNorm,
+    priorYears: [],
+  });
+  const deemedNpatUsed = npatResolved.deemedNpatUsed;
+  const deemedNpat = npatResolved.deemedNpat;
+  const effectiveNpat = Math.max(npatResolved.effectiveNpat, 0);
   const actualMargin = revenue > 0 ? (npat / revenue) * 100 : 0;
-  const deemedNpatUsed = revenue > 0 && (npat <= 0 || actualMargin < (industryNorm * 0.25));
-  const deemedNpat = deemedNpatUsed ? revenue * (industryNorm / 100) : npat;
-  const effectiveNpat = Math.max(deemedNpatUsed ? deemedNpat : npat, 0);
 
   const logs: PipelineLog[] = [...parsed.logs];
   const addLog = (msg: string, type: PipelineLog['type'] = 'info') => {

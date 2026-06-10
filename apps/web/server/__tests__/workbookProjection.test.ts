@@ -180,6 +180,24 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
     }
   });
 
+  it('maps Black shareholder race to black ownership voting rights', () => {
+    const wb = buildWorkbook();
+    const ownershipRows = wb.sections.ownership?.rows ?? [];
+    if (ownershipRows.length > 0) {
+      (ownershipRows[0] as any).race = 'Black';
+      (ownershipRows[0] as any).gender = 'Female';
+      (ownershipRows[0] as any).votingRights = 100;
+      (ownershipRows[0] as any).economicInterest = 100;
+      (ownershipRows[0] as any).shareholding = 100;
+      delete (ownershipRows[0] as any).blackOwnership;
+      delete (ownershipRows[0] as any).blackWomenOwnership;
+    }
+    const out = projectWorkbookToClient(wb);
+    const sh = out.shareholders[0] as any;
+    expect(sh.blackOwnership).toBeGreaterThan(0);
+    expect(sh.blackWomenOwnership).toBeGreaterThan(0);
+  });
+
   it('suppliers expose enterpriseType + fraction blackOwnership + numeric beeLevel (Lake Trading Fix Plan Bug 3 + 7)', () => {
     const sups = projection.suppliers as any[];
     expect(sups.length).toBe(2);

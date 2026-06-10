@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
+import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -95,7 +96,7 @@ const emptyForm: ShareholderFormState = {
 };
 
 export default function Ownership() {
-  const { ownership, addShareholder, updateShareholder, removeShareholder, updateCompanyValue, calculatorConfig } = useBbeeStore();
+  const { ownership, client, addShareholder, updateShareholder, removeShareholder, updateCompanyValue, calculatorConfig } = useBbeeStore();
   const { toast } = useToast();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -538,7 +539,9 @@ export default function Ownership() {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>7 sub-line indicators per RCOGP Generic Codes</CardDescription>
+          <CardDescription>
+            {pillarBreakdownSubtitle(score.subLines, client, calculatorConfig)}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">

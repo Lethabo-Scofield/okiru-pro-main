@@ -21,8 +21,11 @@ import {
   SUPPLIER_SIZE_MAP,
   OCC_LEVEL_MAP,
   BBBEE_LEVEL_MAP,
+  DESIGNATION_MAP,
+  ESD_CATEGORY_MAP,
   type ColumnDef,
 } from "@/components/workbook/sections";
+import { coerceYesNo, yesNoToSelectValue } from "@/lib/yesNoValue";
 import {
   buildFieldMapping,
   headerSimilarity,
@@ -32,6 +35,11 @@ import {
   type FieldMappingMethod,
   type TargetField,
 } from "@/lib/columnMatch";
+import {
+  formatDidYouMeanMessage,
+  suggestSelectOption,
+  FUZZY_SELECT_ACCEPT,
+} from "@/lib/selectOptionMatch";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -271,29 +279,31 @@ function matchSelectOption(raw: string, col: ColumnDef): string | null {
     const g = GENDER_MAP[n];
     if (g) return g;
   }
+  if (col.key === "designation") {
+    const d = DESIGNATION_MAP[n];
+    if (d && (col.options ?? []).includes(d)) return d;
+  }
   if (col.key === "currentSize" || /size/.test(col.key.toLowerCase())) {
     const s = SUPPLIER_SIZE_MAP[n];
     if (s && (col.options ?? []).includes(s)) return s;
   }
-  if (/level/.test(col.key.toLowerCase())) {
+  if (/level/.test(col.key.toLowerCase()) && col.key !== "occupationalLevel") {
     const lvl = BBBEE_LEVEL_MAP[n];
     if (lvl && (col.options ?? []).includes(lvl)) return lvl;
   }
-  if (/occupational|level/.test(col.key.toLowerCase())) {
+  if (col.key === "occupationalLevel") {
     const occ = OCC_LEVEL_MAP[n];
     if (occ && (col.options ?? []).includes(occ)) return occ;
   }
-  if (!col.options?.length) return null;
-  // Exact (normalized) option match.
-  const exact = col.options.find((o) => norm(o) === n);
-  if (exact) return exact;
-  // Containment / fuzzy.
-  let best: { option: string; score: number } | null = null;
-  for (const o of col.options) {
-    const score = headerSimilarity(raw, o);
-    if (!best || score > best.score) best = { option: o, score };
+  if (col.key === "esdCategory") {
+    const cat = ESD_CATEGORY_MAP[n];
+    if (cat && (col.options ?? []).includes(cat)) return cat;
   }
-  if (best && best.score >= 0.8) return best.option;
+  if (!col.options?.length) return null;
+  const fuzzy = suggestSelectOption(raw, col.options, col.key);
+  if (fuzzy.suggestion && fuzzy.confidence >= FUZZY_SELECT_ACCEPT) {
+    return fuzzy.suggestion;
+  }
   return null;
 }
 
@@ -302,11 +312,31 @@ function matchSelectOption(raw: string, col: ColumnDef): string | null {
  * value plus a validation flag when the value is bad or uncertain.
  */
 export function normalizeCellForColumn(raw: unknown, col: ColumnDef): NormalizedCell {
-  const blankValue = col.type === "boolean" ? false : "";
+  const blankValue = col.type === "boolean" || col.yesNoBoolean ? false : "";
   if (raw === null || raw === undefined) {
     return { raw, value: blankValue, changed: false };
   }
   const rawStr = raw instanceof Date ? raw.toISOString() : String(raw);
+
+  if (col.yesNoBoolean && col.type === "select") {
+    const n = norm(rawStr);
+    if (BOOLEAN_TRUE.has(n)) {
+      return { raw, value: true, changed: raw !== true };
+    }
+    if (BOOLEAN_FALSE.has(n)) {
+      return { raw, value: false, changed: raw !== false };
+    }
+    const display = yesNoToSelectValue(raw);
+    if (display === "Yes" || display === "No") {
+      return { raw, value: coerceYesNo(display), changed: coerceYesNo(raw) !== raw };
+    }
+    return {
+      raw,
+      value: false,
+      changed: true,
+      flag: { level: "warning", message: `"${rawStr}" isn't a clear Yes/No — defaulted to No.` },
+    };
+  }
 
   if (col.type === "boolean") {
     const n = norm(rawStr);
@@ -373,15 +403,23 @@ export function normalizeCellForColumn(raw: unknown, col: ColumnDef): Normalized
 
   if (col.type === "select") {
     const matched = matchSelectOption(rawStr, col);
-    if (matched) return { raw, value: matched, changed: matched !== rawStr.trim() };
+    if (matched) {
+      const value = col.yesNoBoolean ? coerceYesNo(matched) : matched;
+      return { raw, value, changed: matched !== rawStr.trim() || value !== raw };
+    }
     if (col.options?.length) {
+      const hint = suggestSelectOption(rawStr, col.options, col.key);
+      const didYouMean =
+        hint.suggestion && hint.suggestion !== rawStr.trim()
+          ? formatDidYouMeanMessage(rawStr.trim(), hint.suggestion)
+          : `"${rawStr}" is not one of: ${col.options.join(", ")}.`;
       return {
         raw,
         value: rawStr.trim(),
         changed: false,
         flag: {
           level: "warning",
-          message: `"${rawStr}" is not one of: ${col.options.join(", ")}.`,
+          message: didYouMean,
         },
       };
     }
@@ -408,17 +446,27 @@ export function validateColumnValue(value: unknown, col: ColumnDef): CellFlag | 
 }
 
 function looksLikeHeaderRow(row: string[], columns: ColumnDef[]): boolean {
-  if (row.length === 0) return false;
+  const nonEmpty = row.filter((c) => String(c ?? "").trim());
+  // Single-cell / single-column pastes are data rows, not headers.
+  if (nonEmpty.length < 2) return false;
+
   let matches = 0;
   let numericCells = 0;
-  for (const cell of row) {
+  for (const cell of nonEmpty) {
     const s = String(cell ?? "").trim();
-    if (!s) continue;
     if (parseNumberLoose(s) !== null && /^[\d\s.,()rR%-]+$/.test(s)) numericCells++;
-    if (matchHeaderToColumn(s, columns)) matches++;
+    const match = matchHeaderToColumn(s, columns);
+    // Only treat as header when the cell closely matches a field label/alias,
+    // not a fuzzy match on a select option value (e.g. "Senior Manager").
+    if (match && match.confidence >= 0.85 && (match.method === "exact" || match.method === "alias")) {
+      matches++;
+    }
   }
-  // Header rows match field names and contain few raw numbers.
-  return matches >= Math.max(1, Math.ceil(row.filter((c) => String(c).trim()).length * 0.4)) && numericCells === 0;
+  return (
+    matches >= 1 &&
+    matches >= Math.ceil(nonEmpty.length * 0.4) &&
+    numericCells === 0
+  );
 }
 
 export interface NormalizeMatrixOptions {
@@ -451,13 +499,15 @@ export function normalizeMatrix(
   }
 
   const firstRow = (matrix[0] ?? []).map((c) => String(c ?? "").trim());
-  const headerRowDetected =
-    options.hasHeaderRow ?? looksLikeHeaderRow(firstRow, columns);
+  const width = Math.max(...matrix.map((r) => r.length), firstRow.length);
+  const startCol = options.startColIndex ?? 0;
+  // Column-vector pastes from Excel should never be treated as a header row.
+  const forceDataRows = width <= 1 && startCol >= 0;
+  const headerRowDetected = forceDataRows
+    ? false
+    : (options.hasHeaderRow ?? looksLikeHeaderRow(firstRow, columns));
 
   let mapping: ColumnMapping[];
-  const startCol = options.startColIndex ?? 0;
-  const width = Math.max(...matrix.map((r) => r.length), firstRow.length);
-
   if (options.mappingOverride && options.mappingOverride.length > 0) {
     mapping = options.mappingOverride;
   } else if (headerRowDetected) {

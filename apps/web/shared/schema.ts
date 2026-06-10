@@ -129,6 +129,8 @@ export interface CalculatorConfig {
     bwo30MaxPts?: number;
     dgTarget?: number;
     dgMaxPts?: number;
+    /** FSC Banks/LTI: PP sub-minimum always passes (toolkit formula returns pass). */
+    alwaysPassSubMin?: boolean;
   };
   esd: {
     supplierDevMax: number;
@@ -198,6 +200,60 @@ export interface CalculatorConfig {
     enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
     socioEconomicDevelopment?: { maxPoints: number; chooseOneGroup?: string };
     yesInitiative?: { maxPoints: number; chooseOneGroup?: string };
+  };
+  /**
+   * FSC Banks/LTI — Empowerment Financing pillar config.
+   * Point values for Targeted Investments and Transaction Financing are 0 by default
+   * (not readable from the toolkit template when sub-sector = Others — Q44).
+   * SD/ED targets differ from Generic (Banks: SD 1.8%, ED 0.2%; LTI: same + stockbroker).
+   */
+  empowermentFinancing?: {
+    maxPoints: number;
+    /** Targeted Investments — % of balance-sheet (Banks) / qualifying exposure (LTI). */
+    targetedInvestmentMaxPts: number;
+    /** Transaction Financing and Risk Capital contributions. */
+    transactionFinancingMaxPts: number;
+    /** Supplier Development (part of EF scorecard for Banks/LTI). */
+    sdMaxPts: number;
+    sdTarget: number;   // e.g. 0.018 (1.8% NPAT)
+    /** Enterprise Development (part of EF scorecard). */
+    edMaxPts: number;
+    edTarget: number;   // e.g. 0.002 (0.2% NPAT)
+    /** ED graduation bonus. */
+    graduationBonusMaxPts: number;
+    /** ED jobs-created bonus. */
+    jobsBonusMaxPts: number;
+    /** LTI-only: ED stockbroker / fund manager / intermediary support (0.5% NPAT / 2 pts). */
+    stockbrokerBonusMaxPts?: number;
+    stockbrokerTarget?: number;
+  };
+  /**
+   * FSC Banks/LTI/STI — Access to Financial Services (AFS) pillar config.
+   * Total AFS = 12 pts for all sub-sectors; structure differs by sub-sector.
+   */
+  accessToFinancialServices?: {
+    subSector: 'Banks' | 'LTI' | 'STI';
+    maxPoints: number;
+    // Banks: geographic / electronic access (total 12 pts)
+    transactionPointTarget?: number;    // 0.85 (85%)
+    transactionPointMaxPts?: number;    // 1
+    servicePointTarget?: number;        // 0.70 (70%)
+    servicePointMaxPts?: number;        // 1
+    salesPointTarget?: number;          // 0.60 (60%)
+    salesPointMaxPts?: number;          // 2
+    electronicAccessMaxPts?: number;    // 2 (national target — yes/no)
+    pointOfPresenceMaxPts?: number;     // 3 (at least one PoP per measurement unit)
+    activeAccountsMaxPts?: number;      // 3 (active accounts in target market)
+    // LTI: products / penetration / transactional access (total 12 pts)
+    appropriateProductsMaxPts?: number; // 3
+    marketPenetrationMaxPts?: number;   // 7
+    transactionalAccessTarget?: number; // 0.80 (80%)
+    transactionalAccessMaxPts?: number; // 2
+    // STI: commercial products + insurance policies (total 12 pts)
+    commercialProductsMaxPts?: number;  // 2 (6 lines × 0.333)
+    commercialLinesCount?: number;      // 6
+    insurancePoliciesTarget?: number;   // 1.0 (100%)
+    insurancePoliciesMaxPts?: number;   // 10
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];

@@ -4,6 +4,7 @@
 export const SECTION_TO_PILLAR: Record<string, string | null> = {
   "company-information": null,
   "financial-information": null,
+  "afs-additions": "accessToFinancialServices",
   ownership: "ownership",
   "management-control": "management",
   employees: "employmentEquity",

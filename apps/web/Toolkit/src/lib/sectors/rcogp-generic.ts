@@ -130,12 +130,15 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
     skills: {
       generalMax: sk.learningProgrammesMaxPts,
       bursaryMax: sk.bursaryMaxPts,
-      overallTarget: sk.overallSpendPercent,
-      bursaryTarget: sk.bursarySpendPercent,
+      // SectorConfig stores spend targets as percentages (3.5 = 3.5%), but the skills
+      // calculator multiplies leviableAmount * target directly (expects a fraction like
+      // 0.035, not 3.5). Divide by 100 to match the calculator's expectation.
+      overallTarget: sk.overallSpendPercent / 100,         // 3.5% → 0.035
+      bursaryTarget: sk.bursarySpendPercent / 100,         // 2.5% → 0.025
       subMinThreshold: skillsSubMin,
-      overallSpendPercent: sk.overallSpendPercent,
-      bursarySpendPercent: sk.bursarySpendPercent,
-      disabledSpendPercent: sk.disabledSpendPercent,
+      overallSpendPercent: sk.overallSpendPercent / 100,   // 0.035 (fraction)
+      bursarySpendPercent: sk.bursarySpendPercent / 100,   // 0.025 (fraction)
+      disabledSpendPercent: sk.disabledSpendPercent / 100, // 0.003 (fraction)
       categoryECap: catE?.cap,
       categoryFCap: catF?.cap,
       learningProgrammesMaxPts: sk.learningProgrammesMaxPts,

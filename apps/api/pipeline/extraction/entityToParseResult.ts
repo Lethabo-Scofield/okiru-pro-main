@@ -68,8 +68,7 @@ function parseRace(raw: string | number | null): string {
   if (/indian/i.test(s)) return 'Indian';
   if (/white/i.test(s)) return 'White';
   // "Black" as a standalone race label means the B-BBEE beneficiary umbrella group
-  // Map to 'Black' so isBlackRace can handle it
-  if (/^black$/i.test(s.trim())) return 'Black';
+  if (/^black$/i.test(s.trim())) return 'African';
   return s;
 }
 

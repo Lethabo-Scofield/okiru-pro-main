@@ -178,6 +178,36 @@ describe('calculateManagementScore', () => {
     });
   });
 
+  describe('workbook label normalisation (race + designation)', () => {
+    it('scores exco rows labelled Other Executive Manager in the workbook', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Other Executive Manager', race: 'African' }),
+          makeEmployee({ id: '2', designation: 'Other Executive Manager', race: 'African', gender: 'Female' }),
+        ],
+      }));
+
+      expect(result.otherExecBlack).toBeGreaterThan(0);
+      expect(result.otherExecBWO).toBeGreaterThan(0);
+      expect(result.rawStats.otherExecBlackPct).toBe(1.0);
+      expect(result.rawStats.otherExecBWOPct).toBe(0.5);
+    });
+
+    it('counts board black female members when race is stored as Black', () => {
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Non-executive Director', race: 'Black', gender: 'Female' }),
+          makeEmployee({ id: '2', designation: 'Non-executive Director', race: 'White', gender: 'Male' }),
+        ],
+      }));
+
+      expect(result.boardVotingBlack).toBeGreaterThan(0);
+      expect(result.boardVotingBWO).toBeGreaterThan(0);
+      expect(result.rawStats.boardBlackPct).toBe(0.5);
+      expect(result.rawStats.boardBWOPct).toBe(0.5);
+    });
+  });
+
   describe('designation level scoring', () => {
     it('should score senior/middle/junior independently', () => {
       const result = calculateManagementScore(makeManagementData({

@@ -10,7 +10,25 @@
 // persisted workbook data; only validators and `required` flags were tightened to
 // match the rules document.
 
+import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
+import { isBelowIndustryNormQuarterThreshold } from "@/lib/npatDeemedCalculation";
+
+function numMeta(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export type ColumnType = "text" | "number" | "select" | "boolean" | "id" | "date";
+
+/** Yes/No dropdown options (Excel toolkit convention). */
+export const YES_NO_OPTIONS = ["Yes", "No"] as const;
+
+export interface GridTotalDef {
+  /** Column key to sum across non-empty rows. */
+  columnKey: string;
+  /** Label shown in the totals row (defaults to "Total"). */
+  label?: string;
+}
 
 export interface ColumnDef {
   key: string;
@@ -18,6 +36,8 @@ export interface ColumnDef {
   type: ColumnType;
   required?: boolean;
   options?: string[];
+  /** When true, a Yes/No select is stored as boolean in row JSON. */
+  yesNoBoolean?: boolean;
   width?: number;
   validate?: (value: unknown) => string | null;
   /** Inline guidance shown as a tooltip on hover (e.g. picker help text). */
@@ -30,6 +50,21 @@ export interface ColumnDef {
    * `mapHeaderToKey` in `workbookExcelNormalizer.ts`).
    */
   aliases?: string[];
+  /**
+   * Plain-English explanation of the validation rule shown in the
+   * CellValidationPopup when the user types an unexpected value.
+   * Example: "Enter EME, QSE, or Generic — not case sensitive"
+   */
+  validationMessage?: string;
+  /**
+   * Short hint appended below the suggested value in the popup.
+   * Example: "B-BBEE level 1 is the highest contributor status"
+   */
+  suggestionHint?: string;
+  /** Visually emphasise sector-specific configuration fields (e.g. FSC sub-sector). */
+  emphasis?: boolean;
+  /** Display-only field (auto-filled); user cannot edit in meta forms. */
+  readOnly?: boolean;
 }
 
 export interface SectionDef {
@@ -50,6 +85,24 @@ export interface SectionDef {
    * for any rule violations spanning multiple columns within the same row.
    */
   rowValidate?: (row: Record<string, unknown>) => Record<string, string>;
+  /** Optional summary row rendered above the data grid (Excel toolkit totals). */
+  gridTotals?: GridTotalDef[];
+}
+
+/** Build a Yes/No select column that persists as boolean. */
+export function yesNoColumn(
+  key: string,
+  label: string,
+  extra: Omit<ColumnDef, "key" | "label" | "type" | "options" | "yesNoBoolean"> = {},
+): ColumnDef {
+  return {
+    key,
+    label,
+    type: "select",
+    options: [...YES_NO_OPTIONS],
+    yesNoBoolean: true,
+    ...extra,
+  };
 }
 
 const RACE_OPTIONS = ["African", "Coloured", "Indian", "White"];
@@ -84,6 +137,9 @@ const PROVINCE_OPTIONS = [
   "Northern Cape",
   "North West",
 ];
+
+/** EAP target lookup includes National (Stats SA national table) plus all provinces. */
+const EAP_PROVINCE_OPTIONS = ["National", ...PROVINCE_OPTIONS];
 const SUPPLIER_SIZE_OPTIONS = ["Large", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
@@ -111,6 +167,44 @@ export const SUPPLIER_SIZE_MAP: Record<string, string> = {
   largeenterprise: "Large",
   generic: "Large",
   l: "Large",
+};
+
+/** Synonyms for the MC/EE designation column (workbook select options). */
+export const DESIGNATION_MAP: Record<string, string> = {
+  executivedirector: "Executive Director",
+  execdirector: "Executive Director",
+  executive: "Executive Director",
+  ed: "Executive Director",
+  nonexecutivedirector: "Non-executive Director",
+  nonexecdirector: "Non-executive Director",
+  nonexecutive: "Non-executive Director",
+  ned: "Non-executive Director",
+  otherexecutivemanager: "Other Executive Manager",
+  otherexecutivemanagement: "Other Executive Manager",
+  otherexecmanager: "Other Executive Manager",
+  otherexecmgmt: "Other Executive Manager",
+  execmanager: "Other Executive Manager",
+  seniormanager: "Senior Manager",
+  seniormanagement: "Senior Manager",
+  seniormgmt: "Senior Manager",
+  snrmanager: "Senior Manager",
+  snrmanagement: "Senior Manager",
+  snrmgmt: "Senior Manager",
+  senior: "Senior Manager",
+  seniormgr: "Senior Manager",
+  middlemanager: "Middle Manager",
+  middlemanagement: "Middle Manager",
+  middlemgmt: "Middle Manager",
+  middle: "Middle Manager",
+  midmanager: "Middle Manager",
+  juniormanager: "Junior Manager",
+  juniormanagement: "Junior Manager",
+  juniormgmt: "Junior Manager",
+  junior: "Junior Manager",
+  jnrmanager: "Junior Manager",
+  semiskilled: "Semi-skilled",
+  semi: "Semi-skilled",
+  unskilled: "Unskilled",
 };
 
 export const OCC_LEVEL_MAP: Record<string, string> = {
@@ -270,41 +364,66 @@ export function resolveScorecardTypeForSector(
   return "";
 }
 
+function insertFieldsAfter(
+  fields: ColumnDef[],
+  afterKey: string,
+  toInsert: ColumnDef[],
+): ColumnDef[] {
+  if (toInsert.length === 0) return fields;
+  const idx = fields.findIndex((f) => f.key === afterKey);
+  if (idx < 0) return [...fields, ...toInsert];
+  return [...fields.slice(0, idx + 1), ...toInsert, ...fields.slice(idx + 1)];
+}
+
 /** Company Information meta fields with scorecardType options filtered by sector. */
 export function getCompanyInfoMetaFields(sectorCode?: string): ColumnDef[] {
   const sector = String(sectorCode ?? "").trim().toUpperCase();
   const scorecardOptions = sector ? getScorecardTypeOptions(sector) : [];
-  const base = COMPANY_INFO_META.map((f) =>
+  let base = COMPANY_INFO_META.map((f) =>
     f.key === "scorecardType" ? { ...f, options: scorecardOptions } : f,
   );
-
-  const extras: ColumnDef[] = [];
-
-  // AGRI: farm workers qualify as a 5th Designated Group category (Ownership 4% EI target).
-  if (sector === "AGRI") {
-    extras.push({
-      key: "farmWorkersIncluded",
-      label: "Farm Workers included in Designated Groups?",
-      type: "boolean",
-      guidance:
-        "AgriBEE-specific. Tick if farm workers employed by the entity should be counted in the Designated Groups indicator for Ownership (4% EI target, 3 pts). Farm workers are a 5th qualifying category alongside ESOP, BBOS, Co-ops, and Black Designated Groups.",
-    });
-  }
-
-  // FSC: sub-sector picker drives which EF/AFS scorecard variant applies.
+  // FSC: Senior/Middle/Junior MC bands are NOT AVAILABLE — no Exco+Senior merge toggle.
   if (sector === "FSC") {
-    extras.push({
-      key: "fscSubSector",
-      label: "FSC Sub-Sector",
-      type: "select",
-      required: true,
-      options: FSC_SUB_SECTOR_OPTIONS,
-      guidance:
-        "Required for FSC. Determines the applicable scorecard variant: Others (FS700), Banks (FS701), Long-Term Insurers (FS702), or Short-Term Insurers (FS703). Currently only the 'Others' variant is fully scored.",
-    });
+    base = base.filter((f) => f.key !== "combineExcoSenior");
   }
 
-  return extras.length > 0 ? [...base, ...extras] : base;
+  if (sector === "AGRI") {
+    base = insertFieldsAfter(base, "industrySector", [
+      {
+        key: "farmWorkersIncluded",
+        label: "Farm Workers included in Designated Groups?",
+        type: "boolean",
+        emphasis: true,
+        guidance:
+          "AgriBEE-specific. Tick if farm workers employed by the entity should be counted in the Designated Groups indicator for Ownership (4% EI target, 3 pts). Farm workers are a 5th qualifying category alongside ESOP, BBOS, Co-ops, and Black Designated Groups.",
+      },
+    ]);
+  }
+
+  if (sector === "FSC") {
+    base = insertFieldsAfter(base, "industrySector", [
+      {
+        key: "fscSubSector",
+        label: "FSC Sub-Sector",
+        type: "select",
+        required: true,
+        emphasis: true,
+        options: FSC_SUB_SECTOR_OPTIONS,
+        guidance:
+          "Required — choose immediately after selecting FSC. Switches Financial Information AFS inputs, SED/CE rules, and procurement sub-minimums (Others FS700, Banks FS701, LTI FS702, STI FS703).",
+      },
+      {
+        key: "fscReinsurer",
+        label: "Reinsurer entity?",
+        type: "boolean",
+        emphasis: true,
+        guidance:
+          "FSC-specific. Reinsurers use reduced Consumer Education scoring: Additional CE only (1 pt max) and the Additional CE bonus row is suppressed.",
+      },
+    ]);
+  }
+
+  return base;
 }
 
 const sectorCodeValidator = (v: unknown): string | null => {
@@ -456,19 +575,27 @@ const COMPANY_INFO_META: ColumnDef[] = [
     required: true,
     options: [...SCORECARD_TYPE_OPTIONS],
   },
-  { key: "financialYearEnd", label: "Financial Year-End (yyyy-mm-dd)", type: "date", validate: dateValidator },
   {
-    key: "measurementPeriodStart",
-    label: "Financial Period Start",
+    key: "financialYearEnd",
+    label: "Financial Year-End (dd/mm/yyyy)",
     type: "date",
     validate: dateValidator,
+    validationMessage: "Enter date as dd/mm/yyyy (e.g. 28/2/2026)",
+  },
+  {
+    key: "measurementPeriodStart",
+    label: "Financial Period Start (dd/mm/yyyy)",
+    type: "date",
+    validate: dateValidator,
+    validationMessage: "Enter date as dd/mm/yyyy (e.g. 1/3/2025)",
     guidance: "Start date of the measured financial period. Drives period filters on Skills, PP, ESD, SED scorecards.",
   },
   {
     key: "measurementPeriodEnd",
-    label: "Financial Period End",
+    label: "Financial Period End (dd/mm/yyyy)",
     type: "date",
     validate: dateValidator,
+    validationMessage: "Enter date as dd/mm/yyyy (e.g. 28/2/2026)",
     guidance: "End date of the measured financial period.",
   },
   {
@@ -492,13 +619,12 @@ const COMPANY_INFO_META: ColumnDef[] = [
 ];
 
 // ---------- Financial Information (single-record meta form) ----------
-// Leviable Amount is intentionally NOT collected separately: per SARS the
-// Skills Development levy is calculated on total payroll (with statutory
-// exclusions), so we derive `leviableAmount` from `forecastPayroll` (preferred)
-// or `payroll` in `mapWorkbookFinancialsToClient`. This removes the user-facing
-// duplication that previously asked for both "Total Payroll" and "Leviable
-// Amount". Legacy workbooks that still carry a `leviableAmount` value continue
-// to be honoured by the mapping fallback.
+// Actual financials only — no "forecast" inputs. Leviable Amount is derived
+// automatically as `payroll × 1%` in `mapWorkbookFinancialsToClient` and is
+// never entered by the user.
+//
+// FSC exception: prior year income is needed for FSC scoring. A `priorYearRevenue`
+// field is appended by `getFinancialMetaFields` when sectorCode = "FSC".
 const FINANCIAL_META: ColumnDef[] = [
   { key: "revenue", label: "Revenue (R)", type: "number", validate: numericValidator },
   { key: "npat", label: "NPAT — Net Profit After Tax (R)", type: "number", validate: signedNumericValidator },
@@ -522,15 +648,18 @@ const FINANCIAL_META: ColumnDef[] = [
     key: "industryNormPercent",
     label: "Industry Norm (% of revenue)",
     type: "number",
-    validate: numericValidator,
-    guidance: "Industry norm margin (%). When actual NPAT margin falls below 25% of this norm, deemed NPAT (revenue × norm) drives SD/ED/SED targets.",
+    readOnly: true,
+    validate: percentValidator,
+    guidance:
+      "Auto-filled from the industry/sector selected in Company Information (SARS reference norms). When actual NPAT margin is below 25% of this value, deemed NPAT / Leibrandt logic applies and prior-year financials may be required.",
   },
   {
     key: "deemedNpatOverride",
     label: "Deemed NPAT Override (R)",
     type: "number",
     validate: signedNumericValidator,
-    guidance: "Optional manual deemed NPAT when the automatic industry-norm test is unsuitable. Leave blank to use actual NPAT or auto-deemed NPAT.",
+    guidance:
+      "Optional manual deemed NPAT. Only applies when at least one prior-year row is completed in the section below.",
   },
   {
     key: "companyValueToUse",
@@ -546,65 +675,286 @@ const FINANCIAL_META: ColumnDef[] = [
     validate: numericValidator,
     guidance: "Debt attributable to the measured entity for net-value calculations.",
   },
-  { key: "forecastRevenue", label: "Forecast Revenue (R)", type: "number", validate: numericValidator },
-  { key: "forecastNpat", label: "Forecast NPAT (R)", type: "number", validate: signedNumericValidator },
-  { key: "forecastPayroll", label: "Forecast Payroll (R, used as Leviable Amount for Skills)", type: "number", validate: numericValidator },
 ];
 
+/** Keys for the five prior-year rows used in Leibrandt / deemed NPAT (not FSC priorYearRevenue). */
+export function isPriorYearLeibrandtMetaKey(key: string): boolean {
+  return /^priorYear[1-5](Label|Revenue|Npat)$/.test(key);
+}
+
+/** Prior-year Leibrandt inputs apply only when current margin is below 25% of industry norm. */
+export function priorYearLeibrandtInputsRelevant(finMeta: Record<string, unknown>): boolean {
+  return isBelowIndustryNormQuarterThreshold(
+    numMeta(finMeta.revenue),
+    numMeta(finMeta.npat),
+    numMeta(finMeta.industryNormPercent),
+  );
+}
+
+/** Hide prior-year Leibrandt fields when the margin test does not apply. */
+export function filterVisibleFinancialMetaFields(
+  fields: ColumnDef[],
+  finMeta: Record<string, unknown>,
+): ColumnDef[] {
+  if (priorYearLeibrandtInputsRelevant(finMeta)) return fields;
+  return fields.filter((f) => !isPriorYearLeibrandtMetaKey(f.key));
+}
+
+/** Up to 5 prior financial years for deemed NPAT / Leibrandt (shown when margin test fails). */
+function buildPriorYearMetaFields(): ColumnDef[] {
+  const fields: ColumnDef[] = [];
+  for (let i = 1; i <= 5; i++) {
+    fields.push(
+      {
+        key: `priorYear${i}Label`,
+        label: `Prior Year ${i} — year ending`,
+        type: "text",
+        guidance: i === 1 ? "Historical revenue and NPAT for deemed NPAT (Leibrandt). Enter up to 5 prior years, most recent first." : undefined,
+      },
+      {
+        key: `priorYear${i}Revenue`,
+        label: `Prior Year ${i} — Revenue (R)`,
+        type: "number",
+        validate: numericValidator,
+      },
+      {
+        key: `priorYear${i}Npat`,
+        label: `Prior Year ${i} — NPAT (R)`,
+        type: "number",
+        validate: signedNumericValidator,
+      },
+    );
+  }
+  return fields;
+}
+
+/**
+ * Returns Financial Information meta fields for the given sector.
+ * FSC requires a "Prior Year Revenue" field in addition to current-year financials
+ * because FSC SED/income scoring uses prior financial year income.
+ */
+export function getFinancialMetaFields(sectorCode?: string): ColumnDef[] {
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  const priorYears = buildPriorYearMetaFields();
+  const base = [...FINANCIAL_META, ...priorYears];
+  if (sector !== "FSC") return base;
+  return [
+    ...base,
+    {
+      key: "priorYearRevenue",
+      label: "Prior Year Revenue (R) — FSC only",
+      type: "number" as const,
+      required: true,
+      validate: numericValidator,
+      guidance:
+        "FSC scoring uses prior financial year income for certain calculations. Enter the revenue / income from the previous completed financial year.",
+    },
+  ];
+}
+
 // ---------- Ownership ----------
+// Column order aligned with Excel "Ownership Data" (RCOGP toolkit row 6).
 export const OWNERSHIP_COLUMNS: ColumnDef[] = [
-  { key: "shareholderName", label: "Shareholder Name", type: "text", required: true, width: 200 },
-  { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150 },
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, width: 130 },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, width: 110 },
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isYouth", label: "Youth (<35)", type: "boolean", width: 110 },
-  { key: "votingRights", label: "Voting Rights (%)", type: "number", width: 140, validate: percentValidator },
-  { key: "economicInterest", label: "Economic Interest (%)", type: "number", width: 160, validate: percentValidator },
-  { key: "shareholding", label: "Shareholding (%)", type: "number", width: 150, validate: percentValidator },
   {
-    key: "shareValue",
-    label: "Share Carrying Value (R)",
+    key: "dataDate",
+    label: "Data Date (dd/mm/yyyy)",
+    type: "date",
+    width: 150,
+    validate: dateValidator,
+    aliases: ["Data Date"],
+    validationMessage: "Enter date as dd/mm/yyyy",
+  },
+  {
+    key: "shareholderName",
+    label: "Shareholder",
+    type: "text",
+    required: true,
+    width: 200,
+    aliases: ["Shareholder", "Shareholder Name", "Name"],
+  },
+  {
+    key: "ownershipType",
+    label: "Ownership Type",
+    type: "text",
+    width: 140,
+    aliases: ["Ownership Type"],
+  },
+  yesNoColumn("soaBuyer", "SOA Buyer", { width: 110, aliases: ["SOA Buyer"] }),
+  {
+    key: "transactionSoa",
+    label: "Transaction (SOA)",
+    type: "text",
+    width: 150,
+    aliases: ["Transaction (SOA)", "Transaction"],
+  },
+  {
+    key: "rowOutstandingDebt",
+    label: "Outstanding Debt (R)",
     type: "number",
     width: 160,
     validate: numericValidator,
+    aliases: ["Outstaning Debt", "Outstanding Debt", "Outstanding Acquisition Debt"],
+  },
+  {
+    key: "loanDate",
+    label: "Loan Date (dd/mm/yyyy)",
+    type: "date",
+    width: 140,
+    validate: dateValidator,
+    aliases: ["Loan Date"],
+    validationMessage: "Enter date as dd/mm/yyyy",
+  },
+  {
+    key: "blackOwnership",
+    label: "BO (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BO%", "BO %", "Black Ownership", "Black Ownership %", "ME BO%"],
+    validationMessage: "Enter a percentage between 0 and 100",
+  },
+  {
+    key: "blackWomenOwnership",
+    label: "BWO (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BWO%", "BWO %", "Black Women Ownership", "ME BWO%"],
+    validationMessage: "Enter a percentage between 0 and 100",
+  },
+  {
+    key: "designatedGroupOwnership",
+    label: "BDG (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BDG%", "BDG %", "Designated Group", "ME BDG%"],
+  },
+  {
+    key: "blackNewEntrantOwnership",
+    label: "BNE (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BNE%", "BNE %", "New Entrant", "ME BNE%"],
+  },
+  {
+    key: "numberOfShares",
+    label: "Number of Shares",
+    type: "number",
+    width: 140,
+    validate: integerNonNegValidator,
+    aliases: ["Number of Share", "Shares Held", "Shares"],
+  },
+  {
+    key: "shareValue",
+    label: "Share Value (R)",
+    type: "number",
+    width: 160,
+    validate: numericValidator,
+    aliases: ["Share Carrying Value (R)", "Share Carrying Value"],
     guidance: "Carrying value of this shareholder's stake. Required with Company Value to Use for net-value scoring.",
   },
+  {
+    key: "shareholding",
+    label: "Share (%)",
+    type: "number",
+    width: 130,
+    validate: percentValidator,
+    aliases: ["Share %", "Shareholding (%)", "Shareholding"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
+  {
+    key: "votingRights",
+    label: "Voting Rights (%)",
+    type: "number",
+    width: 140,
+    validate: percentValidator,
+    aliases: ["Voting Rights"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
+  {
+    key: "economicInterest",
+    label: "Economic Interest (%)",
+    type: "number",
+    width: 160,
+    validate: percentValidator,
+    aliases: ["Economic Interest", "EI %"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
   { key: "yearsHeld", label: "Years Held", type: "number", width: 110, validate: integerNonNegValidator },
-  { key: "modifiedFlowThrough", label: "Modified Flow-Through?", type: "boolean", width: 170 },
+  { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150, aliases: ["ID Number", "ID / Registration Number"] },
+  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, width: 130 },
+  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, width: 110 },
+  yesNoColumn("isDisabled", "Disabled", { width: 100 }),
+  yesNoColumn("isYouth", "Youth (<35)", { width: 110, aliases: ["Youth"] }),
+  yesNoColumn("isBlack", "Black?", { width: 100, aliases: ["Black?"] }),
+  yesNoColumn("hasDebt", "Debt?", { width: 100, aliases: ["Debt?"] }),
+  yesNoColumn("modifiedFlowThrough", "Modified Flow-Through?", { width: 170 }),
 ];
 
-// ---------- Management Control ----------
-// Rules: Full Name*, Gender*, Race*, Designation* (enum), Disabled?, Foreign?,
-// ID Number, Voting Rights*, Employee Code, Start date/years of service.
-export const MANAGEMENT_COLUMNS: ColumnDef[] = [
+// ---------- Management Control + Employment Equity (combined) ----------
+// Per the SLS (docs/domain/sectors/rcogp/generic/sls.md §6.2 and ICT §6.2):
+// MC and EE are a *single combined spreadsheet* (one MC Scorecard in the Excel
+// toolkit). The `designation` column is the required discriminator that
+// distinguishes board-level directors (Executive Director / Non-executive
+// Director) from management/EE bands (Other Executive → Junior). Both groups
+// populate the same grid; scoring logic routes each row to the correct
+// indicator based on its designation value.
+export const MC_EE_COLUMNS: ColumnDef[] = [
   { key: "name", label: "First Name", type: "text", required: true, width: 140, aliases: ["First Name", "Given Name", "Name"] },
   { key: "surname", label: "Surname", type: "text", required: true, width: 140, aliases: ["Surname", "Last Name", "Family Name"] },
   { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number", "ID/Passport"] },
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Race", "Population Group", "Ethnicity"] },
   { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Gender", "Sex"] },
-  { key: "designation", label: "Designation", type: "select", options: DESIGNATION_OPTIONS, required: true, width: 200, aliases: ["Designation", "Title", "Position", "Job Title"] },
-  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level"] },
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
-  { key: "votingRights", label: "Voting Rights (%)", type: "number", required: true, width: 140, validate: percentValidator },
-  { key: "startDate", label: "Start Date / Years of Service", type: "text", width: 180, validate: dateOrNumberValidator },
-];
-
-// ---------- Employees ----------
-export const EMPLOYEE_COLUMNS: ColumnDef[] = [
-  { key: "name", label: "First Name", type: "text", required: true, width: 140, aliases: ["First Name", "Given Name", "Name"] },
-  { key: "surname", label: "Surname", type: "text", required: true, width: 140, aliases: ["Surname", "Last Name", "Family Name"] },
-  { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number", "ID/Passport"] },
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Race", "Population Group", "Ethnicity"] },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Gender", "Sex"] },
+  {
+    key: "designation",
+    label: "Designation",
+    type: "select",
+    options: DESIGNATION_OPTIONS,
+    required: true,
+    width: 220,
+    aliases: ["Designation", "Title", "Position", "Job Title", "Role", "Band"],
+    guidance:
+      "Required. Distinguishes board-level directors (Executive Director, Non-executive Director) from management/EE bands. Board-level rows are scored at fixed MC targets; Senior/Middle/Junior rows are scored against provincial EAP targets.",
+  },
   { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"] },
   { key: "department", label: "Department", type: "text", width: 160, aliases: ["Department", "Dept", "Business Unit"] },
-  { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Remuneration", "Total Cost to Company", "CTC"] },
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
-  { key: "startDate", label: "Start Date", type: "date", width: 140, validate: dateValidator },
+  { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Monthly Salary", "Remuneration", "Total Cost to Company", "CTC"] },
+  yesNoColumn("isDisabled", "Disabled", { width: 100, required: false, aliases: ["Disabled *", "Disabled"] }),
+  yesNoColumn("isForeign", "Foreign", { width: 100, aliases: ["Foreign *", "Foreign National", "Foreign"] }),
+  {
+    key: "votingRights",
+    label: "Voting Rights (%)",
+    type: "number",
+    width: 140,
+    validate: percentValidator,
+    guidance: "Required for board directors. Enter the percentage of exercisable voting rights held by this person.",
+  },
+  {
+    key: "startDate",
+    label: "Start Date / Years of Service (dd/mm/yyyy or years)",
+    type: "text",
+    width: 200,
+    validate: dateOrNumberValidator,
+    aliases: ["Hire Date", "Hire Date (format: dd/mm/yyyy)"],
+  },
 ];
+
+/**
+ * @deprecated Use MC_EE_COLUMNS for the combined Management Control &
+ * Employment Equity grid. Kept as an alias for backward-compatible imports
+ * (e.g. workbookExcelNormalizer column-alias maps).
+ */
+export const MANAGEMENT_COLUMNS: ColumnDef[] = MC_EE_COLUMNS;
+
+/**
+ * @deprecated EMPLOYEE_COLUMNS is no longer used as a separate section.
+ * The `employees` workbook section is hidden in the UI; all directors and
+ * employees are entered in the `management-control` section using MC_EE_COLUMNS.
+ * Kept for backward-compatible imports.
+ */
+export const EMPLOYEE_COLUMNS: ColumnDef[] = MC_EE_COLUMNS;
 
 // ---------- Skills Development ----------
 
@@ -614,29 +964,21 @@ const SELECT_PERIOD_OPTIONS = ["Current YTD", "Full Year", "Prior Year"];
  * Single-record meta form for Skills Development aggregate (grey-cell) inputs.
  * These correspond to the required inputs on the RCOGP Skills Scorecard tab and
  * Skills Toolkit tab. Source of truth: docs/domain/sectors/rcogp/generic/sls.md §3 + §6.3.
+ *
+ * Leviable Amount is NOT collected here — it is always derived as `payroll × 1%`
+ * in `mapWorkbookFinancialsToClient`. Removing it as a user input eliminates the
+ * duplicate-entry problem where Total Payroll and Leviable Amount could conflict.
  */
 export const SKILLS_META: ColumnDef[] = [
-  {
-    key: "leviableAmount",
-    label: "Leviable Amount (R)",
-    type: "number",
-    required: true,
-    validate: (v: unknown): string | null => {
-      if (isBlank(v)) return null;
-      const n = parseAmount(v);
-      if (Number.isNaN(n)) return "Must be a number";
-      if (n <= 0) return "Must be > 0";
-      return null;
-    },
-    guidance: "Entity payroll-based leviable amount (> 0). Drives the 3.5%, 2.5%, and 0.3% spend targets. Overrides Forecast Payroll in Financial Information when set.",
-  },
   {
     key: "eapProvince",
     label: "Applicable EAP Targets (Province)",
     type: "select",
     required: true,
-    options: PROVINCE_OPTIONS,
-    guidance: "Province for EAP demographic lookup. Required for bursary demographic splits and Management Control scoring.",
+    options: EAP_PROVINCE_OPTIONS,
+    guidance: "National or province for EAP demographic lookup. Required for bursary demographic splits and Management Control scoring.",
+    validationMessage: "Select National or a South African province from the dropdown",
+    suggestionHint: "Use National for the Stats SA national EAP table, or select the province where the entity is registered or primarily operates",
   },
   {
     key: "eapYear",
@@ -680,10 +1022,11 @@ export const SKILLS_META: ColumnDef[] = [
   },
   {
     key: "dataDate",
-    label: "Data Date",
+    label: "Data Date (dd/mm/yyyy)",
     type: "date",
     required: true,
     validate: dateValidator,
+    validationMessage: "Enter date as dd/mm/yyyy",
     guidance: "Reference date for this training dataset. Skills scorecard flags 'Data with no data date' when missing.",
   },
 ];
@@ -693,18 +1036,17 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
   { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
   { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
-  { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150 },
+  { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150, validationMessage: "Select a South African province from the dropdown" },
   { key: "municipality", label: "Municipality", type: "text", width: 160 },
   { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180, aliases: ["Learner", "Trainee", "Employee Name", "Beneficiary"] },
   { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number"] },
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Population Group", "Ethnicity"] },
   { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Sex"] },
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
-  { key: "age", label: "Age", type: "number", width: 90, validate: integerNonNegValidator },
-  { key: "employed", label: "Employed?", type: "boolean", width: 110 },
-  { key: "completed", label: "Completed?", type: "boolean", width: 110 },
-  { key: "absorbed", label: "Absorbed?", type: "boolean", width: 110 },
+  yesNoColumn("isDisabled", "Disabled", { width: 100, aliases: ["Disabled *"] }),
+  yesNoColumn("isForeign", "Foreign", { width: 100, aliases: ["Foreign *", "Foreign National"] }),
+  yesNoColumn("employed", "Employed?", { width: 110 }),
+  yesNoColumn("completed", "Completed?", { width: 110 }),
+  yesNoColumn("absorbed", "Absorbed?", { width: 110 }),
   { key: "courseCost", label: "Course Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Course Fees", "Tuition", "Training Cost", "Course"] },
   { key: "travelCost", label: "Travel Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Travel", "Transport"] },
   { key: "accommodationCost", label: "Accommodation (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Accommodation Cost", "Accommodation"] },
@@ -715,8 +1057,8 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "otherCosts", label: "Other Costs (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Other Cost", "Misc", "Miscellaneous"] },
   { key: "totalCost", label: "Total Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Total", "Total Spend", "Cost", "Amount"] },
   { key: "manHours", label: "Man Hours", type: "number", width: 120, validate: numericValidator },
-  { key: "startDate", label: "Start Date", type: "date", width: 140, validate: dateValidator },
-  { key: "endDate", label: "End Date", type: "date", width: 140, validate: dateValidator },
+  { key: "startDate", label: "Start Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
+  { key: "endDate", label: "End Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
 ];
 
 // ---------- Procurement / Suppliers ----------
@@ -724,22 +1066,52 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 // {Large, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Large"] },
-  { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140, aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"] },
+  {
+    key: "currentSize",
+    label: "Current Size",
+    type: "select",
+    options: SUPPLIER_SIZE_OPTIONS,
+    required: true,
+    width: 130,
+    aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Large"],
+    validationMessage: "Enter EME, QSE, or Large — not case sensitive. 'Generic' also maps to Large.",
+    suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise",
+  },
+  {
+    key: "bbbeeLevel",
+    label: "B-BBEE Level",
+    type: "select",
+    options: BBBEE_LEVEL_OPTIONS,
+    width: 140,
+    aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"],
+    validationMessage: "Enter a number 1–8 or 'Non-Compliant'. Level 1 is the highest contributor status.",
+    suggestionHint: "Level 1 (highest) through Level 8 (lowest), or Non-Compliant",
+  },
   { key: "vatNumber", label: "VAT Number", type: "text", width: 140, aliases: ["VAT", "VAT No"] },
   { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150, aliases: ["Code", "Codes", "Scorecard"] },
-  { key: "empoweringSupplier", label: "Empowering Supplier?", type: "boolean", width: 180, aliases: ["Empowering Supplier", "ES"] },
-  { key: "firstProcurementDate", label: "First Procured", type: "date", width: 140, validate: dateValidator, aliases: ["First Procurement Date", "First Spend Date", "Onboarded"] },
-  { key: "sizeAtFirstProcurement", label: "Size at First Procurement", type: "select", options: SUPPLIER_SIZE_OPTIONS, width: 180, aliases: ["Initial Size", "Original Size"] },
-  { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", width: 160, validate: percentValidator, aliases: ["Black Ownership", "% Black Ownership", "Black Owned %", "Black Owned"] },
-  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator, aliases: ["Black Female Ownership", "Black Women Ownership", "% Black Women", "Black Women Owned"] },
-  { key: "hasModifiedBlackOwnership", label: "Modified Black Ownership?", type: "boolean", width: 190 },
+  yesNoColumn("empoweringSupplier", "Empowering Supplier?", {
+    width: 180,
+    aliases: ["Empowering Supplier", "Empowering Supplier? (Yes/No)", "ES"],
+  }),
+  {
+    key: "firstProcurementDate",
+    label: "First Procured (dd/mm/yyyy)",
+    type: "date",
+    width: 160,
+    validate: dateValidator,
+    aliases: ["First Procurement Date", "Date of first procurement (format: dd/mm/yyyy)", "First Spend Date", "Onboarded"],
+    validationMessage: "Enter date as dd/mm/yyyy",
+  },
+  { key: "sizeAtFirstProcurement", label: "Size at First Procurement", type: "select", options: SUPPLIER_SIZE_OPTIONS, width: 180, aliases: ["Initial Size", "Original Size", "Size at first procurement"] },
+  { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", width: 160, validate: percentValidator, aliases: ["Black Ownership", "Current Black ownership", "% Black Ownership", "Black Owned %", "Black Owned"], validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)" },
+  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator, aliases: ["Black Female Ownership", "Current Black Female ownership", "Black Women Ownership", "% Black Women", "Black Women Owned"], validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)" },
+  yesNoColumn("hasModifiedBlackOwnership", "Modified Black Ownership?", { width: 190, aliases: ["Flow through Black ownership"] }),
   { key: "unmodifiedBlackOwnership", label: "Unmodified Black Ownership (%)", type: "number", width: 200, validate: percentValidator },
-  { key: "sdRecipient", label: "SD Recipient?", type: "boolean", width: 130 },
-  { key: "threeYearContract", label: "3yr Contract?", type: "boolean", width: 130 },
-  { key: "designated", label: "Designated?", type: "boolean", width: 120 },
-  { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator, aliases: ["Rand Value", "Amount", "Spend", "Procurement Spend", "Supplier Spend", "Value (R)", "R Spend", "Total Spend", "Annual Spend", "Spend Amount", "Spend (Excl VAT)"] },
-  { key: "certificateExpiryDate", label: "Cert Expiry", type: "date", width: 140, validate: dateValidator, aliases: ["Certificate Expiry", "Cert Expiry Date", "Expiry Date", "Valid Until"] },
+  yesNoColumn("sdRecipient", "SD Recipient?", { width: 130, aliases: ["Supplier development recipient? (Yes/No)"] }),
+  yesNoColumn("threeYearContract", "3yr Contract?", { width: 130, aliases: ["3 year contract in place? (Yes/No)"] }),
+  yesNoColumn("designated", "Designated?", { width: 120, aliases: ["Black Designated Group  ownership"] }),
+  { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator, aliases: ["Rand Value", "Amount", "Spend", "Spend *", "Procurement Spend", "Supplier Spend", "Value (R)", "R Spend", "Total Spend", "Annual Spend", "Spend Amount", "Spend (Excl VAT)"], validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },
+  { key: "certificateExpiryDate", label: "Cert Expiry (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Certificate Expiry", "Cert Expiry Date", "Expiry Date", "Valid Until"], validationMessage: "Enter date as dd/mm/yyyy", guidance: "Optional. When supplied, feeds the AI certificate parser and expiry checks." },
 ];
 
 export const SUPPLIER_COLUMNS: ColumnDef[] = PROCUREMENT_COLUMNS;
@@ -748,20 +1120,42 @@ export const SUPPLIER_COLUMNS: ColumnDef[] = PROCUREMENT_COLUMNS;
 // Per docs/LAKE_TRADING_FIX_PLAN.md §1 Bug 4: the workbook ESD section captures
 // both SD and ED contributions on one sheet; this column tells the scoring
 // engine which sub-element a row belongs to.
-const ESD_CATEGORY_OPTIONS = ["Supplier Development", "Enterprise Development"];
+export const ESD_CATEGORY_OPTIONS = ["Supplier Development", "Enterprise Development"] as const;
+
+/** Synonyms for ESD category (batch upload / AI / paste). */
+export const ESD_CATEGORY_MAP: Record<string, string> = {
+  sd: "Supplier Development",
+  supplierdevelopment: "Supplier Development",
+  supplierdev: "Supplier Development",
+  supplier: "Supplier Development",
+  ed: "Enterprise Development",
+  enterprisedevelopment: "Enterprise Development",
+  enterprisedev: "Enterprise Development",
+  enterprise: "Enterprise Development",
+  enterprisedevelopmentcontributions: "Enterprise Development",
+};
 
 // ---------- ESD ----------
 export const ESD_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Beneficiary / Supplier", type: "text", required: true, width: 220 },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", required: true, width: 160, validate: percentValidator },
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
-  { key: "esdCategory", label: "Category (SD / ED)", type: "select", options: ESD_CATEGORY_OPTIONS, required: false, width: 190 },
+  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, validationMessage: "Enter EME, QSE, or Large — not case sensitive. 'Generic' also maps to Large.", suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise" },
+  {
+    key: "esdCategory",
+    label: "Category (SD / ED)",
+    type: "select",
+    options: [...ESD_CATEGORY_OPTIONS],
+    required: false,
+    width: 190,
+    aliases: ["Pillar", "SD / ED", "SD/ED", "Category", "ED/SD"],
+    validationMessage: "Enter Supplier Development or Enterprise Development (or SD / ED)",
+  },
   { key: "contributionDescription", label: "Description", type: "text", required: true, width: 240 },
   { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 400). Hover an option for the definition.", optionGuidance: ESD_CONTRIBUTION_GUIDANCE },
-  { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },
-  { key: "dateOfTransaction", label: "Date of Transaction", type: "date", width: 160, validate: dateValidator },
-  { key: "invoiceDate", label: "Invoice Date", type: "date", width: 140, validate: dateValidator },
-  { key: "paymentDate", label: "Payment Date", type: "date", width: 140, validate: dateValidator },
+  { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator, validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },
+  { key: "dateOfTransaction", label: "Date of Transaction (dd/mm/yyyy)", type: "date", width: 180, validate: dateValidator, aliases: ["Date of Transaction * (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
+  { key: "invoiceDate", label: "Invoice Date (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Invoice date (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
+  { key: "paymentDate", label: "Payment Date (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Payment date (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
   { key: "primeRate", label: "Prime Rate (%)", type: "number", width: 130, validate: percentValidator },
   { key: "actualRate", label: "Actual Rate (%)", type: "number", width: 130, validate: percentValidator },
 ];
@@ -770,11 +1164,11 @@ export const ESD_COLUMNS: ColumnDef[] = [
 export const SED_COLUMNS: ColumnDef[] = [
   { key: "beneficiaryName", label: "Beneficiary Name", type: "text", required: true, width: 220 },
   { key: "descriptionOfSpend", label: "Description of Spend", type: "text", required: true, width: 260 },
-  { key: "ictSpecificInitiative", label: "ICT-Specific?", type: "boolean", width: 130 },
+  yesNoColumn("ictSpecificInitiative", "ICT-Specific?", { width: 130 }),
   { key: "contributionType", label: "Contribution Type", type: "select", options: SED_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 500). Hover an option for the definition.", optionGuidance: SED_CONTRIBUTION_GUIDANCE },
-  { key: "percentBenefitingBlack", label: "% Benefiting Black", type: "number", required: true, width: 170, validate: percentValidator },
-  { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },
-  { key: "dateOfTransaction", label: "Date of Transaction", type: "date", width: 160, validate: dateValidator },
+  { key: "percentBenefitingBlack", label: "% Benefiting Black", type: "number", required: true, width: 170, validate: percentValidator, validationMessage: "Enter a percentage between 0 and 100 (e.g. 80 not 0.80)" },
+  { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator, validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },
+  { key: "dateOfTransaction", label: "Date of Transaction (dd/mm/yyyy)", type: "date", width: 180, validate: dateValidator, aliases: ["Date of Transaction * (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
 ];
 
 /**
@@ -811,6 +1205,58 @@ export const FSC_SED_META: ColumnDef[] = [
   },
 ];
 
+/** Canonical FSC sub-sector codes that include a scored AFS pillar (12 pts). */
+export function normalizeFscAfsSubSector(fscSubSector?: string): "" | "Banks" | "LTI" | "STI" {
+  const v = String(fscSubSector ?? "").trim();
+  if (v === "Banks") return "Banks";
+  if (v === "LTI" || v === "Long-Term Insurers") return "LTI";
+  if (v === "STI" || v === "Short-Term Insurers") return "STI";
+  return "";
+}
+
+export function fscSubSectorHasAfs(fscSubSector?: string): boolean {
+  return normalizeFscAfsSubSector(fscSubSector) !== "";
+}
+
+/** AFS indicator meta fields for the selected FSC sub-sector (empty when not applicable). */
+export function getFscAfsMetaFields(fscSubSector?: string, sectorCode?: string): ColumnDef[] {
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  if (sector !== "FSC") return [];
+  const subNorm = normalizeFscAfsSubSector(fscSubSector);
+  if (subNorm === "Banks") return FSC_AFS_META_BANKS;
+  if (subNorm === "LTI") return FSC_AFS_META_LTI;
+  if (subNorm === "STI") return FSC_AFS_META_STI;
+  return [];
+}
+
+/** FSC AFS (Banks FS701) — geographic / electronic access inputs (12 pts total). */
+export const FSC_AFS_META_BANKS: ColumnDef[] = [
+  { key: "afsTransactionPointCoverage", label: "Transaction Point within 5km (% of qualifying area)", type: "number", validate: percentValidator, guidance: "Target 85% — 1 pt" },
+  { key: "afsServicePointCoverage", label: "Service Point within 10km (%)", type: "number", validate: percentValidator, guidance: "Target 70% — 1 pt" },
+  { key: "afsSalesPointCoverage", label: "Sales Point within 15km (%)", type: "number", validate: percentValidator, guidance: "Target 60% — 2 pts" },
+  { key: "afsElectronicAccessCompliant", label: "Electronic access compliant (target market)?", type: "boolean", guidance: "National target — 2 pts" },
+  { key: "afsHasPointOfPresence", label: "Point of Presence per measurement unit?", type: "boolean", guidance: "At least one PoP per unit — 3 pts" },
+  { key: "afsActiveAccountsCompliant", label: "Active qualifying accounts in target market?", type: "boolean", guidance: "National target — 3 pts" },
+];
+
+export const FSC_AFS_META_LTI: ColumnDef[] = [
+  { key: "afsAppropriateProductsNumerator", label: "Compliant appropriate products (count)", type: "number", validate: numericValidator, guidance: "Appropriate Products — 3 pts" },
+  { key: "afsAppropriateProductsDenominator", label: "Total developed products (count)", type: "number", validate: numericValidator },
+  { key: "afsMarketPenetrationPolicies", label: "On-book policies (Market Penetration)", type: "number", validate: numericValidator, guidance: "7 pts vs SAIA communicated" },
+  { key: "afsSaiaCommunicatedPolicies", label: "SAIA communicated policies (denominator)", type: "number", validate: numericValidator },
+  { key: "afsTransactionalAccessCoverage", label: "Transactional access — polygon coverage (%)", type: "number", validate: percentValidator, guidance: "Target 80% — 2 pts" },
+];
+
+export const FSC_AFS_META_STI: ColumnDef[] = [
+  { key: "afsCommercialEquipment", label: "Commercial line: Equipment offered?", type: "boolean" },
+  { key: "afsCommercialLiability", label: "Commercial line: Liability offered?", type: "boolean" },
+  { key: "afsCommercialProperty", label: "Commercial line: Property offered?", type: "boolean" },
+  { key: "afsCommercialAgriculture", label: "Commercial line: Agriculture offered?", type: "boolean" },
+  { key: "afsCommercialLivestock", label: "Commercial line: Livestock offered?", type: "boolean" },
+  { key: "afsCommercialOther", label: "Commercial line: Other offered?", type: "boolean", guidance: "Appropriate Products sub-total — 2 pts (6 lines × ⅓ pt)" },
+  { key: "afsInsurancePoliciesCompliant", label: "Personal lines insurance policies at 100%?", type: "boolean", guidance: "Insurance Policies — 10 pts" },
+];
+
 export const SECTIONS: SectionDef[] = [
   {
     key: "company-information",
@@ -827,6 +1273,14 @@ export const SECTIONS: SectionDef[] = [
     meta: FINANCIAL_META,
   },
   {
+    key: "afs-additions",
+    label: "AFS Additions",
+    description:
+      "Access to Financial Services (AFS) indicator inputs for FSC Banks, Long-Term Insurers, and Short-Term Insurers.",
+    enabled: false,
+    meta: [],
+  },
+  {
     key: "ownership",
     label: "Ownership",
     description: "Shareholders, voting rights, and economic interest.",
@@ -835,17 +1289,24 @@ export const SECTIONS: SectionDef[] = [
   },
   {
     key: "management-control",
-    label: "Management Control",
-    description: "Directors and executive composition.",
+    label: "Management Control & Employment Equity",
+    description:
+      "All directors and employees in one register. Use the Designation column to distinguish board-level directors (Executive Director, Non-executive Director) from management/EE bands (Other Executive Manager → Junior Manager). MC scoring applies fixed targets to directors and provincial EAP targets to management bands. Employment Equity (disabled employees) is scored from the same grid.",
     enabled: true,
-    columns: MANAGEMENT_COLUMNS,
+    columns: MC_EE_COLUMNS,
+    gridTotals: [{ columnKey: "salary", label: "Total Annual Salary" }],
   },
   {
+    // The `employees` section key is preserved for backward-compatible workbook
+    // data already persisted in MongoDB. The section is disabled in the UI —
+    // users now enter all directors and employees in `management-control`.
+    // The workbook projection (workbookRoutes.ts `projectWorkbookToClient`)
+    // continues to merge both sections, so any legacy rows are included in scoring.
     key: "employees",
-    label: "Employees",
-    description: "Employee register with race, gender, occupational level, and salary.",
-    enabled: true,
-    columns: EMPLOYEE_COLUMNS,
+    label: "Employees (legacy — use Management Control & EE)",
+    description: "Legacy section — hidden. All entries should be in Management Control & EE.",
+    enabled: false,
+    columns: MC_EE_COLUMNS,
   },
   {
     key: "skills-development",
@@ -854,6 +1315,7 @@ export const SECTIONS: SectionDef[] = [
     enabled: true,
     meta: SKILLS_META,
     columns: SKILLS_COLUMNS,
+    gridTotals: [{ columnKey: "totalCost", label: "Total Training Cost" }],
     rowValidate: (row) => {
       const errs: Record<string, string> = {};
       // SD_DATE_001: end_date >= start_date when both supplied
@@ -891,12 +1353,9 @@ export const SECTIONS: SectionDef[] = [
     description: "Supplier register: spend, B-BBEE certificate, ownership.",
     enabled: true,
     columns: PROCUREMENT_COLUMNS,
+    gridTotals: [{ columnKey: "spend", label: "Total Spend" }],
     rowValidate: (row) => {
       const errs: Record<string, string> = {};
-      // PP_CERT_001: if B-BBEE level is supplied, expect a certificate expiry date
-      if (!isBlank(row.bbbeeLevel) && isBlank(row.certificateExpiryDate)) {
-        errs.certificateExpiryDate = "Required when B-BBEE level is set";
-      }
       // PP_OWN_001: black female ownership <= total black ownership
       if (!isBlank(row.currentBlackOwnership) && !isBlank(row.currentBlackFemaleOwnership)) {
         const total = Number(row.currentBlackOwnership);
@@ -936,17 +1395,80 @@ export const SECTIONS: SectionDef[] = [
 
 /**
  * Looks up a section by key, optionally filtering its columns and meta to match
- * the caller's sector. Sector-aware transformations applied:
+ * the caller's sector and scorecard type. Sector-aware transformations applied:
  *  - SED "ICT-Specific?" column: only shown for ICT sector.
  *  - SED section gets CE/Fundisa meta for FSC sector (hybrid: meta + columns).
  *  - Ownership section gets "Farm Worker?" column for AGRI sector.
- *  - Management Control EAP note differs for QSE vs Generic but columns are shared.
+ *  - Skills Development: eapProvince and eapYear excluded for QSE (fixed % targets, no EAP lookup).
  */
-export function getSection(key: string, sectorCode?: string): SectionDef | undefined {
+export function getSection(
+  key: string,
+  sectorCode?: string,
+  scorecardType?: string,
+  fscSubSector?: string,
+  fscReinsurer?: boolean,
+): SectionDef | undefined {
   const section = SECTIONS.find((s) => s.key === key);
   if (!section) return undefined;
-  if (sectorCode === undefined) return section;
+  if (
+    sectorCode === undefined
+    && scorecardType === undefined
+    && fscSubSector === undefined
+    && fscReinsurer === undefined
+  ) {
+    return section;
+  }
   const sector = String(sectorCode ?? "").trim().toUpperCase();
+  const cardType = String(scorecardType ?? "").trim().toUpperCase();
+
+  // FSC Financial Information: prior year revenue only (AFS lives in afs-additions).
+  if (key === "financial-information") {
+    const meta = getFinancialMetaFields(sector);
+    const subNorm = normalizeFscSubSector(fscSubSector);
+    if (meta !== section.meta || (sector === "FSC" && subNorm !== "Others")) {
+      const afsLabel = fscSubSectorDisplayLabel(subNorm);
+      return {
+        ...section,
+        meta,
+        ...(sector === "FSC"
+          ? {
+              label: section.label,
+              description:
+                subNorm === "Others"
+                  ? `Revenue, NPAT, and payroll for ${afsLabel}. Select Banks, Long-Term Insurers, or Short-Term Insurers under Company Information to unlock the AFS Additions pillar.`
+                  : `Revenue, NPAT, payroll, and procurement totals for ${afsLabel}. Complete AFS Additions separately for Access to Financial Services scoring.`,
+            }
+          : {}),
+      };
+    }
+    return section;
+  }
+
+  // FSC AFS Additions — separate required pillar for Banks / LTI / STI sub-sectors.
+  if (key === "afs-additions") {
+    const afsMeta = getFscAfsMetaFields(fscSubSector, sector);
+    if (afsMeta.length === 0) {
+      return { ...section, enabled: false, meta: [] };
+    }
+    const subNorm = normalizeFscSubSector(fscSubSector);
+    const afsLabel = fscSubSectorDisplayLabel(subNorm);
+    return {
+      ...section,
+      enabled: true,
+      meta: afsMeta,
+      description: `Access to Financial Services (12 pts) — ${afsLabel} AFS indicators.`,
+    };
+  }
+
+  // QSE uses fixed percentage targets (60% Black, 30% Black Female for SMJ band) —
+  // no provincial EAP lookup. Remove eapProvince and eapYear from the skills meta.
+  if (key === "skills-development" && cardType === "QSE" && section.meta) {
+    const EAP_FIELDS = new Set(["eapProvince", "eapYear"]);
+    return {
+      ...section,
+      meta: section.meta.filter((f) => !EAP_FIELDS.has(f.key)),
+    };
+  }
 
   if (key === "sed") {
     let columns = section.columns;
@@ -956,12 +1478,17 @@ export function getSection(key: string, sectorCode?: string): SectionDef | undef
     }
     // FSC: add Consumer Education aggregate meta (hybrid section)
     if (sector === "FSC") {
+      let meta = FSC_SED_META;
+      if (fscReinsurer) {
+        meta = meta.filter((f) => f.key !== "ceBonusSpend");
+      }
       return {
         ...section,
         label: "SED & Consumer Education",
-        description:
-          "SED beneficiaries and contributions, plus Consumer Education and Fundisa aggregates (FSC-specific).",
-        meta: FSC_SED_META,
+        description: fscReinsurer
+          ? "SED beneficiaries and contributions, plus Consumer Education (reinsurer: 1 pt max, no Additional CE bonus)."
+          : "SED beneficiaries and contributions, plus Consumer Education and Fundisa aggregates (FSC-specific).",
+        meta,
         gridLabel: "SED & CE transaction entries",
         columns: columns ?? section.columns,
       };
@@ -972,16 +1499,74 @@ export function getSection(key: string, sectorCode?: string): SectionDef | undef
     return section;
   }
 
+  // FSC MC: Senior/Middle/Junior bands are permanently NOT AVAILABLE (0 target points).
+  if (key === "management-control" && sector === "FSC" && section.columns) {
+    return {
+      ...section,
+      description:
+        "All directors and employees in one register. FSC MC scores Board, Executive Directors, Other Executive Management, and Employees with Disabilities only. Senior, Middle, and Junior designations may be used for workforce data collection but do NOT contribute to the MC score (NOT AVAILABLE, 0 pts each).",
+      columns: section.columns.map((c) =>
+        c.key === "designation"
+          ? {
+              ...c,
+              guidance:
+                "Required. FSC MC scores Board, Executive Director, and Other Executive Management at fixed targets. Senior, Middle, and Junior are collected for data purposes only — they are NOT AVAILABLE for MC scoring (0 target points each, all FSC sub-sectors).",
+            }
+          : c,
+      ),
+    };
+  }
+
+  if (key === "management-control" && sector === "TRANSPORT" && section.columns) {
+    return {
+      ...section,
+      label: "Management Control & Employment Equity",
+      description:
+        "Transport Large Enterprise: Board and executive bands (11 MC pts) plus senior/middle/junior/semi-unskilled EE bands (18 EE pts) in one register. Use Designation to assign each employee to the correct Transport band.",
+    };
+  }
+
+  if (key === "management-control" && sector === "CONSTRUCTION" && section.columns) {
+    return {
+      ...section,
+      description:
+        "Construction sector MC and EE in one register. Band labels follow the Construction Sector Code (Contractor, BEP, or QSE scorecard).",
+    };
+  }
+
+  if (key === "skills-development" && sector === "TRANSPORT") {
+    return {
+      ...section,
+      description:
+        "Transport sector skills: learning programmes, bursaries, and absorption targets per the Transport Sector Code (Large: 15 pts max; QSE: elective pillar).",
+    };
+  }
+
+  if (key === "procurement" && sector === "TRANSPORT") {
+    return {
+      ...section,
+      label: "Preferential Procurement",
+      description:
+        "Transport TMPS-based procurement indicators (Large Enterprise: 20 pts). QSE entities may treat PP as an elective pillar.",
+    };
+  }
+
+  if (key === "procurement" && sector === "CONSTRUCTION") {
+    return {
+      ...section,
+      label: "Preferential Procurement",
+      description:
+        "Construction sector procurement spend against TMPS. Indicator rows follow the selected Construction scorecard type (QSE / Contractor / BEP).",
+    };
+  }
+
   if (key === "ownership" && sector === "AGRI" && section.columns) {
     // AgriBEE: farm workers qualify as a Designated Group for Ownership (4% EI target).
-    const farmWorkerCol: ColumnDef = {
-      key: "isFarmWorker",
-      label: "Farm Worker?",
-      type: "boolean",
+    const farmWorkerCol: ColumnDef = yesNoColumn("isFarmWorker", "Farm Worker?", {
       width: 120,
       guidance:
         "AgriBEE-specific. Tick if this shareholder is a farm worker who qualifies under the Designated Groups indicator (combined EI target 4%, 3 pts). Farm workers are a 5th Designated Group category in AgriBEE.",
-    };
+    });
     // Only add if not already present (prevents duplicate on re-render)
     if (!section.columns.find((c) => c.key === "isFarmWorker")) {
       return {
@@ -1024,30 +1609,37 @@ const BASE_SECTION_KEYS_POST_MGMT = [
 ] as const;
 
 /**
- * Returns the visible section navigation grouped per sector rules:
- *  - TRANSPORT: Management Control and Employees are rendered as separate
- *    top-level sections (Transport scorecard splits them).
- *  - All other sectors: Management Control and Employees are nested under a
- *    single "Management Control & Employment Equity" parent group.
- * Storage keys are untouched in both branches.
+ * Returns the visible section navigation per sector rules.
+ *
+ * MC and EE are now a **single combined spreadsheet** (`management-control`)
+ * for all sectors, including TRANSPORT. The `employees` section is disabled and
+ * never shown in the nav — legacy data stored there is still included in scoring
+ * via the merge in `projectWorkbookToClient`.
+ *
+ * Storage keys are unchanged, so all previously persisted workbook data remains
+ * readable.
  */
-export function getSectionGroupsForSector(sectorCode?: string): SectionGroup[] {
+export function getSectionGroupsForSector(sectorCode?: string, fscSubSector?: string): SectionGroup[] {
   const sector = String(sectorCode ?? "").trim().toUpperCase();
   const groups: SectionGroup[] = [];
   for (const key of BASE_SECTION_KEYS_PRE_MGMT) {
     groups.push({ key, label: SECTIONS.find((s) => s.key === key)?.label ?? key, sectionKeys: [key], isGroup: false });
+    if (key === "financial-information" && sector === "FSC" && fscSubSectorHasAfs(fscSubSector)) {
+      groups.push({
+        key: "afs-additions",
+        label: "AFS Additions",
+        sectionKeys: ["afs-additions"],
+        isGroup: false,
+      });
+    }
   }
-  if (sector === "TRANSPORT") {
-    groups.push({ key: "management-control", label: "Management Control", sectionKeys: ["management-control"], isGroup: false });
-    groups.push({ key: "employees", label: "Employees", sectionKeys: ["employees"], isGroup: false });
-  } else {
-    groups.push({
-      key: "management-control-ee",
-      label: "Management Control & Employment Equity",
-      sectionKeys: ["management-control", "employees"],
-      isGroup: true,
-    });
-  }
+  // Management Control & EE is a single flat section for all sectors.
+  groups.push({
+    key: "management-control",
+    label: "Management Control & Employment Equity",
+    sectionKeys: ["management-control"],
+    isGroup: false,
+  });
   for (const key of BASE_SECTION_KEYS_POST_MGMT) {
     groups.push({ key, label: SECTIONS.find((s) => s.key === key)?.label ?? key, sectionKeys: [key], isGroup: false });
   }
@@ -1055,9 +1647,9 @@ export function getSectionGroupsForSector(sectorCode?: string): SectionGroup[] {
 }
 
 /** Convenience: flat ordered list of enabled section keys per sector. */
-export function getOrderedSectionKeysForSector(sectorCode?: string): string[] {
+export function getOrderedSectionKeysForSector(sectorCode?: string, fscSubSector?: string): string[] {
   const out: string[] = [];
-  for (const g of getSectionGroupsForSector(sectorCode)) {
+  for (const g of getSectionGroupsForSector(sectorCode, fscSubSector)) {
     out.push(...g.sectionKeys);
   }
   return out;
@@ -1070,33 +1662,45 @@ export function getOrderedSectionKeysForSector(sectorCode?: string): string[] {
  * rules that depend on more than one field value.
  *
  * Currently enforced:
- *  - payroll must be >= 0 because it is used as Leviable Amount for Skills
- *    Development calculations.
+ *  - payroll must be >= 0 (Leviable Amount is derived as payroll × 1%).
  */
 export function validateFinancialMetaCrossFields(
   meta: Record<string, unknown>,
 ): Record<string, string> {
   const issues: Record<string, string> = {};
 
-  const pairs: Array<[string, string, string]> = [
-    ["revenue", "forecastRevenue", "Revenue"],
-    ["npat", "forecastNpat", "NPAT"],
-    ["payroll", "forecastPayroll", "Payroll"],
-  ];
-
-  for (const [actualKey, forecastKey, label] of pairs) {
-    const actualBlank = isBlank(meta[actualKey]);
-    const forecastBlank = isBlank(meta[forecastKey]);
-    if (actualBlank && forecastBlank) {
-      issues[actualKey] = `${label}: provide actual or forecast`;
-      issues[forecastKey] = `${label}: provide actual or forecast`;
-    }
+  const payrollRaw = meta.payroll;
+  const payroll =
+    typeof payrollRaw === "number" ? payrollRaw : parseAmount(payrollRaw);
+  if (!isNaN(payroll) && payroll < 0) {
+    issues["payroll"] = "Total Payroll must be zero or positive.";
   }
 
-  const payroll = typeof meta.payroll === "number" ? meta.payroll : undefined;
-  if (payroll !== undefined && payroll < 0) {
-    issues["payroll"] =
-      "Total Payroll (used as Leviable Amount for Skills) must be zero or positive.";
+  const hasPriorYears = (() => {
+    for (let i = 1; i <= 5; i++) {
+      const rev = Number(meta[`priorYear${i}Revenue`]);
+      const npat = meta[`priorYear${i}Npat`];
+      if ((Number.isFinite(rev) && rev > 0) || (npat !== "" && npat != null && npat !== undefined)) {
+        return true;
+      }
+    }
+    return false;
+  })();
+
+  const overrideRaw = meta.deemedNpatOverride;
+  const hasOverride =
+    overrideRaw !== "" &&
+    overrideRaw !== undefined &&
+    overrideRaw !== null &&
+    !(typeof overrideRaw === "string" && overrideRaw.trim() === "");
+
+  if (
+    hasOverride &&
+    !hasPriorYears &&
+    priorYearLeibrandtInputsRelevant(meta)
+  ) {
+    issues.deemedNpatOverride =
+      "Deemed NPAT override requires at least one prior-year revenue/NPAT row.";
   }
 
   return issues;

@@ -10,6 +10,10 @@ import {
 
   validateFinancialMetaCrossFields,
 
+  filterVisibleFinancialMetaFields,
+
+  fscSubSectorHasAfs,
+
   type ColumnDef,
 
   type SectionDef,
@@ -49,6 +53,46 @@ export type WorkbookValidationIssue = {
   field?: string;
 
   message: string;
+
+};
+
+
+
+export type WorkbookValidationRowIssue = WorkbookValidationIssue & {
+
+  /** 1-based row number within the section grid (for line-item navigation). */
+
+  rowNumber?: number;
+
+  fieldLabel?: string;
+
+};
+
+
+
+export type WorkbookValidationSectionSummary = {
+
+  sectionKey: string;
+
+  sectionLabel: string;
+
+  issues: WorkbookValidationRowIssue[];
+
+  issueCount: number;
+
+};
+
+
+
+export type WorkbookValidationAggregate = {
+
+  totalIssues: number;
+
+  criticalCount: number;
+
+  advisoryCount: number;
+
+  sections: WorkbookValidationSectionSummary[];
 
 };
 
@@ -120,7 +164,12 @@ function validateMetaFields(
 
   const issues: WorkbookValidationIssue[] = [];
 
-  for (const f of section.meta ?? []) {
+  const metaFields =
+    section.key === "financial-information"
+      ? filterVisibleFinancialMetaFields(section.meta ?? [], meta)
+      : section.meta ?? [];
+
+  for (const f of metaFields) {
 
     const v = meta[f.key];
 
@@ -306,21 +355,13 @@ function finMetaNumber(meta: Record<string, unknown>, key: string): number | nul
 
 
 
-function hasLeviableAmount(meta: Record<string, unknown>, skillsMeta?: Record<string, unknown>): boolean {
+function hasLeviableAmount(meta: Record<string, unknown>): boolean {
 
-  for (const key of ["forecastPayroll", "leviableAmount", "payroll"]) {
+  // Leviable Amount is always derived as payroll × 1%, so we only need payroll > 0.
 
-    const n = finMetaNumber(meta, key);
+  const n = finMetaNumber(meta, "payroll");
 
-    if (n !== null && n > 0) return true;
-
-  }
-
-  const skillsLev = skillsMeta ? finMetaNumber(skillsMeta, "leviableAmount") : null;
-
-  if (skillsLev !== null && skillsLev > 0) return true;
-
-  return false;
+  return n !== null && n > 0;
 
 }
 
@@ -328,13 +369,15 @@ function hasLeviableAmount(meta: Record<string, unknown>, skillsMeta?: Record<st
 
 function hasNpat(meta: Record<string, unknown>): boolean {
 
-  for (const key of ["forecastNpat", "npat", "deemedNpatOverride"]) {
+  for (const key of ["npat", "deemedNpatOverride"]) {
+
+    // Skip blank values — Number("") === 0 is finite but not a user-entered value.
+
+    if (isBlank(meta[key])) continue;
 
     const n = finMetaNumber(meta, key);
 
     if (n !== null) return true;
-
-    if (!isBlank(meta[key])) return true;
 
   }
 
@@ -467,6 +510,9 @@ export function validateWorkbook(
   const companyMeta = (sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
 
   const sectorCode = String(companyMeta.industrySector ?? "").trim();
+  const scorecardType = String(companyMeta.scorecardType ?? "").trim();
+  const fscSubSector = String(companyMeta.fscSubSector ?? "").trim();
+  const fscReinsurer = Boolean(companyMeta.fscReinsurer);
 
 
 
@@ -488,13 +534,13 @@ export function validateWorkbook(
 
 
 
-  const sectionKeys = getOrderedSectionKeysForSector(sectorCode);
+  const sectionKeys = getOrderedSectionKeysForSector(sectorCode, fscSubSector);
 
   for (const key of sectionKeys) {
 
     if (key === "company-information") continue;
 
-    const section = getSection(key, sectorCode);
+    const section = getSection(key, sectorCode, scorecardType, fscSubSector, fscReinsurer);
 
     if (!section?.enabled) continue;
 
@@ -570,8 +616,6 @@ export function validateWorkbook(
 
   const finMeta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
 
-  const skillsMeta = (sections["skills-development"]?.meta ?? {}) as Record<string, unknown>;
-
 
 
   const scorecardErr = validateScorecardTypeForSector(
@@ -596,6 +640,25 @@ export function validateWorkbook(
 
     });
 
+  }
+
+  if (sectorCode === "FSC" && fscSubSectorHasAfs(fscSubSector)) {
+    const afsMeta = (sections["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
+    const legacyFinAfs = Object.keys(afsMeta).length === 0
+      ? (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>
+      : {};
+    const combined = Object.keys(afsMeta).length > 0 ? afsMeta : legacyFinAfs;
+    const hasAfsData = Object.entries(combined).some(([k, v]) => {
+      if (!k.startsWith("afs")) return false;
+      return v !== "" && v != null;
+    });
+    if (!hasAfsData) {
+      issues.push({
+        sectionKey: "afs-additions",
+        sectionLabel: "AFS Additions",
+        message: "AFS Additions inputs are required for the selected FSC sub-sector",
+      });
+    }
   }
 
 
@@ -628,9 +691,7 @@ export function validateWorkbook(
 
   if (sectionHasNonEmptyRows(sections, "skills-development", sectorCode)) {
 
-    const hasSkillsLeviable = (finMetaNumber(skillsMeta, "leviableAmount") ?? 0) > 0;
-
-    if (!hasLeviableAmount(finMeta, skillsMeta) && !hasSkillsLeviable) {
+    if (!hasLeviableAmount(finMeta)) {
 
       issues.push({
 
@@ -642,7 +703,7 @@ export function validateWorkbook(
 
         message:
 
-          "Payroll (actual or forecast) or leviable amount is required when skills development rows are present",
+          "Total Payroll is required when skills development rows are present (Leviable Amount is derived as 1% of Payroll)",
 
       });
 
@@ -668,7 +729,7 @@ export function validateWorkbook(
 
       field: "npat",
 
-      message: "NPAT (actual or forecast) is required when ESD or SED rows are present",
+      message: "NPAT is required when ESD or SED rows are present",
 
     });
 
@@ -686,7 +747,205 @@ export function validateWorkbook(
 
 
 
-/** Issues that block workbook submit / scorecard sync (company + financials only). */
+function buildRowIndexLookup(sections: WorkbookSectionsInput): Map<string, number> {
+
+  const lookup = new Map<string, number>();
+
+  for (const [sectionKey, data] of Object.entries(sections)) {
+
+    for (let i = 0; i < (data.rows?.length ?? 0); i++) {
+
+      const rowId = String((data.rows![i] as Record<string, unknown>)._id ?? "");
+
+      if (rowId) lookup.set(`${sectionKey}:${rowId}`, i + 1);
+
+    }
+
+  }
+
+  return lookup;
+
+}
+
+
+
+function resolveFieldLabel(
+
+  sectionKey: string,
+
+  field: string | undefined,
+
+  sectorCode?: string,
+
+  scorecardType?: string,
+
+): string | undefined {
+
+  if (!field) return undefined;
+
+  const section = getSection(sectionKey, sectorCode, scorecardType);
+
+  const fromColumn = section?.columns?.find((c) => c.key === field)?.label;
+
+  if (fromColumn) return fromColumn.replace(/\*+$/, "").trim();
+
+  const fromMeta = section?.meta?.find((f) => f.key === field)?.label;
+
+  if (fromMeta) return fromMeta.replace(/\*+$/, "").trim();
+
+  if (sectionKey === "company-information") {
+
+    const fromCompany = getCompanyInfoMetaFields(sectorCode ?? "").find((f) => f.key === field)?.label;
+
+    if (fromCompany) return fromCompany.replace(/\*+$/, "").trim();
+
+  }
+
+  return field;
+
+}
+
+
+
+/**
+
+ * Cross-pillar validation rollup with per-section grouping and 1-based row
+
+ * numbers so large workbooks (1000+ line items) can locate every issue.
+
+ */
+
+export function aggregateWorkbookValidation(
+
+  sections: WorkbookSectionsInput,
+
+  opts: { strictSelectOptions?: boolean } = {},
+
+): WorkbookValidationAggregate {
+
+  const companyMeta = (sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
+
+  const sectorCode = String(companyMeta.industrySector ?? "").trim();
+
+  const scorecardType = String(companyMeta.scorecardType ?? "").trim();
+
+  const issues = validateWorkbook(sections, opts);
+
+  const rowLookup = buildRowIndexLookup(sections);
+
+  const enriched: WorkbookValidationRowIssue[] = issues.map((issue) => {
+
+    const rowNumber =
+
+      issue.rowId != null
+
+        ? rowLookup.get(`${issue.sectionKey}:${issue.rowId}`)
+
+        : undefined;
+
+    return {
+
+      ...issue,
+
+      rowNumber,
+
+      fieldLabel: resolveFieldLabel(issue.sectionKey, issue.field, sectorCode, scorecardType),
+
+    };
+
+  });
+
+
+
+  const bySection = new Map<string, WorkbookValidationSectionSummary>();
+
+  for (const issue of enriched) {
+
+    const existing = bySection.get(issue.sectionKey);
+
+    if (existing) {
+
+      existing.issues.push(issue);
+
+      existing.issueCount++;
+
+    } else {
+
+      bySection.set(issue.sectionKey, {
+
+        sectionKey: issue.sectionKey,
+
+        sectionLabel: issue.sectionLabel,
+
+        issues: [issue],
+
+        issueCount: 1,
+
+      });
+
+    }
+
+  }
+
+
+
+  const sectionOrder = getOrderedSectionKeysForSector(sectorCode);
+
+  const sectionsSummary = [
+
+    ...sectionOrder
+
+      .map((key) => bySection.get(key))
+
+      .filter((s): s is WorkbookValidationSectionSummary => Boolean(s)),
+
+    ...[...bySection.values()].filter((s) => !sectionOrder.includes(s.sectionKey)),
+
+  ];
+
+
+
+  const criticalCount = issues.filter(isCriticalWorkbookIssue).length;
+
+  return {
+
+    totalIssues: issues.length,
+
+    criticalCount,
+
+    advisoryCount: issues.length - criticalCount,
+
+    sections: sectionsSummary,
+
+  };
+
+}
+
+
+
+export function formatValidationIssueLine(issue: WorkbookValidationRowIssue): string {
+
+  if (issue.rowNumber != null) {
+
+    const field = issue.fieldLabel ?? issue.field ?? "Field";
+
+    return `Row ${issue.rowNumber} · ${field}: ${issue.message}`;
+
+  }
+
+  if (issue.fieldLabel) {
+
+    return `${issue.fieldLabel}: ${issue.message}`;
+
+  }
+
+  return issue.message;
+
+}
+
+
+
+/** Issues that block accurate scoring identity — company profile only. Pillar/financial gaps are advisory. */
 
 export function isCriticalWorkbookIssue(issue: WorkbookValidationIssue): boolean {
 
@@ -714,31 +973,7 @@ export function isCriticalWorkbookIssue(issue: WorkbookValidationIssue): boolean
 
   }
 
-  if (issue.sectionKey === "financial-information") {
-
-    if (issue.message.toLowerCase().includes("provide actual or forecast")) return true;
-
-    if (issue.field === "tmps" || issue.field === "payroll" || issue.field === "npat") {
-
-      return true;
-
-    }
-
-  }
-
-  if (issue.sectionKey === "sed" && issue.field === "ceSpend") {
-
-    return true;
-
-  }
-
-  if (issue.sectionKey === "skills-development" && issue.message.toLowerCase().includes("required")) {
-
-    return true;
-
-  }
-
-  if (issue.sectionKey === "ownership" && issue.field === "votingRights") {
+  if (issue.sectionKey === "afs-additions") {
 
     return true;
 
@@ -779,6 +1014,14 @@ export function formatWorkbookValidationSummary(
 ): string {
 
   const lines = issues.slice(0, max).map((i) => {
+
+    const rowIssue = i as WorkbookValidationRowIssue;
+
+    if (rowIssue.rowNumber != null) {
+
+      return formatValidationIssueLine(rowIssue);
+
+    }
 
     const where = i.rowId
 

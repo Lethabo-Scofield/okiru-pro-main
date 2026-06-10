@@ -22,6 +22,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
+import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Supplier } from "@toolkit/lib/types";
 
 const emptySupplierForm = {
@@ -407,7 +408,9 @@ export default function ESD() {
       <Card className="glass-panel mt-8 mb-8" data-testid="card-procurement-detailed-scorecard">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>Direct translation of GP Excel toolkit calculations</CardDescription>
+          <CardDescription>
+            {pillarSectorSubtitle(client, calculatorConfig)}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">

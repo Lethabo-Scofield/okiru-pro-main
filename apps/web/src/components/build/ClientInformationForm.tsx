@@ -5,6 +5,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
+import { NumericDateInput } from "@/components/ui/NumericDateInput";
 import type { Client } from "@toolkit/lib/types";
 import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from "@/lib/bbeeSectorsApi";
 
@@ -466,12 +467,12 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
                 <Calendar className="h-3 w-3" />
                 Financial Year End *
               </Label>
-              <Input
+              <NumericDateInput
                 id="financialYearEnd"
-                type="date"
                 value={data.financialYearEnd}
-                onChange={(e) => updateField('financialYearEnd', e.target.value)}
+                onChange={(v) => updateField('financialYearEnd', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
@@ -493,22 +494,22 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="measurementPeriodStart">Period Start</Label>
-              <Input
+              <NumericDateInput
                 id="measurementPeriodStart"
-                type="date"
                 value={data.measurementPeriodStart || ''}
-                onChange={(e) => updateField('measurementPeriodStart', e.target.value)}
+                onChange={(v) => updateField('measurementPeriodStart', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="measurementPeriodEnd">Period End</Label>
-              <Input
+              <NumericDateInput
                 id="measurementPeriodEnd"
-                type="date"
                 value={data.measurementPeriodEnd || ''}
-                onChange={(e) => updateField('measurementPeriodEnd', e.target.value)}
+                onChange={(v) => updateField('measurementPeriodEnd', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
@@ -540,12 +541,12 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
             </div>
             <div className="space-y-2">
               <Label htmlFor="beeCertificateExpiry">Expiry Date</Label>
-              <Input
+              <NumericDateInput
                 id="beeCertificateExpiry"
-                type="date"
                 value={data.beeCertificateExpiry || ''}
-                onChange={(e) => updateField('beeCertificateExpiry', e.target.value)}
+                onChange={(v) => updateField('beeCertificateExpiry', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="space-y-2">

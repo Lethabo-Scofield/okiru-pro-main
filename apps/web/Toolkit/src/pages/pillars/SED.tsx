@@ -20,6 +20,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
+import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 
 export default function SED() {
   const { sed, client, addSedContribution, removeSedContribution, calculatorConfig } = useBbeeStore();
@@ -159,7 +160,13 @@ export default function SED() {
       <Card className="glass-panel mt-8 mb-8" data-testid="card-sed-detailed-scorecard">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>Direct translation of GP Excel toolkit calculations</CardDescription>
+          <CardDescription>
+            {pillarSectorSubtitle(
+              client,
+              calculatorConfig,
+              calculatorConfig?.pillarConfigs?.socioEconomicDevelopment?.maxPoints,
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">

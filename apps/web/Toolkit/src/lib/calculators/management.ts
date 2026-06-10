@@ -7,23 +7,25 @@
  */
 import type { ManagementData, Employee } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { isBlackRace, safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, allowsRcogpDefaults } from './shared';
+import {
+  isBlackRace,
+  normalizeDesignationForScoring,
+  safeRatio,
+  clampScore,
+  round2,
+  requireSectorConfig,
+  resolveSectorContext,
+  allowsRcogpDefaults,
+} from './shared';
 import type { Province } from './eapTargets';
-import { getEAPTargets, normalizeProvince } from './eapTargets';
+import { getEAPTargets, normalizeProvince, buildDemographicBreakdown, type DemographicBreakdown as EAPGroupBreakdown } from './eapTargets';
+export type { DemoGroup, DemographicBreakdown as EAPGroupBreakdown } from './eapTargets';
 
 export interface ManagementSubLine {
   name: string;
   target: string;
   weighting: number;
   score: number;
-}
-
-export interface EAPGroupBreakdown {
-  group: DemoGroup;
-  eapTarget: number;
-  actual: number;
-  count: number;
-  totalInLevel: number;
 }
 
 export interface ManagementResult {
@@ -64,8 +66,6 @@ export interface ManagementResult {
   };
 }
 
-export type DemoGroup = 'AM' | 'CM' | 'IM' | 'AF' | 'CF' | 'IF';
-
 /** RCOGP Generic defaults when no sector CalculatorConfig is supplied (tests / RCOGP Generic). */
 const MANAGEMENT_RCOGP_DEFAULTS = {
   boardBlackTarget: 0.50,
@@ -97,44 +97,12 @@ function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, useRcogp: boolea
 }
 
 /**
- * National EAP proportions per demographic group (slide 100)
- * @domain-rule pillar:management_control, slide:100
+ * Per-demographic EAP scoring per RCOGP slide 100.
  * @see docs/domain/calculations/management_control_calc.md
  */
-const NATIONAL_EAP_DEMOGRAPHICS: Record<DemoGroup, number> = {
-  AM: 0.435, CM: 0.046, IM: 0.017,
-  AF: 0.375, CF: 0.042, IF: 0.010,
-};
-
-function classifyDemographic(emp: Employee): DemoGroup | null {
-  if (!isBlackRace(emp.race)) return null;
-  const racePrefix = emp.race === 'African' ? 'A' : emp.race === 'Coloured' ? 'C' : 'I';
-  const genderSuffix = emp.gender === 'Female' ? 'F' : 'M';
-  return `${racePrefix}${genderSuffix}` as DemoGroup;
-}
-
-/**
- * Per-demographic EAP scoring per RCOGP slide 100.
- * Each group gets its own effective target, effective weight, and score.
- * Achievement is capped at the EAP proportion to prevent gaming.
- *
- * The aggregate score is a simple safeRatio against the overall category
- * black-EAP target (matching the Excel ground-truth template and the UCS
- * engine in `apps/api/pipeline/rules/pillarCalculators.ts`). The
- * per-demographic breakdown is still surfaced for UI diagnostics, but the
- * old `eapProp * maxPoints` weighting only ever summed to ~92.5% of the
- * pillar max, permanently capping scores. See LAKE_TRADING_FIX_PLAN §1 Bug 2:
- * Lake Trading must produce ≈11.77/19 (Gauteng) to hit the 63.56 grand total.
- */
 function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): { score: number; breakdown: EAPGroupBreakdown[] } {
-  if (employees.length === 0) return { score: 0, breakdown: [] };
-  const breakdown: EAPGroupBreakdown[] = [];
-  for (const group of Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]) {
-    const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
-    const count = employees.filter(e => classifyDemographic(e) === group).length;
-    const ratio = employees.length > 0 ? count / employees.length : 0;
-    breakdown.push({ group, eapTarget: round2(eapProp), actual: round2(ratio), count, totalInLevel: employees.length });
-  }
+  const breakdown = buildDemographicBreakdown(employees);
+  if (employees.length === 0) return { score: 0, breakdown };
   const blackPct = countBlack(employees) / employees.length;
   const score = categoryTarget > 0
     ? Math.min((blackPct / categoryTarget) * maxPoints, maxPoints)
@@ -151,7 +119,8 @@ const countBlackWomen = (emps: Employee[]): number =>
 function groupByDesignation(employees: Employee[]): Record<string, Employee[]> {
   const groups: Record<string, Employee[]> = {};
   for (const emp of employees) {
-    (groups[emp.designation] ??= []).push(emp);
+    const key = normalizeDesignationForScoring(emp.designation);
+    (groups[key] ??= []).push(emp);
   }
   return groups;
 }
@@ -341,6 +310,12 @@ export function calculateManagementScore(
   const skilledTechnicalBWOScore = clampScore(safeRatio(skilledTechnicalBWOPct, skilledTechnicalEAP.blackWomenTarget, seniorBWMaxPts), seniorBWMaxPts);
   const disabledScore = clampScore(safeRatio(blackDisabledPct, disabledTarget, disabledMaxPts), disabledMaxPts);
 
+  // FSC (and similar): Senior/Middle/Junior bands are permanently NOT AVAILABLE (0 pts).
+  const smjNotAvailable =
+    seniorMaxPts === 0 && seniorBWMaxPts === 0 &&
+    middleMaxPts === 0 && middleBWMaxPts === 0 &&
+    juniorMaxPts === 0 && juniorBWMaxPts === 0;
+
   // RCOGP total: Board + Exec + Other Exec + Senior + Middle + Junior + Disabled = 19
   const totalPoints = boardVotingBlack + boardVotingBWO +
     execDirectorsBlack + execDirectorsBWO +
@@ -350,6 +325,28 @@ export function calculateManagementScore(
     juniorBlackScore + juniorBWOScore +
     disabledScore;
 
+  const smjSubLines: ManagementSubLine[] = smjNotAvailable
+    ? [
+        { name: "Senior Management (NOT AVAILABLE)", target: "0%", weighting: 0, score: 0 },
+        { name: "Middle Management (NOT AVAILABLE)", target: "0%", weighting: 0, score: 0 },
+        { name: "Junior Management (NOT AVAILABLE)", target: "0%", weighting: 0, score: 0 },
+      ]
+    : [
+        { name: "Black employees in senior management", target: `${(seniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: seniorBlack },
+        { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: seniorBWO },
+        { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: middleMaxPts, score: middleBlack },
+        { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: middleBWMaxPts, score: middleBWO },
+        { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorMaxPts, score: juniorBlackScore },
+        { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
+      ];
+
+  const skilledTechnicalSubLines: ManagementSubLine[] = seniorMaxPts > 0
+    ? [
+        { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: skilledTechnicalBlackScore },
+        { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: skilledTechnicalBWOScore },
+      ]
+    : [];
+
   const subLines: ManagementSubLine[] = [
     { name: "Exercisable voting rights of black board members", target: `${(boardBlackTarget * 100).toFixed(0)}%`, weighting: boardBlackMaxPts, score: boardVotingBlack },
     { name: "Exercisable voting rights of black female board members", target: `${(boardWomenTarget * 100).toFixed(0)}%`, weighting: boardBWMaxPts, score: boardVotingBWO },
@@ -357,15 +354,8 @@ export function calculateManagementScore(
     { name: "Black female executive directors", target: `${(execWomenTarget * 100).toFixed(0)}%`, weighting: execBWMaxPts, score: execDirectorsBWO },
     { name: "Black other executive management", target: `${(otherExecBlackTarget * 100).toFixed(0)}%`, weighting: otherExecBlackMaxPts, score: otherExecBlackScore },
     { name: "Black female other executive management", target: `${(otherExecWomenTarget * 100).toFixed(0)}%`, weighting: otherExecBWMaxPts, score: otherExecBWOScore },
-    // EAP-based with actual percentage
-    { name: "Black employees in senior management", target: `${(seniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: seniorBlack },
-    { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: seniorBWO },
-    { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: middleMaxPts, score: middleBlack },
-    { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: middleBWMaxPts, score: middleBWO },
-    { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorMaxPts, score: juniorBlackScore },
-    { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
-    { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: skilledTechnicalBlackScore },
-    { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: skilledTechnicalBWOScore },
+    ...smjSubLines,
+    ...skilledTechnicalSubLines,
     { name: "Black employees with disabilities", target: `${(disabledTarget * 100).toFixed(0)}%`, weighting: disabledMaxPts, score: disabledScore },
   ];
 

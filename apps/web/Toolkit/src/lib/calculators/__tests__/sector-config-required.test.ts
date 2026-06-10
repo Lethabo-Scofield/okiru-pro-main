@@ -96,7 +96,7 @@ describe('sector config required (no silent RCOGP fallback)', () => {
         .toThrow(SectorConfigError);
     });
 
-    it('does not silently score skills with RCOGP 3.5% payroll target', () => {
+    it('does not silently score skills with RCOGP defaults', () => {
       const incomplete = incompleteSectorConfig(sectorCode);
       expect(() => calculateSkillsScore(SKILLS_DATA, incomplete)).toThrow(SectorConfigError);
 
@@ -104,7 +104,12 @@ describe('sector config required (no silent RCOGP fallback)', () => {
       const sectorResult = calculateSkillsScore(SKILLS_DATA, fullConfig);
       const rcogpResult = calculateSkillsScore(SKILLS_DATA);
 
-      expect(sectorResult.rawStats.targetOverall).not.toBe(rcogpResult.rawStats.targetOverall);
+      // Each non-RCOGP sector has a different learningProgrammes max than RCOGP Generic (6 pts).
+      // ICT=8, AGRI=8, FSC=11 — verifying the sector-specific config was loaded and used.
+      // Note: FSC Generic uses the same 3.5% spend approximation as RCOGP (intentional
+      // approximation — FSC has per-level targets not yet fully modelled), so targetOverall
+      // may coincidentally match. The learningProgrammes cap is the reliable differentiator.
+      expect(sectorResult.learningProgrammes).not.toBe(rcogpResult.learningProgrammes);
     });
   });
 

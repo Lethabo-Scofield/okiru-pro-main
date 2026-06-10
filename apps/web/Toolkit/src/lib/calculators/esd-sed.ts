@@ -142,6 +142,16 @@ const ESD_DEFAULTS = {
 /** Jobs-bonus tier boundary: ≥ 11% of workforce earns the upper tier (2 pts). */
 const ED_JOBS_UPPER_TIER_THRESHOLD = 0.11;
 
+/** Format NPAT target fraction for sub-line labels (e.g. 0.018 → "1.8% of NPAT"). */
+function formatNpatTargetLabel(pct: number): string {
+  const display = pct * 100;
+  const rounded =
+    Math.abs(display - Math.round(display)) < 0.05
+      ? String(Math.round(display))
+      : display.toFixed(1).replace(/\.0$/, "");
+  return `${rounded}% of NPAT`;
+}
+
 /**
  * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
  * Mirrors the RCOGP Generic Codes (Statement 500 — SED).
@@ -231,11 +241,21 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
-    { name: "Annual value of all Supplier Development contributions", target: "2% of NPAT", weighting: 10, score: sdScore },
+    {
+      name: "Annual value of all Supplier Development contributions",
+      target: formatNpatTargetLabel(supplierDevTargetPct),
+      weighting: supplierDevMax,
+      score: sdScore,
+    },
   ];
 
   const edSubLines: EsdSubLine[] = [
-    { name: "Annual value of Enterprise Development contributions", target: "1% of NPAT", weighting: enterpriseDevMax, score: edScore },
+    {
+      name: "Annual value of Enterprise Development contributions",
+      target: formatNpatTargetLabel(enterpriseDevTargetPct),
+      weighting: enterpriseDevMax,
+      score: edScore,
+    },
     { name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: edGraduationBonusMax, score: graduationBonusScore, isBonus: true },
     { name: "Jobs created from ED & SD initiatives", target: edJobsBonusMax >= 2 ? "≤10% → 1pt / ≥11% → 2pts" : "Tick-box", weighting: edJobsBonusMax, score: jobsCreatedBonusScore, isBonus: true },
   ];
@@ -275,7 +295,12 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   return result;
 }
 
-export function calculateSedScore(data: SEDData, npat: number, config?: CalculatorConfig): SedResult {
+export function calculateSedScore(
+  data: SEDData,
+  npat: number,
+  config?: CalculatorConfig,
+  opts?: { isReinsurer?: boolean },
+): SedResult {
   console.log('[SCORING-TRACE] calculateSedScore received:', {
     npat,
     contributionCount: data.contributions?.length ?? 0,
@@ -311,11 +336,11 @@ export function calculateSedScore(data: SEDData, npat: number, config?: Calculat
     const sedTargetPct = sc.sedNpatTarget ?? 0.006;
     const sedScore = safeRatio(rowSpend, npat * sedTargetPct, sedBaseMax);
 
-    const ceMax = sc.ceMaxPts ?? 2;
+    const ceMax = opts?.isReinsurer ? 1 : (sc.ceMaxPts ?? 2);
     const ceTargetPct = sc.ceNpatTarget ?? 0.004;
     const ceScore = safeRatio(data.ceSpend ?? 0, npat * ceTargetPct, ceMax);
 
-    const ceBonusMax = sc.ceBonusMaxPts ?? 1;
+    const ceBonusMax = opts?.isReinsurer ? 0 : (sc.ceBonusMaxPts ?? 1);
     const ceBonusTargetPct = sc.ceBonusNpatTarget ?? 0.001;
     const ceBonusScore = safeRatio(data.ceBonusSpend ?? 0, npat * ceBonusTargetPct, ceBonusMax);
 

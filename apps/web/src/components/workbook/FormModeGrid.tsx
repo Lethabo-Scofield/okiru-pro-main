@@ -1,5 +1,7 @@
 import { Trash2 } from "lucide-react";
 import type { ColumnDef } from "./sections";
+import { coerceYesNo, yesNoToSelectValue } from "@/lib/yesNoValue";
+import { NumericDateInput } from "@/components/ui/NumericDateInput";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -78,9 +80,15 @@ export function FormModeGrid({
                   </div>
                   {f.type === "select" ? (
                     <select
-                      value={String(v ?? "")}
+                      value={f.yesNoBoolean ? yesNoToSelectValue(v) : String(v ?? "")}
                       disabled={readOnly}
-                      onChange={(e) => updateCell(rIdx, f.key, e.target.value)}
+                      onChange={(e) =>
+                        updateCell(
+                          rIdx,
+                          f.key,
+                          f.yesNoBoolean ? coerceYesNo(e.target.value) : e.target.value,
+                        )
+                      }
                       className="w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a] disabled:opacity-60"
                     >
                       <option value="" className="bg-[#1c1c1e]">—</option>
@@ -98,9 +106,17 @@ export function FormModeGrid({
                         className="h-4 w-4 accent-blue-500 disabled:opacity-60"
                       />
                     </div>
+                  ) : f.type === "date" ? (
+                    <NumericDateInput
+                      value={String(v ?? "")}
+                      disabled={readOnly}
+                      onChange={(iso) => updateCell(rIdx, f.key, iso)}
+                      className={`w-full bg-[#1c1c1e] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
+                      placeholder="dd/mm/yyyy"
+                    />
                   ) : (
                     <input
-                      type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                      type={f.type === "number" ? "number" : "text"}
                       value={String(v ?? "")}
                       disabled={readOnly}
                       onChange={(e) =>

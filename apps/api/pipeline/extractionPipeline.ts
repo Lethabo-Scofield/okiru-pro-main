@@ -10,6 +10,7 @@ import type {
 import { entityResultsToParseResult } from './extraction/entityToParseResult.js';
 import { buildPipelineResult } from './buildResult.js';
 import type { PipelineResult } from './types.js';
+import { resolveNpatForTargets } from './npatResolution.js';
 
 export interface ToolkitFoundationData {
   clientInfo: {
@@ -223,10 +224,16 @@ export function mapExtractedEntitiesToToolkitInput(
   const industry = client.industrySector || 'Other';
   const industryNorm = getIndustryNorm(industry);
 
+  const npatResolved = resolveNpatForTargets({
+    currentRevenue: revenue,
+    currentNpat: npat,
+    industryNormPercent: industryNorm,
+    priorYears: [],
+  });
   const currentMargin = revenue > 0 ? (npat / revenue) * 100 : 0;
   const quarterThreshold = industryNorm / 4;
-  const isBelowQuarter = currentMargin < quarterThreshold;
-  const deemedNpat = isBelowQuarter ? revenue * (industryNorm / 100) : npat;
+  const isBelowQuarter = npatResolved.deemedNpatUsed;
+  const deemedNpat = npatResolved.deemedNpat;
 
   const foundation: ToolkitFoundationData = {
     clientInfo: {
@@ -257,7 +264,7 @@ export function mapExtractedEntitiesToToolkitInput(
       quarterThreshold,
       isBelowQuarter,
       deemedNpat,
-      deemedNpatUsed: isBelowQuarter,
+      deemedNpatUsed: npatResolved.deemedNpatUsed,
     },
   };
 

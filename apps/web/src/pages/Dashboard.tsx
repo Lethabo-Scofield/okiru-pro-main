@@ -235,22 +235,15 @@ export default function Dashboard() {
                                 View Scorecard
                               </button>
                               <button
-                                onClick={() => navigate(`/create-scorecard/${encodeURIComponent(c.id)}`)}
+                                onClick={() => {
+                                  sessionStorage.setItem('okiru-workbook-from', 'saved-companies');
+                                  navigate(`/create-scorecard/${encodeURIComponent(c.id)}`);
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white text-[12px] font-semibold smooth press-sm"
                                 data-testid={`button-workbook-${c.id}`}
                               >
                                 <Pencil className="h-3 w-3" />
                                 Edit Workbook
-                              </button>
-                              <button
-                                onClick={() => {
-                                  localStorage.setItem('okiru-pro-active-client', c.id);
-                                  navigate('/toolkit');
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[#d1d1d6] text-[12px] font-medium smooth press-sm border border-[#2c2c2e]"
-                                data-testid={`button-toolkit-${c.id}`}
-                              >
-                                Toolkit
                               </button>
                             </div>
                           </td>

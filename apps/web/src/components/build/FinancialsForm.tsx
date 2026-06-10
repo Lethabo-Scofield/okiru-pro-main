@@ -6,26 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@toolkit/components/ui/switch";
 import { DollarSign, TrendingUp, Calculator, AlertTriangle, Info, ArrowRight } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
-
-// Industry norms from TOOLKIT_TAB_MAP.md
-const INDUSTRY_NORMS: Record<string, number> = {
-  'Retail': 4,
-  'Manufacturing': 6,
-  'IT Services': 10,
-  'Financial Services': 15,
-  'Construction': 4,
-  'Agriculture': 6,
-  'Mining': 12,
-  'Transport': 5,
-  'Hospitality': 8,
-  'Healthcare': 10,
-  'Education': 5,
-  'Professional Services': 12,
-  'Real Estate': 15,
-  'Telecommunications': 12,
-  'Energy': 15,
-  'Other': 6,
-};
+import {
+  resolveNpatForTargets,
+  marginPercent,
+  type FinancialYearRecord,
+} from "@/lib/npatDeemedCalculation";
+import { BUILD_INDUSTRY_NORMS, lookupIndustryNormPercent } from "@/lib/industryNormLookup";
 
 export interface FinancialsData {
   // Core financials
@@ -38,8 +24,11 @@ export interface FinancialsData {
   tmpsInclusions: number;
   tmpsExclusions: number;
   
-  // Industry norm
   industry: string;
+  /** Auto-filled from industry selection (read-only in UI). */
+  industryNormPercent?: number;
+  /** Up to 5 prior years for Leibrandt / deemed NPAT (optional). */
+  priorYears?: FinancialYearRecord[];
   
   // Derived (calculated)
   tmps: number;
@@ -87,18 +76,23 @@ export function calculateFinancials(base: Partial<FinancialsData>): FinancialsDa
   
   // TMPS calculation
   const tmps = tmpsInclusions - tmpsExclusions;
-  
-  // Margin calculation
-  const currentMargin = totalRevenue > 0 ? (npat / totalRevenue) * 100 : 0;
-  
-  // Deemed NPAT calculation
-  const industryNorm = INDUSTRY_NORMS[industry] || 6;
-  const quarterThreshold = industryNorm / 4;
-  const isBelowQuarter = currentMargin < quarterThreshold;
-  const deemedNpat = isBelowQuarter 
-    ? totalRevenue * (industryNorm / 100) 
-    : npat;
-  const deemedNpatUsed = isBelowQuarter;
+
+  const industryNormPercent =
+    typeof base.industryNormPercent === "number" && base.industryNormPercent > 0
+      ? base.industryNormPercent
+      : lookupIndustryNormPercent(industry) ?? 0;
+  const quarterThreshold = industryNormPercent > 0 ? industryNormPercent / 4 : 0;
+  const currentMargin = marginPercent(npat, totalRevenue);
+
+  const npatResolved = resolveNpatForTargets({
+    currentRevenue: totalRevenue,
+    currentNpat: npat,
+    industryNormPercent,
+    priorYears: base.priorYears ?? [],
+  });
+  const isBelowQuarter = npatResolved.deemedNpatUsed;
+  const deemedNpat = npatResolved.effectiveNpat;
+  const deemedNpatUsed = npatResolved.deemedNpatUsed;
   
   return {
     totalRevenue,
@@ -108,6 +102,7 @@ export function calculateFinancials(base: Partial<FinancialsData>): FinancialsDa
     tmpsInclusions,
     tmpsExclusions,
     industry,
+    industryNormPercent: industryNormPercent > 0 ? industryNormPercent : base.industryNormPercent,
     tmps,
     currentMargin,
     quarterThreshold,
@@ -119,7 +114,11 @@ export function calculateFinancials(base: Partial<FinancialsData>): FinancialsDa
 
 export function FinancialsForm({ data, onChange, className, readOnly }: FinancialsFormProps) {
   const updateField = <K extends keyof FinancialsData>(field: K, value: FinancialsData[K]) => {
-    const updated = calculateFinancials({ ...data, [field]: value });
+    let patch: Partial<FinancialsData> = { [field]: value };
+    if (field === "industry") {
+      patch.industryNormPercent = lookupIndustryNormPercent(String(value));
+    }
+    const updated = calculateFinancials({ ...data, ...patch });
     onChange(updated);
   };
 
@@ -277,17 +276,25 @@ export function FinancialsForm({ data, onChange, className, readOnly }: Financia
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.keys(INDUSTRY_NORMS).map((industry) => (
+                  {Object.keys(BUILD_INDUSTRY_NORMS).map((industry) => (
                     <SelectItem key={industry} value={industry}>{industry}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Industry Norm</Label>
-              <div className="p-2 bg-muted rounded text-sm">
-                {INDUSTRY_NORMS[data.industry] || 6}% NPAT margin expected
-              </div>
+              <Label htmlFor="industryNormPercent">Industry Norm (%)</Label>
+              <Input
+                id="industryNormPercent"
+                type="number"
+                value={data.industryNormPercent ?? ""}
+                readOnly
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                Auto-detected from the selected industry (Stats SA / sector reference).
+              </p>
             </div>
           </div>
 
@@ -300,7 +307,9 @@ export function FinancialsForm({ data, onChange, className, readOnly }: Financia
             <div className="p-3 bg-muted rounded-lg">
               <span className="text-xs text-muted-foreground">Quarter Threshold</span>
               <p className="text-lg font-semibold">{data.quarterThreshold.toFixed(2)}%</p>
-              <p className="text-xs text-muted-foreground">({(INDUSTRY_NORMS[data.industry] || 6) / 4}% of norm)</p>
+              <p className="text-xs text-muted-foreground">
+                ({data.industryNormPercent ? (data.industryNormPercent / 4).toFixed(2) : "—"}% of norm)
+              </p>
             </div>
             <div className={cn(
               "p-3 rounded-lg",

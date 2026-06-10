@@ -3,7 +3,7 @@ import { useAuth } from "@toolkit/lib/auth";
 import { API_BASE } from "@toolkit/lib/config";
 import { canAccessEsgToolkit } from "@/lib/esgAccess";
 
-/** Resolves ESG preview access — server /api/esg/access with client fallback. */
+/** Resolves ESG toolkit access — server /api/esg/access with client fallback. */
 export function useEsgAccess(): { allowed: boolean; loading: boolean } {
   const { user, isLoading: authLoading } = useAuth();
   const [allowed, setAllowed] = useState(false);

@@ -3,6 +3,7 @@ export const FEEDBACK_PILLAR_OPTIONS = [
   { value: "", label: "General / App-wide" },
   { value: "company", label: "Company Information" },
   { value: "financial", label: "Financial Information" },
+  { value: "accessToFinancialServices", label: "AFS Additions" },
   { value: "ownership", label: "Ownership" },
   { value: "management", label: "Management Control" },
   { value: "employmentEquity", label: "Employment Equity" },
@@ -36,6 +37,8 @@ export function inferFeedbackPillar(pathname: string): string {
         return "company";
       case "financial-information":
         return "financial";
+      case "afs-additions":
+        return "accessToFinancialServices";
       case "ownership":
         return "ownership";
       case "management-control":
