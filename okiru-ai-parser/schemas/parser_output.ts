@@ -47,6 +47,14 @@ export const parserOutputSchema = z.object({
     rules_applied: z.array(z.string()),
     graph_version: z.string(),
     requires_human_review: z.boolean(),
+    classification_candidates: z.array(z.object({
+      document_type: z.string(),
+      pillar: z.string(),
+      confidence: z.number().min(0).max(1),
+      matched_evidence: z.array(z.string()),
+      reasons: z.array(z.string()),
+    })).default([]),
+    classification_reason: z.string().optional(),
   }),
 });
 
