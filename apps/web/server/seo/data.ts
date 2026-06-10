@@ -1,7 +1,8 @@
 import http from "http";
-import { makeCertificateSlug } from "./slug";
 
+/** Mirrors API public certificate / SEO payload (sourced from /api/certificates/* only). */
 export interface CertificateRecord {
+  id?: string | null;
   slug: string;
   companyName: string;
   bbbeeLevel: number | null;
@@ -15,6 +16,10 @@ export interface CertificateRecord {
   blobName: string | null;
   status: "valid" | "expiring" | "expired" | "unknown";
   updatedAt: string;
+  vatNumber?: string | null;
+  companySize?: string | null;
+  verified?: boolean;
+  metadataComplete?: boolean;
 }
 
 const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
@@ -61,114 +66,21 @@ function fetchFromApi<T>(path: string, timeoutMs = 5000): Promise<T | null> {
   });
 }
 
-const DEMO_CERTIFICATES: CertificateRecord[] = [
-  {
-    slug: makeCertificateSlug("Absa Group Limited", "ABSA-2025-001"),
-    companyName: "Absa Group Limited",
-    bbbeeLevel: 1,
-    bbbeeScore: 105.5,
-    blackOwnership: 32.4,
-    blackWomenOwnership: 14.2,
-    verificationAgency: "AQRate Verification Services",
-    certificateNumber: "ABSA-2025-001",
-    expiryDate: "2026-09-30",
-    issueDate: "2025-10-01",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-10-01",
-  },
-  {
-    slug: makeCertificateSlug("Standard Bank South Africa", "SBSA-2025-114"),
-    companyName: "Standard Bank South Africa",
-    bbbeeLevel: 1,
-    bbbeeScore: 102.1,
-    blackOwnership: 30.0,
-    blackWomenOwnership: 12.8,
-    verificationAgency: "Empowerdex",
-    certificateNumber: "SBSA-2025-114",
-    expiryDate: "2026-08-15",
-    issueDate: "2025-08-16",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-08-16",
-  },
-  {
-    slug: makeCertificateSlug("Sasol Limited", "SASOL-2025-220"),
-    companyName: "Sasol Limited",
-    bbbeeLevel: 2,
-    bbbeeScore: 92.6,
-    blackOwnership: 25.1,
-    blackWomenOwnership: 9.4,
-    verificationAgency: "BEE Verification Agency",
-    certificateNumber: "SASOL-2025-220",
-    expiryDate: "2026-06-30",
-    issueDate: "2025-07-01",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-07-01",
-  },
-  {
-    slug: makeCertificateSlug("MTN Group", "MTN-2025-337"),
-    companyName: "MTN Group",
-    bbbeeLevel: 2,
-    bbbeeScore: 88.4,
-    blackOwnership: 28.6,
-    blackWomenOwnership: 11.0,
-    verificationAgency: "Mosela Rating Agency",
-    certificateNumber: "MTN-2025-337",
-    expiryDate: "2026-05-12",
-    issueDate: "2025-05-13",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-05-13",
-  },
-  {
-    slug: makeCertificateSlug("Naspers", "NASPERS-2025-441"),
-    companyName: "Naspers",
-    bbbeeLevel: 3,
-    bbbeeScore: 80.2,
-    blackOwnership: 22.5,
-    blackWomenOwnership: 8.1,
-    verificationAgency: "Empowerdex",
-    certificateNumber: "NASPERS-2025-441",
-    expiryDate: "2026-04-20",
-    issueDate: "2025-04-21",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-04-21",
-  },
-  {
-    slug: makeCertificateSlug("Vodacom Group", "VOD-2025-559"),
-    companyName: "Vodacom Group",
-    bbbeeLevel: 4,
-    bbbeeScore: 72.8,
-    blackOwnership: 60.5,
-    blackWomenOwnership: 27.3,
-    verificationAgency: "AQRate Verification Services",
-    certificateNumber: "VOD-2025-559",
-    expiryDate: "2026-03-15",
-    issueDate: "2025-03-16",
-    blobName: null,
-    status: "valid",
-    updatedAt: "2025-03-16",
-  },
-];
-
-function dedupe(records: CertificateRecord[]): CertificateRecord[] {
+function dedupeBySlug(records: CertificateRecord[]): CertificateRecord[] {
   const seen = new Map<string, CertificateRecord>();
   for (const r of records) {
     if (!r.slug) continue;
-    if (!seen.has(r.slug)) seen.set(r.slug, r);
+    seen.set(r.slug, r);
   }
   return Array.from(seen.values());
 }
 
 export async function listCertificates(): Promise<CertificateRecord[]> {
   const apiRecords = await fetchFromApi<CertificateRecord[]>("/api/certificates/seo/list");
-  if (apiRecords && Array.isArray(apiRecords) && apiRecords.length > 0) {
-    return dedupe(apiRecords);
+  if (apiRecords && Array.isArray(apiRecords)) {
+    return dedupeBySlug(apiRecords.filter((r) => r.slug && r.companyName));
   }
-  return DEMO_CERTIFICATES;
+  return [];
 }
 
 export async function getCertificateBySlug(slug: string): Promise<CertificateRecord | null> {
@@ -176,7 +88,7 @@ export async function getCertificateBySlug(slug: string): Promise<CertificateRec
     `/api/certificates/by-slug/${encodeURIComponent(slug)}`,
   );
   if (fromApi && fromApi.slug) return fromApi;
-  return DEMO_CERTIFICATES.find((c) => c.slug === slug) || null;
+  return null;
 }
 
 export async function listCertificatesByLevel(level: number): Promise<CertificateRecord[]> {

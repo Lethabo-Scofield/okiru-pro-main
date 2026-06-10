@@ -328,6 +328,43 @@ export type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
 
 // Certificate Types
 export type CertificateStatus = 'valid' | 'expiring' | 'expired' | 'unknown';
+export type PublicCertificateSource = 'mongo' | 'azure' | 'local';
+
+/** Canonical public registry record (list, detail, SEO). */
+export interface PublicCertificate {
+  id: string | null;
+  slug: string | null;
+  companyName: string;
+  vatNumber: string | null;
+  companySize: string | null;
+  bbbeeLevel: number | null;
+  bbbeeScore: number | null;
+  certificateNumber: string | null;
+  issueDate: string | null;
+  expiryDate: string | null;
+  agency: string | null;
+  verified: boolean;
+  blobName: string | null;
+  fileName: string | null;
+  blackOwnership: number | null;
+  blackWomenOwnership: number | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
+  source: PublicCertificateSource;
+  status: CertificateStatus;
+  metadataComplete: boolean;
+  lastModified: string | null;
+}
 
 export interface CertificateVersion {
   blobName: string;
@@ -356,6 +393,18 @@ export interface Certificate {
   bbbeeScore: number | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
+  flowThroughBlackOwnership?: number | null;
+  blackDesignatedGroupOwnership?: number | null;
+  empoweringSupplier?: boolean | null;
+  firstProcurementDate?: string | null;
+  sizeAtFirstProcurement?: string | null;
+  sdRecipient?: boolean | null;
+  threeYearContract?: boolean | null;
+  annualSpend?: number | null;
+  location?: string | null;
+  businessUnit?: string | null;
+  sectorCode?: string | null;
+  sectorName?: string | null;
   verificationAgency: string | null;
   certificateNumber: string | null;
   expiryDate: string | null;
@@ -394,6 +443,7 @@ export interface CertificateListResponse {
     | 'id' | 'slug' | 'blobName' | 'fileName' | 'companyName'
     | 'vatNumber' | 'companySize' | 'bbbeeLevel' | 'blackOwnership'
     | 'blackWomenOwnership' | 'expiryDate' | 'status' | 'verified'
+    | 'sectorCode' | 'sectorName' | 'location' | 'businessUnit'
   > & { lastModified: string | null }>;
   total: number;
   limit: number;

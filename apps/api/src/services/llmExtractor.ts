@@ -13,8 +13,16 @@ import {
   getAzureFastChatClient,
   isAzureOpenAIConfigured,
 } from '../../pipeline/extraction/azureOpenAIClient.js';
+import { resolveOkiruHubSector } from './okiruHubSectors.js';
 
 const logger = createLogger('LLMExtractor');
+
+export interface CertificateSectorClassification {
+  sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | null;
+  sectorConfidence: 'high' | 'low' | null;
+}
+
+export type CertificatePreviewExtraction = ExtractedCertificateData & CertificateSectorClassification;
 
 /** Raw JSON shape returned by the LLM. */
 interface LLMExtractionOutput {
@@ -29,6 +37,8 @@ interface LLMExtractionOutput {
   certificateNumber: unknown;
   issueDate: unknown;
   expiryDate: unknown;
+  sectorCode: unknown;
+  sectorConfidence: unknown;
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `You are an expert at extracting structured data from South African B-BBEE (Broad-Based Black Economic Empowerment) certificates.
@@ -46,6 +56,8 @@ Extract the following fields from the certificate text provided. Return ONLY a v
 - certificateNumber: The certificate reference number (e.g. "VER/2024/001234")
 - issueDate: Date certificate was issued in ISO format YYYY-MM-DD — null if not found
 - expiryDate: Date certificate expires in ISO format YYYY-MM-DD — null if not found
+- sectorCode: Okiru Hub sector code — one of "RCOGP", "ICT", "FSC", "AGRI", or null if unsure
+- sectorConfidence: "high" only when the sector is clearly indicated on the certificate (e.g. "Measured under the Financial Sector Code", "ICT Sector Code", "AgriBEE", "Revised Codes of Good Practice / RCOGP"); otherwise "low" or null
 
 South African B-BBEE certificate patterns to recognise:
 - "BBBEE Status Level Contributor: 1" or "Level 2 B-BBEE Contributor"
@@ -59,6 +71,7 @@ South African B-BBEE certificate patterns to recognise:
 
 Rules:
 - Return null for any field you cannot determine with confidence
+- For sectorCode: only return a code when sectorConfidence is "high". If uncertain, set sectorCode to null and sectorConfidence to "low"
 - vatNumber: return only the 10 digits, strip spaces and dashes
 - Percentages: return as a number (e.g. 51.0, not "51%")
 - Dates: convert to YYYY-MM-DD ISO format
@@ -72,25 +85,36 @@ export async function extractCertificateWithLLM(
   text: string,
   fileName: string,
 ): Promise<ExtractedCertificateData> {
+  const preview = await extractCertificatePreviewWithLLM(text, fileName);
+  const { sectorCode: _s, sectorConfidence: _c, ...base } = preview;
+  return base;
+}
+
+/**
+ * MAIA preview extraction — includes Okiru Hub sector classification when confident.
+ */
+export async function extractCertificatePreviewWithLLM(
+  text: string,
+  fileName: string,
+): Promise<CertificatePreviewExtraction> {
   if (!isAzureOpenAIConfigured()) {
     logger.debug('Azure OpenAI not configured — using regex extractor', { fileName });
-    return extractCertificateData(text, fileName);
+    return { ...extractCertificateData(text, fileName), sectorCode: null, sectorConfidence: null };
   }
 
   if (!text.trim()) {
     logger.warn('Empty text passed to LLM extractor — using regex extractor', { fileName });
-    return extractCertificateData(text, fileName);
+    return { ...extractCertificateData(text, fileName), sectorCode: null, sectorConfidence: null };
   }
 
   try {
     const llmRaw = await callLLM(text, fileName);
-    const result = validateAndMerge(llmRaw, text, fileName);
-    logger.info('LLM extraction succeeded', {
+    const result = validateAndMergePreview(llmRaw, text, fileName);
+    logger.info('LLM preview extraction succeeded', {
       fileName,
       supplierName: result.supplierName,
-      vatNumber: result.vatNumber,
-      bbbeeLevel: result.bbbeeLevel,
-      companySize: result.companySize,
+      sectorCode: result.sectorCode,
+      sectorConfidence: result.sectorConfidence,
     });
     return result;
   } catch (err: any) {
@@ -98,7 +122,7 @@ export async function extractCertificateWithLLM(
       fileName,
       error: err.message,
     });
-    return extractCertificateData(text, fileName);
+    return { ...extractCertificateData(text, fileName), sectorCode: null, sectorConfidence: null };
   }
 }
 
@@ -136,7 +160,36 @@ async function callLLM(text: string, fileName: string): Promise<LLMExtractionOut
  * Validate each LLM field, apply range/type checks, and merge with regex fallback
  * values for any field the LLM left null.
  */
+function validateAndMergePreview(
+  llm: LLMExtractionOutput,
+  rawText: string,
+  fileName: string,
+): CertificatePreviewExtraction {
+  const base = validateAndMergeBase(llm, rawText, fileName);
+  const confidenceRaw = typeof llm.sectorConfidence === 'string'
+    ? llm.sectorConfidence.toLowerCase()
+    : null;
+  const sectorConfidence = confidenceRaw === 'high' ? 'high' : confidenceRaw === 'low' ? 'low' : null;
+  const resolved = resolveOkiruHubSector(llm.sectorCode);
+  const sectorCode =
+    sectorConfidence === 'high' && resolved ? resolved.sectorCode : null;
+
+  return {
+    ...base,
+    sectorCode,
+    sectorConfidence: sectorCode ? 'high' : sectorConfidence,
+  };
+}
+
 function validateAndMerge(
+  llm: LLMExtractionOutput,
+  rawText: string,
+  fileName: string,
+): ExtractedCertificateData {
+  return validateAndMergeBase(llm, rawText, fileName);
+}
+
+function validateAndMergeBase(
   llm: LLMExtractionOutput,
   rawText: string,
   fileName: string,
