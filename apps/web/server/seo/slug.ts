@@ -10,13 +10,17 @@ export function slugify(text: string | null | undefined): string {
     .slice(0, 80);
 }
 
+/**
+ * Canonical public slug — must match apps/api `buildCertSlug(companyName, id)`.
+ */
 export function makeCertificateSlug(
   companyName: string | null | undefined,
-  certificateNumber: string | null | undefined,
+  certificateId: string | null | undefined,
 ): string {
+  if (!certificateId) return "";
   const company = slugify(companyName) || "company";
-  const cert = slugify(certificateNumber) || "certificate";
-  return `${company}-${cert}`;
+  const idPart = slugify(certificateId) || "certificate";
+  return `${company}-${idPart}`;
 }
 
 export function escapeHtml(value: unknown): string {

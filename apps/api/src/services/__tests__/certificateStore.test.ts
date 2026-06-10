@@ -104,6 +104,35 @@ describe('add() + getById() + list()', () => {
     });
     expect(rec.status).toBe('unknown');
   });
+
+  it('marks certificates expiring within 60 days as expiring', () => {
+    const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const rec = mod.certificateStore.add({
+      fileName: 'soon.pdf',
+      buffer: Buffer.from('x'),
+      mimeType: 'application/pdf',
+      companyName: 'Soon Expiring Co',
+      expiryDate: in30Days,
+    });
+    expect(rec.status).toBe('expiring');
+  });
+});
+
+describe('disk persistence', () => {
+  it('reloads records from _index.json after module reset', async () => {
+    const rec = mod.certificateStore.add({
+      fileName: 'persist.pdf',
+      buffer: Buffer.from('x'),
+      mimeType: 'application/pdf',
+      companyName: 'Persist Co',
+      vatNumber: '7778889990',
+    });
+    vi.resetModules();
+    const reloaded = await import('../certificateStore.js');
+    const fetched = reloaded.certificateStore.getById(rec.id);
+    expect(fetched?.companyName).toBe('Persist Co');
+    expect(fetched?.vatNumber).toBe('7778889990');
+  });
 });
 
 describe('getByVatNumber()', () => {
