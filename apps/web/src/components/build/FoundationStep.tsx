@@ -6,7 +6,7 @@ import { Badge } from "@toolkit/components/ui/badge";
 import { Switch } from "@toolkit/components/ui/switch";
 import { Label } from "@toolkit/components/ui/label";
 import { ClientInformationForm, ClientInformationData, EMPTY_CLIENT_INFO } from './ClientInformationForm';
-import { FinancialsForm, FinancialsData, EMPTY_FINANCIALS } from './FinancialsForm';
+import { FinancialsForm, FinancialsData, EMPTY_FINANCIALS, calculateFinancials } from './FinancialsForm';
 import { AutoFillButton } from '@/components/AutoFillButton';
 import { 
   Building2, 
@@ -113,7 +113,10 @@ export function FoundationStep({
 
   const updateClientInfo = (clientInfo: ClientInformationData) => {
     // Sync industry with financials
-    const updatedFinancials = { ...data.financials, industry: clientInfo.industry };
+    const updatedFinancials = calculateFinancials({
+      ...data.financials,
+      industry: clientInfo.industry,
+    });
     onChange({ 
       clientInfo, 
       financials: updatedFinancials 

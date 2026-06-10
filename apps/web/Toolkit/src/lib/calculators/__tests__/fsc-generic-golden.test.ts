@@ -188,8 +188,8 @@ describe('FSC Generic — CalculatorConfig completeness', () => {
 
     const l1 = thresholds?.find(t => t.level === 1);
     const l8 = thresholds?.find(t => t.level === 8);
-    expect(l1?.minPoints).toBeCloseTo(95.50, 1);
-    expect(l8?.minPoints).toBeCloseTo(38.20, 1);
+    expect(l1?.minPoints).toBeCloseTo(92.79, 1);
+    expect(l8?.minPoints).toBeCloseTo(37.12, 1);
 
     // FSC thresholds differ from RCOGP standard (100/95/90/80/75/70/55/40)
     expect(l1?.minPoints).not.toBe(100);
@@ -240,6 +240,9 @@ describe('FSC Generic golden — pillar scores', () => {
     // Full score: Board(2+1) + Exec(2+1) + OEM(10+4) + Disabled(1) = 21
     expect(r.total).toBeCloseTo(21, 0);
     expect(r.total).toBeGreaterThanOrEqual(20);
+    const naLines = r.subLines.filter((sl) => sl.name.includes('NOT AVAILABLE'));
+    expect(naLines).toHaveLength(3);
+    expect(naLines.every((sl) => sl.weighting === 0 && sl.score === 0)).toBe(true);
   });
 
   it('Management Control = 0/21 (empty workforce)', () => {
@@ -500,14 +503,14 @@ describe('FSC Generic — Level determination', () => {
   it('FSC level thresholds are non-integer (scaled from sub-sector)', () => {
     const thresholds = CONFIG.levelThresholds!;
     const sorted = [...thresholds].sort((a, b) => b.minPoints - a.minPoints);
-    expect(sorted[0].minPoints).toBeCloseTo(95.50, 1);  // L1
-    expect(sorted[1].minPoints).toBeCloseTo(90.72, 1);  // L2
-    expect(sorted[2].minPoints).toBeCloseTo(85.95, 1);  // L3
-    expect(sorted[3].minPoints).toBeCloseTo(76.40, 1);  // L4
-    expect(sorted[4].minPoints).toBeCloseTo(71.62, 1);  // L5
-    expect(sorted[5].minPoints).toBeCloseTo(66.85, 1);  // L6
-    expect(sorted[6].minPoints).toBeCloseTo(52.52, 1);  // L7
-    expect(sorted[7].minPoints).toBeCloseTo(38.20, 1);  // L8
+    expect(sorted[0].minPoints).toBeCloseTo(92.79, 1);  // L1
+    expect(sorted[1].minPoints).toBeCloseTo(88.15, 1);  // L2
+    expect(sorted[2].minPoints).toBeCloseTo(83.51, 1);  // L3
+    expect(sorted[3].minPoints).toBeCloseTo(74.23, 1);  // L4
+    expect(sorted[4].minPoints).toBeCloseTo(69.59, 1);  // L5
+    expect(sorted[5].minPoints).toBeCloseTo(64.95, 1);  // L6
+    expect(sorted[6].minPoints).toBeCloseTo(51.04, 1);  // L7
+    expect(sorted[7].minPoints).toBeCloseTo(37.12, 1);  // L8
   });
 
   it('FSC recognition levels match standard B-BBEE table', () => {

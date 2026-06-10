@@ -35,6 +35,58 @@ export interface EAPValues {
   blackWomenTarget: number;
 }
 
+/** Per-demographic EAP group codes (Stats SA national proportions). */
+export type DemoGroup = 'AM' | 'CM' | 'IM' | 'WM' | 'AF' | 'CF' | 'IF' | 'WF';
+
+export interface DemographicBreakdown {
+  group: DemoGroup;
+  eapTarget: number;
+  actual: number;
+  count: number;
+  totalInLevel: number;
+}
+
+/**
+ * National EAP proportions per demographic group.
+ * Black groups have EAP targets; White M/F are informational (target = 0).
+ */
+export const NATIONAL_EAP_DEMOGRAPHICS: Record<DemoGroup, number> = {
+  AM: 0.435, CM: 0.046, IM: 0.017, WM: 0,
+  AF: 0.375, CF: 0.042, IF: 0.010, WF: 0,
+};
+
+const BLACK_RACES = new Set(['African', 'Coloured', 'Indian']);
+
+export function classifyDemographic(
+  gender: 'Male' | 'Female' | string | undefined,
+  race: string | undefined,
+): DemoGroup | null {
+  const genderSuffix = gender === 'Female' ? 'F' : 'M';
+  if (race === 'White') return `W${genderSuffix}` as DemoGroup;
+  if (!race || !BLACK_RACES.has(race)) return null;
+  const racePrefix = race === 'African' ? 'A' : race === 'Coloured' ? 'C' : 'I';
+  return `${racePrefix}${genderSuffix}` as DemoGroup;
+}
+
+/** Build per-demographic actuals vs national EAP target proportions. */
+export function buildDemographicBreakdown(
+  people: ReadonlyArray<{ gender?: string; race?: string }>,
+): DemographicBreakdown[] {
+  const total = people.length;
+  return (Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]).map(group => {
+    const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
+    const count = people.filter(p => classifyDemographic(p.gender, p.race) === group).length;
+    const ratio = total > 0 ? count / total : 0;
+    return {
+      group,
+      eapTarget: Math.round(eapProp * 10000) / 10000,
+      actual: Math.round(ratio * 10000) / 10000,
+      count,
+      totalInLevel: total,
+    };
+  });
+}
+
 // National EAP (default when no province specified)
 const NATIONAL_EAP: Record<OccupationalLevel, EAPValues> = {
   Senior: { blackTarget: 0.731, blackWomenTarget: 0.341 },

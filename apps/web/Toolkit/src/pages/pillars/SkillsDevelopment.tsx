@@ -1,7 +1,10 @@
 import React, { useRef, useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { parseSkillsBulkUploadBuffer } from "./bulkUploadParser";
-import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
+import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/calculators/skills";
+import { isBlackRace } from "@toolkit/lib/calculators/shared";
+import { getEAPTargets } from "@toolkit/lib/calculators/eapTargets";
+import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -10,7 +13,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, GraduationCap, Trash2, Pencil, Upload, UserCheck, Calendar, DollarSign, BookOpen, Bus, Home, Utensils, PenTool, Building, Wallet, FileText, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, GraduationCap, Trash2, Pencil, Upload, UserCheck, Calendar, DollarSign, BookOpen, Bus, Home, Utensils, PenTool, Building, Wallet, FileText, AlertCircle, ChevronDown, ChevronRight, Globe } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -123,11 +126,6 @@ const defaultFormState: InterventionFormState = {
   isMandatory: false,
 };
 
-// Helper to check if race is Black for BEE purposes
-function isBlackRace(race: string): boolean {
-  return ['African', 'Coloured', 'Indian'].includes(race);
-}
-
 // Calculate total cost
 function calculateTotalCost(costs: Pick<InterventionFormState, 
   'courseCost' | 'travelCost' | 'accommodationCost' | 'cateringCost' | 
@@ -138,8 +136,19 @@ function calculateTotalCost(costs: Pick<InterventionFormState,
          costs.salaryCost + costs.otherCosts;
 }
 
+const DEMO_GROUP_LABELS: Record<string, string> = {
+  AM: 'African M', CM: 'Coloured M', IM: 'Indian M', WM: 'White M',
+  AF: 'African F', CF: 'Coloured F', IF: 'Indian F', WF: 'White F',
+};
+
+const SKILLS_EAP_LEVEL_LABELS: Record<string, string> = {
+  senior: 'Senior Management',
+  middle: 'Middle Management',
+  junior: 'Junior Management',
+};
+
 export default function SkillsDevelopment() {
-  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram, calculatorConfig } = useBbeeStore();
+  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram, calculatorConfig, client } = useBbeeStore();
   const { leviableAmount, trainingPrograms, yesCandidatesCount, yesAbsorbedCount } = skills;
   const { toast } = useToast();
 
@@ -188,11 +197,7 @@ export default function SkillsDevelopment() {
   };
 
   const sc = calculatorConfig?.skills;
-  // Targets derived via the shared helper (see bulkUploadParser.ts) so the
-  // % of payroll formula is unit-testable. The component still owns the
-  // pillar-config lookup for the override percentages.
-  const overallTargetPct = sc?.overallSpendPercent ?? sc?.overallTarget ?? 0.035;
-  const bursaryTargetPct = sc?.bursarySpendPercent ?? sc?.bursaryTarget ?? 0.025;
+  const { overallTargetPct, bursaryTargetPct } = resolveSkillsSpendTargets(sc);
   const targetSpend = leviableAmount * overallTargetPct;
   const bursaryTarget = leviableAmount * bursaryTargetPct;
   
@@ -378,7 +383,8 @@ export default function SkillsDevelopment() {
   };
 
   if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
-  const score = calculateSkillsScore(skills, calculatorConfig);
+  const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
+  const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince);
 
   const totalYesCount = trainingPrograms.filter(p => p.isYesEmployee).length;
   const completedYesCount = trainingPrograms.filter(p => p.isYesEmployee && p.isCompleted).length;
@@ -951,8 +957,27 @@ export default function SkillsDevelopment() {
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>5 sub-line indicators per RCOGP Generic Codes (20 base + 5 bonus)</CardDescription>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle>Detailed Scorecard Breakdown</CardTitle>
+              <CardDescription>
+                {pillarBreakdownSubtitle(
+                  score.subLines,
+                  client,
+                  calculatorConfig,
+                  isQse
+                    ? 'QSE uses fixed percentage targets — no EAP lookup'
+                    : 'click spend rows for category spend and EAP demographic breakdown',
+                )}
+              </CardDescription>
+            </div>
+            {!isQse && (
+              <Badge variant="outline" className="text-xs">
+                <Globe className="h-3 w-3 mr-1" />
+                EAP: {score.eapProvince || 'National'}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
@@ -969,19 +994,29 @@ export default function SkillsDevelopment() {
                 {score.subLines.map((sl, idx) => {
                   const isExpanded = expandedSkillRows.has(idx);
                   const isSpendRow = idx <= 2;
+                  const hasEapBreakdown = !isQse && isSpendRow && !!score.eapBreakdowns[idx];
+                  const categoryRows = score.categoryBreakdown.filter(cb => cb.spend > 0);
+                  const eapByLevel = score.eapBreakdowns[idx];
                   return (
                     <React.Fragment key={idx}>
                       <tr
-                        className={cn("hover:bg-muted/30 cursor-pointer", sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}
-                        onClick={() => setExpandedSkillRows(prev => {
-                          const next = new Set(prev);
-                          next.has(idx) ? next.delete(idx) : next.add(idx);
-                          return next;
-                        })}
+                        className={cn(
+                          "hover:bg-muted/30",
+                          (isSpendRow && (hasEapBreakdown || categoryRows.length > 0)) && "cursor-pointer",
+                          sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20",
+                        )}
+                        onClick={() => {
+                          if (!isSpendRow || isQse) return;
+                          setExpandedSkillRows(prev => {
+                            const next = new Set(prev);
+                            next.has(idx) ? next.delete(idx) : next.add(idx);
+                            return next;
+                          });
+                        }}
                       >
                         <td className="px-4 py-3 text-muted-foreground">
                           <span className="inline-flex items-center gap-1.5">
-                            {isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                            {isSpendRow && !isQse && (isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />)}
                             {sl.isBonus && <Badge variant="outline" className="text-[9px] bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
                             {sl.name}
                           </span>
@@ -990,7 +1025,7 @@ export default function SkillsDevelopment() {
                         <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
                       </tr>
-                      {isExpanded && isSpendRow && score.categoryBreakdown.filter(cb => cb.spend > 0).map((cb, ci) => (
+                      {isExpanded && isSpendRow && !isQse && categoryRows.map((cb, ci) => (
                         <tr key={`cat-${idx}-${ci}`} className="bg-muted/10">
                           <td className="px-4 py-2 pl-10 text-xs text-muted-foreground/70">↳ Cat {cb.code}: {cb.label}</td>
                           <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground whitespace-nowrap">{cb.cap ? `≤${(cb.cap * 100).toFixed(0)}% cap` : 'No cap'}</td>
@@ -1000,6 +1035,40 @@ export default function SkillsDevelopment() {
                           </td>
                         </tr>
                       ))}
+                      {isExpanded && hasEapBreakdown && eapByLevel && (
+                        <tr className="bg-muted/10">
+                          <td colSpan={4} className="px-6 py-3 space-y-4">
+                            {(['senior', 'middle', 'junior'] as const).map(level => {
+                              const breakdown = eapByLevel[level];
+                              const levelEAP = getEAPTargets(score.eapProvince as any, level === 'senior' ? 'Senior' : level === 'middle' ? 'Middle' : 'Junior');
+                              return (
+                                <div key={level}>
+                                  <div className="text-xs font-semibold text-muted-foreground mb-2">
+                                    {SKILLS_EAP_LEVEL_LABELS[level]} — EAP Black {(levelEAP.blackTarget * 100).toFixed(1)}% / BWO {(levelEAP.blackWomenTarget * 100).toFixed(1)}%
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2 text-xs sm:grid-cols-8">
+                                    {breakdown.map((bg) => {
+                                      const isBlackGroup = !bg.group.startsWith('W');
+                                      return (
+                                        <div key={bg.group} className={cn("text-center p-2 rounded border", isBlackGroup ? "bg-card/50" : "bg-muted/30")}>
+                                          <div className="font-semibold text-foreground text-[10px]">{DEMO_GROUP_LABELS[bg.group] ?? bg.group}</div>
+                                          {isBlackGroup && bg.eapTarget > 0 && (
+                                            <div className="text-muted-foreground mt-0.5">EAP: {(bg.eapTarget * 100).toFixed(1)}%</div>
+                                          )}
+                                          <div className={cn("font-mono mt-0.5", isBlackGroup && bg.eapTarget > 0 ? (bg.actual >= bg.eapTarget ? "text-emerald-600" : "text-amber-600") : "text-muted-foreground")}>
+                                            {(bg.actual * 100).toFixed(1)}%
+                                          </div>
+                                          <div className="text-muted-foreground/60">{bg.count}/{bg.totalInLevel}</div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })}

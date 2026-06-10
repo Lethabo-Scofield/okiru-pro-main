@@ -1995,6 +1995,7 @@ export function mapExtractedToWorkbookSections(
   const sections: WorkbookSectionsInput = {
     "company-information": { rows: [], meta: {} },
     "financial-information": { rows: [], meta: {} },
+    "afs-additions": { rows: [], meta: {} },
     ownership: { rows: [] },
     "management-control": { rows: [] },
     employees: { rows: [] },

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useEsgAccess } from "@/hooks/useEsgAccess";
 
-/** Redirects non-allowlisted users away from /esg/* surfaces. */
+/** Guards /esg/* surfaces — requires ESG access (all authenticated users). */
 export function EsgPreviewRoute({ children }: { children: React.ReactNode }) {
   const { allowed, loading } = useEsgAccess();
   const [, navigate] = useLocation();

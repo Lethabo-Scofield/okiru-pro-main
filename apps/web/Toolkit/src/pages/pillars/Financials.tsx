@@ -13,7 +13,12 @@ import { Switch } from "@toolkit/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@toolkit/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { v4 as uuidv4 } from 'uuid';
-import { industryNormsData } from "@toolkit/lib/data/industry-norms";
+import {
+  resolveNpatForTargets,
+  marginPercent,
+  isBelowIndustryNormQuarterThreshold,
+} from "@/lib/npatDeemedCalculation";
+import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
 
 export default function Financials() {
   const { client, updateFinancials, updateTMPS, procurement, addFinancialYear, updateFinancialYear, removeFinancialYear } = useBbeeStore();
@@ -22,7 +27,6 @@ export default function Financials() {
   const [revenue, setRevenue] = useState(client.revenue.toString());
   const [npat, setNpat] = useState(client.npat.toString());
   const [leviableAmount, setLeviableAmount] = useState(client.leviableAmount.toString());
-  
   const [tmpsInclusions, setTmpsInclusions] = useState({
     costOfSales: 0,
     operatingExpenses: 0,
@@ -42,16 +46,42 @@ export default function Financials() {
   const [tmpsManualOverride, setTmpsManualOverride] = useState(procurement.tmpsManualOverride || false);
   const [tmpsManualValue, setTmpsManualValue] = useState(procurement.tmps.toString());
 
-  // Industry Norm logic
   const currentIndustryNorm = useMemo(() => {
-    const entry = industryNormsData.find(d => d.industry === client.industry) || industryNormsData[0];
-    return Math.max(0, entry.norm);
-  }, [client.industry]);
+    if (client.industryNorm != null && client.industryNorm > 0) return client.industryNorm;
+    return lookupIndustryNormPercent(client.industry, client.sectorCode) ?? 0;
+  }, [client.industryNorm, client.industry, client.sectorCode]);
 
-  const currentMargin = (client.npat / client.revenue) * 100;
+  const showPriorYearHistory = isBelowIndustryNormQuarterThreshold(
+    client.revenue,
+    client.npat,
+    currentIndustryNorm,
+  );
+
+  const priorYearsForNpat = useMemo(
+    () =>
+      (client.financialHistory || []).slice(0, 5).map((h) => ({
+        yearLabel: h.year,
+        revenue: h.revenue,
+        npat: h.npat,
+      })),
+    [client.financialHistory],
+  );
+
+  const npatResolution = useMemo(
+    () =>
+      resolveNpatForTargets({
+        currentRevenue: client.revenue,
+        currentNpat: client.npat,
+        industryNormPercent: currentIndustryNorm,
+        priorYears: priorYearsForNpat,
+      }),
+    [client.revenue, client.npat, currentIndustryNorm, priorYearsForNpat],
+  );
+
+  const currentMargin = marginPercent(client.npat, client.revenue);
   const threshold = currentIndustryNorm / 4;
-  const isBelowQuarter = currentMargin < threshold;
-  const deemedNpat = isBelowQuarter ? (client.revenue * (currentIndustryNorm / 100)) : client.npat;
+  const isBelowQuarter = npatResolution.deemedNpatUsed;
+  const deemedNpat = npatResolution.effectiveNpat;
   const targetBase = deemedNpat;
 
   // TMPS Calculations
@@ -60,7 +90,11 @@ export default function Financials() {
   const calculatedTMPS = Math.max(0, totalInclusions - totalExclusions);
 
   const handleSaveFinancials = () => {
-    updateFinancials(Number(revenue), Number(npat), Number(leviableAmount), currentIndustryNorm);
+    const normToSave =
+      currentIndustryNorm > 0
+        ? currentIndustryNorm
+        : lookupIndustryNormPercent(client.industry, client.sectorCode);
+    updateFinancials(Number(revenue), Number(npat), Number(leviableAmount), normToSave);
     toast({
       title: "Financials Updated",
       description: "Base financial metrics have been saved.",
@@ -168,12 +202,15 @@ export default function Financials() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column: Financials Input */}
         <div className="lg:col-span-2 space-y-6">
+          {showPriorYearHistory ? (
           <Card className="glass-panel">
             <CardHeader className="pb-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Financial History</CardTitle>
-                  <CardDescription>Track revenue and NPAT over time</CardDescription>
+                  <CardTitle>Prior-Year Financials (Deemed NPAT)</CardTitle>
+                  <CardDescription>
+                    Required when current NPAT margin is below 25% of the industry norm — used for Leibrandt / deemed NPAT
+                  </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleAddYear} className="flex gap-2">
                   <Plus className="h-4 w-4" /> Add Year
@@ -252,12 +289,60 @@ export default function Financials() {
                   <Input type="number" value={leviableAmount} onChange={(e) => setLeviableAmount(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Used as the base for Skills Development targets.</p>
                 </div>
-                <div className="flex items-end">
+                <div className="space-y-2">
+                  <Label>Industry Norm (%)</Label>
+                  <Input
+                    type="number"
+                    value={currentIndustryNorm > 0 ? currentIndustryNorm : ""}
+                    readOnly
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Auto-detected from industry / sector selection.
+                  </p>
+                </div>
+                <div className="flex items-end sm:col-span-2">
                   <Button className="w-full" onClick={handleSaveFinancials}>Save Current Financials</Button>
                 </div>
               </div>
             </CardContent>
           </Card>
+          ) : (
+          <Card className="glass-panel">
+            <CardHeader className="pb-4">
+              <CardTitle>Current-Year Financials</CardTitle>
+              <CardDescription>Revenue and NPAT for the measurement period</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Revenue (R)</Label>
+                  <Input type="number" value={revenue} onChange={(e) => setRevenue(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>NPAT (R)</Label>
+                  <Input type="number" value={npat} onChange={(e) => setNpat(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Leviable Amount (Payroll)</Label>
+                  <Input type="number" value={leviableAmount} onChange={(e) => setLeviableAmount(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Industry Norm (%)</Label>
+                  <Input
+                    type="number"
+                    value={currentIndustryNorm > 0 ? currentIndustryNorm : ""}
+                    readOnly
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+              </div>
+              <Button className="w-full" onClick={handleSaveFinancials}>Save Current Financials</Button>
+            </CardContent>
+          </Card>
+          )}
 
           {/* TMPS Calculation */}
           <Card className="glass-panel">
@@ -449,11 +534,13 @@ export default function Financials() {
                       <TooltipTrigger asChild>
                          <Info className="h-3 w-3" />
                       </TooltipTrigger>
-                      <TooltipContent><p>Latest norm for {client.industrySector}</p></TooltipContent>
+                      <TooltipContent><p>User-entered norm margin (%) for deemed NPAT / Leibrandt tests</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </span>
-                <span className="font-semibold text-primary">{currentIndustryNorm.toFixed(2)}%</span>
+                <span className="font-semibold text-primary">
+                  {currentIndustryNorm > 0 ? `${currentIndustryNorm.toFixed(2)}%` : "Not set"}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">25% Threshold</span>

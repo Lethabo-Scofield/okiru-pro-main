@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateYESScore, calculateRecommendedCandidates } from "@toolkit/lib/calculators/yes";
+import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -41,11 +42,6 @@ const GENDER_OPTIONS = [
   { value: "Male", label: "Male" },
   { value: "Female", label: "Female" },
 ];
-
-// Helper to check if race is Black for BEE purposes
-function isBlackRace(race: string): boolean {
-  return ['African', 'Coloured', 'Indian'].includes(race);
-}
 
 interface CandidateFormState {
   name: string;

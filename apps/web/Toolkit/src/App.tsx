@@ -17,6 +17,7 @@ import SkillsDevelopment from "@toolkit/pages/pillars/SkillsDevelopment";
 import Procurement from "@toolkit/pages/pillars/Procurement";
 import ESD from "@toolkit/pages/pillars/ESD";
 import SED from "@toolkit/pages/pillars/SED";
+import AccessToFinancialServices from "@toolkit/pages/pillars/AccessToFinancialServices";
 import YES from "@toolkit/pages/pillars/YES";
 import Financials from "@toolkit/pages/pillars/Financials";
 import IndustryNorms from "@toolkit/pages/pillars/IndustryNorms";
@@ -142,6 +143,7 @@ export function AppRoutes() {
           <Route path="/pillars/procurement" component={Procurement}/>
           <Route path="/pillars/esd" component={ESD}/>
           <Route path="/pillars/sed" component={SED}/>
+          <Route path="/pillars/afs" component={AccessToFinancialServices}/>
           <Route path="/pillars/yes" component={YES}/>
           
           <Route component={NotFound} />

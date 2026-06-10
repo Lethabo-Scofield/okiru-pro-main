@@ -1,8 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Award, ChevronRight, Loader2, ScanLine } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
+import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
 
 const PILLAR_META: { key: string; label: string; color: string }[] = [
   { key: "ownership", label: "Ownership", color: "#5e9bff" },
@@ -12,6 +14,7 @@ const PILLAR_META: { key: string; label: string; color: string }[] = [
   { key: "procurement", label: "Preferential Procurement", color: "#a78bfa" },
   { key: "supplierDevelopment", label: "Supplier Development", color: "#38bdf8" },
   { key: "enterpriseDevelopment", label: "Enterprise Development", color: "#22d3ee" },
+  { key: "accessToFinancialServices", label: "Access to Financial Services", color: "#06b6d4" },
   { key: "socioEconomicDevelopment", label: "Socio-Economic Dev.", color: "#f472b6" },
   { key: "yesInitiative", label: "YES Initiative", color: "#fb923c" },
 ];
@@ -27,15 +30,37 @@ interface WorkbookScoreSummaryProps {
 
 export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSummaryProps) {
   const [, navigate] = useLocation();
-  const { scorecard, client, isLoaded, loadClientData, activeClientId } = useBbeeStore();
-  const loading = Boolean(companyId) && (!isLoaded || activeClientId !== companyId);
+  const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
+  const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
     localStorage.setItem("okiru-pro-active-client", companyId);
-    loadClientData(companyId).catch(() => {
-      // Error surfaced via loading state below.
-    });
+    let cancelled = false;
+    (async () => {
+      setRefreshing(true);
+      try {
+        await fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/sync`, {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch {
+        // Best-effort sync — loadClientData still runs below.
+      }
+      if (!cancelled) {
+        try {
+          await loadClientData(companyId);
+        } catch {
+          // Error surfaced via loading state below.
+        }
+      }
+      if (!cancelled) setRefreshing(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [companyId, loadClientData]);
+
+  const loading = Boolean(companyId) && (refreshing || !isLoaded || activeClientId !== companyId);
 
   const pillarRows = useMemo(() => {
     const transportQse =
@@ -78,6 +103,11 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
 
   const sector = client.sectorCode || client.industry || "—";
   const displayLevel = scorecard.isDiscounted ? scorecard.discountedLevel : scorecard.achievedLevel;
+  const isFsc = sector.toUpperCase() === "FSC";
+  const fscSubLabel = isFsc && client.fscSubSector
+    ? fscSubSectorDisplayLabel(normalizeFscSubSector(client.fscSubSector))
+    : null;
+  const level1Threshold = calculatorConfig?.levelThresholds?.find((t) => t.level === 1)?.minPoints;
 
   return (
     <div className="max-w-4xl mx-auto py-4 space-y-6" data-testid="workbook-score-summary">
@@ -91,8 +121,15 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
           <p className="text-[13px] text-[#636366] mt-1">
             {sector}
             {client.scorecardType ? ` · ${client.scorecardType}` : ""}
+            {fscSubLabel ? ` · ${fscSubLabel}` : ""}
+            {client.fscReinsurer ? " · Reinsurer" : ""}
             {scorecard.chosenElectivePillar ? " · 82 compulsory + 1 elective (107 max)" : ""}
           </p>
+          {level1Threshold != null && (
+            <p className="text-[12px] text-[#636366] mt-0.5">
+              Level 1 threshold: &gt; {level1Threshold.toFixed(2)} pts
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -147,7 +184,10 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
           <div className="flex justify-end gap-3 flex-wrap">
             <button
               type="button"
-              onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}`)}
+              onClick={() => {
+                sessionStorage.setItem('okiru-workbook-from', 'summary');
+                navigate(`/create-scorecard/${encodeURIComponent(companyId)}`);
+              }}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
               data-testid="button-back-workbook"
             >

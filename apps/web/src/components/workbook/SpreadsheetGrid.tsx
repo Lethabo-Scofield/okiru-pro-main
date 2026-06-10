@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
-import type { ColumnDef } from "./sections";
-import { applyPasteToRows, parseClipboardMatrix } from "@/lib/workbookGridParse";
-import { toGridRows, type NormalizationResult } from "@/lib/tabularNormalize";
+import type { ColumnDef, GridTotalDef } from "./sections";
+import { parseAmount } from "./sections";
+import { deriveGenderFromSaId } from "@/lib/saIdGender";
+import { coerceYesNo, yesNoToSelectValue } from "@/lib/yesNoValue";
+import { applyPasteToRows, parseClipboardMatrix, expandClipboardMatrix, getClipboardPasteShape } from "@/lib/workbookGridParse";
+import { formatDateForDisplay, numericDateDisplayToIso } from "@/lib/numericDateInput";
+import { normalizeCellForColumn, toGridRows, type NormalizationResult } from "@/lib/tabularNormalize";
 import { normalizePaste } from "@/lib/aiMappingClient";
+import { suggestSelectOption, FUZZY_SELECT_HINT } from "@/lib/selectOptionMatch";
 import { MappingConfirmModal } from "./MappingConfirmModal";
+import { CellValidationPopup, FIELD_LEARN_MORE } from "./CellValidationPopup";
 import { API_BASE } from "@toolkit/lib/config";
 
 type Row = Record<string, unknown> & { _id: string };
@@ -19,9 +25,26 @@ interface Props {
   rowValidate?: (row: Record<string, unknown>) => Record<string, string>;
   sectionLabel?: string;
   sectionDescription?: string;
+  gridTotals?: GridTotalDef[];
   readOnly?: boolean;
   canDeleteRows?: boolean;
   canAddRows?: boolean;
+}
+
+function isYesNoColumn(col: ColumnDef): boolean {
+  return Boolean(col.yesNoBoolean);
+}
+
+function sumColumn(rows: Row[], columns: ColumnDef[], key: string): number {
+  const col = columns.find((c) => c.key === key);
+  if (!col || col.type !== "number") return 0;
+  let total = 0;
+  for (const row of rows) {
+    if (isRowEmpty(row, columns)) continue;
+    const n = parseAmount(row[key]);
+    if (Number.isFinite(n)) total += n;
+  }
+  return total;
 }
 
 // Number of blank ghost rows always visible below the last real row.
@@ -80,12 +103,15 @@ function normalizeRange(a: CellRef, b: CellRef) {
 }
 
 function formatCellDisplay(v: unknown, col: ColumnDef): string {
+  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
   if (col.type === "boolean") return v ? "TRUE" : "FALSE";
+  if (col.type === "date") return formatDateForDisplay(v);
   if (v === null || v === undefined) return "";
   return String(v);
 }
 
 function serializeCellValue(v: unknown, col: ColumnDef): string {
+  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
   if (col.type === "boolean") return v ? "TRUE" : "FALSE";
   if (v === null || v === undefined) return "";
   return String(v);
@@ -98,6 +124,7 @@ export function SpreadsheetGrid({
   rowValidate,
   sectionLabel,
   sectionDescription,
+  gridTotals,
   readOnly = false,
   canDeleteRows = true,
   canAddRows = true,
@@ -124,10 +151,24 @@ export function SpreadsheetGrid({
     notes: string[];
     loading: boolean;
   } | null>(null);
+  const [cellPopup, setCellPopup] = useState<{
+    anchorRect: DOMRect;
+    rawValue: string;
+    suggestion: string | null;
+    col: ColumnDef;
+    rowIdx: number;
+    isAiSuggestion?: boolean;
+    loading?: boolean;
+  } | null>(null);
+  const cellPopupAbortRef = useRef<AbortController | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+  /** false when edit began via type-over (first key already in editValue). */
+  const editFocusSelectAllRef = useRef(true);
+  /** true between first type-to-edit key and edit input mount (editingCell still null). */
+  const editKeystrokeBootstrapRef = useRef(false);
   const dragAnchor = useRef<CellRef | null>(null);
   const isDragging = useRef(false);
   const fillDrag = useRef<{ startRow: number; endRow: number } | null>(null);
@@ -237,34 +278,147 @@ export function SpreadsheetGrid({
 
   // Materializes ghost rows up to rowIdx, then sets the cell value.
   const updateCell = useCallback(
-    (rowIdx: number, colKey: string, value: unknown) => {
+    (rowIdx: number, colKey: string, value: unknown, extra?: Record<string, unknown>) => {
       if (readOnly) return;
       pushUndo(rows);
       const next = [...rows];
       while (next.length <= rowIdx) next.push(emptyRow(columns));
-      next[rowIdx] = { ...next[rowIdx], [colKey]: value };
+      next[rowIdx] = { ...next[rowIdx], [colKey]: value, ...extra };
       onChange(next);
     },
     [rows, columns, onChange, readOnly, pushUndo],
   );
 
+  const columnTotals = useMemo(() => {
+    if (!gridTotals?.length) return {} as Record<string, number>;
+    const out: Record<string, number> = {};
+    for (const t of gridTotals) out[t.columnKey] = sumColumn(rows, columns, t.columnKey);
+    return out;
+  }, [gridTotals, rows, columns]);
+
   const commitEdit = useCallback(
-    (moveTo?: CellRef | null) => {
+    (moveTo?: CellRef | null, rawOverride?: string) => {
       if (!editingCell) return;
       const col = columns[editingCell.col];
       if (col && !readOnly) {
-        let value: unknown = editValue;
+        const raw = rawOverride ?? editValue;
+        let value: unknown = raw;
         if (col.type === "number") {
-          value = editValue !== "" ? Number(editValue) : "";
+          value = raw !== "" ? Number(raw) : "";
         } else if (col.type === "boolean") {
-          value = editValue.toLowerCase() === "true" || editValue === "1";
+          value = raw.toLowerCase() === "true" || raw === "1";
+        } else if (isYesNoColumn(col)) {
+          value = coerceYesNo(raw);
+        } else if (col.type === "date" && raw.trim() !== "") {
+          value = numericDateDisplayToIso(raw) ?? raw;
         }
         // For ghost rows, only materialize if there's actual content.
         const isEmpty = value === "" || value === null || value === undefined;
         if (!isEmpty || editingCell.row < rows.length) {
-          updateCell(editingCell.row, col.key, value);
+          const extra: Record<string, unknown> = {};
+          if (col.key === "idNumber") {
+            const inferred = deriveGenderFromSaId(value);
+            if (inferred && columns.some((c) => c.key === "gender")) {
+              extra.gender = inferred;
+            }
+          }
+          updateCell(editingCell.row, col.key, value, Object.keys(extra).length ? extra : undefined);
+
+          const isExactSelectPick =
+            (col.type === "select" || isYesNoColumn(col)) &&
+            (isYesNoColumn(col)
+              ? raw === "Yes" || raw === "No"
+              : Boolean(col.options?.includes(raw.trim())));
+
+          // Run deterministic normalization to detect mismatches and surface a popup.
+          if (!isExactSelectPick && !isEmpty && raw.trim() !== "") {
+            const normalized = normalizeCellForColumn(raw, col);
+            const hasMismatch =
+              normalized.changed &&
+              normalized.value !== "" &&
+              String(normalized.value) !== raw.trim();
+            const hasFlag = Boolean(normalized.flag);
+            let suggestion = hasMismatch ? String(normalized.value) : null;
+            if (!suggestion && col.type === "select" && col.options?.length) {
+              const fuzzy = suggestSelectOption(raw, col.options, col.key);
+              if (
+                fuzzy.suggestion &&
+                fuzzy.suggestion !== raw.trim() &&
+                fuzzy.confidence >= FUZZY_SELECT_HINT
+              ) {
+                suggestion = fuzzy.suggestion;
+              }
+            }
+
+            if (hasMismatch || hasFlag || suggestion) {
+              const cellEl = document.querySelector(
+                `[data-cell="${editingCell.row}-${editingCell.col}"]`,
+              );
+              const anchorRect = cellEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
+
+              // Abort any previous AI call.
+              cellPopupAbortRef.current?.abort();
+              const abort = new AbortController();
+              cellPopupAbortRef.current = abort;
+
+              setCellPopup({
+                anchorRect,
+                rawValue: raw.trim(),
+                suggestion,
+                col,
+                rowIdx: editingCell.row,
+                isAiSuggestion: false,
+                loading: suggestion == null,
+              });
+
+              // If deterministic couldn't suggest anything confident, hit the AI endpoint.
+              if (suggestion == null) {
+                const payload = {
+                  fieldKey: col.key,
+                  fieldLabel: col.label,
+                  rawValue: raw.trim(),
+                  fieldType: isYesNoColumn(col) ? "select" : col.type,
+                  allowedValues: isYesNoColumn(col)
+                    ? ["Yes", "No"]
+                    : col.options ?? [],
+                  validationMessage: col.validationMessage,
+                  dateFormat: col.type === "date" ? "dd/mm/yyyy" : undefined,
+                };
+                fetch(`${API_BASE}/api/workbook/suggest-value`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  signal: abort.signal,
+                  body: JSON.stringify(payload),
+                })
+                  .then((r) => (r.ok ? r.json() : null))
+                  .then((data: { suggestion?: string; explanation?: string } | null) => {
+                    if (!abort.signal.aborted && data?.suggestion) {
+                      setCellPopup((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              suggestion: data.suggestion ?? null,
+                              isAiSuggestion: true,
+                              loading: false,
+                            }
+                          : null,
+                      );
+                    } else if (!abort.signal.aborted) {
+                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
+                    }
+                  })
+                  .catch(() => {
+                    if (!abort.signal.aborted) {
+                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
+                    }
+                  });
+              }
+            }
+          }
         }
       }
+      editKeystrokeBootstrapRef.current = false;
       setEditingCell(null);
       setEditValue("");
       if (moveTo) {
@@ -275,14 +429,31 @@ export function SpreadsheetGrid({
     [editingCell, editValue, columns, readOnly, updateCell, rows.length],
   );
 
+  const commitSelectEdit = useCallback(
+    (value: string) => {
+      setEditValue(value);
+      commitEdit(undefined, value);
+    },
+    [commitEdit],
+  );
+
   const startEdit = useCallback(
     (ref: CellRef, initialValue?: string) => {
       if (readOnly) return;
       const col = columns[ref.col];
       if (!col || col.type === "boolean") return;
       const v = ref.row < rows.length ? rows[ref.row][col.key] : "";
+      editFocusSelectAllRef.current = initialValue === undefined;
+      editKeystrokeBootstrapRef.current = initialValue !== undefined;
       setEditingCell(ref);
-      setEditValue(initialValue ?? String(v ?? ""));
+      const display =
+        initialValue ??
+        (isYesNoColumn(col)
+          ? yesNoToSelectValue(v)
+          : col.type === "date"
+            ? formatDateForDisplay(v)
+            : String(v ?? ""));
+      setEditValue(display);
       setActiveCell(ref);
       setSelectionEnd(ref);
     },
@@ -381,46 +552,76 @@ export function SpreadsheetGrid({
 
   const applyMatrixPositional = useCallback(
     (matrix: string[][], anchor: CellRef) => {
-      const firstRowLooksLikeHeaders = matrix[0]?.some((h) =>
-        columns.some((c) => c.label.toLowerCase().includes(h.trim().toLowerCase().slice(0, 6))),
-      );
+      const shape = getClipboardPasteShape(matrix);
+      const firstRowLooksLikeHeaders =
+        shape === "grid" &&
+        matrix[0]?.length > 1 &&
+        matrix[0]?.some((h) => {
+          const labelMatch = columns.some((c) => {
+            const label = c.label.replace(/\*+$/, "").trim().toLowerCase();
+            const cell = h.trim().toLowerCase();
+            return label === cell || label.startsWith(cell) || cell.startsWith(label.slice(0, 6));
+          });
+          return labelMatch;
+        });
       pushUndo(rows);
       const next = applyPasteToRows(rows, columns, matrix, anchor, Boolean(firstRowLooksLikeHeaders));
       onChange(next);
-      setPastePreview({ rows: matrix.length, cols: matrix[0]?.length ?? 0 });
+      setPastePreview({
+        rows: matrix.length,
+        cols: Math.max(...matrix.map((r) => r.length), 0),
+      });
       setTimeout(() => setPastePreview(null), 2000);
     },
     [columns, rows, onChange, pushUndo],
   );
 
+  const getPasteAnchor = useCallback((): CellRef | null => {
+    if (selectionRange) {
+      return { row: selectionRange.minR, col: selectionRange.minC };
+    }
+    return activeCell;
+  }, [selectionRange, activeCell]);
+
   const handlePaste = useCallback(
     (text: string) => {
-      if (readOnly || !activeCell) return;
-      const matrix = parseClipboardMatrix(text);
+      if (readOnly) return;
+      const anchor = getPasteAnchor();
+      if (!anchor) return;
+
+      let matrix = expandClipboardMatrix(parseClipboardMatrix(text));
       if (matrix.length === 0) return;
+
+      const shape = getClipboardPasteShape(matrix);
 
       // Single-cell paste: apply immediately, no preview needed.
       const isSingleCell = matrix.length === 1 && (matrix[0]?.length ?? 0) <= 1;
       if (isSingleCell) {
-        applyMatrixPositional(matrix, activeCell);
+        applyMatrixPositional(matrix, anchor);
         return;
       }
 
-      // Tabular paste: normalize + validate, then show a confirm preview so the
-      // user can verify the column→field mapping and flagged cells before commit.
-      const anchor = activeCell;
+      // Column/row vector pastes from Excel: apply directly without blocking modal.
+      if (shape === "column" || shape === "row") {
+        applyMatrixPositional(matrix, anchor);
+        return;
+      }
+
+      // Multi-column grid paste: normalize + validate, then show confirm preview.
       setMapPreview({ anchor, result: null, usedAi: false, notes: [], loading: true });
-      normalizePaste(matrix, columns, API_BASE, { startColIndex: anchor.col })
+      normalizePaste(matrix, columns, API_BASE, {
+        startColIndex: anchor.col,
+        hasHeaderRow: undefined,
+      })
         .then(({ result, usedAi, notes }) => {
           setMapPreview({ anchor, result, usedAi, notes, loading: false });
         })
         .catch(() => {
-          // Fall back to the legacy positional paste if normalization throws.
           setMapPreview(null);
           applyMatrixPositional(matrix, anchor);
         });
     },
-    [readOnly, activeCell, columns, applyMatrixPositional],
+    [readOnly, getPasteAnchor, columns, applyMatrixPositional],
   );
 
   const confirmMapPreview = useCallback(() => {
@@ -489,10 +690,19 @@ export function SpreadsheetGrid({
   }, [readOnly, activeCell, handlePaste]);
 
   useEffect(() => {
-    if (editingCell && editInputRef.current) {
-      editInputRef.current.focus();
-      editInputRef.current.select();
+    const el = editInputRef.current;
+    if (!editingCell || !el) return;
+    el.focus();
+    // HTMLSelectElement has no .select() / .setSelectionRange() — only inputs do.
+    if (typeof el.select === "function") {
+      if (editFocusSelectAllRef.current) {
+        el.select();
+      } else if (typeof el.setSelectionRange === "function") {
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      }
     }
+    editKeystrokeBootstrapRef.current = false;
   }, [editingCell]);
 
   useEffect(() => {
@@ -506,6 +716,7 @@ export function SpreadsheetGrid({
       if (editingCell) {
         if (e.key === "Escape") {
           e.preventDefault();
+          editKeystrokeBootstrapRef.current = false;
           setEditingCell(null);
           setEditValue("");
           return;
@@ -597,8 +808,11 @@ export function SpreadsheetGrid({
           setExtraCells(new Set());
         }
       } else if (!readOnly && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-        // Start editing on any printable character keystroke.
         e.preventDefault();
+        if (editKeystrokeBootstrapRef.current) {
+          setEditValue((prev) => prev + e.key);
+          return;
+        }
         startEdit(activeCell, e.key);
       }
     },
@@ -754,7 +968,7 @@ export function SpreadsheetGrid({
           undefined
         }
       >
-        {col.type === "boolean" ? (
+        {col.type === "boolean" && !isYesNoColumn(col) ? (
           <div className="flex items-center justify-center h-full py-2">
             <input
               type="checkbox"
@@ -766,6 +980,21 @@ export function SpreadsheetGrid({
             />
           </div>
         ) : isEditing ? (
+          col.type === "select" || isYesNoColumn(col) ? (
+            <select
+              ref={editInputRef}
+              value={editValue}
+              disabled={readOnly}
+              onChange={(e) => commitSelectEdit(e.target.value)}
+              className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+              data-testid={`cell-edit-${rIdx}-${col.key}`}
+            >
+              <option value="" className="bg-[#1c1c1e]">—</option>
+              {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
+                <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+              ))}
+            </select>
+          ) : (
           <input
             ref={editInputRef}
             type={col.type === "number" ? "number" : "text"}
@@ -775,6 +1004,7 @@ export function SpreadsheetGrid({
             className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
             data-testid={`cell-edit-${rIdx}-${col.key}`}
           />
+          )
         ) : (
           <div
             className="px-3 py-2 text-[13px] text-white truncate min-h-[36px] flex items-center"
@@ -868,15 +1098,31 @@ export function SpreadsheetGrid({
               onContextMenu={(e) => handleContextMenu(e, rIdx)}
             >
               {cellEditing && col.type !== "boolean" ? (
-                <input
-                  ref={editInputRef}
-                  type={col.type === "number" ? "number" : "text"}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={() => commitEdit()}
-                  className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
-                  data-testid={`cell-edit-${rIdx}-${col.key}`}
-                />
+                col.type === "select" || isYesNoColumn(col) ? (
+                  <select
+                    ref={editInputRef}
+                    value={editValue}
+                    disabled={readOnly}
+                    onChange={(e) => commitSelectEdit(e.target.value)}
+                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    data-testid={`cell-edit-${rIdx}-${col.key}`}
+                  >
+                    <option value="" className="bg-[#1c1c1e]">—</option>
+                    {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
+                      <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    ref={editInputRef}
+                    type={col.type === "number" ? "number" : "text"}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => commitEdit()}
+                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    data-testid={`cell-edit-${rIdx}-${col.key}`}
+                  />
+                )
               ) : (
                 <div className="px-3 py-2 min-h-[36px]" />
               )}
@@ -988,6 +1234,31 @@ export function SpreadsheetGrid({
             ))}
             <th className="w-10 p-2 border-b border-[#2c2c2e]" />
           </tr>
+          {gridTotals && gridTotals.length > 0 && (
+            <tr className="bg-[#161618] border-b border-[#2c2c2e]" data-testid="grid-totals-row">
+              <th className="sticky left-0 bg-[#161618] z-20 p-2 text-[10px] font-semibold text-[#8e8e93] border-r border-[#2c2c2e]">
+                Σ
+              </th>
+              {columns.map((c) => {
+                const spec = gridTotals.find((t) => t.columnKey === c.key);
+                const total = spec ? columnTotals[c.key] : null;
+                return (
+                  <th
+                    key={`total-${c.key}`}
+                    className="text-right px-3 py-1.5 text-[12px] font-semibold text-emerald-400/90 border-r border-[#2c2c2e]"
+                  >
+                    {spec && total != null ? (
+                      <span title={spec.label ?? "Total"}>
+                        {spec.label ? `${spec.label}: ` : ""}
+                        {total.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}
+                      </span>
+                    ) : null}
+                  </th>
+                );
+              })}
+              <th className="border-b border-[#2c2c2e]" />
+            </tr>
+          )}
         </thead>
         <tbody>
           {useVirtual ? (
@@ -1118,6 +1389,23 @@ export function SpreadsheetGrid({
         </p>
       )}
       {contextMenuPortal}
+      {cellPopup && (
+        <CellValidationPopup
+          rawValue={cellPopup.rawValue}
+          suggestion={cellPopup.suggestion}
+          validationMessage={cellPopup.col.validationMessage}
+          suggestionHint={cellPopup.col.suggestionHint}
+          learnMore={FIELD_LEARN_MORE[cellPopup.col.key]}
+          isAiSuggestion={cellPopup.isAiSuggestion}
+          loading={cellPopup.loading}
+          anchorRect={cellPopup.anchorRect}
+          onAccept={(val) => {
+            updateCell(cellPopup.rowIdx, cellPopup.col.key, val);
+            setCellPopup(null);
+          }}
+          onDismiss={() => setCellPopup(null)}
+        />
+      )}
       <MappingConfirmModal
         open={Boolean(mapPreview)}
         title={`Review pasted data${sectionLabel ? ` · ${sectionLabel}` : ""}`}

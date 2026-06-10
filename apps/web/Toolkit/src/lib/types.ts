@@ -28,6 +28,13 @@ export interface Client {
   
   // BEE specifics
   sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | 'TOURISM' | 'CONSTRUCTION' | 'MINING' | 'OTHER';
+  /**
+   * FSC sub-sector picker (Bug #6). Drives EF + AFS pillar routing.
+   * Others = FS700 (generic, no EF/AFS). Banks = FS701. LTI = FS702. STI = FS703.
+   */
+  fscSubSector?: 'Others' | 'Banks' | 'LTI' | 'STI';
+  /** FSC Reinsurer flag — reduces Consumer Education to Additional CE (1 pt, no CE bonus). */
+  fscReinsurer?: boolean;
   industry: string;                     // For industry norm lookup
   
   // Financials
@@ -407,6 +414,49 @@ export interface SEDData {
   fundisaSpend?: number;
 }
 
+/**
+ * FSC Access to Financial Services input data.
+ * Fields are sub-sector-specific; only the relevant fields for the active sub-sector
+ * need to be populated. Unused fields are ignored by the calculator.
+ */
+export interface AfsData {
+  id: string;
+  clientId: string;
+  // ---- Banks (FS701) ----
+  /** % of qualifying area with a Transaction Point within 5km (target 85%). */
+  transactionPointCoverage?: number;
+  /** % of qualifying area with a Service Point within 10km (target 70%). */
+  servicePointCoverage?: number;
+  /** % of qualifying area with a Sales Point within 15km (target 60%). */
+  salesPointCoverage?: number;
+  /** % of account holders with Electronic Access (target: national — treated as yes/no). */
+  electronicAccessCompliant?: boolean;
+  /** At least one Point of Presence per measurement unit in Target Market. */
+  hasPointOfPresence?: boolean;
+  /** Sufficient active accounts with Qualifying Products in Target Market. */
+  activeAccountsCompliant?: boolean;
+  // ---- Long-Term Insurers (FS702) ----
+  /** Number of developed products that are compliant (Appropriate Products numerator). */
+  appropriateProductsNumerator?: number;
+  /** Total number of developed products (Appropriate Products denominator). */
+  appropriateProductsDenominator?: number;
+  /** Number of on-book policies (Market Penetration numerator). */
+  marketPenetrationPolicies?: number;
+  /** SAIA communicated reference number of policies (denominator). */
+  saiaCommunicatedPolicies?: number;
+  /** % of polygons covered (Transactional Accesses; target 80%). */
+  transactionalAccessCoverage?: number;
+  // ---- Short-Term Insurers (FS703) ----
+  commercialEquipment?: boolean;
+  commercialLiability?: boolean;
+  commercialProperty?: boolean;
+  commercialAgriculture?: boolean;
+  commercialLivestock?: boolean;
+  commercialOther?: boolean;
+  /** Meets the Insurance Policies target (yes/no simplified from SAIA policy count). */
+  insurancePoliciesCompliant?: boolean;
+}
+
 export interface PillarScore {
   score: number;
   target: number;
@@ -425,6 +475,10 @@ export interface ScorecardResult {
   enterpriseDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   socioEconomicDevelopment: PillarScore & { isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   yesInitiative: PillarScore;
+  /** FSC Banks/LTI — Empowerment Financing & ESD combined pillar (FS701/FS702 only). */
+  empowermentFinancing?: PillarScore;
+  /** FSC Banks/LTI/STI — Access to Financial Services pillar (12 pts, FS701/702/703 only). */
+  accessToFinancialServices?: PillarScore;
   total: PillarScore;
   achievedLevel: number;
   discountedLevel: number;

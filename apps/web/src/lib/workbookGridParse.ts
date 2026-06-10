@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { parseWorkbookDate, type ColumnDef } from "@/components/workbook/sections";
+import { suggestSelectOption, FUZZY_SELECT_ACCEPT } from "@/lib/selectOptionMatch";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -82,8 +83,12 @@ export function coerceCellValue(key: string, col: ColumnDef | undefined, raw: un
       if (mapped) return mapped;
     }
     if (col.options?.length) {
-      const match = col.options.find((o) => norm(o) === norm(s));
-      if (match) return match;
+      const matched = suggestSelectOption(s, col.options, col.key);
+      if (matched.suggestion && matched.confidence >= FUZZY_SELECT_ACCEPT) {
+        return matched.suggestion;
+      }
+      const exact = col.options.find((o) => norm(o) === norm(s));
+      if (exact) return exact;
     }
     return s;
   }
@@ -135,6 +140,31 @@ export function parseClipboardMatrix(text: string): string[][] {
   row.push(cell);
   if (row.some((c) => c.trim() !== "")) rows.push(row);
   return rows;
+}
+
+/** Expand a single multiline cell (common when copying one Excel column) into rows. */
+export function expandClipboardMatrix(matrix: string[][]): string[][] {
+  if (matrix.length === 1 && (matrix[0]?.length ?? 0) === 1) {
+    const cell = matrix[0][0] ?? "";
+    if (cell.includes("\n")) {
+      return cell
+        .split("\n")
+        .map((line) => [line.replace(/\r/g, "").trim()])
+        .filter((row) => row[0] !== "");
+    }
+  }
+  return matrix;
+}
+
+export type ClipboardPasteShape = "column" | "row" | "grid";
+
+/** Classify clipboard layout — column vector, single row, or multi-row grid. */
+export function getClipboardPasteShape(matrix: string[][]): ClipboardPasteShape {
+  if (matrix.length === 0) return "grid";
+  const maxCols = Math.max(...matrix.map((r) => r.length), 0);
+  if (maxCols <= 1) return "column";
+  if (matrix.length === 1) return "row";
+  return "grid";
 }
 
 export function matrixToRowsByPosition(
@@ -197,6 +227,8 @@ export function applyPasteToRows(
   anchor: { row: number; col: number },
   mapHeaders = false,
 ): WorkbookGridRow[] {
+  const shape = getClipboardPasteShape(matrix);
+  const dataStart = mapHeaders && matrix.length > 0 ? 1 : 0;
   const pasted = matrixToRowsByPosition(matrix, columns, anchor.row, anchor.col, mapHeaders);
   if (pasted.length === 0) return existingRows;
 
@@ -213,12 +245,16 @@ export function applyPasteToRows(
     const src = pasted[i];
     const target = { ...next[targetIdx] };
     const preserveId = target._id;
+    const sourceLine = matrix[dataStart + i] ?? [];
 
     if (mapHeaders) {
       Object.assign(target, src);
       target._id = preserveId;
+    } else if (shape === "column") {
+      const col = columns[anchor.col];
+      if (col) target[col.key] = src[col.key];
     } else {
-      for (let c = 0; c < (matrix[i]?.length || 0); c++) {
+      for (let c = 0; c < sourceLine.length; c++) {
         const col = columns[anchor.col + c];
         if (!col) break;
         target[col.key] = src[col.key];

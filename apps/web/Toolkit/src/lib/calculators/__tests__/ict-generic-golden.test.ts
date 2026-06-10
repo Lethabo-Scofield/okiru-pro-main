@@ -99,13 +99,13 @@ describe('ICT Generic — CalculatorConfig completeness', () => {
     const sk = CONFIG.skills;
     // 2.1.1.1 all-spend at 6% = 8 pts
     expect(sk.learningProgrammesMaxPts).toBe(8);
-    expect(sk.overallSpendPercent).toBe(6.0);
+    expect(sk.overallSpendPercent).toBeCloseTo(0.060, 4); // stored as fraction after /100
     // No separate bursary in ICT
     expect(sk.bursaryMaxPts).toBe(0);
     expect(sk.bursarySpendPercent).toBe(0);
     // 2.1.1.2 disabled at 0.3% = 4 pts
     expect(sk.disabledLearningMaxPts).toBe(4);
-    expect(sk.disabledSpendPercent).toBe(0.3);
+    expect(sk.disabledSpendPercent).toBeCloseTo(0.003, 4); // stored as fraction after /100
     // 2.1.2.1 + 2.1.2.2 LAI + unemployed training at 2.5% = 8 pts combined
     expect(sk.learnershipsMaxPts).toBe(8);
     expect(sk.learnershipTargetPercent).toBe(2.5);

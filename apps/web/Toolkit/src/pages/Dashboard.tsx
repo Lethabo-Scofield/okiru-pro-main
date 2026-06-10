@@ -1,7 +1,7 @@
 import { Button } from "@toolkit/components/ui/button";
 import { Skeleton } from "@toolkit/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
-import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, TrendingUp, DollarSign, Info, Building2 } from "lucide-react";
+import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, TrendingUp, DollarSign, Info, Building2, Landmark } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import type { Client, SkillsData, ProcurementData, ESDData, SEDData, ScorecardResult } from "@toolkit/lib/types";
 import type { CalculatorConfig } from "../../../shared/schema";
@@ -11,6 +11,8 @@ import { calculateEsdScore, calculateSedScore } from "@toolkit/lib/calculators/e
 import { cn, formatRand } from "@toolkit/lib/utils";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import { useMemo } from "react";
+import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
 
 function formatLevel(level: number): string {
   if (level >= 9) return 'Non-Compliant';
@@ -30,7 +32,7 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] as const } }
 };
 
-const pillarMeta = [
+const BASE_PILLAR_META = [
   { key: "ownership", name: "Ownership", icon: Users, color: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15", iconColor: "text-violet-400", barColor: "bg-violet-500", route: "/pillars/ownership" },
   { key: "managementControl", name: "Management Control & Employment Equity", icon: UserCog, color: "from-blue-500 to-cyan-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/management" },
   { key: "skillsDevelopment", name: "Skills Development", icon: BookOpen, color: "from-emerald-400 to-green-500", iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", barColor: "bg-emerald-500", route: "/pillars/skills" },
@@ -38,6 +40,7 @@ const pillarMeta = [
   { key: "supplierDevelopment", name: "Supplier Development", icon: Handshake, color: "from-rose-400 to-pink-500", iconBg: "bg-rose-500/15", iconColor: "text-rose-400", barColor: "bg-rose-500", route: "/pillars/esd" },
   { key: "enterpriseDevelopment", name: "Enterprise Development", icon: Handshake, color: "from-orange-400 to-red-500", iconBg: "bg-orange-500/15", iconColor: "text-orange-400", barColor: "bg-orange-500", route: "/pillars/esd" },
   { key: "socioEconomicDevelopment", name: "Socio-Economic Dev", icon: HeartHandshake, color: "from-fuchsia-400 to-purple-500", iconBg: "bg-fuchsia-500/15", iconColor: "text-fuchsia-400", barColor: "bg-fuchsia-500", route: "/pillars/sed" },
+  { key: "accessToFinancialServices", name: "Access to Financial Services", icon: Landmark, color: "from-cyan-400 to-blue-500", iconBg: "bg-cyan-500/15", iconColor: "text-cyan-400", barColor: "bg-cyan-500", route: "/pillars/afs" },
   { key: "yesInitiative", name: "YES 4 Youth", icon: TrendingUp, color: "from-blue-400 to-indigo-500", iconBg: "bg-blue-500/15", iconColor: "text-blue-400", barColor: "bg-blue-500", route: "/pillars/yes" },
 ];
 
@@ -123,6 +126,16 @@ export default function Dashboard() {
   const { scorecard, client, skills, procurement, esd, sed, isLoaded, calculatorConfig } = useBbeeStore();
   const [, navigate] = useLocation();
 
+  const pillarMeta = useMemo(() => {
+    const hasAfs = Boolean(calculatorConfig?.accessToFinancialServices);
+    return BASE_PILLAR_META.filter((p) => p.key !== "accessToFinancialServices" || hasAfs);
+  }, [calculatorConfig?.accessToFinancialServices]);
+
+  const fscLabel =
+    client.sectorCode?.toUpperCase() === "FSC" && client.fscSubSector
+      ? fscSubSectorDisplayLabel(normalizeFscSubSector(client.fscSubSector))
+      : null;
+
   if (client.id && !isLoaded) {
     return <DashboardSkeleton />;
   }
@@ -180,9 +193,11 @@ export default function Dashboard() {
       initial="hidden"
       animate="show"
     >
-      <motion.div variants={item}>
+        <motion.div variants={item}>
         <h1 className="text-lg font-heading font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-[13px] text-muted-foreground/50 mt-0.5">Your B-BBEE compliance overview.</p>
+        <p className="text-[13px] text-muted-foreground/50 mt-0.5">
+          Your B-BBEE compliance overview.{fscLabel ? ` · ${fscLabel}` : ""}
+        </p>
       </motion.div>
 
       <motion.div variants={item} className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card p-6">

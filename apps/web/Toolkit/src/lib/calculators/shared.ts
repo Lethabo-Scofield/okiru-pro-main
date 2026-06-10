@@ -57,8 +57,88 @@ export const BLACK_RACES = ['African', 'Coloured', 'Indian'] as const;
 
 export type BlackRace = (typeof BLACK_RACES)[number];
 
-export function isBlackRace(race: string): boolean {
-  return BLACK_RACES.includes(race as BlackRace);
+export type WorkbookRace = BlackRace | 'White';
+
+const RACE_SYNONYM_MAP: Record<string, WorkbookRace> = {
+  african: 'African',
+  black: 'African',
+  blackafrican: 'African',
+  coloured: 'Coloured',
+  colored: 'Coloured',
+  indian: 'Indian',
+  white: 'White',
+};
+
+function normRaceKey(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Canonical workbook race label used by calculators and the input layer.
+ * Maps B-BBEE umbrella "Black" and common import variants to African/Coloured/Indian.
+ */
+export function normalizeRace(raw: string | null | undefined): WorkbookRace | '' {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return '';
+  const mapped = RACE_SYNONYM_MAP[normRaceKey(trimmed)];
+  if (mapped) return mapped;
+  for (const race of [...BLACK_RACES, 'White'] as const) {
+    if (trimmed.toLowerCase() === race.toLowerCase()) return race;
+  }
+  return trimmed as WorkbookRace;
+}
+
+export function isBlackRace(race: string | null | undefined): boolean {
+  const normalized = normalizeRace(race);
+  return BLACK_RACES.includes(normalized as BlackRace);
+}
+
+/** Workbook designation labels → calculator designation enums. */
+const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
+  'Executive Director': 'Executive Director',
+  'Non-executive Director': 'Board',
+  'Other Executive Manager': 'Other Executive Management',
+  'Senior Manager': 'Senior',
+  'Middle Manager': 'Middle',
+  'Junior Manager': 'Junior',
+  'Semi-skilled': 'Semi-skilled',
+  Unskilled: 'Unskilled',
+  Board: 'Board',
+  Executive: 'Executive',
+  'Other Executive Management': 'Other Executive Management',
+  Senior: 'Senior',
+  Middle: 'Middle',
+  Junior: 'Junior',
+  'Skilled Technical': 'Skilled Technical',
+};
+
+/**
+ * Map workbook / import designation labels to calculator band keys.
+ * Fixes exco rows stored as "Other Executive Manager" scoring as zero.
+ */
+export function normalizeDesignationForScoring(raw: string | null | undefined): string {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return 'Junior';
+  const exact = WORKBOOK_TO_DESIGNATION[trimmed];
+  if (exact) return exact;
+
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('non-executive') || lower.includes('non executive') || lower === 'director') {
+    return 'Board';
+  }
+  if (lower.includes('executive director')) return 'Executive Director';
+  if (lower.includes('other executive')) return 'Other Executive Management';
+  if (lower.includes('senior')) return 'Senior';
+  if (lower.includes('middle')) return 'Middle';
+  if (lower.includes('junior')) return 'Junior';
+  if (lower.includes('semi-skilled') || lower.includes('semi skilled')) return 'Semi-skilled';
+  if (lower.includes('unskilled')) return 'Unskilled';
+  if (lower.includes('skilled technical')) return 'Skilled Technical';
+  if (lower.includes('executive') || lower.includes('ceo') || lower.includes('managing director')) {
+    return 'Executive Director';
+  }
+  if (lower.includes('manager') || lower.includes('supervisor')) return 'Middle';
+  return trimmed;
 }
 
 export function deepClone<T>(obj: T): T {
@@ -82,6 +162,17 @@ export function clampScore(score: number, max: number): number {
 export function round2(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Normalize a spend target to a fraction (0.035 = 3.5%).
+ * SectorConfig stores percentages as 3.5; calculator config may store either
+ * 3.5 (percent points) or 0.035 (fraction). Values above 0.15 are treated as
+ * percent points and divided by 100.
+ */
+export function normalizeSpendFraction(value: number | undefined | null, fallback: number): number {
+  if (value == null || !Number.isFinite(value)) return fallback;
+  return value > 0.15 ? value / 100 : Math.max(0, value);
 }
 
 /**

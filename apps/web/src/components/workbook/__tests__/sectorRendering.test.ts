@@ -3,35 +3,39 @@ import {
   getSection,
   getSectionGroupsForSector,
   getOrderedSectionKeysForSector,
+  getCompanyInfoMetaFields,
+  filterVisibleFinancialMetaFields,
   SECTIONS,
   SED_COLUMNS,
 } from "../sections";
 
-describe("getSectionGroupsForSector — Management Control & Employment Equity grouping", () => {
-  it("groups Management Control and Employees under a single parent for non-TRANSPORT sectors", () => {
+// MC + EE are now one combined spreadsheet for ALL sectors.
+// The `employees` section is disabled in the UI (legacy data is still projected
+// to scoring via the merge in projectWorkbookToClient).
+describe("getSectionGroupsForSector — MC+EE is a single combined section for all sectors", () => {
+  it("renders Management Control & EE as one flat section for non-TRANSPORT sectors", () => {
     for (const sector of ["RCOGP", "ICT", "FSC", "AGRI", "CONSTRUCTION", "", "unknown"]) {
       const groups = getSectionGroupsForSector(sector);
-      const mgmtGroup = groups.find((g) => g.key === "management-control-ee");
-      expect(mgmtGroup, `sector=${sector}`).toBeDefined();
-      expect(mgmtGroup!.isGroup).toBe(true);
-      expect(mgmtGroup!.label).toBe("Management Control & Employment Equity");
-      expect(mgmtGroup!.sectionKeys).toEqual(["management-control", "employees"]);
-      expect(groups.find((g) => g.key === "management-control" && !g.isGroup)).toBeUndefined();
-      expect(groups.find((g) => g.key === "employees" && !g.isGroup)).toBeUndefined();
+      // No more management-control-ee group key — replaced by a single flat entry.
+      expect(groups.find((g) => g.key === "management-control-ee"), `sector=${sector} management-control-ee`).toBeUndefined();
+      const mgmt = groups.find((g) => g.key === "management-control");
+      expect(mgmt, `sector=${sector}`).toBeDefined();
+      expect(mgmt!.isGroup, `sector=${sector} isGroup`).toBe(false);
+      expect(mgmt!.sectionKeys, `sector=${sector} sectionKeys`).toEqual(["management-control"]);
+      // The disabled `employees` section is NOT in the nav.
+      expect(groups.find((g) => g.sectionKeys.includes("employees")), `sector=${sector} employees in nav`).toBeUndefined();
     }
   });
 
-  it("renders Management Control and Employees as separate top-level sections for TRANSPORT", () => {
+  it("renders Management Control & EE as one flat section for TRANSPORT too", () => {
     const groups = getSectionGroupsForSector("TRANSPORT");
     expect(groups.find((g) => g.key === "management-control-ee")).toBeUndefined();
     const mgmt = groups.find((g) => g.key === "management-control");
-    const employees = groups.find((g) => g.key === "employees");
     expect(mgmt).toBeDefined();
     expect(mgmt!.isGroup).toBe(false);
     expect(mgmt!.sectionKeys).toEqual(["management-control"]);
-    expect(employees).toBeDefined();
-    expect(employees!.isGroup).toBe(false);
-    expect(employees!.sectionKeys).toEqual(["employees"]);
+    // employees is hidden in nav (disabled section).
+    expect(groups.find((g) => g.sectionKeys.includes("employees"))).toBeUndefined();
   });
 
   it("is case-insensitive on the sector code", () => {
@@ -41,25 +45,20 @@ describe("getSectionGroupsForSector — Management Control & Employment Equity g
     expect(mixed.find((g) => g.key === "management-control")).toBeDefined();
   });
 
-  it("preserves storage keys for both branches (no breaking changes to persisted workbooks)", () => {
-    const tKeys = getOrderedSectionKeysForSector("TRANSPORT");
-    const oKeys = getOrderedSectionKeysForSector("RCOGP");
-    expect(tKeys).toContain("management-control");
-    expect(tKeys).toContain("employees");
-    expect(oKeys).toContain("management-control");
-    expect(oKeys).toContain("employees");
-    // Same set of underlying section keys regardless of sector.
-    expect([...tKeys].sort()).toEqual([...oKeys].sort());
+  it("management-control key is in nav for all sectors", () => {
+    for (const sector of ["RCOGP", "TRANSPORT", "ICT", "", "unknown"]) {
+      const keys = getOrderedSectionKeysForSector(sector);
+      expect(keys, `sector=${sector}`).toContain("management-control");
+    }
   });
 
-  it("preserves the canonical section order around the grouping", () => {
+  it("preserves the canonical section order (management-control between ownership and skills-development)", () => {
     const keys = getOrderedSectionKeysForSector("RCOGP");
     expect(keys).toEqual([
       "company-information",
       "financial-information",
       "ownership",
       "management-control",
-      "employees",
       "skills-development",
       "procurement",
       "esd",
@@ -111,6 +110,45 @@ describe("getSection — SED ICT-Specific column visibility", () => {
     const mc2 = getSection("management-control", "TRANSPORT");
     expect(mc1!.columns!.map((c) => c.key)).toEqual(mc2!.columns!.map((c) => c.key));
   });
+
+  it("FSC management-control marks Senior/Middle/Junior as NOT AVAILABLE in guidance", () => {
+    const mc = getSection("management-control", "FSC")!;
+    expect(mc.description).toMatch(/NOT AVAILABLE/i);
+    const designation = mc.columns!.find((c) => c.key === "designation")!;
+    expect(designation.guidance).toMatch(/NOT AVAILABLE/i);
+  });
+
+  it("FSC company info hides combineExcoSenior toggle", () => {
+    const meta = getCompanyInfoMetaFields("FSC");
+    expect(meta.some((f) => f.key === "combineExcoSenior")).toBe(false);
+    expect(meta.some((f) => f.key === "fscSubSector")).toBe(true);
+  });
+
+  it("FSC company info places fscSubSector after industrySector", () => {
+    const meta = getCompanyInfoMetaFields("FSC");
+    const sectorIdx = meta.findIndex((f) => f.key === "industrySector");
+    const subIdx = meta.findIndex((f) => f.key === "fscSubSector");
+    expect(subIdx).toBeGreaterThan(-1);
+    expect(subIdx).toBe(sectorIdx + 1);
+    expect(meta[subIdx].emphasis).toBe(true);
+  });
+
+  it("FSC Banks AFS fields live on afs-additions, not financial-information", () => {
+    const fin = getSection("financial-information", "FSC", "Generic", "Banks")!;
+    expect(fin.meta!.some((f) => f.key === "afsTransactionPointCoverage")).toBe(false);
+    const afs = getSection("afs-additions", "FSC", "Generic", "Banks")!;
+    expect(afs.enabled).toBe(true);
+    expect(afs.meta!.some((f) => f.key === "afsTransactionPointCoverage")).toBe(true);
+    const others = getSection("afs-additions", "FSC", "Generic", "Others")!;
+    expect(others.enabled).toBe(false);
+  });
+
+  it("FSC reinsurer hides Additional CE bonus meta on SED section", () => {
+    const withBonus = getSection("sed", "FSC", "Generic", "Others", false)!;
+    const reinsurer = getSection("sed", "FSC", "Generic", "Others", true)!;
+    expect(withBonus.meta!.some((f) => f.key === "ceBonusSpend")).toBe(true);
+    expect(reinsurer.meta!.some((f) => f.key === "ceBonusSpend")).toBe(false);
+  });
 });
 
 /**
@@ -121,33 +159,24 @@ describe("getSection — SED ICT-Specific column visibility", () => {
  * derives — if these are correct, the rendered nav and grid columns are correct.
  */
 describe("InformationRequest WorkbookView — page composition contract", () => {
-  it("TRANSPORT page nav: separate Management Control and Employees top-level tabs", () => {
-    const groups = getSectionGroupsForSector("TRANSPORT");
-    const navShape = groups.map((g) => ({ label: g.label, isGroup: g.isGroup, keys: g.sectionKeys }));
-    expect(navShape).toEqual([
-      { label: "Company Information", isGroup: false, keys: ["company-information"] },
-      { label: "Financial Information", isGroup: false, keys: ["financial-information"] },
-      { label: "Ownership", isGroup: false, keys: ["ownership"] },
-      { label: "Management Control", isGroup: false, keys: ["management-control"] },
-      { label: "Employees", isGroup: false, keys: ["employees"] },
-      { label: "Skills Development", isGroup: false, keys: ["skills-development"] },
-      { label: "Procurement / Suppliers", isGroup: false, keys: ["procurement"] },
-      { label: "Enterprise & Supplier Development", isGroup: false, keys: ["esd"] },
-      { label: "Socio-Economic Development", isGroup: false, keys: ["sed"] },
-    ]);
-  });
-
-  it("non-TRANSPORT page nav: MC+EE collapsed under one parent (used by both sidebar header and mobile chip)", () => {
-    for (const sector of ["RCOGP", "ICT", "FSC", "AGRI", "CONSTRUCTION"]) {
+  it("all sectors: MC+EE is one flat tab between Ownership and Skills Development", () => {
+    for (const sector of ["RCOGP", "ICT", "FSC", "AGRI", "CONSTRUCTION", "TRANSPORT"]) {
       const groups = getSectionGroupsForSector(sector);
-      const mgmt = groups.find((g) => g.key === "management-control-ee");
-      expect(mgmt, `sector=${sector}`).toBeDefined();
-      expect(mgmt!.isGroup).toBe(true);
-      expect(mgmt!.sectionKeys).toEqual(["management-control", "employees"]);
-      // Order: parent group sits between Ownership and Skills Development.
-      const idx = groups.findIndex((g) => g.key === "management-control-ee");
-      expect(groups[idx - 1].key).toBe("ownership");
-      expect(groups[idx + 1].key).toBe("skills-development");
+      const navShape = groups.map((g) => ({ label: g.label, isGroup: g.isGroup, keys: g.sectionKeys }));
+      expect(navShape, `sector=${sector}`).toEqual([
+        { label: "Company Information", isGroup: false, keys: ["company-information"] },
+        { label: "Financial Information", isGroup: false, keys: ["financial-information"] },
+        { label: "Ownership", isGroup: false, keys: ["ownership"] },
+        { label: "Management Control & Employment Equity", isGroup: false, keys: ["management-control"] },
+        { label: "Skills Development", isGroup: false, keys: ["skills-development"] },
+        { label: "Procurement / Suppliers", isGroup: false, keys: ["procurement"] },
+        { label: "Enterprise & Supplier Development", isGroup: false, keys: ["esd"] },
+        { label: "Socio-Economic Development", isGroup: false, keys: ["sed"] },
+      ]);
+      // MC+EE flat section sits between Ownership and Skills Development.
+      const idx = groups.findIndex((g) => g.key === "management-control");
+      expect(groups[idx - 1].key, `sector=${sector} before`).toBe("ownership");
+      expect(groups[idx + 1].key, `sector=${sector} after`).toBe("skills-development");
     }
   });
 
@@ -165,7 +194,7 @@ describe("InformationRequest WorkbookView — page composition contract", () => 
     expect(transportCols).toEqual(rcogpCols);
   });
 
-  it("storage keys are identical across sectors so persisted workbooks stay compatible", () => {
+  it("navigation keys are identical across sectors so persisted workbooks stay compatible", () => {
     const keysFor = (s: string) => getOrderedSectionKeysForSector(s).sort();
     const baseline = keysFor("RCOGP");
     for (const sector of ["ICT", "FSC", "AGRI", "TRANSPORT", "CONSTRUCTION", ""]) {
@@ -213,13 +242,91 @@ describe("Categorical column audit — sections.ts uses Selects for enumerated f
   });
 });
 
+describe("getSection — Skills Development QSE EAP meta", () => {
+  it("hides eapProvince and eapYear for QSE scorecards", () => {
+    const generic = getSection("skills-development", "RCOGP", "Generic");
+    const qse = getSection("skills-development", "RCOGP", "QSE");
+    expect(generic!.meta!.some((f) => f.key === "eapProvince")).toBe(true);
+    expect(generic!.meta!.some((f) => f.key === "eapYear")).toBe(true);
+    expect(qse!.meta!.some((f) => f.key === "eapProvince")).toBe(false);
+    expect(qse!.meta!.some((f) => f.key === "eapYear")).toBe(false);
+    expect(qse!.meta!.some((f) => f.key === "headcount")).toBe(true);
+  });
+
+  it("includes National in RCOGP Generic eapProvince options", () => {
+    const generic = getSection("skills-development", "RCOGP", "Generic");
+    const eapField = generic!.meta!.find((f) => f.key === "eapProvince");
+    expect(eapField?.options).toContain("National");
+  });
+
+  it("hides EAP fields for ICT QSE", () => {
+    const qse = getSection("skills-development", "ICT", "QSE");
+    expect(qse!.meta!.some((f) => f.key === "eapProvince")).toBe(false);
+    expect(qse!.meta!.some((f) => f.key === "eapYear")).toBe(false);
+  });
+});
+
+describe("Financial Information — prior-year Leibrandt visibility", () => {
+  it("hides prior-year fields when margin meets 25% of norm", () => {
+    const section = getSection("financial-information", "RCOGP")!;
+    const visible = filterVisibleFinancialMetaFields(section.meta!, {
+      revenue: 10_000_000,
+      npat: 500_000,
+      industryNormPercent: 8,
+    });
+    const keys = visible.map((f) => f.key);
+    expect(keys).not.toContain("priorYear1Revenue");
+    expect(keys).toContain("industryNormPercent");
+  });
+
+  it("shows prior-year fields when margin is below 25% of norm", () => {
+    const section = getSection("financial-information", "RCOGP")!;
+    const visible = filterVisibleFinancialMetaFields(section.meta!, {
+      revenue: 10_000_000,
+      npat: 50_000,
+      industryNormPercent: 8,
+    });
+    expect(visible.some((f) => f.key === "priorYear1Revenue")).toBe(true);
+  });
+});
+
 describe("Financial Information — leviableAmount removed from meta", () => {
   it("FINANCIAL_META no longer exposes a separate leviableAmount field", () => {
     const section = getSection("financial-information")!;
     const keys = section.meta!.map((f) => f.key);
     expect(keys).not.toContain("leviableAmount");
-    // Required source fields used to derive leviable amount remain present.
+    // Required source field used to derive leviable amount remains present.
+    // Forecast financial fields are not collected — only actual figures.
     expect(keys).toContain("payroll");
-    expect(keys).toContain("forecastPayroll");
+    expect(keys).not.toContain("forecastPayroll");
+  });
+});
+
+describe("FSC AFS Additions — separate pillar from Financial Information", () => {
+  it("FSC Banks financial-information excludes AFS indicator fields", () => {
+    const fin = getSection("financial-information", "FSC", "Generic", "Banks")!;
+    const keys = fin.meta!.map((f) => f.key);
+    expect(keys).not.toContain("afsTransactionPointCoverage");
+    expect(keys).toContain("priorYearRevenue");
+    expect(fin.label).toBe("Financial Information");
+  });
+
+  it("FSC Banks exposes AFS fields on the afs-additions section", () => {
+    const afs = getSection("afs-additions", "FSC", "Generic", "Banks")!;
+    expect(afs.enabled).toBe(true);
+    expect(afs.label).toBe("AFS Additions");
+    expect(afs.meta!.some((f) => f.key === "afsTransactionPointCoverage")).toBe(true);
+  });
+
+  it("FSC Others hides the afs-additions section", () => {
+    const afs = getSection("afs-additions", "FSC", "Generic", "Others")!;
+    expect(afs.enabled).toBe(false);
+    expect(getOrderedSectionKeysForSector("FSC", "Others")).not.toContain("afs-additions");
+  });
+
+  it("FSC Banks nav inserts AFS Additions after Financial Information", () => {
+    const keys = getOrderedSectionKeysForSector("FSC", "Banks");
+    const finIdx = keys.indexOf("financial-information");
+    expect(keys[finIdx + 1]).toBe("afs-additions");
   });
 });

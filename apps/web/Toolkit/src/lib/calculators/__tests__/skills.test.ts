@@ -31,7 +31,7 @@ describe('calculateSkillsScore', () => {
       const keys: (keyof SkillsResult)[] = [
         'learningProgrammes', 'bursaries', 'disabledLearning',
         'learnerships', 'absorption', 'total', 'subMinimumMet',
-        'categoryBreakdown', 'subLines', 'rawStats',
+        'categoryBreakdown', 'subLines', 'eapBreakdowns', 'eapProvince', 'rawStats',
       ];
       for (const key of keys) {
         expect(result).toHaveProperty(key);
@@ -234,6 +234,47 @@ describe('calculateSkillsScore', () => {
       const result = calculateSkillsScore(makeSkillsData({ leviableAmount }));
 
       expect(result.rawStats.targetBursaries).toBeCloseTo(leviableAmount * 0.025, 0);
+    });
+
+    it('normalizes percent-point config (3.5) to fraction for targets and display', () => {
+      const leviableAmount = 10_000_000;
+      const config = {
+        sectorCode: 'RCOGP',
+        scorecardType: 'Generic',
+        skills: {
+          generalMax: 6,
+          bursaryMax: 4,
+          overallTarget: 3.5,
+          bursaryTarget: 2.5,
+          subMinThreshold: 40,
+          overallSpendPercent: 3.5,
+          bursarySpendPercent: 2.5,
+        },
+      } as any;
+      const result = calculateSkillsScore(makeSkillsData({ leviableAmount }), config);
+      expect(result.rawStats.targetOverall).toBeCloseTo(350_000, 0);
+      expect(result.subLines[0].target).toBe('3.5% of payroll');
+      expect(result.subLines[1].target).toBe('2.5% of payroll');
+    });
+  });
+
+  describe('EAP demographic breakdown', () => {
+    it('returns eapBreakdowns for spend indicators on Generic scorecards', () => {
+      const result = calculateSkillsScore(makeSkillsData({
+        trainingPrograms: [
+          makeTrainingProgram({ id: '1', race: 'African', gender: 'Male', category: 'bursary' }),
+          makeTrainingProgram({ id: '2', race: 'Coloured', gender: 'Female', category: 'bursary' }),
+        ],
+      }), undefined, 'Gauteng');
+      expect(result.eapProvince).toBe('Gauteng');
+      expect(result.eapBreakdowns[1]?.senior).toHaveLength(8);
+      expect(result.eapBreakdowns[1]?.senior[0].group).toBe('AM');
+    });
+
+    it('omits eapBreakdowns for QSE scorecards', () => {
+      const config = { sectorCode: 'RCOGP', scorecardType: 'QSE', skills: { generalMax: 6, bursaryMax: 4, overallTarget: 0.03, bursaryTarget: 0.01, subMinThreshold: 40 } } as any;
+      const result = calculateSkillsScore(makeSkillsData(), config, 'Gauteng');
+      expect(result.eapBreakdowns).toEqual({});
     });
   });
 

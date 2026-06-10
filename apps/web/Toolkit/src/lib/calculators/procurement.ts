@@ -160,6 +160,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   // Sub-minimum excludes bonus points (DG is bonus per RCOGP 2019)
   const baseMaxPoints = allSuppliersMaxPts + qseMaxPts + emeMaxPts + bo51MaxPts + bwo30MaxPts;
   const subMinThresholdPoints = (subMinThreshold / 100) * baseMaxPoints;
+  const alwaysPassSubMin = config?.procurement?.alwaysPassSubMin ?? false;
 
   const subLines: ProcurementSubLine[] = [
     { name: "B-BBEE Procurement Spend from Empowering Suppliers", target: `${(allSuppliersTarget * 100).toFixed(0)}% of TMPS`, weighting: allSuppliersMaxPts, score: empoweringScore, spend: empoweringSpend },
@@ -183,7 +184,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     designatedGroup: round2(designatedGroupScore),
     total: procTotal,
     subMinimumMet:
-      subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : false,
+      alwaysPassSubMin || (subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : false),
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

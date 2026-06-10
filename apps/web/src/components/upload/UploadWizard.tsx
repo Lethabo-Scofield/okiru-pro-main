@@ -139,6 +139,12 @@ const PILLAR_REQUIREMENTS: Record<string, { required: string[]; examples: string
       examples: 'R 50 000 000, R 3 500 000, R 250 000, R 20 000 000',
     },
   ],
+  'AFS Additions': [
+    {
+      required: ['Sub-sector AFS indicators (geographic access, products, or insurance lines)'],
+      examples: 'Banks: transaction/service/sales point coverage; LTI: appropriate products & market penetration; STI: commercial lines & insurance policies',
+    },
+  ],
   Ownership: [
     {
       required: ['Shareholder Name', '% Shareholding', 'Voting Rights %', 'Economic Interest %', 'Race', 'Gender', 'Owner Type'],
@@ -811,9 +817,28 @@ const DEFAULT_INTEGRATED_TOOLKIT_PILLARS: string[] = [
   'SED',
 ];
 
+/** FSC Banks/LTI/STI workbooks also require the AFS Additions pillar (not bundled in Financials). */
+function getIntegratedToolkitPillars(sectorCode?: string, fscSubSector?: string): string[] {
+  const code = (sectorCode || '').trim().toUpperCase();
+  const sub = String(fscSubSector ?? '').trim();
+  const hasAfs =
+    code === 'FSC' &&
+    (sub === 'Banks' ||
+      sub === 'LTI' ||
+      sub === 'Long-Term Insurers' ||
+      sub === 'STI' ||
+      sub === 'Short-Term Insurers');
+  if (!hasAfs) return DEFAULT_INTEGRATED_TOOLKIT_PILLARS;
+  const finIdx = DEFAULT_INTEGRATED_TOOLKIT_PILLARS.indexOf('Financials');
+  const pillars = [...DEFAULT_INTEGRATED_TOOLKIT_PILLARS];
+  pillars.splice(finIdx + 1, 0, 'AFS Additions');
+  return pillars;
+}
+
 export interface ToolkitIntegratedRequirementsSummaryProps {
   sectorCode: string;
   sectorLabel?: string;
+  fscSubSector?: string;
   pillarScopes?: string[] | null;
   className?: string;
 }
@@ -821,10 +846,13 @@ export interface ToolkitIntegratedRequirementsSummaryProps {
 export function ToolkitIntegratedRequirementsSummary({
   sectorCode,
   sectorLabel,
+  fscSubSector,
   pillarScopes,
   className,
 }: ToolkitIntegratedRequirementsSummaryProps) {
-  const pillarsToShow = DEFAULT_INTEGRATED_TOOLKIT_PILLARS.filter((p) => pillarVisibleForScopes(p, pillarScopes));
+  const pillarsToShow = getIntegratedToolkitPillars(sectorCode, fscSubSector).filter((p) =>
+    pillarVisibleForScopes(p, pillarScopes),
+  );
   const code = (sectorCode || '').trim();
 
   const handleDownloadTemplate = () => {

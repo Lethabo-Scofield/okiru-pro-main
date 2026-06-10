@@ -35,6 +35,7 @@ export type ExcelImportResult = {
 const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   { sectionKey: "company-information", hints: ["information request", "company information", "company info", "general", "client"] },
   { sectionKey: "financial-information", hints: ["financial information", "financial", "finance", "p&l", "revenue"] },
+  { sectionKey: "afs-additions", hints: ["afs additions", "access to financial services", "afs scorecard", "afs banks", "afs long term", "afs short term"] },
   { sectionKey: "ownership", hints: ["ownership", "shareholder", "voting rights", "equity"] },
   { sectionKey: "management-control", hints: ["management control", "management", "board", "directors"] },
   { sectionKey: "employees", hints: ["employees", "employee", "staff list", "employment equity", "ee profile"] },

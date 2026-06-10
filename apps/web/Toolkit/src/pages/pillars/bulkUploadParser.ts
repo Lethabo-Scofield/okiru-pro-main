@@ -11,6 +11,7 @@
  */
 import * as XLSX from "xlsx";
 import { v4 as uuidv4 } from "uuid";
+import { isBlackRace, normalizeRace, normalizeSpendFraction } from "@toolkit/lib/calculators/shared";
 import type { TrainingProgram, TrainingCategoryCode } from "@toolkit/lib/types";
 
 export type SkillsBulkUploadResult = {
@@ -36,18 +37,14 @@ export function computeSkillsTargets(input: {
   bursaryTargetPct?: number;
 }): { targetSpend: number; bursaryTarget: number; overallTargetPct: number; bursaryTargetPct: number } {
   const leviable = Number.isFinite(input.leviableAmount) ? Math.max(0, input.leviableAmount) : 0;
-  const overallTargetPct = input.overallTargetPct ?? 0.035; // RCOGP/Generic default
-  const bursaryTargetPct = input.bursaryTargetPct ?? 0.025;
+  const overallTargetPct = normalizeSpendFraction(input.overallTargetPct, 0.035);
+  const bursaryTargetPct = normalizeSpendFraction(input.bursaryTargetPct, 0.025);
   return {
     targetSpend: leviable * overallTargetPct,
     bursaryTarget: leviable * bursaryTargetPct,
     overallTargetPct,
     bursaryTargetPct,
   };
-}
-
-function isBlackRace(race: string): boolean {
-  return ["African", "Coloured", "Indian"].includes(race);
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -62,7 +59,11 @@ const numAt = (r: unknown[], i: number): number => {
 
 const strAt = (r: unknown[], i: number): string => (i < 0 ? "" : String(r[i] ?? "").trim());
 
-const normalizeRace = (v: string): TrainingProgram["race"] => {
+const normalizeRaceForProgram = (v: string): TrainingProgram["race"] => {
+  const mapped = normalizeRace(v);
+  if (mapped === "African" || mapped === "Coloured" || mapped === "Indian" || mapped === "White") {
+    return mapped;
+  }
   const lower = v.toLowerCase();
   if (lower.startsWith("afr")) return "African";
   if (lower.startsWith("col")) return "Coloured";
@@ -157,7 +158,7 @@ export function parseSkillsBulkUploadBuffer(
       continue;
     }
     const categoryCode = normalizeCategory(strAt(r, col.category) || "C");
-    const race = normalizeRace(strAt(r, col.race) || "African");
+    const race = normalizeRaceForProgram(strAt(r, col.race) || "African");
     const courseCost = numAt(r, col.courseCost);
     const travelCost = numAt(r, col.travelCost);
     const accommodationCost = numAt(r, col.accomCost);

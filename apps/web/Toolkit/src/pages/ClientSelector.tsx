@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@toolkit/components/ui/dialog";
 import { cn } from "@toolkit/lib/utils";
+import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
 import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
 
 interface ClientItem {
@@ -328,11 +329,9 @@ export default function ClientSelector() {
                       <Select value={newClient.eapProvince} onValueChange={v => setNewClient({ ...newClient, eapProvince: v })}>
                         <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="National">National</SelectItem>
-                          <SelectItem value="Gauteng">Gauteng</SelectItem>
-                          <SelectItem value="Western Cape">Western Cape</SelectItem>
-                          <SelectItem value="KZN">KwaZulu-Natal</SelectItem>
-                          <SelectItem value="Eastern Cape">Eastern Cape</SelectItem>
+                          {getProvinces().map((p) => (
+                            <SelectItem key={p} value={p}>{p}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
