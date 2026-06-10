@@ -53,6 +53,54 @@ curl -F "file=@supplier_certificate.pdf" http://127.0.0.1:3200/api/parser/resolv
 
 The service first extracts text/tables from the uploaded file, then runs the same strict parser pipeline.
 
+## Document Type Resolution
+
+The parser identifies the business document type before it extracts fields. File format only tells the service how to read the upload; document type tells the service which ontology rules to use.
+
+```text
+PDF / DOCX / XLSX / CSV / image
+-> text and table extraction
+-> document-type resolver
+-> ontology DocumentType
+-> expected fields, patterns, validation rules, calculator mapping
+```
+
+The resolver scores every ontology `DocumentType` using:
+
+- exact document name / alias matches
+- important tokens from the document name
+- important tokens from the auditor description
+- expected field labels and regex patterns
+- generic B-BBEE evidence signals
+
+The response audit trail includes the top candidates:
+
+```json
+{
+  "classification_candidates": [
+    {
+      "document_type": "B-BBEE Certificate",
+      "pillar": "ESD",
+      "confidence": 0.93,
+      "matched_evidence": ["B-BBEE Certificate", "bee_level"],
+      "reasons": ["exact alias/name matched: B-BBEE Certificate"]
+    }
+  ],
+  "classification_reason": "Document type classified with sufficient confidence and margin"
+}
+```
+
+Classification policy:
+
+```text
+>= 0.85 and margin over runner-up >= 0.15 -> classified
+0.60 to 0.84 -> review_required before extraction
+< 0.60 -> failed / unsupported
+runner-up too close -> review_required before extraction
+```
+
+When classification is ambiguous, the service returns no extracted fields and no calculator payload. A human must choose the document type before the parser can safely continue.
+
 ### Resolve Parser Output
 
 ```http

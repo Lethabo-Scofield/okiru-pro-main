@@ -5,6 +5,7 @@ export const SUPPORTED_DOCUMENT_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
   'text/csv',
+  'text/plain',
   'image/png',
   'image/jpeg',
   'image/jpg',
@@ -37,4 +38,16 @@ export interface DocumentClassification {
   pillar: string;
   confidence: number;
   matched_evidence: string[];
+  status?: 'classified' | 'ambiguous' | 'low_confidence' | 'unsupported';
+  candidates?: DocumentClassificationCandidate[];
+  margin?: number;
+  reason?: string;
+}
+
+export interface DocumentClassificationCandidate {
+  document_type: string;
+  pillar: string;
+  confidence: number;
+  matched_evidence: string[];
+  reasons: string[];
 }

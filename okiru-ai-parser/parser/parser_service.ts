@@ -23,10 +23,12 @@ export class ParserService {
       fileId: input.file_id,
       documentType: classification.document_type,
       confidence: classification.confidence,
+      classificationStatus: classification.status,
+      margin: classification.margin,
     });
 
     const knowledge = await this.repository.getDocumentKnowledge(classification.document_type);
-    if (!knowledge || classification.confidence < 0.6) {
+    if (!knowledge || classification.status === 'unsupported' || classification.status === 'low_confidence') {
       return parserOutputSchema.parse({
         file_id: input.file_id,
         filename: input.filename,
@@ -39,7 +41,7 @@ export class ParserService {
         validation: {
           passed: false,
           warnings: [],
-          errors: ['Unsupported or low-confidence document type'],
+          errors: [classification.reason || 'Unsupported or low-confidence document type'],
           missing_fields: [],
         },
         audit_trail: {
@@ -48,6 +50,36 @@ export class ParserService {
           rules_applied: [],
           graph_version: 'v1',
           requires_human_review: true,
+          classification_candidates: classification.candidates ?? [],
+          classification_reason: classification.reason,
+        },
+      });
+    }
+
+    if (classification.status === 'ambiguous') {
+      return parserOutputSchema.parse({
+        file_id: input.file_id,
+        filename: input.filename,
+        document_type: classification.document_type,
+        pillar: classification.pillar,
+        overall_confidence: classification.confidence,
+        status: 'review_required',
+        extracted_fields: {},
+        calculator_payload: {},
+        validation: {
+          passed: false,
+          warnings: [classification.reason || 'Document type requires human review'],
+          errors: [],
+          missing_fields: [],
+        },
+        audit_trail: {
+          source_file: input.filename,
+          matched_patterns: classification.matched_evidence,
+          rules_applied: [],
+          graph_version: knowledge.document.graph_version,
+          requires_human_review: true,
+          classification_candidates: classification.candidates ?? [],
+          classification_reason: classification.reason,
         },
       });
     }
@@ -104,6 +136,8 @@ export class ParserService {
         rules_applied: validation.rules_applied,
         graph_version: knowledge.document.graph_version,
         requires_human_review: requiresReview,
+        classification_candidates: classification.candidates ?? [],
+        classification_reason: classification.reason,
       },
     });
   }

@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest';
+import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
+import type { DocumentKnowledge } from '../../graph/ontology_models.js';
+import { classifyDocument } from '../../parser/classify_document.js';
+import { ParserService } from '../../parser/parser_service.js';
+
+function rawText(raw_text: string) {
+  return {
+    file_id: 'doc_classifier',
+    filename: 'evidence.txt',
+    mime_type: 'text/plain',
+    raw_text,
+    tables: [],
+    metadata: {},
+  };
+}
+
+function customRepository(seed: DocumentKnowledge[]): InMemoryOntologyRepository {
+  return new InMemoryOntologyRepository(seed);
+}
+
+const graphVersion = 'test';
+
+const ambiguousDocs: DocumentKnowledge[] = [
+  {
+    document: {
+      name: 'CIPC COR39 — certificate of director amendments',
+      aliases: ['COR39 director amendments'],
+      description: 'Current directors appointment resignation active director list',
+      required: true,
+      pillar_code: 'OWNERSHIP',
+      graph_version: graphVersion,
+    },
+    fields: [],
+  },
+  {
+    document: {
+      name: 'CIPC registration documents (COR14.1 / COR14.3)',
+      aliases: ['COR14.3 CIPC registration'],
+      description: 'CIPC company registration entity registration number directors',
+      required: true,
+      pillar_code: 'OWNERSHIP',
+      graph_version: graphVersion,
+    },
+    fields: [],
+  },
+];
+
+describe('document type classification', () => {
+  it('classifies a clear B-BBEE certificate and exposes candidates', async () => {
+    const result = await classifyDocument(rawText([
+      'B-BBEE Certificate',
+      'Enterprise Name: ABC Suppliers Pty Ltd',
+      'B-BBEE Status Level: Level Two',
+      'Black Ownership: 51%',
+      'Expiry Date: 01 Feb 2027',
+    ].join('\n')), new InMemoryOntologyRepository());
+
+    expect(result.status).toBe('classified');
+    expect(result.document_type).toBe('B-BBEE Certificate');
+    expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+    expect(result.candidates?.[0].document_type).toBe('B-BBEE Certificate');
+    expect(result.reason).toContain('sufficient confidence');
+  });
+
+  it('marks close document-type candidates as ambiguous', async () => {
+    const result = await classifyDocument(rawText([
+      'CIPC document',
+      'COR39 director amendments',
+      'COR14.3 CIPC registration',
+      'Registration number 2018/123456/07',
+      'Director list active directors registration amendments',
+    ].join('\n')), customRepository(ambiguousDocs));
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.candidates).toHaveLength(2);
+    expect(result.reason).toContain('too close');
+  });
+
+  it('does not extract or map calculator payload when classification is ambiguous', async () => {
+    const service = new ParserService(customRepository(ambiguousDocs));
+    const result = await service.resolve(rawText([
+      'CIPC document',
+      'COR39 director amendments',
+      'COR14.3 CIPC registration',
+      'Registration number 2018/123456/07',
+      'Director list active directors registration amendments',
+    ].join('\n')));
+
+    expect(result.status).toBe('review_required');
+    expect(result.extracted_fields).toEqual({});
+    expect(result.calculator_payload).toEqual({});
+    expect(result.audit_trail.requires_human_review).toBe(true);
+    expect(result.audit_trail.classification_candidates.length).toBeGreaterThan(1);
+  });
+
+  it('fails unsupported uploads with low confidence', async () => {
+    const result = await classifyDocument(rawText('random lunch receipt with no B-BBEE evidence'), new InMemoryOntologyRepository());
+
+    expect(result.status).toBe('low_confidence');
+    expect(result.confidence).toBeLessThan(0.6);
+  });
+});
