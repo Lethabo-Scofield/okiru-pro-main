@@ -363,7 +363,7 @@ export function parseWorkbookDate(input: unknown): Date | null {
   return dt;
 }
 
-const dateValidator = (v: unknown): string | null => {
+export const dateValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const s = String(v).trim();
   const shape = /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{2}\/\d{2}\/\d{4}$/.test(s);
@@ -408,7 +408,7 @@ const COMPANY_INFO_META: ColumnDef[] = [
     required: true,
     options: [...SCORECARD_TYPE_OPTIONS],
   },
-  { key: "financialYearEnd", label: "Financial Year-End (yyyy-mm-dd)", type: "date", validate: dateValidator },
+  { key: "financialYearEnd", label: "Financial Year-End (dd/mm/yyyy)", type: "date", validate: dateValidator },
   { key: "physicalAddress", label: "Physical Address", type: "text" },
   { key: "postalAddress", label: "Postal Address", type: "text" },
   { key: "contactPerson", label: "Contact Person", type: "text" },

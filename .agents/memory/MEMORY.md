@@ -1,1 +1,2 @@
 - [Supplier size term](supplier-size-term.md) — supplier-size enum is produced by TWO paths (workbook sections.ts + excelImport.ts); rename both or legacy term leaks back.
+- [Testing setup quirks](testing-setup.md) — vitest hoisted in apps/web only (apps/api has none); jsdom per-file docblock; avoid jest-dom/vitest import; import.meta.url not file:// under jsdom.

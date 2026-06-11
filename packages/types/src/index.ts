@@ -119,6 +119,8 @@ export interface Employee {
   race: string;
   designation: string;
   isDisabled: boolean;
+  annualSalary?: number;
+  votingRightsPercent?: number;
 }
 
 export interface InsertEmployee {
@@ -128,6 +130,8 @@ export interface InsertEmployee {
   race: string;
   designation: string;
   isDisabled?: boolean;
+  annualSalary?: number;
+  votingRightsPercent?: number;
 }
 
 // Skills Development Types
@@ -140,6 +144,7 @@ export interface TrainingProgram {
   employeeId: string | null;
   isEmployed: boolean;
   isBlack: boolean;
+  municipality?: string;
 }
 
 export interface InsertTrainingProgram {
@@ -150,6 +155,7 @@ export interface InsertTrainingProgram {
   employeeId?: string | null;
   isEmployed?: boolean;
   isBlack?: boolean;
+  municipality?: string;
 }
 
 // Procurement Types
@@ -160,6 +166,7 @@ export interface Supplier {
   beeLevel: number;
   blackOwnership: number;
   spend: number;
+  registrationNumber?: string;
 }
 
 export interface InsertSupplier {
@@ -168,6 +175,7 @@ export interface InsertSupplier {
   beeLevel?: number;
   blackOwnership?: number;
   spend?: number;
+  registrationNumber?: string;
 }
 
 export interface ProcurementDataRow {

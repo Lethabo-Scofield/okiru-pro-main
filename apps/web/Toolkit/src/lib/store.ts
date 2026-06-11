@@ -905,6 +905,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           race: e.race,
           designation: e.designation || mapJobTitleToDesignation(e.occupationalLevel),
           isDisabled: e.isDisabled || false,
+          annualSalary: e.annualSalary ?? 0,
+          votingRightsPercent: e.votingRightsPercent ?? 0,
         })),
       };
 
@@ -929,6 +931,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           gender: tp.gender || null,
           race: tp.race || null,
           isDisabled: tp.isDisabled || false,
+          municipality: tp.municipality || '',
         })),
         yesCandidatesCount: yesCandidatesFromSkills.length,
         yesAbsorbedCount: yesCandidatesFromSkills.filter((tp: any) => tp.isAbsorbed).length,
@@ -945,6 +948,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         suppliers: (data.procurement?.suppliers || []).map((s: any) => ({
           id: s.id,
           name: s.name,
+          registrationNumber: s.registrationNumber || '',
           beeLevel: Number.isFinite(Number(s.beeLevel)) ? Number(s.beeLevel) : 0,
           blackOwnership: s.blackOwnership || 0,
           blackWomenOwnership: s.blackWomenOwnership || 0,
@@ -1264,6 +1268,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       api.addEmployee(state.activeClientId, {
         name: employee.name, gender: employee.gender, race: employee.race,
         designation: employee.designation, isDisabled: employee.isDisabled,
+        annualSalary: employee.annualSalary, votingRightsPercent: employee.votingRightsPercent,
       }).catch(console.error);
     }
   },
@@ -1291,6 +1296,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           api.addEmployee(state.activeClientId!, {
             name: emp.name, gender: emp.gender, race: emp.race,
             designation: emp.designation, isDisabled: emp.isDisabled,
+            annualSalary: emp.annualSalary, votingRightsPercent: emp.votingRightsPercent,
           })
         )
       ).catch(console.error);
@@ -1306,6 +1312,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         name: program.name, category: program.category, cost: program.cost,
         employeeId: program.employeeId, isEmployed: program.isEmployed, isBlack: program.isBlack,
         gender: program.gender, race: program.race, isDisabled: program.isDisabled,
+        municipality: program.municipality,
       }).catch(console.error);
     }
   },
@@ -1327,6 +1334,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     if (state.activeClientId) {
       api.addSupplier(state.activeClientId, {
         name: supplier.name, beeLevel: supplier.beeLevel,
+        registrationNumber: supplier.registrationNumber,
         blackOwnership: supplier.blackOwnership, blackWomenOwnership: supplier.blackWomenOwnership,
         youthOwnership: supplier.youthOwnership, disabledOwnership: supplier.disabledOwnership,
         enterpriseType: supplier.enterpriseType, spend: supplier.spend,
