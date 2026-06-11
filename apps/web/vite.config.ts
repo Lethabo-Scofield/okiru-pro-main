@@ -8,6 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    "process.env": JSON.stringify({
+      NODE_ENV: process.env.NODE_ENV || "development",
+    }),
+  },
   resolve: {
     alias: {
       "@toolkit-assets": path.resolve(import.meta.dirname, "Toolkit/attached_assets"),
@@ -32,7 +37,7 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     hmr: {
-      port: 24680,
+      clientPort: 443,
     },
     proxy: {
       // Proxy all /api/* requests to the API server when running pure Vite dev
