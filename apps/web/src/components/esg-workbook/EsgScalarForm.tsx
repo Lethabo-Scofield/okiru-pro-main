@@ -1,4 +1,4 @@
-import { ESG_INPUT, ESG_PANEL } from "./esgEditorChrome";
+import { ESG_INPUT, ESG_PANEL, ESG_SELECT } from "./esgEditorChrome";
 
 export type EsgFieldDef = {
   cell: string;
@@ -36,7 +36,7 @@ export function EsgScalarForm({ fields, values, onChange, onTouch, readOnly }: P
                 onTouch?.(f.cell);
                 onChange({ [f.cell]: e.target.value });
               }}
-              className={`mt-1 ${ESG_INPUT}`}
+              className={`mt-1 ${ESG_SELECT}`}
             >
               <option value="">—</option>
               {f.options?.map((o) => (

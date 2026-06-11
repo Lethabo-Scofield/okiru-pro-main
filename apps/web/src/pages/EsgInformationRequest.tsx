@@ -324,6 +324,13 @@ export default function EsgInformationRequest() {
                 e.target.value = "";
               }}
             />
+            <a
+              href={`${API_BASE}/api/esg/workbook/template`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
+              data-testid="button-esg-download-template"
+            >
+              <Download className="h-3.5 w-3.5" /> Download template
+            </a>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -331,14 +338,14 @@ export default function EsgInformationRequest() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
               data-testid="button-esg-import-xlsx"
             >
-              Import xlsx
+              Import / bulk upload
             </button>
             <a
               href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
               data-testid="button-esg-export"
             >
-              <Download className="h-3.5 w-3.5" /> Export XLSX
+              <Download className="h-3.5 w-3.5" /> Export workbook
             </a>
             <button
               type="button"

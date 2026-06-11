@@ -7,6 +7,7 @@ import {
   normalizeFromLocal,
   normalizeFromMongo,
   publicCertificateToListRow,
+  resolveCertificateStatus,
   stableBlobRecordId,
 } from '../certificateNormalize.js';
 import type { CertificateRecord } from '../certificateStore.js';
@@ -24,14 +25,36 @@ describe('buildCertSlug', () => {
 });
 
 describe('normalizeFromBlobOnly', () => {
-  it('creates a stable incomplete public row for blob-only files', () => {
-    const a = normalizeFromBlobOnly({ name: 'public/acme.pdf', lastModified: '2025-01-01T00:00:00.000Z' });
-    const b = normalizeFromBlobOnly({ name: 'public/acme.pdf', lastModified: null });
-    expect(a.id).toBe(stableBlobRecordId('public/acme.pdf'));
+  it('creates a stable public row and derives company name from blob path', () => {
+    const a = normalizeFromBlobOnly({
+      name: '2026 01 01 Acme Industries (Pty) Ltd -EME.pdf',
+      lastModified: '2025-01-01T00:00:00.000Z',
+    });
+    const b = normalizeFromBlobOnly({
+      name: '2026 01 01 Acme Industries (Pty) Ltd -EME.pdf',
+      lastModified: null,
+    });
+    expect(a.id).toBe(stableBlobRecordId('2026 01 01 Acme Industries (Pty) Ltd -EME.pdf'));
     expect(a.id).toBe(b.id);
-    expect(a.metadataComplete).toBe(false);
+    expect(a.companyName).toContain('Acme Industries');
+    expect(a.metadataComplete).toBe(true);
     expect(a.slug).toBeTruthy();
-    expect(a.blobName).toBe('public/acme.pdf');
+  });
+});
+
+describe('resolveCertificateStatus', () => {
+  it('marks processed certificates without expiry as valid when B-BBEE data exists', () => {
+    expect(resolveCertificateStatus({
+      extractionStatus: 'completed',
+      bbbeeLevel: 1,
+      companySize: 'EME',
+      status: 'unknown',
+    }, null)).toBe('valid');
+  });
+
+  it('uses expiry-derived status when expiry is present', () => {
+    const future = new Date(Date.now() + 365 * 86400000);
+    expect(resolveCertificateStatus({ status: 'unknown' }, future)).toBe('valid');
   });
 });
 
@@ -85,6 +108,36 @@ describe('dedupePublicCertificates', () => {
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe('id-a');
   });
+
+  it('dedupes by blobName and keeps the richer metadata row', () => {
+    const blobOnly = normalizeFromBlobOnly({ name: 'public/acme.pdf', lastModified: '2025-01-01T00:00:00.000Z' });
+    const mongo = normalizeFromMongo({
+      id: 'mongo-id-1',
+      blobName: 'public/acme.pdf',
+      supplierName: 'Acme Corp',
+      vatNumber: '4123456789',
+    })!;
+    const out = dedupePublicCertificates([blobOnly, mongo]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('mongo-id-1');
+    expect(out[0].companyName).toBe('Acme Corp');
+  });
+
+  it('counts distinct blob-only rows without mongo metadata', () => {
+    const rows = [
+      normalizeFromBlobOnly({ name: 'public/a.pdf', lastModified: null }),
+      normalizeFromBlobOnly({ name: 'public/b.pdf', lastModified: null }),
+      normalizeFromBlobOnly({ name: 'public/c.pdf', lastModified: null }),
+    ];
+    expect(dedupePublicCertificates(rows)).toHaveLength(3);
+  });
+
+  it('includes blob-only rows in deduped output for headline totals', () => {
+    const incomplete = normalizeFromBlobOnly({ name: 'zzzzzz-nonsense-xyzzy.pdf', lastModified: null });
+    const out = dedupePublicCertificates([incomplete]);
+    expect(out).toHaveLength(1);
+    expect(out[0].status).toBe('unknown');
+  });
 });
 
 describe('publicCertificateToListRow', () => {
@@ -97,6 +150,28 @@ describe('publicCertificateToListRow', () => {
     })!;
     const row = publicCertificateToListRow(c);
     expect(row.certificateNumber).toBe('NUM-1');
+  });
+
+  it('classifies processed mongo docs without expiry as valid in list rows', () => {
+    const c = normalizeFromMongo({
+      id: 'proc-1',
+      blobName: '2026 06 19 Precision Scanning and Printing cc - EME.jpg',
+      supplierName: 'Precision Scanning and Printing cc',
+      extractionStatus: 'completed',
+      companySize: 'EME',
+      bbbeeLevel: 1,
+      status: 'unknown',
+    })!;
+    expect(c.status).toBe('valid');
+    const row = publicCertificateToListRow(c);
+    expect(row.status).toBe('valid');
+    expect(row.metadataComplete).toBe(true);
+  });
+
+  it('keeps truly unprocessed blob-only rows as unknown', () => {
+    const c = normalizeFromBlobOnly({ name: 'zzzzzz-nonsense-xyzzy.pdf', lastModified: null });
+    const row = publicCertificateToListRow(c);
+    expect(row.status).toBe('unknown');
   });
 });
 

@@ -8,6 +8,7 @@ import { getClient as memGetClient } from "./clientsMemoryStore";
 import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
 import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
+import { buildEsgWorkbookTemplateXlsx } from "../src/lib/esg/esgWorkbookTemplate";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { buildGoldenSections } from "./esgGoldenFixture";
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
@@ -146,6 +147,17 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       delete wb.sections.cover;
     }
   }
+
+  app.get("/api/esg/workbook/template", requireAuth, async (req, res) => {
+    if (!requireEsgAccess(req, res)) return;
+    const buf = buildEsgWorkbookTemplateXlsx();
+    res.setHeader("Content-Disposition", 'attachment; filename="esg-bulk-input-template.xlsx"');
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.send(buf);
+  });
 
   app.get("/api/esg/workbook/:companyId", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);

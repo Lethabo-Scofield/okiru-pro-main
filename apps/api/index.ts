@@ -156,15 +156,14 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
 
     setImmediate(async () => {
       try {
-        const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
-        if (!connStr) return;
+        const { getCertBlobServiceClient } = await import("./src/services/azureCertStorage.js");
+        const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
         if (process.env.CERT_EXTRACTION_ON_STARTUP === 'false') {
           logger.info("Startup certificate extraction disabled via CERT_EXTRACTION_ON_STARTUP=false");
           return;
         }
-        const { BlobServiceClient } = await import("@azure/storage-blob");
-        const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
-        const blobServiceClient = BlobServiceClient.fromConnectionString(connStr);
+        const blobServiceClient = getCertBlobServiceClient();
+        if (!blobServiceClient) return;
         logger.info("Starting background certificate extraction...");
         const result = await processAllCertificates(blobServiceClient, false, (done, total) => {
           if (done % 25 === 0 || done === total) {

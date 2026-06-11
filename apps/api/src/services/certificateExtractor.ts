@@ -12,9 +12,12 @@ import { normalizeVat } from './certificateStore.js';
 import { extractTextWithDocIntelligence, isDocumentIntelligenceConfigured } from './documentIntelligence.js';
 import { extractCertificateWithLLM, extractCertificatePreviewWithLLM, type CertificatePreviewExtraction } from './llmExtractor.js';
 import { indexCertificate, isChromaConfigured } from './chromaStore.js';
+import {
+  getCertBlobServiceClient,
+  getCertContainerClient,
+} from './azureCertStorage.js';
 
 const logger = createLogger('CertExtractor');
-const CONTAINER_NAME = 'clients-certs';
 const TMP_DIR = join(tmpdir(), 'cert-extract');
 
 const MONTH_NAMES: Record<string, number> = {
@@ -483,7 +486,7 @@ export async function processOneCertificate(
     return { blobName, status: 'skipped', expiryDate: existing.expiryDate };
   }
 
-  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+  const containerClient = getCertContainerClient(blobServiceClient);
   const blobClient = containerClient.getBlobClient(blobName);
   const fileName = blobName.includes('/') ? blobName.split('/').pop()! : blobName;
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -595,7 +598,7 @@ export async function processAllCertificates(
 ): Promise<{ processed: number; skipped: number; errors: number }> {
   if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
-  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+  const containerClient = getCertContainerClient(blobServiceClient);
   const blobs: string[] = [];
   for await (const blob of containerClient.listBlobsFlat()) {
     blobs.push(blob.name);

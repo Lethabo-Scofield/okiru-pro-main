@@ -9,6 +9,7 @@ import { countGoldenCells } from "../../EsgToolkit/src/lib/fixtures/esg-consumer
 /** Registered HTTP paths (must match esgWorkbookRoutes.ts and ingress /api/esg → web). */
 export const ESG_API_ROUTE_PATHS = [
   "GET /api/esg/access",
+  "GET /api/esg/workbook/template",
   "GET /api/esg/workbook/:companyId",
   "PUT /api/esg/workbook/:companyId/section/:sectionKey",
   "POST /api/esg/workbook/:companyId/validate",
@@ -21,7 +22,7 @@ export const ESG_API_ROUTE_PATHS = [
 
 describe("esgWorkbookRoutes section keys", () => {
   it("documents canonical API paths", () => {
-    expect(ESG_API_ROUTE_PATHS.length).toBe(9);
+    expect(ESG_API_ROUTE_PATHS.length).toBe(10);
     expect(ESG_API_ROUTE_PATHS.join(" ")).toContain("/api/esg/");
   });
   it("includes all Phase 1 section ids", () => {
