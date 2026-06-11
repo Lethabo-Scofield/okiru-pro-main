@@ -76,6 +76,8 @@ const employeeSchema = new Schema({
   race: { type: String, required: true },
   designation: { type: String, required: true },
   isDisabled: { type: Boolean, default: false },
+  annualSalary: { type: Number, default: 0 },
+  votingRightsPercent: { type: Number, default: 0 },
 }, { collection: "employees" });
 
 const trainingProgramSchema = new Schema({
@@ -87,6 +89,7 @@ const trainingProgramSchema = new Schema({
   employeeId: { type: String, default: null },
   isEmployed: { type: Boolean, default: false },
   isBlack: { type: Boolean, default: false },
+  municipality: { type: String, default: '' },
 }, { collection: "trainingPrograms" });
 
 const supplierSchema = new Schema({
@@ -96,6 +99,7 @@ const supplierSchema = new Schema({
   beeLevel: { type: Number, default: 4 },
   blackOwnership: { type: Number, default: 0 },
   spend: { type: Number, default: 0 },
+  registrationNumber: { type: String, default: '' },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({

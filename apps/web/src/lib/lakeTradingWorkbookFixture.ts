@@ -145,7 +145,7 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
           ? "QSE"
           : String(s.enterpriseType ?? "").toLowerCase() === "eme"
             ? "EME"
-            : "Large";
+            : "Generic";
       return {
         _id: String(s.id ?? rowId("lt_sup", i)),
         supplierName: s.name,

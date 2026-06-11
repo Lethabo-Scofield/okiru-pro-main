@@ -250,9 +250,9 @@ describe("Skills Development rules", () => {
 describe("Procurement rules", () => {
   const section = getSection("procurement")!;
 
-  it("supplier size enum is Large/QSE/EME", () => {
+  it("supplier size enum is Generic/QSE/EME", () => {
     const col = section.columns!.find((c) => c.key === "currentSize")!;
-    expect(col.options).toEqual(["Large", "QSE", "EME"]);
+    expect(col.options).toEqual(["Generic", "QSE", "EME"]);
   });
 
   it("does not require certificate expiry when a B-BBEE level is set", () => {
