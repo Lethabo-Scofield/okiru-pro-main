@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
-import { ESG_TABLE_CELL, ESG_TABLE_HEAD } from "./esgEditorChrome";
+import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
 
 export const EEA2_LEVELS = [
   "L1 Top management",
@@ -89,7 +89,7 @@ export function EsgHeadcountGrid({ values, onChange, onTouch, readOnly }: Props)
                             [ref]: e.target.value === "" ? "" : Number(e.target.value),
                           });
                         }}
-                        className="w-full bg-transparent text-[12px] outline-none min-w-[48px]"
+                        className={`${ESG_TABLE_INPUT} min-w-[48px]`}
                       />
                     </td>
                   );

@@ -16,7 +16,8 @@ export default function EsgImport() {
           Data Import
         </h1>
         <p className="text-[12px] text-[var(--esg-text2)] mt-1">
-          Bulk XLSX upload and workbook seeding live in the input layer. Use toolkit pages for
+          Download the bulk input template and use Import / bulk upload on the Inputs page (E/S/G
+          sections). Use toolkit pages for
           targeted adjustments after import.
         </p>
       </header>

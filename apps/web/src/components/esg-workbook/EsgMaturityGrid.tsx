@@ -1,4 +1,4 @@
-import { ESG_TABLE_CELL, ESG_TABLE_HEAD } from "./esgEditorChrome";
+import { ESG_SELECT, ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
 
 export type MaturityRowDef = {
   cell: string;
@@ -72,7 +72,7 @@ export function EsgMaturityGrid({
                         onTouch?.(row.cell);
                         onChange({ [row.cell]: e.target.value });
                       }}
-                      className="w-full bg-transparent text-[12px]"
+                      className={ESG_SELECT}
                     >
                       <option value="">—</option>
                       {(row.options ?? ["Yes", "Partial", "No", "N/A"]).map((o) => (
@@ -94,7 +94,7 @@ export function EsgMaturityGrid({
                           [row.cell]: e.target.value === "" ? "" : Number(e.target.value),
                         });
                       }}
-                      className="w-full bg-transparent text-[12px]"
+                      className={ESG_TABLE_INPUT}
                     />
                   )}
                 </td>

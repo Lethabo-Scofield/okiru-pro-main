@@ -17,6 +17,7 @@ import { isMongoConnected } from '../../db.js';
 import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
 import {
   buildCertSlug,
+  blobBasename,
   certificateSearchHaystack,
   dedupePublicCertificates,
   normalizeFromBlobOnly,
@@ -30,6 +31,13 @@ import {
   type ParsedCertificateFields,
   type PublicCertificate,
 } from '../services/certificateNormalize.js';
+import {
+  getCertAccountName,
+  getCertBlobContainerName,
+  getCertBlobServiceClient,
+  getCertConnectionString,
+  getCertContainerClient,
+} from '../services/azureCertStorage.js';
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
@@ -38,7 +46,23 @@ import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 const logger = createLogger("Certificates");
 const router = Router();
 
-const CONTAINER_NAME = 'clients-certs';
+const CONTAINER_NAME = getCertBlobContainerName();
+
+function getConnectionString(): string | undefined {
+  return getCertConnectionString();
+}
+
+function getAccountName(): string | undefined {
+  return getCertAccountName();
+}
+
+function getBlobServiceClient(): BlobServiceClient | null {
+  return getCertBlobServiceClient();
+}
+
+function getContainerClient(blobServiceClient: BlobServiceClient) {
+  return getCertContainerClient(blobServiceClient);
+}
 
 /** Express may surface path/query values as `string | string[]`; normalize to a single string. */
 function singleRouteParam(value: string | string[] | undefined): string {
@@ -65,26 +89,6 @@ const upload = multer({
     }
   },
 });
-
-function getConnectionString(): string | undefined {
-  return process.env.AZURE_STORAGE_CONNECTION_STRING;
-}
-
-function getAccountName(): string | undefined {
-  return process.env.AZURE_STORAGE_ACCOUNT_NAME;
-}
-
-function getBlobServiceClient(): BlobServiceClient | null {
-  const connStr = getConnectionString();
-  if (!connStr) {
-    return null;
-  }
-  return BlobServiceClient.fromConnectionString(connStr);
-}
-
-function getContainerClient(blobServiceClient: BlobServiceClient) {
-  return blobServiceClient.getContainerClient(CONTAINER_NAME);
-}
 
 /** @deprecated Alias — use CertificateListRow from certificateNormalize. */
 type CertificateRow = CertificateListRow;
@@ -190,7 +194,8 @@ async function loadPublicCertificates(): Promise<PublicCertificate[]> {
       const mongoMap = await loadMongoMetadataMap(azureBlobs.map((b) => b.name));
       for (const b of azureBlobs) {
         if (seenBlobs.has(b.name)) continue;
-        const md = mongoMap.get(b.name) as Record<string, unknown> | undefined;
+        const md = mongoMap.get(b.name)
+          ?? mongoMap.get(blobBasename(b.name)) as Record<string, unknown> | undefined;
         if (md) {
           const normalized = normalizeFromMongo(md, {
             blobLastModified: b.lastModified,
@@ -222,8 +227,11 @@ async function loadPublicCertificates(): Promise<PublicCertificate[]> {
         const normalized = normalizeFromMongo(doc);
         if (normalized) {
           certs.push(normalized);
-          seenBlobs.add(blobName);
+        } else {
+          const updatedAt = doc.updatedAt ? new Date(doc.updatedAt as string | Date).toISOString() : null;
+          certs.push(normalizeFromBlobOnly({ name: blobName, lastModified: updatedAt }));
         }
+        seenBlobs.add(blobName);
       }
     } catch (mongoErr) {
       logger.warn('Mongo enumeration failed', { err: (mongoErr as Error).message });
@@ -645,18 +653,42 @@ async function lookupSearchContent(blobName: string): Promise<string> {
   }
 }
 
+const MONGO_BLOB_IN_CHUNK_SIZE = 500;
+
+function registerMongoMetadataDoc(map: Map<string, Record<string, unknown>>, doc: Record<string, unknown>) {
+  const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+  const fileName = typeof doc.fileName === 'string' ? doc.fileName : '';
+  const base = blobName ? blobBasename(blobName) : (fileName || '');
+  for (const key of [blobName, fileName, base]) {
+    if (key && !map.has(key)) map.set(key, doc);
+  }
+}
+
 async function loadMongoMetadataMap(blobNames: string[]): Promise<Map<string, any>> {
   if (!isMongoConnected() || blobNames.length === 0) return new Map();
+  const m = new Map<string, Record<string, unknown>>();
   try {
-    const docs = await CertificateMetadataModel.find(
-      { blobName: { $in: blobNames } },
-      { extractedText: 0 },
-    ).lean();
-    const m = new Map<string, any>();
-    for (const d of docs as any[]) m.set(d.blobName, d);
+    for (let i = 0; i < blobNames.length; i += MONGO_BLOB_IN_CHUNK_SIZE) {
+      const chunk = blobNames.slice(i, i + MONGO_BLOB_IN_CHUNK_SIZE);
+      const basenames = [...new Set(chunk.map(blobBasename))];
+      const docs = await CertificateMetadataModel.find(
+        {
+          $or: [
+            { blobName: { $in: chunk } },
+            { fileName: { $in: basenames } },
+          ],
+        },
+        { extractedText: 0 },
+      ).lean();
+      for (const d of docs as Record<string, unknown>[]) registerMongoMetadataDoc(m, d);
+    }
     return m;
-  } catch {
-    return new Map();
+  } catch (err: unknown) {
+    logger.warn('Mongo metadata map load failed — blob-only rows may lack enrichment', {
+      blobCount: blobNames.length,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return m;
   }
 }
 

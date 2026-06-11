@@ -3,6 +3,7 @@
  * E/S/G accent tokens are for badges and charts only, not page wash.
  */
 .esg-theme {
+  color-scheme: dark;
   --esg-bg: #000000;
   --esg-bg2: #0a0a0a;
   --esg-glass: rgba(255, 255, 255, 0.03);
@@ -51,4 +52,22 @@
 }
 .esg-theme .esg-pillar-g {
   color: var(--esg-acc-g);
+}
+
+/* Native form controls — Windows/Chrome default light selects on dark pages */
+.esg-theme select,
+.esg-theme select option {
+  background-color: var(--esg-input-bg, #0e0e10);
+  color: var(--esg-text, #ffffff);
+}
+
+.esg-theme select:disabled,
+.esg-theme input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.esg-theme .esg-table-input {
+  background-color: var(--esg-input-bg, #0e0e10);
+  color: var(--esg-text, #ffffff);
 }

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
-import { ESG_TABLE_CELL, ESG_TABLE_HEAD } from "./esgEditorChrome";
+import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
 
 export const ESG_DEFAULT_MONTHS = [
   "Jul-25",
@@ -114,7 +114,7 @@ export function EsgMonthlyGrid({
                             [ref]: e.target.value === "" ? "" : Number(e.target.value),
                           });
                         }}
-                        className="w-full bg-transparent text-[12px] outline-none"
+                        className={ESG_TABLE_INPUT}
                       />
                     </td>
                   );
@@ -134,7 +134,7 @@ export function EsgMonthlyGrid({
                       onTouch?.(`${cellPrefix}_src_${ri}`);
                       onChange({ [`${cellPrefix}_src_${ri}`]: e.target.value });
                     }}
-                    className="w-full bg-transparent text-[12px] outline-none"
+                    className={ESG_TABLE_INPUT}
                   />
                 </td>
               </tr>
