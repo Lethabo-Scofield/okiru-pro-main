@@ -1654,7 +1654,7 @@ function normalizeBeeLevelCell(raw: unknown): string {
 function inferSupplierSize(spend: number, tmps: number): string {
   if (tmps > 0 && spend >= tmps * 0.5) return "EME";
   if (spend < 50_000_000) return "QSE";
-  return "Large";
+  return "Generic";
 }
 
 function parseSupplierGridRows(matrix: SheetMatrix): WorkbookRow[] {
@@ -1691,8 +1691,12 @@ function parseSupplierGridRows(matrix: SheetMatrix): WorkbookRow[] {
     const spend = spendIdx !== undefined ? parseCurrency(row[spendIdx]) ?? 0 : 0;
     if (spend <= 0) continue;
     const sizeRaw = sizeIdx !== undefined ? cellStr(row[sizeIdx]) : "";
+    const sizeNorm = norm(sizeRaw);
     const size =
-      norm(sizeRaw).includes("eme") ? "EME" : norm(sizeRaw).includes("qse") ? "QSE" : sizeRaw || "Large";
+      sizeNorm.includes("eme") ? "EME"
+        : sizeNorm.includes("qse") ? "QSE"
+        : sizeNorm.includes("large") || sizeNorm.includes("generic") ? "Generic"
+        : sizeRaw || "Generic";
     const blackPct = blackOwnIdx !== undefined ? parsePercent(row[blackOwnIdx]) ?? 100 : 100;
     const womenPct = blackWomenIdx !== undefined ? parsePercent(row[blackWomenIdx]) ?? 0 : 0;
     out.push({

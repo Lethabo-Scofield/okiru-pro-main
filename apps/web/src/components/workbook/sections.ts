@@ -140,7 +140,7 @@ const PROVINCE_OPTIONS = [
 
 /** EAP target lookup includes National (Stats SA national table) plus all provinces. */
 const EAP_PROVINCE_OPTIONS = ["National", ...PROVINCE_OPTIONS];
-const SUPPLIER_SIZE_OPTIONS = ["Large", "QSE", "EME"];
+const SUPPLIER_SIZE_OPTIONS = ["Generic", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
 const SKILLS_CATEGORY_OPTIONS = ["A", "B", "C", "D", "E", "F", "G"];
@@ -163,10 +163,10 @@ export const SUPPLIER_SIZE_MAP: Record<string, string> = {
   qualifyingsmall: "QSE",
   small: "QSE",
   smallenterprise: "QSE",
-  large: "Large",
-  largeenterprise: "Large",
-  generic: "Large",
-  l: "Large",
+  large: "Generic",
+  largeenterprise: "Generic",
+  generic: "Generic",
+  l: "Generic",
 };
 
 /** Synonyms for the MC/EE designation column (workbook select options). */
@@ -530,7 +530,7 @@ export function parseWorkbookDate(input: unknown): Date | null {
   return dt;
 }
 
-const dateValidator = (v: unknown): string | null => {
+export const dateValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const s = String(v).trim();
   const shape = /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{2}\/\d{2}\/\d{4}$/.test(s);
@@ -1063,7 +1063,7 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 
 // ---------- Procurement / Suppliers ----------
 // Rules require: supplier_name*, current_company_size*, spend*. Sizes are
-// {Large, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
+// {Generic, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
   {
@@ -1073,8 +1073,8 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
     options: SUPPLIER_SIZE_OPTIONS,
     required: true,
     width: 130,
-    aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Large"],
-    validationMessage: "Enter EME, QSE, or Large — not case sensitive. 'Generic' also maps to Large.",
+    aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Generic", "EME/QSE/Large"],
+    validationMessage: "Enter EME, QSE, or Generic — not case sensitive. Legacy 'Large' maps to Generic.",
     suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise",
   },
   {

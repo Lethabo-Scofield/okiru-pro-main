@@ -16,9 +16,18 @@ const logger = createLogger("WebServer");
 const app = express();
 const httpServer = createServer(app);
 
+// In the Replit dev/preview environment the app is rendered inside a
+// cross-origin proxied iframe, so the framing/cross-origin isolation headers
+// must be relaxed for the preview to display. In production we keep helmet's
+// secure defaults (clickjacking protection, COOP/CORP) intact.
+const isProd = process.env.NODE_ENV === "production";
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: isProd ? undefined : false,
+  crossOriginResourcePolicy: isProd ? undefined : false,
+  frameguard: isProd ? undefined : false,
 }));
 
 declare module "http" {

@@ -51,6 +51,24 @@ const GENDER_OPTIONS = [
   { value: "Female", label: "Female" },
 ];
 
+// Common South African metropolitan & district municipalities. The list is not
+// exhaustive — users can pick "Other" and type any municipality name.
+const MUNICIPALITY_OPTIONS = [
+  'City of Johannesburg',
+  'City of Tshwane',
+  'City of Ekurhuleni',
+  'City of Cape Town',
+  'eThekwini',
+  'Nelson Mandela Bay',
+  'Buffalo City',
+  'Mangaung',
+  'Sol Plaatje',
+  'Polokwane',
+  'Mbombela',
+  'Rustenburg',
+];
+const MUNICIPALITY_OTHER = '__other__';
+
 const EMPLOYMENT_OPTIONS = [
   { value: "Permanent", label: "Permanent Employee" },
   { value: "Fixed-Term", label: "Fixed-Term Contract" },
@@ -71,6 +89,9 @@ interface InterventionFormState {
   isDisabled: boolean;
   isForeign: boolean;
   employmentStatus: 'Permanent' | 'Fixed-Term' | 'Unemployed';
+
+  // Location
+  municipality: string;
 
   // YES/Completion status
   isYesEmployee: boolean;
@@ -108,6 +129,7 @@ const defaultFormState: InterventionFormState = {
   isDisabled: false,
   isForeign: false,
   employmentStatus: 'Permanent',
+  municipality: '',
   isYesEmployee: false,
   isCompleted: false,
   isAbsorbed: false,
@@ -157,6 +179,7 @@ export default function SkillsDevelopment() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [formState, setFormState] = useState<InterventionFormState>({ ...defaultFormState });
+  const [municipalityIsOther, setMunicipalityIsOther] = useState(false);
   const [expandedSkillRows, setExpandedSkillRows] = useState<Set<number>>(new Set());
   const bulkUploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -234,6 +257,7 @@ export default function SkillsDevelopment() {
 
   const resetForm = () => {
     setFormState({ ...defaultFormState });
+    setMunicipalityIsOther(false);
     setActiveTab("details");
   };
 
@@ -261,6 +285,7 @@ export default function SkillsDevelopment() {
       isDisabled: formState.isDisabled,
       isForeign: formState.isForeign,
       employmentStatus: formState.employmentStatus,
+      municipality: formState.municipality || undefined,
       isYesEmployee: formState.isYesEmployee,
       isCompleted: formState.isCompleted,
       isAbsorbed: formState.isAbsorbed,
@@ -311,6 +336,7 @@ export default function SkillsDevelopment() {
       isDisabled: prog.isDisabled || false,
       isForeign: prog.isForeign || false,
       employmentStatus: prog.employmentStatus || 'Permanent',
+      municipality: prog.municipality || '',
       isYesEmployee: prog.isYesEmployee || false,
       isCompleted: prog.isCompleted || false,
       isAbsorbed: prog.isAbsorbed || false,
@@ -328,6 +354,7 @@ export default function SkillsDevelopment() {
       isAbet: prog.isAbet || false,
       isMandatory: prog.isMandatory || false,
     });
+    setMunicipalityIsOther(!!prog.municipality && !MUNICIPALITY_OPTIONS.includes(prog.municipality));
     setIsEditOpen(true);
   };
 
@@ -351,6 +378,7 @@ export default function SkillsDevelopment() {
       isDisabled: formState.isDisabled,
       isForeign: formState.isForeign,
       employmentStatus: formState.employmentStatus,
+      municipality: formState.municipality || undefined,
       isYesEmployee: formState.isYesEmployee,
       isCompleted: formState.isCompleted,
       isAbsorbed: formState.isAbsorbed,
@@ -520,6 +548,41 @@ export default function SkillsDevelopment() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label className="text-right">Municipality</Label>
+          <div className="col-span-3 space-y-2">
+            <Select
+              value={municipalityIsOther ? MUNICIPALITY_OTHER : (formState.municipality || '')}
+              onValueChange={(v) => {
+                if (v === MUNICIPALITY_OTHER) {
+                  setMunicipalityIsOther(true);
+                  setFormState({ ...formState, municipality: '' });
+                } else {
+                  setMunicipalityIsOther(false);
+                  setFormState({ ...formState, municipality: v });
+                }
+              }}
+            >
+              <SelectTrigger data-testid="select-municipality">
+                <SelectValue placeholder="Select municipality" />
+              </SelectTrigger>
+              <SelectContent>
+                {MUNICIPALITY_OPTIONS.map(opt => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+                <SelectItem value={MUNICIPALITY_OTHER}>Other (specify)</SelectItem>
+              </SelectContent>
+            </Select>
+            {municipalityIsOther && (
+              <Input
+                value={formState.municipality}
+                onChange={e => setFormState({ ...formState, municipality: e.target.value })}
+                placeholder="Enter municipality name"
+                data-testid="input-municipality-other"
+              />
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-start gap-4">
           <Label className="text-right pt-2">Status</Label>

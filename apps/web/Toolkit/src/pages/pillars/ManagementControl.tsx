@@ -11,7 +11,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight, Wallet, Vote } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import {
 } from "@toolkit/components/ui/dialog";
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
-import { cn } from "@toolkit/lib/utils";
+import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
 import * as XLSX from "xlsx";
@@ -171,6 +171,8 @@ interface EmployeeFormState {
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
   hireDate: string;
   terminationDate: string;
+  annualSalary: number;
+  votingRightsPercent: number;
 }
 
 const defaultFormState: EmployeeFormState = {
@@ -184,6 +186,8 @@ const defaultFormState: EmployeeFormState = {
   province: 'Gauteng',
   hireDate: '',
   terminationDate: '',
+  annualSalary: 0,
+  votingRightsPercent: 0,
 };
 
 export default function ManagementControl() {
@@ -252,6 +256,8 @@ export default function ManagementControl() {
       province: formState.province,
       hireDate: formState.hireDate || undefined,
       terminationDate: formState.terminationDate || undefined,
+      annualSalary: formState.annualSalary || undefined,
+      votingRightsPercent: formState.votingRightsPercent || undefined,
     };
     
     addEmployee(newEmployee);
@@ -278,6 +284,8 @@ export default function ManagementControl() {
       province: emp.province || 'Gauteng',
       hireDate: emp.hireDate || '',
       terminationDate: emp.terminationDate || '',
+      annualSalary: emp.annualSalary || 0,
+      votingRightsPercent: emp.votingRightsPercent || 0,
     });
     setIsEditOpen(true);
   };
@@ -299,6 +307,8 @@ export default function ManagementControl() {
       province: formState.province,
       hireDate: formState.hireDate || undefined,
       terminationDate: formState.terminationDate || undefined,
+      annualSalary: formState.annualSalary || undefined,
+      votingRightsPercent: formState.votingRightsPercent || undefined,
     });
 
     setIsEditOpen(false);
@@ -464,6 +474,7 @@ export default function ManagementControl() {
   // Foreign employee count (for display)
   const foreignCount = employees.filter(e => e.isForeign).length;
   const totalCount = employees.length;
+  const totalAnnualSalary = employees.reduce((acc, e) => acc + (e.annualSalary || 0), 0);
 
   const employeeFormFields = () => (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -627,6 +638,41 @@ export default function ManagementControl() {
             className="col-span-3" 
           />
         </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="annual-salary" className="text-right">
+            <div className="flex items-center gap-1">
+              <Wallet className="h-3 w-3" />
+              Annual Salary (R)
+            </div>
+          </Label>
+          <Input
+            id="annual-salary"
+            type="number"
+            min={0}
+            value={formState.annualSalary}
+            onChange={e => setFormState({...formState, annualSalary: Number(e.target.value)})}
+            className="col-span-3"
+            placeholder="Total annual salary / cost to company"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="voting-rights" className="text-right">
+            <div className="flex items-center gap-1">
+              <Vote className="h-3 w-3" />
+              Voting Rights %
+            </div>
+          </Label>
+          <Input
+            id="voting-rights"
+            type="number"
+            min={0}
+            max={100}
+            value={formState.votingRightsPercent}
+            onChange={e => setFormState({...formState, votingRightsPercent: Number(e.target.value)})}
+            className="col-span-3"
+            placeholder="% of voting rights held (0-100)"
+          />
+        </div>
       </TabsContent>
     </Tabs>
   );
@@ -736,6 +782,17 @@ export default function ManagementControl() {
             <p className="text-xs font-medium uppercase tracking-wider mb-1 opacity-80">Total MC Score</p>
             <p className="text-2xl font-bold font-mono">{mcScore.total.toFixed(2)}</p>
             <p className="text-[10px] mt-0.5 opacity-70">of {mcMax}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-primary/5 border-primary/20" data-testid="card-total-annual-salary">
+          <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 flex items-center gap-1">
+              <Wallet className="h-3 w-3" /> Total Annual Salary
+            </p>
+            <p className="text-2xl font-bold font-mono text-primary" data-testid="text-total-annual-salary">
+              {formatRand(totalAnnualSalary)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">across {totalCount} employees</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20">
