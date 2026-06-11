@@ -72,9 +72,9 @@ describe("currentSize — SUPPLIER_SIZE_MAP synonyms", () => {
     ["Exempt Micro Enterprise", "EME"],
     ["QSE", "QSE"],
     ["qualifying small enterprise", "QSE"],
-    ["Large", "Large"],
-    ["large enterprise", "Large"],
-    ["Generic", "Large"], // documented mapping in SUPPLIER_SIZE_MAP
+    ["Large", "Generic"], // legacy "Large" now normalises to "Generic"
+    ["large enterprise", "Generic"],
+    ["Generic", "Generic"],
   ])("normalises '%s' -> '%s'", async (raw, expected) => {
     const buf = makeBuffer({
       Procurement: [
