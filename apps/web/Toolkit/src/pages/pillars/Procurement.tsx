@@ -27,6 +27,7 @@ import type { Supplier } from "@toolkit/lib/types";
 // Issue 3: Added isForeignSupplier field
 const emptySupplierForm = {
   name: '',
+  registrationNumber: '',
   beeLevel: 4,
   blackOwnership: 0,
   blackWomenOwnership: 0,
@@ -103,6 +104,7 @@ export default function Procurement() {
     addSupplier({
       id: uuidv4(),
       name: newSup.name,
+      registrationNumber: newSup.registrationNumber || undefined,
       beeLevel: Number(newSup.beeLevel) as any,
       blackOwnership: Number(newSup.blackOwnership) / 100,
       blackWomenOwnership: Number(newSup.blackWomenOwnership) / 100,
@@ -123,6 +125,7 @@ export default function Procurement() {
     setEditSupId(sup.id);
     setEditSup({
       name: sup.name,
+      registrationNumber: sup.registrationNumber || '',
       beeLevel: sup.beeLevel,
       blackOwnership: sup.blackOwnership * 100,
       blackWomenOwnership: sup.blackWomenOwnership * 100,
@@ -144,6 +147,7 @@ export default function Procurement() {
     }
     updateSupplier(editSupId, {
       name: editSup.name,
+      registrationNumber: editSup.registrationNumber || undefined,
       beeLevel: Number(editSup.beeLevel) as any,
       blackOwnership: Number(editSup.blackOwnership) / 100,
       blackWomenOwnership: Number(editSup.blackWomenOwnership) / 100,
@@ -188,6 +192,16 @@ export default function Procurement() {
           onChange={e => setData({ ...data, name: e.target.value })}
           className="col-span-3"
           data-testid="input-supplier-name"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Registration No.</Label>
+        <Input
+          value={data.registrationNumber}
+          onChange={e => setData({ ...data, registrationNumber: e.target.value })}
+          className="col-span-3"
+          placeholder="Company registration number (optional)"
+          data-testid="input-supplier-registration-number"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
@@ -456,6 +470,7 @@ export default function Procurement() {
               <thead className="bg-muted/50 border-b">
                 <tr>
                   <th className="h-10 px-4 text-left font-medium text-muted-foreground">Supplier</th>
+                  <th className="h-10 px-4 text-left font-medium text-muted-foreground">Reg. No.</th>
                   <th className="h-10 px-4 text-center font-medium text-muted-foreground">Lvl</th>
                   <th className="h-10 px-4 text-center font-medium text-muted-foreground">Type</th>
                   <th className="h-10 px-4 text-right font-medium text-muted-foreground">Spend</th>
@@ -468,7 +483,7 @@ export default function Procurement() {
               <tbody>
                 {suppliers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-muted-foreground">
                       <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-30" />
                       <p className="font-medium">No suppliers added yet</p>
                       <p className="text-sm mt-1">Add your first supplier to start tracking procurement spend.</p>
@@ -480,6 +495,9 @@ export default function Procurement() {
                   return (
                     <tr key={sup.id} className="border-b last:border-0 hover:bg-muted/30 group" data-testid={`row-supplier-${sup.id}`}>
                       <td className="p-4 font-medium">{sup.name}</td>
+                      <td className="p-4 text-muted-foreground font-mono text-xs" data-testid={`text-supplier-registration-${sup.id}`}>
+                        {sup.registrationNumber || <span className="text-muted-foreground/40">—</span>}
+                      </td>
                       <td className="p-4 text-center">
                         <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded border", getBeeLevelColor(sup.beeLevel))}>
                           L{sup.beeLevel}

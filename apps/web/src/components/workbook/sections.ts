@@ -75,7 +75,7 @@ const PROVINCE_OPTIONS = [
   "Northern Cape",
   "North West",
 ];
-const SUPPLIER_SIZE_OPTIONS = ["Large", "QSE", "EME"];
+const SUPPLIER_SIZE_OPTIONS = ["Generic", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
 const SKILLS_CATEGORY_OPTIONS = ["A", "B", "C", "D", "E", "F", "G"];
@@ -96,10 +96,10 @@ export const SUPPLIER_SIZE_MAP: Record<string, string> = {
   qualifyingsmall: "QSE",
   small: "QSE",
   smallenterprise: "QSE",
-  large: "Large",
-  largeenterprise: "Large",
-  generic: "Large",
-  l: "Large",
+  large: "Generic",
+  largeenterprise: "Generic",
+  generic: "Generic",
+  l: "Generic",
 };
 
 export const OCC_LEVEL_MAP: Record<string, string> = {
@@ -514,10 +514,10 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 
 // ---------- Procurement / Suppliers ----------
 // Rules require: supplier_name*, current_company_size*, spend*. Sizes are
-// {Large, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
+// {Generic, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Large"] },
+  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Generic", "EME/QSE/Large"] },
   { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140, aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"] },
   { key: "vatNumber", label: "VAT Number", type: "text", width: 140, aliases: ["VAT", "VAT No"] },
   { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150, aliases: ["Code", "Codes", "Scorecard"] },

@@ -118,7 +118,11 @@ export interface Employee {
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
   hireDate?: string;
   terminationDate?: string;
-  
+
+  // Remuneration & control (optional)
+  annualSalary?: number;          // Total annual salary / cost to company
+  votingRightsPercent?: number;   // % of voting rights held (0-100)
+
   // Computed fields for measurement period
   isActiveDuringMeasurement?: boolean;
 }
@@ -156,6 +160,9 @@ export interface TrainingProgram {
   isYesEmployee: boolean;
   isCompleted: boolean;
   isAbsorbed: boolean;
+
+  // Location
+  municipality?: string;  // Municipality / district where training delivered
 
   // Dates
   transactionDate: string;  // Invoice/transaction date
@@ -258,6 +265,7 @@ export interface Supplier {
   id: string;
   name: string;
   vatNumber?: string;                    // VAT number for verification
+  registrationNumber?: string;           // Company registration number (optional)
   beeLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 0;
   
   // Ownership details

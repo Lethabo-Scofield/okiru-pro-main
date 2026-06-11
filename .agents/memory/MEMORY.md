@@ -1,0 +1,1 @@
+- [Supplier size term](supplier-size-term.md) — supplier-size enum is produced by TWO paths (workbook sections.ts + excelImport.ts); rename both or legacy term leaks back.
