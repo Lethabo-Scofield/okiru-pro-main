@@ -49,5 +49,20 @@
     "ipAddress": "127.0.0.1",
     "userAgent": "curl/8.14.1",
     "createdAt": "2026-05-05T02:11:01.493Z"
+  },
+  {
+    "id": "92e0b4f8-fce8-432c-9c29-cb442ee97dc8",
+    "type": "download",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": null,
+    "metadata": {
+      "blobName": "public/cert-test-001-acme-bbbee.pdf",
+      "mode": null
+    },
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    "createdAt": "2026-06-12T04:02:12.510Z"
   }
 ]
