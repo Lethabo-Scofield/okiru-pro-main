@@ -31,6 +31,7 @@ import {
   type SectionGroup,
 } from "@/components/workbook/sections";
 import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
+import { NumericDateInput } from "@/components/ui/NumericDateInput";
 import {
   validateWorkbook,
   formatWorkbookValidationSummary,
@@ -587,9 +588,16 @@ function MetaForm({
                   className="h-4 w-4 accent-blue-500"
                 />
               </div>
+            ) : f.type === "date" ? (
+              <NumericDateInput
+                value={String(v ?? "")}
+                onChange={(iso) => setField(f.key, iso)}
+                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
+                placeholder="dd/mm/yyyy"
+              />
             ) : (
               <input
-                type={f.type === "date" ? "date" : "text"}
+                type="text"
                 inputMode={f.type === "number" ? "decimal" : undefined}
                 value={String(v ?? "")}
                 onChange={(e) =>
@@ -1162,7 +1170,8 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       onChange={(next) => handleMetaChange(activeSection.key, next)}
                     />
                   </div>
-                ) : activeSection.columns ? (
+                ) : null}
+                {activeSection.columns ? (
                   <div className="pt-5">
                     <SpreadsheetGrid
                       columns={activeSection.columns}
@@ -1173,11 +1182,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       sectionDescription={activeSection.description}
                     />
                   </div>
-                ) : (
+                ) : !activeMetaFields ? (
                   <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
                     <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           ) : null}
