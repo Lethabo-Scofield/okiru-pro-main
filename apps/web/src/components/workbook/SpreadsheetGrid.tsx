@@ -284,6 +284,7 @@ export function SpreadsheetGrid({
                     >
                       {col.type === "select" ? (
                         <select
+                          aria-label={col.label}
                           value={String(v ?? "")}
                           onChange={(e) => updateCell(rIdx, col.key, e.target.value)}
                           onFocus={() => setActive({ row: rIdx, col: cIdx })}
@@ -311,6 +312,7 @@ export function SpreadsheetGrid({
                       ) : col.type === "boolean" ? (
                         <div className="flex items-center justify-center h-full py-2">
                           <input
+                            aria-label={col.label}
                             type="checkbox"
                             checked={Boolean(v)}
                             onChange={(e) => updateCell(rIdx, col.key, e.target.checked)}
@@ -321,6 +323,7 @@ export function SpreadsheetGrid({
                         </div>
                       ) : (
                         <input
+                          aria-label={col.label}
                           type="text"
                           inputMode={col.type === "number" ? "decimal" : undefined}
                           value={String(v ?? "")}

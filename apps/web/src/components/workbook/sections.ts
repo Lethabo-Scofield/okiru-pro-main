@@ -534,7 +534,7 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   },
   {
     key: "blackOwnership",
-    label: "BO (%)",
+    label: "Black Ownership %",
     type: "number",
     width: 120,
     validate: percentValidator,
@@ -543,7 +543,7 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   },
   {
     key: "blackWomenOwnership",
-    label: "BWO (%)",
+    label: "Black Women Ownership %",
     type: "number",
     width: 120,
     validate: percentValidator,
@@ -552,7 +552,7 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   },
   {
     key: "designatedGroupOwnership",
-    label: "BDG (%)",
+    label: "Disabled Ownership %",
     type: "number",
     width: 120,
     validate: percentValidator,
@@ -560,7 +560,7 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   },
   {
     key: "blackNewEntrantOwnership",
-    label: "BNE (%)",
+    label: "Youth Ownership %",
     type: "number",
     width: 120,
     validate: percentValidator,
@@ -627,6 +627,7 @@ export const MANAGEMENT_COLUMNS: ColumnDef[] = [
   { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level"] },
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
   { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
+  { key: "annualSalary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Remuneration", "Total Cost to Company", "CTC"] },
   { key: "votingRights", label: "Voting Rights (%)", type: "number", required: true, width: 140, validate: percentValidator },
   { key: "startDate", label: "Start Date / Years of Service", type: "text", width: 180, validate: dateOrNumberValidator },
 ];
