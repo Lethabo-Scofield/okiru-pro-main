@@ -633,6 +633,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [submitStatus, setSubmitStatus] = useState<{
+    type: "pending" | "success" | "error";
+    message: string;
+  } | null>(null);
   // Per-section debounce timers + pending payloads so editing section B never
   // discards a pending save for section A.
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); 
@@ -815,6 +819,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const handleSubmit = useCallback(async () => {
     if (!workbook) return;
     setSubmitting(true);
+    setSubmitStatus({
+      type: "pending",
+      message: "Saving workbook changes before submitting the scorecard...",
+    });
     try {
       // 1. Wait for any save that is already mid-flight to land.
       await waitForInFlight();
@@ -825,6 +833,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       // 4. Refuse to submit if any of those saves failed, or a prior save error
       //    has not been cleared.
       if (!ok || saveError) {
+        setSubmitStatus({
+          type: "error",
+          message: "Scorecard was not submitted because the latest workbook changes could not be saved.",
+        });
         toast({
           title: "Submit aborted",
           description: "Unsaved changes failed to save - fix the save error and try again.",
@@ -834,6 +846,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       }
       const validationIssues = validateWorkbook(workbook.sections);
       if (validationIssues.length > 0) {
+        setSubmitStatus({
+          type: "error",
+          message: "Scorecard was not submitted. Fix the validation errors and try again.",
+        });
         toast({
           title: "Fix validation errors before submitting",
           description: formatWorkbookValidationSummary(validationIssues, 4),
@@ -847,8 +863,13 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       );
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setSubmittedAt(data.submittedAt || new Date().toISOString());
+        const nextSubmittedAt = data.submittedAt || new Date().toISOString();
+        setSubmittedAt(nextSubmittedAt);
         const c = data.counts || {};
+        setSubmitStatus({
+          type: "success",
+          message: `Scorecard saved and submitted at ${new Date(nextSubmittedAt).toLocaleTimeString()}. Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
+        });
         toast({
           title: "Submitted to scorecard",
           description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
@@ -859,8 +880,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         } catch {
           // DataLoader will retry on the summary page if preload fails.
         }
-        navigate(`/create-scorecard/${encodeURIComponent(companyId)}/summary`);
       } else {
+        setSubmitStatus({
+          type: "error",
+          message: data.error || `Scorecard was not saved. Server returned ${res.status}.`,
+        });
         toast({
           title: "Submit failed",
           description: data.error || `Server returned ${res.status}.`,
@@ -868,6 +892,10 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         });
       }
     } catch (e) {
+      setSubmitStatus({
+        type: "error",
+        message: "Scorecard was not saved. Network error while submitting.",
+      });
       toast({ title: "Submit failed", description: "Network error.", variant: "destructive" });
     } finally {
       setSubmitting(false);
@@ -1130,6 +1158,33 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           </button>
         </div>
       </div>
+
+      {submitStatus && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-[13px] ${
+            submitStatus.type === "success"
+              ? "border-status-success/30 bg-status-success-bg text-status-success"
+              : submitStatus.type === "error"
+                ? "border-status-error/30 bg-status-error-bg text-status-error"
+                : "border-white/10 bg-[#1c1c1e] text-[#d1d1d6]"
+          }`}
+          data-testid="submit-status"
+          role={submitStatus.type === "error" ? "alert" : "status"}
+        >
+          <div className="flex items-start gap-2">
+            {submitStatus.type === "pending" ? (
+              <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+            ) : submitStatus.type === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-current text-[10px] font-bold">
+                !
+              </span>
+            )}
+            <span>{submitStatus.message}</span>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="lg:hidden w-full -mx-1 px-1 overflow-x-auto">
