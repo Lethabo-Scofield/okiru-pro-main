@@ -7,6 +7,7 @@ import {
 import { apiRequest } from '@toolkit/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavBack } from '@/components/AppNavBack';
+import { useAuth } from '@toolkit/lib/auth';
 
 type Status = 'open' | 'in-progress' | 'resolved';
 type Category = 'bug' | 'feature' | 'general' | 'compliance';
@@ -86,6 +87,7 @@ function formatDate(iso: string): string {
 
 export default function DevMode() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
@@ -173,9 +175,9 @@ export default function DevMode() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <AppNavBack
-              href="/hub"
+              href="/"
               eyebrow="Suite"
-              label="Hub"
+              label="Home"
               variant="zinc"
               size="compact"
               data-testid="link-back-home"
@@ -311,32 +313,34 @@ export default function DevMode() {
                         <span>Anonymous</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={item.status}
-                        onChange={(e) => updateStatus.mutate({ id: item.id, status: e.target.value as Status })}
-                        disabled={updateStatus.isPending}
-                        data-testid={`select-status-${item.id}`}
-                        className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-zinc-200 focus:border-indigo-500 focus:outline-none"
-                      >
-                        <option value="open">Open</option>
-                        <option value="in-progress">In progress</option>
-                        <option value="resolved">Resolved</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('Delete this feedback?')) {
-                            deleteFeedback.mutate(item.id);
-                          }
-                        }}
-                        disabled={deleteFeedback.isPending}
-                        data-testid={`button-delete-${item.id}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
+                    {user && (
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={item.status}
+                          onChange={(e) => updateStatus.mutate({ id: item.id, status: e.target.value as Status })}
+                          disabled={updateStatus.isPending}
+                          data-testid={`select-status-${item.id}`}
+                          className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-zinc-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="open">Open</option>
+                          <option value="in-progress">In progress</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Delete this feedback?')) {
+                              deleteFeedback.mutate(item.id);
+                            }
+                          }}
+                          disabled={deleteFeedback.isPending}
+                          data-testid={`button-delete-${item.id}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 hover:bg-red-500/10 hover:text-red-300"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}

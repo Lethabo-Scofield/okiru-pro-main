@@ -103,7 +103,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -127,7 +127,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/stats', requireAuth, async (_req: Request, res: Response) => {
+router.get('/stats', async (_req: Request, res: Response) => {
   try {
     if (isMongoConnected()) {
       const [total, open, inProgress, resolved, byCategory] = await Promise.all([
