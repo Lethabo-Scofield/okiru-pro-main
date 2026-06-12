@@ -8,6 +8,7 @@ import { cn } from "@toolkit/lib/utils";
 import type { Client } from "@toolkit/lib/types";
 import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from "@/lib/bbeeSectorsApi";
 import { NumberTextInput } from "./NumberTextInput";
+import { NumericDateInput } from "@/components/ui/NumericDateInput";
 
 // Sector option from API
 export interface SectorOption {
@@ -463,13 +464,12 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
             <div className="space-y-2">
               <Label htmlFor="financialYearEnd" className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Financial Year End *
+                Financial Year End (dd/mm/yyyy) *
               </Label>
-              <Input
+              <NumericDateInput
                 id="financialYearEnd"
-                type="date"
                 value={data.financialYearEnd}
-                onChange={(e) => updateField('financialYearEnd', e.target.value)}
+                onChange={(value) => updateField('financialYearEnd', value)}
                 disabled={readOnly}
               />
             </div>
@@ -491,22 +491,20 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodStart">Period Start</Label>
-              <Input
+              <Label htmlFor="measurementPeriodStart">Financial Period Start (dd/mm/yyyy)</Label>
+              <NumericDateInput
                 id="measurementPeriodStart"
-                type="date"
                 value={data.measurementPeriodStart || ''}
-                onChange={(e) => updateField('measurementPeriodStart', e.target.value)}
+                onChange={(value) => updateField('measurementPeriodStart', value)}
                 disabled={readOnly}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodEnd">Period End</Label>
-              <Input
+              <Label htmlFor="measurementPeriodEnd">Financial Period End (dd/mm/yyyy)</Label>
+              <NumericDateInput
                 id="measurementPeriodEnd"
-                type="date"
                 value={data.measurementPeriodEnd || ''}
-                onChange={(e) => updateField('measurementPeriodEnd', e.target.value)}
+                onChange={(value) => updateField('measurementPeriodEnd', value)}
                 disabled={readOnly}
               />
             </div>
@@ -538,12 +536,11 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="beeCertificateExpiry">Expiry Date</Label>
-              <Input
+              <Label htmlFor="beeCertificateExpiry">Expiry Date (dd/mm/yyyy)</Label>
+              <NumericDateInput
                 id="beeCertificateExpiry"
-                type="date"
                 value={data.beeCertificateExpiry || ''}
-                onChange={(e) => updateField('beeCertificateExpiry', e.target.value)}
+                onChange={(value) => updateField('beeCertificateExpiry', value)}
                 disabled={readOnly}
               />
             </div>

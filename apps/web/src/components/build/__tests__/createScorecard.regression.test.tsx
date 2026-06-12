@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { NumericDateInput } from '@/components/ui/NumericDateInput';
 import { NumberTextInput } from '../NumberTextInput';
+import ClientInformationForm, { type ClientInformationData } from '../ClientInformationForm';
 import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore } from '@toolkit/lib/calculators/esd-sed';
@@ -39,6 +40,37 @@ describe('create-scorecard date validation', () => {
     await user.tab();
 
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid date as dd/mm/yyyy.');
+  });
+
+  it('lets Company Info Financial Period Start use dd/mm/yyyy entry', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const data: ClientInformationData = {
+      companyName: 'QA Company',
+      registrationNumber: '2019/123456/07',
+      physicalAddress: '1 Test Road',
+      contactPerson: 'QA',
+      contactEmail: 'qa@example.com',
+      contactPhone: '0100000000',
+      sectorCode: 'RCOGP',
+      industry: 'RCOGP',
+      annualTurnover: 1000000,
+      numberOfEmployees: 20,
+      financialYearEnd: '',
+      measurementPeriodStart: '',
+      measurementPeriodEnd: '',
+    };
+
+    render(<ClientInformationForm data={data} onChange={onChange} />);
+
+    await user.type(screen.getByLabelText(/Financial Period Start/i), '31/12/2025');
+    await user.tab();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      measurementPeriodStart: '2025-12-31',
+    }));
+    expect(screen.getByLabelText(/Financial Period Start/i)).toHaveValue('31/12/2025');
   });
 });
 
