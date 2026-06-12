@@ -19,6 +19,7 @@ import type { CalculatorConfig } from "@shared/schema";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
+import { NumberTextInput } from "../NumberTextInput";
 
 interface ProcurementFormProps {
   data: ProcurementData;
@@ -29,6 +30,7 @@ interface ProcurementFormProps {
 // Issue 3: Removed graduation bonus, added isForeignSupplier
 const emptySupplier = {
   name: '',
+  registrationNumber: '',
   vatNumber: '',
   beeLevel: 4 as Supplier['beeLevel'],
   blackOwnership: 0,
@@ -42,6 +44,15 @@ const emptySupplier = {
   isForeignSupplier: false, // Issue 3: Added
   spend: 0,
 };
+
+function normalizeEnterpriseType(value: unknown): Supplier['enterpriseType'] {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'eme' || normalized === 'qse' || normalized === 'generic') {
+    return normalized;
+  }
+  if (normalized === 'large') return 'generic';
+  return 'generic';
+}
 
 export function ProcurementForm({ data, onChange, className }: ProcurementFormProps) {
   const [showDialog, setShowDialog] = useState(false);
@@ -66,13 +77,14 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
   const openEdit = (s: Supplier) => {
     setForm({
       name: s.name,
+      registrationNumber: s.registrationNumber || '',
       vatNumber: s.vatNumber || '',
       beeLevel: s.beeLevel,
       blackOwnership: s.blackOwnership,
       blackWomenOwnership: s.blackWomenOwnership,
       youthOwnership: s.youthOwnership,
       disabledOwnership: s.disabledOwnership,
-      enterpriseType: s.enterpriseType,
+      enterpriseType: normalizeEnterpriseType(s.enterpriseType),
       isEmpoweringSupplier: s.isEmpoweringSupplier,
       isSupplierDevRecipient: s.isSupplierDevRecipient,
       hasThreeYearContract: s.hasThreeYearContract,
@@ -88,13 +100,14 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
     const supplier: Supplier = {
       id: editingId || uuidv4(),
       name: form.name,
+      registrationNumber: form.registrationNumber || undefined,
       vatNumber: form.vatNumber || undefined,
       beeLevel: form.beeLevel,
       blackOwnership: form.blackOwnership,
       blackWomenOwnership: form.blackWomenOwnership,
       youthOwnership: form.youthOwnership,
       disabledOwnership: form.disabledOwnership,
-      enterpriseType: form.enterpriseType,
+      enterpriseType: normalizeEnterpriseType(form.enterpriseType),
       isEmpoweringSupplier: form.isEmpoweringSupplier,
       isSupplierDevRecipient: form.isSupplierDevRecipient,
       hasThreeYearContract: form.hasThreeYearContract,
@@ -151,10 +164,9 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-xs">Total Measured Procurement Spend (TMPS)</Label>
-          <Input
-            type="number"
-            value={data.tmps || ''}
-            onChange={e => onChange({ ...data, tmps: Number(e.target.value) })}
+          <NumberTextInput
+            value={data.tmps}
+            onNumberChange={value => onChange({ ...data, tmps: value })}
             placeholder="0"
           />
         </div>
@@ -204,7 +216,7 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
                     <td className="px-3 py-2 text-xs">
                       <Badge variant="outline">L{s.beeLevel}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground uppercase">{s.enterpriseType}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground uppercase">{normalizeEnterpriseType(s.enterpriseType)}</td>
                     <td className="px-3 py-2 text-xs">{(s.blackOwnership * 100).toFixed(0)}%</td>
                     <td className="px-3 py-2 text-right text-xs font-medium">{formatRand(s.spend)}</td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
@@ -236,12 +248,18 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Supplier Name</Label>
-                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Company name" />
+                <Label htmlFor="supplierName" className="text-xs">Supplier Name</Label>
+                <Input id="supplierName" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Company name" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">VAT Number</Label>
-                <Input value={form.vatNumber} onChange={e => setForm(p => ({ ...p, vatNumber: e.target.value }))} placeholder="Optional" />
+                <Label htmlFor="supplierRegistrationNumber" className="text-xs">Registration Number</Label>
+                <Input id="supplierRegistrationNumber" value={form.registrationNumber} onChange={e => setForm(p => ({ ...p, registrationNumber: e.target.value }))} placeholder="Optional" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="supplierVatNumber" className="text-xs">VAT Number</Label>
+                <Input id="supplierVatNumber" value={form.vatNumber} onChange={e => setForm(p => ({ ...p, vatNumber: e.target.value }))} placeholder="Optional" />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -266,18 +284,26 @@ export function ProcurementForm({ data, onChange, className }: ProcurementFormPr
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Spend (R)</Label>
-                <Input type="number" value={form.spend || ''} onChange={e => setForm(p => ({ ...p, spend: Number(e.target.value) }))} placeholder="0" />
+                <Label htmlFor="supplierSpend" className="text-xs">Spend (R)</Label>
+                <NumberTextInput id="supplierSpend" value={form.spend} onNumberChange={value => setForm(p => ({ ...p, spend: value }))} placeholder="0" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Black Ownership %</Label>
-                <Input type="number" min="0" max="100" value={(form.blackOwnership * 100).toFixed(0)} onChange={e => setForm(p => ({ ...p, blackOwnership: Number(e.target.value) / 100 }))} />
+                <NumberTextInput min="0" max="100" value={form.blackOwnership * 100} onNumberChange={value => setForm(p => ({ ...p, blackOwnership: value / 100 }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Black Women Ownership %</Label>
-                <Input type="number" min="0" max="100" value={(form.blackWomenOwnership * 100).toFixed(0)} onChange={e => setForm(p => ({ ...p, blackWomenOwnership: Number(e.target.value) / 100 }))} />
+                <NumberTextInput min="0" max="100" value={form.blackWomenOwnership * 100} onNumberChange={value => setForm(p => ({ ...p, blackWomenOwnership: value / 100 }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Youth Ownership %</Label>
+                <NumberTextInput min="0" max="100" value={form.youthOwnership * 100} onNumberChange={value => setForm(p => ({ ...p, youthOwnership: value / 100 }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Disabled Ownership %</Label>
+                <NumberTextInput min="0" max="100" value={form.disabledOwnership * 100} onNumberChange={value => setForm(p => ({ ...p, disabledOwnership: value / 100 }))} />
               </div>
             </div>
             {/* Issue 3: Replaced graduation bonus with foreign supplier checkbox */}

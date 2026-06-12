@@ -7,6 +7,7 @@ import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase,
 import { cn } from "@toolkit/lib/utils";
 import type { Client } from "@toolkit/lib/types";
 import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from "@/lib/bbeeSectorsApi";
+import { NumberTextInput } from "./NumberTextInput";
 
 // Sector option from API
 export interface SectorOption {
@@ -435,11 +436,10 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
               <Label htmlFor="annualTurnover" className="flex items-center gap-1">
                 Annual Turnover (R) *
               </Label>
-              <Input
+              <NumberTextInput
                 id="annualTurnover"
-                type="number"
-                value={data.annualTurnover || ''}
-                onChange={(e) => updateField('annualTurnover', Number(e.target.value))}
+                value={data.annualTurnover}
+                onNumberChange={(value) => updateField('annualTurnover', value)}
                 placeholder="0"
                 disabled={readOnly}
               />
@@ -452,11 +452,10 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
                 <Users className="h-3 w-3" />
                 Number of Employees *
               </Label>
-              <Input
+              <NumberTextInput
                 id="numberOfEmployees"
-                type="number"
-                value={data.numberOfEmployees || ''}
-                onChange={(e) => updateField('numberOfEmployees', Number(e.target.value))}
+                value={data.numberOfEmployees}
+                onNumberChange={(value) => updateField('numberOfEmployees', value)}
                 placeholder="0"
                 disabled={readOnly}
               />

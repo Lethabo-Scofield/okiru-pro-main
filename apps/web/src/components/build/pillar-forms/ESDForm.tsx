@@ -19,6 +19,7 @@ import type { CalculatorConfig } from "@shared/schema";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
+import { NumberTextInput } from "../NumberTextInput";
 
 interface ESDFormProps {
   data: ESDData;
@@ -227,8 +228,38 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
         </label>
       </div>
 
+<<<<<<< Updated upstream
       {renderTable(sdContribs, 'supplier_development', 'Supplier Development', 10)}
       {renderTable(edContribs, 'enterprise_development', 'Enterprise Development', 5)}
+=======
+      {showStockbrokerRow && (
+        <Card className="border-border/80 bg-card">
+          <CardContent className="p-4 space-y-2">
+            <Label className="text-xs">
+              ED support of black stockbrokers / fund managers / intermediaries (R)
+            </Label>
+            <NumberTextInput
+              min={0}
+              value={data.stockbrokerSpend}
+              onNumberChange={(value) =>
+                onChange({
+                  ...data,
+                  stockbrokerSpend: value || undefined,
+                })
+              }
+              placeholder="0"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Target {(edStockbrokerTargetPct * 100).toFixed(1)}% of NPAT · max {edStockbrokerBonusMax} bonus pts
+              {result.stockbrokerBonus > 0 ? ` · scored ${result.stockbrokerBonus.toFixed(1)}` : ''}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {renderTable(sdContribs, 'supplier_development', 'Supplier Development', sdMax)}
+      {renderTable(edContribs, 'enterprise_development', 'Enterprise Development', edMax)}
+>>>>>>> Stashed changes
 
       {/* Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -259,12 +290,12 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Amount (R)</Label>
-                <Input type="number" value={form.amount || ''} onChange={e => setForm(p => ({ ...p, amount: Number(e.target.value) }))} placeholder="0" />
+                <NumberTextInput value={form.amount} onNumberChange={value => setForm(p => ({ ...p, amount: value }))} placeholder="0" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Black Beneficiary %</Label>
-              <Input type="number" min="0" max="100" value={form.blackBenefitPercent} onChange={e => setForm(p => ({ ...p, blackBenefitPercent: Number(e.target.value) }))} />
+              <NumberTextInput min="0" max="100" value={form.blackBenefitPercent} onNumberChange={value => setForm(p => ({ ...p, blackBenefitPercent: value }))} />
             </div>
           </div>
           <DialogFooter>

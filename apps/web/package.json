@@ -10,6 +10,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -102,6 +103,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@replit/vite-plugin-cartographer": "^0.4.10",
     "@replit/vite-plugin-dev-banner": "^0.1.2",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.4",
@@ -128,7 +130,8 @@
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.1.8"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

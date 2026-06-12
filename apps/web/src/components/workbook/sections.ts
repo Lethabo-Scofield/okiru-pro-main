@@ -79,6 +79,23 @@ const SUPPLIER_SIZE_OPTIONS = ["Generic", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
 const SKILLS_CATEGORY_OPTIONS = ["A", "B", "C", "D", "E", "F", "G"];
+const MUNICIPALITY_OPTIONS = [
+  "City of Johannesburg",
+  "City of Tshwane",
+  "Ekurhuleni",
+  "eThekwini",
+  "City of Cape Town",
+  "Nelson Mandela Bay",
+  "Buffalo City",
+  "Mangaung",
+  "Msunduzi",
+  "Rustenburg",
+  "Polokwane",
+  "Mbombela",
+  "Sol Plaatje",
+  "Stellenbosch",
+  "Other",
+];
 
 /**
  * Synonym maps consulted by the Excel normaliser when coercing a `select`
@@ -436,8 +453,133 @@ const FINANCIAL_META: ColumnDef[] = [
 
 // ---------- Ownership ----------
 export const OWNERSHIP_COLUMNS: ColumnDef[] = [
+<<<<<<< Updated upstream
   { key: "shareholderName", label: "Shareholder Name", type: "text", required: true, width: 200 },
   { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150 },
+=======
+  {
+    key: "shareholderName",
+    label: "Shareholder",
+    type: "text",
+    required: true,
+    width: 200,
+    aliases: ["Shareholder", "Shareholder Name", "Name"],
+  },
+  {
+    key: "ownershipType",
+    label: "Ownership Type",
+    type: "select",
+    options: ["Shareholder", "Sale of Assets", "Equity Equivalent"],
+    width: 140,
+    aliases: ["Ownership Type", "Type"],
+    validationMessage: "Choose Shareholder, Sale of Assets, or Equity Equivalent",
+  },
+  yesNoColumn("soaBuyer", "SOA Buyer", { width: 110, aliases: ["SOA Buyer"] }),
+  {
+    key: "transactionSoa",
+    label: "Transaction (SOA)",
+    type: "text",
+    width: 150,
+    aliases: ["Transaction (SOA)", "Transaction"],
+  },
+  {
+    key: "rowOutstandingDebt",
+    label: "Outstanding Debt (R)",
+    type: "number",
+    width: 160,
+    validate: numericValidator,
+    aliases: ["Outstaning Debt", "Outstanding Debt", "Outstanding Acquisition Debt"],
+  },
+  {
+    key: "loanDate",
+    label: "Loan Date (dd/mm/yyyy)",
+    type: "date",
+    width: 140,
+    validate: dateValidator,
+    aliases: ["Loan Date"],
+    validationMessage: "Enter date as dd/mm/yyyy",
+  },
+  {
+    key: "blackOwnership",
+    label: "BO (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BO%", "BO %", "Black Ownership", "Black Ownership %", "ME BO%"],
+    validationMessage: "Enter a percentage between 0 and 100",
+  },
+  {
+    key: "blackWomenOwnership",
+    label: "BWO (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BWO%", "BWO %", "Black Women Ownership", "ME BWO%"],
+    validationMessage: "Enter a percentage between 0 and 100",
+  },
+  {
+    key: "designatedGroupOwnership",
+    label: "BDG (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BDG%", "BDG %", "Designated Group", "ME BDG%"],
+  },
+  {
+    key: "blackNewEntrantOwnership",
+    label: "BNE (%)",
+    type: "number",
+    width: 120,
+    validate: percentValidator,
+    aliases: ["BNE%", "BNE %", "New Entrant", "ME BNE%"],
+  },
+  {
+    key: "numberOfShares",
+    label: "Number of Shares",
+    type: "number",
+    width: 140,
+    validate: integerNonNegValidator,
+    aliases: ["Number of Share", "Shares Held", "Shares"],
+  },
+  {
+    key: "shareValue",
+    label: "Share Value (R)",
+    type: "number",
+    width: 160,
+    validate: numericValidator,
+    aliases: ["Share Carrying Value (R)", "Share Carrying Value"],
+    guidance: "Carrying value of this shareholder's stake. Required with Company Value to Use for net-value scoring.",
+  },
+  {
+    key: "shareholding",
+    label: "Share (%)",
+    type: "number",
+    width: 130,
+    validate: percentValidator,
+    aliases: ["Share %", "Shareholding (%)", "Shareholding"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
+  {
+    key: "votingRights",
+    label: "Voting Rights (%)",
+    type: "number",
+    width: 140,
+    validate: percentValidator,
+    aliases: ["Voting Rights"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
+  {
+    key: "economicInterest",
+    label: "Economic Interest (%)",
+    type: "number",
+    width: 160,
+    validate: percentValidator,
+    aliases: ["Economic Interest", "EI %"],
+    validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+  },
+  { key: "yearsHeld", label: "Years Held", type: "number", width: 110, validate: integerNonNegValidator },
+  { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150, aliases: ["ID Number", "ID / Registration Number"] },
+>>>>>>> Stashed changes
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, width: 130 },
   { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, width: 110 },
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
@@ -481,17 +623,100 @@ export const EMPLOYEE_COLUMNS: ColumnDef[] = [
 ];
 
 // ---------- Skills Development ----------
+<<<<<<< Updated upstream
+=======
+
+const SELECT_PERIOD_OPTIONS = ["Current YTD", "Full Year", "Prior Year"];
+
+/**
+ * Single-record meta form for Skills Development aggregate (grey-cell) inputs.
+ * These correspond to the required inputs on the RCOGP Skills Scorecard tab and
+ * Skills Toolkit tab. Source of truth: docs/domain/sectors/rcogp/generic/sls.md §3 + §6.3.
+ *
+ * Leviable Amount is NOT collected here — it is always derived as `payroll × 1%`
+ * in `mapWorkbookFinancialsToClient`. Removing it as a user input eliminates the
+ * duplicate-entry problem where Total Payroll and Leviable Amount could conflict.
+ */
+export const SKILLS_META: ColumnDef[] = [
+  {
+    key: "eapProvince",
+    label: "Applicable EAP Targets (Province)",
+    type: "select",
+    required: true,
+    options: EAP_PROVINCE_OPTIONS,
+    guidance: "National or province for EAP demographic lookup. Required for bursary demographic splits and Management Control scoring.",
+    validationMessage: "Select National or a South African province from the dropdown",
+    suggestionHint: "Use National for the Stats SA national EAP table, or select the province where the entity is registered or primarily operates",
+  },
+  {
+    key: "eapYear",
+    label: "EAP Targets Year",
+    type: "number",
+    required: true,
+    validate: positiveIntValidator,
+    guidance: "Year matching a row in the EAP table (e.g. 2025). Triggers 'EAP targets Year selected?' validation in the toolkit.",
+  },
+  {
+    key: "headcount",
+    label: "Headcount (Total Employees)",
+    type: "number",
+    required: true,
+    validate: positiveIntValidator,
+    guidance: "Total employee headcount of the entity (positive integer). Used as the base for the LAI target: 5% × headcount.",
+  },
+  {
+    key: "trainingManagerSalary",
+    label: "Training Manager's Salary (R)",
+    type: "number",
+    required: true,
+    validate: numericValidator,
+    guidance: "Annual salary of the Skills Development Facilitator / Training Manager (≥ 0). Admin costs are capped at 15% of total skills spend.",
+  },
+  {
+    key: "trainingOverheadCost",
+    label: "Training Overhead Cost (R)",
+    type: "number",
+    required: true,
+    validate: numericValidator,
+    guidance: "Total training overhead costs (venue hire, admin, etc.) (≥ 0). Also subject to the 15% admin cost cap.",
+  },
+  {
+    key: "selectPeriod",
+    label: "Select Period",
+    type: "select",
+    required: true,
+    options: SELECT_PERIOD_OPTIONS,
+    guidance: "Set to 'Current YTD' for active year-to-date measurement. The Summary scorecard warns when not set.",
+  },
+  {
+    key: "dataDate",
+    label: "Training Data Reference Date (dd/mm/yyyy)",
+    type: "date",
+    required: true,
+    validate: dateValidator,
+    validationMessage: "Enter date as dd/mm/yyyy",
+    guidance: "Reference date for this training dataset. Skills scorecard flags missing training reference dates.",
+  },
+];
+
+>>>>>>> Stashed changes
 // Rules require: program*, category*, learner*, gender*, race*. Costs ≥ 0.
 export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
   { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
   { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
+<<<<<<< Updated upstream
   { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150 },
   { key: "municipality", label: "Municipality", type: "text", width: 160 },
+=======
+  { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150, validationMessage: "Select a South African province from the dropdown" },
+  { key: "municipality", label: "Municipality", type: "select", options: MUNICIPALITY_OPTIONS, width: 180, validationMessage: "Select a common municipality or Other" },
+>>>>>>> Stashed changes
   { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180, aliases: ["Learner", "Trainee", "Employee Name", "Beneficiary"] },
   { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number"] },
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Population Group", "Ethnicity"] },
   { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Sex"] },
+<<<<<<< Updated upstream
   { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
   { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
   { key: "age", label: "Age", type: "number", width: 90, validate: integerNonNegValidator },
@@ -499,6 +724,14 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "completed", label: "Completed?", type: "boolean", width: 110 },
   { key: "absorbed", label: "Absorbed?", type: "boolean", width: 110 },
   { key: "courseCost", label: "Course Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Course Fees", "Tuition", "Training Cost", "Course"] },
+=======
+  yesNoColumn("isDisabled", "Disabled", { width: 100, aliases: ["Disabled *"] }),
+  yesNoColumn("isForeign", "Foreign", { width: 100, aliases: ["Foreign *", "Foreign National"] }),
+  yesNoColumn("employed", "Employed?", { width: 110 }),
+  yesNoColumn("completed", "Completed?", { width: 110 }),
+  yesNoColumn("absorbed", "Absorbed?", { width: 110 }),
+  { key: "courseCost", label: "Programme Spend (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Course Cost", "Course Fees", "Tuition", "Training Cost", "Course", "Programme Spend", "Program Spend"] },
+>>>>>>> Stashed changes
   { key: "travelCost", label: "Travel Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Travel", "Transport"] },
   { key: "accommodationCost", label: "Accommodation (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Accommodation Cost", "Accommodation"] },
   { key: "cateringCost", label: "Catering (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Catering", "Food", "Meals"] },
@@ -517,8 +750,33 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 // {Generic, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
+<<<<<<< Updated upstream
   { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Generic", "EME/QSE/Large"] },
   { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140, aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"] },
+=======
+  { key: "registrationNumber", label: "Supplier Registration Number", type: "text", width: 210, aliases: ["Registration Number", "Reg No", "Company Registration", "Supplier Registration"] },
+  {
+    key: "currentSize",
+    label: "Current Size",
+    type: "select",
+    options: SUPPLIER_SIZE_OPTIONS,
+    required: true,
+    width: 130,
+    aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Generic", "EME/QSE/Large"],
+    validationMessage: "Enter EME, QSE, or Generic — not case sensitive. Legacy 'Large' maps to Generic.",
+    suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise",
+  },
+  {
+    key: "bbbeeLevel",
+    label: "B-BBEE Level",
+    type: "select",
+    options: BBBEE_LEVEL_OPTIONS,
+    width: 140,
+    aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"],
+    validationMessage: "Enter a number 1–8 or 'Non-Compliant'. Level 1 is the highest contributor status.",
+    suggestionHint: "Level 1 (highest) through Level 8 (lowest), or Non-Compliant",
+  },
+>>>>>>> Stashed changes
   { key: "vatNumber", label: "VAT Number", type: "text", width: 140, aliases: ["VAT", "VAT No"] },
   { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150, aliases: ["Code", "Codes", "Scorecard"] },
   { key: "empoweringSupplier", label: "Empowering Supplier?", type: "boolean", width: 180, aliases: ["Empowering Supplier", "ES"] },
@@ -547,8 +805,22 @@ const ESD_CATEGORY_OPTIONS = ["Supplier Development", "Enterprise Development"];
 export const ESD_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Beneficiary / Supplier", type: "text", required: true, width: 220 },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", required: true, width: 160, validate: percentValidator },
+<<<<<<< Updated upstream
   { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
   { key: "esdCategory", label: "Category (SD / ED)", type: "select", options: ESD_CATEGORY_OPTIONS, required: false, width: 190 },
+=======
+  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, validationMessage: "Enter EME, QSE, or Generic — not case sensitive. Legacy 'Large' maps to Generic.", suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise" },
+  {
+    key: "esdCategory",
+    label: "Category (SD / ED)",
+    type: "select",
+    options: [...ESD_CATEGORY_OPTIONS],
+    required: false,
+    width: 190,
+    aliases: ["Pillar", "SD / ED", "SD/ED", "Category", "ED/SD"],
+    validationMessage: "Enter Supplier Development or Enterprise Development (or SD / ED)",
+  },
+>>>>>>> Stashed changes
   { key: "contributionDescription", label: "Description", type: "text", required: true, width: 240 },
   { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 400). Hover an option for the definition.", optionGuidance: ESD_CONTRIBUTION_GUIDANCE },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },

@@ -107,6 +107,10 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
   let foreignSupplierSpend = 0;
 
   for (const sup of suppliers) {
+    const enterpriseType = String(sup.enterpriseType || '').toLowerCase() === 'large'
+      ? 'generic'
+      : sup.enterpriseType;
+
     if (sup.isForeignSupplier) {
       foreignSupplierSpend += sup.spend;
       continue;
@@ -120,10 +124,10 @@ export function calculateProcurementScore(data: ProcurementData, config: Calcula
       empoweringSpend += recognised;
     }
 
-    if (sup.enterpriseType === 'qse') {
+    if (enterpriseType === 'qse') {
       qseSpend += recognised;
     }
-    if (sup.enterpriseType === 'eme') {
+    if (enterpriseType === 'eme') {
       emeSpend += recognised;
     }
 

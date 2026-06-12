@@ -19,7 +19,9 @@ export async function connectDB(): Promise<typeof mongoose> {
 
   try {
     logger.debug("Connecting to MongoDB...", { uri: MONGODB_URI.replace(/\/\/.*@/, "//***@") });
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: process.env.NODE_ENV === "production" ? 30000 : 3000,
+    });
     isConnected = true;
     logger.info("Connected to MongoDB successfully");
 
@@ -41,7 +43,12 @@ export async function connectDB(): Promise<typeof mongoose> {
     return mongoose;
   } catch (error) {
     logger.error("MongoDB connection failed", error);
-    throw error;
+    if (process.env.NODE_ENV === "production") {
+      throw error;
+    }
+    mongoose.set("bufferCommands", false);
+    logger.warn("Continuing without MongoDB in development - database features will be unavailable");
+    return mongoose;
   }
 }
 

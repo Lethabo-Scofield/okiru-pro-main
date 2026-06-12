@@ -988,9 +988,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
+        annualSalary: num((r as any).salary),
         isDisabled: Boolean((r as any).isDisabled),
         isForeign: Boolean((r as any).isForeign),
         votingRights: num((r as any).votingRights),
+        votingRightsPercent: num((r as any).votingRights),
         startDate: s((r as any).startDate),
       });
     }
@@ -1015,6 +1017,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       categoryCode: s((r as any).categoryCode),
       category: s((r as any).categoryCode),
       trainingProvider: s((r as any).trainingProvider),
+      municipality: s((r as any).municipality),
       learnerName: s((r as any).learnerName),
       idNumber: s((r as any).idNumber),
       race: s((r as any).race),
@@ -1029,6 +1032,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),
+      cateringCost: num((r as any).cateringCost),
+      stationeryCost: num((r as any).stationeryCost),
+      facilityCost: num((r as any).trainingFacilityCost),
       salaryCost: num((r as any).salaryCost),
       otherCosts: num((r as any).otherCosts),
       totalCost: total,
@@ -1067,6 +1073,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
         bbbeeLevel: beeLevel,
         beeLevel,
+        registrationNumber: s((r as any).registrationNumber),
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
         empoweringSupplier: Boolean((r as any).empoweringSupplier),

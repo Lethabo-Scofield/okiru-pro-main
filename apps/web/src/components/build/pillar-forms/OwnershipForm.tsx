@@ -48,6 +48,7 @@ import type { Shareholder, OwnershipData } from "@toolkit/lib/types";
 import type { CalculatorConfig } from "@shared/schema";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { NumberTextInput } from "../NumberTextInput";
 
 // ============================================================================
 // Types
@@ -396,21 +397,19 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="companyValue">Company Value (R)</Label>
-                  <Input
+                  <NumberTextInput
                     id="companyValue"
-                    type="number"
-                    value={data.companyValue || ''}
-                    onChange={(e) => handleCompanyValueChange('companyValue', Number(e.target.value))}
+                    value={data.companyValue}
+                    onNumberChange={(value) => handleCompanyValueChange('companyValue', value)}
                     placeholder="0"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="outstandingDebt">Outstanding Debt (R)</Label>
-                  <Input
+                  <NumberTextInput
                     id="outstandingDebt"
-                    type="number"
-                    value={data.outstandingDebt || ''}
-                    onChange={(e) => handleCompanyValueChange('outstandingDebt', Number(e.target.value))}
+                    value={data.outstandingDebt}
+                    onNumberChange={(value) => handleCompanyValueChange('outstandingDebt', value)}
                     placeholder="0"
                   />
                 </div>
@@ -491,20 +490,18 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="shShares">Number of Shares</Label>
-                  <Input
+                  <NumberTextInput
                     id="shShares"
-                    type="number"
-                    value={formState.shares || ''}
-                    onChange={(e) => setFormState(s => ({ ...s, shares: Number(e.target.value) }))}
+                    value={formState.shares}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, shares: value }))}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="shValue">Value per Share (R)</Label>
-                  <Input
+                  <NumberTextInput
                     id="shValue"
-                    type="number"
-                    value={formState.shareValue || ''}
-                    onChange={(e) => setFormState(s => ({ ...s, shareValue: Number(e.target.value) }))}
+                    value={formState.shareValue}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, shareValue: value }))}
                   />
                 </div>
               </div>
@@ -512,24 +509,22 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="shBlack">Black Ownership (%)</Label>
-                  <Input
+                  <NumberTextInput
                     id="shBlack"
-                    type="number"
                     min="0"
                     max="100"
-                    value={formState.blackOwnership || ''}
-                    onChange={(e) => setFormState(s => ({ ...s, blackOwnership: Number(e.target.value) }))}
+                    value={formState.blackOwnership}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, blackOwnership: value }))}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="shBlackWomen">Black Women Ownership (%)</Label>
-                  <Input
+                  <NumberTextInput
                     id="shBlackWomen"
-                    type="number"
                     min="0"
                     max="100"
-                    value={formState.blackWomenOwnership || ''}
-                    onChange={(e) => setFormState(s => ({ ...s, blackWomenOwnership: Number(e.target.value) }))}
+                    value={formState.blackWomenOwnership}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, blackWomenOwnership: value }))}
                   />
                 </div>
               </div>
@@ -544,13 +539,12 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
 
               <div className="space-y-2">
                 <Label htmlFor="shVoting">Voting Rights (%)</Label>
-                <Input
+                <NumberTextInput
                   id="shVoting"
-                  type="number"
                   min="0"
                   max="100"
-                  value={formState.votingRightsPercent || ''}
-                  onChange={(e) => setFormState(s => ({ ...s, votingRightsPercent: Number(e.target.value) }))}
+                  value={formState.votingRightsPercent}
+                  onNumberChange={(value) => setFormState(s => ({ ...s, votingRightsPercent: value }))}
                   placeholder={formState.blackOwnership.toString()}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -560,13 +554,12 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
 
               <div className="space-y-2">
                 <Label htmlFor="shEconomic">Economic Interest (%)</Label>
-                <Input
+                <NumberTextInput
                   id="shEconomic"
-                  type="number"
                   min="0"
                   max="100"
-                  value={formState.economicInterestPercent || ''}
-                  onChange={(e) => setFormState(s => ({ ...s, economicInterestPercent: Number(e.target.value) }))}
+                  value={formState.economicInterestPercent}
+                  onNumberChange={(value) => setFormState(s => ({ ...s, economicInterestPercent: value }))}
                   placeholder={formState.blackOwnership.toString()}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -620,12 +613,11 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
 
                 <div className="space-y-2">
                   <Label htmlFor="shYearsHeld">Years Held</Label>
-                  <Input
+                  <NumberTextInput
                     id="shYearsHeld"
-                    type="number"
                     min="0"
-                    value={formState.yearsHeld || ''}
-                    onChange={(e) => setFormState(s => ({ ...s, yearsHeld: Number(e.target.value) }))}
+                    value={formState.yearsHeld}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, yearsHeld: value }))}
                   />
                   <p className="text-xs text-muted-foreground">
                     Affects graduation factor: {calculateGraduationFactor(formState.yearsHeld).toFixed(1)}x
