@@ -85,7 +85,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
       if (data.validationIssueCount > 0) {
         toast({
           title: "Demo loaded with validation warnings",
-          description: `${data.validationIssueCount} issue(s) â€” review before submit.`,
+          description: `${data.validationIssueCount} issue(s) - review before submit.`,
           variant: "destructive",
         });
       }
@@ -110,7 +110,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
             <h2 className="text-[15px] font-semibold text-amber-100">Lake Trading Demo Workbook</h2>
           </div>
           <p className="text-[13px] text-[#98989f] max-w-xl">
-            RCOGP Generic ground truth (~63.56 pts, Level 7 â†’ 8). Pre-filled workbook â€” same UI,
+            RCOGP Generic ground truth (~63.56 pts, Level 7 to 8). Pre-filled workbook - same UI,
             validation, and submit flow as a live client.
           </p>
         </div>
@@ -256,7 +256,7 @@ function CompanyPicker({
     <div className="space-y-5">
       {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
 
-      {/* Start a new company â€” primary action */}
+      {/* Start a new company - primary action */}
       <div
         className="relative overflow-hidden rounded-2xl border border-violet-400/20 p-6"
         style={{
@@ -285,7 +285,7 @@ function CompanyPicker({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Company nameâ€¦"
+                placeholder="Company name..."
                 aria-label="New company name"
                 className="flex-1 bg-black/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none transition-colors"
                 data-testid="input-new-company"
@@ -310,7 +310,7 @@ function CompanyPicker({
                 const fallback = await normalizeExcelFile(file);
                 if (fallback.criticalBlocked) {
                   toast({
-                    title: "Import blocked â€” fix critical fields",
+                    title: "Import blocked - fix critical fields",
                     description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
                     variant: "destructive",
                   });
@@ -371,7 +371,7 @@ function CompanyPicker({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search companiesâ€¦"
+              placeholder="Search companies..."
               aria-label="Search companies"
               className="w-full bg-black/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[#636366] outline-none focus:border-white/[0.18] transition-colors"
               data-testid="input-company-search"
@@ -381,7 +381,7 @@ function CompanyPicker({
 
         {loading ? (
           <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-10 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading companiesâ€¦
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading companies...
           </div>
         ) : companies.length === 0 ? (
           <div className="text-center py-12 px-4">
@@ -523,8 +523,8 @@ function CompanyPicker({
               description: submitted
                 ? companyName
                 : warnCount > 0
-                  ? `${warnCount} warning(s) â€” open workbook and submit when ready.`
-                  : `${companyName} â€” submit workbook to calculate score.`,
+                  ? `${warnCount} warning(s) - open workbook and submit when ready.`
+                  : `${companyName} - submit workbook to calculate score.`,
             });
             setPreviewOpen(false);
             setPendingFile(null);
@@ -572,7 +572,7 @@ function MetaForm({
                 onChange={(e) => setField(f.key, e.target.value)}
                 className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a]"
               >
-                <option value="" className="bg-[#1c1c1e]">â€”</option>
+                <option value="" className="bg-[#1c1c1e]">-</option>
                 {f.options?.map((o) => (
                   <option key={o} value={o} className="bg-[#1c1c1e]">
                     {o}
@@ -691,7 +691,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         setSaveError("Network error");
         toast({
           title: "Save failed",
-          description: "Network error â€” will retry on next change.",
+          description: "Network error - will retry on next change.",
           variant: "destructive",
         });
         return false;
@@ -827,7 +827,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       if (!ok || saveError) {
         toast({
           title: "Submit aborted",
-          description: "Unsaved changes failed to save â€” fix the save error and try again.",
+          description: "Unsaved changes failed to save - fix the save error and try again.",
           variant: "destructive",
         });
         return;
@@ -883,7 +883,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
       if (result.criticalBlocked) {
         toast({
-          title: "Import blocked â€” fix critical fields",
+          title: "Import blocked - fix critical fields",
           description: formatWorkbookValidationSummary(result.validationIssues, 5),
           variant: "destructive",
         });
@@ -909,7 +909,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         toast({
           title: "Imported with gaps",
           description:
-            "Non-critical fields missing â€” review sections before submit. Scores may reflect discounted levels.",
+            "Non-critical fields missing - review sections before submit. Scores may reflect discounted levels.",
         });
       } else {
         toast({ title: "Workbook updated from Excel" });
@@ -962,7 +962,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   };
 
   const saveStatusText = saving
-    ? "Savingâ€¦"
+    ? "Saving..."
     : saveError
       ? saveError
       : savedAt
@@ -977,11 +977,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     const isActive = activeSectionKey === sec.key;
     const indicator = sec.meta
       ? status === "filled"
-        ? "âœ“"
-        : "â€”"
+        ? "OK"
+        : "-"
       : count > 0
         ? String(count)
-        : "â€”";
+        : "-";
     const baseClass =
       variant === "sidebar"
         ? `w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${indent ? "pl-6" : ""}`
@@ -1073,7 +1073,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             className="text-[12px] text-[#8e8e93] hover:text-white smooth press-sm"
             data-testid="button-change-company"
           >
-            â† Change company
+            &lt;- Change company
           </button>
           <span className="text-[#3a3a3c]">|</span>
           <div className="flex items-center gap-2">
@@ -1151,7 +1151,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         >
           {loading ? (
             <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbookâ€¦
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook...
             </div>
           ) : activeSection ? (
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
@@ -1275,7 +1275,7 @@ export default function InformationRequest() {
             <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
               {basePath === "/create-scorecard"
                 ? "Pick a company below or import an existing workbook from Excel. You can save and come back anytime."
-                : "Structured spreadsheet collection â€” replaces manual onboarding sheets."}
+                : "Structured spreadsheet collection - replaces manual onboarding sheets."}
             </p>
           </div>
         )}
