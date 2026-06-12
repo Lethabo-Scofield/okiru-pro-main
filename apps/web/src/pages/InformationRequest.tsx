@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronRight,
@@ -84,7 +84,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
       if (data.validationIssueCount > 0) {
         toast({
           title: "Demo loaded with validation warnings",
-          description: `${data.validationIssueCount} issue(s) — review before submit.`,
+          description: `${data.validationIssueCount} issue(s) â€” review before submit.`,
           variant: "destructive",
         });
       }
@@ -109,7 +109,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
             <h2 className="text-[15px] font-semibold text-amber-100">Lake Trading Demo Workbook</h2>
           </div>
           <p className="text-[13px] text-[#98989f] max-w-xl">
-            RCOGP Generic ground truth (~63.56 pts, Level 7 → 8). Pre-filled workbook — same UI,
+            RCOGP Generic ground truth (~63.56 pts, Level 7 â†’ 8). Pre-filled workbook â€” same UI,
             validation, and submit flow as a live client.
           </p>
         </div>
@@ -255,7 +255,7 @@ function CompanyPicker({
     <div className="space-y-5">
       {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
 
-      {/* Start a new company — primary action */}
+      {/* Start a new company â€” primary action */}
       <div
         className="relative overflow-hidden rounded-2xl border border-violet-400/20 p-6"
         style={{
@@ -284,7 +284,7 @@ function CompanyPicker({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Company name…"
+                placeholder="Company nameâ€¦"
                 aria-label="New company name"
                 className="flex-1 bg-black/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none transition-colors"
                 data-testid="input-new-company"
@@ -309,7 +309,7 @@ function CompanyPicker({
                 const fallback = await normalizeExcelFile(file);
                 if (fallback.criticalBlocked) {
                   toast({
-                    title: "Import blocked — fix critical fields",
+                    title: "Import blocked â€” fix critical fields",
                     description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
                     variant: "destructive",
                   });
@@ -370,7 +370,7 @@ function CompanyPicker({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search companies…"
+              placeholder="Search companiesâ€¦"
               aria-label="Search companies"
               className="w-full bg-black/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[#636366] outline-none focus:border-white/[0.18] transition-colors"
               data-testid="input-company-search"
@@ -380,7 +380,7 @@ function CompanyPicker({
 
         {loading ? (
           <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-10 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading companies…
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading companiesâ€¦
           </div>
         ) : companies.length === 0 ? (
           <div className="text-center py-12 px-4">
@@ -522,8 +522,8 @@ function CompanyPicker({
               description: submitted
                 ? companyName
                 : warnCount > 0
-                  ? `${warnCount} warning(s) — open workbook and submit when ready.`
-                  : `${companyName} — submit workbook to calculate score.`,
+                  ? `${warnCount} warning(s) â€” open workbook and submit when ready.`
+                  : `${companyName} â€” submit workbook to calculate score.`,
             });
             setPreviewOpen(false);
             setPendingFile(null);
@@ -549,188 +549,8 @@ function MetaForm({
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
 }) {
-<<<<<<< Updated upstream
   const setField = (k: string, v: unknown) => onChange({ ...value, [k]: v });
-=======
-  const [popup, setPopup] = useState<{
-    anchorRect: DOMRect;
-    rawValue: string;
-    suggestion: string | null;
-    col: ColumnDef;
-    isAiSuggestion?: boolean;
-    loading?: boolean;
-  } | null>(null);
-  const popupAbortRef = useRef<AbortController | null>(null);
-  const inputRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
 
-  const setField = (k: string, v: unknown) => {
-    if (readOnly) return;
-    onChange({ ...value, [k]: v });
-  };
-
-  const handleBlur = (f: ColumnDef, rawTyped: string) => {
-    if (readOnly || !rawTyped.trim()) return;
-    // Only run for text-entry types, not boolean/select (select already constrains).
-    if (f.type === "boolean" || f.type === "select") return;
-
-    const normalized = normalizeCellForColumn(rawTyped, f);
-    const hasMismatch =
-      normalized.changed &&
-      normalized.value !== "" &&
-      String(normalized.value) !== rawTyped.trim();
-    const hasFlag = Boolean(normalized.flag);
-    if (!hasMismatch && !hasFlag) return;
-
-    const inputEl = inputRefs.current[f.key];
-    const anchorRect = inputEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
-    const suggestion = hasMismatch ? String(normalized.value) : null;
-
-    popupAbortRef.current?.abort();
-    const abort = new AbortController();
-    popupAbortRef.current = abort;
-
-    setPopup({
-      anchorRect,
-      rawValue: rawTyped.trim(),
-      suggestion,
-      col: f,
-      isAiSuggestion: false,
-      loading: suggestion == null,
-    });
-
-    if (suggestion == null) {
-      fetch(`${API_BASE}/api/workbook/suggest-value`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        signal: abort.signal,
-        body: JSON.stringify({
-          fieldKey: f.key,
-          fieldLabel: f.label,
-          rawValue: rawTyped.trim(),
-          fieldType: f.type,
-          allowedValues: f.options ?? [],
-        }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: { suggestion?: string; explanation?: string } | null) => {
-          if (!abort.signal.aborted && data?.suggestion) {
-            setPopup((prev) =>
-              prev
-                ? { ...prev, suggestion: data.suggestion ?? null, isAiSuggestion: true, loading: false }
-                : null,
-            );
-          } else if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        })
-        .catch(() => {
-          if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        });
-    }
-  };
-
-  const renderField = (f: ColumnDef) => {
-    const v = value[f.key];
-    const blank =
-      v === "" || v === undefined || v === null ||
-      (typeof v === "string" && v.trim() === "");
-    const err =
-      crossFieldErrors[f.key] ||
-      (f.required && blank ? "Required" : f.validate ? f.validate(v) : null);
-    const emphasized = Boolean(f.emphasis);
-    return (
-      <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
-        <div className={`text-[12px] mb-1.5 flex items-center gap-1 ${emphasized ? "text-sky-200 font-medium" : "text-[#8e8e93]"}`}>
-          {f.label}
-          {f.required && <span className="text-status-error">*</span>}
-        </div>
-        {f.type === "select" ? (
-          <select
-            ref={(el) => { inputRefs.current[f.key] = el; }}
-            value={String(v ?? "")}
-            disabled={readOnly || f.readOnly}
-            onChange={(e) => setField(f.key, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a] disabled:opacity-60 ${emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
-          >
-            <option value="" className="bg-[#1c1c1e]">—</option>
-            {f.options?.map((o) => (
-              <option key={o} value={o} className="bg-[#1c1c1e]">
-                {o}
-              </option>
-            ))}
-          </select>
-        ) : f.type === "boolean" ? (
-          <div className="flex items-center h-9">
-            <input
-              type="checkbox"
-              checked={Boolean(v)}
-              disabled={readOnly || f.readOnly}
-              onChange={(e) => setField(f.key, e.target.checked)}
-              className="h-4 w-4 accent-blue-500 disabled:opacity-60"
-            />
-          </div>
-        ) : f.type === "date" ? (
-          <NumericDateInput
-            ref={(el) => { inputRefs.current[f.key] = el; }}
-            value={String(v ?? "")}
-            disabled={readOnly || f.readOnly}
-            onChange={(iso) => setField(f.key, iso)}
-            onBlur={(e) => handleBlur(f, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
-            placeholder="dd/mm/yyyy"
-          />
-        ) : (
-          <input
-            ref={(el) => { inputRefs.current[f.key] = el; }}
-            type="text"
-            inputMode={f.type === "number" ? "decimal" : undefined}
-            value={String(v ?? "")}
-            disabled={readOnly || f.readOnly}
-            readOnly={f.readOnly}
-            onChange={(e) =>
-              setField(
-                f.key,
-                f.type === "number" && e.target.value !== ""
-                  ? Number(e.target.value)
-                  : e.target.value,
-              )
-            }
-            onBlur={(e) => handleBlur(f, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${f.readOnly ? "bg-[#141416] cursor-default" : ""} ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
-            placeholder={f.required ? "Required" : ""}
-          />
-        )}
-        {err && <div className="text-[11px] text-status-error mt-1">{err}</div>}
-        {f.guidance && (emphasized || f.readOnly) && (
-          <p className="text-[11px] text-[#8e8e93] mt-1.5 leading-snug">{f.guidance}</p>
-        )}
-      </label>
-    );
-  };
-
-  type MetaUnit = { kind: "field"; field: ColumnDef } | { kind: "emphasis"; fields: ColumnDef[] };
-  const units: MetaUnit[] = [];
-  let emphasisBatch: ColumnDef[] = [];
-  const flushEmphasis = () => {
-    if (emphasisBatch.length > 0) {
-      units.push({ kind: "emphasis", fields: emphasisBatch });
-      emphasisBatch = [];
-    }
-  };
-  for (const f of fields) {
-    if (f.emphasis) {
-      emphasisBatch.push(f);
-    } else {
-      flushEmphasis();
-      units.push({ kind: "field", field: f });
-    }
-  }
-  flushEmphasis();
-
->>>>>>> Stashed changes
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {fields.map((f) => {
@@ -751,7 +571,7 @@ function MetaForm({
                 onChange={(e) => setField(f.key, e.target.value)}
                 className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a]"
               >
-                <option value="" className="bg-[#1c1c1e]">—</option>
+                <option value="" className="bg-[#1c1c1e]">â€”</option>
                 {f.options?.map((o) => (
                   <option key={o} value={o} className="bg-[#1c1c1e]">
                     {o}
@@ -769,7 +589,8 @@ function MetaForm({
               </div>
             ) : (
               <input
-                type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                type={f.type === "date" ? "date" : "text"}
+                inputMode={f.type === "number" ? "decimal" : undefined}
                 value={String(v ?? "")}
                 onChange={(e) =>
                   setField(
@@ -862,7 +683,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         setSaveError("Network error");
         toast({
           title: "Save failed",
-          description: "Network error — will retry on next change.",
+          description: "Network error â€” will retry on next change.",
           variant: "destructive",
         });
         return false;
@@ -998,7 +819,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       if (!ok || saveError) {
         toast({
           title: "Submit aborted",
-          description: "Unsaved changes failed to save — fix the save error and try again.",
+          description: "Unsaved changes failed to save â€” fix the save error and try again.",
           variant: "destructive",
         });
         return;
@@ -1054,7 +875,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
       if (result.criticalBlocked) {
         toast({
-          title: "Import blocked — fix critical fields",
+          title: "Import blocked â€” fix critical fields",
           description: formatWorkbookValidationSummary(result.validationIssues, 5),
           variant: "destructive",
         });
@@ -1080,7 +901,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         toast({
           title: "Imported with gaps",
           description:
-            "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
+            "Non-critical fields missing â€” review sections before submit. Scores may reflect discounted levels.",
         });
       } else {
         toast({ title: "Workbook updated from Excel" });
@@ -1133,7 +954,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   };
 
   const saveStatusText = saving
-    ? "Saving…"
+    ? "Savingâ€¦"
     : saveError
       ? saveError
       : savedAt
@@ -1148,11 +969,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     const isActive = activeSectionKey === sec.key;
     const indicator = sec.meta
       ? status === "filled"
-        ? "✓"
-        : "—"
+        ? "âœ“"
+        : "â€”"
       : count > 0
         ? String(count)
-        : "—";
+        : "â€”";
     const baseClass =
       variant === "sidebar"
         ? `w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${indent ? "pl-6" : ""}`
@@ -1244,7 +1065,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             className="text-[12px] text-[#8e8e93] hover:text-white smooth press-sm"
             data-testid="button-change-company"
           >
-            ← Change company
+            â† Change company
           </button>
           <span className="text-[#3a3a3c]">|</span>
           <div className="flex items-center gap-2">
@@ -1322,7 +1143,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         >
           {loading ? (
             <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbookâ€¦
             </div>
           ) : activeSection ? (
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
@@ -1445,7 +1266,7 @@ export default function InformationRequest() {
             <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
               {basePath === "/create-scorecard"
                 ? "Pick a company below or import an existing workbook from Excel. You can save and come back anytime."
-                : "Structured spreadsheet collection — replaces manual onboarding sheets."}
+                : "Structured spreadsheet collection â€” replaces manual onboarding sheets."}
             </p>
           </div>
         )}
