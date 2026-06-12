@@ -25,11 +25,16 @@ import Workspace from "@/pages/Workspace";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
+import EsgClientSelector from "@/pages/EsgClientSelector";
+import EsgInformationRequest from "@/pages/EsgInformationRequest";
+import EsgScoreSummary from "@/pages/EsgScoreSummary";
+import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
 /** Legacy upload/build flows — super-admin only in production go-live. */
 function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
@@ -77,6 +82,32 @@ function ToolkitLoader() {
     }>
       <ToolkitView />
     </Suspense>
+  );
+}
+
+function EsgToolkitLoader() {
+  return (
+    <Suspense
+      fallback={
+        <div className="esg-theme min-h-screen flex items-center justify-center">
+          <div className="h-10 w-10 border-2 border-[#1de9a0] border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      }
+    >
+      <EsgToolkitView />
+    </Suspense>
+  );
+}
+
+function EsgHubRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate("/esg/clients", { replace: true });
+  }, [navigate]);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
+    </div>
   );
 }
 
@@ -143,8 +174,26 @@ function AppRouter() {
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
+      <Route path="/esg">
+        <ProtectedRoute><EsgPreviewRoute><EsgHubRedirect /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/clients">
+        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/create/:companyId/summary">
+        <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/create/:companyId">
+        <ProtectedRoute><EsgPreviewRoute><EsgInformationRequest /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/toolkit/:companyId" nest>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg/toolkit" nest>
+        <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
       <Route path="/devmode">
-        <ProtectedRoute><DevMode /></ProtectedRoute>
+        <DevMode />
       </Route>
       <Route path="/super-admin">
         <SuperAdminRoute><SuperAdmin /></SuperAdminRoute>

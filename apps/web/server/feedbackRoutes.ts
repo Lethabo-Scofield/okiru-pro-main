@@ -94,7 +94,7 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.get("/api/feedback", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/feedback", async (req: Request, res: Response) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -120,7 +120,7 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.get("/api/feedback/stats", requireAuth, async (_req: Request, res: Response) => {
+  app.get("/api/feedback/stats", async (_req: Request, res: Response) => {
     try {
       if (isMongoConnected()) {
         const [total, open, inProgress, resolved, byCategory] = await Promise.all([
