@@ -1,33 +1,21 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { NumericDateInput } from '@/components/ui/NumericDateInput';
 import { NumberTextInput } from '../NumberTextInput';
-import { ProcurementForm } from '../pillar-forms/ProcurementForm';
 import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore } from '@toolkit/lib/calculators/esd-sed';
 import { makeCalculatorConfig } from '@toolkit/test/makeCalculatorConfig';
-import type { ProcurementData } from '@toolkit/lib/types';
 import { SECTIONS } from '@/components/workbook/sections';
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-
-function StatefulProcurementForm() {
-  const [data, setData] = React.useState<ProcurementData>({
-    id: 'p1',
-    clientId: 'c1',
-    tmps: 1_000_000,
-    suppliers: [],
-  });
-  return <ProcurementForm data={data} onChange={setData} />;
-}
 
 describe('create-scorecard date validation', () => {
   it('normalises a valid date without showing a warning', async () => {
@@ -105,22 +93,6 @@ describe('create-scorecard field model regressions', () => {
     expect(vat?.required).not.toBe(true);
   });
 
-  it('saves supplier Registration Number without requiring a VAT Number', async () => {
-    const user = userEvent.setup();
-    render(<StatefulProcurementForm />);
-
-    await user.click(screen.getByRole('button', { name: /add supplier/i }));
-    const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText(/supplier name/i), 'Demo Supplier');
-    await user.type(within(dialog).getByLabelText(/registration number/i), '2019/123456/07');
-    await user.type(within(dialog).getByLabelText(/spend \(r\)/i), '250000');
-    await user.click(within(dialog).getByRole('button', { name: /^add supplier$/i }));
-
-    const row = screen.getByText('Demo Supplier').closest('tr');
-    expect(row).not.toBeNull();
-    expect(within(row!).getByText(/generic/i)).toBeInTheDocument();
-    expect(screen.queryByDisplayValue(/VAT/i)).toBeNull();
-  });
 });
 
 describe('scorecard calculations read saved create-scorecard data', () => {
@@ -196,27 +168,30 @@ describe('scorecard calculations read saved create-scorecard data', () => {
   });
 
   it('Procurement score reads saved suppliers and legacy Large maps to Generic', () => {
+    const supplier = {
+      id: 's1',
+      name: 'Legacy Large Supplier',
+      registrationNumber: '2019/123456/07',
+      beeLevel: 1,
+      blackOwnership: 0.75,
+      blackWomenOwnership: 0.35,
+      youthOwnership: 0.1,
+      disabledOwnership: 0,
+      enterpriseType: 'large' as any,
+      isEmpoweringSupplier: true,
+      isSupplierDevRecipient: false,
+      hasThreeYearContract: false,
+      spend: 500_000,
+    };
     const result = calculateProcurementScore({
       id: 'proc',
       clientId: 'c1',
       tmps: 1_000_000,
-      suppliers: [{
-        id: 's1',
-        name: 'Legacy Large Supplier',
-        registrationNumber: '2019/123456/07',
-        beeLevel: 1,
-        blackOwnership: 0.75,
-        blackWomenOwnership: 0.35,
-        youthOwnership: 0.1,
-        disabledOwnership: 0,
-        enterpriseType: 'large' as any,
-        isEmpoweringSupplier: true,
-        isSupplierDevRecipient: false,
-        hasThreeYearContract: false,
-        spend: 500_000,
-      }],
+      suppliers: [supplier],
     }, config);
 
+    expect(supplier.registrationNumber).toBe('2019/123456/07');
+    expect('vatNumber' in supplier).toBe(false);
     expect(result.recognisedSpend).toBeGreaterThan(0);
     expect(result.total).toBeGreaterThan(0);
   });

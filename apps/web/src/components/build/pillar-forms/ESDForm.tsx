@@ -228,10 +228,6 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
         </label>
       </div>
 
-<<<<<<< Updated upstream
-      {renderTable(sdContribs, 'supplier_development', 'Supplier Development', 10)}
-      {renderTable(edContribs, 'enterprise_development', 'Enterprise Development', 5)}
-=======
       {showStockbrokerRow && (
         <Card className="border-border/80 bg-card">
           <CardContent className="p-4 space-y-2">
@@ -259,7 +255,6 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
 
       {renderTable(sdContribs, 'supplier_development', 'Supplier Development', sdMax)}
       {renderTable(edContribs, 'enterprise_development', 'Enterprise Development', edMax)}
->>>>>>> Stashed changes
 
       {/* Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

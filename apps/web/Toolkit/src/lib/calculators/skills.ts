@@ -4,7 +4,7 @@
  */
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2 } from './shared';
+import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, normalizeSpendFraction, isBlackRace } from './shared';
 
 /**
  * @domain-rule pillar:skills_development, slide:86
@@ -115,7 +115,13 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
 
     if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
     if (prog.isDisabled) acc.disabled += cost;
-    if (prog.category === 'learnership' || prog.category === 'internship' || catCode === 'B') acc.learnershipCount++;
+    if (
+      prog.category === 'learnership' ||
+      prog.category === 'internship' ||
+      catCode === 'B' ||
+      catCode === 'C' ||
+      catCode === 'D'
+    ) acc.learnershipCount++;
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
     if (prog.isAbsorbed) acc.absorbedCount++;
   }

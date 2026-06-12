@@ -14,6 +14,8 @@ export interface ColumnDef {
   type: ColumnType;
   required?: boolean;
   options?: string[];
+  /** When true, a Yes/No select is stored as boolean in row JSON. */
+  yesNoBoolean?: boolean;
   width?: number;
   validate?: (value: unknown) => string | null;
   /** Inline guidance shown as a tooltip on hover (e.g. picker help text). */
@@ -26,6 +28,10 @@ export interface ColumnDef {
    * `mapHeaderToKey` in `workbookExcelNormalizer.ts`).
    */
   aliases?: string[];
+  validationMessage?: string;
+  suggestionHint?: string;
+  emphasis?: boolean;
+  readOnly?: boolean;
 }
 
 export interface SectionDef {
@@ -36,11 +42,32 @@ export interface SectionDef {
   enabled: boolean;
   /** Optional single-record (meta) form. When set, the section is a key/value form, not a grid. */
   meta?: ColumnDef[];
+  gridLabel?: string;
+  gridTotals?: Array<{ columnKey: string; label?: string }>;
   /**
    * Optional cross-field row validator. Returns a map of `{ columnKey: errorMessage }`
    * for any rule violations spanning multiple columns within the same row.
    */
   rowValidate?: (row: Record<string, unknown>) => Record<string, string>;
+}
+
+/** Yes/No dropdown options (Excel toolkit convention). */
+export const YES_NO_OPTIONS = ["Yes", "No"] as const;
+
+/** Build a Yes/No select column that persists as boolean. */
+export function yesNoColumn(
+  key: string,
+  label: string,
+  extra: Omit<ColumnDef, "key" | "label" | "type" | "options" | "yesNoBoolean"> = {},
+): ColumnDef {
+  return {
+    key,
+    label,
+    type: "select",
+    options: [...YES_NO_OPTIONS],
+    yesNoBoolean: true,
+    ...extra,
+  };
 }
 
 const RACE_OPTIONS = ["African", "Coloured", "Indian", "White"];
@@ -75,6 +102,7 @@ const PROVINCE_OPTIONS = [
   "Northern Cape",
   "North West",
 ];
+const EAP_PROVINCE_OPTIONS = ["National", ...PROVINCE_OPTIONS];
 const SUPPLIER_SIZE_OPTIONS = ["Generic", "QSE", "EME"];
 const MEASURED_UNDER_OPTIONS = ["CoGP", "RCoGP"];
 const BBBEE_LEVEL_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "Non-compliant"];
@@ -354,6 +382,15 @@ const integerNonNegValidator = (v: unknown): string | null => {
   return null;
 };
 
+const positiveIntValidator = (v: unknown): string | null => {
+  if (isBlank(v)) return null;
+  const n = Number(v);
+  if (Number.isNaN(n)) return "Must be a number";
+  if (!Number.isInteger(n)) return "Must be a whole number";
+  if (n <= 0) return "Must be > 0";
+  return null;
+};
+
 // Parses yyyy-mm-dd (HTML date input) or dd/mm/yyyy (manual entry per rules)
 // and rejects calendar overflow (e.g. 31/02/2024 → would otherwise wrap to March).
 export function parseWorkbookDate(input: unknown): Date | null {
@@ -453,10 +490,6 @@ const FINANCIAL_META: ColumnDef[] = [
 
 // ---------- Ownership ----------
 export const OWNERSHIP_COLUMNS: ColumnDef[] = [
-<<<<<<< Updated upstream
-  { key: "shareholderName", label: "Shareholder Name", type: "text", required: true, width: 200 },
-  { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150 },
-=======
   {
     key: "shareholderName",
     label: "Shareholder",
@@ -579,15 +612,6 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   },
   { key: "yearsHeld", label: "Years Held", type: "number", width: 110, validate: integerNonNegValidator },
   { key: "idNumber", label: "ID / Reg Number", type: "text", width: 150, aliases: ["ID Number", "ID / Registration Number"] },
->>>>>>> Stashed changes
-  { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, width: 130 },
-  { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, width: 110 },
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isYouth", label: "Youth (<35)", type: "boolean", width: 110 },
-  { key: "votingRights", label: "Voting Rights (%)", type: "number", width: 140, validate: percentValidator },
-  { key: "economicInterest", label: "Economic Interest (%)", type: "number", width: 160, validate: percentValidator },
-  { key: "shareholding", label: "Shareholding (%)", type: "number", width: 150, validate: percentValidator },
-  { key: "modifiedFlowThrough", label: "Modified Flow-Through?", type: "boolean", width: 170 },
 ];
 
 // ---------- Management Control ----------
@@ -623,9 +647,6 @@ export const EMPLOYEE_COLUMNS: ColumnDef[] = [
 ];
 
 // ---------- Skills Development ----------
-<<<<<<< Updated upstream
-=======
-
 const SELECT_PERIOD_OPTIONS = ["Current YTD", "Full Year", "Prior Year"];
 
 /**
@@ -698,40 +719,23 @@ export const SKILLS_META: ColumnDef[] = [
     guidance: "Reference date for this training dataset. Skills scorecard flags missing training reference dates.",
   },
 ];
-
->>>>>>> Stashed changes
 // Rules require: program*, category*, learner*, gender*, race*. Costs ≥ 0.
 export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
   { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
   { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
-<<<<<<< Updated upstream
-  { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150 },
-  { key: "municipality", label: "Municipality", type: "text", width: 160 },
-=======
   { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150, validationMessage: "Select a South African province from the dropdown" },
   { key: "municipality", label: "Municipality", type: "select", options: MUNICIPALITY_OPTIONS, width: 180, validationMessage: "Select a common municipality or Other" },
->>>>>>> Stashed changes
   { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180, aliases: ["Learner", "Trainee", "Employee Name", "Beneficiary"] },
   { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number"] },
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Population Group", "Ethnicity"] },
   { key: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, required: true, width: 110, aliases: ["Sex"] },
-<<<<<<< Updated upstream
-  { key: "isDisabled", label: "Disabled", type: "boolean", width: 100 },
-  { key: "isForeign", label: "Foreign", type: "boolean", width: 100 },
-  { key: "age", label: "Age", type: "number", width: 90, validate: integerNonNegValidator },
-  { key: "employed", label: "Employed?", type: "boolean", width: 110 },
-  { key: "completed", label: "Completed?", type: "boolean", width: 110 },
-  { key: "absorbed", label: "Absorbed?", type: "boolean", width: 110 },
-  { key: "courseCost", label: "Course Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Course Fees", "Tuition", "Training Cost", "Course"] },
-=======
   yesNoColumn("isDisabled", "Disabled", { width: 100, aliases: ["Disabled *"] }),
   yesNoColumn("isForeign", "Foreign", { width: 100, aliases: ["Foreign *", "Foreign National"] }),
   yesNoColumn("employed", "Employed?", { width: 110 }),
   yesNoColumn("completed", "Completed?", { width: 110 }),
   yesNoColumn("absorbed", "Absorbed?", { width: 110 }),
   { key: "courseCost", label: "Programme Spend (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Course Cost", "Course Fees", "Tuition", "Training Cost", "Course", "Programme Spend", "Program Spend"] },
->>>>>>> Stashed changes
   { key: "travelCost", label: "Travel Cost (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Travel", "Transport"] },
   { key: "accommodationCost", label: "Accommodation (R)", type: "number", width: 160, validate: numericValidator, aliases: ["Accommodation Cost", "Accommodation"] },
   { key: "cateringCost", label: "Catering (R)", type: "number", width: 140, validate: numericValidator, aliases: ["Catering", "Food", "Meals"] },
@@ -750,10 +754,6 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 // {Generic, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
-<<<<<<< Updated upstream
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, aliases: ["Size", "Company Size", "Supplier Size", "Enterprise Size", "Entity Size", "EME/QSE/Generic", "EME/QSE/Large"] },
-  { key: "bbbeeLevel", label: "B-BBEE Level", type: "select", options: BBBEE_LEVEL_OPTIONS, width: 140, aliases: ["BEE Level", "BBBEE Level", "B-BBEE Status", "BEE Status", "Level", "Contributor Level"] },
-=======
   { key: "registrationNumber", label: "Supplier Registration Number", type: "text", width: 210, aliases: ["Registration Number", "Reg No", "Company Registration", "Supplier Registration"] },
   {
     key: "currentSize",
@@ -776,7 +776,6 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
     validationMessage: "Enter a number 1–8 or 'Non-Compliant'. Level 1 is the highest contributor status.",
     suggestionHint: "Level 1 (highest) through Level 8 (lowest), or Non-Compliant",
   },
->>>>>>> Stashed changes
   { key: "vatNumber", label: "VAT Number", type: "text", width: 140, aliases: ["VAT", "VAT No"] },
   { key: "measuredUnder", label: "Measured Under", type: "select", options: MEASURED_UNDER_OPTIONS, width: 150, aliases: ["Code", "Codes", "Scorecard"] },
   { key: "empoweringSupplier", label: "Empowering Supplier?", type: "boolean", width: 180, aliases: ["Empowering Supplier", "ES"] },
@@ -805,10 +804,6 @@ const ESD_CATEGORY_OPTIONS = ["Supplier Development", "Enterprise Development"];
 export const ESD_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Beneficiary / Supplier", type: "text", required: true, width: 220 },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", required: true, width: 160, validate: percentValidator },
-<<<<<<< Updated upstream
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130 },
-  { key: "esdCategory", label: "Category (SD / ED)", type: "select", options: ESD_CATEGORY_OPTIONS, required: false, width: 190 },
-=======
   { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, validationMessage: "Enter EME, QSE, or Generic — not case sensitive. Legacy 'Large' maps to Generic.", suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise" },
   {
     key: "esdCategory",
@@ -820,7 +815,6 @@ export const ESD_COLUMNS: ColumnDef[] = [
     aliases: ["Pillar", "SD / ED", "SD/ED", "Category", "ED/SD"],
     validationMessage: "Enter Supplier Development or Enterprise Development (or SD / ED)",
   },
->>>>>>> Stashed changes
   { key: "contributionDescription", label: "Description", type: "text", required: true, width: 240 },
   { key: "contributionType", label: "Contribution Type", type: "select", options: ESD_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 400). Hover an option for the definition.", optionGuidance: ESD_CONTRIBUTION_GUIDANCE },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator },
@@ -883,6 +877,7 @@ export const SECTIONS: SectionDef[] = [
     label: "Skills Development",
     description: "Training programmes, learnerships, and spend.",
     enabled: true,
+    meta: SKILLS_META,
     columns: SKILLS_COLUMNS,
     rowValidate: (row) => {
       const errs: Record<string, string> = {};

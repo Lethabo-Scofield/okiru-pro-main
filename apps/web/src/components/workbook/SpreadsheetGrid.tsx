@@ -321,7 +321,8 @@ export function SpreadsheetGrid({
                         </div>
                       ) : (
                         <input
-                          type={col.type === "number" ? "number" : "text"}
+                          type="text"
+                          inputMode={col.type === "number" ? "decimal" : undefined}
                           value={String(v ?? "")}
                           onChange={(e) =>
                             updateCell(
