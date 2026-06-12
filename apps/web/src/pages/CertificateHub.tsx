@@ -5,8 +5,8 @@ import { useAuth } from '@toolkit/lib/auth';
 import {
   Download, Loader2, AlertCircle, Search, X, ChevronDown,
   RefreshCw, ShieldCheck, Clock, AlertTriangle, Award,
-  Upload, CloudUpload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
-  Building2, Hash, Users2, Percent, CalendarClock, Info, Eye, ExternalLink,
+  Upload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
+  Building2, Hash, Users2, Percent, CalendarClock, Eye, ExternalLink,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
@@ -682,58 +682,6 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {/* ─── Upload your certificate CTA ────────────────── */}
-        <section
-          className="mt-12 rounded-2xl border p-6 md:p-8"
-          style={{ borderColor: 'rgba(99,102,241,0.2)', background: 'linear-gradient(135deg, rgba(99,102,241,0.06), transparent 60%)' }}
-        >
-          <div className="flex items-start gap-3 mb-4">
-            <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg" style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
-              <CloudUpload className="h-5 w-5" />
-            </div>
-            <div>
-              <h2
-                className="text-[22px] text-white tracking-tight"
-                style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400 }}
-              >
-                Is your company B-BBEE certified?
-              </h2>
-              <p className="text-[13px] text-[#a1a1aa] mt-1 max-w-[620px] leading-relaxed">
-                Join {(stats?.total ?? allCerts.length ?? 0).toLocaleString()} companies in the registry. Upload your certificate to get found by procurement teams and clients evaluating B-BBEE suppliers.
-              </p>
-            </div>
-          </div>
-
-          <ol className="grid sm:grid-cols-3 gap-4 mt-4">
-            {[
-              { n: '1', title: 'Sign in or create an account', body: 'Free, takes under a minute. Required so we can attribute uploads.' },
-              { n: '2', title: 'Upload your certificate', body: 'PDF, image, or document. Add company name, VAT, size and ownership.' },
-              { n: '3', title: 'Goes live in the registry', body: 'Anyone can search and verify. You can update or remove it any time.' },
-            ].map(step => (
-              <li key={step.n} className="rounded-xl border border-[#1c1c1e] bg-[#0d0d10] p-4">
-                <div className="text-[10px] tracking-[0.14em] uppercase text-[#818cf8] mb-2" style={{ fontFamily: "'Geist Mono', monospace" }}>
-                  Step {step.n}
-                </div>
-                <div className="text-[14px] text-white font-medium mb-1">{step.title}</div>
-                <div className="text-[12px] text-[#8e8e93] leading-relaxed">{step.body}</div>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-5 flex items-center gap-3 flex-wrap">
-            <button
-              onClick={requireLoginToUpload}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"
-            >
-              <Upload className="h-4 w-4" />
-              {isAuthenticated ? 'Add Your Certificate' : 'Sign in to upload'}
-            </button>
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-[#636366]">
-              <Info className="h-3.5 w-3.5" />
-              Accepted: PDF, PNG, JPG, XLS, DOC · up to 50MB
-            </span>
-          </div>
-        </section>
       </main>
 
       {/* ─── Certificate Preview modal ──────────────────────── */}

@@ -5,6 +5,8 @@ import type { ColumnDef } from "./sections";
 
 type Row = Record<string, unknown> & { _id: string };
 
+const MIN_VISIBLE_ROWS = 10;
+
 interface Props {
   columns: ColumnDef[];
   rows: Row[];
@@ -113,6 +115,18 @@ export function SpreadsheetGrid({
     return m;
   }, [rows, validateRow]);
 
+  const visibleRows = useMemo(() => {
+    const missing = Math.max(0, MIN_VISIBLE_ROWS - rows.length);
+    if (missing === 0) return rows;
+    return [
+      ...rows,
+      ...Array.from({ length: missing }, (_, i) => ({
+        ...emptyRow(columns),
+        _id: `ghost_${rows.length + i}`,
+      })),
+    ];
+  }, [rows, columns]);
+
   const totalErrors = useMemo(
     () => Object.values(errorMap).reduce((sum, e) => sum + Object.keys(e).length, 0),
     [errorMap],
@@ -120,10 +134,12 @@ export function SpreadsheetGrid({
 
   const updateCell = useCallback(
     (rowIdx: number, colKey: string, value: unknown) => {
-      const next = rows.map((r, i) => (i === rowIdx ? { ...r, [colKey]: value } : r));
+      const next = [...rows];
+      while (next.length <= rowIdx) next.push(emptyRow(columns));
+      next[rowIdx] = { ...next[rowIdx], [colKey]: value };
       onChange(next);
     },
-    [rows, onChange],
+    [rows, columns, onChange],
   );
 
   const addRow = useCallback(() => {
@@ -143,7 +159,7 @@ export function SpreadsheetGrid({
       if (!active) return;
       const { row, col } = active;
       const lastCol = columns.length - 1;
-      const lastRow = rows.length - 1;
+      const lastRow = visibleRows.length - 1;
 
       if (e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
@@ -169,7 +185,7 @@ export function SpreadsheetGrid({
         }
       }
     },
-    [active, columns.length, rows.length, addRow],
+    [active, columns.length, visibleRows.length, addRow],
   );
 
   useEffect(() => {
@@ -252,19 +268,9 @@ export function SpreadsheetGrid({
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td
-                colSpan={columns.length + 2}
-                className="text-center py-12 text-[#636366] text-[13px]"
-                data-testid="empty-state"
-              >
-                No rows yet. Click <span className="text-[#d1d1d6] font-medium">Add row</span> to begin.
-              </td>
-            </tr>
-          )}
-          {rows.map((row, rIdx) => {
+          {visibleRows.map((row, rIdx) => {
             const errs = errorMap[row._id] || {};
+            const isMaterialized = rIdx < rows.length;
             return (
               <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`row-${rIdx}`}>
                 <td className="text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5">
@@ -353,6 +359,7 @@ export function SpreadsheetGrid({
                 <td className="border-b border-[#2c2c2e] p-1 text-center">
                   <button
                     onClick={() => deleteRow(rIdx)}
+                    disabled={!isMaterialized}
                     className="p-1.5 rounded hover:bg-white/[0.06] text-[#636366] hover:text-status-error smooth press-sm"
                     title="Delete row"
                     data-testid={`button-delete-row-${rIdx}`}
