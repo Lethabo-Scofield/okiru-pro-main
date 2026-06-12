@@ -102,10 +102,13 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   };
 
   for (const prog of programs) {
-    if (!prog.isBlack) continue;
+    if (!(prog.isBlack ?? isBlackRace(prog.race)) || prog.isForeign) continue;
 
     const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
-    const cost = prog.cost ?? 0;
+    const cost = prog.totalCost ?? prog.cost ??
+      ((prog.courseCost || 0) + (prog.travelCost || 0) + (prog.accommodationCost || 0) +
+      (prog.cateringCost || 0) + (prog.stationeryCost || 0) + (prog.facilityCost || 0) +
+      (prog.salaryCost || 0) + (prog.otherCosts || 0));
     acc.byCategory[catCode] += cost;
     acc.blackPeople += cost;
     acc.totalBlackLearners++;
