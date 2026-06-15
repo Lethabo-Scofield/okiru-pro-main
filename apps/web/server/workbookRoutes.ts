@@ -228,9 +228,23 @@ function yesNo(v: unknown): string {
   if (["false", "no", "n", "0"].includes(t)) return "No";
   return s(v);
 }
-function num(v: unknown): number {
-  const n = Number(v);
+// Tolerant numeric parse: Number("1,000,000") / Number("R 1 000 000") / Number("60%")
+// are all NaN, which previously coerced to 0 and silently zeroed revenue / payroll /
+// spend / ownership% from text-formatted Excel cells or pasted values. Strip currency
+// symbols, thousands separators (commas + ordinary/narrow/non-breaking spaces) and a
+// trailing percent sign before parsing.
+function parseLooseNumber(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v === null || v === undefined) return 0;
+  const cleaned = String(v)
+    .replace(/[\s  ]/g, "")
+    .replace(/[R$,%]/gi, "");
+  if (cleaned === "" || cleaned === "-") return 0;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
+}
+function num(v: unknown): number {
+  return parseLooseNumber(v);
 }
 
 const DATA_SHEETS: DataSheetSpec[] = [
@@ -862,8 +876,9 @@ function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators expect fractions (0Î“Ã‡Ã´1)
 function pctToFraction(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
+  // parseLooseNumber strips "%", currency and thousands separators so "51.5%" /
+  // "60" / "0,6" still parse instead of NaN→0 (which failed every BO51/BWO30 check).
+  const n = parseLooseNumber(v);
   if (n <= 1) return Math.max(0, n);
   return Math.max(0, n / 100);
 }

@@ -140,7 +140,14 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       blackFemaleOwned30Spend += recognised;
     }
 
-    const isDesignatedGroup = sup.blackOwnership >= 0.51 && (sup.youthOwnership > 0 || sup.disabledOwnership > 0);
+    // Designated-group supplier: ≥51% black-owned AND a designated-group owner.
+    // Honour an explicit isDesignatedGroup flag (the workbook captures a boolean
+    // "designated" flag, not youth/disabled ownership columns) in addition to the
+    // youth/disabled ownership signals the Toolkit form collects — otherwise the
+    // workbook path could never award the DG bonus.
+    const isDesignatedGroup =
+      sup.blackOwnership >= 0.51 &&
+      (Boolean(sup.isDesignatedGroup) || sup.youthOwnership > 0 || sup.disabledOwnership > 0);
     if (isDesignatedGroup) {
       designatedGroupSpend += recognised;
     }
