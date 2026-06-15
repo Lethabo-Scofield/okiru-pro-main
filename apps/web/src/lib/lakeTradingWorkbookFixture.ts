@@ -13,6 +13,7 @@ import {
   LAKE_NPAT,
   LAKE_LEVIABLE,
   LAKE_TMPS,
+  LAKE_HEADCOUNT,
 } from "@/lib/lakeTradingDemo";
 
 export const LAKE_TRADING_DEMO_CLIENT_ID = "C-LAKE-DEMO";
@@ -205,7 +206,19 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
     ownership: { rows: ownershipRows },
     "management-control": { rows: employeeRows },
     employees: { rows: employeeRows },
-    "skills-development": { rows: [] },
+    "skills-development": {
+      rows: [],
+      meta: {
+        leviableAmount: LAKE_LEVIABLE,
+        eapProvince: lakeTradingClientInfo.eapProvince ?? "Gauteng",
+        eapYear: 2025,
+        headcount: LAKE_HEADCOUNT,
+        trainingManagerSalary: 0,
+        trainingOverheadCost: 0,
+        selectPeriod: "Current YTD",
+        dataDate: "2026-02-28",
+      },
+    },
     procurement: { rows: supplierRows },
     suppliers: { rows: supplierRows },
     esd: { rows: esdRows },

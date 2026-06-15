@@ -2,23 +2,13 @@
  * ESG register / row-grid column definitions — v1.7 workbook headers.
  * Keys map to Excel columns via esgGridRows (A=first column).
  */
-export type EsgColumnDef = {
-  key: string;
-  label: string;
-  type: "text" | "number" | "select" | "boolean" | "id" | "date";
-  required?: boolean;
-  options?: string[];
-  yesNoBoolean?: boolean;
-  width?: number;
-  guidance?: string;
-  optionGuidance?: Record<string, string>;
-};
+import type { ColumnDef } from "@/components/workbook/sections";
 
 export type EsgGridSectionDef = {
   sectionId: string;
   sheet: string;
   description: string;
-  columns: EsgColumnDef[];
+  columns: ColumnDef[];
   /** First data row on sheet (1-based). */
   startRow: number;
 };

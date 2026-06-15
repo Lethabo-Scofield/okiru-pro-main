@@ -1,6 +1,6 @@
 import { parseWorkbookDate } from "@/components/workbook/sections";
 
-/** Convert stored yyyy-mm-dd (or dd/mm/yyyy) to dd/mm/yyyy display (numeric month, no "Jan"). */
+/** Convert stored yyyy-mm-dd (or dd/mm/yyyy) to dd/m/yyyy display (numeric month, no "Jan"). */
 export function isoToNumericDateDisplay(value: unknown): string {
   if (value === undefined || value === null) return "";
   const s = String(value).trim();
@@ -8,7 +8,7 @@ export function isoToNumericDateDisplay(value: unknown): string {
   const parsed = parseWorkbookDate(s);
   if (!parsed) return s;
   const day = String(parsed.getUTCDate()).padStart(2, "0");
-  const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+  const month = String(parsed.getUTCMonth() + 1);
   const year = parsed.getUTCFullYear();
   return `${day}/${month}/${year}`;
 }

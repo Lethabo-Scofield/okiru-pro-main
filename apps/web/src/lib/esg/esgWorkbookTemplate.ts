@@ -10,8 +10,8 @@ import {
   S_DATA_HS_FIELDS,
   S_DATA_PAYROLL_FIELDS,
   S_DATA_TRAINING_FIELDS,
-} from "../../components/esg-workbook/esgSectionConfigs";
-import { ESG_DEFAULT_DEPOTS, ESG_DEFAULT_MONTHS } from "../../components/esg-workbook/esgDefaults";
+} from "@/components/esg-workbook/esgSectionConfigs";
+import { ESG_DEFAULT_DEPOTS, ESG_DEFAULT_MONTHS } from "@/components/esg-workbook/EsgMonthlyGrid";
 
 export const ESG_BULK_TEMPLATE_SHEETS = [
   "Instructions",

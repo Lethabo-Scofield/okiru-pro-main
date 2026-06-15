@@ -102,6 +102,13 @@ CODEBASE = {
 
 
 def load_data(sector_key):
+    consolidated = os.path.join(TOOLKIT_DIR, "extracted_values.json")
+    if os.path.exists(consolidated):
+        with open(consolidated, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+        sector = all_data.get(sector_key)
+        if sector:
+            return sector.get("extracted_sheets", {})
     path = os.path.join(TOOLKIT_DIR, f"extracted_{sector_key}.json")
     if not os.path.exists(path):
         return None

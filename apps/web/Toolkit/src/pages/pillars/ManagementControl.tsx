@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
@@ -24,6 +25,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
+import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
 import * as XLSX from "xlsx";
 
@@ -439,15 +441,36 @@ export default function ManagementControl() {
   const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
   if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
+  const mcCfg = calculatorConfig.managementControl;
+  const mcMax =
+    calculatorConfig.pillarConfigs?.managementControl?.maxPoints ??
+    mcCfg?.maxPoints ??
+    19;
+  const boardMaxPts =
+    (mcCfg?.boardBlackMaxPts ?? 2) + (mcCfg?.boardBWMaxPts ?? 1);
+  const execMgmtMaxPts =
+    (mcCfg?.execBlackMaxPts ?? 2) +
+    (mcCfg?.execBWMaxPts ?? 1) +
+    (mcCfg?.otherExecBlackMaxPts ?? 2) +
+    (mcCfg?.otherExecBWMaxPts ?? 1);
+  const smjNotAvailable =
+    (mcCfg?.seniorMaxPts ?? 0) === 0 &&
+    (mcCfg?.middleMaxPts ?? 0) === 0 &&
+    (mcCfg?.juniorMaxPts ?? 0) === 0;
   const mcScore = calculateManagementScore(management, calculatorConfig, client.eapProvince);
+  const mcTotalWeighting = mcScore.subLines.reduce((sum, sl) => sum + sl.weighting, 0);
 
   const eapLevelMap: Record<number, string> = {};
-  mcScore.subLines.forEach((sl, idx) => {
-    if (idx >= 6 && idx <= 11) {
-      const level = idx <= 7 ? 'senior' : idx <= 9 ? 'middle' : 'junior';
-      eapLevelMap[idx] = level;
-    }
-  });
+  if (!smjNotAvailable) {
+    mcScore.subLines.forEach((sl, idx) => {
+      if (sl.weighting <= 0 || !sl.target.includes('(EAP)')) return;
+      const name = sl.name.toLowerCase();
+      if (name.includes('senior management')) eapLevelMap[idx] = 'senior';
+      else if (name.includes('middle management')) eapLevelMap[idx] = 'middle';
+      else if (name.includes('junior management')) eapLevelMap[idx] = 'junior';
+    });
+  }
 
   // Foreign employee count (for display)
   const foreignCount = employees.filter(e => e.isForeign).length;
@@ -623,12 +646,11 @@ export default function ManagementControl() {
               Annual Salary (R)
             </div>
           </Label>
-          <Input
+          <NumberInput
             id="annual-salary"
-            type="number"
             min={0}
             value={formState.annualSalary}
-            onChange={e => setFormState({...formState, annualSalary: Number(e.target.value)})}
+            onValueChange={v => setFormState({...formState, annualSalary: v})}
             className="col-span-3"
             placeholder="Total annual salary / cost to company"
           />
@@ -640,13 +662,12 @@ export default function ManagementControl() {
               Voting Rights %
             </div>
           </Label>
-          <Input
+          <NumberInput
             id="voting-rights"
-            type="number"
             min={0}
             max={100}
             value={formState.votingRightsPercent}
-            onChange={e => setFormState({...formState, votingRightsPercent: Number(e.target.value)})}
+            onValueChange={v => setFormState({...formState, votingRightsPercent: v})}
             className="col-span-3"
             placeholder="% of voting rights held (0-100)"
           />
@@ -666,22 +687,24 @@ export default function ManagementControl() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 mr-2">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">EAP Province:</Label>
-            <Select
-              value={client.eapProvince || 'National'}
-              onValueChange={(v) => updateSettings(v, client.industrySector || '', client.measurementPeriodStart, client.measurementPeriodEnd)}
-            >
-              <SelectTrigger className="w-[160px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {getProvinces().map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!isQse && (
+            <div className="flex items-center gap-2 mr-2">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">EAP Province:</Label>
+              <Select
+                value={client.eapProvince || 'National'}
+                onValueChange={(v) => updateSettings(v, client.industrySector || '', client.measurementPeriodStart, client.measurementPeriodEnd)}
+              >
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {getProvinces().map(p => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Button 
             variant="outline" 
             className={cn("gap-2", showForeignOnly && "bg-amber-100 border-amber-300")}
@@ -729,6 +752,14 @@ export default function ManagementControl() {
         </div>
       </div>
 
+      {smjNotAvailable && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+          <strong>FSC Management Control:</strong> Senior, Middle, and Junior bands are permanently{" "}
+          <strong>NOT AVAILABLE</strong> (0 pts each). Scoring applies to Board, Executive Directors,
+          Other Executive Management (75% / 38% targets), and Employees with Disabilities only.
+        </div>
+      )}
+
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); } }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -749,7 +780,7 @@ export default function ManagementControl() {
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs font-medium uppercase tracking-wider mb-1 opacity-80">Total MC Score</p>
             <p className="text-2xl font-bold font-mono">{mcScore.total.toFixed(2)}</p>
-            <p className="text-[10px] mt-0.5 opacity-70">of 19</p>
+            <p className="text-[10px] mt-0.5 opacity-70">of {mcMax}</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20" data-testid="card-total-annual-salary">
@@ -767,34 +798,57 @@ export default function ManagementControl() {
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Board</p>
             <p className="text-2xl font-bold font-mono text-primary">{(mcScore.boardVotingBlack + mcScore.boardVotingBWO).toFixed(2)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">of 3</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">of {boardMaxPts}</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Exec Mgmt</p>
             <p className="text-2xl font-bold font-mono text-primary">{(mcScore.execDirectorsBlack + mcScore.execDirectorsBWO + mcScore.otherExecBlack + mcScore.otherExecBWO).toFixed(2)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">of 6</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">of {execMgmtMaxPts}</p>
           </CardContent>
         </Card>
         <Card className="border-border/50">
           <CardContent className="p-4 grid grid-cols-2 gap-2 text-center">
-            <div>
-              <p className="text-[10px] text-muted-foreground">Senior</p>
-              <p className="text-sm font-bold font-mono">{(mcScore.seniorBlack + mcScore.seniorBWO).toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Middle</p>
-              <p className="text-sm font-bold font-mono">{(mcScore.middleBlack + mcScore.middleBWO).toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Junior</p>
-              <p className="text-sm font-bold font-mono">{(mcScore.juniorBlack + mcScore.juniorBWO).toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Disabled</p>
-              <p className="text-sm font-bold font-mono">{mcScore.disabled.toFixed(2)}</p>
-            </div>
+            {smjNotAvailable ? (
+              <>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Senior</p>
+                  <p className="text-sm font-bold font-mono text-muted-foreground">N/A</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Middle</p>
+                  <p className="text-sm font-bold font-mono text-muted-foreground">N/A</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Junior</p>
+                  <p className="text-sm font-bold font-mono text-muted-foreground">N/A</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Disabled</p>
+                  <p className="text-sm font-bold font-mono">{mcScore.disabled.toFixed(2)}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Senior</p>
+                  <p className="text-sm font-bold font-mono">{(mcScore.seniorBlack + mcScore.seniorBWO).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Middle</p>
+                  <p className="text-sm font-bold font-mono">{(mcScore.middleBlack + mcScore.middleBWO).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Junior</p>
+                  <p className="text-sm font-bold font-mono">{(mcScore.juniorBlack + mcScore.juniorBWO).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Disabled</p>
+                  <p className="text-sm font-bold font-mono">{mcScore.disabled.toFixed(2)}</p>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -804,7 +858,14 @@ export default function ManagementControl() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-              <CardDescription>Click EAP rows to see per-demographic breakdown</CardDescription>
+              <CardDescription>
+                {pillarBreakdownSubtitle(
+                  mcScore.subLines,
+                  client,
+                  calculatorConfig,
+                  'click EAP rows to see per-demographic breakdown',
+                )}
+              </CardDescription>
             </div>
             <Badge variant="outline" className="text-xs">
               <Globe className="h-3 w-3 mr-1" />
@@ -826,16 +887,23 @@ export default function ManagementControl() {
               </thead>
               <tbody className="divide-y divide-border">
                 {mcScore.subLines.map((sl, idx) => {
-                  const statsKeys = [
-                    'boardBlackPct', 'boardBWOPct',
-                    'execBlackPct', 'execBWOPct',
-                    'otherExecBlackPct', 'otherExecBWOPct',
-                    'seniorBlackPct', 'seniorBWOPct',
-                    'middleBlackPct', 'middleBWOPct',
-                    'juniorBlackPct', 'juniorBWOPct',
-                    'disabledBlackPct',
-                  ];
-                  const statsKey = statsKeys[idx] as keyof typeof mcScore.rawStats | undefined;
+                  const isNotAvailable = sl.weighting === 0 && sl.name.includes('NOT AVAILABLE');
+                  const statsKeyByName: Record<string, keyof typeof mcScore.rawStats> = {
+                    'Exercisable voting rights of black board members': 'boardBlackPct',
+                    'Exercisable voting rights of black female board members': 'boardBWOPct',
+                    'Black executive directors': 'execBlackPct',
+                    'Black female executive directors': 'execBWOPct',
+                    'Black other executive management': 'otherExecBlackPct',
+                    'Black female other executive management': 'otherExecBWOPct',
+                    'Black employees in senior management': 'seniorBlackPct',
+                    'Black female employees in senior management': 'seniorBWOPct',
+                    'Black employees in middle management': 'middleBlackPct',
+                    'Black female employees in middle management': 'middleBWOPct',
+                    'Black employees in junior management (incl. Semi-skilled & Unskilled)': 'juniorBlackPct',
+                    'Black female employees in junior management (incl. Semi-skilled & Unskilled)': 'juniorBWOPct',
+                    'Black employees with disabilities': 'disabledBlackPct',
+                  };
+                  const statsKey = statsKeyByName[sl.name];
                   const actualPct = statsKey ? mcScore.rawStats[statsKey] : undefined;
                   const eapLevel = eapLevelMap[idx];
                   const hasBreakdown = !!eapLevel;
@@ -845,7 +913,10 @@ export default function ManagementControl() {
                   return (
                     <React.Fragment key={idx}>
                       <tr
-                        className={cn("hover:bg-muted/30", hasBreakdown && "cursor-pointer")}
+                        className={cn(
+                          isNotAvailable ? "bg-muted/20 text-muted-foreground" : "hover:bg-muted/30",
+                          hasBreakdown && "cursor-pointer",
+                        )}
                         onClick={() => {
                           if (!hasBreakdown) return;
                           setExpandedMcRows(prev => {
@@ -862,26 +933,42 @@ export default function ManagementControl() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
-                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(0)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-primary whitespace-nowrap">
-                          {actualPct !== undefined ? `${(actualPct * 100).toFixed(2)}%` : '—'}
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">
+                          {isNotAvailable ? '—' : sl.weighting.toFixed(0)}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap">
+                          {isNotAvailable ? '—' : actualPct !== undefined ? `${(actualPct * 100).toFixed(2)}%` : '—'}
+                        </td>
+                        <td className={cn(
+                          "px-4 py-3 text-right font-mono font-bold whitespace-nowrap",
+                          isNotAvailable ? "text-muted-foreground" : "text-primary",
+                        )}>
+                          {isNotAvailable ? '—' : sl.score.toFixed(2)}
+                        </td>
                       </tr>
                       {isExpanded && breakdown && (
                         <tr className="bg-muted/10">
                           <td colSpan={5} className="px-6 py-2">
-                            <div className="grid grid-cols-6 gap-2 text-xs">
-                              {breakdown.map((bg) => (
-                                <div key={bg.group} className="text-center p-2 rounded border bg-card/50">
-                                  <div className="font-semibold text-foreground">{bg.group}</div>
-                                  <div className="text-muted-foreground mt-0.5">EAP: {(bg.eapTarget * 100).toFixed(1)}%</div>
-                                  <div className={cn("font-mono mt-0.5", bg.actual >= bg.eapTarget ? "text-emerald-600" : "text-amber-600")}>
-                                    {(bg.actual * 100).toFixed(1)}%
+                            <div className="grid grid-cols-4 gap-2 text-xs sm:grid-cols-8">
+                              {breakdown.map((bg) => {
+                                const groupLabels: Record<string, string> = {
+                                  AM: 'African M', CM: 'Coloured M', IM: 'Indian M', WM: 'White M',
+                                  AF: 'African F', CF: 'Coloured F', IF: 'Indian F', WF: 'White F',
+                                };
+                                const isBlackGroup = !bg.group.startsWith('W');
+                                return (
+                                  <div key={bg.group} className={cn("text-center p-2 rounded border", isBlackGroup ? "bg-card/50" : "bg-muted/30")}>
+                                    <div className="font-semibold text-foreground text-[10px]">{groupLabels[bg.group] ?? bg.group}</div>
+                                    {isBlackGroup && bg.eapTarget > 0 && (
+                                      <div className="text-muted-foreground mt-0.5">EAP: {(bg.eapTarget * 100).toFixed(1)}%</div>
+                                    )}
+                                    <div className={cn("font-mono mt-0.5", isBlackGroup && bg.eapTarget > 0 ? (bg.actual >= bg.eapTarget ? "text-emerald-600" : "text-amber-600") : "text-muted-foreground")}>
+                                      {(bg.actual * 100).toFixed(1)}%
+                                    </div>
+                                    <div className="text-muted-foreground/60">{bg.count}/{bg.totalInLevel}</div>
                                   </div>
-                                  <div className="text-muted-foreground/60">{bg.count}/{bg.totalInLevel}</div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </td>
                         </tr>
@@ -893,7 +980,7 @@ export default function ManagementControl() {
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total Management Control Score</td>
-                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">19.00</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">{mcTotalWeighting.toFixed(0)}.00</td>
                   <td className="px-4 py-4"></td>
                   <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{mcScore.total.toFixed(2)}</td>
                 </tr>

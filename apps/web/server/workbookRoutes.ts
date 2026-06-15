@@ -9,6 +9,7 @@ import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixtu
 import { WorkbookModel, ClientModel } from "../shared/schema";
 import {
   validateWorkbook,
+  validateWorkbookForSubmit,
   formatWorkbookValidationSummary,
 } from "../src/components/workbook/workbookValidation";
 import {
@@ -19,6 +20,7 @@ import {
   type SectionDef,
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
+import { isBlackRace, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
@@ -42,6 +44,7 @@ export type WorkbookData = {
 const SECTION_KEYS = [
   "company-information",
   "financial-information",
+  "afs-additions",
   "ownership",
   "management-control",
   "skills-development",
@@ -137,7 +140,6 @@ const SKILLS_HEADERS = [
   "Race *",
   "Disabled?",
   "Foreign?",
-  "Age",
   "Employed?",
   "Completed?",
   "Absorbed?",
@@ -267,7 +269,6 @@ const DATA_SHEETS: DataSheetSpec[] = [
       s((r as any).race),
       yesNo((r as any).isDisabled ?? (r as any).disabled),
       yesNo((r as any).isForeign ?? (r as any).foreign),
-      s((r as any).age),
       yesNo((r as any).employed),
       yesNo((r as any).completed),
       yesNo((r as any).absorbed),
@@ -627,7 +628,7 @@ export function buildInstructionsSheet(): XLSX.WorkSheet {
   aoa.push(["Measured Under", "CoGP (Codes of Good Practice) or RCoGP (Revised CoGP)."]);
   aoa.push(["Empowering Supplier?", "Yes / No. Required for points from Apr 2025 onwards."]);
   aoa.push(["Black / Black Female Ownership", "Percentage 0–100 (e.g. 51 for 51%). Black Female cannot exceed Black."]);
-  aoa.push(["Certificate Expiry Date", "Required whenever B-BBEE Level is supplied; must match the certificate / sworn affidavit on file."]);
+  aoa.push(["Certificate Expiry Date", "Optional. When supplied (especially with a B-BBEE Level), must match the certificate / sworn affidavit on file and helps the AI parser extract supplier data."]);
   aoa.push([""]);
 
   aoa.push(["Enterprise & Supplier Development — Contribution Type"]);
@@ -820,32 +821,9 @@ async function authorizeWorkbookAccess(
 
 // ---------- Submit: translate workbook into ClientModel bulk-import shape ----------
 
-// Lake Trading Fix Plan â”¬Âº1 Bug 1 (ownership) helpers
-const BLACK_RACES = new Set(["African", "Coloured", "Indian"]);
-
-// Lake Trading Fix Plan â”¬Âº1 Bug 2 (designations) Î“Ã‡Ã¶ workbook label Î“Ã¥Ã† calculator enum
-const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
-  "Executive Director": "Executive Director",
-  "Non-executive Director": "Board",
-  "Other Executive Manager": "Other Executive Management",
-  "Senior Manager": "Senior",
-  "Middle Manager": "Middle",
-  "Junior Manager": "Junior",
-  "Semi-skilled": "Semi-skilled",
-  "Unskilled": "Unskilled",
-  // pass-through for direct enum values already used elsewhere
-  Board: "Board",
-  Executive: "Executive",
-  "Other Executive Management": "Other Executive Management",
-  Senior: "Senior",
-  Middle: "Middle",
-  Junior: "Junior",
-  "Skilled Technical": "Skilled Technical",
-};
-
+// Lake Trading Fix Plan — ownership helpers (race/designation normalisation in shared.ts)
 function mapDesignation(raw: string): string {
-  const trimmed = (raw ?? "").trim();
-  return WORKBOOK_TO_DESIGNATION[trimmed] ?? trimmed;
+  return normalizeDesignationForScoring(raw);
 }
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 4 + 5 (ESD/SED type)
@@ -866,9 +844,10 @@ function mapContributionType(raw: string): string {
 }
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
-  const t = (raw ?? "").toLowerCase();
-  if (t.startsWith("enterprise")) return "enterprise_development";
-  // Lake Trading Fix Plan â”¬Âº1 Bug 4: safe default Î“Ã‡Ã¶ counts toward SD sub-min
+  const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (t === "ed" || t.startsWith("enterprise")) return "enterprise_development";
+  if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
+  // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
   return "supplier_development";
 }
 
@@ -905,10 +884,13 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // For trust / multi-beneficiary holders the workbook row can also carry an
   // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
   // Lake demo seed for the Family Trust shareholder); when present we prefer it.
+  const sectorCode = s(companyMeta.industrySector).trim().toUpperCase();
+  const farmWorkersIncluded = companyMeta.farmWorkersIncluded !== false;
+
   const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
-    const race = s((r as any).race);
+    const race = normalizeRace(s((r as any).race));
     const gender = s((r as any).gender);
-    const isBlack = BLACK_RACES.has(race);
+    const isBlack = isBlackRace(race);
     const isFemale = gender === "Female";
     const votingPct = pctToFraction((r as any).votingRights);
     const eiPct = pctToFraction((r as any).economicInterest);
@@ -917,6 +899,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const isDisabled = Boolean((r as any).isDisabled);
     // Lake demo writes `isNewEntrant` directly; default false otherwise.
     const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    // AGRI-specific: farm workers as a 5th Designated Group category.
+    const isFarmWorker = sectorCode === "AGRI" && Boolean((r as any).isFarmWorker) && farmWorkersIncluded;
 
     // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
     // supplies them (trust holders, multi-beneficiary shareholders). Fall back
@@ -953,11 +937,19 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // Use integer "shares" derived from shareholding %; only relative weight matters
       // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
       // branch in calculateOwnershipScore so blackOwnership flows through.
-      shares: Math.max(1, Math.round(sharePct * 10_000)),
-      shareValue: 1,
+      shares:
+        num((r as any).numberOfShares) > 0
+          ? Math.round(num((r as any).numberOfShares))
+          : Math.max(1, Math.round(sharePct * 10_000)),
+      shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
-        Boolean((r as any).isDesignatedGroup) || isYouth || isDisabled,
+        Boolean((r as any).isDesignatedGroup) ||
+        pctToFraction((r as any).designatedGroupOwnership) > 0 ||
+        isYouth ||
+        isDisabled ||
+        isFarmWorker,
+      isFarmWorker,
       blackNewEntrant: isNewEntrant,
       votingRightsPercent: votingPct,
       economicInterestPercent: eiPct,
@@ -982,17 +974,15 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         surname: s((r as any).surname),
         fullName: joinName(r as any),
         idNumber: s((r as any).idNumber),
-        race: s((r as any).race),
+        race: normalizeRace(s((r as any).race)) || s((r as any).race),
         gender: s((r as any).gender),
         occupationalLevel,
         designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
-        annualSalary: num((r as any).salary),
         isDisabled: Boolean((r as any).isDisabled),
         isForeign: Boolean((r as any).isForeign),
         votingRights: num((r as any).votingRights),
-        votingRightsPercent: num((r as any).votingRights),
         startDate: s((r as any).startDate),
       });
     }
@@ -1010,31 +1000,42 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
     const absorbed = Boolean((r as any).absorbed);
+    const employed = Boolean((r as any).employed);
+    const categoryCode = s((r as any).categoryCode);
+    // Derive employmentStatus (calculator reads this for unemployed/learnership/
+    // absorption scoring) and the explicit YES / bursary flags, so the first
+    // calculation after submit matches what the loader reconstructs on reload.
+    const rawEmpStatus = s((r as any).employmentStatus);
+    const employmentStatus = rawEmpStatus || (employed ? "Permanent" : "Unemployed");
     return {
       programName: s((r as any).programName),
       // Alias `name` for consumers keyed on it.
       name: s((r as any).programName),
-      categoryCode: s((r as any).categoryCode),
-      category: s((r as any).categoryCode),
+      categoryCode,
+      category: categoryCode,
       trainingProvider: s((r as any).trainingProvider),
-      municipality: s((r as any).municipality),
       learnerName: s((r as any).learnerName),
       idNumber: s((r as any).idNumber),
-      race: s((r as any).race),
+      learnerIdNumber: s((r as any).idNumber),
+      race: normalizeRace(s((r as any).race)) || s((r as any).race),
       gender: s((r as any).gender),
-      isBlack: ["African", "Coloured", "Indian"].includes(s((r as any).race)),
+      isBlack: isBlackRace(s((r as any).race)),
       isDisabled: Boolean((r as any).isDisabled),
       isForeign: Boolean((r as any).isForeign),
-      employed: Boolean((r as any).employed),
+      employed,
+      employmentStatus,
+      isYesEmployee: Boolean((r as any).isYesEmployee ?? (r as any).yesEmployee),
       completed: Boolean((r as any).completed),
+      isCompleted: Boolean((r as any).completed),
       absorbed,
       isAbsorbed: absorbed,
+      isBursary: Boolean((r as any).isBursary) || categoryCode === "A",
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),
       cateringCost: num((r as any).cateringCost),
       stationeryCost: num((r as any).stationeryCost),
-      facilityCost: num((r as any).trainingFacilityCost),
+      facilityCost: num((r as any).trainingFacilityCost ?? (r as any).facilityCost),
       salaryCost: num((r as any).salaryCost),
       otherCosts: num((r as any).otherCosts),
       totalCost: total,
@@ -1073,7 +1074,6 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
         bbbeeLevel: beeLevel,
         beeLevel,
-        registrationNumber: s((r as any).registrationNumber),
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
         empoweringSupplier: Boolean((r as any).empoweringSupplier),
@@ -1147,9 +1147,31 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     };
   });
 
-  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta);
+  const skillsMeta = (sec["skills-development"]?.meta ?? {}) as Record<string, unknown>;
+  const sedMeta = (sec["sed"]?.meta ?? {}) as Record<string, unknown>;
+  const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
+  const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
 
-  return { shareholders, employees, trainingPrograms, suppliers, esdContributions, sedContributions, financials, companyMeta };
+  const ownershipMeta = {
+    companyValue: financials.companyValue ?? 0,
+    outstandingDebt: financials.outstandingDebt ?? 0,
+    yearsHeld: Math.max(
+      0,
+      ...shareholders.map((sh) => num((sh as any).yearsHeld)),
+    ),
+  };
+
+  return {
+    shareholders,
+    employees,
+    trainingPrograms,
+    suppliers,
+    esdContributions,
+    sedContributions,
+    financials,
+    companyMeta,
+    ownershipMeta,
+  };
 }
 
 function requireSuperAdmin(req: Request, res: Response): boolean {
@@ -1301,10 +1323,7 @@ export function registerWorkbookRoutes(app: Express): void {
 
   // Submit the workbook Î“Ã¥Ã† write its contents into the associated client record
   // so the scorecard pipeline can pick it up. Returns row counts of what was synced.
-  app.post(
-    "/api/workbook/:companyId/submit",
-    requireAuth,
-    async (req: Request, res: Response) => {
+  const handleWorkbookScorecardSync = async (req: Request, res: Response) => {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
@@ -1323,14 +1342,8 @@ export function registerWorkbookRoutes(app: Express): void {
           .json({ error: "Database unavailable — cannot submit workbook." });
       }
 
-      const validationIssues = validateWorkbook(wb.sections);
-      if (validationIssues.length > 0) {
-        return res.status(400).json({
-          error: "Workbook validation failed",
-          issues: validationIssues,
-          summary: formatWorkbookValidationSummary(validationIssues),
-        });
-      }
+      const allValidationIssues = validateWorkbook(wb.sections);
+      const blockingIssues = validateWorkbookForSubmit(wb.sections);
 
       const projected = projectWorkbookToClient(wb);
       console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
@@ -1362,9 +1375,20 @@ export function registerWorkbookRoutes(app: Express): void {
           };
           const f = projected.financials;
           if (f.revenue > 0) update.revenue = f.revenue;
-          if (typeof f.npat === "number") update.npat = f.npat;
           if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
           if (f.tmps > 0) update.tmps = f.tmps;
+          if (f.effectiveNpat != null) update.npat = f.effectiveNpat;
+          else if (typeof f.npat === "number") update.npat = f.npat;
+          if (projected.ownershipMeta?.companyValue > 0) {
+            update.companyValue = projected.ownershipMeta.companyValue;
+          } else if (f.companyValue != null && f.companyValue > 0) {
+            update.companyValue = f.companyValue;
+          }
+          if (projected.ownershipMeta?.outstandingDebt != null) {
+            update.outstandingDebt = projected.ownershipMeta.outstandingDebt;
+          } else if (f.outstandingDebt != null) {
+            update.outstandingDebt = f.outstandingDebt;
+          }
           if (f.industrySector) {
             update.industrySector = f.industrySector;
             update.sectorCode = f.industrySector;
@@ -1374,6 +1398,40 @@ export function registerWorkbookRoutes(app: Express): void {
             update.companySize = f.scorecardType;
           }
           if (f.annualTurnover > 0) update.annualTurnover = f.annualTurnover;
+          // Cover-sheet global inputs
+          if (f.measurementPeriodStart) update.measurementPeriodStart = f.measurementPeriodStart;
+          if (f.measurementPeriodEnd) update.measurementPeriodEnd = f.measurementPeriodEnd;
+          // Skills aggregate inputs — persist to dedicated client fields where they exist,
+          // and into the mixed `financials` blob for fields without a top-level column.
+          if (f.eapProvince) update.eapProvince = f.eapProvince;
+          if (f.headcount != null && f.headcount > 0) update.numberOfEmployees = f.headcount;
+          const skillsExtra: Record<string, unknown> = {};
+          if (f.deemedNpatUsed != null) skillsExtra.deemedNpatUsed = f.deemedNpatUsed;
+          if (f.deemedNpat != null) skillsExtra.deemedNpat = f.deemedNpat;
+          if (f.effectiveNpat != null) skillsExtra.effectiveNpat = f.effectiveNpat;
+          if (f.industryNormPercent != null) skillsExtra.industryNormPercent = f.industryNormPercent;
+          if (f.combineExcoSenior != null) skillsExtra.combineExcoSenior = f.combineExcoSenior;
+          if (f.headcount != null) skillsExtra.headcount = f.headcount;
+          if (f.groupLeviableAmount != null) skillsExtra.groupLeviableAmount = f.groupLeviableAmount;
+          if (f.eapYear != null) skillsExtra.eapYear = f.eapYear;
+          if (f.trainingManagerSalary != null) skillsExtra.trainingManagerSalary = f.trainingManagerSalary;
+          if (f.trainingOverheadCost != null) skillsExtra.trainingOverheadCost = f.trainingOverheadCost;
+          if (f.selectPeriod) skillsExtra.selectPeriod = f.selectPeriod;
+          if (f.dataDate) skillsExtra.dataDate = f.dataDate;
+          // AGRI-specific
+          if (f.farmWorkersIncluded !== undefined) skillsExtra.farmWorkersIncluded = f.farmWorkersIncluded;
+          // FSC-specific
+          if (f.fscSubSector) update.fscSubSector = f.fscSubSector;
+          if (f.fscReinsurer !== undefined) update.fscReinsurer = f.fscReinsurer;
+          if (f.afs) skillsExtra.afs = f.afs;
+          if (f.ceSpend != null) skillsExtra.ceSpend = f.ceSpend;
+          if (f.ceBonusSpend != null) skillsExtra.ceBonusSpend = f.ceBonusSpend;
+          if (f.fundisaSpend != null) skillsExtra.fundisaSpend = f.fundisaSpend;
+          // FSC-specific: prior year revenue for FSC SED/income scoring.
+          if (f.priorYearRevenue != null) skillsExtra.priorYearRevenue = f.priorYearRevenue;
+          if (Object.keys(skillsExtra).length > 0) {
+            update.financials = { ...(update.financials ?? {}), ...skillsExtra };
+          }
           const cm = projected.companyMeta;
           for (const key of [
             "tradingName",
@@ -1427,6 +1485,9 @@ export function registerWorkbookRoutes(app: Express): void {
               sedContributions: projected.sedContributions.length,
             },
             submittedAt,
+            validationIssues: allValidationIssues,
+            blockingIssues,
+            warnings: allValidationIssues.filter((i) => !blockingIssues.includes(i)),
           });
         }
 
@@ -1469,11 +1530,124 @@ export function registerWorkbookRoutes(app: Express): void {
             sedContributions: projected.sedContributions.length,
           },
           submittedAt: new Date().toISOString(),
+          validationIssues: allValidationIssues,
+          blockingIssues,
+          warnings: allValidationIssues.filter((i) => !blockingIssues.includes(i)),
         });
       } catch (err: any) {
         logger.error("Failed to submit workbook", err);
         res.status(500).json({ error: "Failed to submit workbook" });
       }
-    },
-  );
+  };
+
+  app.post("/api/workbook/:companyId/submit", requireAuth, handleWorkbookScorecardSync);
+  app.post("/api/workbook/:companyId/sync", requireAuth, handleWorkbookScorecardSync);
+
+  // ---------------------------------------------------------------------------
+  // POST /api/workbook/suggest-value
+  // AI fallback for single-cell normalization when the deterministic engine
+  // can't produce a confident suggestion. Returns { suggestion, explanation }.
+  // ---------------------------------------------------------------------------
+  app.post("/api/workbook/suggest-value", requireAuth, async (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const fieldKey = typeof body.fieldKey === "string" ? body.fieldKey.trim() : "";
+      const fieldLabel = typeof body.fieldLabel === "string" ? body.fieldLabel.trim() : fieldKey;
+      const rawValue = typeof body.rawValue === "string" ? body.rawValue.trim() : "";
+      const fieldType = typeof body.fieldType === "string" ? body.fieldType.trim() : "text";
+      const allowedValues: string[] = Array.isArray(body.allowedValues)
+        ? body.allowedValues.map(String)
+        : [];
+
+      if (!rawValue) {
+        return res.status(400).json({ message: "rawValue is required" });
+      }
+
+      if (fieldType === "select" && allowedValues.length > 0) {
+        const { suggestSelectOption, FUZZY_SELECT_HINT } = await import("../src/lib/selectOptionMatch");
+        const match = suggestSelectOption(rawValue, allowedValues, fieldKey || undefined);
+        if (match.suggestion && match.confidence >= FUZZY_SELECT_HINT) {
+          return res.json({
+            suggestion: match.suggestion,
+            explanation: `Did you mean "${match.suggestion}"?`,
+          });
+        }
+      }
+
+      const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+      const apiKey = process.env.AZURE_OPENAI_API_KEY;
+      const deployment =
+        process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.AZURE_OPENAI_DEPLOYMENT;
+      const openaiKey = process.env.OPENAI_API_KEY;
+
+      if (!((endpoint && apiKey && deployment) || openaiKey)) {
+        return res.status(503).json({ message: "AI not configured" });
+      }
+
+      const { AzureOpenAI, default: OpenAI } = await import("openai");
+      let client: InstanceType<typeof OpenAI>;
+      let model: string;
+      if (endpoint && apiKey && deployment) {
+        client = new AzureOpenAI({
+          endpoint,
+          apiKey,
+          deployment,
+          apiVersion: process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview",
+        });
+        model = deployment;
+      } else {
+        client = new OpenAI({ apiKey: openaiKey! });
+        model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+      }
+
+      const validationMessage =
+        typeof body.validationMessage === "string" ? body.validationMessage.trim() : "";
+      const dateFormat = typeof body.dateFormat === "string" ? body.dateFormat.trim() : "";
+      const allowedList =
+        allowedValues.length > 0
+          ? `Allowed values: ${allowedValues.map((v) => `"${v}"`).join(", ")}.`
+          : "";
+      const system = [
+        "You normalize a single user-entered value for a South African B-BBEE scorecard field.",
+        "Return JSON only: { \"suggestion\": string|null, \"explanation\": string }.",
+        "suggestion should be the best normalized value, or null if you cannot confidently normalize.",
+        "explanation should be a single short sentence (≤20 words) explaining the normalization.",
+        "Never invent values that aren't in the allowed list (when provided).",
+        dateFormat ? `Dates must use format ${dateFormat}.` : "",
+        validationMessage ? `Validation rule: ${validationMessage}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const user =
+        `Field: "${fieldLabel}" (type: ${fieldType}). ${allowedList}\n` +
+        (validationMessage ? `Rule: ${validationMessage}\n` : "") +
+        (dateFormat ? `Format: ${dateFormat}\n` : "") +
+        `User typed: "${rawValue}"\n` +
+        `What is the correct normalized value?`;
+
+      const response = await client.chat.completions.create({
+        model,
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      });
+      const text = response.choices?.[0]?.message?.content;
+      if (!text) return res.json({ suggestion: null, explanation: "" });
+
+      const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
+      const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
+      const validSuggestion =
+        suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
+          ? suggestion
+          : null;
+
+      return res.json({ suggestion: validSuggestion, explanation: parsed.explanation ?? "" });
+    } catch (err) {
+      logger.error("suggest-value failed", err);
+      return res.status(500).json({ message: "suggest-value failed" });
+    }
+  });
 }

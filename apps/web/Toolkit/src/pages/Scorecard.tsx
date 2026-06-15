@@ -38,6 +38,39 @@ interface ScorecardElement {
 
 const EMPTY_PILLAR = { score: 0, target: 0, weighting: 0, subMinimumMet: false };
 
+const GROUP_LABEL: Record<string, string> = {
+  AM: "African Male", CM: "Coloured Male", IM: "Indian Male", WM: "White Male",
+  AF: "African Female", CF: "Coloured Female", IF: "Indian Female", WF: "White Female",
+};
+
+interface EapCell { group: string; eapTarget: number; actual: number; count: number; totalInLevel: number; }
+
+/**
+ * Flatten per-level EAP demographic breakdowns into sub-indicator rows so the
+ * detailed per-demographic view (province-specific effective EAP) is visible on
+ * the Scorecard tab, not only on the pillar pages.
+ */
+function eapRows(breakdowns: Record<string, EapCell[]> | undefined, province?: string): SubIndicator[] {
+  if (!breakdowns) return [];
+  const rows: SubIndicator[] = [];
+  for (const level of Object.keys(breakdowns)) {
+    const cells = breakdowns[level] || [];
+    if (!cells.some(c => c.totalInLevel > 0)) continue;
+    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
+    for (const c of cells) {
+      if (c.eapTarget <= 0 && c.actual <= 0) continue;
+      rows.push({
+        name: `  EAP · ${levelLabel} · ${GROUP_LABEL[c.group] ?? c.group}`,
+        target: `${(c.eapTarget * 100).toFixed(1)}%${province ? ` (${province})` : " EAP"}`,
+        weighting: 0,
+        score: 0,
+        formula: `Actual ${(c.actual * 100).toFixed(1)}% (${c.count}/${c.totalInLevel})`,
+      });
+    }
+  }
+  return rows;
+}
+
 function fmt(value: number, full: boolean): string {
   if (value === null || value === undefined || isNaN(value)) return full ? "0.0000" : "0.00";
   return full ? value.toFixed(4) : value.toFixed(2);
@@ -101,11 +134,11 @@ export default function Scorecard() {
     try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
   }, [ownership, cfg, hasConfig]);
   const mgtResult = useMemo(() => {
-    try { return hasConfig ? calculateManagementScore(management, cfg!) : null; } catch { return null; }
-  }, [management, cfg, hasConfig]);
+    try { return hasConfig ? calculateManagementScore(management, cfg!, client.eapProvince) : null; } catch { return null; }
+  }, [management, cfg, hasConfig, client.eapProvince]);
   const skillResult = useMemo(() => {
-    try { return hasConfig ? calculateSkillsScore(skills, cfg!) : null; } catch { return null; }
-  }, [skills, cfg, hasConfig]);
+    try { return hasConfig ? calculateSkillsScore(skills, cfg!, client.eapProvince) : null; } catch { return null; }
+  }, [skills, cfg, hasConfig, client.eapProvince]);
   const procResult = useMemo(() => {
     try { return hasConfig ? calculateProcurementScore(procurement, cfg!) : null; } catch { return null; }
   }, [procurement, cfg, hasConfig]);
@@ -144,13 +177,17 @@ export default function Scorecard() {
       ...(scorecard.managementControl || EMPTY_PILLAR),
       accentColor: "text-blue-500 dark:text-blue-400",
       barColor: "bg-blue-500",
-      subIndicators: mgtResult?.subLines.map(sl => ({
-        name: sl.name,
-        target: sl.target,
-        weighting: sl.weighting,
-        score: sl.score,
-        formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-      })) || [],
+      subIndicators: mgtResult ? [
+        ...mgtResult.subLines.map(sl => ({
+          name: sl.name,
+          target: sl.target,
+          weighting: sl.weighting,
+          score: sl.score,
+          formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
+        })),
+        // Per-demographic effective-EAP detail (Senior/Middle/Junior), matching the pillar page.
+        ...eapRows(mgtResult.eapBreakdowns as Record<string, EapCell[]>, mgtResult.eapProvince),
+      ] : [],
     },
     {
       key: "skillsDevelopment",

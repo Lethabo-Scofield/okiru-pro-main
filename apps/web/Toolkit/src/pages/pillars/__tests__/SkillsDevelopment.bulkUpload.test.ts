@@ -167,6 +167,19 @@ describe("computeSkillsTargets — % of payroll formula (Task #18 area 6)", () =
     expect(out.bursaryTarget).toBeCloseTo(28_000, 6);
   });
 
+  it("normalizes percent-point overrides (3.5 → 0.035) for KPI cards", async () => {
+    const { computeSkillsTargets } = await import("../bulkUploadParser");
+    const out = computeSkillsTargets({
+      leviableAmount: 10_000_000,
+      overallTargetPct: 3.5,
+      bursaryTargetPct: 2.5,
+    });
+    expect(out.overallTargetPct).toBeCloseTo(0.035, 6);
+    expect(out.bursaryTargetPct).toBeCloseTo(0.025, 6);
+    expect(out.targetSpend).toBeCloseTo(350_000, 6);
+    expect(out.bursaryTarget).toBeCloseTo(250_000, 6);
+  });
+
   it("clamps negative / NaN leviableAmount to 0", async () => {
     const { computeSkillsTargets } = await import("../bulkUploadParser");
     expect(computeSkillsTargets({ leviableAmount: -100 }).targetSpend).toBe(0);

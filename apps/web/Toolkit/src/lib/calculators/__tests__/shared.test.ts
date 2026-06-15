@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deepClone, safeRatio, clampScore, isBlackRace, BLACK_RACES } from '../shared';
+import { deepClone, safeRatio, clampScore, isBlackRace, normalizeRace, normalizeDesignationForScoring, BLACK_RACES, allowsRcogpDefaults, requireSectorConfig, SectorConfigError, normalizeSpendFraction } from '../shared';
 
 describe('deepClone', () => {
   it('should create independent copies of objects', () => {
@@ -126,26 +126,43 @@ describe('isBlackRace', () => {
     expect(isBlackRace('Indian')).toBe(true);
   });
 
+  it('should treat B-BBEE umbrella "Black" as black for scoring', () => {
+    expect(isBlackRace('Black')).toBe(true);
+    expect(isBlackRace('black')).toBe(true);
+  });
+
   it('should return false for non-black races', () => {
     expect(isBlackRace('White')).toBe(false);
     expect(isBlackRace('Other')).toBe(false);
     expect(isBlackRace('')).toBe(false);
   });
 
-  it('should be case-sensitive', () => {
-    expect(isBlackRace('african')).toBe(false);
-    expect(isBlackRace('AFRICAN')).toBe(false);
-    expect(isBlackRace('coloured')).toBe(false);
-  });
-
-  it('should handle whitespace', () => {
-    expect(isBlackRace(' African')).toBe(false);
-    expect(isBlackRace('African ')).toBe(false);
+  it('should accept common import variants', () => {
+    expect(isBlackRace('african')).toBe(true);
+    expect(isBlackRace('AFRICAN')).toBe(true);
+    expect(isBlackRace('coloured')).toBe(true);
+    expect(isBlackRace(' African')).toBe(true);
+    expect(isBlackRace('African ')).toBe(true);
   });
 
   it('should return false for undefined or null', () => {
     expect(isBlackRace(undefined as any)).toBe(false);
     expect(isBlackRace(null as any)).toBe(false);
+  });
+});
+
+describe('normalizeRace', () => {
+  it('maps Black umbrella label to African workbook option', () => {
+    expect(normalizeRace('Black')).toBe('African');
+    expect(normalizeRace('black')).toBe('African');
+  });
+});
+
+describe('normalizeDesignationForScoring', () => {
+  it('maps workbook exco label to calculator band', () => {
+    expect(normalizeDesignationForScoring('Other Executive Manager')).toBe('Other Executive Management');
+    expect(normalizeDesignationForScoring('Non-executive Director')).toBe('Board');
+    expect(normalizeDesignationForScoring('Senior Manager')).toBe('Senior');
   });
 });
 
@@ -163,5 +180,55 @@ describe('BLACK_RACES', () => {
 
   it('should be a readonly tuple', () => {
     expect(Array.isArray(BLACK_RACES)).toBe(true);
+  });
+});
+
+describe('requireSectorConfig', () => {
+  it('allows empty pillar config when sector is unset (tests)', () => {
+    expect(requireSectorConfig(undefined, 'skills', undefined)).toEqual({});
+  });
+
+  it('allows empty pillar config for RCOGP Generic', () => {
+    expect(requireSectorConfig('RCOGP', 'skills', undefined, 'Generic')).toEqual({});
+  });
+
+  it('throws for non-RCOGP sector with missing pillar config', () => {
+    expect(() => requireSectorConfig('ICT', 'skills', undefined, 'Generic'))
+      .toThrow(SectorConfigError);
+    expect(() => requireSectorConfig('ICT', 'skills', {}, 'Generic'))
+      .toThrow(/missing skills config for sector ICT Generic/);
+  });
+
+  it('returns pillar config when present for non-RCOGP sector', () => {
+    const skills = { overallTarget: 0.03 };
+    expect(requireSectorConfig('ICT', 'skills', skills, 'Generic')).toBe(skills);
+  });
+});
+
+describe('allowsRcogpDefaults', () => {
+  it('returns true when sector is unset', () => {
+    expect(allowsRcogpDefaults(undefined)).toBe(true);
+  });
+
+  it('returns true only for RCOGP Generic', () => {
+    expect(allowsRcogpDefaults('RCOGP', 'Generic')).toBe(true);
+    expect(allowsRcogpDefaults('RCOGP', 'QSE')).toBe(false);
+    expect(allowsRcogpDefaults('ICT', 'Generic')).toBe(false);
+  });
+});
+
+describe('normalizeSpendFraction', () => {
+  it('passes through fractions unchanged', () => {
+    expect(normalizeSpendFraction(0.035, 0)).toBe(0.035);
+    expect(normalizeSpendFraction(0.025, 0)).toBe(0.025);
+  });
+
+  it('converts percent points to fractions', () => {
+    expect(normalizeSpendFraction(3.5, 0)).toBeCloseTo(0.035, 6);
+    expect(normalizeSpendFraction(2.5, 0)).toBeCloseTo(0.025, 6);
+  });
+
+  it('uses fallback when value is missing', () => {
+    expect(normalizeSpendFraction(undefined, 0.035)).toBe(0.035);
   });
 });

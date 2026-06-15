@@ -4,6 +4,8 @@
  */
 import {
   BBBEE_LEVEL_MAP,
+  DESIGNATION_MAP,
+  ESD_CATEGORY_MAP,
   OCC_LEVEL_MAP,
   SUPPLIER_SIZE_MAP,
 } from "@/components/workbook/sections";
@@ -18,15 +20,6 @@ const RACE_SYNONYM_MAP: Record<string, string> = {
   white: "White",
 };
 
-const DESIGNATION_SYNONYM_MAP: Record<string, string> = {
-  snrmanagement: "Senior Manager",
-  seniormanagement: "Senior Manager",
-  seniormanager: "Senior Manager",
-  seniormanagers: "Senior Manager",
-};
-
-const ESD_CATEGORY_SYNONYM_MAP: Record<string, string> = {};
-
 export interface SelectMatchResult {
   suggestion: string | null;
   confidence: number;
@@ -34,10 +27,10 @@ export interface SelectMatchResult {
 }
 
 const FIELD_SYNONYM_MAPS: Record<string, Record<string, string>> = {
-  designation: DESIGNATION_SYNONYM_MAP,
+  designation: DESIGNATION_MAP,
   occupationalLevel: OCC_LEVEL_MAP,
   currentSize: SUPPLIER_SIZE_MAP,
-  esdCategory: ESD_CATEGORY_SYNONYM_MAP,
+  esdCategory: ESD_CATEGORY_MAP,
 };
 
 /** Minimum score to show a "did you mean" hint. */

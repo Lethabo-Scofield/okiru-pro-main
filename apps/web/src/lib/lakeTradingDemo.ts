@@ -240,13 +240,14 @@ export const lakeTradingPillars: BuildPillarsData = {
  */
 export const lakeTradingExpectedScores = {
   ownership: 25,
-  managementControl: 11.77,
+  // Per-demographic MC (corrected 2026-06-11; was 11.77 under the aggregate engine).
+  managementControl: 10.38,
   skillsDevelopment: 0,
   procurement: 20.33,
   supplierDevelopment: 3.69,
   enterpriseDevelopment: 2.36,
   socioEconomicDevelopment: 0.41,
-  total: 63.56,
+  total: 62.17,
   level: 7,
   discountedLevel: 8,
 };

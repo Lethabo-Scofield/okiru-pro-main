@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
 import { Card, CardContent, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
@@ -512,11 +513,9 @@ export default function Settings() {
                 <SelectValue placeholder="Select Province" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="National">National</SelectItem>
-                <SelectItem value="Gauteng">Gauteng</SelectItem>
-                <SelectItem value="Western Cape">Western Cape</SelectItem>
-                <SelectItem value="KZN">KwaZulu-Natal</SelectItem>
-                <SelectItem value="Eastern Cape">Eastern Cape</SelectItem>
+                {getProvinces().map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">Demographic targets for Management Control.</p>

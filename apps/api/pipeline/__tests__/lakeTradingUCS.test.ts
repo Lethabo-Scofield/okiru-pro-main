@@ -100,13 +100,17 @@ const CONTRIBUTIONS: ContributionInput[] = [
 
 const EXPECTED = {
   ownership: 25.00,
-  managementControl: 11.77,
+  // Management Control corrected 2026-06-11 to the workbook's PER-DEMOGRAPHIC EAP
+  // model (was 11.77 under the legacy aggregate engine). Each band is split across
+  // demographic groups and capped at bandMaxPts × effectiveEAP_group; frontend and
+  // API agree at 10.38 for this fixture. See management.eapWorkbook.test.ts.
+  managementControl: 10.38,
   skillsDevelopment: 0.00,
   procurement: 20.33,
   supplierDevelopment: 3.69,
   enterpriseDevelopment: 2.36,
   socioEconomicDevelopment: 0.41,
-  grandTotal: 63.56,
+  grandTotal: 62.17, // 63.56 − 11.77 (old MC) + 10.38 (per-demographic MC)
   beeLevel: 7,
   discountedLevel: 8,
 };

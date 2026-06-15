@@ -53,6 +53,9 @@ const envSchema = z.object({
 
   // External services — optional. Validated only if set.
   AZURE_STORAGE_CONNECTION_STRING: z.string().optional(),
+  AZURE_CERT_STORAGE_CONNECTION_STRING: z.string().optional(),
+  AZURE_CERT_STORAGE_ACCOUNT_NAME: z.string().optional(),
+  AZURE_CERT_BLOB_CONTAINER: z.string().optional(),
   AZURE_OPENAI_ENDPOINT: z.string().url().optional(),
   AZURE_OPENAI_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),

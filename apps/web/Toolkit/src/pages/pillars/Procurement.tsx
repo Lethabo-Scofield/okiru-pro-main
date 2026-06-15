@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Switch } from "@toolkit/components/ui/switch";
@@ -22,6 +23,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
+import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Supplier } from "@toolkit/lib/types";
 
 // Issue 3: Added isForeignSupplier field
@@ -63,14 +65,18 @@ export default function Procurement() {
 
   const handleTmpsToggle = (manual: boolean) => {
     setIsManualTmps(manual);
-    if (!manual) {
-      updateTMPS(calculatedTmps);
+    if (manual) {
+      // Pin the current value as a manual override; user can then edit it.
+      updateTMPS(tmps || calculatedTmps, true);
+    } else {
+      // Calculated mode: derive from suppliers and keep it auto-syncing.
+      updateTMPS(calculatedTmps, false);
     }
   };
 
   const handleManualTmpsChange = (value: number) => {
     setManualTmpsValue(value);
-    updateTMPS(value);
+    updateTMPS(value, true);
   };
 
   const [isSupOpen, setIsSupOpen] = useState(false);
@@ -206,10 +212,9 @@ export default function Procurement() {
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Spend (R)</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.spend}
-          onChange={e => setData({ ...data, spend: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, spend: v })}
           className="col-span-3"
           data-testid="input-supplier-spend"
         />
@@ -245,40 +250,36 @@ export default function Procurement() {
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Black %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.blackOwnership}
-          onChange={e => setData({ ...data, blackOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, blackOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-black-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Black Women %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.blackWomenOwnership}
-          onChange={e => setData({ ...data, blackWomenOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, blackWomenOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-black-women-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Youth %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.youthOwnership}
-          onChange={e => setData({ ...data, youthOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, youthOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-youth-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Disabled %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.disabledOwnership}
-          onChange={e => setData({ ...data, disabledOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, disabledOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-disabled-ownership"
         />
@@ -348,10 +349,9 @@ export default function Procurement() {
           <CardContent>
             {isManualTmps ? (
               <div className="space-y-2">
-                <Input
-                  type="number"
+                <NumberInput
                   value={manualTmpsValue}
-                  onChange={e => handleManualTmpsChange(Number(e.target.value))}
+                  onValueChange={handleManualTmpsChange}
                   className="text-lg font-bold font-heading"
                   data-testid="input-tmps-manual"
                 />
@@ -417,7 +417,13 @@ export default function Procurement() {
       <Card className="glass-panel mt-8 mb-8" data-testid="card-procurement-detailed-scorecard">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>Direct translation of GP Excel toolkit calculations (29 points)</CardDescription>
+          <CardDescription>
+            {pillarSectorSubtitle(
+              client,
+              calculatorConfig,
+              score.subLines.reduce((a, l) => a + l.weighting, 0),
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">

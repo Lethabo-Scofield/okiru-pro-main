@@ -11,6 +11,7 @@
  */
 
 import type { SectorConfig, PillarConfig } from '../sectorConfig.js';
+import { EFFECTIVE_EAP_NORMS, RAW_EAP_NORMS, LATEST_EAP_YEAR } from '../eapNorms.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (from frontend shared.ts)
@@ -309,18 +310,88 @@ function calcTransportQseEmploymentEquity(
 }
 
 // ---------------------------------------------------------------------------
-// EAP Targets (from frontend eapTargets.ts)
+// EAP — sourced from the generated CEE norms (single source of truth, shared
+// with the frontend via scripts/import-eap-norms.cjs). The MC pillar uses the
+// effective/adjusted EAP (white-excluded, re-normalised) per the workbook.
 // ---------------------------------------------------------------------------
 
-interface EAPValues { blackTarget: number; blackWomenTarget: number; }
+type DemoGroup = 'AM' | 'CM' | 'IM' | 'WM' | 'AF' | 'CF' | 'IF' | 'WF';
+const BLACK_GROUPS: DemoGroup[] = ['AM', 'CM', 'IM', 'AF', 'CF', 'IF'];
+const BLACK_FEMALE_GROUPS: DemoGroup[] = ['AF', 'CF', 'IF'];
 
+const PROVINCE_TITLE: Record<string, string> = {
+  national: 'National', gauteng: 'Gauteng', 'western cape': 'Western Cape',
+  'eastern cape': 'Eastern Cape', 'kwazulu-natal': 'KwaZulu-Natal', 'free state': 'Free State',
+  'north west': 'North West', 'northern cape': 'Northern Cape', mpumalanga: 'Mpumalanga', limpopo: 'Limpopo',
+};
+
+function provinceTitle(province?: string): string {
+  return PROVINCE_TITLE[(province || 'national').toLowerCase().trim()] || 'National';
+}
+
+/** Effective/adjusted EAP (6 non-white groups, re-normalised) for province + year. */
+function effEapApi(province?: string, year?: number): Record<DemoGroup, number> {
+  const yr = String(year ?? LATEST_EAP_YEAR);
+  const byProv = EFFECTIVE_EAP_NORMS[yr] ?? EFFECTIVE_EAP_NORMS[String(LATEST_EAP_YEAR)];
+  const prov = provinceTitle(province);
+  return (byProv?.[prov] ?? byProv?.['National']) as Record<DemoGroup, number>;
+}
+
+/** Black-female-only re-normalised EAP (AF/CF/IF sum to 1.0) for province + year. */
+function effBlackFemaleEapApi(province?: string, year?: number): Record<'AF' | 'CF' | 'IF', number> {
+  const yr = String(year ?? LATEST_EAP_YEAR);
+  const byProv = RAW_EAP_NORMS[yr] ?? RAW_EAP_NORMS[String(LATEST_EAP_YEAR)];
+  const raw = (byProv?.[provinceTitle(province)] ?? byProv?.['National']) as Record<DemoGroup, number>;
+  const d = (raw.AF || 0) + (raw.CF || 0) + (raw.IF || 0);
+  return d > 0 ? { AF: raw.AF / d, CF: raw.CF / d, IF: raw.IF / d } : { AF: 0, CF: 0, IF: 0 };
+}
+
+function classifyGroup(race?: string, gender?: string): DemoGroup | null {
+  const g = gender === 'Female' ? 'F' : 'M';
+  if (race === 'White') return `W${g}` as DemoGroup;
+  const p = race === 'African' ? 'A' : race === 'Coloured' ? 'C' : race === 'Indian' ? 'I' : null;
+  return p ? (`${p}${g}` as DemoGroup) : null;
+}
+
+/**
+ * Per-demographic band score — faithful replica of the workbook MC Scorecard.
+ * For each group g: subTarget = bandTarget×eff_g, maxPts_g = bandMaxPts×eff_g,
+ * score_g = min(actual_g / subTarget × maxPts_g, maxPts_g); band score = Σ.
+ */
+function scoreBandPerDemographicApi(
+  emps: EmployeeInput[],
+  bandTarget: number,
+  bandMaxPts: number,
+  eapSet: Partial<Record<DemoGroup, number>>,
+  groups: DemoGroup[],
+): number {
+  const total = emps.length;
+  if (total === 0 || bandTarget <= 0) return 0;
+  let score = 0;
+  for (const grp of groups) {
+    const eff = eapSet[grp] || 0;
+    const subTarget = bandTarget * eff;
+    const maxPtsG = bandMaxPts * eff;
+    const count = emps.filter(e => classifyGroup(e.race, e.gender) === grp).length;
+    const actual = count / total;
+    if (subTarget > 0) score += Math.min((actual / subTarget) * maxPtsG, maxPtsG);
+  }
+  return score;
+}
+
+/**
+ * LEGACY aggregate per-level EAP black/black-women targets — retained ONLY for
+ * the Transport (Large) MC "EAP bonus" gate (calcManagementTransport below),
+ * which checks aggregate band representation against these thresholds. The RCOGP
+ * MC pillar no longer uses this; it scores per-demographic against effEapApi().
+ */
+interface EAPValues { blackTarget: number; blackWomenTarget: number; }
 const NATIONAL_EAP: Record<string, EAPValues> = {
   Senior: { blackTarget: 0.731, blackWomenTarget: 0.341 },
   Middle: { blackTarget: 0.786, blackWomenTarget: 0.425 },
   Junior: { blackTarget: 0.845, blackWomenTarget: 0.512 },
   'Skilled Technical': { blackTarget: 0.786, blackWomenTarget: 0.425 },
 };
-
 const PROVINCIAL_EAP: Record<string, Record<string, EAPValues>> = {
   national: NATIONAL_EAP,
   gauteng: {
@@ -378,7 +449,6 @@ const PROVINCIAL_EAP: Record<string, Record<string, EAPValues>> = {
     'Skilled Technical': { blackTarget: 0.951, blackWomenTarget: 0.498 },
   },
 };
-
 function getEAP(province: string, level: string): EAPValues {
   const key = (province || 'national').toLowerCase();
   const table = PROVINCIAL_EAP[key] || NATIONAL_EAP;
@@ -531,7 +601,7 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
 // MANAGEMENT CONTROL (ported from frontend management.ts)
 // ===========================================================================================
 
-function calcManagement(employees: EmployeeInput[], cfg: SectorConfig, province?: string): PillarScore {
+function calcManagement(employees: EmployeeInput[], cfg: SectorConfig, province?: string, eapYear?: number): PillarScore {
   const mc = cfg.targets.managementControl;
   const ee = cfg.targets.employmentEquity;
   const maxTotal = cfg.pillarConfigs.managementControl.maxPoints;
@@ -557,10 +627,19 @@ function calcManagement(employees: EmployeeInput[], cfg: SectorConfig, province?
   const semiSkilled = grouped['Semi-skilled'] || [];
   const unskilled = grouped['Unskilled'] || [];
 
-  const seniorEAP = getEAP(province || 'national', 'Senior');
-  const middleEAP = getEAP(province || 'national', 'Middle');
-  const juniorEAP = getEAP(province || 'national', 'Junior');
-  const stEAP = getEAP(province || 'national', 'Skilled Technical');
+  // Per-demographic effective EAP sets (workbook MC model). Province-specific;
+  // year defaults to the latest CEE norms.
+  const eff = effEapApi(province, eapYear);
+  const effBf = effBlackFemaleEapApi(province, eapYear);
+  const stEAP = getEAP(province || 'national', 'Skilled Technical'); // informational only
+
+  // Band black / black-female targets (fallback to generic-code defaults).
+  const seniorBlackTarget = mc.seniorBlackTarget ?? 0.60;
+  const seniorBWBandTarget = mc.seniorBWTarget ?? 0.30;
+  const middleBlackTarget = mc.middleBlackTarget ?? 0.75;
+  const middleBWBandTarget = mc.middleBWTarget ?? 0.38;
+  const juniorBlackTarget = mc.juniorBlackTarget ?? 0.88;
+  const juniorBWBandTarget = mc.juniorBWTarget ?? 0.44;
 
   const boardBlack = clampScore(safeRatio(pct(board, countB), mc.boardBlackTarget, mc.boardBlackMaxPts), mc.boardBlackMaxPts);
   const boardBWO = clampScore(safeRatio(pct(board, countBW), mc.boardBWTarget, mc.boardBWMaxPts), mc.boardBWMaxPts);
@@ -568,16 +647,16 @@ function calcManagement(employees: EmployeeInput[], cfg: SectorConfig, province?
   const execBWO = clampScore(safeRatio(pct(exec, countBW), mc.execBWTarget, mc.execBWMaxPts), mc.execBWMaxPts);
   const oExecBlack = clampScore(safeRatio(pct(otherExec, countB), mc.otherExecBlackTarget, mc.otherExecBlackMaxPts), mc.otherExecBlackMaxPts);
   const oExecBWO = clampScore(safeRatio(pct(otherExec, countBW), mc.otherExecBWTarget, mc.otherExecBWMaxPts), mc.otherExecBWMaxPts);
-  const seniorBlack = clampScore(safeRatio(pct(senior, countB), seniorEAP.blackTarget, mc.seniorMaxPts), mc.seniorMaxPts);
-  const seniorBWO = clampScore(safeRatio(pct(senior, countBW), seniorEAP.blackWomenTarget, mc.seniorBWMaxPts), mc.seniorBWMaxPts);
-  const middleBlack = clampScore(safeRatio(pct(middle, countB), middleEAP.blackTarget, mc.middleMaxPts), mc.middleMaxPts);
-  const middleBWO = clampScore(safeRatio(pct(middle, countBW), middleEAP.blackWomenTarget, mc.middleBWMaxPts), mc.middleBWMaxPts);
 
   const juniorAll = [...junior, ...semiSkilled, ...unskilled];
-  const juniorBlackPct = juniorAll.length > 0 ? countB(juniorAll) / juniorAll.length : 0;
-  const juniorBWOPct = juniorAll.length > 0 ? countBW(juniorAll) / juniorAll.length : 0;
-  const juniorBlack = clampScore(safeRatio(juniorBlackPct, juniorEAP.blackTarget, mc.juniorMaxPts), mc.juniorMaxPts);
-  const juniorBWO = clampScore(safeRatio(juniorBWOPct, juniorEAP.blackWomenTarget, mc.juniorBWMaxPts), mc.juniorBWMaxPts);
+
+  // Senior/Middle/Junior — per-demographic (workbook MC Scorecard).
+  const seniorBlack = clampScore(scoreBandPerDemographicApi(senior, seniorBlackTarget, mc.seniorMaxPts, eff, BLACK_GROUPS), mc.seniorMaxPts);
+  const seniorBWO = clampScore(scoreBandPerDemographicApi(senior, seniorBWBandTarget, mc.seniorBWMaxPts, effBf, BLACK_FEMALE_GROUPS), mc.seniorBWMaxPts);
+  const middleBlack = clampScore(scoreBandPerDemographicApi(middle, middleBlackTarget, mc.middleMaxPts, eff, BLACK_GROUPS), mc.middleMaxPts);
+  const middleBWO = clampScore(scoreBandPerDemographicApi(middle, middleBWBandTarget, mc.middleBWMaxPts, effBf, BLACK_FEMALE_GROUPS), mc.middleBWMaxPts);
+  const juniorBlack = clampScore(scoreBandPerDemographicApi(juniorAll, juniorBlackTarget, mc.juniorMaxPts, eff, BLACK_GROUPS), mc.juniorMaxPts);
+  const juniorBWO = clampScore(scoreBandPerDemographicApi(juniorAll, juniorBWBandTarget, mc.juniorBWMaxPts, effBf, BLACK_FEMALE_GROUPS), mc.juniorBWMaxPts);
 
   const stBlack = clampScore(safeRatio(pct(skilledTech, countB), stEAP.blackTarget, mc.seniorMaxPts), mc.seniorMaxPts);
   const stBWO = clampScore(safeRatio(pct(skilledTech, countBW), stEAP.blackWomenTarget, mc.seniorBWMaxPts), mc.seniorBWMaxPts);
@@ -624,7 +703,15 @@ function calcSkills(programs: TrainingProgramInput[], leviableAmount: number, he
 
     if (catCode === 'A' || tp.category === 'bursary') bursarySpend += cost;
     if (tp.isDisabled) disabledSpend += cost;
-    if (catCode === 'B' || tp.category === 'learnership' || tp.category === 'internship') learnershipCount++;
+    // Learnership/apprenticeship/internship participation = categories B/C/D
+    // (was B-only, so C/D scored zero — frontend parity, Polo feedback #9).
+    if (
+      ['B', 'C', 'D'].includes(catCode) ||
+      tp.category === 'learnership' ||
+      tp.category === 'internship'
+    ) {
+      learnershipCount++;
+    }
     if (tp.isAbsorbed) absorbedCount++;
   }
 

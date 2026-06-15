@@ -10,6 +10,7 @@ interface FeedbackRecord {
   id: string;
   message: string;
   category: 'bug' | 'feature' | 'general' | 'compliance';
+  pillar: string | null;
   pageUrl: string | null;
   userName: string | null;
   userEmail: string | null;
@@ -25,6 +26,25 @@ const memoryStore: FeedbackRecord[] = [];
 
 const VALID_CATEGORIES = new Set(['bug', 'feature', 'general', 'compliance']);
 const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
+const VALID_PILLARS = new Set([
+  '',
+  'company',
+  'financial',
+  'ownership',
+  'management',
+  'employmentEquity',
+  'skills',
+  'procurement',
+  'supplierDevelopment',
+  'sed',
+]);
+
+function normalizePillar(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (!value || !VALID_PILLARS.has(value)) return null;
+  return value;
+}
 
 function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
@@ -36,6 +56,7 @@ function toRecord(doc: any): FeedbackRecord {
     id: obj.feedbackId ?? obj.id,
     message: obj.message,
     category: obj.category,
+    pillar: obj.pillar ?? null,
     pageUrl: obj.pageUrl ?? null,
     userName: obj.userName ?? null,
     userEmail: obj.userEmail ?? null,
@@ -46,6 +67,22 @@ function toRecord(doc: any): FeedbackRecord {
     createdAt: obj.createdAt instanceof Date ? obj.createdAt.toISOString() : String(obj.createdAt),
     updatedAt: obj.updatedAt instanceof Date ? obj.updatedAt.toISOString() : String(obj.updatedAt),
   };
+}
+
+function feedbackIdFilter(id: string) {
+  return { $or: [{ feedbackId: id }, { id }] };
+}
+
+function respondFeedbackWriteError(res: Response, err: unknown) {
+  if (err instanceof mongoose.Error.ValidationError) {
+    const message = Object.values(err.errors).map(e => e.message).join('; ') || 'Invalid feedback data';
+    return res.status(400).json({ message });
+  }
+  if (err && typeof err === 'object' && 'code' in err && (err as { code?: number }).code === 11000) {
+    return res.status(400).json({ message: 'Duplicate feedback entry' });
+  }
+  logger.error('Failed to save feedback', err);
+  return res.status(500).json({ message: 'Failed to save feedback' });
 }
 
 export function registerFeedbackRoutes(
@@ -60,6 +97,7 @@ export function registerFeedbackRoutes(
 
       const rawCategory = typeof req.body?.category === 'string' ? req.body.category : 'general';
       const category = VALID_CATEGORIES.has(rawCategory) ? rawCategory : 'general';
+      const pillar = normalizePillar(req.body?.pillar);
 
       const pageUrl = typeof req.body?.pageUrl === 'string' ? req.body.pageUrl.slice(0, 500) : null;
       const userName = typeof req.body?.userName === 'string' ? req.body.userName.slice(0, 200) : null;
@@ -70,11 +108,13 @@ export function registerFeedbackRoutes(
       const organizationId = (req.session as any)?.organizationId ?? null;
 
       const now = new Date();
-      const id = uuid();
+      const feedbackId = uuid();
 
       if (isMongoConnected()) {
         const created = await FeedbackModel.create({
-          feedbackId: id, message, category, pageUrl, userName, userEmail,
+          feedbackId,
+          id: feedbackId,
+          message, category, pillar, pageUrl, userName, userEmail,
           userId, organizationId, status: 'open', userAgent,
           createdAt: now, updatedAt: now,
         });
@@ -82,15 +122,14 @@ export function registerFeedbackRoutes(
       }
 
       const record: FeedbackRecord = {
-        id, message, category, pageUrl, userName, userEmail,
+        id: feedbackId, message, category, pillar, pageUrl, userName, userEmail,
         userId, organizationId, status: 'open', userAgent,
         createdAt: now.toISOString(), updatedAt: now.toISOString(),
       };
       memoryStore.unshift(record);
       return res.status(201).json({ feedback: record });
     } catch (err) {
-      logger.error('Failed to save feedback', err);
-      return res.status(500).json({ message: 'Failed to save feedback' });
+      return respondFeedbackWriteError(res, err);
     }
   });
 
@@ -98,12 +137,14 @@ export function registerFeedbackRoutes(
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+      const pillar = typeof req.query.pillar === 'string' ? req.query.pillar : undefined;
       const limit = Math.min(parseInt(String(req.query.limit ?? '500'), 10) || 500, 1000);
 
       if (isMongoConnected()) {
-        const filter: Record<string, string> = {};
+        const filter: Record<string, unknown> = {};
         if (status && VALID_STATUSES.has(status)) filter.status = status;
         if (category && VALID_CATEGORIES.has(category)) filter.category = category;
+        if (pillar && VALID_PILLARS.has(pillar)) filter.pillar = pillar || null;
         const docs = await FeedbackModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
         const items = docs.map(toRecord);
         return res.json({ feedback: items, total: items.length, source: 'mongodb' });
@@ -112,6 +153,7 @@ export function registerFeedbackRoutes(
       let items = [...memoryStore];
       if (status && VALID_STATUSES.has(status)) items = items.filter(i => i.status === status);
       if (category && VALID_CATEGORIES.has(category)) items = items.filter(i => i.category === category);
+      if (pillar && VALID_PILLARS.has(pillar)) items = items.filter(i => (i.pillar ?? '') === pillar);
       items = items.slice(0, limit);
       return res.json({ feedback: items, total: items.length, source: 'memory' });
     } catch (err) {
@@ -162,7 +204,7 @@ export function registerFeedbackRoutes(
 
       if (isMongoConnected()) {
         const updated = await FeedbackModel.findOneAndUpdate(
-          { feedbackId: id },
+          feedbackIdFilter(id),
           { $set: { status, updatedAt: now } },
           { new: true },
         );
@@ -184,7 +226,7 @@ export function registerFeedbackRoutes(
     try {
       const id = req.params.id;
       if (isMongoConnected()) {
-        const result = await FeedbackModel.deleteOne({ feedbackId: id });
+        const result = await FeedbackModel.deleteOne(feedbackIdFilter(id));
         if (result.deletedCount === 0) return res.status(404).json({ message: 'Feedback not found' });
         return res.status(204).end();
       }

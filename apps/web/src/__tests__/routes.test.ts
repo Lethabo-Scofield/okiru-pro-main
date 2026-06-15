@@ -1,13 +1,10 @@
 /**
  * Regression — route table (Task #4 verification).
- *
- * Source-level smoke test on `apps/web/src/App.tsx`. We don't spin up wouter
- * or React (no RTL in this project's vitest setup) — we assert the route
- * declarations are present (or absent) by inspecting the JSX text.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
+import { ESG_CLIENTS_PATH, esgClientsHref } from "@/lib/esgRoutes";
 
 const APP_TSX = readFileSync(
   path.resolve(__dirname, "../App.tsx"),
@@ -37,5 +34,26 @@ describe("App.tsx route declarations", () => {
 
   it("does NOT declare /test (falls through to NotFound)", () => {
     expect(hasRoute("/test")).toBe(false);
+  });
+
+  it("declares ESG routes — clients, inputs, summary, toolkit", () => {
+    expect(hasRoute("/esg")).toBe(true);
+    expect(hasRoute("/esg/clients")).toBe(true);
+    expect(hasRoute("/esg/toolkit")).toBe(true);
+    expect(hasRoute("/esg/toolkit/:companyId")).toBe(true);
+    expect(hasRoute("/esg/create/:companyId")).toBe(true);
+    expect(hasRoute("/esg/create/:companyId/summary")).toBe(true);
+    expect(APP_TSX).toMatch(/EsgInformationRequest/);
+    expect(APP_TSX).not.toMatch(/path="\/esg\/create.*nest/);
+    expect(APP_TSX).toMatch(/EsgScoreSummary/);
+    expect(APP_TSX).not.toMatch(/EsgSectionEditor/);
+    expect(APP_TSX).not.toMatch(/EsgToolkitRedirect/);
+    expect(APP_TSX).not.toMatch(/EsgFlowStepper/);
+    expect(APP_TSX).toMatch(/EsgPreviewRoute/);
+  });
+
+  it("exports companies href for toolkit back navigation", () => {
+    expect(ESG_CLIENTS_PATH).toBe("/esg/clients");
+    expect(esgClientsHref()).toBe("/esg/clients");
   });
 });

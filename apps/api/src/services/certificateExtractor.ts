@@ -12,9 +12,12 @@ import { normalizeVat } from './certificateStore.js';
 import { extractTextWithDocIntelligence, isDocumentIntelligenceConfigured } from './documentIntelligence.js';
 import { extractCertificateWithLLM, extractCertificatePreviewWithLLM, type CertificatePreviewExtraction } from './llmExtractor.js';
 import { indexCertificate, isChromaConfigured } from './chromaStore.js';
+import {
+  getCertBlobServiceClient,
+  getCertContainerClient,
+} from './azureCertStorage.js';
 
 const logger = createLogger('CertExtractor');
-const CONTAINER_NAME = 'clients-certs';
 const TMP_DIR = join(tmpdir(), 'cert-extract');
 
 const MONTH_NAMES: Record<string, number> = {
@@ -70,6 +73,96 @@ export interface ExtractedCertificateData {
   verificationAgency: string | null;
   certificateNumber: string | null;
   bbbeeScore: number | null;
+}
+
+/**
+ * Returns true when `name` looks like a genuine company name rather than
+ * garbage data (all digits, placeholders, single characters, etc.).
+ */
+export function isValidSupplierName(name: string): boolean {
+  const t = name.trim();
+  if (t.length < 3) return false;
+  if (/^\d+$/.test(t)) return false;                                   // pure number
+  if (/^[^a-zA-Z]+$/.test(t)) return false;                           // no letters at all
+  if ((t.match(/[a-zA-Z]/g) ?? []).length < 2) return false;          // fewer than 2 letters
+  if (/^(?:null|undefined|n\/a|none|unknown|n\.?a\.?)$/i.test(t)) return false;
+  return true;
+}
+
+const SIZE_CODE_PATTERN = /[\s_\-]+(EME|QSE|GEN|Generic(?:\s+Enterprise)?|Large(?:\s+Enterprise)?|Specialis[e]?d|Specialized)[\s_\-]*$/i;
+const TRAILING_DATE_PATTERNS: RegExp[] = [
+  // Mon-Year or MonYear: Jan2025, Jan-2025, Jan_2025
+  /[\s_\-]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s_\-]?\d{2,4}$/i,
+  // Full ISO date: -2024-01-15 or _2024_01_15
+  /[\s_\-]+\d{4}[\s_\-]\d{1,2}[\s_\-]\d{1,2}$/,
+  // Year-Month: -2024-01
+  /[\s_\-]+\d{4}[\s_\-]\d{1,2}$/,
+  // Bare year: -2024 or _24
+  /[\s_\-]+20\d{2}$/,
+  /[\s_\-]+\d{2}$/,
+];
+
+/**
+ * Clean a blob storage path or filename into a human-readable company name.
+ * Handles patterns like `CompanyName-EME-Jan2025.pdf` and `uuid-CompanyName.pdf`.
+ * Returns null if the result is not a valid supplier name.
+ */
+export function cleanNameFromBlobPath(blobNameOrPath: string): string | null {
+  // Use only the filename part (strip org/folder prefix)
+  const base = blobNameOrPath.includes('/') ? blobNameOrPath.split('/').pop()! : blobNameOrPath;
+
+  // Strip UUID prefix added by the upload pipeline: 8-4-4-4-12 hex pattern
+  let working = base.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, '');
+
+  // Strip file extension
+  working = working.replace(/\.[^/.]+$/, '');
+
+  // Strip leading date prefixes: 2024-01-15_, 20240115_, 2024_01_15, 2024_
+  working = working
+    .replace(/^\d{4}[\s_\-]+\d{1,2}[\s_\-]+\d{1,2}[\s_\-]+/, '')
+    .replace(/^(?:19|20)\d{2}[\s._\-]+/, '');
+
+  // Strip trailing size codes (possibly multiple, e.g. -QSE-2024)
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const before = working;
+    // Size codes
+    working = working.replace(SIZE_CODE_PATTERN, '');
+    // B-BBEE / certificate noise
+    working = working
+      .replace(/[\s_\-]+B[\s\-]?BBEE.*$/i, '')
+      .replace(/[\s_\-]+Certificate.*$/i, '')
+      .replace(/[\s_\-]+Affidavit.*$/i, '')
+      .replace(/[\s_\-]+Scorecard.*$/i, '')
+      .replace(/[\s_\-]+Verification.*$/i, '')
+      .replace(/[\s_\-]+BEE$/i, '')
+      .replace(/[\s_\-]*\(?\d+\)?$/, '');
+    // Trailing date patterns (loop to handle stacked: -QSE-2024)
+    for (const pat of TRAILING_DATE_PATTERNS) {
+      working = working.replace(pat, '');
+    }
+    if (working !== before) changed = true;
+  }
+
+  // Normalise separators to spaces
+  working = working
+    .replace(/[_\-–—]+/gu, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (!working) return null;
+
+  // Title-case: capitalise first letter of each word; preserve known abbreviations
+  const KEEP_UPPER = new Set(['PTY', 'LTD', 'CC', 'LLC', 'SA', 'NPC', 'RF', 'SOC', 'JV']);
+  working = working.replace(/\b(\w+)/g, (word) => {
+    const up = word.toUpperCase();
+    if (KEEP_UPPER.has(up)) return up;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  if (!isValidSupplierName(working)) return null;
+  return working.slice(0, 150);
 }
 
 /** @deprecated Prefer extractCertificateData — kept for call sites that only need date/level/name fields. */
@@ -205,23 +298,42 @@ export function extractCertificateData(text: string, fileName: string): Extracte
   }
 
   const shortName = fileName.includes('/') ? fileName.split('/').pop()! : fileName;
-  const nameFromFile = shortName
-    .replace(/^\d{4}\s+\d{2}\s+\d{1,2}\s+/, '')
-    .replace(/\s*-\s*(EME|QSE|Generic|Large).*$/i, '')
-    .trim();
-  if (nameFromFile && nameFromFile !== shortName) {
-    result.supplierName = nameFromFile.replace(/\.[^/.]+$/, '');
+
+  // --- Supplier name: text patterns first, filename fallback ---
+  const textNamePatterns: RegExp[] = [
+    /(?:company\s*name|registered\s*(?:company\s*)?name|entity\s*(?:name)?|supplier\s*(?:name)?|organisation(?:al)?\s*(?:name)?|name\s*of\s*(?:entity|company|organisation))[:\s]+([^\n\r]{3,120})/i,
+    /(?:this\s+certificate\s+(?:is\s+)?issued\s+to|certificate\s+(?:is\s+)?issued\s+to|issued\s+to)[:\s]+([^\n\r]{3,120})/i,
+    /(?:trading\s+(?:as|name))[:\s]+([^\n\r]{3,120})/i,
+  ];
+  for (const p of textNamePatterns) {
+    const m = p.exec(normalised);
+    if (m) {
+      // Strip trailing noise: extra whitespace runs, leading label bleed
+      const raw = m[1].split(/\s{3,}|\t/)[0].replace(/[.,;:]+$/, '').trim();
+      if (isValidSupplierName(raw)) {
+        result.supplierName = raw.slice(0, 150);
+        break;
+      }
+    }
+  }
+  // Filename fallback: use cleanNameFromBlobPath for robust date/size stripping + title case
+  if (!result.supplierName) {
+    const blobDerived = cleanNameFromBlobPath(shortName);
+    if (blobDerived) {
+      result.supplierName = blobDerived;
+    }
   }
 
   result.companySize = extractCompanySizeFromText(normalised) || extractCompanySizeFromFileName(shortName);
 
+  // SA VAT registration numbers are exactly 10 digits and always start with 4.
   const vatMatch =
-    /(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(\d{4}\s*\d{3}\s*\d{3}|\d{10})/i.exec(
+    /(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(4[\d\s]{9,13})/i.exec(
       normalised,
-    ) || /\b(?:vat|tin)\s*[#:]?\s*(\d{4}\s*\d{3}\s*\d{3}|\d{10})\b/i.exec(normalised);
+    ) || /\b(?:vat|tin)\s*[#:]?\s*(4[\d\s]{9,13})\b/i.exec(normalised);
   if (vatMatch) {
     const digits = vatMatch[1].replace(/\D/g, '');
-    if (digits.length >= 9 && digits.length <= 12) {
+    if (digits.length === 10 && digits.startsWith('4')) {
       result.vatNumber = digits;
     }
   }
@@ -374,7 +486,7 @@ export async function processOneCertificate(
     return { blobName, status: 'skipped', expiryDate: existing.expiryDate };
   }
 
-  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+  const containerClient = getCertContainerClient(blobServiceClient);
   const blobClient = containerClient.getBlobClient(blobName);
   const fileName = blobName.includes('/') ? blobName.split('/').pop()! : blobName;
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -418,6 +530,14 @@ export async function processOneCertificate(
 
   // Stage 2: LLM extraction (GPT-4o-mini) → regex fallback
   const extracted = await extractCertificateWithLLM(text, fileName);
+
+  // Prefer the blob-name-derived supplier name: it was set by a human on upload
+  // and is more reliable than OCR/LLM extraction for common noise patterns.
+  const blobDerivedName = cleanNameFromBlobPath(blobName);
+  if (blobDerivedName) {
+    extracted.supplierName = blobDerivedName;
+  }
+
   const certStatus = computeStatus(extracted.expiryDate);
   const vatNumberNormalized = normalizeVat(extracted.vatNumber);
 
@@ -478,7 +598,7 @@ export async function processAllCertificates(
 ): Promise<{ processed: number; skipped: number; errors: number }> {
   if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
-  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+  const containerClient = getCertContainerClient(blobServiceClient);
   const blobs: string[] = [];
   for await (const blob of containerClient.listBlobsFlat()) {
     blobs.push(blob.name);

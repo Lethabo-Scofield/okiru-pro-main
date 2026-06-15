@@ -28,6 +28,13 @@ export interface Client {
   
   // BEE specifics
   sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | 'TOURISM' | 'CONSTRUCTION' | 'MINING' | 'OTHER';
+  /**
+   * FSC sub-sector picker (Bug #6). Drives EF + AFS pillar routing.
+   * Others = FS700 (generic, no EF/AFS). Banks = FS701. LTI = FS702. STI = FS703.
+   */
+  fscSubSector?: 'Others' | 'Banks' | 'LTI' | 'STI';
+  /** FSC Reinsurer flag — reduces Consumer Education to Additional CE (1 pt, no CE bonus). */
+  fscReinsurer?: boolean;
   industry: string;                     // For industry norm lookup
   
   // Financials
@@ -131,6 +138,8 @@ export interface ManagementData {
   id: string;
   clientId: string;
   employees: Employee[];
+  /** When true, merge Other Executive + Senior Management into one MC band (toolkit toggle). */
+  combineExcoSenior?: boolean;
 }
 
 export type TrainingCategoryCode = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
@@ -204,6 +213,15 @@ export interface SkillsData {
   // Tracking for YES absorption (cross-pillar linkage)
   yesCandidatesCount: number;  // From isYesEmployee flag
   yesAbsorbedCount: number;    // From isAbsorbed flag
+
+  /** Entity headcount (grey cell) — LAI / absorption / headcount-based indicators. */
+  headcount?: number;
+  /** Group-level leviable amount when measuring at group level (grey cell). */
+  groupLeviableAmount?: number;
+  /** Training manager / SDF salary — capped at 15% of total skills spend each. */
+  trainingManagerSalary?: number;
+  /** Training overhead — capped at 15% of total skills spend each. */
+  trainingOverheadCost?: number;
 }
 
 // YES 4 Youth Initiative
@@ -380,12 +398,71 @@ export interface ESDData {
   jobsCreatedBonus: boolean;
   jobsCreatedCount?: number;
   jobsCreatedEvidence?: string;
+  /**
+   * Jobs created as a fraction of the prior-year workforce. Drives the ICT
+   * two-tier jobs bonus: < 0.11 (≤10%) → 1 pt, ≥ 0.11 (≥11%) → 2 pts.
+   * Only applied when the sector config sets esd.edJobsBonusMax ≥ 2.
+   */
+  jobsCreatedPercent?: number;
+  /**
+   * FSC-only: recognised (benefit-adjusted) ED spend supporting black
+   * stockbrokers / fund managers / intermediaries. Scored against 0.5% of NPAT
+   * for the separate 2-pt FSC stockbroker bonus.
+   */
+  stockbrokerSpend?: number;
 }
 
 export interface SEDData {
   id: string;
   clientId: string;
   contributions: Contribution[];
+  /** FSC Consumer Education aggregate inputs (sed section meta — not SED rows). */
+  ceSpend?: number;
+  ceBonusSpend?: number;
+  fundisaSpend?: number;
+}
+
+/**
+ * FSC Access to Financial Services input data.
+ * Fields are sub-sector-specific; only the relevant fields for the active sub-sector
+ * need to be populated. Unused fields are ignored by the calculator.
+ */
+export interface AfsData {
+  id: string;
+  clientId: string;
+  // ---- Banks (FS701) ----
+  /** % of qualifying area with a Transaction Point within 5km (target 85%). */
+  transactionPointCoverage?: number;
+  /** % of qualifying area with a Service Point within 10km (target 70%). */
+  servicePointCoverage?: number;
+  /** % of qualifying area with a Sales Point within 15km (target 60%). */
+  salesPointCoverage?: number;
+  /** % of account holders with Electronic Access (target: national — treated as yes/no). */
+  electronicAccessCompliant?: boolean;
+  /** At least one Point of Presence per measurement unit in Target Market. */
+  hasPointOfPresence?: boolean;
+  /** Sufficient active accounts with Qualifying Products in Target Market. */
+  activeAccountsCompliant?: boolean;
+  // ---- Long-Term Insurers (FS702) ----
+  /** Number of developed products that are compliant (Appropriate Products numerator). */
+  appropriateProductsNumerator?: number;
+  /** Total number of developed products (Appropriate Products denominator). */
+  appropriateProductsDenominator?: number;
+  /** Number of on-book policies (Market Penetration numerator). */
+  marketPenetrationPolicies?: number;
+  /** SAIA communicated reference number of policies (denominator). */
+  saiaCommunicatedPolicies?: number;
+  /** % of polygons covered (Transactional Accesses; target 80%). */
+  transactionalAccessCoverage?: number;
+  // ---- Short-Term Insurers (FS703) ----
+  commercialEquipment?: boolean;
+  commercialLiability?: boolean;
+  commercialProperty?: boolean;
+  commercialAgriculture?: boolean;
+  commercialLivestock?: boolean;
+  commercialOther?: boolean;
+  /** Meets the Insurance Policies target (yes/no simplified from SAIA policy count). */
+  insurancePoliciesCompliant?: boolean;
 }
 
 export interface PillarScore {
@@ -406,6 +483,10 @@ export interface ScorecardResult {
   enterpriseDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   socioEconomicDevelopment: PillarScore & { isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   yesInitiative: PillarScore;
+  /** FSC Banks/LTI — Empowerment Financing & ESD combined pillar (FS701/FS702 only). */
+  empowermentFinancing?: PillarScore;
+  /** FSC Banks/LTI/STI — Access to Financial Services pillar (12 pts, FS701/702/703 only). */
+  accessToFinancialServices?: PillarScore;
   total: PillarScore;
   achievedLevel: number;
   discountedLevel: number;

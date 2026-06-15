@@ -436,7 +436,7 @@ function parseAnnualTurnoverValue(annualTurnoverStr: string | number): number {
 }
 
 const BBEE_LEVELS = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Non-Compliant', 'Not Verified'];
-const FYE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const FYE_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
 const EMPTY_COMPANY_INFO: CompanyInfo = {
   name: '', sector: '', registrationNumber: '', annualTurnover: '', employees: '',
@@ -3799,7 +3799,7 @@ export default function DocumentProcessor() {
                           <select value={companyInfo.financialYearEnd} onChange={(e) => setCompanyInfo(p => ({ ...p, financialYearEnd: e.target.value }))}
                             className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[13px] text-white focus:border-[#48484a] focus:outline-none focus:ring-1 focus:ring-[#48484a]/30 transition-all appearance-none"
                             data-testid="select-fye">
-                            <option value="">Select month…</option>
+                            <option value="">Select month (1–12)…</option>
                             {FYE_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         </div>
@@ -4096,6 +4096,7 @@ export default function DocumentProcessor() {
                 <ToolkitIntegratedRequirementsSummary
                   sectorCode={toolkitSectorCode || companyInfo.sector}
                   sectorLabel={availableSectors.find((s) => s.code === (toolkitSectorCode || companyInfo.sector))?.label}
+                  fscSubSector={foundationData.clientInfo?.fscSubSector as string | undefined}
                   pillarScopes={buildCollaboration?.pillarScopes ?? null}
                 />
               </div>

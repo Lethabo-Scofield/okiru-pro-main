@@ -148,20 +148,26 @@ export function ExcelImportPreviewModal({
                   <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
                     {group.label}
                   </div>
-                  <table className="w-full text-[13px]">
+                  <table className="w-full text-[13px] table-fixed">
+                    <colgroup>
+                      <col style={{ width: "42%" }} />
+                      <col />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "32px" }} />
+                    </colgroup>
                     <thead>
                       <tr className="bg-[#0e0e10]/50 text-[#8e8e93] text-left">
-                        <th className="px-3 py-2 font-medium w-[38%]">Field</th>
+                        <th className="px-3 py-2 font-medium">Field</th>
                         <th className="px-3 py-2 font-medium">Value</th>
-                        <th className="px-3 py-2 font-medium w-16">Conf.</th>
-                        <th className="px-3 py-2 font-medium w-8" />
+                        <th className="px-3 py-2 font-medium">Conf.</th>
+                        <th className="px-3 py-2 font-medium" />
                       </tr>
                     </thead>
                     <tbody>
                       {group.rows.map((row) => (
                         <tr key={row.key} className="border-t border-[#2c2c2e]" title={row.source}>
-                          <td className="px-3 py-2 text-[#d1d1d6]">{row.label}</td>
-                          <td className="px-3 py-2 text-white font-medium tabular-nums">
+                          <td className="px-3 py-2 text-[#d1d1d6] truncate">{row.label}</td>
+                          <td className="px-3 py-2 text-white font-medium tabular-nums truncate">
                             {formatValue(row.key, row.value)}
                           </td>
                           <td className="px-3 py-2">

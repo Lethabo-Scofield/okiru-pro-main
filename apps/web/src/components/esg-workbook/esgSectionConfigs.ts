@@ -1,6 +1,6 @@
 import type { EsgFieldDef } from "./EsgScalarForm";
 import type { MaturityRowDef } from "./EsgMaturityGrid";
-import { ESG_DEFAULT_DEPOTS } from "./esgDefaults";
+import { ESG_DEFAULT_DEPOTS } from "./EsgMonthlyGrid";
 
 const ESG_SOLAR_SOURCES = ["ISANDO (JHB)", "DBN (EDGE)", "CPT", "BLOEM", "PE"] as const;
 

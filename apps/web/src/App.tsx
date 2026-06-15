@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@toolkit/lib/queryClient";
@@ -70,6 +70,23 @@ function LegacyOnboardingRedirect() {
   );
 }
 
+/** Legacy `/information-request` URLs → canonical create-scorecard flow. */
+function InformationRequestRedirect() {
+  const params = useParams<{ companyId?: string }>();
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    const id = params.companyId;
+    navigate(id ? `/create-scorecard/${encodeURIComponent(id)}` : "/create-scorecard", {
+      replace: true,
+    });
+  }, [params.companyId, navigate]);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function ToolkitLoader() {
   return (
     <Suspense fallback={
@@ -99,6 +116,7 @@ function EsgToolkitLoader() {
   );
 }
 
+/** /esg → company picker */
 function EsgHubRedirect() {
   const [, navigate] = useLocation();
   useEffect(() => {
@@ -148,10 +166,10 @@ function AppRouter() {
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
       <Route path="/information-request/:companyId">
-        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+        <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>
       </Route>
       <Route path="/information-request">
-        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+        <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>
       </Route>
       <Route path="/builder">
         <ProtectedRoute><SuperAdminOnlyRoute><EntityBuilder /></SuperAdminOnlyRoute></ProtectedRoute>
@@ -193,7 +211,7 @@ function AppRouter() {
         <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/devmode">
-        <DevMode />
+        <ProtectedRoute><DevMode /></ProtectedRoute>
       </Route>
       <Route path="/super-admin">
         <SuperAdminRoute><SuperAdmin /></SuperAdminRoute>

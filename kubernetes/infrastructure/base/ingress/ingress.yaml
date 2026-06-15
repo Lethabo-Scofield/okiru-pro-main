@@ -82,6 +82,54 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # User feedback (web server handles both POST and GET — saved to MongoDB)
+          - path: /api/feedback
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Client/scorecard CRUD (web server owns /api/clients — only requireAuth, no RBAC)
+          - path: /api/clients
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Workbook data routes (web server owns ALL /api/workbook/* — NOT on api backend)
+          - path: /api/workbook
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # ESG workbook routes (web server owns ALL /api/esg/* — NOT on api backend)
+          - path: /api/esg
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Admin/demo routes on web: Lake Trading demo, rollback (NOT on api backend)
+          - path: /api/admin
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Excel import normalisation endpoint (web only)
+          - path: /api/excel-import
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # API backend routes (all other /api/*)
           - path: /api
             pathType: Prefix

@@ -31,6 +31,7 @@
             "sheet": "Information Request",
             "type": "checklist_only",
             "description": "Financial information requested in the checklist. The workbook does not provide a dedicated financial input tab.",
+            "financial_pair_rule": "For revenue, NPAT, and payroll: provide at least one of actual (historical) OR forecast — not both required.",
             "fields": [
                 {
                     "field": "historical_revenue",
@@ -534,7 +535,7 @@
                     "required": true,
                     "type": "enum",
                     "allowed_values": [
-                        "Large",
+                        "Generic",
                         "QSE",
                         "EME"
                     ]
@@ -601,7 +602,7 @@
                     "required": false,
                     "type": "enum",
                     "allowed_values": [
-                        "Large",
+                        "Generic",
                         "QSE",
                         "EME"
                     ]
@@ -717,12 +718,6 @@
                 }
             ],
             "cross_field_rules": [
-                {
-                    "rule_id": "PP_CERT_001",
-                    "description": "If a B-BBEE level is supplied, a certificate expiry date should be supplied.",
-                    "condition": "bbbee_level != null",
-                    "assert": "certificate_expiry_date != null"
-                },
                 {
                     "rule_id": "PP_OWN_001",
                     "description": "Black female ownership cannot exceed total black ownership when both values are supplied.",

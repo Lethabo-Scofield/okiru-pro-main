@@ -5,10 +5,9 @@ import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Building2, MapPin, Phone, Mail, User, Hash, Calendar, Users, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@toolkit/lib/utils";
+import { NumericDateInput } from "@/components/ui/NumericDateInput";
 import type { Client } from "@toolkit/lib/types";
 import { loadBbeeSectorOptionRows, invalidateBbeeSectorOptionsCache } from "@/lib/bbeeSectorsApi";
-import { NumberTextInput } from "./NumberTextInput";
-import { NumericDateInput } from "@/components/ui/NumericDateInput";
 
 // Sector option from API
 export interface SectorOption {
@@ -437,10 +436,11 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
               <Label htmlFor="annualTurnover" className="flex items-center gap-1">
                 Annual Turnover (R) *
               </Label>
-              <NumberTextInput
+              <Input
                 id="annualTurnover"
-                value={data.annualTurnover}
-                onNumberChange={(value) => updateField('annualTurnover', value)}
+                type="number"
+                value={data.annualTurnover || ''}
+                onChange={(e) => updateField('annualTurnover', Number(e.target.value))}
                 placeholder="0"
                 disabled={readOnly}
               />
@@ -453,10 +453,11 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
                 <Users className="h-3 w-3" />
                 Number of Employees *
               </Label>
-              <NumberTextInput
+              <Input
                 id="numberOfEmployees"
-                value={data.numberOfEmployees}
-                onNumberChange={(value) => updateField('numberOfEmployees', value)}
+                type="number"
+                value={data.numberOfEmployees || ''}
+                onChange={(e) => updateField('numberOfEmployees', Number(e.target.value))}
                 placeholder="0"
                 disabled={readOnly}
               />
@@ -464,13 +465,14 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
             <div className="space-y-2">
               <Label htmlFor="financialYearEnd" className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                Financial Year End (dd/mm/yyyy) *
+                Financial Year End *
               </Label>
               <NumericDateInput
                 id="financialYearEnd"
                 value={data.financialYearEnd}
-                onChange={(value) => updateField('financialYearEnd', value)}
+                onChange={(v) => updateField('financialYearEnd', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
@@ -491,21 +493,23 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodStart">Financial Period Start (dd/mm/yyyy)</Label>
+              <Label htmlFor="measurementPeriodStart">Period Start</Label>
               <NumericDateInput
                 id="measurementPeriodStart"
                 value={data.measurementPeriodStart || ''}
-                onChange={(value) => updateField('measurementPeriodStart', value)}
+                onChange={(v) => updateField('measurementPeriodStart', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodEnd">Financial Period End (dd/mm/yyyy)</Label>
+              <Label htmlFor="measurementPeriodEnd">Period End</Label>
               <NumericDateInput
                 id="measurementPeriodEnd"
                 value={data.measurementPeriodEnd || ''}
-                onChange={(value) => updateField('measurementPeriodEnd', value)}
+                onChange={(v) => updateField('measurementPeriodEnd', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
@@ -536,12 +540,13 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="beeCertificateExpiry">Expiry Date (dd/mm/yyyy)</Label>
+              <Label htmlFor="beeCertificateExpiry">Expiry Date</Label>
               <NumericDateInput
                 id="beeCertificateExpiry"
                 value={data.beeCertificateExpiry || ''}
-                onChange={(value) => updateField('beeCertificateExpiry', value)}
+                onChange={(v) => updateField('beeCertificateExpiry', v)}
                 disabled={readOnly}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="space-y-2">

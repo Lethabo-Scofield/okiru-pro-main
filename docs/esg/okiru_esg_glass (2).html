@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Okiru ESG Toolkit — SG Consumer FY2025/26</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080e14;
+  --bg2:#0d1520;
+  --glass:rgba(255,255,255,0.04);
+  --glass-hover:rgba(255,255,255,0.07);
+  --glass-border:rgba(255,255,255,0.09);
+  --glass-border-hover:rgba(255,255,255,0.18);
+  --glass-strong:rgba(255,255,255,0.10);
+  --text:#f0ede8;
+  --text2:#8a9aaa;
+  --text3:#4a5a6a;
+  --acc-e:#1de9a0;
+  --acc-s:#f5a623;
+  --acc-g:#9b6bff;
+  --acc-red:#ff5f5f;
+  --acc-blue:#4aa8ff;
+  --nav-w:220px;
+  --hdr-h:52px;
+}
+
+/* ── BASE ── */
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px;background-image:radial-gradient(ellipse 80% 60% at 20% -10%,rgba(29,233,160,0.06) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 80% 100%,rgba(155,107,255,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 50% 50%,rgba(245,166,35,0.03) 0%,transparent 70%)}
+::selection{background:rgba(29,233,160,0.25);color:#fff}
+
+/* ── GLASS MIXIN UTILITY ── */
+.glass{background:var(--glass);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--glass-border);border-radius:14px}
+.glass-sm{background:var(--glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--glass-border);border-radius:10px}
+.glass-strong{background:var(--glass-strong);backdrop-filter:blur(30px) saturate(200%);-webkit-backdrop-filter:blur(30px) saturate(200%);border:1px solid rgba(255,255,255,0.14);border-radius:14px}
+
+/* ── HEADER ── */
+.hdr{position:sticky;top:0;z-index:300;height:var(--hdr-h);background:rgba(8,14,20,0.75);backdrop-filter:blur(40px) saturate(200%);-webkit-backdrop-filter:blur(40px) saturate(200%);border-bottom:1px solid var(--glass-border);display:flex;align-items:center;padding:0 20px;gap:14px}
+.hdr-logo{display:flex;align-items:center;gap:8px}
+.hdr-brand{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+.hdr-brand span{color:var(--acc-e)}
+.hdr-sub{font-size:10px;color:var(--text3);letter-spacing:.04em;text-transform:uppercase}
+.hdr-pill{font-size:10px;font-weight:500;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid var(--glass-border);color:var(--text2)}
+.hdr-sp{flex:1}
+.hdr-score{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.hdr-rat{font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px;border:1px solid;margin-left:6px}
+.stance-row{display:flex;gap:3px;margin-left:10px}
+.sb{font-size:10px;font-weight:500;padding:4px 10px;border:1px solid var(--glass-border);border-radius:20px;background:transparent;cursor:pointer;color:var(--text3);transition:all .2s;letter-spacing:.02em}
+.sb:hover{border-color:var(--glass-border-hover);color:var(--text2)}
+.sb.on{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:var(--text);font-weight:600}
+
+/* ── LAYOUT ── */
+.layout{display:flex;height:calc(100vh - var(--hdr-h));overflow:hidden}
+
+/* ── LEFT NAV ── */
+.nav{width:var(--nav-w);background:rgba(8,14,20,0.6);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border-right:1px solid var(--glass-border);overflow-y:auto;flex-shrink:0;padding:12px 0 24px;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.ns{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;padding:16px 16px 6px}
+.pillar-btn{display:flex;align-items:center;gap:8px;padding:9px 14px;cursor:pointer;border:none;background:none;color:var(--text2);font-size:12px;width:100%;text-align:left;border-left:2px solid transparent;transition:all .18s;font-weight:500;letter-spacing:-.01em}
+.pillar-btn:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.pillar-btn.on{color:var(--text);border-left-color:var(--acc-e);background:rgba(29,233,160,.06)}
+.pillar-btn.on.s-pil{border-left-color:var(--acc-s);background:rgba(245,166,35,.06)}
+.pillar-btn.on.g-pil{border-left-color:var(--acc-g);background:rgba(155,107,255,.06)}
+.picon{font-size:13px;width:16px;text-align:center;flex-shrink:0}
+.pscore{margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;border:1px solid;font-variant-numeric:tabular-nums}
+.sub-btn{display:flex;align-items:center;gap:6px;padding:6px 14px 6px 32px;cursor:pointer;border:none;background:none;color:var(--text3);font-size:11px;width:100%;text-align:left;border-left:2px solid transparent;transition:all .18s;letter-spacing:-.01em}
+.sub-btn:hover{color:var(--text2);background:rgba(255,255,255,.02)}
+.sub-btn.on{color:var(--text);background:rgba(255,255,255,.04)}
+.sub-btn .sbpts{margin-left:auto;font-size:9px;font-weight:600;font-variant-numeric:tabular-nums;opacity:.6}
+.sub-btn.on .sbpts{opacity:1}
+.ndiv{height:1px;background:var(--glass-border);margin:8px 12px}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;padding:28px 28px 40px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}
+.main::-webkit-scrollbar{width:4px}
+.main::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+
+/* ── PAGE ELEMENTS ── */
+.page-hdr{margin-bottom:20px}
+.page-eyebrow{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+.page-hdr h2{font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.1;color:var(--text)}
+.page-hdr p{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5}
+.acc-e{color:var(--acc-e)}.acc-s{color:var(--acc-s)}.acc-g{color:var(--acc-g)}.acc-r{color:var(--acc-red)}
+
+/* SCORE HERO */
+.score-hero{padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:20px}
+.sh-big{font-size:52px;font-weight:700;letter-spacing:-.03em;line-height:1;min-width:100px}
+.sh-right{flex:1}
+.sh-rat{font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid;display:inline-block;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase}
+.sh-label{font-size:13px;color:var(--text2);margin-bottom:3px;font-weight:500}
+.sh-desc{font-size:11px;color:var(--text3);line-height:1.5}
+.sh-bar-track{height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:10px}
+.sh-bar-fill{height:100%;border-radius:2px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+/* KPI ROW */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.kpi{padding:14px 16px}
+.kpi .kl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.kpi .kv{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.kpi .ks{font-size:10px;color:var(--text3);margin-top:3px}
+.kpi .kb{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:10px;overflow:hidden}
+.kpi .kbf{height:100%;border-radius:2px;transition:width .5s}
+
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+
+/* CARD */
+.card{padding:18px 20px;margin-bottom:12px}
+.card-ttl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-ttl .ct-badge{margin-left:auto;font-size:9px;font-weight:600;padding:2px 7px;border-radius:8px;border:1px solid}
+
+/* BAR ROWS */
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}
+.bar-row:last-child{margin-bottom:0}
+.bar-lbl{width:130px;color:var(--text2);flex-shrink:0;cursor:pointer;transition:color .15s}
+.bar-lbl:hover{color:var(--acc-e)}
+.bar-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .5s}
+.bar-val{width:70px;text-align:right;font-weight:600;flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums}
+
+/* INDICATOR TABLE */
+.ind-tbl{width:100%;border-collapse:collapse}
+.ind-tbl th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);text-align:left;padding:6px 10px;border-bottom:1px solid var(--glass-border)}
+.ind-tbl td{font-size:12px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;transition:background .15s}
+.ind-tbl tr:hover td{background:rgba(255,255,255,.02)}
+.ind-tbl tr:last-child td{border-bottom:none}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:7px;flex-shrink:0;vertical-align:middle}
+.pbar{height:3px;border-radius:2px;background:rgba(255,255,255,.08);width:50px;display:inline-block;overflow:hidden;vertical-align:middle}
+.pbarf{height:100%;border-radius:2px}
+
+/* INPUT TABLE */
+.inp-tbl{width:100%;border-collapse:collapse}
+.inp-tbl th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:6px 10px;border-bottom:1px solid var(--glass-border);text-align:left}
+.inp-tbl td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;font-size:12px}
+.inp-tbl tr:hover td{background:rgba(255,255,255,.02)}
+.inp-tbl tr:last-child td{border-bottom:none}
+.inp-tbl .lc{font-weight:500;color:var(--text2);white-space:nowrap;width:180px}
+.inp-tbl .nc{font-size:11px;color:var(--text3)}
+.inp-tbl .ac{font-weight:600;font-variant-numeric:tabular-nums}
+.inp-tbl .sc-row td{background:rgba(255,255,255,.03);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);padding:5px 10px}
+.inp-tbl input[type=number],.inp-tbl select{font-size:12px;padding:5px 8px;border:1px solid var(--glass-border);border-radius:7px;background:rgba(255,255,255,.05);color:var(--text);width:100%;transition:border-color .2s}
+.inp-tbl input:focus,.inp-tbl select:focus{border-color:rgba(29,233,160,.4);outline:none;background:rgba(29,233,160,.04)}
+.inp-tbl select option{background:#0d1520;color:var(--text)}
+
+/* EEA2 TABLE */
+.eea-wrap{overflow-x:auto}
+.eea-tbl{border-collapse:collapse;width:100%;font-size:11px}
+.eea-tbl th{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);text-align:center;padding:6px 5px;border-bottom:1px solid var(--glass-border);white-space:nowrap}
+.eea-tbl th.tl{text-align:left;padding-left:8px}
+.eea-tbl td{padding:4px 4px;border-bottom:1px solid rgba(255,255,255,.03);text-align:center}
+.eea-tbl td.tl{text-align:left;padding-left:8px;font-weight:500;color:var(--text2)}
+.eea-tbl .eap-r td{font-size:10px;color:var(--text3);font-style:italic}
+.eea-tbl tr:hover td{background:rgba(255,255,255,.02)}
+.ni{width:40px;font-size:11px;padding:3px 4px;border:1px solid var(--glass-border);border-radius:5px;background:rgba(255,255,255,.05);color:var(--text);text-align:center;transition:border-color .2s}
+.ni:focus{border-color:rgba(29,233,160,.4);outline:none;background:rgba(29,233,160,.04)}
+
+/* ACTION ITEMS */
+.act{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:7px;border:1px solid;transition:all .2s}
+.act:last-child{margin-bottom:0}
+.act:hover{background:rgba(255,255,255,.02)}
+.act-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.act-body{flex:1}
+.act-title{font-weight:500;font-size:12px;color:var(--text)}
+.act-desc{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.4}
+.act-pts{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px}
+.act-high{background:rgba(255,95,95,.06);border-color:rgba(255,95,95,.15)}
+.act-amb{background:rgba(245,166,35,.05);border-color:rgba(245,166,35,.12)}
+.act-good{background:rgba(29,233,160,.04);border-color:rgba(29,233,160,.12)}
+
+/* KING V TABLE */
+.kv-tbl{width:100%;border-collapse:collapse}
+.kv-tbl th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:6px 10px;border-bottom:1px solid var(--glass-border);text-align:left}
+.kv-tbl td{font-size:12px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top}
+.kv-tbl tr:hover td{background:rgba(255,255,255,.02)}
+.kv-pill{font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;border:1px solid;letter-spacing:.04em;white-space:nowrap}
+
+/* CHIP */
+.chip{font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;border:1px solid;letter-spacing:.04em;text-transform:uppercase;display:inline-block}
+.chip-e{color:var(--acc-e);border-color:rgba(29,233,160,.3);background:rgba(29,233,160,.08)}
+.chip-a{color:var(--acc-s);border-color:rgba(245,166,35,.3);background:rgba(245,166,35,.08)}
+.chip-r{color:var(--acc-red);border-color:rgba(255,95,95,.3);background:rgba(255,95,95,.08)}
+.chip-g{color:var(--acc-g);border-color:rgba(155,107,255,.3);background:rgba(155,107,255,.08)}
+
+/* B-BBEE */
+.bbee-tbl{width:100%;border-collapse:collapse}
+.bbee-tbl th,.bbee-tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px}
+.bbee-tbl th{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);text-align:left}
+.lvl-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.lvl-cell{padding:10px 8px;border-radius:10px;border:1px solid var(--glass-border);text-align:center;background:var(--glass);cursor:default;transition:all .2s}
+.lvl-cell .lv-n{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.lvl-cell .lv-p{font-size:16px;font-weight:700;color:var(--text);margin:3px 0}
+.lvl-cell .lv-r{font-size:10px;color:var(--text3)}
+.lvl-cell.active{background:rgba(29,233,160,.12);border-color:rgba(29,233,160,.35)}
+.lvl-cell.active .lv-n,.lvl-cell.active .lv-r,.lvl-cell.active .lv-p{color:var(--acc-e)}
+
+/* BREADCRUMB */
+.breadcrumb{font-size:11px;color:var(--text3);margin-bottom:16px;display:flex;align-items:center;gap:5px;letter-spacing:.01em}
+.breadcrumb a{color:var(--acc-e);cursor:pointer;opacity:.7;transition:opacity .15s}
+.breadcrumb a:hover{opacity:1}
+
+/* SCROLLBAR */
+.card::-webkit-scrollbar{width:3px}
+
+/* RISK ROW */
+.risk-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px}
+.risk-row:last-child{border-bottom:none}
+
+/* SETTINGS ROW */
+.settings-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.settings-row label{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.settings-row select{font-size:11px;padding:4px 8px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(255,255,255,.07);color:var(--text);transition:border-color .2s}
+.settings-row select:focus{border-color:rgba(29,233,160,.4);outline:none}
+.settings-row select option{background:#0d1520}
+.settings-row .eap-note{font-size:11px;color:var(--text3);margin-left:auto}
+
+@media(max-width:720px){.nav{display:none}.kpi-row{grid-template-columns:1fr 1fr}.two-col,.three-col{grid-template-columns:1fr}}
+
+/* PRIOR PERIOD PANEL */
+.pp-btn{position:fixed;bottom:20px;right:20px;z-index:500;padding:8px 14px;border-radius:20px;background:rgba(255,255,255,.07);border:1px solid var(--glass-border);color:var(--text2);font-size:11px;font-weight:500;cursor:pointer;backdrop-filter:blur(20px);transition:all .2s}
+.pp-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:var(--text)}
+.pp-panel{position:fixed;bottom:56px;right:20px;z-index:500;width:320px;max-height:60vh;overflow-y:auto;border-radius:12px;background:rgba(13,21,32,0.92);border:1px solid var(--glass-border);backdrop-filter:blur(30px);padding:16px;display:none;scrollbar-width:thin}
+.pp-panel.open{display:block}
+.pp-panel h4{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+.pp-panel .pf{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;gap:8px}
+.pp-panel .pf label{font-size:11px;color:var(--text2);flex:1}
+.pp-panel .pf input{width:80px;font-size:11px;padding:3px 6px;border:1px solid var(--glass-border);border-radius:5px;background:rgba(255,255,255,.06);color:var(--text);text-align:right}
+.pp-panel .pf input:focus{border-color:rgba(29,233,160,.4);outline:none}
+.pp-panel .pp-note{font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.4}
+
+/* ── IMPORT TAB ── */
+.imp-section{margin-bottom:20px}
+.imp-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--glass-border)}
+.imp-section-hdr h3{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.imp-section-hdr p{font-size:11px;color:var(--text3);margin-top:2px}
+.imp-tpl-btn{font-size:10px;font-weight:600;padding:4px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(255,255,255,.05);color:var(--text2);cursor:pointer;transition:all .18s;letter-spacing:.04em;text-transform:uppercase}
+.imp-tpl-btn:hover{border-color:var(--acc-blue);color:var(--acc-blue)}
+.imp-tpl-btn.copied{border-color:var(--acc-e);color:var(--acc-e)}
+.imp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.imp-field{background:var(--glass);border:1px solid var(--glass-border);border-radius:10px;padding:12px 14px;transition:border-color .2s}
+.imp-field:hover{border-color:var(--glass-border-hover)}
+.imp-field.has-data{border-color:rgba(29,233,160,.25);background:rgba(29,233,160,.04)}
+.imp-field.has-error{border-color:rgba(255,95,95,.3);background:rgba(255,95,95,.04)}
+.imp-field-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.imp-field-name{font-size:11px;font-weight:600;color:var(--text2)}
+.imp-field-unit{font-size:10px;color:var(--text3);padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.05);border:1px solid var(--glass-border)}
+.imp-field-status{font-size:10px;font-weight:600}
+.imp-periods{display:grid;gap:3px}
+.imp-period-row{display:flex;align-items:center;gap:6px;font-size:11px}
+.imp-period-lbl{width:40px;color:var(--text3);flex-shrink:0;font-variant-numeric:tabular-nums}
+.imp-period-inp{flex:1;font-size:11px;padding:3px 6px;border:1px solid var(--glass-border);border-radius:5px;background:rgba(255,255,255,.04);color:var(--text);text-align:right;min-width:0;transition:border-color .2s;font-variant-numeric:tabular-nums}
+.imp-period-inp:focus{border-color:rgba(74,168,255,.5);outline:none;background:rgba(74,168,255,.05)}
+.imp-period-inp.populated{border-color:rgba(29,233,160,.3);background:rgba(29,233,160,.04)}
+.imp-ytd{font-size:11px;font-weight:700;color:var(--acc-e);text-align:right;min-width:60px;font-variant-numeric:tabular-nums}
+.imp-ytd-lbl{width:40px;font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.paste-drop{border:1.5px dashed var(--glass-border);border-radius:10px;padding:14px;margin-bottom:10px;transition:all .2s;background:rgba(255,255,255,.02)}
+.paste-drop.drag-over{border-color:var(--acc-blue);background:rgba(74,168,255,.06)}
+.paste-drop-lbl{font-size:11px;color:var(--text3);text-align:center;margin-bottom:8px}
+.paste-drop-lbl span{color:var(--acc-blue)}
+.paste-ta{width:100%;min-height:64px;font-size:11px;padding:8px 10px;border:1px solid var(--glass-border);border-radius:7px;background:rgba(255,255,255,.04);color:var(--text);resize:vertical;font-family:'SF Mono',ui-monospace,monospace;line-height:1.5;transition:border-color .2s}
+.paste-ta:focus{border-color:rgba(74,168,255,.4);outline:none;background:rgba(74,168,255,.04)}
+.paste-actions{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.paste-apply{font-size:11px;font-weight:600;padding:5px 14px;border:1px solid rgba(74,168,255,.4);border-radius:8px;background:rgba(74,168,255,.1);color:var(--acc-blue);cursor:pointer;transition:all .18s;letter-spacing:.04em;text-transform:uppercase}
+.paste-apply:hover{background:rgba(74,168,255,.18);border-color:rgba(74,168,255,.6)}
+.paste-clear{font-size:11px;padding:5px 10px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;color:var(--text3);cursor:pointer;transition:all .18s}
+.paste-clear:hover{border-color:var(--glass-border-hover);color:var(--text2)}
+.paste-status{font-size:11px;padding:5px 10px;border-radius:7px;flex:1;min-width:0}
+.pst-ok{color:var(--acc-e);background:rgba(29,233,160,.08);border:1px solid rgba(29,233,160,.2)}
+.pst-err{color:var(--acc-red);background:rgba(255,95,95,.08);border:1px solid rgba(255,95,95,.2)}
+.imp-summary-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px}
+.imp-summary-row:last-child{border-bottom:none}
+.imp-sum-lbl{width:160px;color:var(--text2);flex-shrink:0}
+.imp-sum-val{font-weight:600;font-variant-numeric:tabular-nums;color:var(--acc-e)}
+.imp-sum-ytd{color:var(--text3);font-size:11px;margin-left:auto}
+
+/* SVG icons in nav */
+.pillar-btn svg,.sub-btn svg{flex-shrink:0;opacity:.7;transition:opacity .15s}
+.pillar-btn:hover svg,.pillar-btn.on svg,.sub-btn:hover svg,.sub-btn.on svg{opacity:1}
+/* Overview dashboard extras */
+.ov-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.ov-pillar-card{padding:18px 20px;cursor:pointer;transition:border-color .2s,background .2s}
+.ov-pillar-card:hover{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+.ov-pillar-score{font-size:44px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.ov-pillar-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.ov-pillar-sub{font-size:11px;color:var(--text3);margin-top:4px}
+.timeline{position:relative;padding-left:20px}
+.timeline::before{content:'';position:absolute;left:5px;top:0;bottom:0;width:1px;background:var(--glass-border)}
+.tl-item{position:relative;margin-bottom:14px}
+.tl-item:last-child{margin-bottom:0}
+.tl-dot{width:11px;height:11px;border-radius:50%;position:absolute;left:-20px;top:3px;border:2px solid}
+.tl-title{font-size:12px;font-weight:500;color:var(--text)}
+.tl-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.tl-tag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid;margin-left:6px;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+/* Analytics */
+.chart-wrap{position:relative;width:100%;overflow-x:auto}
+.bar-chart{display:flex;align-items:flex-end;gap:4px;height:100px;padding-bottom:20px;position:relative}
+.bc-bar{flex:1;min-width:18px;border-radius:3px 3px 0 0;position:relative;transition:opacity .15s;cursor:default}
+.bc-bar:hover{opacity:.8}
+.bc-bar::after{content:attr(data-lbl);position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text3);white-space:nowrap}
+.bc-bar::before{content:attr(data-val);position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text2);white-space:nowrap;font-weight:600}
+.chart-y-axis{position:absolute;left:0;top:0;bottom:20px;width:2px;background:rgba(255,255,255,.08)}
+.chart-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.chart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.chart-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Credits */
+.cr-table{width:100%;border-collapse:collapse}
+.cr-table th{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);text-align:left;padding:6px 10px;border-bottom:1px solid var(--glass-border)}
+.cr-table td{font-size:12px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+.cr-table tr:hover td{background:rgba(255,255,255,.02)}
+.cr-table tr:last-child td{border-bottom:none}
+.cr-form{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.cr-field{display:flex;flex-direction:column;gap:3px}
+.cr-field label{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3)}
+.cr-field input,.cr-field select{font-size:12px;padding:6px 9px;border:1px solid var(--glass-border);border-radius:7px;background:rgba(255,255,255,.05);color:var(--text);transition:border-color .2s}
+.cr-field input:focus,.cr-field select:focus{border-color:rgba(29,233,160,.4);outline:none}
+.cr-field select option{background:#0d1520}
+.cr-add-btn{font-size:11px;font-weight:600;padding:8px 18px;border:1px solid rgba(29,233,160,.4);border-radius:8px;background:rgba(29,233,160,.08);color:var(--acc-e);cursor:pointer;transition:all .18s;align-self:end}
+.cr-add-btn:hover{background:rgba(29,233,160,.16);border-color:rgba(29,233,160,.6)}
+.cr-retire-btn{font-size:10px;padding:3px 9px;border:1px solid var(--glass-border);border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;transition:all .15s}
+.cr-retire-btn:hover{border-color:var(--acc-s);color:var(--acc-s)}
+.cr-delete-btn{font-size:10px;padding:3px 9px;border:1px solid rgba(255,95,95,.2);border-radius:6px;background:transparent;color:rgba(255,95,95,.6);cursor:pointer;transition:all .15s}
+.cr-delete-btn:hover{border-color:var(--acc-red);color:var(--acc-red)}
+/* Net zero timeline */
+.nz-milestone{padding:16px 20px;border-radius:12px;border:1px solid;margin-bottom:8px;transition:border-color .2s}
+.nz-year{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-bottom:4px}
+.nz-band{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.nz-desc{font-size:12px;color:var(--text2);line-height:1.5}
+.nz-levers{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.nz-lever{font-size:10px;padding:3px 9px;border-radius:8px;border:1px solid;font-weight:500}
+.reduction-tbl{width:100%;border-collapse:collapse}
+.reduction-tbl th{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);text-align:right;padding:5px 8px;border-bottom:1px solid var(--glass-border)}
+.reduction-tbl th:first-child{text-align:left}
+.reduction-tbl td{font-size:12px;padding:7px 8px;border-bottom:.5px solid rgba(255,255,255,.04);text-align:right;font-variant-numeric:tabular-nums}
+.reduction-tbl td:first-child{text-align:left;color:var(--text2)}
+.reduction-tbl tr:hover td{background:rgba(255,255,255,.02)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-logo">
+    <div>
+      <div class="hdr-brand">Ok<span>i</span>ru <span style="font-weight:300;color:var(--text2)">Consulting</span></div>
+      <div class="hdr-sub">ESG Intelligence Toolkit · SG Consumer · FY25/26</div>
+    </div>
+  </div>
+  <div class="hdr-sp"></div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="hdr-score" id="ov-big" style="color:var(--acc-e)">—%</div>
+    <div class="hdr-rat" id="ov-rat">—</div>
+    <div class="hdr-pill">9 months YTD</div>
+    <div class="hdr-pill">v1.7</div>
+  </div>
+  <div class="stance-row">
+    <button class="sb" onclick="setStance('lean')">Lean</button>
+    <button class="sb on" onclick="setStance('standard')">Standard</button>
+    <button class="sb" onclick="setStance('strict')">Strict</button>
+  </div>
+</header>
+
+<div class="layout">
+<!-- NAV -->
+<nav class="nav">
+  <div class="ns">Environmental</div>
+  <button class="pillar-btn" onclick="go('e-dash')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><path d="M12 3a4 4 0 0 1 0 8"/><path d="M20 8c0 3.3-2.7 6-6 6"/><path d="M8 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>E Dashboard<span class="pscore" id="ns-e" style="color:var(--acc-e);border-color:rgba(29,233,160,.25);background:rgba(29,233,160,.08)"></span></button>
+  <button class="sub-btn" onclick="go('e-ghg')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><line x1="12" y1="3" x2="12" y2="21"/></svg>GHG Emissions<span class="sbpts" id="ns-e-ghg"></span></button>
+  <button class="sub-btn" onclick="go('e-energy')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Energy<span class="sbpts" id="ns-e-en"></span></button>
+  <button class="sub-btn" onclick="go('e-fleet')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Fleet<span class="sbpts" id="ns-e-fl"></span></button>
+  <button class="sub-btn" onclick="go('e-waste')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Waste<span class="sbpts" id="ns-e-wa"></span></button>
+  <button class="sub-btn" onclick="go('e-water')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>Water<span class="sbpts" id="ns-e-wt"></span></button>
+  <button class="sub-btn" onclick="go('e-iso')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>ISO 14001<span class="sbpts" id="ns-e-is"></span></button>
+  <div class="ndiv"></div>
+  <div class="ns">Social</div>
+  <button class="pillar-btn s-pil" onclick="go('s-dash')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>S Dashboard<span class="pscore" id="ns-s" style="color:var(--acc-s);border-color:rgba(245,166,35,.25);background:rgba(245,166,35,.08)"></span></button>
+  <button class="sub-btn" onclick="go('s-mc')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Management Control<span class="sbpts" id="ns-s-mc"></span></button>
+  <button class="sub-btn" onclick="go('s-wsp')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>WSP / ATR<span class="sbpts" id="ns-s-wsp"></span></button>
+  <button class="sub-btn" onclick="go('s-hs')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Health &amp; Safety<span class="sbpts" id="ns-s-hs"></span></button>
+  <button class="sub-btn" onclick="go('s-csi')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>Community / CSI<span class="sbpts" id="ns-s-csi"></span></button>
+  <div class="ndiv"></div>
+  <div class="ns">Governance</div>
+  <button class="pillar-btn g-pil" onclick="go('g-dash')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>G Dashboard<span class="pscore" id="ns-g" style="color:var(--acc-g);border-color:rgba(155,107,255,.25);background:rgba(155,107,255,.08)"></span></button>
+  <button class="sub-btn" onclick="go('g-board')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>Board Composition<span class="sbpts" id="ns-g-brd"></span></button>
+  <button class="sub-btn" onclick="go('g-kingv')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>King V<span class="sbpts" id="ns-g-kv"></span></button>
+  <button class="sub-btn" onclick="go('g-ifrs')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>IFRS S1 / S2<span class="sbpts" id="ns-g-if"></span></button>
+  <button class="sub-btn" onclick="go('g-garp')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>GARP / ERM<span class="sbpts" id="ns-g-gp"></span></button>
+  <button class="sub-btn" onclick="go('g-ethics')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Ethics &amp; Compliance<span class="sbpts" id="ns-g-et"></span></button>
+  <div class="ndiv"></div>
+  <div class="ns">Import</div>
+  <button class="pillar-btn" onclick="go('import')" style="color:var(--acc-blue)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Data Import<span class="pscore" id="ns-imp" style="color:var(--acc-blue);border-color:rgba(74,168,255,.25);background:rgba(74,168,255,.08)"></span></button>
+</nav>
+
+<!-- MAIN -->
+<main class="main"><div id="pc"></div></main>
+</div>
+
+<script>
+/* ============================
+   DATA & ENGINE
+   ============================ */
+const EF={diesel:2.68,petrol:2.31,lpg:1.51,elec:0.82,solar:0.025,water:0.000344};
+const FL={lean:.30,standard:.50,strict:.70};
+let stance='standard';
+const EAP={2025:{gauteng:{AM:.466,CM:.012,IM:.017,AF:.374,CF:.012,IF:.011},western_cape:{AM:.225,CM:.224,IM:.008,AF:.207,CF:.198,IF:.006},kwazulu_natal:{AM:.437,CM:.006,IM:.046,AF:.434,CF:.007,IF:.035},eastern_cape:{AM:.433,CM:.057,IM:.008,AF:.398,CF:.049,IF:.003},free_state:{AM:.506,CM:.016,IM:.003,AF:.418,CF:.019,IF:.000},limpopo:{AM:.511,CM:.001,IM:.003,AF:.449,CF:.000,IF:.000},mpumalanga:{AM:.512,CM:.003,IM:.004,AF:.431,CF:.002,IF:.002},north_west:{AM:.527,CM:.010,IM:.019,AF:.385,CF:.010,IF:.001},northern_cape:{AM:.299,CM:.186,IM:.006,AF:.248,CF:.169,IF:.002}},2024:{gauteng:{AM:.454,CM:.012,IM:.017,AF:.382,CF:.012,IF:.012}},2023:{gauteng:{AM:.461,CM:.011,IM:.022,AF:.369,CF:.013,IF:.014}}};
+const MCB=[{id:'board',label:'Board',bTgt:.50,bPts:2,fTgt:.25,fPts:1,eap:false},{id:'exdir',label:'Executive Directors',bTgt:.50,bPts:2,fTgt:.25,fPts:1,eap:false},{id:'otherexec',label:'Other Exec Management',bTgt:.60,bPts:2,fTgt:.30,fPts:1,eap:false},{id:'senior',label:'Senior Management',bPts:2,fPts:1,eap:true},{id:'middle',label:'Middle Management',bPts:2,fPts:1,eap:true},{id:'junior',label:'Junior Management',bPts:1,fPts:1,eap:true},{id:'pwd',label:'Disabilities',bTgt:.02,bPts:2,eap:false,nof:true}];
+const RACES=['AM','CM','IM','WM','AF','CF','IF','WF'];
+const BLK=['AM','CM','IM','AF','CF','IF'];
+const D={fleet_diesel:589465.53,gen_litres:2181.14,lpg_kg:2280,car_litres:1053.82,elec_kwh:2589578.44,solar_kwh:0,water_kl:4356.41,waste_div:91.1,waste_card:12.4,landfill_co2:1.16,iso14001:'in_progress',aspects:false,env_policy:'partial',legal_reg:false,sbti:true,prior_s12:0,ev_count:0,fleet_total:134,energy_yoy:false,water_init:false,payroll:10331940.87,npat:0,wsp:false,atr:false,train_hrs:0,grant_pct:0,ltifr:null,fatalities:0,fatigue:true,incidents:true,csi_pct:0,initiatives:10,local_pct:0,sup_hs:0,board_total:7,board_blk:42.9,board_fem:14.3,board_meetings:4,risk_committee:true,sec_active:true,esg_rem:false,king5:135,ifrs_board:'partial',ifrs_mgmt:'no',ifrs_risks:'partial',ifrs_opps:'partial',ifrs_scenario:'no',ifrs_risk_id:'partial',ifrs_erm:'partial',ifrs_ghg_tgt:'partial',ifrs_trans_plan:'no',ifrs_phys_board:'no',ifrs_trans_board:'no',erm_phys:true,erm_trans:true,erm_fleet:true,erm_ee:true,erm_popia:true,grap_sec:true,erm_count:12,code_ethics:true,hotline:true,popia:'partial',ext_assur:false,int_report:true,risk_reg:'partial',no_penalties:true,mc_prov:'gauteng',mc_year:2025,mc_combined:false};
+const mhc={};MCB.forEach(b=>{mhc[b.id]={};RACES.forEach(r=>{mhc[b.id][r]=0;});});
+
+let curPage='g-dash';
+
+/* ── TREND DATA (prior period — update when prior data available) ── */
+const T={
+  fleet_diesel:null,gen_litres:null,lpg_kg:null,car_litres:null,
+  elec_kwh:null,solar_kwh:null,water_kl:null,
+  waste_div:88.0,waste_card:11.2,landfill_co2:1.28,
+  ev_count:null,fleet_total:null,
+  payroll:null,npat:null,train_hrs:null,grant_pct:null,
+  ltifr:null,fatalities:null,csi_pct:null,initiatives:9,local_pct:null,sup_hs:null,
+  board_blk:42.9,board_fem:14.3,king5:130,
+  eT:null,sT:null,gT:null,
+  ghgT:null,enT:null,flT:null,waT:null,wtT:null,isoT:null,
+  wspT:null,hsT:null,csiT:null,
+  brdT:null,kvT:null,ifrsT:null,garpT:null,ethT:null,mc_pts:null
+};
+function trendArrow(cur,prior,lowerBetter){
+  if(prior===null||prior===undefined||cur===null||cur===undefined)return'<span style="color:var(--text3);font-size:10px;font-weight:500">—</span>';
+  const diff=cur-prior;
+  if(Math.abs(diff)<0.001)return'<span style="color:var(--text3);font-size:10px">→</span>';
+  const pctChg=prior!==0?Math.round(Math.abs(diff)/Math.abs(prior)*100):0;
+  const up=diff>0;const good=lowerBetter?!up:up;
+  const c=good?'var(--acc-e)':'var(--acc-red)';
+  return`<span style="color:${c};font-size:10px;font-weight:600">${up?'↑':'↓'} ${pctChg}%</span>`;
+}
+
+function getEAP(){return(EAP[D.mc_year]&&EAP[D.mc_year][D.mc_prov])||EAP[2025].gauteng;}
+function eB(){const e=getEAP();return BLK.reduce((a,r)=>a+(e[r]||0),0);}
+function eF(){const e=getEAP();return['AF','CF','IF'].reduce((a,r)=>a+(e[r]||0),0);}
+function bN(id){return RACES.reduce((a,r)=>a+(mhc[id][r]||0),0);}
+function bBl(id){return BLK.reduce((a,r)=>a+(mhc[id][r]||0),0);}
+function bFm(id){return['AF','CF','IF'].reduce((a,r)=>a+(mhc[id][r]||0),0);}
+function pr(a,t,max){if(!t||a===null)return 0;const r=a/t,fl=FL[stance];if(r>=1)return max;if(r>=fl)return Math.round(r*max*100)/100;return 0;}
+function prI(a,t,max){if(a===null)return 0;if(a<=t)return max;return Math.max(0,Math.round((2-a/t)*max*100)/100);}
+function bn(v,max){if(v===true||v==='yes')return max;if(v==='partial')return max*.5;return 0;}
+function r2(n){return Math.round(n*100)/100;}
+function pct(n){return Math.round(n*100);}
+
+function col(p){return p>=.70?'var(--acc-e)':p>=.40?'var(--acc-s)':'var(--acc-red)';}
+function stC(s){return s==='m'?'var(--acc-e)':s==='p'?'var(--acc-s)':'var(--acc-red)';}
+function rat(p){return p>=.85?'EXCELLENT':p>=.70?'GOOD':p>=.50?'ADEQUATE':'NEEDS ATTENTION';}
+function chipClass(p){return p>=.70?'chip-e':p>=.40?'chip-a':'chip-r';}
+
+function calcMC(){
+  let pts=0;const res={};
+  MCB.forEach(b=>{const n=bN(b.id),bl=bBl(b.id),fm=bFm(b.id);const bt=b.eap?eB():b.bTgt||0,ft=b.eap?eF():(b.fTgt||0);const bP=n?bl/n:0,fP=n?fm/n:0;res[b.id]={n,bl,fm,bP,fP,bPts:pr(bP,bt,b.bPts),fPts:b.nof?0:pr(fP,ft,b.fPts||0),bt,ft};});
+  if(D.mc_combined){const n=bN('otherexec')+bN('senior'),bl=bBl('otherexec')+bBl('senior'),fm=bFm('otherexec')+bFm('senior');const bP=n?bl/n:0,fP=n?fm/n:0;res['comb']={n,bl,fm,bP,fP,bPts:pr(bP,.60,4),fPts:pr(fP,.30,2),bt:.60,ft:.30};['board','exdir','middle','junior'].forEach(id=>{pts+=res[id].bPts+res[id].fPts;});pts+=res['pwd'].bPts+res['comb'].bPts+res['comb'].fPts;}
+  else{MCB.forEach(b=>{pts+=res[b.id].bPts+(b.nof?0:res[b.id].fPts);});}
+  return{pts:r2(pts),res};
+}
+function calcAll(){
+  const mc=calcMC();
+  const s1=(D.fleet_diesel*EF.diesel/1000)+(D.gen_litres*EF.diesel/1000)+(D.lpg_kg*EF.lpg/1000)+(D.car_litres*EF.petrol/1000);
+  const s2=Math.max(0,(D.elec_kwh*EF.elec/1000)-(D.solar_kwh*EF.solar/1000));
+  const s3=D.water_kl*EF.water;
+  const re=D.elec_kwh>0?D.solar_kwh/D.elec_kwh:0,ev=D.fleet_total>0?D.ev_count/D.fleet_total:0;
+  const yoy=D.prior_s12>0?Math.max(0,(D.prior_s12-(s1+s2))/D.prior_s12):0;
+  const ghg={s1b:s1>0?5:0,yoy:D.prior_s12>0?pr(yoy,.10,10):0,sol:pr(re,.20,8),s3:s3>0?5:0,sbti:D.sbti?5:0};
+  const en={kwh:D.elec_kwh>0?5:0,yoy:D.energy_yoy?5:0,re:pr(re,.20,8)};
+  const fl={norm:0,int:0,ev:pr(ev,.05,5)};
+  const wa={div:pr(D.waste_div,75,5),card:D.waste_card>0?4:0,lf:D.landfill_co2>0?3:0};
+  const wt={track:D.water_kl>0?4:0,init:D.water_init?3:0};
+  const iso={cert:D.iso14001==='certified'?8:0,asp:D.aspects?4:0,pol:bn(D.env_policy,4),leg:D.legal_reg?4:0};
+  const eT=r2([ghg,en,fl,wa,wt,iso].flatMap(o=>Object.values(o)).reduce((a,v)=>a+v,0));
+  const ee={mc:Math.min(17,mc.pts),plan:5,forum:3,tgt:3};
+  const wsp={wsp:D.wsp?5:0,atr:D.atr?5:0,hrs:pr(D.train_hrs,40,5),grnt:pr(D.grant_pct,80,5)};
+  const hs={ltifr:D.ltifr!==null?prI(D.ltifr,2,8):0,fat:D.fatalities===0?8:0,ftg:D.fatigue?5:0,inc:D.incidents?4:0};
+  const csi={spend:D.npat>0?pr(D.csi_pct,1,5):0,cal:pr(D.initiatives,6,5),loc:pr(D.local_pct,40,5),sup:pr(D.sup_hs,80,5)};
+  const sT=r2([ee,wsp,hs,csi].flatMap(o=>Object.values(o)).reduce((a,v)=>a+v,0));
+  const k5=D.king5/170;
+  const brd={blk:pr(D.board_blk/100,.50,2),fem:pr(D.board_fem/100,.25,1)};
+  const kv={score:r2(k5*25),sec:D.sec_active?5:0,rem:D.esg_rem?5:0};
+  const iDiscs=[D.ifrs_board,D.ifrs_mgmt,D.ifrs_risks,D.ifrs_opps,D.ifrs_scenario,D.ifrs_risk_id,D.ifrs_erm,D.ifrs_ghg_tgt,D.ifrs_trans_plan,D.ifrs_phys_board,D.ifrs_trans_board];
+  const ifrs={disc:r2(iDiscs.reduce((a,v)=>a+bn(v,1),0)/iDiscs.length*10),clim:bn(D.ifrs_erm,5)};
+  const garp={erm:D.erm_phys&&D.erm_trans?8:4,grap:D.grap_sec?5:0};
+  const eth={code:(D.code_ethics&&D.hotline)?4:(D.code_ethics||D.hotline)?2:0,popia:bn(D.popia,5),legal:bn(D.risk_reg,5),assur:D.ext_assur?5:0,rep:D.int_report?8:0,pen:D.no_penalties?5:0};
+  const gT=r2([brd,kv,ifrs,garp,eth].flatMap(o=>Object.values(o)).reduce((a,v)=>a+v,0));
+  const ghgT=Object.values(ghg).reduce((a,v)=>a+v,0);
+  const enT=Object.values(en).reduce((a,v)=>a+v,0);
+  const flT=Object.values(fl).reduce((a,v)=>a+v,0);
+  const waT=Object.values(wa).reduce((a,v)=>a+v,0);
+  const wtT=Object.values(wt).reduce((a,v)=>a+v,0);
+  const isoT=Object.values(iso).reduce((a,v)=>a+v,0);
+  const wspT=Object.values(wsp).reduce((a,v)=>a+v,0);
+  const hsT=Object.values(hs).reduce((a,v)=>a+v,0);
+  const csiT=Object.values(csi).reduce((a,v)=>a+v,0);
+  const brdT=Object.values(brd).reduce((a,v)=>a+v,0);
+  const kvT=r2(Object.values(kv).reduce((a,v)=>a+v,0));
+  const ifrsT=r2(Object.values(ifrs).reduce((a,v)=>a+v,0));
+  const garpT=r2(Object.values(garp).reduce((a,v)=>a+v,0));
+  const ethT=r2(Object.values(eth).reduce((a,v)=>a+v,0));
+  return{mc,s1,s2,s3,re,ev,yoy,ghg,en,fl,wa,wt,iso,eT,ee,wsp,hs,csi,sT,brd,kv,ifrs,garp,eth,gT,ghgT,enT,flT,waT,wtT,isoT,wspT,hsT,csiT,brdT,kvT,ifrsT,garpT,ethT,k5};
+}
+
+/* ============================
+   HTML HELPERS
+   ============================ */
+function hero(pts,max,col2,label,desc){
+  const p=pts/max;
+  const c=col2||col(p);
+  return`<div class="glass score-hero" style="border-color:${c}22"><div class="sh-big" style="color:${c}">${r2(pts)}</div><div class="sh-right"><div class="sh-rat" style="color:${c};border-color:${c}44;background:${c}11">${rat(p)}</div><div class="sh-label">${label} — ${r2(pts)} / ${max} pts (${pct(p)}%)</div><div class="sh-desc">${desc}</div><div class="sh-bar-track"><div class="sh-bar-fill" style="width:${pct(p)}%;background:${c}"></div></div></div></div>`;
+}
+function kpiRow(items){
+  return '<div class="kpi-row">'+items.map(function(it){
+    var l=it[0],v=it[1],s=it[2],p=it[3],c=it[4]||null,dest=it[5]||null,trnd=it[6]||'';
+    var cc=c||col(p);
+    var clickAttr=dest?'onclick="go(\''+dest+'\')"; style="cursor:pointer;transition:border-color .2s,background .2s"':'style="cursor:default"';
+    return '<div class="glass kpi" '+clickAttr+' onmouseenter="this.style.borderColor=\'rgba(255,255,255,.2)\'" onmouseleave="this.style.borderColor=\'\'">'+
+      '<div class="kl" style="display:flex;justify-content:space-between;align-items:center">'+l+
+      (dest?'<span style="font-size:9px;opacity:.4">→</span>':trnd)+
+      '</div>'+
+      '<div class="kv" style="color:'+cc+'">'+v+'</div>'+
+      '<div class="ks" style="display:flex;justify-content:space-between">'+s+(dest&&trnd?trnd:'')+'</div>'+
+      '<div class="kb"><div class="kbf" style="width:'+Math.round(Math.min(Math.max(p,0),1)*100)+'%;background:'+cc+'"></div></div>'+
+      '</div>';
+  }).join('')+'</div>';
+}
+function iRow(name,pts,max,st,note,trnd){return`<tr><td><span class="dot" style="background:${stC(st)}"></span>${name}</td><td style="text-align:center;font-weight:600;font-size:11px;color:${stC(st)}">${r2(pts)}</td><td style="text-align:center;color:var(--text3);font-size:11px">${max}</td><td style="text-align:center">${trnd||'<span style="color:var(--text3);font-size:10px">—</span>'}</td><td><div class="pbar"><div class="pbarf" style="width:${max?Math.min(100,pct(pts/max)):0}%;background:${stC(st)}"></div></div></td><td class="nc">${note||''}</td></tr>`;}
+function iWrap(rows){return`<table class="ind-tbl"><thead><tr><th>Indicator</th><th style="text-align:center;width:50px">Score</th><th style="text-align:center;width:45px">Max</th><th style="text-align:center;width:55px">Trend</th><th style="width:55px">Bar</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`;}
+function inN(f,l,note,hint){return`<tr><td class="lc">${l}</td><td><input type="number" value="${D[f]}" onchange="D['${f}']=parseFloat(this.value)||0;recalc()"></td><td class="nc">${note||''}</td><td class="nc">${hint||''}</td></tr>`;}
+function inSel(f,l,opts,note){return`<tr><td class="lc">${l}</td><td><select onchange="D['${f}']=this.value;recalc()">${opts.map(([v,lbl])=>`<option value="${v}" ${D[f]===v?'selected':''}>${lbl}</option>`).join('')}</select></td><td class="nc" colspan="2">${note||''}</td></tr>`;}
+function inChk(f,l,note){return`<tr><td class="lc">${l}</td><td><select onchange="D['${f}']=this.value==='yes';recalc()"><option value="no" ${!D[f]?'selected':''}>No</option><option value="yes" ${D[f]?'selected':''}>Yes</option></select></td><td class="nc" colspan="2">${note||''}</td></tr>`;}
+function inA(l,v,note){return`<tr style="opacity:.7"><td class="lc">${l}</td><td class="ac" style="color:var(--acc-e)">${v}</td><td class="nc" colspan="2">${note||''}</td></tr>`;}
+function inSec(l){return`<tr class="sc-row"><td colspan="4">${l}</td></tr>`;}
+function inWrap(rows){return`<table class="inp-tbl"><thead><tr><th style="width:180px">Field</th><th>Value</th><th>Source</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>`;}
+function actH(t,d,p){return`<div class="act act-high"><div class="act-dot" style="background:var(--acc-red)"></div><div class="act-body"><div class="act-title">${t}</div><div class="act-desc">${d}</div></div><div class="act-pts" style="color:var(--acc-red)">${p}</div></div>`;}
+function actA(t,d,by){return`<div class="act act-amb"><div class="act-dot" style="background:var(--acc-s)"></div><div class="act-body"><div class="act-title">${t}</div><div class="act-desc">${by}</div></div></div>`;}
+function actG(t,d){return`<div class="act act-good"><div class="act-dot" style="background:var(--acc-e)"></div><div class="act-body"><div class="act-title">${t}</div><div class="act-desc">${d}</div></div></div>`;}
+function barRow(lbl,page,s,max,acc){const p=s/max;return`<div class="bar-row"><div class="bar-lbl" onclick="go('${page}')">${lbl}</div><div class="bar-track"><div class="bar-fill" style="width:${max?pct(p):0}%;background:${acc||col(p)}"></div></div><div class="bar-val" style="color:${acc||col(p)}">${r2(s)}/${max}</div></div>`;}
+function crumb(items){return`<div class="breadcrumb">${items.map((it,i)=>i<items.length-1?`<a onclick="go('${it[1]}')">${it[0]}</a><span style="opacity:.4">›</span>`:`<span style="color:var(--text2)">${it[0]}</span>`).join('')}</div>`;}
+function eyebrow(txt){return`<div class="page-eyebrow">${txt}</div>`;}
+
+/* ============================
+   NAV UPDATE
+   ============================ */
+function updateNav(sc){
+  // update import badge with field coverage
+  const el=document.getElementById('ns-imp');
+  if(el){
+    const total=Object.keys(TS).length;
+    const filled=Object.keys(TS).filter(k=>TS[k].some(v=>v!==null&&v!==0)).length;
+    el.textContent=filled+'/'+total;
+    el.style.color='var(--acc-blue)';el.style.borderColor='rgba(74,168,255,.3)';el.style.background='rgba(74,168,255,.08)';
+  }
+  const ep=sc.eT/108,sp=sc.sT/100,gp=sc.gT/100;
+  const ov=ep*.4+sp*.3+gp*.3;
+  document.getElementById('ov-big').textContent=pct(ov)+'%';
+  document.getElementById('ov-big').style.color=col(ov);
+  const rat2=document.getElementById('ov-rat');rat2.textContent=rat(ov);rat2.style.color=col(ov);rat2.style.borderColor=col(ov)+'44';rat2.style.background=col(ov)+'11';
+  const ns=(id,pts,max)=>{const el=document.getElementById(id);if(el){el.textContent=r2(pts)+'/'+max;const p=pts/max;el.style.color=col(p);el.style.borderColor=col(p)+'44';el.style.background=col(p)+'10';}};
+  const ovEl=document.getElementById('ns-ov');if(ovEl){const ov2=ep*.4+sp*.3+gp*.3;ovEl.textContent=Math.round(ov2*100)+'%';ovEl.style.color=col(ov2);ovEl.style.borderColor=col(ov2)+'44';ovEl.style.background=col(ov2)+'10';}
+  document.getElementById('ns-e').textContent=pct(ep)+'%';document.getElementById('ns-s').textContent=pct(sp)+'%';document.getElementById('ns-g').textContent=pct(gp)+'%';
+  ns('ns-e-ghg',sc.ghgT,33);ns('ns-e-en',sc.enT,18);ns('ns-e-fl',sc.flT,18);ns('ns-e-wa',sc.waT,12);ns('ns-e-wt',sc.wtT,7);ns('ns-e-is',sc.isoT,20);
+  ns('ns-s-mc',sc.mc.pts,19);ns('ns-s-wsp',sc.wspT,20);ns('ns-s-hs',sc.hsT,25);ns('ns-s-csi',sc.csiT,20);
+  ns('ns-g-brd',sc.brdT,6);ns('ns-g-kv',sc.kvT,35);ns('ns-g-if',sc.ifrsT,15);ns('ns-g-gp',sc.garpT,13);ns('ns-g-et',sc.ethT,32);
+}
+
+/* ============================
+   NAV ROUTING
+   ============================ */
+function go(page){
+  curPage=page;
+  document.querySelectorAll('.pillar-btn,.sub-btn').forEach(b=>b.classList.remove('on'));
+  const btn=document.querySelector(`[onclick="go('${page}')"]`);
+  if(btn){btn.classList.add('on');if(btn.classList.contains('sub-btn')){let p=btn.previousElementSibling;while(p&&!p.classList.contains('pillar-btn'))p=p.previousElementSibling;if(p)p.classList.add('on');}}
+  renderPage(page,calcAll());
+}
+
+/* ============================
+   RECALC
+   ============================ */
+function recalc(){const sc=calcAll();updateNav(sc);renderPage(curPage,sc);}
+
+/* ============================
+   PAGES
+   ============================ */
+function renderPage(page,sc){
+  const el=document.getElementById('pc');
+  const map={'e-dash':pageEDash,'e-ghg':pageEGHG,'e-energy':pageEEnergy,'e-fleet':pageEFleet,'e-waste':pageEWaste,'e-water':pageEWater,'e-iso':pageEISO,'s-dash':pageSDash,'s-mc':pageSMC,'s-wsp':pageSWSP,'s-hs':pageSHS,'s-csi':pageSCSI,'g-dash':pageGDash,'g-board':pageGBoard,'g-kingv':pageGKingV,'g-ifrs':pageGIFRS,'g-garp':pageGGARP,'g-ethics':pageGEthics,'import':pageImport,'overview':pageOverview,'analytics':pageAnalytics,'netzero':pageNetZero,'credits':pageCredits};
+  if(map[page])el.innerHTML=map[page](sc);
+}
+
+/* ===== ENVIRONMENTAL ===== */
+function pageEDash(sc){
+  const acc='var(--acc-e)';
+  return`${eyebrow('01 · Environmental Pillar')}
+  <div class="page-hdr"><h2>Environmental <span class="acc-e">Performance</span></h2><p>GHG Protocol · DEFRA 2024 · Eskom NERSA 2024 · SBTi CNZS 2.0 · ISO 14001 · GRI 305/302/303/306</p></div>
+  ${hero(sc.eT,108,acc,'Environmental score','GHG 31% · Energy 17% · Fleet 17% · Waste 11% · Water 6% · ISO 14001 19%')}
+  ${kpiRow([['E Score',r2(sc.eT)+'/108',pct(sc.eT/108)+'%',sc.eT/108,acc,'e-dash',trendArrow(sc.eT,T.eT,false)],['Scope 1+2',r2(sc.s1+sc.s2),'tCO₂e YTD',1,acc,'e-ghg',trendArrow(sc.s1+sc.s2,T.ghgT?T.ghgT-T.wtT:null,true)],['RE%',pct(sc.re)+'%','Target ≥20%',sc.re/.20,acc,'e-energy',trendArrow(sc.re,T.solar_kwh&&T.elec_kwh?T.solar_kwh/T.elec_kwh:null,false)],['EV Fleet',pct(sc.ev)+'%','Target ≥5%',sc.ev/.05,acc,'e-fleet',trendArrow(sc.ev,T.ev_count&&T.fleet_total?T.ev_count/T.fleet_total:null,false)]])}
+  <div class="two-col">
+    <div class="glass card">
+      <div class="card-ttl">Sub-pillar breakdown</div>
+      ${barRow('GHG Emissions','e-ghg',sc.ghgT,33,acc)}
+      ${barRow('Energy','e-energy',sc.enT,18,acc)}
+      ${barRow('Fleet','e-fleet',sc.flT,18,acc)}
+      ${barRow('Waste','e-waste',sc.waT,12,acc)}
+      ${barRow('Water','e-water',sc.wtT,7,acc)}
+      ${barRow('ISO 14001','e-iso',sc.isoT,20,acc)}
+    </div>
+    <div class="glass card">
+      <div class="card-ttl">GHG Scope breakdown — tCO₂e YTD</div>
+      ${[['Scope 1 — Fleet, Gen, LPG, Cars',sc.s1],['Scope 2 — Grid electricity (net)',sc.s2],['Scope 3 — Water',sc.s3]].map(([l,v])=>`<div class="bar-row"><div class="bar-lbl">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${sc.s1+sc.s2+sc.s3?pct(v/(sc.s1+sc.s2+sc.s3)):0}%;background:${acc}"></div></div><div class="bar-val" style="color:${acc}">${r2(v).toLocaleString()}</div></div>`).join('')}
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="glass card"><div class="card-ttl" style="color:var(--acc-red)">Priority actions</div>
+      ${D.solar_kwh===0?actH('Log solar generation (kWh)','JHB (Graeme Barand) confirmed. DBN EDGE in progress.','+8 pts'):''}
+      ${D.prior_s12===0?actH('Enter prior year Scope 1+2','Required for YoY reduction scoring.','+10 pts'):''}
+      ${D.ev_count===0?actA('Begin EV fleet transition','MAXUS eDeliver 3/5 — CPT & PE first. 5% minimum threshold.','FY26/27'):''}
+      ${D.iso14001!=='certified'?actA('ISO 14001 — confirm target date','Confirm with Maria.','+8 pts'):''}
+    </div>
+    <div class="glass card"><div class="card-ttl" style="color:var(--acc-e)">Net-zero status</div>
+      ${actG('Scope 1 baseline established','FY2025/26 confirmed as SBTi CNZS 2.0 baseline year.')}
+      ${actG('Scope 3 water tracking active','4,356 kL YTD · 5 depots.')}
+      ${D.sbti?actG('SBTi net-zero 2050 committed','Submit commitment letter Q1 FY2026.'):actH('Submit SBTi commitment letter','Baseline established.','+5 pts')}
+    </div>
+  </div>`;
+}
+function pageEGHG(sc){
+  return`${crumb([['Environmental','e-dash'],['GHG Emissions','e-ghg']])}
+  ${eyebrow('01 · Environmental · GHG')}
+  <div class="page-hdr"><h2>GHG <span class="acc-e">Emissions</span></h2><p>GHG Protocol · DEFRA 2024 emission factors · SBTi CNZS 2.0 · GRI 305-1/2/3</p></div>
+  ${hero(sc.ghgT,33,'var(--acc-e)','GHG sub-pillar','Scope 1 baseline (5) + YoY reduction (10) + Scope 2 solar net (8) + Scope 3 (5) + SBTi (5)')}
+  <div class="glass card">${iWrap([iRow('Scope 1 baseline established & tracked',sc.ghg.s1b,5,sc.ghg.s1b>0?'m':'g','Fleet diesel actuals loaded',trendArrow(sc.ghg.s1b,T.ghgT!==null?5:null,false)),iRow('Scope 1 YoY reduction vs prior year',sc.ghg.yoy,10,sc.ghg.yoy>=10?'m':sc.ghg.yoy>0?'p':'g',D.prior_s12>0?'Prior year: '+D.prior_s12+' tCO₂e':'Enter prior year to unlock',trendArrow(sc.ghg.yoy,null,false)),iRow('Scope 2 net reduction via solar',sc.ghg.sol,8,sc.ghg.sol>=8?'m':sc.ghg.sol>0?'p':'g','RE%: '+pct(sc.re)+'% · Target ≥20%',trendArrow(sc.re,T.solar_kwh&&T.elec_kwh?T.solar_kwh/T.elec_kwh:null,false)),iRow('Scope 3 tracking initiated',sc.ghg.s3,5,sc.ghg.s3>0?'p':'g','Water consumption: '+D.water_kl.toLocaleString()+' kL YTD',trendArrow(D.water_kl,T.water_kl,true)),iRow('Net-zero target set (SBTi CNZS 2.0)',sc.ghg.sbti,5,sc.ghg.sbti>0?'p':'g','Net-zero by 2050 — submit commitment letter Q1 FY26',trendArrow(sc.ghg.sbti,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">GHG data inputs</div>${inWrap([inSec('Scope 1 — Mobile combustion (DEFRA 2024)'),inN('fleet_diesel','Fleet diesel (litres YTD)','Mariette dashboard — all 5 depots','= '+r2(D.fleet_diesel*EF.diesel/1000)+' tCO₂e @2.68'),inN('gen_litres','Generator diesel (litres)','BLOEM + DBN generators','= '+r2(D.gen_litres*EF.diesel/1000)+' tCO₂e'),inN('lpg_kg','LPG forklifts (kg — DBN)','DBN warehouse only','= '+r2(D.lpg_kg*EF.lpg/1000)+' tCO₂e @1.51'),inN('car_litres','Business car petrol (litres)','ISANDO — Solly\'s car','= '+r2(D.car_litres*EF.petrol/1000)+' tCO₂e @2.31'),inA('Scope 1 total',r2(sc.s1)+' tCO₂e','Auto'),inSec('Scope 2 — Purchased electricity (Eskom NERSA 2024 @0.82)'),inN('elec_kwh','Grid electricity (kWh YTD)','Utility bills — all 5 depots','Gross: '+r2(D.elec_kwh*EF.elec/1000)+' tCO₂e'),inN('solar_kwh','Solar PV generated (kWh YTD)','JHB + DBN EDGE','Offset: -'+r2(D.solar_kwh*EF.solar/1000)+' tCO₂e'),inA('Scope 2 net',r2(sc.s2)+' tCO₂e','After solar'),inSec('Scope 3 (GHG Protocol @0.000344 tCO₂e/kL)'),inN('water_kl','Water consumption (kL YTD)','Utility bills — 5 depots','= '+r2(sc.s3).toFixed(2)+' tCO₂e'),inSec('Net-zero'),inN('prior_s12','Prior year Scope 1+2 (tCO₂e)','0 = FY2025/26 is baseline','Required for YoY scoring'),inSel('sbti','SBTi target set',[['true','Yes — CNZS 2.0 net-zero by 2050'],['false','No']],'Submit commitment letter Q1 FY26')])}</div>`;
+}
+function pageEEnergy(sc){
+  return`${crumb([['Environmental','e-dash'],['Energy','e-energy']])}
+  ${eyebrow('01 · Environmental · Energy')}
+  <div class="page-hdr"><h2>Energy <span class="acc-e">Management</span></h2><p>GRI 302-1/302-3/302-4 · RE100 · ISO 14001 cl 6.2</p></div>
+  ${hero(sc.enT,18,'var(--acc-e)','Energy sub-pillar','kWh tracking (5) + efficiency YoY (5) + renewable ≥20% (8)')}
+  <div class="glass card">${iWrap([iRow('Energy: kWh tracked monthly all 5 depots',sc.en.kwh,5,sc.en.kwh>0?'p':'g','Utility bills loaded',trendArrow(D.elec_kwh,T.elec_kwh,true)),iRow('Energy: Efficiency improvement YoY',sc.en.yoy,5,sc.en.yoy>0?'m':'g','Requires prior-year kWh baseline',trendArrow(sc.en.yoy,null,false)),iRow('Energy: Renewable electricity ≥20%',sc.en.re,8,sc.en.re>=8?'m':sc.en.re>0?'p':'g','RE%: '+pct(sc.re)+'% · Target ≥20%',trendArrow(sc.re,T.solar_kwh&&T.elec_kwh?T.solar_kwh/T.elec_kwh:null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">Energy inputs</div>${inWrap([inN('elec_kwh','Grid electricity (kWh YTD)','Utility bills','= '+r2(D.elec_kwh*EF.elec/1000)+' tCO₂e Scope 2'),inN('solar_kwh','Solar PV generated (kWh YTD)','JHB + DBN EDGE pending','RE%: '+pct(sc.re)+'%'),inChk('energy_yoy','Energy efficiency YoY confirmed','Prior-year kWh comparison'),inA('RE% (auto)',pct(sc.re)+'%','solar ÷ grid · Target ≥20%')])}</div>
+  <div class="glass card"><div class="card-ttl">Solar expansion pipeline</div>
+    ${actG('JHB Isando — Graeme Barand system confirmed','Log kWh generated monthly.')}
+    ${actA('DBN EDGE certification in progress','Confirm completion date.','In progress')}
+    ${actA('CPT / BLOEM / PE — feasibility assessment outstanding','Complete depot-level assessments.','FY2025/26')}
+  </div>`;
+}
+function pageEFleet(sc){
+  return`${crumb([['Environmental','e-dash'],['Fleet','e-fleet']])}
+  ${eyebrow('01 · Environmental · Fleet')}
+  <div class="page-hdr"><h2>Fleet <span class="acc-e">Emissions</span></h2><p>ISO 14083 · GLEC Framework · GRI 302-3 · IFRS S2 · SBTi Scope 1 lever · SASB TR-AU</p></div>
+  ${hero(sc.flT,18,'var(--acc-e)','Fleet sub-pillar','L/100km norm (8) + CO₂/tonne-km (5) + EV % (5)')}
+  <div class="glass card">${iWrap([iRow('Fleet: L/100km within OEM norm',sc.fl.norm,8,sc.fl.norm>0?'m':'g','Per-vehicle km + litres not yet logged in Fleet Register',trendArrow(sc.fl.norm,null,false)),iRow('Fleet: CO₂ per tonne-km tracked',sc.fl.int,5,sc.fl.int>0?'p':'g','Monthly km + carry capacity per vehicle required',trendArrow(sc.fl.int,null,false)),iRow('Fleet: EV vehicles as % of fleet',sc.fl.ev,5,sc.fl.ev>=5?'m':sc.fl.ev>0?'p':'g',pct(sc.ev)+'% · Target ≥5% current · 20% by 2030',trendArrow(sc.ev,T.ev_count&&T.fleet_total?T.ev_count/T.fleet_total:null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">Fleet inputs</div>${inWrap([inN('ev_count','EV vehicles (count)','Currently 0','MAXUS eDeliver 3/5 — CPT & PE priority'),inN('fleet_total','Total fleet size','134 confirmed','BLOEM 16, CPT 14, DBN 19, PE 6, SPFMCG 79'),inA('EV % of fleet',pct(sc.ev)+'%','Target ≥5% current · ≥20% by 2030')])}</div>
+  <div class="glass card"><div class="card-ttl">EV transition plan</div>
+    ${actH('Zero EVs currently — 5% minimum not met','MAXUS eDeliver 3 (3.5T, 330km) and eDeliver 5 (1T, 320km) identified.','+5 pts')}
+    ${actA('Priority: CPT and PE urban routes first','Short runs suit current EV range.','FY26/27')}
+    ${actA('Load monthly km + litres per vehicle — Fleet Register','Required for L/100km and tonne-km intensity scoring.','Immediate')}
+  </div>`;
+}
+function pageEWaste(sc){
+  return`${crumb([['Environmental','e-dash'],['Waste','e-waste']])}
+  ${eyebrow('01 · Environmental · Waste')}
+  <div class="page-hdr"><h2>Waste <span class="acc-e">&amp; Circularity</span></h2><p>GRI 306-3 · ISO 14001 cl 8.1 · NEMWA waste hierarchy · GHG Protocol Scope 3 cat 5</p></div>
+  ${hero(sc.waT,12,'var(--acc-e)','Waste sub-pillar','Diversion ≥75% (5) + Cardboard recycling (4) + Landfill tCO₂e tracked (3)')}
+  <div class="glass card">${iWrap([iRow('Waste: Diversion rate ≥75% (Oricol CPT)',sc.wa.div,5,sc.wa.div>=5?'m':sc.wa.div>0?'p':'g','CPT Mar-26: 91.1% — extend to all depots',trendArrow(D.waste_div,T.waste_div,false)),iRow('Waste: Cardboard recycling tracked (Cority)',sc.wa.card,4,sc.wa.card>0?'p':'g','Cority avg: '+D.waste_card+'% · Target ≥25%',trendArrow(D.waste_card,T.waste_card,false)),iRow('Waste: Landfill tCO₂e tracked',sc.wa.lf,3,sc.wa.lf>0?'p':'g','CPT Mar-26: '+D.landfill_co2+' tCO₂e',trendArrow(D.landfill_co2,T.landfill_co2,true))])}</div>
+  <div class="glass card"><div class="card-ttl">Waste inputs</div>${inWrap([inN('waste_div','Waste diversion rate (%)','Oricol CPT — Mar-26','Target ≥75% · Excellence ≥90%'),inN('waste_card','Cardboard recycling avg (%)','Cority all depots','Target ≥25%'),inN('landfill_co2','Landfill tCO₂e YTD','Waste contractor data','DEFRA 2024 @0.58 tCO₂e/tonne')])}</div>
+  <div class="glass card"><div class="card-ttl">Waste insights</div>
+    ${actG('CPT Oricol: 91.1% diversion — above 90% excellence benchmark','Strongest environmental metric. Evidences ISO 14001 waste management.')}
+    ${actA('Extend Oricol CPT model to all 4 other depots','BLOEM, DBN, ISANDO, PE currently below target.','FY2026')}
+  </div>`;
+}
+function pageEWater(sc){
+  return`${crumb([['Environmental','e-dash'],['Water','e-water']])}
+  ${eyebrow('01 · Environmental · Water')}
+  <div class="page-hdr"><h2>Water <span class="acc-e">Management</span></h2><p>GRI 303-1/303-3 · ISO 14001 cl 6.1.2 · NWA Section 21 · CDP Water</p></div>
+  ${hero(sc.wtT,7,'var(--acc-e)','Water sub-pillar','Monthly tracking (4) + Efficiency initiative (3)')}
+  <div class="glass card">${iWrap([iRow('Water: Monthly consumption tracked all 5 depots',sc.wt.track,4,sc.wt.track>0?'p':'g','4,356 kL YTD confirmed',trendArrow(D.water_kl,T.water_kl,true)),iRow('Water: Efficiency initiative active',sc.wt.init,3,sc.wt.init>0?'m':'g','CT dam project · DBN 20kL mezzanine',trendArrow(sc.wt.init,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">Water inputs</div>${inWrap([inN('water_kl','Water consumption (kL YTD)','Utility bills — 5 depots','= '+r2(sc.s3).toFixed(3)+' tCO₂e Scope 3'),inChk('water_init','Water efficiency initiative active','CT dam project + DBN mezzanine')])}</div>`;
+}
+function pageEISO(sc){
+  return`${crumb([['Environmental','e-dash'],['ISO 14001','e-iso']])}
+  ${eyebrow('01 · Environmental · ISO 14001')}
+  <div class="page-hdr"><h2>ISO 14001 <span class="acc-e">Environmental Management</span></h2><p>ISO 14001:2015 · NEMA s28 · NWA s21 · NEMWA · King V P12 · GRI 2-27</p></div>
+  ${hero(sc.isoT,20,'var(--acc-e)','ISO 14001 sub-pillar','Certification (8) + Aspects register (4) + Board policy (4) + Legal register (4)')}
+  <div class="glass card">${iWrap([iRow('ISO 14001: Certification achieved/in progress',sc.iso.cert,8,sc.iso.cert>0?'m':'g',D.iso14001==='in_progress'?'In progress — confirm date with Maria':'Not started',trendArrow(sc.iso.cert,null,false)),iRow('ISO 14001: Aspects register maintained',sc.iso.asp,4,sc.iso.asp>0?'m':'g','Fleet diesel = dominant aspect (>80% Scope 1)',trendArrow(sc.iso.asp,null,false)),iRow('Environmental policy — board approved',sc.iso.pol,4,sc.iso.pol>0?'m':D.env_policy==='partial'?'p':'g','Code of Ethics §11 = partial evidence',trendArrow(sc.iso.pol,null,false)),iRow('NEMA/NWA/NEMWA legal register',sc.iso.leg,4,sc.iso.leg>0?'m':'g','ISO 14001 cl 6.1.3 — quarterly update',trendArrow(sc.iso.leg,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">ISO 14001 inputs</div>${inWrap([inSel('iso14001','ISO 14001 status',[['not_started','Not started'],['in_progress','In progress'],['certified','Certified']],'Confirm target date with Maria'),inChk('aspects','Aspects register maintained','cl 6.1.2 — fleet diesel is dominant aspect'),inSel('env_policy','Environmental policy',[['no','Not in place'],['partial','Partial — Code of Ethics §11'],['yes','Board-approved with net-zero']],'Add SBTi commitment to Code of Ethics §11'),inChk('legal_reg','Legal requirements register','NEMA/NWA/NEMWA — quarterly update')])}</div>`;
+}
+
+/* ===== SOCIAL ===== */
+function pageSDash(sc){
+  const acc='var(--acc-s)';
+  return`${eyebrow('02 · Social Pillar')}
+  <div class="page-hdr"><h2>Social <span class="acc-s">Performance</span></h2><p>EEA · SDL Act · OHS Act · ISO 26000 · GRI 401/403/404/405/413 · B-BBEE Statement 200</p></div>
+  ${hero(sc.sT,100,acc,'Social score','MC (28) + WSP/ATR (20) + H&S (25) + Community (20)')}
+  ${kpiRow([['MC Score',sc.mc.pts+'/19','EEA2 headcount',sc.mc.pts/19,acc,'s-mc',trendArrow(sc.mc.pts,T.mc_pts,false)],['WSP/ATR',r2(sc.wspT)+'/20','Skills Dev',sc.wspT/20,acc,'s-wsp',trendArrow(sc.wspT,T.wspT,false)],['H&S',r2(sc.hsT)+'/25','Safety',sc.hsT/25,acc,'s-hs',trendArrow(sc.hsT,T.hsT,false)],['Community',r2(sc.csiT)+'/20','CSI+Supplier',sc.csiT/20,acc,'s-csi',trendArrow(sc.csiT,T.csiT,false)]])}
+  <div class="two-col">
+    <div class="glass card"><div class="card-ttl">Sub-pillar breakdown</div>
+      ${barRow('Management Control','s-mc',sc.mc.pts,19,acc)}
+      ${barRow('WSP / ATR','s-wsp',sc.wspT,20,acc)}
+      ${barRow('Health & Safety','s-hs',sc.hsT,25,acc)}
+      ${barRow('Community / CSI','s-csi',sc.csiT,20,acc)}
+    </div>
+    <div class="glass card"><div class="card-ttl" style="color:var(--acc-red)">Priority actions</div>
+      ${bN('board')+bN('exdir')+bN('senior')+bN('middle')+bN('junior')===0?actH('Enter EEA2 headcount — MC tab','Single highest unlock. Blocks 17 Social pts + B-BBEE MC element.','+17 pts'):''}
+      ${!D.wsp?actH('Submit WSP to SETA (deadline 30 April)','Unlocks mandatory grant recovery.','+5 pts'):''}
+      ${!D.atr?actH('Submit ATR to SETA','Annual Training Report.','+5 pts'):''}
+      ${D.ltifr===null?actA('Enter hours worked → LTIFR','4 LTIs confirmed. Hours outstanding.','Urgent'):''}
+    </div>
+  </div>`;
+}
+function pageSMC(sc){
+  const e=getEAP(),eb=pct(eB()),ef=pct(eF());
+  const bands=MCB.filter(b=>!(D.mc_combined&&b.id==='senior'));
+  let rows='';
+  for(const b of bands){
+    const r=sc.mc.res[b.id];const tp=r2(r.bPts+(b.nof?0:r.fPts)),tm=b.bPts+(b.nof?0:(b.fPts||0));const sc2=col(tm?tp/tm:0);
+    rows+=`<tr><td class="tl" style="white-space:nowrap">${b.label}</td>`;
+    RACES.forEach(r2=>{rows+=`<td><input class="ni" type="number" min="0" value="${mhc[b.id][r2]||0}" onchange="mhc['${b.id}']['${r2}']=parseInt(this.value)||0;recalc()"></td>`;});
+    const bt=b.eap?eb+'%':(b.bTgt?pct(b.bTgt)+'%':'—');
+    rows+=`<td style="font-weight:600">${bN(b.id)}</td><td style="color:${col(r.bP>=(b.eap?eB():b.bTgt||0)?1:.3)};font-weight:500">${bN(b.id)?pct(r.bP)+'%':'—'}</td><td style="font-weight:700;color:${sc2}">${tp}/${tm}</td></tr>`;
+    if(b.eap){rows+=`<tr class="eap-r"><td class="tl" style="padding-left:16px;color:var(--text3)">EAP target</td>`;RACES.forEach(r3=>{rows+=`<td>${r3==='WM'||r3==='WF'?'—':pct(e[r3]||0)+'%'}</td>`;});rows+=`<td></td><td style="color:var(--acc-e)">${eb}%</td><td></td></tr>`;}
+  }
+  return`${crumb([['Social','s-dash'],['Management Control','s-mc']])}
+  ${eyebrow('02 · Social · Management Control')}
+  <div class="page-hdr"><h2>Management Control <span class="acc-s">EEA2</span></h2><p>B-BBEE Generic Codes Statement 200 · EEA s27 · GRI 405-1 · 19 points total · EAP-weighted</p></div>
+  ${hero(sc.mc.pts,19,'var(--acc-s)','MC score','Enter headcount below — scores update in real time')}
+  <div class="glass card">
+    <div class="settings-row">
+      <label>Province <select onchange="D.mc_prov=this.value;recalc()">${[['gauteng','Gauteng'],['western_cape','Western Cape'],['kwazulu_natal','KwaZulu-Natal'],['eastern_cape','Eastern Cape'],['free_state','Free State'],['limpopo','Limpopo'],['mpumalanga','Mpumalanga'],['north_west','North West'],['northern_cape','Northern Cape']].map(([v,l])=>`<option value="${v}" ${D.mc_prov===v?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label>Year <select onchange="D.mc_year=parseInt(this.value);recalc()"><option value="2025" ${D.mc_year===2025?'selected':''}>2025</option><option value="2024" ${D.mc_year===2024?'selected':''}>2024</option><option value="2023" ${D.mc_year===2023?'selected':''}>2023</option></select></label>
+      <label>Layout <select onchange="D.mc_combined=this.value==='yes';recalc()"><option value="no" ${!D.mc_combined?'selected':''}>Separate Exco + Senior</option><option value="yes" ${D.mc_combined?'selected':''}>Combined (4+2 pts)</option></select></label>
+      <div class="eap-note">Black EAP: <span style="color:var(--acc-s);font-weight:600">${eb}%</span> · Female EAP: <span style="color:var(--acc-s);font-weight:600">${ef}%</span></div>
+    </div>
+    <div class="eea-wrap"><table class="eea-tbl">
+      <thead><tr><th class="tl">Band</th>${RACES.map(r=>`<th>${r}</th>`).join('')}<th>Total</th><th>Black%</th><th>Pts</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--glass-border-hover)"><td class="tl" colspan="9" style="font-weight:700;font-size:12px;padding:10px 8px">MC Total</td><td colspan="2" style="font-weight:700;font-size:16px;color:var(--acc-s);padding:10px 8px">${sc.mc.pts.toFixed(2)} / 19</td></tr></tfoot>
+    </table></div>
+  </div>`;
+}
+function pageSWSP(sc){
+  return`${crumb([['Social','s-dash'],['WSP / ATR','s-wsp']])}
+  ${eyebrow('02 · Social · Skills Development')}
+  <div class="page-hdr"><h2>WSP / ATR <span class="acc-s">Skills Development</span></h2><p>SDL Act 9 of 1999 · Skills Development Act s10 · GRI 404-1 · B-BBEE Statement 300</p></div>
+  ${hero(sc.wspT,20,'var(--acc-s)','WSP/ATR sub-pillar','WSP submitted (5) + ATR submitted (5) + Training ≥40hrs (5) + Grant ≥80% (5)')}
+  <div class="glass card">${iWrap([iRow('WSP submitted to SETA by 30 April',sc.wsp.wsp,5,sc.wsp.wsp>0?'m':'g',D.wsp?'Submitted ✓':'NOT submitted — urgent',trendArrow(sc.wsp.wsp,T.wspT!==null?5:null,false)),iRow('ATR submitted to SETA',sc.wsp.atr,5,sc.wsp.atr>0?'m':'g',D.atr?'Submitted ✓':'NOT submitted',trendArrow(sc.wsp.atr,null,false)),iRow('Training hours ≥40/employee',sc.wsp.hrs,5,sc.wsp.hrs>=5?'m':sc.wsp.hrs>0?'p':'g',D.train_hrs+' hrs · Target 40',trendArrow(D.train_hrs,T.train_hrs,false)),iRow('Mandatory grant recovery ≥80%',sc.wsp.grnt,5,sc.wsp.grnt>=5?'m':sc.wsp.grnt>0?'p':'g',D.grant_pct+'% · SDL levy R'+Math.round(D.payroll*.01).toLocaleString(),trendArrow(D.grant_pct,T.grant_pct,false))])}</div>
+  <div class="glass card"><div class="card-ttl">WSP/ATR inputs</div>${inWrap([inSec('Payroll & levy'),inN('payroll','Leviable payroll (R)','Coba HR — 27 May 2026','SDL levy: R'+Math.round(D.payroll*.01).toLocaleString()),inN('npat','NPAT (R)','Management accounts','Required for SED scoring'),inSec('Submissions'),inChk('wsp','WSP submitted to SETA','Deadline: 30 April annually'),inChk('atr','ATR submitted to SETA','Annual Training Report'),inSec('Performance'),inN('train_hrs','Training hours per employee','HR / SETA records','Target ≥40 hrs'),inN('grant_pct','Mandatory grant recovered (%)','20% of SDL = R'+Math.round(D.payroll*.01*.2).toLocaleString(),'Target ≥80%')])}</div>`;
+}
+function pageSHS(sc){
+  return`${crumb([['Social','s-dash'],['Health & Safety','s-hs']])}
+  ${eyebrow('02 · Social · Health & Safety')}
+  <div class="page-hdr"><h2>Health <span class="acc-s">&amp; Safety</span></h2><p>ISO 45001:2018 · OHS Act 85 of 1993 · GRI 403-9 · Accidently system · Driver Debrief</p></div>
+  ${hero(sc.hsT,25,'var(--acc-s)','H&S sub-pillar','LTIFR ≤2.0 (8) + Zero fatalities (8) + Driver fatigue programme (5) + Incident investigation (4)')}
+  <div class="glass card">${iWrap([iRow('H&S: LTIFR ≤2.0',sc.hs.ltifr,8,sc.hs.ltifr>=8?'m':sc.hs.ltifr>0?'p':'g',D.ltifr===null?'Awaiting hours worked — 4 LTIs confirmed':'LTIFR: '+D.ltifr+' · Target ≤2.0',trendArrow(D.ltifr,T.ltifr,true)),iRow('H&S: Zero fatalities YTD',sc.hs.fat,8,sc.hs.fat>0?'p':'g',D.fatalities===0?'No fatalities confirmed ✓':D.fatalities+' fatalities',trendArrow(D.fatalities,T.fatalities,true)),iRow('H&S: Driver fatigue programme active',sc.hs.ftg,5,sc.hs.ftg>0?'p':'g','77 drivers in WSP training plan',trendArrow(sc.hs.ftg,null,false)),iRow('H&S: Incident investigation rate',sc.hs.inc,4,sc.hs.inc>0?'p':'g','Accidently system — all depots',trendArrow(sc.hs.inc,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">H&S inputs</div>${inWrap([inSec('Incident data — Jul-25 to Apr-26'),`<tr><td class="lc">LTIFR</td><td><input type="number" step=".1" placeholder="Enter once hours worked known" value="${D.ltifr===null?'':D.ltifr}" onchange="D.ltifr=this.value===''?null:parseFloat(this.value)||0;recalc()"></td><td class="nc">LTIs × 1,000,000 ÷ hours worked</td><td class="nc">Target ≤2.0</td></tr>`,`<tr><td class="lc">Fatalities YTD</td><td><input type="number" min="0" value="${D.fatalities}" onchange="D.fatalities=parseInt(this.value)||0;recalc()"></td><td class="nc">Any fatality = 0 pts (absolute)</td><td></td></tr>`,inSec('Programme status'),inChk('fatigue','Driver fatigue programme active','TETA WSP — 77 heavy motor vehicle drivers'),inChk('incidents','Incident investigation active','Accidently system — all depots')])}</div>
+  <div class="glass card"><div class="card-ttl">Confirmed LTIs (SHE register)</div>
+    ${['Wallace Arends','Ndumiso Mkhize','Joseph Sebeko','Tendani Matumba'].map(n=>`<div class="bar-row"><div style="width:6px;height:6px;border-radius:50%;background:var(--acc-s);flex-shrink:0"></div><div style="flex:1;font-size:12px;padding-left:8px;color:var(--text2)">${n}</div></div>`).join('')}
+  </div>`;
+}
+function pageSCSI(sc){
+  return`${crumb([['Social','s-dash'],['Community / CSI','s-csi']])}
+  ${eyebrow('02 · Social · Community')}
+  <div class="page-hdr"><h2>Community <span class="acc-s">&amp; CSI</span></h2><p>GRI 413-1 · ISO 26000 s6.8 · B-BBEE SED Statement 500 · IMS-T-149</p></div>
+  ${hero(sc.csiT,20,'var(--acc-s)','Community sub-pillar','CSI ≥1% NPAT (5) + Social calendar ≥6 (5) + Local procurement ≥40% (5) + Supplier H&S ≥80% (5)')}
+  <div class="glass card">${iWrap([iRow('CSI/SED spend ≥1% NPAT',sc.csi.spend,5,sc.csi.spend>=5?'m':sc.csi.spend>0?'p':'g',D.npat===0?'Enter NPAT to activate':'CSI: '+D.csi_pct+'% · Budget R45,000 confirmed',trendArrow(D.csi_pct,T.csi_pct,false)),iRow('Social calendar ≥6 initiatives',sc.csi.cal,5,sc.csi.cal>=5?'m':sc.csi.cal>0?'p':'g',D.initiatives+' programmes confirmed',trendArrow(D.initiatives,T.initiatives,false)),iRow('Local labour procurement ≥40%',sc.csi.loc,5,sc.csi.loc>=5?'m':sc.csi.loc>0?'p':'g',D.local_pct+'%',trendArrow(D.local_pct,T.local_pct,false)),iRow('Supplier H&S compliance IMS-T-149 ≥80%',sc.csi.sup,5,sc.csi.sup>=5?'m':sc.csi.sup>0?'p':'g',D.sup_hs+'% · All 12 suppliers at 60% (C) currently',trendArrow(D.sup_hs,T.sup_hs,false))])}</div>
+  <div class="glass card"><div class="card-ttl">CSI / procurement inputs</div>${inWrap([inN('npat','NPAT (R)','Management accounts','Required for CSI % calc'),inN('csi_pct','CSI/SED as % of NPAT','Budget R45,000 confirmed','Target ≥1%'),inN('initiatives','Social initiatives YTD','10 programmes confirmed','Target ≥6'),inN('local_pct','Local labour procurement (%)','B-BBEE ESD','Target ≥40%'),inN('sup_hs','Supplier H&S compliance (%)','SAQ — 12 key suppliers','Target ≥80%')])}</div>
+  <div class="glass card"><div class="card-ttl">CSI programmes confirmed (FY2025/26)</div>
+    ${['Mandela Day · Community · 90–100% Black','Casual Day Stickers · Disability · 75–90% Black','CHOC Foundation · Health · 75–90% Black','SA Guide Dog Association · Visual · 70–85% Black','Friends of Valkenburg Trust · Mental health · 75–90% Black','Blanket Drive (May-26) · Winter relief · 90–100% Black','Wings of Inspiration · Community · 90–100% Black','Gerald Fitzpatrick · SED Enterprise Dev · 75–90% Black','Jicama 89 · Children visual impairment · 100% Black'].map(p=>`<div class="bar-row"><div style="width:5px;height:5px;border-radius:50%;background:var(--acc-s);flex-shrink:0;margin-top:2px"></div><div style="font-size:11px;padding-left:8px;color:var(--text2)">${p}</div></div>`).join('')}
+  </div>`;
+}
+
+/* ===== GOVERNANCE ===== */
+function pageGDash(sc){
+  const acc='var(--acc-g)';
+  return`${eyebrow('03 · Governance Pillar')}
+  <div class="page-hdr"><h2>Governance <span class="acc-g">Performance</span></h2><p>King V · IFRS S1/S2 · GARP ERM · GRAP · POPIA · Companies Act · JSE Listings</p></div>
+  ${hero(sc.gT,100,acc,'Governance score','Board (6) + King V (35) + IFRS S1/S2 (15) + GARP/ERM (13) + Ethics & Compliance (32)')}
+  ${kpiRow([['Board',r2(sc.brdT)+'/6','Composition',sc.brdT/6,acc,'g-board',trendArrow(sc.brdT,T.brdT,false)],['King V',r2(sc.kvT)+'/35','Apply & Explain',sc.kvT/35,acc,'g-kingv',trendArrow(sc.kvT,T.kvT,false)],['IFRS',r2(sc.ifrsT)+'/15','S1/S2 disclosures',sc.ifrsT/15,acc,'g-ifrs',trendArrow(sc.ifrsT,T.ifrsT,false)],['Ethics',r2(sc.ethT)+'/32','Compliance',sc.ethT/32,acc,'g-ethics',trendArrow(sc.ethT,T.ethT,false)]])}
+  <div class="two-col">
+    <div class="glass card"><div class="card-ttl">Sub-pillar breakdown</div>
+      ${barRow('Board Composition','g-board',sc.brdT,6,acc)}
+      ${barRow('King V','g-kingv',sc.kvT,35,acc)}
+      ${barRow('IFRS S1/S2','g-ifrs',sc.ifrsT,15,acc)}
+      ${barRow('GARP / ERM','g-garp',sc.garpT,13,acc)}
+      ${barRow('Ethics & Compliance','g-ethics',sc.ethT,32,acc)}
+    </div>
+    <div class="glass card"><div class="card-ttl" style="color:var(--acc-red)">Priority actions</div>
+      ${!D.esg_rem?actH('Embed ESG KPIs in executive contracts','King V P6 — ESG-linked remuneration not yet evidenced.','+5 pts'):''}
+      ${!D.ext_assur?actH('Engage external ESG assurance (ISAE 3000)','Unlocks 5 pts + strengthens IFRS S1/S2 status.','+5 pts'):''}
+      ${D.popia==='partial'?actA('POPIA IO — formal appointment letter','s55 registration — consent active but letter outstanding.','Immediate'):''}
+      ${actA('Improve IFRS S1/S2 disclosures','Currently at '+pct(sc.ifrsT/15)+'%. Assign exec climate risk owner.','FY2026')}
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="glass card"><div class="card-ttl" style="color:var(--acc-e)">Confirmed strengths</div>
+      ${actG('Code of Ethics + Be Heard hotline (24/365)','Super Group Code Rev 2, Jan 2023. 0800-007-117 anonymous.')}
+      ${actG('Social & Ethics Committee established','Group S&EC — CSI/SED Policy §7. Monitors CSI/SED, EE, anti-corruption.')}
+      ${actG('Integrated Report published (JSE-listed)','CSI/SED Policy §15(b)(v) confirms. King V P8/P15.')}
+      ${actG('King V: 79.4% — Adequate','135/170 Apply & Explain.')}
+    </div>
+    <div class="glass card"><div class="card-ttl">Material risk register (top 5)</div>
+      ${[['Climate Transition','High · 25','chip-r'],['Operational — Fleet','High · 25','chip-r'],['Climate Physical','High · 20','chip-a'],['Supply Chain','Medium · 12','chip-a'],['Regulatory — EE Act','Medium · 9','chip-g']].map(([n,s,c])=>`<div class="risk-row"><div style="flex:1;font-size:12px;color:var(--text2)">${n}</div><span class="chip ${c}">${s}</span></div>`).join('')}
+    </div>
+  </div>`;
+}
+function pageGBoard(sc){
+  return`${crumb([['Governance','g-dash'],['Board Composition','g-board']])}
+  ${eyebrow('03 · Governance · Board')}
+  <div class="page-hdr"><h2>Board <span class="acc-g">Composition</span></h2><p>King V P3/P4 · B-BBEE MC Statement 200 — Board band · Companies Act s72 · GRI 2-18 · JSE Listings</p></div>
+  ${hero(sc.brdT,6,'var(--acc-g)','Board sub-pillar','Black board ≥50% (2) + Black female board ≥25% (1) + Executive Directors scored in MC tab (3)')}
+  <div class="glass card">${iWrap([iRow('Black board members ≥50% voting rights',sc.brd.blk,2,sc.brd.blk>=2?'m':sc.brd.blk>0?'p':'g',D.board_blk.toFixed(1)+'% (3/7) · Chitalu SA-EEA classification pending',trendArrow(D.board_blk,T.board_blk,false)),iRow('Black female board members ≥25%',sc.brd.fem,1,sc.brd.fem>=1?'m':sc.brd.fem>0?'p':'g',D.board_fem.toFixed(1)+'% (1/7 — Mnisi) · Gender gap vs King V P4',trendArrow(D.board_fem,T.board_fem,false)),iRow('Executive Directors — scored in MC tab',0,2,sc.mc.res.exdir&&bN('exdir')>0?'p':'g','Enter exec directors in MC tab',trendArrow(0,null,false)),iRow('Black female Exec Directors — MC tab',0,1,sc.mc.res.exdir&&bN('exdir')>0?'p':'g','Enter exec directors in MC tab',trendArrow(0,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">Board inputs</div>${inWrap([inN('board_total','Total board members','7 confirmed: 2 Exec + 5 Ind NED','Mountford (CEO), Brown (CFO)'),inN('board_blk','% Black board members','3/7 = 42.9%','Chitalu (Zambian Chair) — SA-EEA classification pending'),inN('board_fem','% Female board members','1/7 = 14.3% — Pitsi Mnisi','Material gap vs King V P4'),inN('board_meetings','Board meetings held YTD','4 (JSE minimum)','Confirm from Co Sec John Mackay'),inChk('risk_committee','Risk Committee active','Cathrall chairs'),inChk('sec_active','S&EC active','Group S&EC — CSI/SED Policy §7')])}</div>
+  <div class="glass card"><div class="card-ttl">Board — confirmed members (27 May 2026)</div>
+    ${[['Chair','Chitalu (Zambian) — SA-EEA classification pending'],['Lead Independent','Cathrall (Risk Committee Chair)'],['CEO','Peter Mountford (Executive Director)'],['CFO / Debt Officer','Colin Brown (Executive Director)'],['NEDs','Mehlomakulu · Mnisi (Black female) · Phalane'],['Company Secretary','John Mackay']].map(([r,n])=>`<div class="bar-row"><div style="width:120px;font-size:11px;color:var(--text3);flex-shrink:0">${r}</div><div style="font-size:12px;color:var(--text2)">${n}</div></div>`).join('')}
+  </div>`;
+}
+function pageGKingV(sc){
+  const kvT=r2(sc.kvT);
+  const PRINCIPLES=[
+    [1,'Ethical leadership & organisational ethics','Applied',8,10,'Code of Ethics Rev 2 · Be Heard hotline confirmed'],
+    [2,'Responsible corporate citizenship','Applied',6,10,'CSI/SED Policy — 1% NPAT SED · three-pronged approach'],
+    [3,'Board composition, skills & independence','Explained',6,7,'Board skills matrix not in supplied policies'],
+    [4,'Board roles, function & performance','Explained',6,7,'Board charter not in supplied policies'],
+    [5,'Committees — Audit, Risk, Remco, S&EC','Partially Applied',8,5,'S&EC confirmed · Audit/Risk/Remco ToRs not provided'],
+    [6,'Remuneration policy — ESG-linked KPIs','Explained',6,7,'Remco report not disclosed · ESG KPIs in contracts outstanding'],
+    [7,'Stakeholder engagement & inclusivity','Applied',6,10,'CSI/SED Policy §15 — stakeholder comms plan confirmed'],
+    [8,'Reporting — integrated, materiality-based','Applied',8,10,'CSI/SED Policy §15(b)(v) confirms Integrated Report'],
+    [9,'Technology & information governance','Applied',6,10,'Code of Ethics §6 — POPI Act · POPIA consent Jan 2026'],
+    [10,'Risk governance — ERM including climate','Partially Applied',8,5,'Code of Ethics §11 risk approach · formal climate ERM TBC'],
+    [11,'Internal audit & combined assurance','Partially Applied',6,5,'Internal Audit active · combined assurance model TBC'],
+    [12,'Governing compliance — legal & regulatory','Applied',8,10,'Code of Ethics §3-4 · multi-statute compliance framework'],
+    [13,'Strategy — six capitals & value creation','Explained',6,7,'Six-capitals framing not explicit in supplied policies'],
+    [14,'Performance — financial & non-financial','Explained',6,7,'ESG KPIs in board pack not evidenced'],
+    [15,'Disclosure — transparent & balanced','Applied',6,10,'CSI/SED Policy §15(b)(v) confirms IAR · public policies'],
+    [16,'Non-financial outcomes — ESG, Ubuntu-Botho','Partially Applied',6,5,'ESG policies + operational data via this toolkit'],
+    [17,'SA-specific — Companies Act, MOI, AGM','Applied',4,10,'Companies Act compliance confirmed'],
+  ];
+  const stMap={'Applied':['chip-e','APPLIED'],'Partially Applied':['chip-a','PARTIAL'],'Explained':['chip-a','EXPLAINED'],'Not Applied':['chip-r','NOT APPLIED']};
+  return`${crumb([['Governance','g-dash'],['King V','g-kingv']])}
+  ${eyebrow('03 · Governance · King V')}
+  <div class="page-hdr"><h2>King V <span class="acc-g">Apply &amp; Explain</span></h2><p>IoDSA King V Report 2024 · 17 principles · JSE Listings s8.63 · Apply & Explain methodology · 170-point scorecard</p></div>
+  ${hero(kvT,35,'var(--acc-g)','King V sub-pillar','Apply & Explain (/170 × 25) + S&EC (5) + ESG remuneration (5)')}
+  <div class="two-col">
+    <div class="glass card"><div class="card-ttl">Score inputs</div>${inWrap([inN('king5','King V A&E score (/170)','17 principles weighted',pct(D.king5/170)+'% · Target ≥70% for Good'),inChk('sec_active','S&EC established (King V P5)','Group S&EC — CSI/SED Policy §7'),inChk('esg_rem','ESG-linked exec remuneration (P6)','Remco — ESG KPIs in contracts — outstanding'),inA('King V sub-pillar',kvT+'/35 ('+pct(kvT/35)+'%)','Auto')])}</div>
+    <div class="glass card"><div class="card-ttl">Scored output</div>${iWrap([iRow('King V: Apply & Explain (79.4%)',sc.kv.score,25,sc.kv.score/25>=.70?'p':'g',D.king5+'/170 = '+pct(D.king5/170)+'%',trendArrow(D.king5,T.king5,false)),iRow('King V: S&EC established (P5)',sc.kv.sec,5,sc.kv.sec>0?'p':'g',D.sec_active?'Active ✓':'Not established',trendArrow(sc.kv.sec,null,false)),iRow('King V: ESG-linked remuneration (P6)',sc.kv.rem,5,sc.kv.rem>0?'m':'g',D.esg_rem?'In exec contracts ✓':'Not yet evidenced',trendArrow(sc.kv.rem,null,false))])}</div>
+  </div>
+  <div class="glass card"><div class="card-ttl">All 17 principles — Apply &amp; Explain status</div>
+    <table class="kv-tbl"><thead><tr><th style="width:30px">#</th><th>Principle</th><th style="width:120px">Status</th><th style="text-align:center;width:45px">Wgt</th><th style="text-align:center;width:50px">Score</th><th>Evidence / next action</th></tr></thead>
+    <tbody>${PRINCIPLES.map(([n,p,st,w,sc2,ev])=>{const[cls,lbl]=stMap[st]||['chip-r','N/A'];const ws=Math.round(sc2/10*w*10)/10;return`<tr><td style="font-weight:700;color:var(--acc-g);font-size:12px">${n}</td><td style="font-size:12px">${p}</td><td><span class="kv-pill ${cls}">${lbl}</span></td><td style="text-align:center;color:var(--text3);font-size:12px">${w}</td><td style="text-align:center;font-weight:700;color:${col(sc2/10)};font-size:12px">${ws}</td><td style="font-size:11px;color:var(--text3)">${ev}</td></tr>`;}).join('')}
+    <tr style="border-top:1px solid var(--glass-border-hover)"><td colspan="4" style="font-weight:700;font-size:12px;padding:10px">Total</td><td style="font-weight:700;font-size:16px;color:var(--acc-g);padding:10px">${D.king5}</td><td style="font-size:11px;color:var(--text3);padding:10px">/170 (${pct(D.king5/170)}%) — ${rat(D.king5/170)}</td></tr>
+    </tbody></table>
+  </div>`;
+}
+function pageGIFRS(sc){
+  const ifrsT=r2(sc.ifrsT);
+  const DISCS=[['Board oversight of climate risks','Governance','ifrs_board'],['Management role in climate risk','Governance','ifrs_mgmt'],['Climate risks to business model','Strategy','ifrs_risks'],['Climate opportunities identified','Strategy','ifrs_opps'],['Scenario analysis (1.5°C/2°C/4°C)','Strategy','ifrs_scenario'],['Climate risk identification process','Risk Mgmt','ifrs_risk_id'],['Climate risk in ERM framework','Risk Mgmt','ifrs_erm'],['GHG reduction targets','Metrics','ifrs_ghg_tgt'],['Transition plan (net-zero pathway)','Metrics','ifrs_trans_plan'],['Physical climate risks — board agenda','Governance S2','ifrs_phys_board'],['Transition climate risks — board agenda','Governance S2','ifrs_trans_board']];
+  return`${crumb([['Governance','g-dash'],['IFRS S1/S2','g-ifrs']])}
+  ${eyebrow('03 · Governance · IFRS S1/S2')}
+  <div class="page-hdr"><h2>IFRS S1 / S2 <span class="acc-g">Climate Disclosures</span></h2><p>ISSB IFRS S1 (2023) · ISSB IFRS S2 (2023) · TCFD framework · GHG Protocol · King V P8/P15</p></div>
+  ${hero(ifrsT,15,'var(--acc-g)','IFRS S1/S2 sub-pillar','Disclosure completeness (10) + ERM climate integration (5)')}
+  <div class="glass card"><div class="card-ttl">Disclosure tracker</div>
+    <table class="kv-tbl"><thead><tr><th>Requirement</th><th style="width:120px">Framework pillar</th><th style="width:180px">Status</th><th style="text-align:center;width:50px">Score</th></tr></thead>
+    <tbody>${DISCS.map(([l,pil,f])=>`<tr><td style="font-size:12px">${l}</td><td style="font-size:11px;color:var(--text3)">${pil}</td><td><select style="font-size:11px;padding:4px 7px;border:1px solid var(--glass-border);border-radius:7px;background:rgba(255,255,255,.05);color:var(--text);width:100%" onchange="D['${f}']=this.value;recalc()"><option value="no" ${D[f]==='no'?'selected':''}>Not disclosed</option><option value="partial" ${D[f]==='partial'?'selected':''}>Partially disclosed</option><option value="yes" ${D[f]==='yes'?'selected':''}>Fully disclosed</option></select></td><td style="text-align:center;font-weight:700;font-size:12px;color:${stC(D[f]==='yes'?'m':D[f]==='partial'?'p':'g')}">${bn(D[f],1).toFixed(1)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="glass card"><div class="card-ttl" style="color:var(--acc-red)">Priority IFRS gaps</div>
+    ${actH('Assign exec management role for climate risk','IFRS S1 governance requirement — exec owner with KPIs.','+scored')}
+    ${actH('Commission 1.5°C/2°C/4°C scenario analysis','Required for IFRS S2 Strategy pillar.','+scored')}
+    ${actA('Formalise climate risk into ERM register','Code of Ethics §11 is partial — formal update needed.','FY2026')}
+    ${actA('Submit SBTi near-term targets','Baseline FY2025/26 established.','Q1 FY26')}
+  </div>`;
+}
+function pageGGARP(sc){
+  const RISKS=[['Climate Physical Risk','High',4,5,20,'DBN floods 2022, extreme heat'],['Climate Transition Risk','High',5,5,25,'Carbon tax, EV mandate, fuel escalation'],['Operational Risk — Fleet','High',5,5,25,'Driver fatigue, vehicle accidents'],['Regulatory Risk — EE Act','Medium',3,3,9,'EEA reporting non-compliance'],['Regulatory Risk — POPIA','Medium',3,3,9,'Data breach, IO appointment outstanding'],['Financial Risk — SDL/WSP','Medium',3,3,9,'Grant recovery loss if WSP not submitted'],['Reputational Risk — ESG','Medium',3,3,9,'Poor ESG scores, disclosure failure'],['Supply Chain Risk','Medium',4,3,12,'Supplier ESG non-compliance (SAQ gaps)'],['Environmental Risk — Waste','Low',2,1,2,'Landfill NEMA non-compliance'],['Technology Risk','Low',2,1,2,'Cority/telematics failure']];
+  return`${crumb([['Governance','g-dash'],['GARP / ERM','g-garp']])}
+  ${eyebrow('03 · Governance · GARP / ERM')}
+  <div class="page-hdr"><h2>GARP / GRAP <span class="acc-g">Enterprise Risk</span></h2><p>GARP ERM · GRAP public interest · ISO 31000 · COSO ERM 2017 · IFRS S1 risk identification · Companies Act s93</p></div>
+  ${hero(sc.garpT,13,'var(--acc-g)','GARP/GRAP sub-pillar','ERM includes ESG/climate (8) + GRAP public interest S&EC (5)')}
+  <div class="glass card">${iWrap([iRow('GARP: ERM includes ESG/climate risks',sc.garp.erm,8,sc.garp.erm>=8?'p':'g','Climate physical + transition: '+(D.erm_phys&&D.erm_trans?'both confirmed ✓':'gap'),trendArrow(sc.garp.erm,T.garpT!==null?T.garpT-5:null,false)),iRow('GRAP: Public interest ≥500 — S&EC mandatory',sc.garp.grap,5,sc.garp.grap>0?'p':'g','Group S&EC active · PI score ≥500 threshold met',trendArrow(sc.garp.grap,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">ERM inputs</div>${inWrap([inChk('erm_phys','Climate physical risk in ERM','DBN floods, extreme heat — Code of Ethics §11'),inChk('erm_trans','Climate transition risk in ERM','Carbon tax, EV mandate — Code of Ethics §11'),inChk('erm_fleet','Operational risk (fleet) in ERM','Driver fatigue, accidents — Driver Debrief'),inChk('erm_ee','Regulatory risk (EE Act) in ERM','EE Policy + Committees established'),inChk('erm_popia','Regulatory risk (POPIA) in ERM','POPIA consent active · IO outstanding'),inChk('grap_sec','S&EC established (GRAP PI ≥500)','Group S&EC confirmed — CSI/SED Policy §7'),inN('erm_count','Material risks identified (count)','12 of 18 logged','Target ≥10')])}</div>
+  <div class="glass card"><div class="card-ttl">10 ESG risks — register</div>
+    <table class="kv-tbl"><thead><tr><th>Risk</th><th>Severity</th><th style="text-align:center">Likelihood</th><th style="text-align:center">Score</th><th>Context</th></tr></thead>
+    <tbody>${RISKS.map(([n,s,l,_,tot,desc])=>`<tr><td style="font-weight:500;font-size:12px">${n}</td><td><span class="chip ${tot>=15?'chip-r':tot>=10?'chip-a':'chip-g'}">${s}</span></td><td style="text-align:center;color:var(--text3);font-size:12px">${l}</td><td style="text-align:center;font-weight:700;font-size:13px;color:${tot>=15?'var(--acc-red)':tot>=10?'var(--acc-s)':'var(--acc-e)'}">${tot}</td><td style="font-size:11px;color:var(--text3)">${desc}</td></tr>`).join('')}
+    </tbody></table>
+  </div>`;
+}
+function pageGEthics(sc){
+  return`${crumb([['Governance','g-dash'],['Ethics & Compliance','g-ethics']])}
+  ${eyebrow('03 · Governance · Ethics & Compliance')}
+  <div class="page-hdr"><h2>Ethics <span class="acc-g">&amp; Compliance</span></h2><p>King V P1/P12 · POPIA Act 4 of 2013 · ISAE 3000 · GRI 205/418 · Companies Act · PRECCA · FICA</p></div>
+  ${hero(sc.ethT,32,'var(--acc-g)','Ethics & Compliance sub-pillar','Ethics (4) + POPIA (5) + Legal register (5) + External assurance (5) + Integrated report (8) + No penalties (5)')}
+  <div class="glass card">${iWrap([iRow('Code of ethics + Be Heard hotline',sc.eth.code,4,sc.eth.code>=4?'p':'g','Super Group Code Rev 2 · 0800-007-117 24/365',trendArrow(sc.eth.code,null,false)),iRow('POPIA Information Officer appointed',sc.eth.popia,5,sc.eth.popia>=5?'m':sc.eth.popia>0?'p':'g','Consent active · Formal appointment letter outstanding',trendArrow(sc.eth.popia,null,false)),iRow('Legal compliance register maintained',sc.eth.legal,5,sc.eth.legal>=5?'m':sc.eth.legal>0?'p':'g','Code of Ethics §11 — partial evidence',trendArrow(sc.eth.legal,null,false)),iRow('External ESG assurance (ISAE 3000)',sc.eth.assur,5,sc.eth.assur>0?'m':'g',D.ext_assur?'Assurance engaged ✓':'Not engaged — 5 pts gap',trendArrow(sc.eth.assur,null,false)),iRow('ESG/Integrated Report published',sc.eth.rep,8,sc.eth.rep>0?'p':'g',D.int_report?'IAR published at Group level ✓':'Not published',trendArrow(sc.eth.rep,null,false)),iRow('No material regulatory penalties YTD',sc.eth.pen,5,sc.eth.pen>0?'p':'g','No penalties confirmed',trendArrow(sc.eth.pen,null,false))])}</div>
+  <div class="glass card"><div class="card-ttl">Ethics & compliance inputs</div>${inWrap([inChk('code_ethics','Code of ethics in place','Super Group Code Rev 2, Jan 2023'),inChk('hotline','Whistleblower hotline active','0800-007-117 · 24/365 anonymous · confirmed May 2026'),inSel('popia','POPIA Information Officer',[['no','Not appointed'],['partial','Partial — consent active'],['yes','Formally appointed with letter']],'s55 POPIA — register with Information Regulator'),inSel('risk_reg','Legal compliance register',[['no','Not in place'],['partial','Partial evidence'],['yes','Maintained quarterly']],'Code of Ethics §11 · ISO 14001/45001 cl 6.1.3'),inChk('ext_assur','External ESG assurance (ISAE 3000)','Engage assurance provider — unlocks 5 pts'),inChk('int_report','Integrated Report published','JSE-listed SG Holdings — confirmed'),inChk('no_penalties','No material regulatory penalties YTD','Confirmed')])}</div>`;
+}
+
+/* ============================
+   UTILITIES
+   ============================ */
+function setStance(s){stance=s;document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('on',b.textContent.trim().toLowerCase()===s));recalc();}
+
+
+
+/* ============================
+   CARBON CREDITS STORE
+   ============================ */
+const CR = {
+  purchases: [
+    {id:1, date:'2025-09-15', standard:'VCS', type:'REDD+', volume:500, cost:45000, registry:'Verra', project:'Amazon Forest Protection BR-001', status:'verified'},
+    {id:2, date:'2026-01-20', standard:'Gold Standard', type:'RE', volume:200, cost:24000, registry:'Gold Standard', project:'SA Solar PV ZA-005', status:'pending'},
+  ],
+  retired: [],
+  nextId: 3
+};
+
+function crNetOffset(){
+  const purchased = CR.purchases.filter(c=>c.status==='verified').reduce((a,c)=>a+c.volume,0);
+  const retired = CR.retired.reduce((a,c)=>a+c.volume,0);
+  return {purchased, retired, net: purchased};
+}
+
+function addCredit(date, standard, type, volume, cost, registry, project, status){
+  CR.purchases.push({id:CR.nextId++, date, standard, type, volume:parseFloat(volume)||0, cost:parseFloat(cost)||0, registry, project, status});
+  recalc();
+}
+
+function retireCredit(id){
+  const idx = CR.purchases.findIndex(c=>c.id===id);
+  if(idx>=0){
+    const c = CR.purchases[idx];
+    if(c.status==='verified'){
+      CR.retired.push({...c, retiredDate: new Date().toISOString().split('T')[0]});
+      CR.purchases.splice(idx,1);
+      recalc();
+    }
+  }
+}
+
+function deleteCredit(id){
+  const idx = CR.purchases.findIndex(c=>c.id===id);
+  if(idx>=0){CR.purchases.splice(idx,1);recalc();}
+}
+
+/* ============================
+   DATA IMPORT PAGE
+   ============================ */
+const PERIODS=['Jul-25','Aug-25','Sep-25','Oct-25','Nov-25','Dec-25','Jan-26','Feb-26','Mar-26'];
+const PS=PERIODS.length; // 9
+
+// Time-series store: each field has an array of 9 values
+const TS={
+  fleet_diesel:  [79354,68179,65076,73387,67295,57589,48740,63980,65865],
+  gen_litres:    [1289,0,0,0,0,295,0,0,597],
+  lpg_kg:        [0,570,190,190,380,570,380,0,0],
+  car_litres:    [140,142,93,109,144,75,110,98,143],
+  elec_kwh:      [288639,304665,294858,263388,255634,290165,261691,315713,314826],
+  solar_kwh:     Array(9).fill(0),
+  water_kl:      [409,391,381,535,476,500,533,561,570],
+  waste_div:     [89,90,91,91,92,90,91,92,91.1],
+  waste_card:    [10.7,16.2,11.1,8.9,26.4,10.7,4.6,13.7,9.6],
+  landfill_co2:  [0.11,0.11,0.13,0.14,0.12,0.13,0.13,0.14,0.15],
+  ev_count:      Array(9).fill(0),
+  train_hrs:     Array(9).fill(0),
+  grant_pct:     Array(9).fill(0),
+  ltifr:         Array(9).fill(null),
+  fatalities:    Array(9).fill(0),
+  csi_pct:       Array(9).fill(0),
+  initiatives:   [1,0,1,1,1,0,1,0,1],
+  local_pct:     Array(9).fill(0),
+  sup_hs:        Array(9).fill(60),
+  board_blk:     Array(9).fill(42.9),
+  board_fem:     Array(9).fill(14.3),
+  king5:         Array(9).fill(135),
+};
+
+// Sync TS totals/averages into D (the main scoring data object)
+function syncTStoD(){
+  const sum=f=>TS[f].reduce((a,v)=>a+(v||0),0);
+  const avg=f=>TS[f].filter(v=>v!==null&&v!==undefined).reduce((a,v)=>a+v,0)/TS[f].filter(v=>v!==null&&v!==undefined).length;
+  D.fleet_diesel=sum('fleet_diesel');
+  D.gen_litres=sum('gen_litres');
+  D.lpg_kg=sum('lpg_kg');
+  D.car_litres=sum('car_litres');
+  D.elec_kwh=sum('elec_kwh');
+  D.solar_kwh=sum('solar_kwh');
+  D.water_kl=sum('water_kl');
+  D.waste_div=Math.round(avg('waste_div')*10)/10;
+  D.waste_card=Math.round(avg('waste_card')*10)/10;
+  D.landfill_co2=Math.round(sum('landfill_co2')*100)/100;
+  D.ev_count=TS.ev_count[TS.ev_count.length-1]||0;
+  D.train_hrs=Math.round(avg('train_hrs')*10)/10;
+  D.grant_pct=Math.round(avg('grant_pct')*10)/10;
+  // LTIFR: use last non-null value
+  const lts=TS.ltifr.filter(v=>v!==null);
+  D.ltifr=lts.length?lts[lts.length-1]:null;
+  D.fatalities=sum('fatalities');
+  D.csi_pct=Math.round(avg('csi_pct')*10)/10;
+  D.initiatives=sum('initiatives');
+  D.local_pct=Math.round(avg('local_pct')*10)/10;
+  D.sup_hs=Math.round(avg('sup_hs')*10)/10;
+  D.board_blk=Math.round(avg('board_blk')*10)/10;
+  D.board_fem=Math.round(avg('board_fem')*10)/10;
+  D.king5=Math.round(avg('king5'));
+}
+
+// Field definitions for the import page
+const IMP_FIELDS={
+  environmental:[
+    {key:'fleet_diesel',label:'Fleet diesel',unit:'litres',sum:true,lowerBetter:false,desc:'All depots — from Mariette dashboard / I-CAM / Mix Telematics'},
+    {key:'gen_litres',label:'Generator diesel',unit:'litres',sum:true,lowerBetter:true,desc:'BLOEM + DBN generators'},
+    {key:'lpg_kg',label:'LPG forklifts',unit:'kg',sum:true,lowerBetter:true,desc:'DBN warehouse only'},
+    {key:'car_litres',label:'Business car petrol',unit:'litres',sum:true,lowerBetter:true,desc:'ISANDO — Solly car'},
+    {key:'elec_kwh',label:'Grid electricity',unit:'kWh',sum:true,lowerBetter:true,desc:'All 5 depots — utility bills'},
+    {key:'solar_kwh',label:'Solar PV generated',unit:'kWh',sum:true,lowerBetter:false,desc:'JHB (Graeme Barand) + DBN EDGE'},
+    {key:'water_kl',label:'Water consumption',unit:'kL',sum:true,lowerBetter:true,desc:'All 5 depots — utility bills'},
+    {key:'waste_div',label:'Waste diversion rate',unit:'%',sum:false,lowerBetter:false,desc:'Oricol monthly diversion % — target ≥75%'},
+    {key:'waste_card',label:'Cardboard recycling',unit:'%',sum:false,lowerBetter:false,desc:'Cority all depots — target ≥25%'},
+    {key:'landfill_co2',label:'Landfill tCO₂e',unit:'tCO₂e',sum:true,lowerBetter:true,desc:'Waste contractor data'},
+    {key:'ev_count',label:'EV vehicles in fleet',unit:'count',sum:false,lowerBetter:false,desc:'Use latest month value'},
+  ],
+  social:[
+    {key:'train_hrs',label:'Training hours / employee',unit:'hrs',sum:false,lowerBetter:false,desc:'HR system — target ≥40 hrs'},
+    {key:'grant_pct',label:'Mandatory grant recovered',unit:'%',sum:false,lowerBetter:false,desc:'SETA grant recovery — target ≥80%'},
+    {key:'ltifr',label:'LTIFR',unit:'index',sum:false,lowerBetter:true,nullable:true,desc:'LTIs × 1,000,000 ÷ hours worked — target ≤2.0'},
+    {key:'fatalities',label:'Fatalities',unit:'count',sum:true,lowerBetter:true,desc:'Any fatality = immediate escalation'},
+    {key:'csi_pct',label:'CSI as % of NPAT',unit:'%',sum:false,lowerBetter:false,desc:'Target ≥1% — budget R45,000 confirmed'},
+    {key:'initiatives',label:'Social initiatives',unit:'count',sum:true,lowerBetter:false,desc:'Cumulative count — target ≥6 per year'},
+    {key:'local_pct',label:'Local labour procurement',unit:'%',sum:false,lowerBetter:false,desc:'Target ≥40%'},
+    {key:'sup_hs',label:'Supplier H&S compliance',unit:'%',sum:false,lowerBetter:false,desc:'IMS-T-149 — target ≥80%'},
+  ],
+  governance:[
+    {key:'board_blk',label:'Board Black (%)',unit:'%',sum:false,lowerBetter:false,desc:'% Black voting rights — target ≥50%'},
+    {key:'board_fem',label:'Board Female (%)',unit:'%',sum:false,lowerBetter:false,desc:'% Black female voting rights — target ≥25%'},
+    {key:'king5',label:'King V score',unit:'/170',sum:false,lowerBetter:false,desc:'Apply & Explain composite — 170 max'},
+  ]
+};
+
+// PASTE ENGINE — parses tab-separated Excel content
+// Supports two formats:
+// Format A: rows = metrics, cols = periods (with optional label in col 0)
+// Format B: cols = metrics, rows = periods (transposed — e.g. EEA2 extract)
+function parsePaste(txt, fieldKeys){
+  const rows=txt.trim().split('\n').map(r=>r.split('\t').map(c=>c.trim().replace(/,/g,'')));
+  if(!rows.length) return {ok:false,msg:'No data found.',matched:0};
+
+  const cleanNum=s=>{if(!s||s===''||s==='-'||s.toLowerCase()==='n/a'||s.toLowerCase()==='null')return null;const n=parseFloat(s.replace(/[^0-9.\-]/g,''));return isNaN(n)?null:n;};
+
+  // Detect if first row is a header
+  const firstRowHasNums=rows[0].some(c=>cleanNum(c)!==null&&cleanNum(c)!==0);
+  const hasHeader=!firstRowHasNums;
+  const dataRows=hasHeader?rows.slice(1):rows;
+  const headerRow=hasHeader?rows[0]:null;
+
+  // Build a label→fieldKey map (fuzzy)
+  const labelMap={};
+  const fmap={
+    'fleet diesel':'fleet_diesel','fleet fuel':'fleet_diesel','diesel litres':'fleet_diesel','fuel litres':'fleet_diesel',
+    'generator':'gen_litres','gen diesel':'gen_litres',
+    'lpg':'lpg_kg','forklift':'lpg_kg',
+    'petrol':'car_litres','business car':'car_litres',
+    'electricity':'elec_kwh','elec':'elec_kwh','kwh':'elec_kwh','grid':'elec_kwh',
+    'solar':'solar_kwh','pv':'solar_kwh','renewable':'solar_kwh',
+    'water':'water_kl',
+    'waste diversion':'waste_div','diversion':'waste_div',
+    'cardboard':'waste_card','recycling':'waste_card',
+    'landfill':'landfill_co2',
+    'ev':'ev_count','electric vehicle':'ev_count',
+    'training':'train_hrs','train':'train_hrs',
+    'grant':'grant_pct','mandatory grant':'grant_pct',
+    'ltifr':'ltifr','lost time':'ltifr',
+    'fatal':'fatalities','fatalities':'fatalities',
+    'csi':'csi_pct','sed':'csi_pct','social spend':'csi_pct',
+    'initiative':'initiatives','social calendar':'initiatives',
+    'local':'local_pct','local labour':'local_pct',
+    'supplier h':'sup_hs','ims':'sup_hs',
+    'board black':'board_blk','black board':'board_blk',
+    'board female':'board_fem','female board':'board_fem',
+    'king':'king5','king v':'king5',
+  };
+  function matchField(s){
+    const sl=s.toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    for(const[k,v] of Object.entries(fmap)){if(sl.includes(k))return v;}
+    return null;
+  }
+
+  let matched=0;
+  const results={};
+
+  // FORMAT A: each row = one metric, with period values across columns
+  // Detect: if column count = 9 or 10 (9 periods + optional label), or matches period count
+  const isFmtA=dataRows.some(r=>{
+    const nums=r.filter(c=>cleanNum(c)!==null);
+    return nums.length>=7; // at least 7 of 9 months present
+  });
+
+  if(isFmtA){
+    for(const row of dataRows){
+      if(!row[0])continue;
+      const fk=matchField(row[0]);
+      if(!fk)continue;
+      // Find numeric values — up to 9
+      const vals=[];
+      for(let i=1;i<row.length&&vals.length<9;i++){
+        const n=cleanNum(row[i]);
+        vals.push(n);
+      }
+      // Pad/trim to 9 periods
+      while(vals.length<9)vals.push(null);
+      if(vals.some(v=>v!==null)){
+        results[fk]=vals.slice(0,9);
+        matched++;
+      }
+    }
+  } else {
+    // FORMAT B: each row = one period, columns = metrics
+    // Use header row to map columns to fields
+    if(headerRow){
+      const colMap={};
+      headerRow.forEach((h,i)=>{const fk=matchField(h);if(fk)colMap[i]=fk;});
+      for(let pi=0;pi<dataRows.length&&pi<9;pi++){
+        const row=dataRows[pi];
+        for(const[ci,fk] of Object.entries(colMap)){
+          const n=cleanNum(row[parseInt(ci)]);
+          if(n!==null){
+            if(!results[fk])results[fk]=Array(9).fill(null);
+            results[fk][pi]=n;
+            matched++;
+          }
+        }
+      }
+    }
+  }
+
+  // Apply results to TS
+  for(const[k,vals] of Object.entries(results)){
+    if(TS[k]!==undefined){
+      TS[k]=vals.map((v,i)=>v!==null?v:TS[k][i]);
+    }
+  }
+  if(matched>0) syncTStoD();
+  return{ok:matched>0,msg:matched>0?'Loaded data for '+matched+' field'+(matched>1?'s':'')+' across '+PS+' periods.':'No matching fields found. Check row labels match field names (e.g. "Fleet Diesel", "Grid Electricity", "LTIFR").',matched};
+}
+
+function tsYTD(key){
+  const f=IMP_FIELDS.environmental.concat(IMP_FIELDS.social).concat(IMP_FIELDS.governance).find(f=>f.key===key);
+  if(!f)return 0;
+  const vals=TS[key].filter(v=>v!==null);
+  if(!vals.length)return 0;
+  return f.sum?vals.reduce((a,v)=>a+v,0):Math.round(vals.reduce((a,v)=>a+v,0)/vals.length*100)/100;
+}
+
+function buildTemplateCSV(section){
+  const fields=IMP_FIELDS[section];
+  const header=['Metric / Period'].concat(PERIODS);
+  const rows=fields.map(f=>[f.label+' ('+f.unit+')'].concat(TS[f.key].map(v=>v===null?'':v)));
+  return [header].concat(rows).map(r=>r.join('\t')).join('\n');
+}
+
+function copyTemplate(section, btn){
+  const txt=buildTemplateCSV(section);
+  navigator.clipboard.writeText(txt).then(()=>{
+    btn.classList.add('copied');btn.textContent='Copied!';
+    setTimeout(()=>{btn.classList.remove('copied');btn.textContent='Copy template';},2000);
+  }).catch(()=>{
+    const ta=document.getElementById('paste-ta-'+section);if(ta)ta.value=txt;
+  });
+}
+
+function applyPaste(section){
+  const ta=document.getElementById('paste-ta-'+section);
+  const st=document.getElementById('paste-st-'+section);
+  if(!ta||!ta.value.trim()){if(st){st.textContent='';st.className='paste-status';}return;}
+  const fieldKeys=IMP_FIELDS[section].map(f=>f.key);
+  const res=parsePaste(ta.value,fieldKeys);
+  if(st){
+    st.textContent=res.msg;
+    st.className='paste-status '+(res.ok?'pst-ok':'pst-err');
+  }
+  recalc();
+}
+
+function updateTSField(key, periodIdx, val){
+  TS[key][periodIdx]=val===''||val===null?null:parseFloat(val)||0;
+  syncTStoD();
+  recalc();
+}
+
+function pageImport(sc){
+  const sections=[
+    {id:'environmental',label:'Environmental',acc:'var(--acc-e)',icon:'◆',desc:'GHG, energy, fleet, waste & water — monthly actuals'},
+    {id:'social',label:'Social',acc:'var(--acc-s)',icon:'◆',desc:'WSP, H&S, CSI & procurement — monthly actuals'},
+    {id:'governance',label:'Governance',acc:'var(--acc-g)',icon:'◆',desc:'Board composition, King V & IFRS — period snapshots'},
+  ];
+
+  let html='';
+  html+=`<div class="page-eyebrow">Data Import</div>
+  <div class="page-hdr">
+    <h2>Time-series <span style="color:var(--acc-blue)">Data Import</span></h2>
+    <p>Paste directly from Excel for each pillar. Rows = metrics, columns = periods (Jul-25 → Mar-26). Or transpose — rows = periods, columns = metrics. Auto-maps to correct fields.</p>
+  </div>`;
+
+  // Summary card
+  html+=`<div class="glass card" style="margin-bottom:20px">
+    <div class="card-ttl">Data coverage — ${PS} periods loaded (Jul-25 to Mar-26)</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      ${[['Environmental',sc.eT,108,'var(--acc-e)','e-dash'],['Social',sc.sT,100,'var(--acc-s)','s-dash'],['Governance',sc.gT,100,'var(--acc-g)','g-dash']].map(([l,s,max,acc,dest])=>`
+      <div style="padding:12px;border-radius:8px;border:1px solid ${acc}30;background:${acc}08;cursor:pointer" onclick="go('${dest}')">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${acc};margin-bottom:6px">${l}</div>
+        <div style="font-size:22px;font-weight:700;color:${acc}">${Math.round(s*10)/10}<span style="font-size:13px;color:var(--text3)">/${max}</span></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">${Math.round(s/max*100)}% — ${rat(s/max)}</div>
+        <div style="height:2px;background:rgba(255,255,255,.06);border-radius:1px;margin-top:8px;overflow:hidden"><div style="width:${Math.round(s/max*100)}%;height:100%;background:${acc};border-radius:1px"></div></div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+
+  // Each section
+  for(const sec of sections){
+    const fields=IMP_FIELDS[sec.id];
+    html+=`<div class="imp-section">
+      <div class="imp-section-hdr">
+        <div>
+          <h3 style="color:${sec.acc}">${sec.label} data</h3>
+          <p>${sec.desc}</p>
+        </div>
+        <button class="imp-tpl-btn" id="tpl-btn-${sec.id}" onclick="copyTemplate('${sec.id}',this)">Copy template</button>
+      </div>
+
+      <div class="paste-drop" id="drop-${sec.id}">
+        <div class="paste-drop-lbl">Paste from Excel — <span>rows = metrics, columns = Jul-25 → Mar-26</span> — or transpose</div>
+        <textarea class="paste-ta" id="paste-ta-${sec.id}" placeholder="Paste tab-separated data here (Ctrl+V / Cmd+V)&#10;&#10;Accepted row labels: Fleet Diesel, Generator Diesel, LPG Forklifts, Business Car Petrol, Grid Electricity, Solar Generated, Water Consumption, Waste Diversion, Cardboard Recycling, Landfill tCO2e, EV Count, Training Hours, Grant %, LTIFR, Fatalities, CSI %, Initiatives, Local %, Supplier H&S %, Board Black %, Board Female %, King V Score&#10;&#10;Or copy the template above, fill values in Excel, then paste back." onpaste="setTimeout(()=>applyPaste('${sec.id}'),60)"></textarea>
+        <div class="paste-actions">
+          <button class="paste-apply" onclick="applyPaste('${sec.id}')">Apply</button>
+          <button class="paste-clear" onclick="document.getElementById('paste-ta-${sec.id}').value='';document.getElementById('paste-st-${sec.id}').textContent=''">Clear</button>
+          <div class="paste-status" id="paste-st-${sec.id}"></div>
+        </div>
+      </div>
+
+      <div class="imp-grid">`;
+
+    for(const f of fields){
+      const vals=TS[f.key];
+      const hasData=vals.some(v=>v!==null&&v!==0);
+      const ytd=tsYTD(f.key);
+      const allNull=vals.every(v=>v===null);
+      html+=`<div class="imp-field ${hasData?'has-data':''}">
+        <div class="imp-field-hdr">
+          <div>
+            <div class="imp-field-name">${f.label}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px">${f.desc}</div>
+          </div>
+          <span class="imp-field-unit">${f.unit}</span>
+        </div>
+        <div class="imp-periods">
+          ${PERIODS.map((p,i)=>{
+            const v=vals[i];
+            const populated=v!==null&&v!==undefined;
+            return`<div class="imp-period-row">
+              <span class="imp-period-lbl">${p.split('-')[0]}</span>
+              <input class="imp-period-inp ${populated?'populated':''}" type="number" step="any" value="${populated?v:''}" placeholder="—"
+                onchange="updateTSField('${f.key}',${i},this.value);this.classList.toggle('populated',this.value!=='')">
+            </div>`;
+          }).join('')}
+          <div class="imp-period-row" style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.06)">
+            <span class="imp-ytd-lbl">${f.sum?'YTD':'Avg'}</span>
+            <span class="imp-ytd" id="ytd-${f.key}">${allNull?'—':(f.sum?ytd.toLocaleString():ytd)}</span>
+          </div>
+        </div>
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+  return html;
+}
+
+
+/* ============================
+   OVERVIEW DASHBOARD
+   ============================ */
+function pageOverview(sc){
+  const ep=sc.eT/108, sp=sc.sT/100, gp=sc.gT/100;
+  const ov=ep*.4+sp*.3+gp*.3;
+  const ghgTotal = sc.s1+sc.s2+sc.s3;
+  const cr = crNetOffset();
+  const netGhg = Math.max(0, ghgTotal - cr.net/1000);
+
+  // Priority actions
+  const allActions=[];
+  if(!mhc.board||bN('board')===0) allActions.push({sev:'high',title:'Enter EEA2 headcount',desc:'Blocks 17 Social pts + B-BBEE MC element',pts:'+17 pts',dest:'s-mc'});
+  if(!D.wsp) allActions.push({sev:'high',title:'Submit WSP to SETA',desc:'Deadline 30 April — unlocks mandatory grant recovery',pts:'+5 pts',dest:'s-wsp'});
+  if(!D.atr) allActions.push({sev:'high',title:'Submit ATR to SETA',desc:'Annual Training Report',pts:'+5 pts',dest:'s-wsp'});
+  if(D.solar_kwh===0) allActions.push({sev:'high',title:'Log solar generation (kWh)',desc:'JHB system confirmed. DBN EDGE in progress',pts:'+8 pts',dest:'e-energy'});
+  if(!D.ext_assur) allActions.push({sev:'high',title:'Engage external ESG assurance',desc:'ISAE 3000 — unlocks 5 Governance pts',pts:'+5 pts',dest:'g-ethics'});
+  if(!D.esg_rem) allActions.push({sev:'med',title:'Embed ESG KPIs in executive contracts',desc:'King V P6 — Remco action required',pts:'+5 pts',dest:'g-kingv'});
+  if(D.iso14001!=='certified') allActions.push({sev:'med',title:'ISO 14001 certification',desc:'Confirm target date with Maria',pts:'+8 pts',dest:'e-iso'});
+  if(D.popia==='partial') allActions.push({sev:'med',title:'POPIA IO — formal appointment letter',desc:'s55 registration — consent active, letter outstanding',pts:'',dest:'g-ethics'});
+  if(D.prior_s12===0) allActions.push({sev:'med',title:'Enter prior year Scope 1+2 baseline',desc:'Required for YoY reduction scoring',pts:'+10 pts',dest:'e-ghg'});
+
+  const high=allActions.filter(a=>a.sev==='high');
+  const med=allActions.filter(a=>a.sev==='med');
+
+  return`<div class="page-eyebrow">Overview</div>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px">
+    <div>
+      <h2 style="font-size:22px;font-weight:600;letter-spacing:-.02em">SG Consumer <span style="color:var(--acc-e)">ESG Intelligence</span></h2>
+      <p style="font-size:12px;color:var(--text3);margin-top:4px">FY 2025/26 · 9 months YTD (Jul-25 → Mar-26) · Generic Codes · RCOGP · IFRS S1/S2 · SBTi CNZS 2.0</p>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Overall ESG score</div>
+      <div style="font-size:48px;font-weight:700;letter-spacing:-.03em;color:${col(ov)};line-height:1">${Math.round(ov*100)}%</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${col(ov)};margin-top:3px">${rat(ov)}</div>
+    </div>
+  </div>
+
+  <div class="ov-grid">
+    ${[
+      {l:'Environmental',acc:'var(--acc-e)',pts:sc.eT,max:108,p:ep,dest:'e-dash',gap:'Fleet L/100km · Solar data outstanding'},
+      {l:'Social',acc:'var(--acc-s)',pts:sc.sT,max:100,p:sp,dest:'s-dash',gap:'EEA2 headcount · WSP/ATR outstanding'},
+      {l:'Governance',acc:'var(--acc-g)',pts:sc.gT,max:100,p:gp,dest:'g-dash',gap:'ESG remuneration · Ext assurance gap'},
+    ].map(x=>`<div class="glass ov-pillar-card" onclick="go('${x.dest}')">
+      <div class="ov-pillar-label" style="color:${x.acc}">${x.l} · ${Math.round(x.p*100)}%</div>
+      <div class="ov-pillar-score" style="color:${x.acc}">${r2(x.pts)}<span style="font-size:16px;color:var(--text3);font-weight:400"> / ${x.max}</span></div>
+      <div style="height:2px;background:rgba(255,255,255,.06);border-radius:1px;margin:10px 0 6px;overflow:hidden"><div style="width:${Math.round(x.p*100)}%;height:100%;background:${x.acc}"></div></div>
+      <div class="ov-pillar-sub">${x.gap}</div>
+    </div>`).join('')}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+    ${[
+      {l:'GHG Scope 1+2',v:(r2(sc.s1+sc.s2)/1000).toFixed(1)+'k',u:'tCO₂e YTD',acc:'var(--acc-e)',dest:'e-ghg'},
+      {l:'Net GHG (after credits)',v:r2(netGhg).toFixed(1),u:'tCO₂e',acc:'var(--acc-e)',dest:'credits'},
+      {l:'Renewable energy',v:Math.round(sc.re*100)+'%',u:'of grid consumption',acc:'var(--acc-e)',dest:'e-energy'},
+      {l:'MC score',v:sc.mc.pts.toFixed(1)+'/19',u:'Management control',acc:'var(--acc-s)',dest:'s-mc'},
+      {l:'Carbon credits',v:cr.net+'',u:'tCO₂e verified + pending',acc:'var(--acc-e)',dest:'credits'},
+      {l:'Data coverage',v:Object.keys(TS).filter(k=>TS[k].some(v=>v!==null&&v!==0)).length+'/'+Object.keys(TS).length,u:'fields with data',acc:'var(--acc-blue)',dest:'import'},
+    ].map(k=>`<div class="glass kpi" style="cursor:pointer" onclick="go('${k.dest}')">
+      <div class="kl" style="display:flex;justify-content:space-between">${k.l}<span style="opacity:.3;font-size:9px">→</span></div>
+      <div class="kv" style="color:${k.acc}">${k.v}</div>
+      <div class="ks">${k.u}</div>
+    </div>`).join('')}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div>
+      <div class="glass card" style="margin-bottom:12px">
+        <div class="card-ttl" style="color:var(--acc-red)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          High-priority actions (${high.length})
+        </div>
+        ${high.map(a=>`<div class="act act-high" style="cursor:pointer" onclick="go('${a.dest}')">
+          <div class="act-dot" style="background:var(--acc-red)"></div>
+          <div class="act-body"><div class="act-title">${a.title}</div><div class="act-desc">${a.desc}</div></div>
+          ${a.pts?`<div class="act-pts" style="color:var(--acc-red)">${a.pts}</div>`:''}
+        </div>`).join('') || '<div style="font-size:12px;color:var(--text3);padding:6px 0">No critical actions outstanding</div>'}
+      </div>
+      <div class="glass card">
+        <div class="card-ttl" style="color:var(--acc-s)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Next steps (${med.length})
+        </div>
+        ${med.map(a=>`<div class="act act-amb" style="cursor:pointer" onclick="go('${a.dest}')">
+          <div class="act-dot" style="background:var(--acc-s)"></div>
+          <div class="act-body"><div class="act-title">${a.title}</div><div class="act-desc">${a.desc}</div></div>
+          ${a.pts?`<div class="act-pts" style="color:var(--acc-s)">${a.pts}</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="glass card" style="margin-bottom:12px">
+        <div class="card-ttl">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Net-zero trajectory
+        </div>
+        <div class="timeline">
+          ${[
+            {yr:'2025',band:'Baseline',c:'var(--acc-e)',desc:'FY2025/26 established as SBTi CNZS 2.0 baseline. Submit commitment letter Q1 FY26.',done:true},
+            {yr:'2028',band:'Recognition',c:'var(--acc-s)',desc:'−50% Scope 1+2 vs baseline. EV fleet phase-in. Solar at all 5 depots.',done:false},
+            {yr:'2035',band:'Leadership',c:'var(--acc-g)',desc:'−90% Scope 1+2. Full EV fleet. 100% renewable electricity.',done:false},
+            {yr:'2050',band:'Net-Zero',c:'var(--acc-e)',desc:'Net-zero Scope 1+2+3. Residual credits only.',done:false},
+          ].map(m=>`<div class="tl-item">
+            <div class="tl-dot" style="background:${m.done?m.c:'transparent'};border-color:${m.c}"></div>
+            <div class="tl-title">${m.yr} <span class="tl-tag" style="color:${m.c};border-color:${m.c}40;background:${m.c}12">${m.band}</span></div>
+            <div class="tl-sub">${m.desc}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="glass card">
+        <div class="card-ttl">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          Sustainability report readiness
+        </div>
+        ${[
+          ['GHG inventory (Scope 1+2+3)',sc.s1+sc.s2+sc.s3>0,'GRI 305 · IFRS S2'],
+          ['Renewable energy tracked',sc.re>0,'GRI 302-1'],
+          ['Waste diversion documented',D.waste_div>0,'GRI 306'],
+          ['Water consumption logged',D.water_kl>0,'GRI 303'],
+          ['EE/MC scorecard complete',sc.mc.pts>0,'B-BBEE Statement 200'],
+          ['WSP/ATR submitted',D.wsp&&D.atr,'SDL Act'],
+          ['H&S statistics available',D.fatalities!==null,'GRI 403 · ISO 45001'],
+          ['King V A&E scored',D.king5>0,'IoDSA King V'],
+          ['IFRS S1/S2 disclosures started',sc.ifrsT>0,'ISSB 2023'],
+          ['Carbon credits registered',CR.purchases.length>0,'VCS/Gold Standard'],
+        ].map(([l,ok,fw])=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:.5px solid rgba(255,255,255,.04);font-size:12px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${ok?'var(--acc-e)':'var(--text3)'}" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style="flex:1;color:${ok?'var(--text)':'var(--text3)'}">${l}</span>
+          <span style="font-size:10px;color:var(--text3)">${fw}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================
+   ANALYTICS PAGE
+   ============================ */
+function pageAnalytics(sc){
+  const MONTHS=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+  const s1Monthly = TS.fleet_diesel.map((v,i)=>(v||0)*EF.diesel/1000 + (TS.gen_litres[i]||0)*EF.diesel/1000 + (TS.lpg_kg[i]||0)*EF.lpg/1000 + (TS.car_litres[i]||0)*EF.petrol/1000);
+  const s2Monthly = TS.elec_kwh.map((v,i)=>Math.max(0,(v||0)*EF.elec/1000 - (TS.solar_kwh[i]||0)*EF.solar/1000));
+  const s3Monthly = TS.water_kl.map(v=>(v||0)*EF.water);
+  const totalMonthly = s1Monthly.map((v,i)=>r2(v+s2Monthly[i]+s3Monthly[i]));
+  const maxGhg = Math.max(...totalMonthly,1);
+
+  function barChart(data, labels, accent, maxVal){
+    const mx = maxVal||Math.max(...data,1);
+    return '<div class="bar-chart">' + data.map((v,i)=>{
+      const h = Math.round((v/mx)*90);
+      const dv = typeof v==='number'?v.toFixed(v<10?2:1):'—';
+      return `<div class="bc-bar" style="height:${h}px;background:${accent};opacity:${0.5+0.5*(v/mx)}" data-lbl="${labels[i]}" data-val="${dv}"></div>`;
+    }).join('') + '</div>';
+  }
+
+  const cr = crNetOffset();
+  const netGhg = Math.max(0,(sc.s1+sc.s2+sc.s3) - cr.net/1000);
+  const carbonTaxT1 = Math.round((sc.s1+sc.s2)*0.4*236);
+
+  return`<div class="page-eyebrow">Analytics</div>
+  <div class="page-hdr"><h2>Sustainability <span class="acc-e">Analytics</span></h2>
+  <p>Monthly actuals · GHG trend · Scope breakdown · Carbon tax · Sustainability report data extract</p></div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    ${[
+      ['Total GHG YTD',(r2(sc.s1+sc.s2+sc.s3)/1000).toFixed(2)+'k tCO₂e','Scope 1+2+3','var(--acc-e)'],
+      ['Net GHG (less credits)',r2(netGhg).toFixed(1)+' tCO₂e','After '+cr.net+' tCO₂e credits','var(--acc-e)'],
+      ['Carbon tax exposure','R'+carbonTaxT1.toLocaleString(),'Tier 1 @R236/tCO₂e · 40% net','var(--acc-s)'],
+      ['Renewable %',Math.round(sc.re*100)+'%','of grid kWh · target ≥20%',sc.re>=.20?'var(--acc-e)':'var(--acc-red)'],
+    ].map(([l,v,s,c])=>`<div class="glass kpi"><div class="kl">${l}</div><div class="kv" style="color:${c}">${v}</div><div class="ks">${s}</div></div>`).join('')}
+  </div>
+
+  <div class="glass card" style="margin-bottom:12px">
+    <div class="card-ttl">GHG emissions by month (tCO₂e) — Scope 1+2+3
+      <span class="ct-badge" style="color:var(--acc-e);border-color:rgba(29,233,160,.3);background:rgba(29,233,160,.08)">YTD ${r2(sc.s1+sc.s2+sc.s3).toFixed(1)} tCO₂e</span>
+    </div>
+    ${barChart(totalMonthly, MONTHS, 'var(--acc-e)', maxGhg)}
+    <div class="chart-legend">
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--acc-e)"></div>Total Scope 1+2+3 (tCO₂e)</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="glass card">
+      <div class="card-ttl">Scope 1 — combustion (tCO₂e/month)</div>
+      ${barChart(s1Monthly.map(v=>r2(v)), MONTHS, 'rgba(255,95,95,.7)', Math.max(...s1Monthly,1))}
+    </div>
+    <div class="glass card">
+      <div class="card-ttl">Scope 2 — electricity net (tCO₂e/month)</div>
+      ${barChart(s2Monthly.map(v=>r2(v)), MONTHS, 'rgba(74,168,255,.7)', Math.max(...s2Monthly,1))}
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="glass card">
+      <div class="card-ttl">Fleet diesel by month (litres)</div>
+      ${barChart(TS.fleet_diesel.map(v=>v||0), MONTHS, 'var(--acc-s)', Math.max(...TS.fleet_diesel.map(v=>v||0),1))}
+    </div>
+    <div class="glass card">
+      <div class="card-ttl">Grid electricity by month (kWh)</div>
+      ${barChart(TS.elec_kwh.map(v=>v||0), MONTHS, 'var(--acc-g)', Math.max(...TS.elec_kwh.map(v=>v||0),1))}
+    </div>
+  </div>
+
+  <div class="glass card">
+    <div class="card-ttl">Sustainability report data extract — GRI / IFRS S2 aligned</div>
+    <table class="cr-table">
+      <thead><tr><th>Disclosure</th><th>Framework</th><th>Unit</th><th style="text-align:right">YTD value</th><th>Status</th></tr></thead>
+      <tbody>
+      ${[
+        ['GHG: Scope 1 emissions','GRI 305-1 · IFRS S2','tCO₂e',r2(sc.s1).toFixed(2),sc.s1>0],
+        ['GHG: Scope 2 emissions (net)','GRI 305-2 · IFRS S2','tCO₂e',r2(sc.s2).toFixed(2),sc.s2>=0],
+        ['GHG: Scope 3 — water','GRI 305-3','tCO₂e',r2(sc.s3).toFixed(3),sc.s3>0],
+        ['GHG: Net after credits','SBTi CNZS 2.0','tCO₂e',r2(netGhg).toFixed(2),true],
+        ['Energy: Grid electricity','GRI 302-1','kWh',D.elec_kwh.toLocaleString(),D.elec_kwh>0],
+        ['Energy: Renewable generated','GRI 302-1','kWh',D.solar_kwh.toLocaleString(),D.solar_kwh>0],
+        ['Energy: RE % of total','GRI 302-1','%',Math.round(sc.re*100),D.elec_kwh>0],
+        ['Water: Total consumption','GRI 303-3','kL',D.water_kl.toLocaleString(),D.water_kl>0],
+        ['Waste: Diversion rate (CPT)','GRI 306-3','%',D.waste_div,D.waste_div>0],
+        ['Carbon tax: Tier 1 exposure','Carbon Tax Act 15 of 2019','ZAR','R'+carbonTaxT1.toLocaleString(),true],
+        ['Carbon credits: Purchased','VCS/GS registry','tCO₂e',cr.purchased,true],
+        ['Carbon credits: Net offset','SBTi',  'tCO₂e',cr.net,true],
+      ].map(([l,fw,u,v,ok])=>`<tr>
+        <td>${l}</td><td style="font-size:11px;color:var(--text3)">${fw}</td><td style="font-size:11px;color:var(--text3)">${u}</td>
+        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${v}</td>
+        <td>${ok?'<span class="chip chip-e">AVAILABLE</span>':'<span class="chip chip-r">MISSING</span>'}</td>
+      </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/* ============================
+   NET-ZERO ROADMAP
+   ============================ */
+function pageNetZero(sc){
+  const ghgBase = sc.s1+sc.s2+sc.s3;
+  const r = (yr)=>{
+    const yrs = yr - 2025;
+    const annualRate = 0.093; // ~48% by 2030
+    return Math.max(0, Math.round(ghgBase*Math.pow(1-annualRate,yrs)*10)/10);
+  };
+  const cr = crNetOffset();
+
+  return`<div class="page-eyebrow">Net-Zero Roadmap</div>
+  <div class="page-hdr"><h2>Net-Zero <span class="acc-e">Pathway</span></h2>
+  <p>SBTi CNZS 2.0 · Baseline FY2025/26 · Activity-based projection · DEFRA 2024 · GHG Protocol</p></div>
+
+  ${hero(ghgBase>0?5:0,5,'var(--acc-e)','Net-zero baseline established','FY2025/26 confirmed as SBTi CNZS 2.0 baseline. Submit commitment letter Q1 FY2026.')}
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    ${[
+      ['Baseline (FY2025/26)',r2(ghgBase).toFixed(1)+' tCO₂e','Scope 1+2+3','var(--acc-e)'],
+      ['2028 target (−48%)',r(2028).toFixed(1)+' tCO₂e','SBTi near-term milestone','var(--acc-s)'],
+      ['2035 target (−90%)',r(2035).toFixed(1)+' tCO₂e','SBTi long-term milestone','var(--acc-g)'],
+      ['2050 net-zero',Math.round(ghgBase*.055).toFixed(1)+' tCO₂e','Residual — offset by credits','var(--acc-e)'],
+    ].map(([l,v,s,c])=>`<div class="glass kpi"><div class="kl">${l}</div><div class="kv" style="color:${c}">${v}</div><div class="ks">${s}</div></div>`).join('')}
+  </div>
+
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="glass card">
+      <div class="card-ttl">Reduction trajectory — Scope 1+2+3 (tCO₂e)</div>
+      <table class="reduction-tbl">
+        <thead><tr><th style="text-align:left">Scope</th><th>Baseline</th><th>2026</th><th>2028 (−48%)</th><th>2030</th><th>2035 (−90%)</th><th>2050 (Net-Zero)</th></tr></thead>
+        <tbody>
+          ${[
+            ['Scope 1+2 (Fleet + Electricity)',sc.s1+sc.s2],
+            ['Scope 3 (Water + value chain)',sc.s3],
+            ['Total Scope 1+2+3',ghgBase],
+          ].map(([l,base])=>`<tr>
+            <td>${l}</td>
+            ${[2025,2026,2028,2030,2035,2050].map(yr=>{
+              const v=Math.max(0,Math.round(base*Math.pow(1-0.093,yr-2025)*10)/10);
+              const isBase=yr===2025;
+              return`<td style="color:${isBase?'var(--text)':v<base*.2?'var(--acc-e)':v<base*.5?'var(--acc-s)':'var(--text2)'};font-weight:${isBase?600:400}">${v.toFixed(1)}</td>`;
+            }).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="glass card">
+      <div class="card-ttl">Carbon credits position</div>
+      ${[
+        ['Baseline Scope 1+2+3',r2(ghgBase).toFixed(1)+' tCO₂e'],
+        ['Credits purchased (verified)',cr.purchased+' tCO₂e'],
+        ['Credits pending verification',CR.purchases.filter(c=>c.status==='pending').reduce((a,c)=>a+c.volume,0)+' tCO₂e'],
+        ['Credits retired',cr.retired+' tCO₂e'],
+        ['Net GHG exposure',r2(Math.max(0,ghgBase-cr.net/1000)).toFixed(1)+' tCO₂e'],
+      ].map(([l,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid rgba(255,255,255,.04);font-size:12px">
+        <span style="color:var(--text2)">${l}</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${v}</span>
+      </div>`).join('')}
+      <div style="margin-top:10px">
+        <button class="cr-add-btn" style="width:100%;margin-top:4px" onclick="go('credits')">Manage credits →</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+    ${[
+      {yr:'2025',band:'PRE-RECOGNITION',c:'rgba(29,233,160,.6)',bg:'rgba(29,233,160,.06)',desc:'Baseline established. Submit SBTi commitment letter Q1 FY26.',levers:['SBTi letter','Baseline locked'],done:true},
+      {yr:'2028',band:'RECOGNITION',c:'rgba(245,166,35,.7)',bg:'rgba(245,166,35,.06)',desc:'−50% Scope 1+2. EV fleet phase-in. Solar at all 5 depots.',levers:['EV fleet (20%)','Solar (50% RE)','Eco-driving −10%'],done:false},
+      {yr:'2035',band:'LEADERSHIP',c:'rgba(155,107,255,.7)',bg:'rgba(155,107,255,.06)',desc:'−90% Scope 1+2+3. Full EV fleet. 100% renewable electricity.',levers:['Full EV','100% RE','Waste zero-landfill'],done:false},
+      {yr:'2050',band:'NET-ZERO',c:'rgba(29,233,160,.9)',bg:'rgba(29,233,160,.08)',desc:'Net-zero Scope 1+2+3. Zero fossil fleet. Residual credits only.',levers:['Residual credits','Zero fossil','SBTi certified'],done:false},
+    ].map(m=>`<div class="nz-milestone glass" style="border-color:${m.c}40;background:${m.bg}">
+      <div class="nz-band" style="color:${m.c}">${m.band}</div>
+      <div class="nz-year" style="color:${m.c}">${m.yr}</div>
+      <div class="nz-desc">${m.desc}</div>
+      <div class="nz-levers">${m.levers.map(l=>`<span class="nz-lever" style="color:${m.c};border-color:${m.c}40;background:${m.c}10">${l}</span>`).join('')}</div>
+    </div>`).join('')}
+  </div>
+
+  <div class="glass card">
+    <div class="card-ttl">Key reduction levers — operational impact</div>
+    <table class="cr-table">
+      <thead><tr><th>Lever</th><th>Scope</th><th>Reduction potential</th><th>Capex estimate</th><th>Payback</th><th>Status</th></tr></thead>
+      <tbody>
+        ${[
+          ['EV fleet transition (CPT + PE first)','Scope 1','−15 to −40% diesel over 5 yrs','R4.2M for 10 vehicles','4–6 yrs','Plan — no EVs yet'],
+          ['Solar PV all 5 depots','Scope 2','−60 to −100% electricity net','R3.5M for 50%+ RE','5–7 yrs','In progress (JHB)'],
+          ['Eco-driving programme','Scope 1','−8 to −12% L/100km','R350K training + telematics','<2 yrs','Driver Debrief active'],
+          ['Waste zero-landfill (extend Oricol)','Scope 3','−100% landfill tCO₂e','R120K contractor rollout','1–2 yrs','CPT only (91.1%)'],
+          ['Water efficiency initiatives','Scope 3','−10 to −20% kL','R95K (CT dam + DBN)','2–3 yrs','Partial — 2 depots'],
+          ['Carbon credits (offset residual)','Net GHG','Up to 100% offset','Market rate R90–200/tCO₂e','Immediate',''+cr.net+' tCO₂e held'],
+        ].map(([l,s,r,c,p,st])=>`<tr>
+          <td style="font-weight:500">${l}</td>
+          <td style="font-size:11px"><span class="chip chip-e">${s}</span></td>
+          <td style="font-size:12px;color:var(--acc-e)">${r}</td>
+          <td style="font-size:11px;color:var(--text3)">${c}</td>
+          <td style="font-size:11px;color:var(--text3)">${p}</td>
+          <td style="font-size:11px;color:var(--text2)">${st}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/* ============================
+   CARBON CREDITS PAGE
+   ============================ */
+function pageCredits(sc){
+  const cr = crNetOffset();
+  const ghgBase = sc.s1+sc.s2+sc.s3;
+  const netGhg = Math.max(0, ghgBase - cr.net/1000);
+
+  return`<div class="page-eyebrow">Carbon Credits</div>
+  <div class="page-hdr"><h2>Carbon Credit <span class="acc-e">Register</span></h2>
+  <p>VCS · Gold Standard · South Pole · Carbon Offset Initiative · SBTi compliant offsetting · GHG Protocol</p></div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    ${[
+      ['Verified credits held',CR.purchases.filter(c=>c.status==='verified').reduce((a,c)=>a+c.volume,0)+' tCO₂e','Ready to retire','var(--acc-e)'],
+      ['Pending verification',CR.purchases.filter(c=>c.status==='pending').reduce((a,c)=>a+c.volume,0)+' tCO₂e','Awaiting registry confirmation','var(--acc-s)'],
+      ['Total retired',cr.retired+' tCO₂e','Permanently cancelled','var(--text2)'],
+      ['Net GHG after credits',netGhg.toFixed(1)+' tCO₂e','Gross '+r2(ghgBase).toFixed(1)+' less offsets','var(--acc-e)'],
+    ].map(([l,v,s,c])=>`<div class="glass kpi"><div class="kl">${l}</div><div class="kv" style="color:${c}">${v}</div><div class="ks">${s}</div></div>`).join('')}
+  </div>
+
+  <div class="glass card" style="margin-bottom:12px">
+    <div class="card-ttl">Add credit purchase</div>
+    <div class="cr-form" id="cr-form">
+      <div class="cr-field"><label>Date</label><input type="date" id="cr-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="cr-field"><label>Standard</label>
+        <select id="cr-standard"><option>VCS (Verra)</option><option>Gold Standard</option><option>ACR</option><option>CAR</option><option>Social Carbon</option><option>ISO 14064</option></select>
+      </div>
+      <div class="cr-field"><label>Type</label>
+        <select id="cr-type"><option value="REDD+">REDD+ (Deforestation)</option><option value="RE">Renewable Energy</option><option value="EE">Energy Efficiency</option><option value="Blue">Blue Carbon</option><option value="Soil">Soil Carbon</option><option value="Direct Air">Direct Air Capture</option></select>
+      </div>
+      <div class="cr-field"><label>Volume (tCO₂e)</label><input type="number" id="cr-volume" placeholder="0" min="1"></div>
+      <div class="cr-field"><label>Cost (ZAR total)</label><input type="number" id="cr-cost" placeholder="0"></div>
+      <div class="cr-field"><label>Registry / Serialno</label><input type="text" id="cr-registry" placeholder="e.g. VCS-3456-2025"></div>
+      <div class="cr-field" style="grid-column:1/3"><label>Project name / description</label><input type="text" id="cr-project" placeholder="e.g. Amazon Forest Protection BR-001"></div>
+      <div class="cr-field"><label>Status</label>
+        <select id="cr-status"><option value="verified">Verified</option><option value="pending">Pending verification</option><option value="anticipated">Anticipated</option></select>
+      </div>
+      <div class="cr-field" style="display:flex;align-items:flex-end">
+        <button class="cr-add-btn" style="width:100%" onclick="
+          addCredit(
+            document.getElementById('cr-date').value,
+            document.getElementById('cr-standard').value,
+            document.getElementById('cr-type').value,
+            document.getElementById('cr-volume').value,
+            document.getElementById('cr-cost').value,
+            document.getElementById('cr-registry').value,
+            document.getElementById('cr-project').value,
+            document.getElementById('cr-status').value
+          );
+          document.getElementById('cr-volume').value='';
+          document.getElementById('cr-cost').value='';
+          document.getElementById('cr-registry').value='';
+          document.getElementById('cr-project').value='';
+        ">+ Add credit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass card" style="margin-bottom:12px">
+    <div class="card-ttl">Active credit portfolio (${CR.purchases.length} holdings)
+      <span class="ct-badge" style="color:var(--acc-e);border-color:rgba(29,233,160,.3);background:rgba(29,233,160,.08)">${CR.purchases.reduce((a,c)=>a+c.volume,0)} tCO₂e total</span>
+    </div>
+    ${CR.purchases.length===0?'<div style="font-size:12px;color:var(--text3);padding:8px 0">No credits registered. Add a purchase above.</div>':''}
+    ${CR.purchases.length>0?`<div style="overflow-x:auto"><table class="cr-table">
+      <thead><tr>
+        <th>Date</th><th>Standard</th><th>Type</th><th>Project</th><th>Registry</th>
+        <th style="text-align:right">Volume (tCO₂e)</th><th style="text-align:right">Cost (ZAR)</th>
+        <th style="text-align:right">ZAR/tCO₂e</th><th>Status</th><th>Actions</th>
+      </tr></thead>
+      <tbody>
+      ${CR.purchases.map(c=>`<tr>
+        <td style="font-size:11px;color:var(--text3)">${c.date}</td>
+        <td style="font-size:11px">${c.standard}</td>
+        <td><span class="chip chip-e" style="font-size:9px">${c.type}</span></td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.project}</td>
+        <td style="font-size:11px;color:var(--text3)">${c.registry}</td>
+        <td style="text-align:right;font-weight:600;color:var(--acc-e)">${c.volume.toLocaleString()}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${c.cost>0?'R'+c.cost.toLocaleString():'—'}</td>
+        <td style="text-align:right;font-size:11px;color:var(--text3)">${c.cost>0&&c.volume>0?'R'+Math.round(c.cost/c.volume):'—'}</td>
+        <td><span class="chip ${c.status==='verified'?'chip-e':c.status==='pending'?'chip-a':'chip-r'}">${c.status.toUpperCase()}</span></td>
+        <td style="white-space:nowrap">
+          ${c.status==='verified'?`<button class="cr-retire-btn" onclick="retireCredit(${c.id})">Retire</button> `:''}
+          <button class="cr-delete-btn" onclick="if(confirm('Remove this credit?'))deleteCredit(${c.id})">×</button>
+        </td>
+      </tr>`).join('')}
+      </tbody>
+      <tfoot><tr style="border-top:1px solid var(--glass-border)">
+        <td colspan="5" style="font-weight:600;font-size:12px;padding:8px 10px">TOTALS</td>
+        <td style="text-align:right;font-weight:700;color:var(--acc-e)">${CR.purchases.reduce((a,c)=>a+c.volume,0).toLocaleString()}</td>
+        <td style="text-align:right;font-weight:600">R${CR.purchases.reduce((a,c)=>a+c.cost,0).toLocaleString()}</td>
+        <td colspan="3"></td>
+      </tr></tfoot>
+    </table></div>`:''}
+  </div>
+
+  ${CR.retired.length>0?`<div class="glass card">
+    <div class="card-ttl">Retired credits (${CR.retired.length} cancellations · ${cr.retired} tCO₂e permanently offset)</div>
+    <table class="cr-table"><thead><tr><th>Date retired</th><th>Standard</th><th>Project</th><th style="text-align:right">Volume</th><th>Serial</th></tr></thead>
+    <tbody>${CR.retired.map(c=>`<tr>
+      <td style="font-size:11px;color:var(--text3)">${c.retiredDate}</td><td style="font-size:11px">${c.standard}</td>
+      <td style="font-size:11px">${c.project}</td>
+      <td style="text-align:right;font-weight:600;color:var(--text3)">${c.volume.toLocaleString()} tCO₂e</td>
+      <td style="font-size:11px;color:var(--text3)">${c.registry}</td>
+    </tr>`).join('')}</tbody></table>
+  </div>`:''}`;
+}
+
+syncTStoD();
+recalc();
+go('overview');
+</script>
+
+<!-- PRIOR PERIOD PANEL -->
+<button class="pp-btn" onclick="document.getElementById('ppPanel').classList.toggle('open')">⟲ Prior period</button>
+<div class="pp-panel" id="ppPanel">
+  <h4>Prior period values</h4>
+  <p class="pp-note">Enter prior-year actuals to show trend arrows (↑↓) on all indicators. Leave blank for no trend. Updates live.</p>
+  <div class="pf"><label>Fleet diesel (litres)</label><input type="number" placeholder="—" onchange="T.fleet_diesel=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Grid electricity (kWh)</label><input type="number" placeholder="—" onchange="T.elec_kwh=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Solar generated (kWh)</label><input type="number" placeholder="—" onchange="T.solar_kwh=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Water consumption (kL)</label><input type="number" placeholder="—" onchange="T.water_kl=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Waste diversion (%)</label><input type="number" value="88" onchange="T.waste_div=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Cardboard recycling (%)</label><input type="number" value="11.2" onchange="T.waste_card=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Landfill tCO₂e</label><input type="number" value="1.28" onchange="T.landfill_co2=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>LTIFR</label><input type="number" placeholder="—" onchange="T.ltifr=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Fatalities</label><input type="number" value="0" onchange="T.fatalities=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Training hrs/employee</label><input type="number" placeholder="—" onchange="T.train_hrs=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Grant recovery (%)</label><input type="number" placeholder="—" onchange="T.grant_pct=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Social initiatives (count)</label><input type="number" value="9" onchange="T.initiatives=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Board Black (%)</label><input type="number" value="42.9" onchange="T.board_blk=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>Board Female (%)</label><input type="number" value="14.3" onchange="T.board_fem=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>King V score (/170)</label><input type="number" value="130" onchange="T.king5=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>E pillar score (/108)</label><input type="number" placeholder="—" onchange="T.eT=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>S pillar score (/100)</label><input type="number" placeholder="—" onchange="T.sT=parseFloat(this.value)||null;recalc()"></div>
+  <div class="pf"><label>G pillar score (/100)</label><input type="number" placeholder="—" onchange="T.gT=parseFloat(this.value)||null;recalc()"></div>
+</div>
+</body>
+</html>

@@ -116,8 +116,7 @@ export function FormModeGrid({
                     />
                   ) : (
                     <input
-                      type="text"
-                      inputMode={f.type === "number" ? "decimal" : undefined}
+                      type={f.type === "number" ? "number" : "text"}
                       value={String(v ?? "")}
                       disabled={readOnly}
                       onChange={(e) =>

@@ -432,9 +432,13 @@ certificateEventSchema.set("toJSON", {
 export const CertificateEventModel = mongoose.models.CertificateEvent || mongoose.model("CertificateEvent", certificateEventSchema);
 
 const feedbackSchema = new Schema({
-  id: { type: String, default: uuid, unique: true },
+  /** Primary business id (preferred over legacy `id` field in Mongo). */
+  feedbackId: { type: String, required: true, unique: true },
+  /** Legacy field — keep populated (= feedbackId) for existing `id_1` unique index. */
+  id: { type: String, sparse: true, unique: true },
   message: { type: String, required: true },
   category: { type: String, enum: ['bug', 'feature', 'general', 'compliance'], default: 'general' },
+  pillar: { type: String, default: null, index: true },
   pageUrl: { type: String, default: null },
   userName: { type: String, default: null },
   userEmail: { type: String, default: null },
@@ -444,10 +448,11 @@ const feedbackSchema = new Schema({
   userAgent: { type: String, default: null },
   createdAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now },
-}, { collection: "feedback" });
+}, { collection: "feedback", id: false });
 
 feedbackSchema.set("toJSON", {
   transform: (_doc: any, ret: any) => {
+    ret.id = ret.feedbackId ?? ret.id;
     delete ret._id;
     delete ret.__v;
     return ret;

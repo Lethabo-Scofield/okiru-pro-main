@@ -434,6 +434,8 @@ function sectorConfigToCalculatorConfig(sc: any) {
   const catF = cw.find((c: any) => c.code === 'F');
 
   return {
+    sectorCode: sc.sectorCode,
+    scorecardType: sc.scorecardType,
     totalMaxPoints,
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,
@@ -493,12 +495,12 @@ function sectorConfigToCalculatorConfig(sc: any) {
     skills: {
       generalMax: sk.learningProgrammesMaxPts,
       bursaryMax: sk.bursaryMaxPts,
-      overallTarget: sk.overallSpendPercent,
-      bursaryTarget: sk.bursarySpendPercent,
+      overallTarget: sk.overallSpendPercent / 100,
+      bursaryTarget: sk.bursarySpendPercent / 100,
       subMinThreshold: skillsSubMin,
-      overallSpendPercent: sk.overallSpendPercent,
-      bursarySpendPercent: sk.bursarySpendPercent,
-      disabledSpendPercent: sk.disabledSpendPercent,
+      overallSpendPercent: sk.overallSpendPercent / 100,
+      bursarySpendPercent: sk.bursarySpendPercent / 100,
+      disabledSpendPercent: sk.disabledSpendPercent / 100,
       categoryECap: catE?.cap,
       categoryFCap: catF?.cap,
       learningProgrammesMaxPts: sk.learningProgrammesMaxPts,
