@@ -67,29 +67,32 @@ describe("Excel upload — occupational level normalisation", () => {
   });
 
   it("leaves invalid level text on the row but validateWorkbook flags it as an invalid option", async () => {
+    // The legacy `employees` section is disabled (users now enter directors and
+    // employees in `management-control`), and validateWorkbook skips disabled
+    // sections — so the live validation surface is `management-control`.
     const buf = makeBuffer({
-      Employees: [
-        ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
-        ["Frank", "Doe", "White", "Male", "Garbage Level"],
+      "Management Control": [
+        ["First Name", "Surname", "Race", "Gender", "Designation", "Occupational Level"],
+        ["Frank", "Doe", "White", "Male", "Director", "Garbage Level"],
       ],
     });
     const out = await normalizeExcelBuffer(buf);
     // Normalizer is non-destructive — bad input survives verbatim.
-    expect(out.sections["employees"].rows[0].occupationalLevel).toBe("Garbage Level");
+    expect(out.sections["management-control"].rows[0].occupationalLevel).toBe("Garbage Level");
 
     // Pin the column option-set contract.
-    const employees = SECTIONS.find((s) => s.key === "employees")!;
-    const occCol = employees.columns!.find((c) => c.key === "occupationalLevel")!;
+    const mc = SECTIONS.find((s) => s.key === "management-control")!;
+    const occCol = mc.columns!.find((c) => c.key === "occupationalLevel")!;
     expect(occCol.type).toBe("select");
     expect(occCol.options).toBeDefined();
     expect(occCol.options).not.toContain("Garbage Level");
 
-    // validateWorkbook now surfaces invalid select values at the
-    // import-preview surface (Task #18 area 2 — invalid occupational level
-    // must appear in validationIssues).
+    // validateWorkbook surfaces invalid select values at the import-preview
+    // surface (Task #18 area 2 — invalid occupational level must appear in
+    // validationIssues).
     const issues = validateWorkbook(out.sections, { strictSelectOptions: true });
     const occIssues = issues.filter(
-      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+      (i) => i.sectionKey === "management-control" && i.field === "occupationalLevel",
     );
     expect(occIssues.length).toBeGreaterThan(0);
     expect(occIssues[0].message).toMatch(/Not an allowed option/);
@@ -101,15 +104,15 @@ describe("Excel upload — occupational level normalisation", () => {
 
   it("validateWorkbook does NOT flag legal values (Top Management, Semi-Skilled, etc.)", async () => {
     const buf = makeBuffer({
-      Employees: [
-        ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
-        ["A", "B", "African", "Male", "Top Management"],
-        ["C", "D", "African", "Female", "Semi-Skilled"],
+      "Management Control": [
+        ["First Name", "Surname", "Race", "Gender", "Designation", "Occupational Level"],
+        ["A", "B", "African", "Male", "Director", "Top Management"],
+        ["C", "D", "African", "Female", "Senior", "Semi-Skilled"],
       ],
     });
     const out = await normalizeExcelBuffer(buf);
     const issues = validateWorkbook(out.sections, { strictSelectOptions: true }).filter(
-      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+      (i) => i.sectionKey === "management-control" && i.field === "occupationalLevel",
     );
     expect(issues.length).toBe(0);
   });
@@ -117,14 +120,14 @@ describe("Excel upload — occupational level normalisation", () => {
   it("normalizeExcelBuffer (the real import-preview path) surfaces the invalid level in result.validationIssues", async () => {
     // Integration-style assertion against the real preview pipeline.
     const buf = makeBuffer({
-      Employees: [
-        ["First Name", "Surname", "Race", "Gender", "Occupational Level"],
-        ["Frank", "Doe", "White", "Male", "Garbage Level"],
+      "Management Control": [
+        ["First Name", "Surname", "Race", "Gender", "Designation", "Occupational Level"],
+        ["Frank", "Doe", "White", "Male", "Director", "Garbage Level"],
       ],
     });
     const out = await normalizeExcelBuffer(buf);
     const occIssues = out.validationIssues.filter(
-      (i) => i.sectionKey === "employees" && i.field === "occupationalLevel",
+      (i) => i.sectionKey === "management-control" && i.field === "occupationalLevel",
     );
     expect(occIssues.length).toBeGreaterThan(0);
     expect(occIssues[0].message).toMatch(/Not an allowed option/);

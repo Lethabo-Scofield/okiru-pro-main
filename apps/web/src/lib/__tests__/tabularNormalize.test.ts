@@ -12,7 +12,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true },
   { key: "spend", label: "Spend (R)", type: "number" },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number" },
-  { key: "currentSize", label: "Size", type: "select", options: ["Large", "QSE", "EME"] },
+  { key: "currentSize", label: "Size", type: "select", options: ["Generic", "QSE", "EME"] },
   {
     key: "bbbeeLevel",
     label: "B-BBEE Level",
@@ -93,7 +93,8 @@ describe("normalizeCellForColumn — enterprise size & level codes", () => {
   it("maps EME/QSE/Generic variants to canonical options", () => {
     expect(normalizeCellForColumn("eme", col("currentSize")).value).toBe("EME");
     expect(normalizeCellForColumn("Qualifying Small Enterprise", col("currentSize")).value).toBe("QSE");
-    expect(normalizeCellForColumn("Generic", col("currentSize")).value).toBe("Large");
+    expect(normalizeCellForColumn("Generic", col("currentSize")).value).toBe("Generic");
+    expect(normalizeCellForColumn("Large", col("currentSize")).value).toBe("Generic");
   });
 
   it("maps level variants", () => {
@@ -161,7 +162,7 @@ describe("normalizeMatrix — full pipeline", () => {
     expect(rows[0].currentSize).toBe("QSE");
     expect(rows[0].currentBlackOwnership).toBe(51);
     expect(rows[1].spend).toBe(2500000);
-    expect(rows[1].currentSize).toBe("Large");
+    expect(rows[1].currentSize).toBe("Generic");
     expect(rows[1].currentBlackOwnership).toBe(30);
   });
 
