@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
@@ -618,11 +619,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="course-cost" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" /> Course/Tuition
             </Label>
-            <Input
+            <NumberInput
               id="course-cost"
-              type="number"
               value={formState.courseCost}
-              onChange={e => setFormState({ ...formState, courseCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, courseCost: v })}
               placeholder="0"
             />
           </div>
@@ -630,11 +630,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="travel-cost" className="flex items-center gap-2">
               <Bus className="h-4 w-4" /> Travel
             </Label>
-            <Input
+            <NumberInput
               id="travel-cost"
-              type="number"
               value={formState.travelCost}
-              onChange={e => setFormState({ ...formState, travelCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, travelCost: v })}
               placeholder="0"
             />
           </div>
@@ -642,11 +641,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="accommodation-cost" className="flex items-center gap-2">
               <Home className="h-4 w-4" /> Accommodation
             </Label>
-            <Input
+            <NumberInput
               id="accommodation-cost"
-              type="number"
               value={formState.accommodationCost}
-              onChange={e => setFormState({ ...formState, accommodationCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, accommodationCost: v })}
               placeholder="0"
             />
           </div>
@@ -654,11 +652,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="catering-cost" className="flex items-center gap-2">
               <Utensils className="h-4 w-4" /> Catering
             </Label>
-            <Input
+            <NumberInput
               id="catering-cost"
-              type="number"
               value={formState.cateringCost}
-              onChange={e => setFormState({ ...formState, cateringCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, cateringCost: v })}
               placeholder="0"
             />
           </div>
@@ -666,11 +663,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="stationery-cost" className="flex items-center gap-2">
               <PenTool className="h-4 w-4" /> Stationery
             </Label>
-            <Input
+            <NumberInput
               id="stationery-cost"
-              type="number"
               value={formState.stationeryCost}
-              onChange={e => setFormState({ ...formState, stationeryCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, stationeryCost: v })}
               placeholder="0"
             />
           </div>
@@ -678,11 +674,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="facility-cost" className="flex items-center gap-2">
               <Building className="h-4 w-4" /> Facility/Venue
             </Label>
-            <Input
+            <NumberInput
               id="facility-cost"
-              type="number"
               value={formState.facilityCost}
-              onChange={e => setFormState({ ...formState, facilityCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, facilityCost: v })}
               placeholder="0"
             />
           </div>
@@ -690,11 +685,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="salary-cost" className="flex items-center gap-2">
               <Wallet className="h-4 w-4" /> Salary/Stipend
             </Label>
-            <Input
+            <NumberInput
               id="salary-cost"
-              type="number"
               value={formState.salaryCost}
-              onChange={e => setFormState({ ...formState, salaryCost: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, salaryCost: v })}
               placeholder="0"
             />
           </div>
@@ -702,11 +696,10 @@ export default function SkillsDevelopment() {
             <Label htmlFor="other-cost" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> Other
             </Label>
-            <Input
+            <NumberInput
               id="other-cost"
-              type="number"
               value={formState.otherCosts}
-              onChange={e => setFormState({ ...formState, otherCosts: Number(e.target.value) })}
+              onValueChange={v => setFormState({ ...formState, otherCosts: v })}
               placeholder="0"
             />
           </div>

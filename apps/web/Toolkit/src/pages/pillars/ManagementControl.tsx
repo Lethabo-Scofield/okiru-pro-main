@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
@@ -645,12 +646,11 @@ export default function ManagementControl() {
               Annual Salary (R)
             </div>
           </Label>
-          <Input
+          <NumberInput
             id="annual-salary"
-            type="number"
             min={0}
             value={formState.annualSalary}
-            onChange={e => setFormState({...formState, annualSalary: Number(e.target.value)})}
+            onValueChange={v => setFormState({...formState, annualSalary: v})}
             className="col-span-3"
             placeholder="Total annual salary / cost to company"
           />
@@ -662,13 +662,12 @@ export default function ManagementControl() {
               Voting Rights %
             </div>
           </Label>
-          <Input
+          <NumberInput
             id="voting-rights"
-            type="number"
             min={0}
             max={100}
             value={formState.votingRightsPercent}
-            onChange={e => setFormState({...formState, votingRightsPercent: Number(e.target.value)})}
+            onValueChange={v => setFormState({...formState, votingRightsPercent: v})}
             className="col-span-3"
             placeholder="% of voting rights held (0-100)"
           />
