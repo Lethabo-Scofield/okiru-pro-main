@@ -1241,9 +1241,14 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     (sectionKey: string, meta: Record<string, unknown>) => {
       let next = meta;
       const sectionPatches: Record<string, { meta: Record<string, unknown> }> = {};
+      // Read sibling sections from the live ref, NOT the `workbook` closure value:
+      // handleMetaChange only depends on [scheduleSave], so `workbook` is stale and
+      // reading financial meta from it wiped real financials when the sector changed
+      // (the cross-section patch rebuilt financial-information from an empty copy).
+      const wb = workbookRef.current;
 
       if (sectionKey === "company-information") {
-        const prevMeta = (workbook?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
+        const prevMeta = (wb?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
         const prevSector = String(prevMeta.industrySector ?? "").trim().toUpperCase();
         const newSector = String(meta.industrySector ?? "").trim().toUpperCase();
         if (newSector !== prevSector) {
@@ -1251,7 +1256,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             ...meta,
             scorecardType: resolveScorecardTypeForSector(newSector, meta.scorecardType),
           };
-          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+          const finMeta = (wb?.sections["financial-information"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
@@ -1269,7 +1274,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             if (norm != null) finNext = { ...finNext, industryNormPercent: norm };
             sectionPatches["financial-information"] = { meta: finNext };
             sectionPatches["afs-additions"] = { meta: {} };
-            const sedMeta = (workbook?.sections["sed"]?.meta ?? {}) as Record<string, unknown>;
+            const sedMeta = (wb?.sections["sed"]?.meta ?? {}) as Record<string, unknown>;
             sectionPatches["sed"] = { meta: pruneSedMetaWhenLeavingFsc(sedMeta) };
           }
         }
@@ -1277,11 +1282,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         const prevFsc = String(prevMeta.fscSubSector ?? "");
         const newFsc = String(next.fscSubSector ?? "");
         if (newSector === "FSC" && newFsc && prevFsc !== newFsc) {
-          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+          const finMeta = (wb?.sections["financial-information"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
-          const existingAfs = (workbook?.sections["afs-additions"]?.meta ?? {}) as Record<
+          const existingAfs = (wb?.sections["afs-additions"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
@@ -1297,7 +1302,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       }
 
       if (sectionKey === "financial-information") {
-        const companyMeta = (workbook?.sections["company-information"]?.meta ?? {}) as Record<
+        const companyMeta = (wb?.sections["company-information"]?.meta ?? {}) as Record<
           string,
           unknown
         >;
