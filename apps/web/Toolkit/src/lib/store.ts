@@ -335,7 +335,7 @@ interface BbeeState extends PillarState {
   updateEsdBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, jobsCreatedCount?: number, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
   
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
-  updateTMPS: (tmps: number) => void;
+  updateTMPS: (tmps: number, manualOverride?: boolean) => void;
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
@@ -1593,7 +1593,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   },
 
   addSupplier: (supplier) => {
-    set((state) => ({ procurement: { ...state.procurement, suppliers: [...state.procurement.suppliers, supplier] } }));
+    set((state) => {
+      const suppliers = [...state.procurement.suppliers, supplier];
+      // Keep TMPS in sync with supplier spend unless the user manually overrode
+      // it — otherwise tmps stays 0 and every procurement target (tmps × pct)
+      // is 0, so suppliers never score (Polo feedback #10).
+      const tmps = state.procurement.tmpsManualOverride
+        ? state.procurement.tmps
+        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+      return { procurement: { ...state.procurement, suppliers, tmps } };
+    });
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
@@ -1607,12 +1616,24 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
   updateSupplier: (id, data) => {
-    set((state) => ({ procurement: { ...state.procurement, suppliers: state.procurement.suppliers.map(s => s.id === id ? { ...s, ...data } : s) } }));
+    set((state) => {
+      const suppliers = state.procurement.suppliers.map(s => s.id === id ? { ...s, ...data } : s);
+      const tmps = state.procurement.tmpsManualOverride
+        ? state.procurement.tmps
+        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+      return { procurement: { ...state.procurement, suppliers, tmps } };
+    });
     get()._recalculateAll();
     api.updateSupplier(id, data).catch(console.error);
   },
   removeSupplier: (id) => {
-    set((state) => ({ procurement: { ...state.procurement, suppliers: state.procurement.suppliers.filter(s => s.id !== id) } }));
+    set((state) => {
+      const suppliers = state.procurement.suppliers.filter(s => s.id !== id);
+      const tmps = state.procurement.tmpsManualOverride
+        ? state.procurement.tmps
+        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+      return { procurement: { ...state.procurement, suppliers, tmps } };
+    });
     get()._recalculateAll();
     api.deleteSupplier(id).catch(console.error);
   },
@@ -1687,8 +1708,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
   
-  updateTMPS: (tmps) => {
-    set((state) => ({ procurement: { ...state.procurement, tmps } }));
+  updateTMPS: (tmps, manualOverride = true) => {
+    // manualOverride=true pins TMPS to the entered value; false (calculated mode)
+    // clears the pin so supplier mutations keep TMPS in sync (see addSupplier).
+    set((state) => ({ procurement: { ...state.procurement, tmps, tmpsManualOverride: manualOverride } }));
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
