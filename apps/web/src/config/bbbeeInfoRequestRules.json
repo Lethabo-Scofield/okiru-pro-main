@@ -535,7 +535,7 @@
                     "required": true,
                     "type": "enum",
                     "allowed_values": [
-                        "Large",
+                        "Generic",
                         "QSE",
                         "EME"
                     ]
@@ -602,7 +602,7 @@
                     "required": false,
                     "type": "enum",
                     "allowed_values": [
-                        "Large",
+                        "Generic",
                         "QSE",
                         "EME"
                     ]
