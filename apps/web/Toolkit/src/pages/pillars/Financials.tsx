@@ -7,6 +7,7 @@ import { Calculator, TrendingUp, AlertTriangle, Plus, Trash2, Info, ArrowRight, 
 import { useBbeeStore } from "@toolkit/lib/store";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
 import { Switch } from "@toolkit/components/ui/switch";
@@ -24,9 +25,9 @@ export default function Financials() {
   const { client, updateFinancials, updateTMPS, procurement, addFinancialYear, updateFinancialYear, removeFinancialYear } = useBbeeStore();
   const { toast } = useToast();
   
-  const [revenue, setRevenue] = useState(client.revenue.toString());
-  const [npat, setNpat] = useState(client.npat.toString());
-  const [leviableAmount, setLeviableAmount] = useState(client.leviableAmount.toString());
+  const [revenue, setRevenue] = useState<number>(client.revenue);
+  const [npat, setNpat] = useState<number>(client.npat);
+  const [leviableAmount, setLeviableAmount] = useState<number>(client.leviableAmount);
   const [tmpsInclusions, setTmpsInclusions] = useState({
     costOfSales: 0,
     operatingExpenses: 0,
@@ -44,7 +45,7 @@ export default function Financials() {
   
   const [showDraftRules, setShowDraftRules] = useState(false);
   const [tmpsManualOverride, setTmpsManualOverride] = useState(procurement.tmpsManualOverride || false);
-  const [tmpsManualValue, setTmpsManualValue] = useState(procurement.tmps.toString());
+  const [tmpsManualValue, setTmpsManualValue] = useState<number>(procurement.tmps);
 
   const currentIndustryNorm = useMemo(() => {
     if (client.industryNorm != null && client.industryNorm > 0) return client.industryNorm;
@@ -94,7 +95,7 @@ export default function Financials() {
       currentIndustryNorm > 0
         ? currentIndustryNorm
         : lookupIndustryNormPercent(client.industry, client.sectorCode);
-    updateFinancials(Number(revenue), Number(npat), Number(leviableAmount), normToSave);
+    updateFinancials(revenue, npat, leviableAmount, normToSave);
     toast({
       title: "Financials Updated",
       description: "Base financial metrics have been saved.",
@@ -102,7 +103,7 @@ export default function Financials() {
   };
 
   const handleSaveTMPS = () => {
-    updateTMPS(calculatedTMPS);
+    updateTMPS(calculatedTMPS, false);
     toast({
       title: "TMPS Updated",
       description: "Total Measured Procurement Spend has been saved.",
@@ -233,13 +234,13 @@ export default function Financials() {
                     <TableRow className="bg-primary/5 font-medium">
                       <TableCell>{client.financialYear} (Current)</TableCell>
                       <TableCell>
-                        <Input type="number" value={revenue} onChange={(e) => setRevenue(e.target.value)} className="h-8" />
+                        <NumberInput value={revenue} onValueChange={setRevenue} className="h-8" />
                       </TableCell>
                       <TableCell>
-                        <Input type="number" value={npat} onChange={(e) => setNpat(e.target.value)} className="h-8" />
+                        <NumberInput value={npat} onValueChange={setNpat} className="h-8" />
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {(Number(revenue) > 0 ? (Number(npat) / Number(revenue)) * 100 : 0).toFixed(2)}%
+                        {(revenue > 0 ? (npat / revenue) * 100 : 0).toFixed(2)}%
                       </TableCell>
                       <TableCell></TableCell>
                     </TableRow>
@@ -254,19 +255,17 @@ export default function Financials() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Input 
-                            type="number" 
-                            value={history.revenue} 
-                            onChange={(e) => updateFinancialYear(history.id, { revenue: Number(e.target.value) })} 
-                            className="h-8" 
+                          <NumberInput
+                            value={history.revenue}
+                            onValueChange={(v) => updateFinancialYear(history.id, { revenue: v })}
+                            className="h-8"
                           />
                         </TableCell>
                         <TableCell>
-                          <Input 
-                            type="number" 
-                            value={history.npat} 
-                            onChange={(e) => updateFinancialYear(history.id, { npat: Number(e.target.value) })} 
-                            className="h-8" 
+                          <NumberInput
+                            value={history.npat}
+                            onValueChange={(v) => updateFinancialYear(history.id, { npat: v })}
+                            className="h-8"
                           />
                         </TableCell>
                         <TableCell className="text-right font-mono">
@@ -286,7 +285,7 @@ export default function Financials() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Leviable Amount (Payroll)</Label>
-                  <Input type="number" value={leviableAmount} onChange={(e) => setLeviableAmount(e.target.value)} />
+                  <NumberInput value={leviableAmount} onValueChange={setLeviableAmount} />
                   <p className="text-xs text-muted-foreground">Used as the base for Skills Development targets.</p>
                 </div>
                 <div className="space-y-2">
@@ -318,15 +317,15 @@ export default function Financials() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Revenue (R)</Label>
-                  <Input type="number" value={revenue} onChange={(e) => setRevenue(e.target.value)} />
+                  <NumberInput value={revenue} onValueChange={setRevenue} />
                 </div>
                 <div className="space-y-2">
                   <Label>NPAT (R)</Label>
-                  <Input type="number" value={npat} onChange={(e) => setNpat(e.target.value)} />
+                  <NumberInput value={npat} onValueChange={setNpat} />
                 </div>
                 <div className="space-y-2">
                   <Label>Leviable Amount (Payroll)</Label>
-                  <Input type="number" value={leviableAmount} onChange={(e) => setLeviableAmount(e.target.value)} />
+                  <NumberInput value={leviableAmount} onValueChange={setLeviableAmount} />
                 </div>
                 <div className="space-y-2">
                   <Label>Industry Norm (%)</Label>
@@ -374,19 +373,19 @@ export default function Financials() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Cost of Sales</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsInclusions.costOfSales} onChange={e => setTmpsInclusions({...tmpsInclusions, costOfSales: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsInclusions.costOfSales} onValueChange={v => setTmpsInclusions({...tmpsInclusions, costOfSales: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Operating Expenses</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsInclusions.operatingExpenses} onChange={e => setTmpsInclusions({...tmpsInclusions, operatingExpenses: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsInclusions.operatingExpenses} onValueChange={v => setTmpsInclusions({...tmpsInclusions, operatingExpenses: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Capital Expenditure</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsInclusions.capitalExpenditure} onChange={e => setTmpsInclusions({...tmpsInclusions, capitalExpenditure: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsInclusions.capitalExpenditure} onValueChange={v => setTmpsInclusions({...tmpsInclusions, capitalExpenditure: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Other</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsInclusions.other} onChange={e => setTmpsInclusions({...tmpsInclusions, other: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsInclusions.other} onValueChange={v => setTmpsInclusions({...tmpsInclusions, other: v})} />
                     </div>
                   </div>
                   
@@ -403,23 +402,23 @@ export default function Financials() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Permissible Imports</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsExclusions.imports} onChange={e => setTmpsExclusions({...tmpsExclusions, imports: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsExclusions.imports} onValueChange={v => setTmpsExclusions({...tmpsExclusions, imports: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Salaries & Wages</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsExclusions.salaries} onChange={e => setTmpsExclusions({...tmpsExclusions, salaries: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsExclusions.salaries} onValueChange={v => setTmpsExclusions({...tmpsExclusions, salaries: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Statutory (PAYE, UIF, etc)</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsExclusions.statutory} onChange={e => setTmpsExclusions({...tmpsExclusions, statutory: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsExclusions.statutory} onValueChange={v => setTmpsExclusions({...tmpsExclusions, statutory: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Depreciation/Bad Debts</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsExclusions.depreciation} onChange={e => setTmpsExclusions({...tmpsExclusions, depreciation: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsExclusions.depreciation} onValueChange={v => setTmpsExclusions({...tmpsExclusions, depreciation: v})} />
                     </div>
                     <div className="grid grid-cols-[1fr_120px] gap-2 items-center">
                       <Label className="text-sm">Other Exclusions</Label>
-                      <Input type="number" className="h-8 text-right font-mono" value={tmpsExclusions.other} onChange={e => setTmpsExclusions({...tmpsExclusions, other: Number(e.target.value)})} />
+                      <NumberInput className="h-8 text-right font-mono" value={tmpsExclusions.other} onValueChange={v => setTmpsExclusions({...tmpsExclusions, other: v})} />
                     </div>
                   </div>
                   
@@ -454,16 +453,15 @@ export default function Financials() {
                     <Label className="text-sm">Manual TMPS:</Label>
                     <div className="flex items-center gap-1">
                       <span className="text-sm font-mono text-muted-foreground">R</span>
-                      <Input
-                        type="number"
+                      <NumberInput
                         className="w-40 h-9 text-right font-mono font-bold text-primary"
                         value={tmpsManualValue}
-                        onChange={e => setTmpsManualValue(e.target.value)}
+                        onValueChange={setTmpsManualValue}
                         data-testid="input-tmps-manual"
                       />
                     </div>
                   </div>
-                  <Button onClick={() => { updateTMPS(Number(tmpsManualValue)); toast({ title: "TMPS Updated", description: "Manual TMPS value saved." }); }} data-testid="btn-save-manual-tmps">
+                  <Button onClick={() => { updateTMPS(tmpsManualValue, true); toast({ title: "TMPS Updated", description: "Manual TMPS value saved." }); }} data-testid="btn-save-manual-tmps">
                     Save Manual TMPS
                   </Button>
                 </div>

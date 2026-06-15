@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Plus, HeartHandshake, Trash2 } from "lucide-react";
@@ -91,7 +92,7 @@ export default function SED() {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Amount (R)</Label>
-                <Input type="number" value={newSed.amount} onChange={e => setNewSed({...newSed, amount: Number(e.target.value)})} className="col-span-3" />
+                <NumberInput value={newSed.amount} onValueChange={v => setNewSed({...newSed, amount: v})} className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Type</Label>

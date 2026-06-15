@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tool
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Switch } from "@toolkit/components/ui/switch";
@@ -55,14 +56,16 @@ export default function ESD() {
 
   const handleTmpsToggle = (manual: boolean) => {
     setIsManualTmps(manual);
-    if (!manual) {
-      updateTMPS(calculatedTmps);
+    if (manual) {
+      updateTMPS(tmps || calculatedTmps, true);
+    } else {
+      updateTMPS(calculatedTmps, false);
     }
   };
 
   const handleManualTmpsChange = (value: number) => {
     setManualTmpsValue(value);
-    updateTMPS(value);
+    updateTMPS(value, true);
   };
 
   const [isSupOpen, setIsSupOpen] = useState(false);
@@ -180,10 +183,9 @@ export default function ESD() {
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Spend (R)</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.spend}
-          onChange={e => setData({ ...data, spend: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, spend: v })}
           className="col-span-3"
           data-testid="input-supplier-spend"
         />
@@ -219,40 +221,36 @@ export default function ESD() {
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Black %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.blackOwnership}
-          onChange={e => setData({ ...data, blackOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, blackOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-black-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Black Women %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.blackWomenOwnership}
-          onChange={e => setData({ ...data, blackWomenOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, blackWomenOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-black-women-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Youth %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.youthOwnership}
-          onChange={e => setData({ ...data, youthOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, youthOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-youth-ownership"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Disabled %</Label>
-        <Input
-          type="number"
+        <NumberInput
           value={data.disabledOwnership}
-          onChange={e => setData({ ...data, disabledOwnership: Number(e.target.value) })}
+          onValueChange={v => setData({ ...data, disabledOwnership: v })}
           className="col-span-3"
           data-testid="input-supplier-disabled-ownership"
         />
@@ -302,7 +300,7 @@ export default function ESD() {
               <DialogHeader><DialogTitle>Add ESD Contribution</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Beneficiary</Label><Input value={newEsd.beneficiary} onChange={e => setNewEsd({...newEsd, beneficiary: e.target.value})} className="col-span-3" /></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Amount (R)</Label><Input type="number" value={newEsd.amount} onChange={e => setNewEsd({...newEsd, amount: Number(e.target.value)})} className="col-span-3" /></div>
+                <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Amount (R)</Label><NumberInput value={newEsd.amount} onValueChange={v => setNewEsd({...newEsd, amount: v})} className="col-span-3" /></div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right">Category</Label>
                   <Select value={newEsd.category} onValueChange={v => setNewEsd({...newEsd, category: v})}>
@@ -360,10 +358,9 @@ export default function ESD() {
           <CardContent>
             {isManualTmps ? (
               <div className="space-y-2">
-                <Input
-                  type="number"
+                <NumberInput
                   value={manualTmpsValue}
-                  onChange={e => handleManualTmpsChange(Number(e.target.value))}
+                  onValueChange={handleManualTmpsChange}
                   className="text-lg font-bold font-heading"
                   data-testid="input-tmps-manual"
                 />
