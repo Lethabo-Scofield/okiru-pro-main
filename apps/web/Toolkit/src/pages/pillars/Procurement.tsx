@@ -65,14 +65,18 @@ export default function Procurement() {
 
   const handleTmpsToggle = (manual: boolean) => {
     setIsManualTmps(manual);
-    if (!manual) {
-      updateTMPS(calculatedTmps);
+    if (manual) {
+      // Pin the current value as a manual override; user can then edit it.
+      updateTMPS(tmps || calculatedTmps, true);
+    } else {
+      // Calculated mode: derive from suppliers and keep it auto-syncing.
+      updateTMPS(calculatedTmps, false);
     }
   };
 
   const handleManualTmpsChange = (value: number) => {
     setManualTmpsValue(value);
-    updateTMPS(value);
+    updateTMPS(value, true);
   };
 
   const [isSupOpen, setIsSupOpen] = useState(false);
