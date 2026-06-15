@@ -882,6 +882,69 @@ function mapLegacyCategoryForStore(cat: string): TrainingCategoryCode {
   }
 }
 
+function isBlackRaceForStore(race: string | null | undefined): boolean {
+  return race === 'African' || race === 'Coloured' || race === 'Indian';
+}
+
+/**
+ * Hydrate one training program from an API/workbook payload, preserving EVERY
+ * field the Skills calculator and UI read (BBEE-008/009). Previously isAbsorbed,
+ * isForeign, isBursary, employmentStatus, isYesEmployee, totalCost, dates and
+ * several cost components were dropped here, silently zeroing Skills scores and
+ * losing YES/absorption data on reload / _recalculateAll. Exported for testing.
+ */
+export function hydrateTrainingProgramFromApi(tp: any) {
+  const courseCost = tp.courseCost || 0;
+  const travelCost = tp.travelCost || 0;
+  const accommodationCost = tp.accommodationCost || 0;
+  const cateringCost = tp.cateringCost || 0;
+  const stationeryCost = tp.stationeryCost || 0;
+  const facilityCost = tp.facilityCost ?? tp.trainingFacilityCost ?? 0;
+  const salaryCost = tp.salaryCost || 0;
+  const otherCosts = tp.otherCosts || 0;
+  const componentSum = courseCost + travelCost + accommodationCost + cateringCost +
+    stationeryCost + facilityCost + salaryCost + otherCosts;
+  // cost the calculator reads must never be 0 when the user entered costs.
+  const totalCost = tp.totalCost ?? tp.cost ?? (componentSum || 0);
+  const race = tp.race || null;
+  return {
+    id: tp.id,
+    programName: tp.programName ?? tp.name ?? '',
+    name: tp.name ?? tp.programName ?? '',
+    trainingProvider: tp.trainingProvider ?? tp.provider ?? '',
+    category: tp.category,
+    categoryCode: tp.categoryCode || mapLegacyCategoryForStore(tp.category),
+    learnerName: tp.learnerName || '',
+    learnerIdNumber: tp.learnerIdNumber ?? tp.idNumber ?? '',
+    employeeId: tp.employeeId,
+    // Demographics
+    gender: tp.gender || null,
+    race,
+    isDisabled: tp.isDisabled || false,
+    isForeign: tp.isForeign || false,
+    isBlack: typeof tp.isBlack === 'boolean' ? tp.isBlack : isBlackRaceForStore(race),
+    // Employment / YES / completion — required for unemployed, learnership & absorption scoring
+    employmentStatus: tp.employmentStatus ?? (tp.isEmployed === false ? 'Unemployed' : tp.isEmployed ? 'Permanent' : undefined),
+    isEmployed: typeof tp.isEmployed === 'boolean' ? tp.isEmployed : tp.employmentStatus ? tp.employmentStatus !== 'Unemployed' : false,
+    isYesEmployee: tp.isYesEmployee || false,
+    isCompleted: tp.isCompleted || false,
+    isAbsorbed: tp.isAbsorbed || false,
+    isBursary: tp.isBursary || tp.category === 'bursary' || tp.categoryCode === 'A' || false,
+    isAbet: tp.isAbet || false,
+    isMandatory: tp.isMandatory || false,
+    // Location & dates
+    municipality: tp.municipality || '',
+    transactionDate: tp.transactionDate ?? tp.dateOfTransaction ?? '',
+    startDate: tp.startDate ?? '',
+    endDate: tp.endDate ?? '',
+    // Costs
+    courseCost, travelCost, accommodationCost, cateringCost,
+    stationeryCost, facilityCost, salaryCost, otherCosts,
+    totalCost,
+    cost: totalCost,
+  };
+}
+
 export const useBbeeStore = create<BbeeState>((set, get) => ({
   isLoaded: false,
   activeClientId: null,
@@ -1038,24 +1101,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           undefined,
         trainingManagerSalary: finExtras.trainingManagerSalary as number | undefined,
         trainingOverheadCost: finExtras.trainingOverheadCost as number | undefined,
-        trainingPrograms: (data.skills?.trainingPrograms || []).map((tp: any) => ({
-          id: tp.id,
-          name: tp.name,
-          category: tp.category,
-          categoryCode: tp.categoryCode || mapLegacyCategoryForStore(tp.category),
-          cost: tp.cost || 0,
-          courseCost: tp.courseCost || 0,
-          travelCost: tp.travelCost || 0,
-          accommodationCost: tp.accommodationCost || 0,
-          cateringCost: tp.cateringCost || 0,
-          employeeId: tp.employeeId,
-          isEmployed: tp.isEmployed || false,
-          isBlack: tp.isBlack || false,
-          gender: tp.gender || null,
-          race: tp.race || null,
-          isDisabled: tp.isDisabled || false,
-          municipality: tp.municipality || '',
-        })),
+        // BBEE-008/009: preserve EVERY field the Skills calculator and UI read, so
+        // scores don't silently drop to 0 (or YES/absorption data vanish) on
+        // reload / _recalculateAll. Previously isAbsorbed, isForeign, isBursary,
+        // employmentStatus, isYesEmployee, totalCost, dates and several cost
+        // components were dropped here.
+        // BBEE-008/009: preserve every field the Skills calculator/UI read (see
+        // hydrateTrainingProgramFromApi) so scores don't silently zero / YES &
+        // absorption data don't vanish on reload / _recalculateAll.
+        trainingPrograms: (data.skills?.trainingPrograms || []).map(hydrateTrainingProgramFromApi),
         yesCandidatesCount: yesCandidatesFromSkills.length,
         yesAbsorbedCount: yesCandidatesFromSkills.filter((tp: any) => tp.isAbsorbed).length,
       };

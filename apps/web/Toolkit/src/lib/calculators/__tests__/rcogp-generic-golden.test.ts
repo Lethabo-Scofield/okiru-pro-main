@@ -23,16 +23,27 @@ const LEVIABLE = 2_069_572;
 const TMPS = 133_730_345.99;
 const EAP_PROVINCE = 'Gauteng';
 
-/** Excel Summary Scorecard actuals (verified 2026-03-31). */
+/**
+ * Excel Summary Scorecard actuals (verified 2026-03-31), with the Management
+ * Control value corrected 2026-06-11 to the workbook's PER-DEMOGRAPHIC model.
+ *
+ * The prior managementControl = 11.765 was the value produced by the legacy
+ * AGGREGATE engine (black% ÷ EAP-black-target), which does NOT match the
+ * workbook. The workbook `MC Scorecard` scores each band per demographic group
+ * and caps each group at bandMaxPts × effectiveEAP_group (cells E31=$E$30*EAP!C23,
+ * H31=MIN(G31/E31*F31, F31)); its own cached Grand Total for Lake's data is 8.825.
+ * For THIS synthetic 12-employee fixture the per-demographic total (Gauteng, 25th
+ * CEE norms) is 10.38. Formula fidelity is proven in management.eapWorkbook.test.ts.
+ */
 const EXCEL = {
   ownership: 25,
-  managementControl: 11.765470494417864,
+  managementControl: 10.38, // per-demographic (was 11.765 under the aggregate engine)
   skillsDevelopment: 0,
   procurement: 20.333988202597936,
   supplierDevelopment: 3.6913447533499544,
   enterpriseDevelopment: 2.3624606421439704,
   socioEconomicDevelopment: 0.40604792286849495,
-  grandTotal: 63.55931201537822,
+  grandTotal: 62.17, // 63.559 − 11.765 (old MC) + 10.38 (per-demographic MC)
 };
 
 const lakeOwnership = {

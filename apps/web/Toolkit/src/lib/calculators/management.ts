@@ -18,8 +18,51 @@ import {
   allowsRcogpDefaults,
 } from './shared';
 import type { Province } from './eapTargets';
-import { getEAPTargets, normalizeProvince, buildDemographicBreakdown, type DemographicBreakdown as EAPGroupBreakdown } from './eapTargets';
+import {
+  getEAPTargets,
+  getEffectiveEap,
+  getEffectiveBlackFemaleEap,
+  classifyDemographic,
+  normalizeProvince,
+  type DemographicBreakdown as EAPGroupBreakdown,
+} from './eapTargets';
+import type { DemoGroup } from './eapNorms';
 export type { DemoGroup, DemographicBreakdown as EAPGroupBreakdown } from './eapTargets';
+
+const BLACK_GROUPS: DemoGroup[] = ['AM', 'CM', 'IM', 'AF', 'CF', 'IF'];
+const BLACK_FEMALE_GROUPS: DemoGroup[] = ['AF', 'CF', 'IF'];
+const round4 = (n: number): number => Math.round(n * 10000) / 10000;
+
+/**
+ * Per-demographic band scoring — faithful replica of the workbook `MC Scorecard`
+ * (e.g. Senior: E31 = $E$30*EAP!C23, F31 = F$30*EAP!C23, H31 = MIN(G31/E31*F31, F31)).
+ * Each demographic group g gets:
+ *   subTarget_g = bandTarget × eff_g,  maxPts_g = bandMaxPts × eff_g,
+ *   score_g     = min(actual_g / subTarget_g × maxPts_g, maxPts_g)
+ * Band score = Σ score_g. The breakdown reports the EAP proportion (eff_g) per group.
+ */
+function scoreBandPerDemographic(
+  emps: Employee[],
+  bandTarget: number,
+  bandMaxPts: number,
+  eapSet: Partial<Record<DemoGroup, number>>,
+  groups: DemoGroup[],
+): { score: number; breakdown: EAPGroupBreakdown[] } {
+  const total = emps.length;
+  let score = 0;
+  const breakdown: EAPGroupBreakdown[] = [];
+  for (const g of groups) {
+    const eff = eapSet[g] || 0;
+    const subTarget = bandTarget * eff;
+    const maxPtsG = bandMaxPts * eff;
+    const count = emps.filter(e => classifyDemographic(e.gender, e.race) === g).length;
+    const actual = total > 0 ? count / total : 0;
+    const scoreG = subTarget > 0 ? Math.min((actual / subTarget) * maxPtsG, maxPtsG) : 0;
+    score += scoreG;
+    breakdown.push({ group: g, eapTarget: round4(eff), actual: round4(actual), count, totalInLevel: total });
+  }
+  return { score, breakdown };
+}
 
 export interface ManagementSubLine {
   name: string;
@@ -86,6 +129,14 @@ const MANAGEMENT_RCOGP_DEFAULTS = {
   middleBWMaxPts: 1,
   juniorMaxPts: 1,
   juniorBWMaxPts: 1,
+  // Band black / black-female targets (workbook MC Scorecard E30/E37/E43/E50/E56/E63).
+  // These are split across demographic groups by the effective EAP for the client's province.
+  seniorBlackTarget: 0.60,
+  seniorBWTarget: 0.30,
+  middleBlackTarget: 0.75,
+  middleBWTarget: 0.38,
+  juniorBlackTarget: 0.88,
+  juniorBWTarget: 0.44,
   disabledTarget: 0.02,
   disabledMaxPts: 2,
   maxPoints: 19,
@@ -94,20 +145,6 @@ const MANAGEMENT_RCOGP_DEFAULTS = {
 function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, useRcogp: boolean): T {
   if (value !== undefined && value !== null) return value;
   return useRcogp ? rcogpDefault : (value as T);
-}
-
-/**
- * Per-demographic EAP scoring per RCOGP slide 100.
- * @see docs/domain/calculations/management_control_calc.md
- */
-function calculateEAPScore(employees: Employee[], categoryTarget: number, maxPoints: number): { score: number; breakdown: EAPGroupBreakdown[] } {
-  const breakdown = buildDemographicBreakdown(employees);
-  if (employees.length === 0) return { score: 0, breakdown };
-  const blackPct = countBlack(employees) / employees.length;
-  const score = categoryTarget > 0
-    ? Math.min((blackPct / categoryTarget) * maxPoints, maxPoints)
-    : 0;
-  return { score, breakdown };
 }
 
 const countBlack = (emps: Employee[]): number =>
@@ -132,7 +169,8 @@ function pctOf(emps: Employee[], countFn: (e: Employee[]) => number): number {
 export function calculateManagementScore(
   data: ManagementData,
   config?: CalculatorConfig,
-  eapProvince?: string
+  eapProvince?: string,
+  eapYear?: number,
 ): ManagementResult {
   const { sectorCode, scorecardType } = resolveSectorContext(config);
   const management = requireSectorConfig(
@@ -198,12 +236,21 @@ export function calculateManagementScore(
     : mgmtFallback(config?.managementControl?.maxPoints, rcogp.maxPoints, useRcogp);
   const subMinPercent = config?.pillarConfigs?.managementControl?.subMinimumPercent ?? 40;
 
-  // Get EAP targets based on province
+  // Get EAP targets based on province + report year.
   const province = normalizeProvince(eapProvince || 'National') as Province;
-  const seniorEAP = getEAPTargets(province, 'Senior');
-  const middleEAP = getEAPTargets(province, 'Middle');
-  const juniorEAP = getEAPTargets(province, 'Junior');
-  const skilledTechnicalEAP = getEAPTargets(province, 'Skilled Technical'); // Uses Middle EAP targets
+  const skilledTechnicalEAP = getEAPTargets(province, 'Skilled Technical'); // informational only
+
+  // Per-demographic effective EAP sets (workbook EAP!C23:C28 = 6-group; C30:C32 = black-female).
+  const effEap = getEffectiveEap(province, eapYear);
+  const effBfEap = getEffectiveBlackFemaleEap(province, eapYear);
+
+  // Band black / black-female targets — config-driven (RCOGP fallback 0.60/0.75/0.88, 0.30/0.38/0.44).
+  const seniorBlackTarget = mgmtFallback(cfg?.seniorBlackTarget, rcogp.seniorBlackTarget, useRcogp);
+  const seniorBWBandTarget = mgmtFallback(cfg?.seniorBWTarget, rcogp.seniorBWTarget, useRcogp);
+  const middleBlackTarget = mgmtFallback(cfg?.middleBlackTarget, rcogp.middleBlackTarget, useRcogp);
+  const middleBWBandTarget = mgmtFallback(cfg?.middleBWTarget, rcogp.middleBWTarget, useRcogp);
+  const juniorBlackTarget = mgmtFallback(cfg?.juniorBlackTarget, rcogp.juniorBlackTarget, useRcogp);
+  const juniorBWBandTarget = mgmtFallback(cfg?.juniorBWTarget, rcogp.juniorBWTarget, useRcogp);
 
   const board = grouped['Board'] || [];
   const execDirs = [
@@ -249,14 +296,20 @@ export function calculateManagementScore(
   const execDirectorsBlack = clampScore(safeRatio(execBlackPct, execBlackTarget, execBlackMaxPts), execBlackMaxPts);
   const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
 
-  const seniorTarget = cfg?.seniorBlackTarget ?? seniorEAP.blackTarget;
-  const seniorBWTarget = seniorEAP.blackWomenTarget;
-  const middleTarget = cfg?.middleBlackTarget ?? middleEAP.blackTarget;
-  const middleBWTarget = middleEAP.blackWomenTarget;
-  const juniorTarget = cfg?.juniorBlackTarget ?? juniorEAP.blackTarget;
-  const juniorBWTarget = juniorEAP.blackWomenTarget;
+  // Junior band combines Junior + Semi-skilled + Unskilled (workbook grouping).
+  const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
 
-  // Toolkit toggle: merge Other Executive + Senior into one band (4 + 2 pts).
+  // Per-demographic band scoring — faithful replica of the workbook MC Scorecard.
+  // Black bands split their target across the 6-group effective EAP; black-female
+  // bands split across the black-female-only effective set. Scores sum per band.
+  const seniorBlackResult = scoreBandPerDemographic(senior, seniorBlackTarget, seniorMaxPts, effEap, BLACK_GROUPS);
+  const seniorBWResult = scoreBandPerDemographic(senior, seniorBWBandTarget, seniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
+  const middleBlackResult = scoreBandPerDemographic(middle, middleBlackTarget, middleMaxPts, effEap, BLACK_GROUPS);
+  const middleBWResult = scoreBandPerDemographic(middle, middleBWBandTarget, middleBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
+  const juniorBlackResult = scoreBandPerDemographic(juniorCombined, juniorBlackTarget, juniorMaxPts, effEap, BLACK_GROUPS);
+  const juniorBWResult = scoreBandPerDemographic(juniorCombined, juniorBWBandTarget, juniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
+
+  // Toolkit toggle: merge Other Executive + Senior into one band (aggregate scoring).
   const combinedExcoSeniorEmps = [...otherExec, ...senior];
   const combinedExcoBlackPct = pctOf(combinedExcoSeniorEmps, countBlack);
   const combinedExcoBWOPct = pctOf(combinedExcoSeniorEmps, countBlackWomen);
@@ -282,28 +335,14 @@ export function calculateManagementScore(
   } else {
     otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
     otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
-    seniorBlack = clampScore(safeRatio(seniorBlackPct, seniorTarget, seniorMaxPts), seniorMaxPts);
-    seniorBWO = clampScore(safeRatio(seniorBWOPct, seniorBWTarget, seniorBWMaxPts), seniorBWMaxPts);
+    seniorBlack = clampScore(seniorBlackResult.score, seniorMaxPts);
+    seniorBWO = clampScore(seniorBWResult.score, seniorBWMaxPts);
   }
 
-  // Lake Trading Fix Plan §1 Bug 2 — match the Excel ground-truth template
-  // (and `apps/api/pipeline/rules/pillarCalculators.ts::calcManagement`) by
-  // scoring Black and BWO independently with simple safeRatio against the
-  // provincial EAP target. The per-demographic breakdown is still surfaced
-  // below for UI diagnostics. Junior includes Semi-skilled and Unskilled.
-
-  const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
-  const juniorCombinedBlackPct = pctOf(juniorCombined, countBlack);
-  const juniorCombinedBWOPct = pctOf(juniorCombined, countBlackWomen);
-
-  const middleBlack = clampScore(safeRatio(middleBlackPct, middleTarget, middleMaxPts), middleMaxPts);
-  const middleBWO = clampScore(safeRatio(middleBWOPct, middleBWTarget, middleBWMaxPts), middleBWMaxPts);
-  const juniorBlackScore = clampScore(safeRatio(juniorCombinedBlackPct, juniorTarget, juniorMaxPts), juniorMaxPts);
-  const juniorBWOScore = clampScore(safeRatio(juniorCombinedBWOPct, juniorBWTarget, juniorBWMaxPts), juniorBWMaxPts);
-
-  const seniorEAPResult = calculateEAPScore(senior, seniorTarget, seniorMaxPts + seniorBWMaxPts);
-  const middleEAPResult = calculateEAPScore(middle, middleTarget, middleMaxPts + middleBWMaxPts);
-  const juniorEAPResult = calculateEAPScore(juniorCombined, juniorTarget, juniorMaxPts + juniorBWMaxPts);
+  const middleBlack = clampScore(middleBlackResult.score, middleMaxPts);
+  const middleBWO = clampScore(middleBWResult.score, middleBWMaxPts);
+  const juniorBlackScore = clampScore(juniorBlackResult.score, juniorMaxPts);
+  const juniorBWOScore = clampScore(juniorBWResult.score, juniorBWMaxPts);
 
   // Skilled Technical is informational only (not part of RCOGP 19-point total)
   const skilledTechnicalBlackScore = clampScore(safeRatio(skilledTechnicalBlackPct, skilledTechnicalEAP.blackTarget, seniorMaxPts), seniorMaxPts);
@@ -332,12 +371,12 @@ export function calculateManagementScore(
         { name: "Junior Management (NOT AVAILABLE)", target: "0%", weighting: 0, score: 0 },
       ]
     : [
-        { name: "Black employees in senior management", target: `${(seniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: seniorBlack },
-        { name: "Black female employees in senior management", target: `${(seniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: seniorBWO },
-        { name: "Black employees in middle management", target: `${(middleEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: middleMaxPts, score: middleBlack },
-        { name: "Black female employees in middle management", target: `${(middleEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: middleBWMaxPts, score: middleBWO },
-        { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorMaxPts, score: juniorBlackScore },
-        { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
+        { name: "Black employees in senior management", target: `${(seniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: seniorMaxPts, score: seniorBlack },
+        { name: "Black female employees in senior management", target: `${(seniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: seniorBWMaxPts, score: seniorBWO },
+        { name: "Black employees in middle management", target: `${(middleBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: middleMaxPts, score: middleBlack },
+        { name: "Black female employees in middle management", target: `${(middleBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: middleBWMaxPts, score: middleBWO },
+        { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorMaxPts, score: juniorBlackScore },
+        { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
       ];
 
   const skilledTechnicalSubLines: ManagementSubLine[] = seniorMaxPts > 0
@@ -382,9 +421,9 @@ export function calculateManagementScore(
     subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     eapBreakdowns: {
-      senior: seniorEAPResult.breakdown,
-      middle: middleEAPResult.breakdown,
-      junior: juniorEAPResult.breakdown,
+      senior: seniorBlackResult.breakdown,
+      middle: middleBlackResult.breakdown,
+      junior: juniorBlackResult.breakdown,
     },
     eapProvince: province,
     rawStats: {

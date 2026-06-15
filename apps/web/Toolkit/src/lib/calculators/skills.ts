@@ -5,7 +5,7 @@
 import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, normalizeSpendFraction, isBlackRace } from './shared';
-import { buildDemographicBreakdown, getEAPTargets, normalizeProvince, type DemographicBreakdown, type Province } from './eapTargets';
+import { buildDemographicBreakdown, normalizeProvince, type DemographicBreakdown, type Province } from './eapTargets';
 
 /**
  * @domain-rule pillar:skills_development, slide:86
@@ -113,10 +113,14 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   };
 
   for (const prog of programs) {
-    if (!prog.isBlack) continue;
+    // Compute black-status from race when the flag isn't set (input layers don't
+    // always write isBlack), and accept totalCost when cost wasn't populated —
+    // both previously caused silently-zero Skills scores.
+    const isBlack = prog.isBlack ?? isBlackRace(prog.race);
+    if (!isBlack) continue;
 
     const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
-    const cost = prog.cost ?? 0;
+    const cost = prog.cost ?? prog.totalCost ?? 0;
     acc.byCategory[catCode] += cost;
     acc.blackPeople += cost;
     acc.totalBlackLearners++;
@@ -192,16 +196,18 @@ function filterProgramsForSpendIndicator(
 function buildSkillsEAPBreakdowns(
   programs: TrainingProgram[],
   province: Province,
+  year?: number,
 ): Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> {
   const result: Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> = {};
   for (const indicatorIdx of [0, 1, 2]) {
     const filtered = filterProgramsForSpendIndicator(programs, indicatorIdx);
     const byLevel = {} as Record<SkillsEAPLevel, DemographicBreakdown[]>;
     for (const level of SKILLS_EAP_LEVELS) {
-      // Provincial aggregate EAP is level-specific; per-demographic proportions are national.
-      getEAPTargets(province, SKILLS_EAP_OCC_LEVEL[level]);
+      // Province + year effective EAP (was national-only — same bug fixed in MC).
       byLevel[level] = buildDemographicBreakdown(
         filtered.map(p => ({ gender: p.gender, race: p.race })),
+        province,
+        year,
       );
     }
     result[indicatorIdx] = byLevel;

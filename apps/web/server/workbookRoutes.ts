@@ -140,7 +140,6 @@ const SKILLS_HEADERS = [
   "Race *",
   "Disabled?",
   "Foreign?",
-  "Age",
   "Employed?",
   "Completed?",
   "Absorbed?",
@@ -270,7 +269,6 @@ const DATA_SHEETS: DataSheetSpec[] = [
       s((r as any).race),
       yesNo((r as any).isDisabled ?? (r as any).disabled),
       yesNo((r as any).isForeign ?? (r as any).foreign),
-      s((r as any).age),
       yesNo((r as any).employed),
       yesNo((r as any).completed),
       yesNo((r as any).absorbed),
@@ -1002,27 +1000,42 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
     const absorbed = Boolean((r as any).absorbed);
+    const employed = Boolean((r as any).employed);
+    const categoryCode = s((r as any).categoryCode);
+    // Derive employmentStatus (calculator reads this for unemployed/learnership/
+    // absorption scoring) and the explicit YES / bursary flags, so the first
+    // calculation after submit matches what the loader reconstructs on reload.
+    const rawEmpStatus = s((r as any).employmentStatus);
+    const employmentStatus = rawEmpStatus || (employed ? "Permanent" : "Unemployed");
     return {
       programName: s((r as any).programName),
       // Alias `name` for consumers keyed on it.
       name: s((r as any).programName),
-      categoryCode: s((r as any).categoryCode),
-      category: s((r as any).categoryCode),
+      categoryCode,
+      category: categoryCode,
       trainingProvider: s((r as any).trainingProvider),
       learnerName: s((r as any).learnerName),
       idNumber: s((r as any).idNumber),
+      learnerIdNumber: s((r as any).idNumber),
       race: normalizeRace(s((r as any).race)) || s((r as any).race),
       gender: s((r as any).gender),
       isBlack: isBlackRace(s((r as any).race)),
       isDisabled: Boolean((r as any).isDisabled),
       isForeign: Boolean((r as any).isForeign),
-      employed: Boolean((r as any).employed),
+      employed,
+      employmentStatus,
+      isYesEmployee: Boolean((r as any).isYesEmployee ?? (r as any).yesEmployee),
       completed: Boolean((r as any).completed),
+      isCompleted: Boolean((r as any).completed),
       absorbed,
       isAbsorbed: absorbed,
+      isBursary: Boolean((r as any).isBursary) || categoryCode === "A",
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),
+      cateringCost: num((r as any).cateringCost),
+      stationeryCost: num((r as any).stationeryCost),
+      facilityCost: num((r as any).trainingFacilityCost ?? (r as any).facilityCost),
       salaryCost: num((r as any).salaryCost),
       otherCosts: num((r as any).otherCosts),
       totalCost: total,
