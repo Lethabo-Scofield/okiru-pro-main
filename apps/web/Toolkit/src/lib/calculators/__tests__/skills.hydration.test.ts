@@ -40,4 +40,24 @@ describe('Skills hydration', () => {
     ]));
     expect(r.rawStats.absorbedCount).toBe(1);
   });
+
+  // Polo feedback #9: learnership/apprenticeship participation must count the
+  // proper RCOGP category codes C (apprenticeship) and D (learnership), not just
+  // B/legacy strings. Previously these scored zero.
+  it('counts learnership (D), apprenticeship (C) and internship (B) participation', () => {
+    const r = calculateSkillsScore(skillsData([
+      { id: '1', categoryCode: 'D', race: 'African', gender: 'Male', isBlack: true, cost: 50_000 },
+      { id: '2', categoryCode: 'C', race: 'Coloured', gender: 'Female', isBlack: true, cost: 50_000 },
+      { id: '3', categoryCode: 'B', race: 'Indian', gender: 'Male', isBlack: true, cost: 50_000 },
+    ]));
+    expect(r.rawStats.learnershipCount).toBe(3);
+    expect(r.learnerships).toBeGreaterThan(0);
+  });
+
+  it('does not count non-participation categories (E) as learnerships', () => {
+    const r = calculateSkillsScore(skillsData([
+      { id: '1', categoryCode: 'E', race: 'African', gender: 'Male', isBlack: true, cost: 50_000 },
+    ]));
+    expect(r.rawStats.learnershipCount).toBe(0);
+  });
 });

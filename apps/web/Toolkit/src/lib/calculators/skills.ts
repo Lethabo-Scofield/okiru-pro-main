@@ -127,7 +127,19 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
 
     if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
     if (prog.isDisabled) acc.disabled += cost;
-    if (prog.category === 'learnership' || prog.category === 'internship' || catCode === 'B') acc.learnershipCount++;
+    // "Number of ALL Black people participating in learnerships, apprenticeships
+    // or internships" — count categories B (internship), C (apprenticeship) and
+    // D (learnership). Previously only B/legacy strings counted, so selecting the
+    // proper C/D codes scored zero (Polo feedback #9).
+    if (
+      prog.category === 'learnership' ||
+      prog.category === 'internship' ||
+      catCode === 'B' ||
+      catCode === 'C' ||
+      catCode === 'D'
+    ) {
+      acc.learnershipCount++;
+    }
     if (isUnemployed(prog)) acc.unemployedCount++;
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
     if (prog.isAbsorbed) acc.absorbedCount++;

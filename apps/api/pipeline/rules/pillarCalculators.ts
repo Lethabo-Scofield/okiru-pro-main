@@ -703,7 +703,15 @@ function calcSkills(programs: TrainingProgramInput[], leviableAmount: number, he
 
     if (catCode === 'A' || tp.category === 'bursary') bursarySpend += cost;
     if (tp.isDisabled) disabledSpend += cost;
-    if (catCode === 'B' || tp.category === 'learnership' || tp.category === 'internship') learnershipCount++;
+    // Learnership/apprenticeship/internship participation = categories B/C/D
+    // (was B-only, so C/D scored zero — frontend parity, Polo feedback #9).
+    if (
+      ['B', 'C', 'D'].includes(catCode) ||
+      tp.category === 'learnership' ||
+      tp.category === 'internship'
+    ) {
+      learnershipCount++;
+    }
     if (tp.isAbsorbed) absorbedCount++;
   }
 
