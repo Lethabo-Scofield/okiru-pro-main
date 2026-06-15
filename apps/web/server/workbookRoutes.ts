@@ -1069,6 +1069,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         supplierName: s((r as any).supplierName),
         // Alias `name` for downstream consumers that key off it.
         name: s((r as any).supplierName),
+        // Polo feedback #8: carry the supplier registration number through.
+        registrationNumber: s((r as any).registrationNumber),
         currentSize: sizeRaw,
         size: sizeRaw,
         enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
@@ -1151,6 +1153,18 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const sedMeta = (sec["sed"]?.meta ?? {}) as Record<string, unknown>;
   const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
   const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
+
+  // Procurement TMPS fallback (Polo feedback #10): suppliers were saved but never
+  // scored because procurement targets are tmps × pct, and tmps only came from the
+  // Financials TMPS field. If that wasn't supplied, derive tmps from total supplier
+  // spend so entered suppliers actually produce a score.
+  if (!(financials.tmps > 0)) {
+    const supplierSpendTotal = suppliers.reduce(
+      (acc, sup) => acc + (num((sup as any).spend) || 0),
+      0,
+    );
+    if (supplierSpendTotal > 0) financials.tmps = supplierSpendTotal;
+  }
 
   const ownershipMeta = {
     companyValue: financials.companyValue ?? 0,
