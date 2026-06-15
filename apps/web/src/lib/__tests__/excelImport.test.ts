@@ -342,7 +342,10 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(ee.maxPoints).toBe(27);
     expect(ee.score).toBeGreaterThan(0);
     expect(total).toBeGreaterThan(40);
-    expect(total).toBeLessThan(70);
+    // Upper bound raised from 70 → 80 (2026-06-11): the per-demographic MC model
+    // rewards an EAP-matched workforce more than the old aggregate model (which
+    // penalised against inflated per-level targets), lifting this diverse QSE to ~73.
+    expect(total).toBeLessThan(80);
   });
 
   it("maps Lake Trading Test.xlsx into supplier, ESD, and SED detail rows", () => {
@@ -430,7 +433,7 @@ describe("excelImport — Thandanani Transport fixture", () => {
       RCOGP_GENERIC_CONFIG,
     );
     const total = own.total + mc.total + proc.total + esd.sdTotal + esd.edTotal + sed.total;
-    expect(total).toBeCloseTo(63.56, 1);
+    expect(total).toBeCloseTo(62.17, 1); // per-demographic MC (was 63.56 under aggregate MC)
   });
 
   it("normalizes sector labels deterministically", () => {

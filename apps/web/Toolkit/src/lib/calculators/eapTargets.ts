@@ -7,6 +7,15 @@
  * Reference: B-BBEE Commission EAP tables
  * Last updated: 2026-03-31
  */
+import {
+  EFFECTIVE_EAP_NORMS,
+  RAW_EAP_NORMS,
+  LATEST_EAP_YEAR,
+  type DemoGroup,
+  type EapGroupValues,
+} from './eapNorms';
+
+export type { DemoGroup, EapGroupValues } from './eapNorms';
 
 export type Province =
   | 'National'
@@ -35,9 +44,6 @@ export interface EAPValues {
   blackWomenTarget: number;
 }
 
-/** Per-demographic EAP group codes (Stats SA national proportions). */
-export type DemoGroup = 'AM' | 'CM' | 'IM' | 'WM' | 'AF' | 'CF' | 'IF' | 'WF';
-
 export interface DemographicBreakdown {
   group: DemoGroup;
   eapTarget: number;
@@ -46,14 +52,65 @@ export interface DemographicBreakdown {
   totalInLevel: number;
 }
 
+/** The CEE report year used for EAP norms (default = latest ingested). */
+export type EapYear = number;
+
+/** Available EAP report years (newest first), sourced from the generated norms. */
+export function getEapReportYears(): EapYear[] {
+  return Object.keys(EFFECTIVE_EAP_NORMS)
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a);
+}
+
+/**
+ * Effective/Adjusted EAP proportions for a province + year (white-excluded,
+ * re-normalised — the set the MC Scorecard scores against). Falls back to
+ * National, then to the latest year.
+ */
+export function getEffectiveEap(province: Province | string = 'National', year?: EapYear): EapGroupValues {
+  return lookupEap(EFFECTIVE_EAP_NORMS, province, year);
+}
+
+/** Raw CEE EAP proportions for a province + year. */
+export function getRawEap(province: Province | string = 'National', year?: EapYear): EapGroupValues {
+  return lookupEap(RAW_EAP_NORMS, province, year);
+}
+
+/**
+ * Black-female-only re-normalised EAP for a province + year — AF/CF/IF
+ * re-based to sum to 1.0. This is the set the MC Scorecard's black-female
+ * bands score against (workbook cells EAP!C30:C32), distinct from the 6-group
+ * effective set used by the black bands.
+ */
+export function getEffectiveBlackFemaleEap(
+  province: Province | string = 'National',
+  year?: EapYear,
+): { AF: number; CF: number; IF: number } {
+  const raw = getRawEap(province, year);
+  const denom = (raw.AF || 0) + (raw.CF || 0) + (raw.IF || 0);
+  if (denom <= 0) return { AF: 0, CF: 0, IF: 0 };
+  return { AF: raw.AF / denom, CF: raw.CF / denom, IF: raw.IF / denom };
+}
+
+function lookupEap(
+  table: typeof EFFECTIVE_EAP_NORMS,
+  province: Province | string,
+  year?: EapYear,
+): EapGroupValues {
+  const yr = String(year ?? LATEST_EAP_YEAR);
+  const byProvince = table[yr] ?? table[String(LATEST_EAP_YEAR)];
+  const prov = normalizeProvince(String(province));
+  return (byProvince?.[prov] ?? byProvince?.['National']) as EapGroupValues;
+}
+
 /**
  * National EAP proportions per demographic group.
- * Black groups have EAP targets; White M/F are informational (target = 0).
+ * @deprecated Use `getEffectiveEap(province, year)` — this constant is the
+ * effective National set for the latest year, kept for backward compatibility.
  */
-export const NATIONAL_EAP_DEMOGRAPHICS: Record<DemoGroup, number> = {
-  AM: 0.435, CM: 0.046, IM: 0.017, WM: 0,
-  AF: 0.375, CF: 0.042, IF: 0.010, WF: 0,
-};
+export const NATIONAL_EAP_DEMOGRAPHICS: EapGroupValues =
+  EFFECTIVE_EAP_NORMS[String(LATEST_EAP_YEAR)].National;
 
 const BLACK_RACES = new Set(['African', 'Coloured', 'Indian']);
 
@@ -68,13 +125,20 @@ export function classifyDemographic(
   return `${racePrefix}${genderSuffix}` as DemoGroup;
 }
 
-/** Build per-demographic actuals vs national EAP target proportions. */
+/**
+ * Build per-demographic actuals vs the effective EAP target proportions for the
+ * given province + year. Province/year default to National / latest so existing
+ * callers keep working; pass the client's province for a correct breakdown.
+ */
 export function buildDemographicBreakdown(
   people: ReadonlyArray<{ gender?: string; race?: string }>,
+  province: Province | string = 'National',
+  year?: EapYear,
 ): DemographicBreakdown[] {
   const total = people.length;
-  return (Object.keys(NATIONAL_EAP_DEMOGRAPHICS) as DemoGroup[]).map(group => {
-    const eapProp = NATIONAL_EAP_DEMOGRAPHICS[group];
+  const eap = getEffectiveEap(province, year);
+  return (Object.keys(eap) as DemoGroup[]).map(group => {
+    const eapProp = eap[group];
     const count = people.filter(p => classifyDemographic(p.gender, p.race) === group).length;
     const ratio = total > 0 ? count / total : 0;
     return {

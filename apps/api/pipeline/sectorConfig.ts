@@ -91,6 +91,18 @@ export interface MCTargets {
   middleBWMaxPts: number;
   juniorMaxPts: number;
   juniorBWMaxPts: number;
+  /**
+   * Per-band black / black-female targets, split across demographic groups by
+   * the effective EAP for the client's province (workbook MC Scorecard model).
+   * Optional — when omitted, the calculator falls back to the generic-code
+   * defaults (0.60/0.75/0.88 black, 0.30/0.38/0.44 black female).
+   */
+  seniorBlackTarget?: number;
+  seniorBWTarget?: number;
+  middleBlackTarget?: number;
+  middleBWTarget?: number;
+  juniorBlackTarget?: number;
+  juniorBWTarget?: number;
 }
 
 export interface EETargets {
@@ -448,6 +460,10 @@ export const RCOGP_GENERIC: SectorConfig = {
       seniorMaxPts: 2, seniorBWMaxPts: 1,
       middleMaxPts: 2, middleBWMaxPts: 1,
       juniorMaxPts: 1, juniorBWMaxPts: 1,
+      // Per-band black / black-female targets (workbook MC Scorecard E30/E37/E43/E50/E56/E63).
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
     },
     employmentEquity: {
       seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,

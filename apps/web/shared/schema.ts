@@ -75,6 +75,17 @@ export interface CalculatorConfig {
     middleBWMaxPts?: number;
     juniorMaxPts?: number;
     juniorBWMaxPts?: number;
+    /**
+     * Per-band black / black-female targets. Each is split across demographic
+     * groups by the effective EAP for the client's province (workbook MC model).
+     * RCOGP: 0.60/0.75/0.88 (black) and 0.30/0.38/0.44 (black female).
+     */
+    seniorBlackTarget?: number;
+    seniorBWTarget?: number;
+    middleBlackTarget?: number;
+    middleBWTarget?: number;
+    juniorBlackTarget?: number;
+    juniorBWTarget?: number;
     disabledTarget?: number;
     disabledMaxPts?: number;
   };
