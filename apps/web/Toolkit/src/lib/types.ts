@@ -316,6 +316,10 @@ export interface Supplier {
   
   // Foreign supplier indicator (Issue 3)
   isForeignSupplier?: boolean;
+
+  // Explicit designated-group flag (workbook captures a boolean; the Toolkit form
+  // also derives DG from youth/disabled ownership). Used by the procurement DG line.
+  isDesignatedGroup?: boolean;
 }
 
 export interface ProcurementData {

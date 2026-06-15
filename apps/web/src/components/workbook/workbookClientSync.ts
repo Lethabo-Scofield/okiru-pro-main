@@ -7,7 +7,14 @@ import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
 import { coerceYesNo } from "@/lib/yesNoValue";
 
 function num(v: unknown): number {
-  const n = Number(v);
+  // Tolerant parse: "1,000,000" / "R 1 000 000" / "60%" are NaN under Number() and
+  // previously coerced to 0, silently zeroing revenue/npat/payroll/tmps from
+  // text-formatted Excel cells. Strip currency, thousands separators and "%".
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v === null || v === undefined) return 0;
+  const cleaned = String(v).replace(/\s/g, "").replace(/[R$,%]/gi, "");
+  if (cleaned === "" || cleaned === "-") return 0;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 

@@ -34,6 +34,37 @@ function workbookWithSuppliers(finMeta: Record<string, unknown> = {}): WorkbookD
   } as unknown as WorkbookData;
 }
 
+describe('workbook numeric parsing — formatted strings must not zero out', () => {
+  it('parses thousands separators, currency symbols, spaces and percent signs', () => {
+    const wb = {
+      companyId: 'c1',
+      sections: {
+        'company-information': { meta: { industrySector: 'RCOGP' } },
+        'financial-information': { meta: { revenue: '1,000,000', npat: 'R 250 000', payroll: '4 000 000' } },
+        procurement: {
+          rows: [
+            {
+              _id: 's1', supplierName: 'Acme', currentSize: 'Generic', bbbeeLevel: '1',
+              currentBlackOwnership: '60%', currentBlackFemaleOwnership: '35%', spend: 'R 500,000',
+            },
+          ],
+        },
+      },
+    } as unknown as WorkbookData;
+    const p = projectWorkbookToClient(wb);
+    // Financials: commas / currency / spaces no longer NaN→0
+    expect(p.financials.revenue).toBe(1_000_000);
+    expect(p.financials.npat).toBe(250_000);
+    // payroll "4 000 000" parsed (not NaN→0) → leviableAmount = payroll × 1%
+    expect(p.financials.leviableAmount).toBe(40_000);
+    // Supplier: "R 500,000" spend, "60%" black ownership → fraction 0.6 (≥51%)
+    const sup = p.suppliers[0];
+    expect(sup.spend).toBe(500_000);
+    expect(sup.blackOwnership).toBeCloseTo(0.6, 5);
+    expect(sup.isBlackOwned51).toBe(true);
+  });
+});
+
 describe('workbook supplier projection (Polo #8/#10)', () => {
   it('derives TMPS from supplier spend when Financials omits it', () => {
     const p = projectWorkbookToClient(workbookWithSuppliers());
