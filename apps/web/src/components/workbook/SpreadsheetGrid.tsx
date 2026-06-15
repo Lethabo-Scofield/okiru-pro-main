@@ -18,6 +18,17 @@ import { API_BASE } from "@toolkit/lib/config";
 type Row = Record<string, unknown> & { _id: string };
 type CellRef = { row: number; col: number };
 
+// <input> types that support text selection (select()/setSelectionRange()).
+// number/date/email/etc. throw InvalidStateError if selection is attempted.
+const SELECTABLE_INPUT_TYPES = new Set([
+  "text",
+  "search",
+  "url",
+  "tel",
+  "password",
+  "",
+]);
+
 interface Props {
   columns: ColumnDef[];
   rows: Row[];
@@ -693,13 +704,21 @@ export function SpreadsheetGrid({
     const el = editInputRef.current;
     if (!editingCell || !el) return;
     el.focus();
-    // HTMLSelectElement has no .select() / .setSelectionRange() — only inputs do.
-    if (typeof el.select === "function") {
-      if (editFocusSelectAllRef.current) {
-        el.select();
-      } else if (typeof el.setSelectionRange === "function") {
-        const end = el.value.length;
-        el.setSelectionRange(end, end);
+    // Only text-like <input> elements support selection. <select> has no
+    // select()/setSelectionRange(), and <input type="number|date|email|...">
+    // HAS those methods but THROWS InvalidStateError when called — which crashed
+    // the whole app via the ErrorBoundary the moment you typed into a numeric
+    // grid cell. Restrict selection to input types that actually support it.
+    if (el instanceof HTMLInputElement && SELECTABLE_INPUT_TYPES.has(el.type)) {
+      try {
+        if (editFocusSelectAllRef.current) {
+          el.select();
+        } else {
+          const end = el.value.length;
+          el.setSelectionRange(end, end);
+        }
+      } catch {
+        // Defensive: ignore engines that still reject selection for some types.
       }
     }
     editKeystrokeBootstrapRef.current = false;
