@@ -1139,7 +1139,7 @@ export const ESD_CATEGORY_MAP: Record<string, string> = {
 export const ESD_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Beneficiary / Supplier", type: "text", required: true, width: 220 },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", required: true, width: 160, validate: percentValidator },
-  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, validationMessage: "Enter EME, QSE, or Large — not case sensitive. 'Generic' also maps to Large.", suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise" },
+  { key: "currentSize", label: "Current Size", type: "select", options: SUPPLIER_SIZE_OPTIONS, required: true, width: 130, validationMessage: "Enter EME, QSE, or Generic — not case sensitive. Legacy 'Large' maps to Generic.", suggestionHint: "EME = Exempted Micro Enterprise, QSE = Qualifying Small Enterprise" },
   {
     key: "esdCategory",
     label: "Category (SD / ED)",

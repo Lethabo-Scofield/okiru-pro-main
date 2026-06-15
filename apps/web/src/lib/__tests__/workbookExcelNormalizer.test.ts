@@ -132,9 +132,9 @@ describe("normalizeExcelBuffer — column header aliases", () => {
     ["QSE", "QSE"],
     ["Qualifying Small Enterprise", "QSE"],
     ["Small", "QSE"],
-    ["Large", "Large"],
-    ["Large Enterprise", "Large"],
-    ["Generic", "Large"],
+    ["Large", "Generic"],
+    ["Large Enterprise", "Generic"],
+    ["Generic", "Generic"],
   ])("normalises the supplier-size value %s to %s", (input, canonical) => {
     const buf = makeBuffer({
       Procurement: [
