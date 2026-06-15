@@ -61,9 +61,12 @@ describe('financial date validation (feedback #1)', () => {
 describe('date label consistency (feedback #1)', () => {
   it('financialYearEnd label advertises dd/mm/yyyy, never yyyy-mm-dd', () => {
     const src = readFileSync(path.resolve(process.cwd(), 'src/components/workbook/sections.ts'), 'utf8');
-    const line = src.split('\n').find((l) => l.includes('"financialYearEnd"'));
-    expect(line).toBeTruthy();
-    expect(line!).toContain('dd/mm/yyyy');
-    expect(line!).not.toContain('yyyy-mm-dd');
+    // The field definition spans several lines (key, label, type, validate), so
+    // inspect the whole block after the key rather than a single line.
+    const idx = src.indexOf('"financialYearEnd"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 200);
+    expect(block).toContain('dd/mm/yyyy');
+    expect(block).not.toContain('yyyy-mm-dd');
   });
 });
