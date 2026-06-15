@@ -20,6 +20,8 @@ import {
 
 } from "./sections";
 
+import { coerceYesNo } from "@/lib/yesNoValue";
+
 
 
 /** Sector codes supported by apps/api/pipeline/sectorConfig.ts */
@@ -512,7 +514,7 @@ export function validateWorkbook(
   const sectorCode = String(companyMeta.industrySector ?? "").trim();
   const scorecardType = String(companyMeta.scorecardType ?? "").trim();
   const fscSubSector = String(companyMeta.fscSubSector ?? "").trim();
-  const fscReinsurer = Boolean(companyMeta.fscReinsurer);
+  const fscReinsurer = coerceYesNo(companyMeta.fscReinsurer);
 
 
 
