@@ -47,6 +47,7 @@ import {
   isAgriGenericSector,
 } from './sectors/agri-generic';
 
+import { coerceYesNo } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
@@ -920,18 +921,18 @@ export function hydrateTrainingProgramFromApi(tp: any) {
     // Demographics
     gender: tp.gender || null,
     race,
-    isDisabled: tp.isDisabled || false,
-    isForeign: tp.isForeign || false,
+    isDisabled: coerceYesNo(tp.isDisabled),
+    isForeign: coerceYesNo(tp.isForeign),
     isBlack: typeof tp.isBlack === 'boolean' ? tp.isBlack : isBlackRaceForStore(race),
     // Employment / YES / completion — required for unemployed, learnership & absorption scoring
     employmentStatus: tp.employmentStatus ?? (tp.isEmployed === false ? 'Unemployed' : tp.isEmployed ? 'Permanent' : undefined),
     isEmployed: typeof tp.isEmployed === 'boolean' ? tp.isEmployed : tp.employmentStatus ? tp.employmentStatus !== 'Unemployed' : false,
-    isYesEmployee: tp.isYesEmployee || false,
-    isCompleted: tp.isCompleted || false,
-    isAbsorbed: tp.isAbsorbed || false,
-    isBursary: tp.isBursary || tp.category === 'bursary' || tp.categoryCode === 'A' || false,
-    isAbet: tp.isAbet || false,
-    isMandatory: tp.isMandatory || false,
+    isYesEmployee: coerceYesNo(tp.isYesEmployee),
+    isCompleted: coerceYesNo(tp.isCompleted),
+    isAbsorbed: coerceYesNo(tp.isAbsorbed),
+    isBursary: coerceYesNo(tp.isBursary) || tp.category === 'bursary' || tp.categoryCode === 'A',
+    isAbet: coerceYesNo(tp.isAbet),
+    isMandatory: coerceYesNo(tp.isMandatory),
     // Location & dates
     municipality: tp.municipality || '',
     transactionDate: tp.transactionDate ?? tp.dateOfTransaction ?? '',
@@ -1000,7 +1001,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         leviableAmount: data.client.leviableAmount || 0,
         industry: data.client.industry || 'Generic',
         fscSubSector: normalizeFscSubSector(data.client.fscSubSector ?? finExtras.fscSubSector) as Client['fscSubSector'],
-        fscReinsurer: Boolean(data.client.fscReinsurer ?? finExtras.fscReinsurer),
+        fscReinsurer: coerceYesNo(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
         financialHistory: (data.financialYears || []).map((fy: any) => ({
@@ -1044,9 +1045,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           shares: derivedShares,
           shareValue: sh.shareValue || 1,
           yearsHeld: sh.yearsHeld || 0,
-          isDesignatedGroup: Boolean(sh.isDesignatedGroup),
+          isDesignatedGroup: coerceYesNo(sh.isDesignatedGroup),
           designatedGroupType: sh.designatedGroupType,
-          blackNewEntrant: Boolean(sh.blackNewEntrant),
+          blackNewEntrant: coerceYesNo(sh.blackNewEntrant),
           votingRightsPercent:
             normalizeFraction(sh.votingRightsPercent ?? sh.blackOwnership ?? 0),
           economicInterestPercent:
@@ -1074,7 +1075,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const managementState: ManagementData = {
         id: '',
         clientId,
-        combineExcoSenior: Boolean(finExtras.combineExcoSenior ?? data.client.combineExcoSenior),
+        combineExcoSenior: coerceYesNo(finExtras.combineExcoSenior ?? data.client.combineExcoSenior),
         employees: (data.management?.employees || []).map((e: any) => ({
           id: e.id,
           name: e.name,
@@ -1083,7 +1084,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           designation: normalizeDesignationForScoring(
             e.designation || e.occupationalLevel || mapJobTitleToDesignation(e.occupationalLevel),
           ),
-          isDisabled: e.isDisabled || false,
+          isDisabled: coerceYesNo(e.isDisabled),
+          isForeign: coerceYesNo(e.isForeign),
           annualSalary: e.annualSalary ?? 0,
           votingRightsPercent: e.votingRightsPercent ?? 0,
         })),
@@ -1133,16 +1135,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           disabledOwnership: s.disabledOwnership || 0,
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
-          isEmpoweringSupplier:
-            typeof s.isEmpoweringSupplier === 'boolean'
-              ? s.isEmpoweringSupplier
-              : Boolean(s.empoweringSupplier),
-          isForeignSupplier: Boolean(s.isForeignSupplier),
-          isBlackOwned51: Boolean(s.isBlackOwned51),
-          isBlackWomanOwned30: Boolean(s.isBlackWomanOwned30),
-          isDesignatedGroup: Boolean(s.isDesignatedGroup),
-          isSupplierDevRecipient: Boolean(s.isSupplierDevRecipient),
-          hasThreeYearContract: Boolean(s.hasThreeYearContract),
+          isEmpoweringSupplier: coerceYesNo(s.isEmpoweringSupplier ?? s.empoweringSupplier),
+          isForeignSupplier: coerceYesNo(s.isForeignSupplier),
+          isBlackOwned51: coerceYesNo(s.isBlackOwned51),
+          isBlackWomanOwned30: coerceYesNo(s.isBlackWomanOwned30),
+          isDesignatedGroup: coerceYesNo(s.isDesignatedGroup),
+          isSupplierDevRecipient: coerceYesNo(s.isSupplierDevRecipient),
+          hasThreeYearContract: coerceYesNo(s.hasThreeYearContract),
         })),
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
