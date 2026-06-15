@@ -13,6 +13,9 @@ export interface TemplateEntity {
 }
 
 export interface CalculatorConfig {
+  /** Populated by sectorConfigToCalculatorConfig — drives pillar config guards. */
+  sectorCode?: string;
+  scorecardType?: string;
   totalMaxPoints: number;
   ownership: {
     votingRightsMax: number;
@@ -29,6 +32,14 @@ export interface CalculatorConfig {
     newEntrantsMax?: number;
     designatedGroupsMax?: number;
     designatedGroupsTarget?: number;
+    /**
+     * QSE-only: the toolkit collapses "Black New Entrants" and "Designated Groups"
+     * into a single combined economic-interest indicator. When true, a shareholder
+     * qualifies for the designated-group indicator on EITHER criterion
+     * (isDesignatedGroup OR blackNewEntrant), and the separate new-entrants slot is 0.
+     * (TOOLKIT-RESOLVED.md Q8; RCOGP QSE / ICT QSE Ownership Scorecard r9.)
+     */
+    combinedNewEntrantsDesignated?: boolean;
   };
   management: {
     boardBlackTarget: number;
@@ -64,6 +75,17 @@ export interface CalculatorConfig {
     middleBWMaxPts?: number;
     juniorMaxPts?: number;
     juniorBWMaxPts?: number;
+    /**
+     * Per-band black / black-female targets. Each is split across demographic
+     * groups by the effective EAP for the client's province (workbook MC model).
+     * RCOGP: 0.60/0.75/0.88 (black) and 0.30/0.38/0.44 (black female).
+     */
+    seniorBlackTarget?: number;
+    seniorBWTarget?: number;
+    middleBlackTarget?: number;
+    middleBWTarget?: number;
+    juniorBlackTarget?: number;
+    juniorBWTarget?: number;
     disabledTarget?: number;
     disabledMaxPts?: number;
   };
@@ -90,6 +112,14 @@ export interface CalculatorConfig {
     absorptionMaxPts?: number;
     learnershipTargetPercent?: number;
     absorptionTargetPercent?: number;
+    /**
+     * AgriBEE-only: the "unemployed Black people in training" indicator (2.1.2.2)
+     * is scored on a HEADCOUNT basis (count of unemployed Black learners vs a
+     * % -of-headcount target), not on a spend basis. When true, the bursary slot
+     * (bursaryMaxPts) is scored from the unemployed-learner headcount.
+     * (TOOLKIT-RESOLVED.md Q13; AGRI Skills Scorecard r39, header "Headcount".)
+     */
+    bursaryIsHeadcount?: boolean;
   };
   procurement: {
     baseMax: number;
@@ -110,16 +140,48 @@ export interface CalculatorConfig {
     bwo30MaxPts?: number;
     dgTarget?: number;
     dgMaxPts?: number;
+    /** FSC Banks/LTI: PP sub-minimum always passes (toolkit formula returns pass). */
+    alwaysPassSubMin?: boolean;
   };
   esd: {
     supplierDevMax: number;
     enterpriseDevMax: number;
     supplierDevTarget: number;
     enterpriseDevTarget: number;
+    /** Max points for the ED graduation tick-box bonus (default 1). */
+    edGraduationBonusMax?: number;
+    /**
+     * Max points for the ED "jobs created" bonus (default 1). ICT awards a tiered
+     * bonus: ≤10% of workforce → 1 pt, ≥11% → 2 pts (mutually exclusive). Set to 2
+     * to enable the upper tier. (TOOLKIT-RESOLVED.md S6.)
+     */
+    edJobsBonusMax?: number;
+    /**
+     * FSC-only: separate ED bonus for "support of black stockbrokers / fund
+     * managers / intermediaries" (0.5% NPAT / 2 pts). Default 0. Scored from
+     * ESDData.stockbrokerSpend against npat × edStockbrokerTarget.
+     * (TOOLKIT-RESOLVED.md Q42; FSC ESD Scorecard r12.)
+     */
+    edStockbrokerBonusMax?: number;
+    /** FSC-only: NPAT fraction target for the stockbroker bonus (e.g. 0.005). */
+    edStockbrokerTarget?: number;
   };
   sed: {
     maxPoints: number;
     npatTarget: number;
+    /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
+    sedBaseMaxPts?: number;
+    /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */
+    sedNpatTarget?: number;
+    /** FSC: CE base max points from ceSpend meta. */
+    ceMaxPts?: number;
+    ceNpatTarget?: number;
+    /** FSC: additional CE bonus from ceBonusSpend meta. */
+    ceBonusMaxPts?: number;
+    ceBonusNpatTarget?: number;
+    /** FSC: Fundisa grant bonus from fundisaSpend meta. */
+    fundisaMaxPts?: number;
+    fundisaNpatTarget?: number;
   };
   yes?: {
     tier1Points: number;
@@ -149,6 +211,60 @@ export interface CalculatorConfig {
     enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
     socioEconomicDevelopment?: { maxPoints: number; chooseOneGroup?: string };
     yesInitiative?: { maxPoints: number; chooseOneGroup?: string };
+  };
+  /**
+   * FSC Banks/LTI — Empowerment Financing pillar config.
+   * Point values for Targeted Investments and Transaction Financing are 0 by default
+   * (not readable from the toolkit template when sub-sector = Others — Q44).
+   * SD/ED targets differ from Generic (Banks: SD 1.8%, ED 0.2%; LTI: same + stockbroker).
+   */
+  empowermentFinancing?: {
+    maxPoints: number;
+    /** Targeted Investments — % of balance-sheet (Banks) / qualifying exposure (LTI). */
+    targetedInvestmentMaxPts: number;
+    /** Transaction Financing and Risk Capital contributions. */
+    transactionFinancingMaxPts: number;
+    /** Supplier Development (part of EF scorecard for Banks/LTI). */
+    sdMaxPts: number;
+    sdTarget: number;   // e.g. 0.018 (1.8% NPAT)
+    /** Enterprise Development (part of EF scorecard). */
+    edMaxPts: number;
+    edTarget: number;   // e.g. 0.002 (0.2% NPAT)
+    /** ED graduation bonus. */
+    graduationBonusMaxPts: number;
+    /** ED jobs-created bonus. */
+    jobsBonusMaxPts: number;
+    /** LTI-only: ED stockbroker / fund manager / intermediary support (0.5% NPAT / 2 pts). */
+    stockbrokerBonusMaxPts?: number;
+    stockbrokerTarget?: number;
+  };
+  /**
+   * FSC Banks/LTI/STI — Access to Financial Services (AFS) pillar config.
+   * Total AFS = 12 pts for all sub-sectors; structure differs by sub-sector.
+   */
+  accessToFinancialServices?: {
+    subSector: 'Banks' | 'LTI' | 'STI';
+    maxPoints: number;
+    // Banks: geographic / electronic access (total 12 pts)
+    transactionPointTarget?: number;    // 0.85 (85%)
+    transactionPointMaxPts?: number;    // 1
+    servicePointTarget?: number;        // 0.70 (70%)
+    servicePointMaxPts?: number;        // 1
+    salesPointTarget?: number;          // 0.60 (60%)
+    salesPointMaxPts?: number;          // 2
+    electronicAccessMaxPts?: number;    // 2 (national target — yes/no)
+    pointOfPresenceMaxPts?: number;     // 3 (at least one PoP per measurement unit)
+    activeAccountsMaxPts?: number;      // 3 (active accounts in target market)
+    // LTI: products / penetration / transactional access (total 12 pts)
+    appropriateProductsMaxPts?: number; // 3
+    marketPenetrationMaxPts?: number;   // 7
+    transactionalAccessTarget?: number; // 0.80 (80%)
+    transactionalAccessMaxPts?: number; // 2
+    // STI: commercial products + insurance policies (total 12 pts)
+    commercialProductsMaxPts?: number;  // 2 (6 lines × 0.333)
+    commercialLinesCount?: number;      // 6
+    insurancePoliciesTarget?: number;   // 1.0 (100%)
+    insurancePoliciesMaxPts?: number;   // 10
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];
@@ -536,9 +652,13 @@ export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoos
 export const ClientModel = mongoose.models.Client || mongoose.model("Client", clientSchema);
 
 const feedbackSchema = new Schema({
+  /** Primary business id (preferred over legacy `id` field in Mongo). */
   feedbackId: { type: String, required: true, unique: true },
+  /** Legacy field — keep populated (= feedbackId) for existing `id_1` unique index. */
+  id: { type: String, sparse: true, unique: true },
   message: { type: String, required: true },
   category: { type: String, enum: ['bug', 'feature', 'general', 'compliance'], default: 'general' },
+  pillar: { type: String, default: null, index: true },
   pageUrl: { type: String, default: null },
   userName: { type: String, default: null },
   userEmail: { type: String, default: null },
@@ -548,12 +668,12 @@ const feedbackSchema = new Schema({
   userAgent: { type: String, default: null },
   createdAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now },
-}, { collection: "feedback" });
+}, { collection: "feedback", id: false });
 
 feedbackSchema.set("toJSON", {
   virtuals: true,
   transform: (_doc: any, ret: any) => {
-    ret.id = ret.feedbackId;
+    ret.id = ret.feedbackId ?? ret.id;
     delete ret._id;
     delete ret.__v;
     return ret;

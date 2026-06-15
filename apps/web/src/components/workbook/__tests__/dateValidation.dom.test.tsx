@@ -3,7 +3,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { dateValidator, SECTIONS } from '../sections';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { dateValidator } from '../sections';
 
 afterEach(cleanup);
 
@@ -58,9 +60,13 @@ describe('financial date validation (feedback #1)', () => {
 
 describe('date label consistency (feedback #1)', () => {
   it('financialYearEnd label advertises dd/mm/yyyy, never yyyy-mm-dd', () => {
-    const companyInfo = SECTIONS.find((section) => section.key === 'company-information');
-    const field = companyInfo?.meta?.find((item) => item.key === 'financialYearEnd');
-    expect(field?.label).toContain('dd/mm/yyyy');
-    expect(field?.label).not.toContain('yyyy-mm-dd');
+    const src = readFileSync(path.resolve(process.cwd(), 'src/components/workbook/sections.ts'), 'utf8');
+    // The field definition spans several lines (key, label, type, validate), so
+    // inspect the whole block after the key rather than a single line.
+    const idx = src.indexOf('"financialYearEnd"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 200);
+    expect(block).toContain('dd/mm/yyyy');
+    expect(block).not.toContain('yyyy-mm-dd');
   });
 });

@@ -1,0 +1,1810 @@
+{
+  "sheet_name": "Fleet_Register",
+  "sanitized_name": "Fleet_Register",
+  "dimensions": {
+    "max_row": 33,
+    "max_column": 15
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 52,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "FLEET REGISTER — Per-Vehicle CO₂ | L/100km | EV Mix | Service Status  [Source: Updated Fleet List Feb 2026]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Reg"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Depot"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Model/Category"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "GVM (kg)"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Tare (kg)"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Carry (kg)"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Fuel Cap (L)"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "Tracking"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Monthly km"
+        },
+        "10": {
+          "coord": "J3",
+          "col": 10,
+          "value": "Monthly Litres"
+        },
+        "11": {
+          "coord": "K3",
+          "col": 11,
+          "value": "L/100km Actual"
+        },
+        "12": {
+          "coord": "L3",
+          "col": 12,
+          "value": "L/100km Norm"
+        },
+        "13": {
+          "coord": "M3",
+          "col": 13,
+          "value": "Monthly tCO₂e"
+        },
+        "14": {
+          "coord": "N3",
+          "col": 14,
+          "value": "Service Status"
+        },
+        "15": {
+          "coord": "O3",
+          "col": 15,
+          "value": "Licence Expiry"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "JR45DZGP"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "11-Seater Bus"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": 3445
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": 2395
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": 1050
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": 100
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J4",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K4",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J4/I4*100,0)"
+        },
+        "12": {
+          "coord": "L4",
+          "col": 12,
+          "value": 30
+        },
+        "13": {
+          "coord": "M4",
+          "col": 13,
+          "value": 0,
+          "formula": "=J4*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N4",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L4=0,\"N/A\",IF(K4=0,\"No data\",IF(K4<=L4*1.05,\"✓ Good\",IF(K4<=L4*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "KY75THGP"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "HINO 1627 8T Fridge"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 16000
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 8180
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 7820
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J5/I5*100,0)"
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M5",
+          "col": 13,
+          "value": 0,
+          "formula": "=J5*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N5",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L5=0,\"N/A\",IF(K5=0,\"No data\",IF(K5<=L5*1.05,\"✓ Good\",IF(K5<=L5*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "KY82RLGP"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "HINO 614 2.5T"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 5500
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 3220
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 2280
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": 100
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J6/I6*100,0)"
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": 18
+        },
+        "13": {
+          "coord": "M6",
+          "col": 13,
+          "value": 0,
+          "formula": "=J6*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N6",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L6=0,\"N/A\",IF(K6=0,\"No data\",IF(K6<=L6*1.05,\"✓ Good\",IF(K6<=L6*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "KY98LTGP"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "HINO 816 4T Curtain"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 8000
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 4180
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 3820
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": 200
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J7/I7*100,0)"
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": 22
+        },
+        "13": {
+          "coord": "M7",
+          "col": 13,
+          "value": 0,
+          "formula": "=J7*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N7",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L7=0,\"N/A\",IF(K7=0,\"No data\",IF(K7<=L7*1.05,\"✓ Good\",IF(K7<=L7*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "KY98MRGP"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "HINO 816 4T Curtain"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 8000
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 4180
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 3820
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": 200
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J8/I8*100,0)"
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": 22
+        },
+        "13": {
+          "coord": "M8",
+          "col": 13,
+          "value": 0,
+          "formula": "=J8*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N8",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L8=0,\"N/A\",IF(K8=0,\"No data\",IF(K8<=L8*1.05,\"✓ Good\",IF(K8<=L8*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "KZ00LCGP"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "HINO 500 1627 8T Fridge"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 16000
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 8180
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 7820
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J9/I9*100,0)"
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M9",
+          "col": 13,
+          "value": 0,
+          "formula": "=J9*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N9",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L9=0,\"N/A\",IF(K9=0,\"No data\",IF(K9<=L9*1.05,\"✓ Good\",IF(K9<=L9*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "KZ00LHGP"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "HINO 500 1627 8T Fridge"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": 16000
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 8180
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 7820
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J10",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K10",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J10/I10*100,0)"
+        },
+        "12": {
+          "coord": "L10",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M10",
+          "col": 13,
+          "value": 0,
+          "formula": "=J10*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N10",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L10=0,\"N/A\",IF(K10=0,\"No data\",IF(K10<=L10*1.05,\"✓ Good\",IF(K10<=L10*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "KZ97BKGP"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "HINO 1627 8T Fridge"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 16000
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 8180
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 7820
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J11",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K11",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J11/I11*100,0)"
+        },
+        "12": {
+          "coord": "L11",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M11",
+          "col": 13,
+          "value": 0,
+          "formula": "=J11*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N11",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L11=0,\"N/A\",IF(K11=0,\"No data\",IF(K11<=L11*1.05,\"✓ Good\",IF(K11<=L11*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "LB45BMGP"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "HINO 1627 16T Fridge"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 25380
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 9360
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 16020
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K12",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J12/I12*100,0)"
+        },
+        "12": {
+          "coord": "L12",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M12",
+          "col": 13,
+          "value": 0,
+          "formula": "=J12*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N12",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L12=0,\"N/A\",IF(K12=0,\"No data\",IF(K12<=L12*1.05,\"✓ Good\",IF(K12<=L12*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "LB45BXGP"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "HINO 1627 16T Curtain"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 25380
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 9360
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 16020
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J13",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K13",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J13/I13*100,0)"
+        },
+        "12": {
+          "coord": "L13",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M13",
+          "col": 13,
+          "value": 0,
+          "formula": "=J13*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N13",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L13=0,\"N/A\",IF(K13=0,\"No data\",IF(K13<=L13*1.05,\"✓ Good\",IF(K13<=L13*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "LC36DCGP"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "SGTBLOEM"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "HINO 500 1627 16T Fridge"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 25380
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 9340
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 16040
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J14",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K14",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J14/I14*100,0)"
+        },
+        "12": {
+          "coord": "L14",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M14",
+          "col": 13,
+          "value": 0,
+          "formula": "=J14*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N14",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L14=0,\"N/A\",IF(K14=0,\"No data\",IF(K14<=L14*1.05,\"✓ Good\",IF(K14<=L14*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "MK66VTGP"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "HINO 700 32T"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 42000
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 9060
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 32940
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": 1000
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J15",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K15",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J15/I15*100,0)"
+        },
+        "12": {
+          "coord": "L15",
+          "col": 12,
+          "value": 55
+        },
+        "13": {
+          "coord": "M15",
+          "col": 13,
+          "value": 0,
+          "formula": "=J15*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N15",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L15=0,\"N/A\",IF(K15=0,\"No data\",IF(K15<=L15*1.05,\"✓ Good\",IF(K15<=L15*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "HT95GWGP"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "SCANIA G460 32T"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 42000
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 9060
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 32940
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": 1000
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J16",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K16",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J16/I16*100,0)"
+        },
+        "12": {
+          "coord": "L16",
+          "col": 12,
+          "value": 55
+        },
+        "13": {
+          "coord": "M16",
+          "col": 13,
+          "value": 0,
+          "formula": "=J16*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N16",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L16=0,\"N/A\",IF(K16=0,\"No data\",IF(K16<=L16*1.05,\"✓ Good\",IF(K16<=L16*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "BB33CMGP"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "SGTSPFMCG"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "15M Fridge Trailer"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 42000
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 10500
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 31500
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J17",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K17",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J17/I17*100,0)"
+        },
+        "12": {
+          "coord": "L17",
+          "col": 12,
+          "value": 0
+        },
+        "13": {
+          "coord": "M17",
+          "col": 13,
+          "value": 0,
+          "formula": "=J17*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N17",
+          "col": 14,
+          "value": "N/A",
+          "formula": "=IF(L17=0,\"N/A\",IF(K17=0,\"No data\",IF(K17<=L17*1.05,\"✓ Good\",IF(K17<=L17*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "KB33CSGP"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "SGTCPT"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "SCANIA G460 32T"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 42000
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 9060
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 32940
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": 1000
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J18",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K18",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J18/I18*100,0)"
+        },
+        "12": {
+          "coord": "L18",
+          "col": 12,
+          "value": 55
+        },
+        "13": {
+          "coord": "M18",
+          "col": 13,
+          "value": 0,
+          "formula": "=J18*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N18",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L18=0,\"N/A\",IF(K18=0,\"No data\",IF(K18<=L18*1.05,\"✓ Good\",IF(K18<=L18*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "LC09YVGP"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "SGTPE"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "HINO 1627 16T Curtain"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 25380
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 9320
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 16060
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": 390
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "I-CAM"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J19",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K19",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(J19/I19*100,0)"
+        },
+        "12": {
+          "coord": "L19",
+          "col": 12,
+          "value": 26.5
+        },
+        "13": {
+          "coord": "M19",
+          "col": 13,
+          "value": 0,
+          "formula": "=J19*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N19",
+          "col": 14,
+          "value": "No data",
+          "formula": "=IF(L19=0,\"N/A\",IF(K19=0,\"No data\",IF(K19<=L19*1.05,\"✓ Good\",IF(K19<=L19*1.15,\"⚠ Alert\",\"🔴 High\"))))"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "FLEET SUMMARY  (from Fleet Summary Totals Per Type sheet)"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Depot"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Total Vehicles"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "32T Scania"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "16T"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "8T"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "4T"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "Trailers"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "EV Vehicles"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "SGTBLOEM"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "16"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "2"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "7"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "2"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "0"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "4"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "SGTCPT"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "14"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "2"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "2"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "3"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "3"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "4"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "SGTDBN"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "19"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "3"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "8"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": "3"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "0"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "4"
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "SGTPE"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "6"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "0"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "1"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "3"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "2"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "0"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "SGTSPFMCG"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "79"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "12"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "7"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "11"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "8"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "34"
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "TOTAL"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "134"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "19"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "25"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "22"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "13"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "46"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": "0"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "EV FLEET TRANSITION PLAN  |  MAXUS eDeliver 3 (3.5T, range 330km) & eDeliver 5 (1T, range 320km)  |  Target: 20% EV mix by 2030  |  EF_SOLAR offset applies to EV charging"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "EV Model"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "Range (km)"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "Payload (kg)"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "Charge kWh"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "tCO₂e/km (grid)"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": "vs Diesel saving"
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": "Recommended depot"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "MAXUS eDeliver 3"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "330"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "900"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": 35
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": 8.69697e-05,
+          "formula": "=E_Data!$B$7*35/330/1000"
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": 0.0035,
+          "formula": "=IFERROR(D32*0.0001,0)"
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": "CPT/PE short runs"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "MAXUS eDeliver 5"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "320"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "1075"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": 42
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": 0.000107625,
+          "formula": "=E_Data!$B$7*42/320/1000"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": 0.0042,
+          "formula": "=IFERROR(D33*0.0001,0)"
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": "BLOEM/JHB urban"
+        }
+      }
+    }
+  ]
+}

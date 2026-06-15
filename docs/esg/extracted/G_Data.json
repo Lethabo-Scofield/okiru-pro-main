@@ -1,0 +1,858 @@
+{
+  "sheet_name": "G_Data",
+  "sanitized_name": "G_Data",
+  "dimensions": {
+    "max_row": 26,
+    "max_column": 6
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B17"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B18"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B19"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B20"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B21"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B23"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No,Partial,N/A\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B24"
+    }
+  ],
+  "formula_count": 21,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "G_DATA — GOVERNANCE RAW DATA  [King V | IFRS S1/S2 | GARP/GRAP | POPIA | Board]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "BOARD & GOVERNANCE"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Governance Metric"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Current Value"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Target/Req"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Source"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "King V Ref"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Score /5"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Board members (total)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 7
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — SG Holdings Ltd Board: 2 Exec (Mountford CEO, Brown CFO) + 5 NEDs (Chitalu Chair, Cathrall Lead Ind, Mehlomakulu, Mnisi, Phalane). John Mackay = Co Sec."
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B5>0,5,0)"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "Independent non-executive directors"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 5
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — 5 of 5 NEDs disclosed as Independent (Chitalu, Cathrall, Mehlomakulu, Mnisi, Phalane)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": 5,
+          "formula": "=IFERROR(IF(B5=0,0,IF(B6/B5>=0.5,5,IF(B6/B5>=0.5*Assumptions!$B$9,5*B6/B5/0.5,0))),0)"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "Executive directors"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 2
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — Group ED: Peter Mountford (CEO), Colin Brown (CFO/Debt Officer). [Prior placeholder of 5 referred to SG Consumer divisional execs — different scope.]"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": 5,
+          "formula": "=IFERROR(IF(B5=0,0,IF(B7/B5<=0.4,5,MAX(0,5*(1-((B7/B5)-0.4)*2)))),0)"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "% Black board members"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 0.4285714286
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — Black SA directors: Mehlomakulu, Mnisi, Phalane (3 of 7). Note: Chitalu (Zambian Chair) is African but not SA-EEA Black designated. Confirm classification with Co Sec."
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": 3.5714285714,
+          "formula": "=IFERROR(IF(B8>=Assumptions!$B$50,5,IF(B8>=Assumptions!$B$50*Assumptions!$B$9,5*B8/Assumptions!$B$50,0)),0)"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "% Female board members"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 0.1428571429
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — 1 female NED (Pitsi Mnisi) of 7. Gap vs 50% target = -35.7pp. Material gender diversity risk."
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(IF(B9>=0.5,5,IF(B9>=0.5*Assumptions!$B$9,5*B9/0.5,0)),0)"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "Board meetings held YTD"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": 4
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "Source: Inferred JSE-listed minimum (4/yr). Awaiting confirmation from Company Secretary John Mackay."
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": 5,
+          "formula": "=IFERROR(IF(B10>=4,5,IF(B10>=4*Assumptions!$B$9,5*B10/4,0)),0)"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Audit committee meetings YTD"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": 4
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — Cathrall chairs Audit Committee; assumed 4 meetings YTD (confirm minute count from Co Sec)."
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": 5,
+          "formula": "=IFERROR(IF(B11>=4,5,IF(B11>=4*Assumptions!$B$9,5*B11/4,0)),0)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Risk committee active (Y/N)"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — Cathrall confirmed as Risk Committee Chair. [Updated from \"Partial\".]"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B12=\"Yes\",5,IF(B12=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Social & Ethics committee active (Y/N)"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "Group Social and Ethics Committee — CSI/SED Policy §7 (identifies/approves/coordinates CSI & SED initiatives and budgets; monitors all CSI/SED expenditure)"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B13=\"Yes\",5,IF(B13=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "ESG linked to executive remuneration (Y/N)"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "Not disclosed in supplied policies — confirm from Remco report"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 0,
+          "formula": "=IF(B14=\"Yes\",5,IF(B14=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Code of ethics in place (Y/N)"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Super Group Code of Business Standards and Ethics — Rev 2, 30 Jan 2023, approved by SG Executive Committee (Public disclosure)"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B15=\"Yes\",5,IF(B15=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Whistleblower hotline active (Y/N)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 confirmed — Be Heard (https://beheard.co.za/make-a-disclosure/) 0800-007-117 anonymous 24/365. Case-count/response-time data requested from HO, confidential at Group level."
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B16=\"Yes\",5,IF(B16=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "POPIA Information Officer appointed (Y/N)"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "Partial"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "POPI Act compliance framework in place (Code of Ethics §6); SG Consumer POPI consent operational (Jan 2026 letter). Formal Information Officer appointment letter required as evidence."
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 2.5,
+          "formula": "=IF(B17=\"Yes\",5,IF(B17=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "POPIA impact assessment done (Y/N)"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "Partial"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "Active POPI consent process suggests assessment performed — formal PIA documentation required as evidence"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 2.5,
+          "formula": "=IF(B18=\"Yes\",5,IF(B18=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "External assurance of ESG report (Y/N)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "Not disclosed in supplied policies — confirm from latest integrated report"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 0,
+          "formula": "=IF(B19=\"Yes\",5,IF(B19=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Integrated report published (Y/N)"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Yes"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Source: Coba 27 May 2026 — SG Holdings JSE-listed publishes Integrated Report incl. ESG section (Group level). CSI/SED Policy §15(b)(v) confirms."
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": 5,
+          "formula": "=IF(B20=\"Yes\",5,IF(B20=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Risk register updated (Y/N)"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "Partial"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "Risk-based approach evidenced (Code of Ethics §11 — pragmatic risk-based environmental performance); formal risk register documentation required"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": 2.5,
+          "formula": "=IF(B21=\"Yes\",5,IF(B21=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Number of material risks identified"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "Not disclosed in supplied policies — confirm count from risk register"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(IF(B22>=Assumptions!$B$61,5,IF(B22>=Assumptions!$B$61*Assumptions!$B$9,5*B22/Assumptions!$B$61,0)),0)"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Climate risk in risk register (Y/N)"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "Partial"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "GHG/emissions commitments in Code of Ethics §11; explicit climate risk in formal register requires confirmation"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": 2.5,
+          "formula": "=IF(B23=\"Yes\",5,IF(B23=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Anti-corruption training done (Y/N)"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "Partial"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "Code of Ethics §8 and Supplier Code §5 establish zero-tolerance anti-bribery/corruption framework + whistleblower hotline; formal training records required as evidence"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "P1-P16"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": 2.5,
+          "formula": "=IF(B24=\"Yes\",5,IF(B24=\"Partial\",2.5,0))"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "GOVERNANCE TOTAL SCORE (out of 100)"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": 66.0714285714,
+          "formula": "=SUM(F5:F24)"
+        }
+      }
+    }
+  ]
+}

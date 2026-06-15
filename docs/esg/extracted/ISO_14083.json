@@ -1,0 +1,2554 @@
+{
+  "sheet_name": "ISO_14083",
+  "sanitized_name": "ISO_14083",
+  "dimensions": {
+    "max_row": 81,
+    "max_column": 15
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Road,Rail,Sea,Air,Multi-modal\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "F6:F25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Light,Medium,Heavy,Articulated,Rigid\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "G6:G25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Diesel,Petrol,LPG,Electric,Hybrid,CNG,LNG\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "H6:H25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Weight,Volume,Distance,Revenue,Equal-share\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "M6:M25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Yes,No\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "N6:N25"
+    }
+  ],
+  "formula_count": 303,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "🚚  ISO 14083 / GLEC  —  TRANSPORT EMISSIONS  |  Per-trip · Intensity · Customer Allocation"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "ISO 14083:2023 quantification methodology for transport chain GHG emissions. Calculates emissions at journey/leg level, enables intensity metrics (gCO₂e/t·km), and supports per-customer allocation for client-ready reporting. See Glossary for ISO 14083, GLEC, t·km, TKM, allocation methods."
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "BLOCK 1 — TRIP REGISTER  |  Each row = one trip/journey  |  Pre-seeded with Apr-26 data from Driver_Debrief"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Trip ID"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Date"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Depot"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Vehicle Reg"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Route ID"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Mode"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "Vehicle Class"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Fuel Type"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Distance (km)"
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": "Load (tonnes)"
+        },
+        "11": {
+          "coord": "K5",
+          "col": 11,
+          "value": "Tonne-km (t·km)"
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": "Customer"
+        },
+        "13": {
+          "coord": "M5",
+          "col": 13,
+          "value": "Allocation Basis"
+        },
+        "14": {
+          "coord": "N5",
+          "col": 14,
+          "value": "Loaded?"
+        },
+        "15": {
+          "coord": "O5",
+          "col": 15,
+          "value": "Fuel Used (L)"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "T-26040001"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "SGTPE"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "KZ00LRGP"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "010426EJ002"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Light"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": 2
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": 0.5
+        },
+        "11": {
+          "coord": "K6",
+          "col": 11,
+          "value": 1,
+          "formula": "=IFERROR(I6*J6,0)"
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": "Engen Express"
+        },
+        "13": {
+          "coord": "M6",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N6",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "T-26040002"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "SGTPE"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "LC09YVGP"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "010426EJ005"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "Heavy"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": 1
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": 8
+        },
+        "11": {
+          "coord": "K7",
+          "col": 11,
+          "value": 8,
+          "formula": "=IFERROR(I7*J7,0)"
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": "Engen Express"
+        },
+        "13": {
+          "coord": "M7",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N7",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "T-26040003"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "SGTPE"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "KZ00LRGP"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "010426EL001"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "Light"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": 37
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": 1.2
+        },
+        "11": {
+          "coord": "K8",
+          "col": 11,
+          "value": 44.4,
+          "formula": "=IFERROR(I8*J8,0)"
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": "Engen Logistics"
+        },
+        "13": {
+          "coord": "M8",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N8",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "T-26040004"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "SGTPE"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "LC22HRGP"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "010426EL003"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "Medium"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": 55
+        },
+        "10": {
+          "coord": "J9",
+          "col": 10,
+          "value": 3.8
+        },
+        "11": {
+          "coord": "K9",
+          "col": 11,
+          "value": 209,
+          "formula": "=IFERROR(I9*J9,0)"
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": "Engen Logistics"
+        },
+        "13": {
+          "coord": "M9",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N9",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "T-26040005"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "SGTBLOEM"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "LB45BMGP"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "010426FC001"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "Heavy"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": 449
+        },
+        "10": {
+          "coord": "J10",
+          "col": 10,
+          "value": 16
+        },
+        "11": {
+          "coord": "K10",
+          "col": 11,
+          "value": 7184,
+          "formula": "=IFERROR(I10*J10,0)"
+        },
+        "12": {
+          "coord": "L10",
+          "col": 12,
+          "value": "Famous Brands"
+        },
+        "13": {
+          "coord": "M10",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N10",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "T-26040006"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "SGTBLOEM"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "LB45BMGP"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "010426FL001"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "Heavy"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": 28
+        },
+        "10": {
+          "coord": "J11",
+          "col": 10,
+          "value": 12.5
+        },
+        "11": {
+          "coord": "K11",
+          "col": 11,
+          "value": 350,
+          "formula": "=IFERROR(I11*J11,0)"
+        },
+        "12": {
+          "coord": "L11",
+          "col": 12,
+          "value": "Famous Brands"
+        },
+        "13": {
+          "coord": "M11",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N11",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "T-26040007"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "2026-04-01"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "SGTSPFMCG"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "KZ97BKGP"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "010426GC001"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "Road"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "Heavy"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Diesel"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": 972
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": 8
+        },
+        "11": {
+          "coord": "K12",
+          "col": 11,
+          "value": 7776,
+          "formula": "=IFERROR(I12*J12,0)"
+        },
+        "12": {
+          "coord": "L12",
+          "col": 12,
+          "value": "Shared (3 customers)"
+        },
+        "13": {
+          "coord": "M12",
+          "col": 13,
+          "value": "Weight"
+        },
+        "14": {
+          "coord": "N12",
+          "col": 14,
+          "value": "Yes"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "11": {
+          "coord": "K13",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I13*J13,0)"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "11": {
+          "coord": "K14",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I14*J14,0)"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "11": {
+          "coord": "K15",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I15*J15,0)"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "11": {
+          "coord": "K16",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I16*J16,0)"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "11": {
+          "coord": "K17",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I17*J17,0)"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "11": {
+          "coord": "K18",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I18*J18,0)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "11": {
+          "coord": "K19",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I19*J19,0)"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "11": {
+          "coord": "K20",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I20*J20,0)"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "11": {
+          "coord": "K21",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I21*J21,0)"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "11": {
+          "coord": "K22",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I22*J22,0)"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "11": {
+          "coord": "K23",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I23*J23,0)"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "11": {
+          "coord": "K24",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I24*J24,0)"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "11": {
+          "coord": "K25",
+          "col": 11,
+          "value": 0,
+          "formula": "=IFERROR(I25*J25,0)"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "TOTAL"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": 1544,
+          "formula": "=SUM(I6:I25)"
+        },
+        "10": {
+          "coord": "J26",
+          "col": 10,
+          "value": 50,
+          "formula": "=SUM(J6:J25)"
+        },
+        "11": {
+          "coord": "K26",
+          "col": 11,
+          "value": 15572.4,
+          "formula": "=SUM(K6:K25)"
+        },
+        "15": {
+          "coord": "O26",
+          "col": 15,
+          "value": 0,
+          "formula": "=SUM(O6:O25)"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "BLOCK 2 — PER-TRIP EMISSIONS  |  Fuel-based (preferred) or distance-based fallback per ISO 14083 §7"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Trip ID"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "Method"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "Fuel kgCO₂e"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "Dist kgCO₂e"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "Trip tCO₂e"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "gCO₂e/km"
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": "gCO₂e/t·km"
+        },
+        "8": {
+          "coord": "H29",
+          "col": 8,
+          "value": "Customer"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "Customer tCO₂e"
+        },
+        "10": {
+          "coord": "J29",
+          "col": 10,
+          "value": "Empty trip?"
+        },
+        "11": {
+          "coord": "K29",
+          "col": 11,
+          "value": "Intensity vs avg"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "T-26040001",
+          "formula": "=IF(A6=\"\",\"\",A6)"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A6=\"\",\"\",IF(O6>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": 0.9648,
+          "formula": "=IFERROR(I6*IF(G6=\"Light\",18,IF(G6=\"Medium\",22,IF(G6=\"Heavy\",26.5,IF(G6=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": 0.0009648,
+          "formula": "=IFERROR(IF(A6=\"\",\"\",IF(O6>0,C30,D30)/1000),0)"
+        },
+        "6": {
+          "coord": "F30",
+          "col": 6,
+          "value": 482.4,
+          "formula": "=IFERROR(E30*1000000/I6,0)"
+        },
+        "7": {
+          "coord": "G30",
+          "col": 7,
+          "value": 964.8,
+          "formula": "=IFERROR(E30*1000000/K6,0)"
+        },
+        "8": {
+          "coord": "H30",
+          "col": 8,
+          "value": "Engen Express",
+          "formula": "=IF(L6=\"\",\"\",L6)"
+        },
+        "9": {
+          "coord": "I30",
+          "col": 9,
+          "value": 0.0009648,
+          "formula": "=IFERROR(IF(L6=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L6)),E30/3,E30)),\"\")"
+        },
+        "11": {
+          "coord": "K30",
+          "col": 11,
+          "value": "✗ High",
+          "formula": "=IF(A6=\"\",\"\",IF(G30<=80,\"✓ Best\",IF(G30<=150,\"○ Good\",IF(G30<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "T-26040002",
+          "formula": "=IF(A7=\"\",\"\",A7)"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A7=\"\",\"\",IF(O7>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": 0.7102,
+          "formula": "=IFERROR(I7*IF(G7=\"Light\",18,IF(G7=\"Medium\",22,IF(G7=\"Heavy\",26.5,IF(G7=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": 0.0007102,
+          "formula": "=IFERROR(IF(A7=\"\",\"\",IF(O7>0,C31,D31)/1000),0)"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": 710.2,
+          "formula": "=IFERROR(E31*1000000/I7,0)"
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": 88.775,
+          "formula": "=IFERROR(E31*1000000/K7,0)"
+        },
+        "8": {
+          "coord": "H31",
+          "col": 8,
+          "value": "Engen Express",
+          "formula": "=IF(L7=\"\",\"\",L7)"
+        },
+        "9": {
+          "coord": "I31",
+          "col": 9,
+          "value": 0.0007102,
+          "formula": "=IFERROR(IF(L7=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L7)),E31/3,E31)),\"\")"
+        },
+        "11": {
+          "coord": "K31",
+          "col": 11,
+          "value": "○ Good",
+          "formula": "=IF(A7=\"\",\"\",IF(G31<=80,\"✓ Best\",IF(G31<=150,\"○ Good\",IF(G31<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "T-26040003",
+          "formula": "=IF(A8=\"\",\"\",A8)"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A8=\"\",\"\",IF(O8>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": 17.8488,
+          "formula": "=IFERROR(I8*IF(G8=\"Light\",18,IF(G8=\"Medium\",22,IF(G8=\"Heavy\",26.5,IF(G8=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": 0.0178488,
+          "formula": "=IFERROR(IF(A8=\"\",\"\",IF(O8>0,C32,D32)/1000),0)"
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": 482.4,
+          "formula": "=IFERROR(E32*1000000/I8,0)"
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": 402,
+          "formula": "=IFERROR(E32*1000000/K8,0)"
+        },
+        "8": {
+          "coord": "H32",
+          "col": 8,
+          "value": "Engen Logistics",
+          "formula": "=IF(L8=\"\",\"\",L8)"
+        },
+        "9": {
+          "coord": "I32",
+          "col": 9,
+          "value": 0.0178488,
+          "formula": "=IFERROR(IF(L8=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L8)),E32/3,E32)),\"\")"
+        },
+        "11": {
+          "coord": "K32",
+          "col": 11,
+          "value": "✗ High",
+          "formula": "=IF(A8=\"\",\"\",IF(G32<=80,\"✓ Best\",IF(G32<=150,\"○ Good\",IF(G32<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "T-26040004",
+          "formula": "=IF(A9=\"\",\"\",A9)"
+        },
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A9=\"\",\"\",IF(O9>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": 32.428,
+          "formula": "=IFERROR(I9*IF(G9=\"Light\",18,IF(G9=\"Medium\",22,IF(G9=\"Heavy\",26.5,IF(G9=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": 0.032428,
+          "formula": "=IFERROR(IF(A9=\"\",\"\",IF(O9>0,C33,D33)/1000),0)"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": 589.6,
+          "formula": "=IFERROR(E33*1000000/I9,0)"
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": 155.1578947368,
+          "formula": "=IFERROR(E33*1000000/K9,0)"
+        },
+        "8": {
+          "coord": "H33",
+          "col": 8,
+          "value": "Engen Logistics",
+          "formula": "=IF(L9=\"\",\"\",L9)"
+        },
+        "9": {
+          "coord": "I33",
+          "col": 9,
+          "value": 0.032428,
+          "formula": "=IFERROR(IF(L9=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L9)),E33/3,E33)),\"\")"
+        },
+        "11": {
+          "coord": "K33",
+          "col": 11,
+          "value": "⚠ Avg",
+          "formula": "=IF(A9=\"\",\"\",IF(G33<=80,\"✓ Best\",IF(G33<=150,\"○ Good\",IF(G33<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "1": {
+          "coord": "A34",
+          "col": 1,
+          "value": "T-26040005",
+          "formula": "=IF(A10=\"\",\"\",A10)"
+        },
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A10=\"\",\"\",IF(O10>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": 318.8798,
+          "formula": "=IFERROR(I10*IF(G10=\"Light\",18,IF(G10=\"Medium\",22,IF(G10=\"Heavy\",26.5,IF(G10=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": 0.3188798,
+          "formula": "=IFERROR(IF(A10=\"\",\"\",IF(O10>0,C34,D34)/1000),0)"
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": 710.2,
+          "formula": "=IFERROR(E34*1000000/I10,0)"
+        },
+        "7": {
+          "coord": "G34",
+          "col": 7,
+          "value": 44.3875,
+          "formula": "=IFERROR(E34*1000000/K10,0)"
+        },
+        "8": {
+          "coord": "H34",
+          "col": 8,
+          "value": "Famous Brands",
+          "formula": "=IF(L10=\"\",\"\",L10)"
+        },
+        "9": {
+          "coord": "I34",
+          "col": 9,
+          "value": 0.3188798,
+          "formula": "=IFERROR(IF(L10=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L10)),E34/3,E34)),\"\")"
+        },
+        "11": {
+          "coord": "K34",
+          "col": 11,
+          "value": "✓ Best",
+          "formula": "=IF(A10=\"\",\"\",IF(G34<=80,\"✓ Best\",IF(G34<=150,\"○ Good\",IF(G34<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "T-26040006",
+          "formula": "=IF(A11=\"\",\"\",A11)"
+        },
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A11=\"\",\"\",IF(O11>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": 19.8856,
+          "formula": "=IFERROR(I11*IF(G11=\"Light\",18,IF(G11=\"Medium\",22,IF(G11=\"Heavy\",26.5,IF(G11=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": 0.0198856,
+          "formula": "=IFERROR(IF(A11=\"\",\"\",IF(O11>0,C35,D35)/1000),0)"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": 710.2,
+          "formula": "=IFERROR(E35*1000000/I11,0)"
+        },
+        "7": {
+          "coord": "G35",
+          "col": 7,
+          "value": 56.816,
+          "formula": "=IFERROR(E35*1000000/K11,0)"
+        },
+        "8": {
+          "coord": "H35",
+          "col": 8,
+          "value": "Famous Brands",
+          "formula": "=IF(L11=\"\",\"\",L11)"
+        },
+        "9": {
+          "coord": "I35",
+          "col": 9,
+          "value": 0.0198856,
+          "formula": "=IFERROR(IF(L11=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L11)),E35/3,E35)),\"\")"
+        },
+        "11": {
+          "coord": "K35",
+          "col": 11,
+          "value": "✓ Best",
+          "formula": "=IF(A11=\"\",\"\",IF(G35<=80,\"✓ Best\",IF(G35<=150,\"○ Good\",IF(G35<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "T-26040007",
+          "formula": "=IF(A12=\"\",\"\",A12)"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "Distance-based",
+          "formula": "=IF(A12=\"\",\"\",IF(O12>0,\"Fuel-based\",\"Distance-based\"))"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": 690.3144,
+          "formula": "=IFERROR(I12*IF(G12=\"Light\",18,IF(G12=\"Medium\",22,IF(G12=\"Heavy\",26.5,IF(G12=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": 0.6903144,
+          "formula": "=IFERROR(IF(A12=\"\",\"\",IF(O12>0,C36,D36)/1000),0)"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": 710.2,
+          "formula": "=IFERROR(E36*1000000/I12,0)"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": 88.775,
+          "formula": "=IFERROR(E36*1000000/K12,0)"
+        },
+        "8": {
+          "coord": "H36",
+          "col": 8,
+          "value": "Shared (3 customers)",
+          "formula": "=IF(L12=\"\",\"\",L12)"
+        },
+        "9": {
+          "coord": "I36",
+          "col": 9,
+          "value": 0.2301048,
+          "formula": "=IFERROR(IF(L12=\"\",\"\",IF(ISNUMBER(SEARCH(\"Shared\",L12)),E36/3,E36)),\"\")"
+        },
+        "11": {
+          "coord": "K36",
+          "col": 11,
+          "value": "○ Good",
+          "formula": "=IF(A12=\"\",\"\",IF(G36<=80,\"✓ Best\",IF(G36<=150,\"○ Good\",IF(G36<=300,\"⚠ Avg\",\"✗ High\"))))"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I13*IF(G13=\"Light\",18,IF(G13=\"Medium\",22,IF(G13=\"Heavy\",26.5,IF(G13=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E37*1000000/I13,0)"
+        },
+        "7": {
+          "coord": "G37",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E37*1000000/K13,0)"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I14*IF(G14=\"Light\",18,IF(G14=\"Medium\",22,IF(G14=\"Heavy\",26.5,IF(G14=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F38",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E38*1000000/I14,0)"
+        },
+        "7": {
+          "coord": "G38",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E38*1000000/K14,0)"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "4": {
+          "coord": "D39",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I15*IF(G15=\"Light\",18,IF(G15=\"Medium\",22,IF(G15=\"Heavy\",26.5,IF(G15=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F39",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E39*1000000/I15,0)"
+        },
+        "7": {
+          "coord": "G39",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E39*1000000/K15,0)"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "4": {
+          "coord": "D40",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I16*IF(G16=\"Light\",18,IF(G16=\"Medium\",22,IF(G16=\"Heavy\",26.5,IF(G16=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F40",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E40*1000000/I16,0)"
+        },
+        "7": {
+          "coord": "G40",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E40*1000000/K16,0)"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "4": {
+          "coord": "D41",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I17*IF(G17=\"Light\",18,IF(G17=\"Medium\",22,IF(G17=\"Heavy\",26.5,IF(G17=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F41",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E41*1000000/I17,0)"
+        },
+        "7": {
+          "coord": "G41",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E41*1000000/K17,0)"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I18*IF(G18=\"Light\",18,IF(G18=\"Medium\",22,IF(G18=\"Heavy\",26.5,IF(G18=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F42",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E42*1000000/I18,0)"
+        },
+        "7": {
+          "coord": "G42",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E42*1000000/K18,0)"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "4": {
+          "coord": "D43",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I19*IF(G19=\"Light\",18,IF(G19=\"Medium\",22,IF(G19=\"Heavy\",26.5,IF(G19=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F43",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E43*1000000/I19,0)"
+        },
+        "7": {
+          "coord": "G43",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E43*1000000/K19,0)"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "4": {
+          "coord": "D44",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I20*IF(G20=\"Light\",18,IF(G20=\"Medium\",22,IF(G20=\"Heavy\",26.5,IF(G20=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F44",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E44*1000000/I20,0)"
+        },
+        "7": {
+          "coord": "G44",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E44*1000000/K20,0)"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I21*IF(G21=\"Light\",18,IF(G21=\"Medium\",22,IF(G21=\"Heavy\",26.5,IF(G21=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F45",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E45*1000000/I21,0)"
+        },
+        "7": {
+          "coord": "G45",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E45*1000000/K21,0)"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I22*IF(G22=\"Light\",18,IF(G22=\"Medium\",22,IF(G22=\"Heavy\",26.5,IF(G22=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F46",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E46*1000000/I22,0)"
+        },
+        "7": {
+          "coord": "G46",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E46*1000000/K22,0)"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "4": {
+          "coord": "D47",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I23*IF(G23=\"Light\",18,IF(G23=\"Medium\",22,IF(G23=\"Heavy\",26.5,IF(G23=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F47",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E47*1000000/I23,0)"
+        },
+        "7": {
+          "coord": "G47",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E47*1000000/K23,0)"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "4": {
+          "coord": "D48",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I24*IF(G24=\"Light\",18,IF(G24=\"Medium\",22,IF(G24=\"Heavy\",26.5,IF(G24=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F48",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E48*1000000/I24,0)"
+        },
+        "7": {
+          "coord": "G48",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E48*1000000/K24,0)"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "4": {
+          "coord": "D49",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(I25*IF(G25=\"Light\",18,IF(G25=\"Medium\",22,IF(G25=\"Heavy\",26.5,IF(G25=\"Articulated\",35,22))))/100*Assumptions!$B$30,0)"
+        },
+        "6": {
+          "coord": "F49",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E49*1000000/I25,0)"
+        },
+        "7": {
+          "coord": "G49",
+          "col": 7,
+          "value": 0,
+          "formula": "=IFERROR(E49*1000000/K25,0)"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "TOTAL"
+        },
+        "5": {
+          "coord": "E50",
+          "col": 5,
+          "value": 1.0810316,
+          "formula": "=SUM(E30:E49)"
+        },
+        "7": {
+          "coord": "G50",
+          "col": 7,
+          "value": 257.2444849624,
+          "formula": "=IFERROR(AVERAGEIF(G30:G49,\">0\"),0)"
+        },
+        "9": {
+          "coord": "I50",
+          "col": 9,
+          "value": 0.620822,
+          "formula": "=SUM(I30:I49)"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "1": {
+          "coord": "A52",
+          "col": 1,
+          "value": "BLOCK 3 — INTENSITY METRICS  |  Performance benchmarks aligned to GLEC framework"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "1": {
+          "coord": "A53",
+          "col": 1,
+          "value": "Metric"
+        },
+        "2": {
+          "coord": "B53",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C53",
+          "col": 3,
+          "value": "Unit"
+        },
+        "4": {
+          "coord": "D53",
+          "col": 4,
+          "value": "Benchmark"
+        },
+        "5": {
+          "coord": "E53",
+          "col": 5,
+          "value": "vs Benchmark"
+        },
+        "6": {
+          "coord": "F53",
+          "col": 6,
+          "value": "Source / Note"
+        }
+      }
+    },
+    {
+      "row": 54,
+      "cells": {
+        "1": {
+          "coord": "A54",
+          "col": 1,
+          "value": "Total trips logged"
+        },
+        "2": {
+          "coord": "B54",
+          "col": 2,
+          "value": 7,
+          "formula": "=COUNTIF(A6:A25,\"T-*\")"
+        },
+        "3": {
+          "coord": "C54",
+          "col": 3,
+          "value": "count"
+        },
+        "4": {
+          "coord": "D54",
+          "col": 4,
+          "value": "n/a"
+        }
+      }
+    },
+    {
+      "row": 55,
+      "cells": {
+        "1": {
+          "coord": "A55",
+          "col": 1,
+          "value": "Total distance (km)"
+        },
+        "2": {
+          "coord": "B55",
+          "col": 2,
+          "value": 1544,
+          "formula": "=SUM(I6:I25)"
+        },
+        "3": {
+          "coord": "C55",
+          "col": 3,
+          "value": "km"
+        },
+        "4": {
+          "coord": "D55",
+          "col": 4,
+          "value": "n/a"
+        }
+      }
+    },
+    {
+      "row": 56,
+      "cells": {
+        "1": {
+          "coord": "A56",
+          "col": 1,
+          "value": "Total load (tonnes)"
+        },
+        "2": {
+          "coord": "B56",
+          "col": 2,
+          "value": 50,
+          "formula": "=SUM(J6:J25)"
+        },
+        "3": {
+          "coord": "C56",
+          "col": 3,
+          "value": "t"
+        },
+        "4": {
+          "coord": "D56",
+          "col": 4,
+          "value": "n/a"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "1": {
+          "coord": "A57",
+          "col": 1,
+          "value": "Total tonne-km (t·km)"
+        },
+        "2": {
+          "coord": "B57",
+          "col": 2,
+          "value": 15572.4,
+          "formula": "=SUM(K6:K25)"
+        },
+        "3": {
+          "coord": "C57",
+          "col": 3,
+          "value": "t·km"
+        },
+        "4": {
+          "coord": "D57",
+          "col": 4,
+          "value": "n/a"
+        },
+        "6": {
+          "coord": "F57",
+          "col": 6,
+          "value": "Distance × Load — ISO 14083 §6.2 activity unit"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "1": {
+          "coord": "A58",
+          "col": 1,
+          "value": "Total emissions (tCO₂e)"
+        },
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": 1.0810316,
+          "formula": "=SUM(E30:E49)"
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": "tCO₂e"
+        },
+        "4": {
+          "coord": "D58",
+          "col": 4,
+          "value": "n/a"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "1": {
+          "coord": "A59",
+          "col": 1,
+          "value": "Avg intensity (gCO₂e/t·km)"
+        },
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": 69.4197169351,
+          "formula": "=IFERROR(SUM(E30:E49)*1000000/SUM(K6:K25),0)"
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": "gCO₂e/t·km"
+        },
+        "4": {
+          "coord": "D59",
+          "col": 4,
+          "value": 80
+        },
+        "5": {
+          "coord": "E59",
+          "col": 5,
+          "value": "✓ Met",
+          "formula": "=IF(B59<=D59,\"✓ Met\",IF(B59<=D59*1.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "6": {
+          "coord": "F59",
+          "col": 6,
+          "value": "GLEC heavy road freight benchmark: ~80 g/t·km"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "1": {
+          "coord": "A60",
+          "col": 1,
+          "value": "Avg intensity (gCO₂e/km)"
+        },
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": 700.15,
+          "formula": "=IFERROR(SUM(E30:E49)*1000000/SUM(I6:I25),0)"
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": "gCO₂e/km"
+        },
+        "4": {
+          "coord": "D60",
+          "col": 4,
+          "value": 900
+        },
+        "5": {
+          "coord": "E60",
+          "col": 5,
+          "value": "✓ Met",
+          "formula": "=IF(B60<=D60,\"✓ Met\",IF(B60<=D60*1.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "6": {
+          "coord": "F60",
+          "col": 6,
+          "value": "DEFRA heavy HGV diesel: ~1,095 g/km"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "1": {
+          "coord": "A61",
+          "col": 1,
+          "value": "Avg emissions per trip (tCO₂e)"
+        },
+        "2": {
+          "coord": "B61",
+          "col": 2,
+          "value": 0.1544330857,
+          "formula": "=IFERROR(SUM(E30:E49)/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C61",
+          "col": 3,
+          "value": "tCO₂e/trip"
+        },
+        "4": {
+          "coord": "D61",
+          "col": 4,
+          "value": "—"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "1": {
+          "coord": "A62",
+          "col": 1,
+          "value": "Empty/backhaul ratio"
+        },
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR(COUNTIF(N6:N25,\"No\")/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D62",
+          "col": 4,
+          "value": 0.15
+        },
+        "5": {
+          "coord": "E62",
+          "col": 5,
+          "value": "✓ Met",
+          "formula": "=IF(B62<=D62,\"✓ Met\",IF(B62<=D62*1.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "6": {
+          "coord": "F62",
+          "col": 6,
+          "value": "Target ≤15% for fleet efficiency"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "1": {
+          "coord": "A63",
+          "col": 1,
+          "value": "Loaded ratio"
+        },
+        "2": {
+          "coord": "B63",
+          "col": 2,
+          "value": 1,
+          "formula": "=IFERROR(COUNTIF(N6:N25,\"Yes\")/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": "%"
+        },
+        "4": {
+          "coord": "D63",
+          "col": 4,
+          "value": 0.85
+        },
+        "5": {
+          "coord": "E63",
+          "col": 5,
+          "value": "✓ Met",
+          "formula": "=IF(B63>=D63,\"✓ Met\",IF(B63>=D63*0.7,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "6": {
+          "coord": "F63",
+          "col": 6,
+          "value": "Target ≥85%"
+        }
+      }
+    },
+    {
+      "row": 65,
+      "cells": {
+        "1": {
+          "coord": "A65",
+          "col": 1,
+          "value": "BLOCK 4 — CUSTOMER EMISSIONS  |  Client-ready reporting — allocation per ISO 14083 §8"
+        }
+      }
+    },
+    {
+      "row": 66,
+      "cells": {
+        "1": {
+          "coord": "A66",
+          "col": 1,
+          "value": "Customer"
+        },
+        "2": {
+          "coord": "B66",
+          "col": 2,
+          "value": "Trips"
+        },
+        "3": {
+          "coord": "C66",
+          "col": 3,
+          "value": "Distance (km)"
+        },
+        "4": {
+          "coord": "D66",
+          "col": 4,
+          "value": "Load (t·km)"
+        },
+        "5": {
+          "coord": "E66",
+          "col": 5,
+          "value": "Emissions (tCO₂e)"
+        },
+        "6": {
+          "coord": "F66",
+          "col": 6,
+          "value": "Intensity (g/t·km)"
+        },
+        "7": {
+          "coord": "G66",
+          "col": 7,
+          "value": "% of Total"
+        },
+        "8": {
+          "coord": "H66",
+          "col": 8,
+          "value": "Report Status"
+        }
+      }
+    },
+    {
+      "row": 67,
+      "cells": {
+        "1": {
+          "coord": "A67",
+          "col": 1,
+          "value": "Engen Express"
+        },
+        "2": {
+          "coord": "B67",
+          "col": 2,
+          "value": 2,
+          "formula": "=COUNTIF(L$6:L$25,\"Engen Express\")"
+        },
+        "3": {
+          "coord": "C67",
+          "col": 3,
+          "value": 3,
+          "formula": "=SUMIF(L$6:L$25,\"Engen Express\",I$6:I$25)"
+        },
+        "4": {
+          "coord": "D67",
+          "col": 4,
+          "value": 9,
+          "formula": "=SUMIF(L$6:L$25,\"Engen Express\",K$6:K$25)"
+        },
+        "5": {
+          "coord": "E67",
+          "col": 5,
+          "value": 0.001675,
+          "formula": "=SUMIF(H$30:H$49,\"Engen Express\",I$30:I$49)"
+        },
+        "6": {
+          "coord": "F67",
+          "col": 6,
+          "value": 186.1111111111,
+          "formula": "=IFERROR(E67*1000000/D67,0)"
+        },
+        "7": {
+          "coord": "G67",
+          "col": 7,
+          "value": 0.0026980358,
+          "formula": "=IFERROR(E67/SUM(E$67:E$70),0)"
+        },
+        "8": {
+          "coord": "H67",
+          "col": 8,
+          "value": "📋 Client-ready",
+          "formula": "=IF(AND(B67>0,E67>0),\"📋 Client-ready\",\"○ No data\")"
+        }
+      }
+    },
+    {
+      "row": 68,
+      "cells": {
+        "1": {
+          "coord": "A68",
+          "col": 1,
+          "value": "Engen Logistics"
+        },
+        "2": {
+          "coord": "B68",
+          "col": 2,
+          "value": 2,
+          "formula": "=COUNTIF(L$6:L$25,\"Engen Logistics\")"
+        },
+        "3": {
+          "coord": "C68",
+          "col": 3,
+          "value": 92,
+          "formula": "=SUMIF(L$6:L$25,\"Engen Logistics\",I$6:I$25)"
+        },
+        "4": {
+          "coord": "D68",
+          "col": 4,
+          "value": 253.4,
+          "formula": "=SUMIF(L$6:L$25,\"Engen Logistics\",K$6:K$25)"
+        },
+        "5": {
+          "coord": "E68",
+          "col": 5,
+          "value": 0.0502768,
+          "formula": "=SUMIF(H$30:H$49,\"Engen Logistics\",I$30:I$49)"
+        },
+        "6": {
+          "coord": "F68",
+          "col": 6,
+          "value": 198.408839779,
+          "formula": "=IFERROR(E68*1000000/D68,0)"
+        },
+        "7": {
+          "coord": "G68",
+          "col": 7,
+          "value": 0.0809842435,
+          "formula": "=IFERROR(E68/SUM(E$67:E$70),0)"
+        },
+        "8": {
+          "coord": "H68",
+          "col": 8,
+          "value": "📋 Client-ready",
+          "formula": "=IF(AND(B68>0,E68>0),\"📋 Client-ready\",\"○ No data\")"
+        }
+      }
+    },
+    {
+      "row": 69,
+      "cells": {
+        "1": {
+          "coord": "A69",
+          "col": 1,
+          "value": "Famous Brands"
+        },
+        "2": {
+          "coord": "B69",
+          "col": 2,
+          "value": 2,
+          "formula": "=COUNTIF(L$6:L$25,\"Famous Brands\")"
+        },
+        "3": {
+          "coord": "C69",
+          "col": 3,
+          "value": 477,
+          "formula": "=SUMIF(L$6:L$25,\"Famous Brands\",I$6:I$25)"
+        },
+        "4": {
+          "coord": "D69",
+          "col": 4,
+          "value": 7534,
+          "formula": "=SUMIF(L$6:L$25,\"Famous Brands\",K$6:K$25)"
+        },
+        "5": {
+          "coord": "E69",
+          "col": 5,
+          "value": 0.3387654,
+          "formula": "=SUMIF(H$30:H$49,\"Famous Brands\",I$30:I$49)"
+        },
+        "6": {
+          "coord": "F69",
+          "col": 6,
+          "value": 44.9648792142,
+          "formula": "=IFERROR(E69*1000000/D69,0)"
+        },
+        "7": {
+          "coord": "G69",
+          "col": 7,
+          "value": 0.5456723505,
+          "formula": "=IFERROR(E69/SUM(E$67:E$70),0)"
+        },
+        "8": {
+          "coord": "H69",
+          "col": 8,
+          "value": "📋 Client-ready",
+          "formula": "=IF(AND(B69>0,E69>0),\"📋 Client-ready\",\"○ No data\")"
+        }
+      }
+    },
+    {
+      "row": 70,
+      "cells": {
+        "1": {
+          "coord": "A70",
+          "col": 1,
+          "value": "Shared (3 customers)"
+        },
+        "2": {
+          "coord": "B70",
+          "col": 2,
+          "value": 1,
+          "formula": "=COUNTIF(L$6:L$25,\"Shared (3 customers)\")"
+        },
+        "3": {
+          "coord": "C70",
+          "col": 3,
+          "value": 972,
+          "formula": "=SUMIF(L$6:L$25,\"Shared (3 customers)\",I$6:I$25)"
+        },
+        "4": {
+          "coord": "D70",
+          "col": 4,
+          "value": 7776,
+          "formula": "=SUMIF(L$6:L$25,\"Shared (3 customers)\",K$6:K$25)"
+        },
+        "5": {
+          "coord": "E70",
+          "col": 5,
+          "value": 0.2301048,
+          "formula": "=SUMIF(H$30:H$49,\"Shared (3 customers)\",I$30:I$49)"
+        },
+        "6": {
+          "coord": "F70",
+          "col": 6,
+          "value": 29.5916666667,
+          "formula": "=IFERROR(E70*1000000/D70,0)"
+        },
+        "7": {
+          "coord": "G70",
+          "col": 7,
+          "value": 0.3706453702,
+          "formula": "=IFERROR(E70/SUM(E$67:E$70),0)"
+        },
+        "8": {
+          "coord": "H70",
+          "col": 8,
+          "value": "📋 Client-ready",
+          "formula": "=IF(AND(B70>0,E70>0),\"📋 Client-ready\",\"○ No data\")"
+        }
+      }
+    },
+    {
+      "row": 71,
+      "cells": {
+        "1": {
+          "coord": "A71",
+          "col": 1,
+          "value": "TOTAL — CUSTOMER ALLOCATED"
+        },
+        "2": {
+          "coord": "B71",
+          "col": 2,
+          "value": 7,
+          "formula": "=SUM(B67:B70)"
+        },
+        "3": {
+          "coord": "C71",
+          "col": 3,
+          "value": 1544,
+          "formula": "=SUM(C67:C70)"
+        },
+        "4": {
+          "coord": "D71",
+          "col": 4,
+          "value": 15572.4,
+          "formula": "=SUM(D67:D70)"
+        },
+        "5": {
+          "coord": "E71",
+          "col": 5,
+          "value": 0.620822,
+          "formula": "=SUM(E67:E70)"
+        },
+        "6": {
+          "coord": "F71",
+          "col": 6,
+          "value": 39.8668156482,
+          "formula": "=IFERROR(E71*1000000/D71,0)"
+        },
+        "7": {
+          "coord": "G71",
+          "col": 7,
+          "value": 1,
+          "formula": "=SUM(G67:G70)"
+        }
+      }
+    },
+    {
+      "row": 73,
+      "cells": {
+        "1": {
+          "coord": "A73",
+          "col": 1,
+          "value": "BLOCK 5 — OPERATIONAL SUMMARY  |  Fleet performance + route efficiency  |  ISO 14083 §9 reporting"
+        }
+      }
+    },
+    {
+      "row": 74,
+      "cells": {
+        "1": {
+          "coord": "A74",
+          "col": 1,
+          "value": "Avg distance per trip"
+        },
+        "2": {
+          "coord": "B74",
+          "col": 2,
+          "value": 220.5714285714,
+          "formula": "=IFERROR(SUM(I6:I25)/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C74",
+          "col": 3,
+          "value": "km"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "Avg load per trip"
+        },
+        "2": {
+          "coord": "B75",
+          "col": 2,
+          "value": 7.1428571429,
+          "formula": "=IFERROR(SUM(J6:J25)/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C75",
+          "col": 3,
+          "value": "t"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "Avg t·km per trip"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": 2224.6285714286,
+          "formula": "=IFERROR(SUM(K6:K25)/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": "t·km"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Longest single trip"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": 972,
+          "formula": "=MAX(I6:I25)"
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": "km"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Shortest single trip"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR(minifs(I6:I25,I6:I25,\">0\"),0)"
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": "km"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "Trips with fuel data"
+        },
+        "2": {
+          "coord": "B79",
+          "col": 2,
+          "value": 0,
+          "formula": "=COUNTIF(O6:O25,\">0\")"
+        },
+        "3": {
+          "coord": "C79",
+          "col": 3,
+          "value": "count"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "Trips on default factors"
+        },
+        "2": {
+          "coord": "B80",
+          "col": 2,
+          "value": 7,
+          "formula": "=COUNTIF(A6:A25,\"T-*\")-COUNTIF(O6:O25,\">0\")"
+        },
+        "3": {
+          "coord": "C80",
+          "col": 3,
+          "value": "count"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "Fuel-based emissions %"
+        },
+        "2": {
+          "coord": "B81",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR(COUNTIF(O6:O25,\">0\")/COUNTIF(A6:A25,\"T-*\"),0)"
+        },
+        "3": {
+          "coord": "C81",
+          "col": 3,
+          "value": "%"
+        }
+      }
+    }
+  ]
+}

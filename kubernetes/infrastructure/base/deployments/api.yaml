@@ -157,6 +157,24 @@ spec:
                   name: external-api-keys
                   key: AZURE_STORAGE_ACCOUNT_NAME
                   optional: true
+            - name: AZURE_CERT_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_CERT_STORAGE_CONNECTION_STRING
+                  optional: true
+            - name: AZURE_CERT_STORAGE_ACCOUNT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_CERT_STORAGE_ACCOUNT_NAME
+                  optional: true
+            - name: AZURE_CERT_BLOB_CONTAINER
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_CERT_BLOB_CONTAINER
+                  optional: true
             - name: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
               valueFrom:
                 secretKeyRef:

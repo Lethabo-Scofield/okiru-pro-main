@@ -91,6 +91,18 @@ export interface MCTargets {
   middleBWMaxPts: number;
   juniorMaxPts: number;
   juniorBWMaxPts: number;
+  /**
+   * Per-band black / black-female targets, split across demographic groups by
+   * the effective EAP for the client's province (workbook MC Scorecard model).
+   * Optional — when omitted, the calculator falls back to the generic-code
+   * defaults (0.60/0.75/0.88 black, 0.30/0.38/0.44 black female).
+   */
+  seniorBlackTarget?: number;
+  seniorBWTarget?: number;
+  middleBlackTarget?: number;
+  middleBWTarget?: number;
+  juniorBlackTarget?: number;
+  juniorBWTarget?: number;
 }
 
 export interface EETargets {
@@ -278,16 +290,39 @@ const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognitio
   recognition,
 }));
 
-// FSC uses scaled (non-integer) thresholds based on sub-sector total (from Excel)
-const FSC_LEVELS = [
-  { level: 1, minPoints: 95.50, recognition: 135 },
-  { level: 2, minPoints: 90.72, recognition: 125 },
-  { level: 3, minPoints: 85.95, recognition: 110 },
-  { level: 4, minPoints: 76.40, recognition: 100 },
-  { level: 5, minPoints: 71.62, recognition: 80 },
-  { level: 6, minPoints: 66.85, recognition: 60 },
-  { level: 7, minPoints: 52.52, recognition: 50 },
-  { level: 8, minPoints: 38.20, recognition: 10 },
+// FSC level thresholds vary by sub-sector (Scoring Scale sheet — FSC-FULL-ANALYSIS §3)
+const FSC_LEVELS_OTHERS = [
+  { level: 1, minPoints: 92.79, recognition: 135 },
+  { level: 2, minPoints: 88.15, recognition: 125 },
+  { level: 3, minPoints: 83.51, recognition: 110 },
+  { level: 4, minPoints: 74.23, recognition: 100 },
+  { level: 5, minPoints: 69.59, recognition: 80 },
+  { level: 6, minPoints: 64.95, recognition: 60 },
+  { level: 7, minPoints: 51.04, recognition: 50 },
+  { level: 8, minPoints: 37.12, recognition: 10 },
+];
+
+/** Banks and LTI share identical thresholds. */
+const FSC_LEVELS_BANKS_LTI = [
+  { level: 1, minPoints: 108.11, recognition: 135 },
+  { level: 2, minPoints: 102.70, recognition: 125 },
+  { level: 3, minPoints: 97.30, recognition: 110 },
+  { level: 4, minPoints: 86.49, recognition: 100 },
+  { level: 5, minPoints: 81.08, recognition: 80 },
+  { level: 6, minPoints: 75.68, recognition: 60 },
+  { level: 7, minPoints: 59.46, recognition: 50 },
+  { level: 8, minPoints: 43.24, recognition: 10 },
+];
+
+const FSC_LEVELS_STI = [
+  { level: 1, minPoints: 103.60, recognition: 135 },
+  { level: 2, minPoints: 98.42, recognition: 125 },
+  { level: 3, minPoints: 93.24, recognition: 110 },
+  { level: 4, minPoints: 82.88, recognition: 100 },
+  { level: 5, minPoints: 77.70, recognition: 80 },
+  { level: 6, minPoints: 72.52, recognition: 60 },
+  { level: 7, minPoints: 56.98, recognition: 50 },
+  { level: 8, minPoints: 41.44, recognition: 10 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -425,6 +460,10 @@ export const RCOGP_GENERIC: SectorConfig = {
       seniorMaxPts: 2, seniorBWMaxPts: 1,
       middleMaxPts: 2, middleBWMaxPts: 1,
       juniorMaxPts: 1, juniorBWMaxPts: 1,
+      // Per-band black / black-female targets (workbook MC Scorecard E30/E37/E43/E50/E56/E63).
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
     },
     employmentEquity: {
       seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,
@@ -479,66 +518,97 @@ export const ICT_GENERIC: SectorConfig = {
   sectorCode: 'ICT',
   sectorName: 'ICT Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 140, // Verified from Excel: 25+23+25+27+10+18+12 = 140 (YES excluded)
+  // Verified from Excel Summary Scorecard: 25+23+25+27+10+18+12 = 140 (YES excluded)
+  // ICT uses different level scale: L1=120, L2=115, L3=110, L4=100, L5=95, L6=90, L7=75, L8=55
+  totalMaxPoints: 140,
   pillarConfigs: {
+    // Ownership: 4+2+4+2+3+2+8 = 25 (same structure as RCOGP)
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Merged into MC
+    // MC+EE combined at 23 pts; no separate EE pillar
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // Skills: 8+4+4+4+5 = 25 (6% all-spend, no bursary, 2×headcount, absorption bonus)
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    // PP: 5+3+4+9+4 = 25 base + 2 DG bonus = 27
     preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 }, // 2% NPAT
-    enterpriseDevelopment: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 }, // 15 base + 1 grad + 1 jobs≤10% + 1 jobs>11%
-    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 }, // ICT-specific
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
+    // SD: 2% NPAT / 10 pts
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    // ED: 15 base (3% NPAT) + 1 graduation + 2 jobs≥11% = 18 max
+    enterpriseDevelopment: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
+    // SED: 1.5% NPAT / 12 pts (ICT Specific Initiatives)
+    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
-      // GROUND TRUTH Section 4: ICT voting target = 30% (not 25%)
-      votingRightsTarget: 0.30, votingRightsMaxPts: 5,
+      // Verified from Summary Scorecard rows 20–26: 25%+1 vote = 4 pts, 10% women = 2 pts
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3,
+      netValueMaxPts: 8,
+      newEntrantsMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.03,
+      economicInterestDesignatedGroupMaxPts: 3,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3, // 50% target
-      boardBWTarget: 0.25, boardBWMaxPts: 2, // 25% target
-      execBlackTarget: 0.50, execBlackMaxPts: 2, // 50% target
-      execBWTarget: 0.25, execBWMaxPts: 1, // 25% target (NOT 30%)
+      // Verified from MC Scorecard rows: board 3+2, exec 2+1, other exec 3+2 = 13 director pts
+      // Senior 2+1, middle 2+1, junior 1+1, disabled 2 = 10 EE pts; total 23
+      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
       otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
       otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
-      seniorMaxPts: 0, seniorBWMaxPts: 0, // Included in EE portion
-      middleMaxPts: 0, middleBWMaxPts: 0,
-      juniorMaxPts: 0, juniorBWMaxPts: 0,
+      // Senior/middle/junior bands are included in the combined MC+EE 23-pt total
+      seniorMaxPts: 2, seniorBWMaxPts: 1,
+      middleMaxPts: 2, middleBWMaxPts: 1,
+      juniorMaxPts: 1, juniorBWMaxPts: 1,
     },
     employmentEquity: {
-      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0, // All merged into MC
-      disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
+      // All MC+EE merged into the MC pillar; disabled scored within MC
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 2, disabledTarget: 0.02,
     },
     skills: {
-      // Super Admin Fix Plan §3.4 I1 — ICT Generic Skills rows must sum to 25
-      // (6+4+4+6+5), not 30 (Ground Truth §4 + extracted ICT Generic JSON).
-      learningProgrammesMaxPts: 6,
-      bursaryMaxPts: 4,
+      // 2.1.1.1 All-spend Black: 6% leviable = 8 pts
+      // 2.1.1.2 Disabled Black: 0.3% leviable = 4 pts
+      // 2.1.2.1 LAI Black: 2.5% headcount = 4 pts
+      // 2.1.2.2 Unemployed training Black: 2.5% headcount = 4 pts (combined with LAI in learnershipsMaxPts)
+      // 2.1.3 Absorption bonus = 5 pts
+      // Total: 8+4+4+4+5 = 25
+      learningProgrammesMaxPts: 8,
+      bursaryMaxPts: 0,        // No separate bursary indicator in ICT
       disabledLearningMaxPts: 4,
-      learnershipsMaxPts: 6,
+      learnershipsMaxPts: 8,   // LAI 4 pts + unemployed training 4 pts combined
       absorptionMaxPts: 5,
-      overallSpendPercent: 3.0,
-      bursarySpendPercent: 1.0,
-      disabledSpendPercent: 0.15,
-      learnershipTargetPercent: 5.0,
+      overallSpendPercent: 6.0,
+      bursarySpendPercent: 0.0,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 2.5,
       absorptionTargetPercent: 2.5,
     },
     procurement: {
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5, // 80% spend
-      qseTarget: 0.15, qseMaxPts: 3, // 15% QSE
-      emeTarget: 0.15, emeMaxPts: 4, // 15% EME
-      bo51Target: 0.50, bo51MaxPts: 9, // 50% black-owned
-      bwo30Target: 0.12, bwo30MaxPts: 4, // 12% black women-owned
-      dgTarget: 0.02, dgMaxPts: 2, // 2% designated group
+      // Verified from Procurement Scorecard: total 27 (25 base + 2 DG bonus)
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.15, qseMaxPts: 3,
+      emeTarget: 0.15, emeMaxPts: 4,
+      // ICT CRITICAL: BO51 target is 40% (not 50% as in RCOGP)
+      bo51Target: 0.40, bo51MaxPts: 9,
+      bwo30Target: 0.12, bwo30MaxPts: 4,
+      dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
-    sed: { spendPercent: 1.0, maxPts: 12 }, // ICT-specific initiatives
+    esd: {
+      // SD: 2% NPAT = 10 pts (same as RCOGP)
+      // ED: 3% NPAT base = 15 pts; bonuses: graduation +1, jobs≥11% +2 (or jobs≤10% +1)
+      // edJobsBonus = 2 enables the ICT ≥11%-of-workforce upper tier (TOOLKIT-RESOLVED.md S6),
+      // so the full ED pillar reaches 15 + 1 + 2 = 18.
+      sdPercent: 2.0, sdMaxPts: 10,
+      edPercent: 3.0, edMaxPts: 15,
+      edGraduationBonus: 1, edJobsBonus: 2,
+    },
+    // SED: 1.5% NPAT = 12 pts (ICT Specific Initiatives)
+    sed: { spendPercent: 1.5, maxPts: 12 },
   },
   levelThresholds: ICT_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
@@ -597,35 +667,38 @@ export const FSC_GENERIC: SectorConfig = {
       disabledMaxPts: 1, disabledTarget: 0.02, // FSC: 1 pt disabled (NOT 0)
     },
     skills: {
-      // Super Admin Fix Plan §3.5 F1 — FSC Others Skills rows must sum to 23
-      // per Ground Truth §5 (2+2+3+4+4+1+4+3). Previously the rows summed to
-      // 25 while the pillar header showed 23.
-      learningProgrammesMaxPts: 5,
-      bursaryMaxPts: 4,
-      disabledLearningMaxPts: 3,
-      learnershipsMaxPts: 6,
-      absorptionMaxPts: 5,
-      overallSpendPercent: 3.5,
-      bursarySpendPercent: 2.5,
-      disabledSpendPercent: 0.3,
-      learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 2.5,
+      // FSC Others skills structure — per-management-level approach (not RCOGP single-rate).
+      // Excel indicator breakdown: Senior+Exec(2)+Middle(2)+Junior(3)+Non-mgmt(4) = 11;
+      // Unemployed(4) + Disabled(1) = 5; LAI headcount(4); Absorption bonus(3). Total = 23.
+      // learningProgrammesMaxPts maps to managed-level spend sub-total (11 pts).
+      // bursaryMaxPts maps to unemployed Black spend (4 pts, 1.5% leviable).
+      learningProgrammesMaxPts: 11,   // Senior+Exec(2)+Middle(2)+Junior(3)+Non-mgmt(4) = 11
+      bursaryMaxPts: 4,               // Unemployed Black people (2.5: 1.5% leviable)
+      disabledLearningMaxPts: 1,      // Black disabled (2.6: 0.3% leviable) — 1 pt not 3
+      learnershipsMaxPts: 4,          // LAI headcount (2.7: 5% of headcount) — 4 pts not 6
+      absorptionMaxPts: 3,            // Absorption bonus (2.8: 100%) — 3 pts not 5
+      overallSpendPercent: 3.5,       // Approximation only; FSC uses per-level rates
+      bursarySpendPercent: 1.5,       // Unemployed spend target = 1.5% of leviable
+      disabledSpendPercent: 0.3,      // Disabled spend target = 0.3% of leviable
+      learnershipTargetPercent: 5.0,  // LAI = 5% of total headcount
+      absorptionTargetPercent: 1.0,   // Absorption = 100% of unemployed LAI participants
     },
     procurement: {
-      // Super Admin Fix Plan §3.5 F2 — FSC Others PP rows must sum to 24
-      // per Ground Truth §5 (5+3+2+7+3+2+2). Previously the rows summed to
-      // 27 while the pillar header showed 24.
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
-      qseTarget: 0.15, qseMaxPts: 3,
-      emeTarget: 0.15, emeMaxPts: 2,
-      bo51Target: 0.50, bo51MaxPts: 7,
-      bwo30Target: 0.12, bwo30MaxPts: 3,
-      dgTarget: 0.02, dgMaxPts: 4,
+      // FSC Others PP — verified from Excel procurement scorecard.
+      // Base rows: 5+3+2+7+3 = 20 pts; bonus capped at 4 pts → total 24 pts.
+      // Note: 3 bonus row types (intermediated 2pts, stockbrokers 2pts, DG 2pts = 6 pts raw)
+      // but scorecard Total = 24 (base 20 + 4 bonus cap). dgMaxPts represents combined bonus.
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,  // 80% of TMPS from L1–L8
+      qseTarget: 0.18, qseMaxPts: 3,                    // 18% QSE (FSC: 18%, not RCOGP 15%)
+      emeTarget: 0.12, emeMaxPts: 2,                    // 12% EME (FSC: 12%, not RCOGP 15%)
+      bo51Target: 0.30, bo51MaxPts: 7,                  // 30% ≥51% black owned (FSC: 30%, not RCOGP 50%)
+      bwo30Target: 0.10, bwo30MaxPts: 3,                // 10% ≥30% BWO (FSC: 10%, not RCOGP 12%)
+      dgTarget: 0.02, dgMaxPts: 4,                      // Combined bonus rows (intermediated+stockbrokers+DG) capped at 4 pts
     },
     esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
     sed: { spendPercent: 1.0, maxPts: 8 }, // SED+CE combined for Others sub-sector
   },
-  levelThresholds: FSC_LEVELS,
+  levelThresholds: FSC_LEVELS_OTHERS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
@@ -633,13 +706,285 @@ export const FSC_GENERIC: SectorConfig = {
 };
 // FSC Generic verified: 25+21+23+24+10+9+8 = 120 (Others sub-sector) ✓
 // MC breakdown (Section 5): board 2+1, exec 2+1, other exec 10+4, disabled 1 = 21 ✓
+// Skills breakdown: Senior(2)+Middle(2)+Junior(3)+Non-mgmt(4)+Unemployed(4)+Disabled(1)+LAI(4)+Absorption(3) = 23 ✓
+// PP targets (FSC-specific): QSE 18%, EME 12%, BO51 30%, BWO30 10%
 // FSC uses scaled level thresholds: L1=95.5, L2=90.7, ... L8=38.2
-// FSC has sub-variants: Banks, Long-Term Insurers, Short-Term Insurers, Others
-// EF is "NOT Applicable" for Others sub-sector
+// FSC has sub-variants: Banks (FS701), Long-Term Insurers (FS702), Short-Term Insurers (FS703), Others (Generic)
 
 // ---------------------------------------------------------------------------
-// Agri Generic (Agriculture / AgriBEE)
-// TODO: Verify against AgriBEE Sector Code toolkit Excel
+// FSC Banks (FS701) — Empowerment Financing + AFS: Banks
+// Grand total: 130 pts (25+21+23+24+10+7+12+8)
+//   SD target: 1.8% NPAT (not 2%); ED target: 0.2% NPAT (not 1%)
+//   No stockbroker bonus (not on Banks EF&ESD sheet)
+//   EF Targeted Investments + Transaction Financing = 0 pts (Q44: blank in template)
+//   AFS Banks = 12 pts (6 geographic/access indicators)
+// ---------------------------------------------------------------------------
+
+export const FSC_BANKS: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Banks — FS701)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+7(ED no stockbroker)+12(AFS)+8 = 130
+  totalMaxPoints: 130,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    // Banks ED: 5 base + 1 grad + 1 jobs = 7 (no stockbroker row on Banks EF sheet)
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // EF: point values = 0 per Q44 (template defaults to Others sub-sector — all EF cells blank)
+    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // AFS Banks = 12 pts (verified from AFS Scorecard - Banks sheet)
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // Banks SD: 1.8% NPAT (vs 2% Others); ED: 0.2% NPAT (vs 1% Others); no stockbroker bonus
+    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_BANKS_LTI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC Banks verified: 25+21+23+24+10+7+12+8 = 130 (Banks sub-sector, EF=0 per Q44) ✓
+// SD target 1.8%, ED target 0.2%; no stockbroker bonus (not on Banks EF&ESD sheet)
+// AFS: Transaction Point(5km,1pt) + Service Point(10km,1pt) + Sales Point(15km,2pts)
+//      + Electronic Access(2pts) + Point of Presence(3pts) + Active Accounts(3pts) = 12 ✓
+
+// ---------------------------------------------------------------------------
+// FSC Long-Term Insurers (FS702) — Empowerment Financing + AFS: Long Term
+// Grand total: 132 pts (25+21+23+24+10+9+12+8)
+//   SD target: 1.8% NPAT; ED target: 0.2% NPAT + stockbroker support (0.5% / 2 pts)
+//   EF Targeted Investments + Transaction Financing = 0 pts (Q44)
+//   AFS LTI = 12 pts (Appropriate Products 3 + Market Penetration 7 + Transactional Access 2)
+// ---------------------------------------------------------------------------
+
+export const FSC_LTI: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+9(ED with stockbroker)+12(AFS)+8 = 132
+  totalMaxPoints: 132,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    // LTI ED: 5 base + 1 grad + 1 jobs + 2 stockbroker = 9 (stockbroker on LTI EF sheet)
+    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // LTI SD: 1.8% NPAT; ED: 0.2% NPAT; stockbroker bonus 0.5% NPAT / 2 pts (on EF sheet)
+    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_BANKS_LTI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC LTI verified: 25+21+23+24+10+9+12+8 = 132 (LTI sub-sector, EF=0 per Q44) ✓
+// SD target 1.8%, ED target 0.2%, stockbroker bonus 0.5%/2pts included
+// AFS: Appropriate Products(3pts) + Market Penetration(7pts) + Transactional Access(80%/2pts) = 12 ✓
+
+// ---------------------------------------------------------------------------
+// FSC Short-Term Insurers (FS703) — AFS: Short Term only (no EF)
+// Grand total: 132 pts (25+21+23+24+10+9+12+8)
+//   Standard SD/ED targets (same as Others: SD 2%, ED 1%, stockbroker 0.5%)
+//   No EF pillar (STI: EF = N/A per SLS §2)
+//   AFS STI = 12 pts (Commercial Products 2 + Insurance Policies 10)
+// ---------------------------------------------------------------------------
+
+export const FSC_STI: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
+  scorecardType: 'Generic',
+  // 25+21+23+24+10+9+12+8 = 132 (same as LTI, EF=N/A for STI)
+  totalMaxPoints: 132,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // No EF for STI (N/A per SLS §2)
+    accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+    },
+    managementControl: {
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.75, otherExecBlackMaxPts: 10,
+      otherExecBWTarget: 0.38, otherExecBWMaxPts: 4,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 1, disabledTarget: 0.02,
+    },
+    skills: {
+      learningProgrammesMaxPts: 11,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 1,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 3,
+      overallSpendPercent: 3.5,
+      bursarySpendPercent: 1.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 5.0,
+      absorptionTargetPercent: 1.0,
+    },
+    procurement: {
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.18, qseMaxPts: 3,
+      emeTarget: 0.12, emeMaxPts: 2,
+      bo51Target: 0.30, bo51MaxPts: 7,
+      bwo30Target: 0.10, bwo30MaxPts: 3,
+      dgTarget: 0.02, dgMaxPts: 4,
+    },
+    // STI: standard SD/ED (same targets as Others — 2% and 1%)
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
+    sed: { spendPercent: 1.0, maxPts: 8 },
+  },
+  levelThresholds: FSC_LEVELS_STI,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// FSC STI verified: 25+21+23+24+10+9+12+8 = 132 (STI sub-sector) ✓
+// Standard SD 2%/10pts and ED 1%/5pts+bonuses (same as Generic Others)
+// No EF pillar for STI
+// AFS: Commercial Products (2pts) + Insurance Policies (100%/10pts) = 12 ✓
+
+// ---------------------------------------------------------------------------
+// AGRI Generic (AgriBEE Sector Code — Amended AgriBEE Sector Codes: Generic)
+// VERIFIED AGAINST: BBBEE Toolkit (Agri Generic)_Master_v.1.0.1.xlsx
+// Grand Total: 132 (25+23+25+27+10+7+15 = 132)
+// MC: 23 combined (Exco 13 + EE bands 10 — board 3+2, exec 2+1, other-exec 3+2,
+//     senior 2+1, middle 2+1, junior 1+1, disabled 2)
+// PP: 27 (allSuppliers 5@80%, QSE 3@15%, EME 4@15%, BO51 9@40%, BWO30 4@12%,
+//          DG bonus 2@2%)
+// Skills: 25 (general 8@6%, disabled 4@0.3%, LAI 4@2.5%, unemployedTraining 4@2.5%,
+//              absorption 5@100%)
+// ESD: SD 10@2%, ED 5@1.5%, grad bonus 1, jobs bonus 1
+// SED: 15@1.5% — Agriculture-specific "Socioeconomic Development Contributions"
+// Ownership: voting-Black 4@25%, voting-BW 2@10%, EI-Black 4@25%, EI-BW 2@10%,
+//             designated-groups (incl. farm workers, ESOP, BBOS, co-ops) 3@4%,
+//             new-entrants 2@2%, net-value 8@100%
 // ---------------------------------------------------------------------------
 
 export const AGRI_GENERIC: SectorConfig = {
@@ -649,63 +994,88 @@ export const AGRI_GENERIC: SectorConfig = {
   totalMaxPoints: 132, // Verified: 25+23+25+27+10+7+15 = 132
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 23 pts
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // EE folded into MC
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
-    socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Agriculture-specific CD
+    socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Agriculture-specific SED
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
-      votingRightsTarget: 0.25, votingRightsMaxPts: 5,
+      // AGRI Ownership: verified against Ownership Scorecard rows 5–17
+      // Voting Black: 4pts @ 25%+1 vote; Voting BW: 2pts @ 10%
+      // EI Black: 4pts @ 25%; EI BW: 2pts @ 10%
+      // Designated Groups (1. Black DG, 2. ESOP participants, 3. BBOS, 4. Co-ops, 5. Farm workers):
+      //   3pts @ 4% — agriculture-specific inclusion of farm workers
+      // New Entrants: 2pts @ 2%; Net Value: 8pts @ 100%
+      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3,
+      economicInterestDesignatedGroupTarget: 0.04, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
+      // AGRI MC: verified against MC Scorecard rows 18–72 — 23-pt combined total
+      // Exco sub-total: 13 — Board Black 3@50%, Board BW 2@25%, Exec Black 2@50%,
+      //   Exec BW 1@25%, Other Exec Black 3@60%, Other Exec BW 2@30%
+      // EE bands sub-total: 10 — Senior Black 2@60%, Senior BW 1@30%,
+      //   Middle Black 2@75%, Middle BW 1@38%, Junior Black 1@88%, Junior BW 1@44%,
+      //   Disabled 2@2%
       boardBlackTarget: 0.50, boardBlackMaxPts: 3,
       boardBWTarget: 0.25, boardBWMaxPts: 2,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
-      execBWTarget: 0.25, execBWMaxPts: 1, // 25% (NOT 30%)
+      execBWTarget: 0.25, execBWMaxPts: 1,   // 25% (NOT 30% — exec directors only)
       otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
       otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
-      seniorMaxPts: 0, seniorBWMaxPts: 0,
-      middleMaxPts: 0, middleBWMaxPts: 0,
-      juniorMaxPts: 0, juniorBWMaxPts: 0,
+      seniorMaxPts: 2, seniorBWMaxPts: 1,    // EAP-based (60%/30%)
+      middleMaxPts: 2, middleBWMaxPts: 1,    // EAP-based (75%/38%)
+      juniorMaxPts: 1, juniorBWMaxPts: 1,    // EAP-based (88%/44%)
     },
     employmentEquity: {
-      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
+      seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,
+      disabledMaxPts: 2, disabledTarget: 0.02, // 2% of all employees
     },
     skills: {
-      // Super Admin Fix Plan §3.6 A1 — AGRI Generic Skills rows must sum to 25
-      // per Ground Truth §6 (8+4+4+4+5). Previously the rows summed to 30
-      // while the pillar header showed 25.
+      // AGRI Skills: verified against Skills Scorecard rows 15–48
+      // 2.1.1.1: General learning programmes for Black people — 8pts @ 6% leviable
+      // 2.1.1.2: Disabled Black learning — 4pts @ 0.3% leviable (mapped to disabledLearningMaxPts)
+      // 2.1.2.1: Black people in LAI — 4pts @ 2.5% headcount (learnershipsMaxPts)
+      // 2.1.2.2: Unemployed Black people in training — 4pts @ 2.5% headcount
+      //          (mapped to bursaryMaxPts — AGRI has no HEI bursary indicator)
+      // 2.1.3:   Absorption of unemployed after LAI — 5pts @ 100% (bonus)
+      // Total: 8+4+4+4+5 = 25 ✓
       learningProgrammesMaxPts: 8,
-      bursaryMaxPts: 4,
+      bursaryMaxPts: 4,         // Repurposed: AGRI unemployed training (2.1.2.2) 4pts @ 2.5%
       disabledLearningMaxPts: 4,
       learnershipsMaxPts: 4,
       absorptionMaxPts: 5,
-      overallSpendPercent: 3.0,
-      bursarySpendPercent: 1.0,
-      disabledSpendPercent: 0.15,
-      learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 2.5,
+      overallSpendPercent: 6.0, // 6% of leviable amount (AgriBEE — not 3.5%)
+      bursarySpendPercent: 2.5, // Repurposed: unemployed training headcount target (2.5%)
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 2.5, // LAI: 2.5% of headcount (AgriBEE — not 5%)
+      absorptionTargetPercent: 100.0, // Absorption: 100% of unemployed LAI graduates
     },
     procurement: {
+      // AGRI PP: verified against Procurement Scorecard rows 9–16
+      // allSuppliers: 5pts @ 80%; QSE: 3pts @ 15%; EME: 4pts @ 15%
+      // BO51: 9pts @ 40% (NOT 50% — agriculture-specific lower threshold)
+      // BWO30: 4pts @ 12%; DG bonus: 2pts @ 2%
+      // Total base: 5+3+4+9+4 = 25; bonus: 2; pillar total: 27
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
       qseTarget: 0.15, qseMaxPts: 3,
       emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.50, bo51MaxPts: 9,
+      bo51Target: 0.40, bo51MaxPts: 9, // 40% (NOT 50%)
       bwo30Target: 0.12, bwo30MaxPts: 4,
       dgTarget: 0.02, dgMaxPts: 2,
     },
-    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
-    sed: { spendPercent: 1.0, maxPts: 15 },
+    // ESD: SD 2% NPAT / 10pts; ED 1.5% NPAT / 5pts base + 1 grad + 1 jobs = 7
+    esd: { sdPercent: 2.0, sdMaxPts: 10, edPercent: 1.5, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
+    // SED: 1.5% NPAT / 15pts — "Socioeconomic Development Contributions (Agricultural Industry)"
+    sed: { spendPercent: 1.5, maxPts: 15 },
   },
   levelThresholds: STANDARD_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
@@ -724,59 +1094,71 @@ export const RCOGP_QSE: SectorConfig = {
   sectorCode: 'RCOGP',
   sectorName: 'Revised Codes (QSE)',
   scorecardType: 'QSE',
-  totalMaxPoints: 108, // Verified: 25+15+30+21+5+7+5 = 108
+  // Verified against BBBEE Toolkit (RCOGP QSE)_Template_v.1.1.xlsx:
+  // 25 + 15 + 30 + 21 + 5 + 7 + 5 = 108
+  totalMaxPoints: 108,
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    // QSE MC: no board, no EAP bands, no disabled — 2-section flat-target scorecard
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 }, // 1% NPAT
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 1% NPAT
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
     ownership: {
+      // QSE ownership: voting Black 5pts, EI Black 5pts; new entrants/designated combined 3pts
       votingRightsTarget: 0.25, votingRightsMaxPts: 5,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
       economicInterestTarget: 0.25, economicInterestMaxPts: 5,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3,
+      economicInterestDesignatedGroupTarget: 0.02, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 0, // combined into designatedGroup above
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
-      boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.50, execBlackMaxPts: 5, // 50% = 5pts
-      execBWTarget: 0.25, execBWMaxPts: 2, // 25% = 2pts
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
-      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      // QSE MC Section 1 — Executive Management (no Board indicator)
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0, boardBWMaxPts: 0,
+      execBlackTarget: 0.50, execBlackMaxPts: 5,
+      execBWTarget: 0.25, execBWMaxPts: 2,
+      // QSE MC has no "Other Executive Management" band
+      otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+      otherExecBWTarget: 0, otherExecBWMaxPts: 0,
+      // QSE MC Section 2 — Senior+Middle+Junior combined (60%/30% fixed targets, not EAP-based)
+      // seniorMaxPts carries the combined SMJ Black score (6pts @ 60%)
+      seniorMaxPts: 6, seniorBWMaxPts: 2,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
+      // No disabled employees indicator in QSE MC
     },
     employmentEquity: {
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
+      disabledMaxPts: 0, disabledTarget: 0,
     },
     skills: {
-      learningProgrammesMaxPts: 15, // 3% leviable
-      bursaryMaxPts: 7, // 1% black female
-      disabledLearningMaxPts: 3, // 0.15% disabled
-      learnershipsMaxPts: 0,
-      absorptionMaxPts: 5, // 1% absorption
-      overallSpendPercent: 3.0,
-      bursarySpendPercent: 1.0,
-      disabledSpendPercent: 0.15,
+      // QSE Skills: all-black 3%/15pts, black-female 1%/7pts, disabled 0.15%/3pts, absorption 1%/5pts
+      learningProgrammesMaxPts: 15,   // Spend on Black people: 3% leviable
+      bursaryMaxPts: 7,               // Spend on Black female: 1% leviable (QSE-specific indicator)
+      disabledLearningMaxPts: 3,      // Spend on Black disabled: 0.15% leviable
+      learnershipsMaxPts: 0,          // No LAI headcount indicator in QSE
+      absorptionMaxPts: 5,            // Absorption of unemployed Black after LAI: 1%
+      overallSpendPercent: 3.0,       // 3% (vs Generic 3.5%)
+      bursarySpendPercent: 1.0,       // Black female spend target 1%
+      disabledSpendPercent: 0.15,     // 0.15% (vs Generic 0.3%)
       learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 1.0,   // 1% (vs Generic 2.5%)
     },
     procurement: {
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
-      qseTarget: 0.15, qseMaxPts: 3,
-      emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.50, bo51MaxPts: 9,
-      bwo30Target: 0.12, bwo30MaxPts: 4,
-      dgTarget: 0.02, dgMaxPts: 2,
+      // QSE PP: 3 indicators only (no QSE/EME split, no BWO30)
+      allSuppliersTarget: 0.60, allSuppliersMaxPts: 15, // 60% TMPS (Generic: 80% / 5pts)
+      qseTarget: 0, qseMaxPts: 0,                       // Not present in QSE toolkit
+      emeTarget: 0, emeMaxPts: 0,                       // Not present in QSE toolkit
+      bo51Target: 0.15, bo51MaxPts: 5,                  // 15% TMPS (Generic: 50% / 11pts)
+      bwo30Target: 0, bwo30MaxPts: 0,                   // Not present in QSE toolkit
+      dgTarget: 0.01, dgMaxPts: 1,                      // DG bonus: 1% / 1pt (Generic: 2% / 2pts)
     },
     esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
     sed: { spendPercent: 1.0, maxPts: 5 },
@@ -787,11 +1169,13 @@ export const RCOGP_QSE: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+// RCOGP QSE verified: 25+15+30+21+5+7+5 = 108 (exact match Excel v1.1)
 // RCOGP QSE verified: 25+15+30+21+5+7+5 = 108 (exact match Excel)
 
 // ---------------------------------------------------------------------------
 // ICT QSE (Information & Communication Technology - Qualifying Small Enterprise)
-// TODO: Verify against ICT QSE toolkit Excel
+// Verified 2026-05-29 against BBBEE Toolkit (ICT QSE)_Template_v.1.1.xlsx
+// @see docs/domain/sectors/ict/qse/sls.md
 // ---------------------------------------------------------------------------
 
 export const ICT_QSE: SectorConfig = {
@@ -805,38 +1189,53 @@ export const ICT_QSE: SectorConfig = {
     skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 2 jobs
-    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + tiered jobs (1 or 2)
+    socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 }, // ICT-specific 12 pts
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
   targets: {
     ownership: {
-      votingRightsTarget: 0.25, votingRightsMaxPts: 5,
+      // ICT sector: voting rights target = 30% (not 25% as in RCOGP)
+      votingRightsTarget: 0.30, votingRightsMaxPts: 5,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      economicInterestTarget: 0.30, economicInterestMaxPts: 5,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 3,
+      // QSE: single combined "Black New Entrants OR Designated Groups" indicator
+      // (3 pts @ 2%); modelled via the designated-group slot, new-entrants = 0.
+      // (TOOLKIT-RESOLVED.md Q8.) Ownership total: 5+2+5+2+8+3 = 25.
+      economicInterestDesignatedGroupTarget: 0.02, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 0,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
-      boardBWTarget: 0.25, boardBWMaxPts: 2,
-      execBlackTarget: 0.50, execBlackMaxPts: 4,
-      execBWTarget: 0.25, execBWMaxPts: 4,
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
-      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      // QSE: NO board indicators
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0, boardBWMaxPts: 0,
+      // QSE Section 1: Executive Management (50%/25% flat targets)
+      execBlackTarget: 0.50, execBlackMaxPts: 5,
+      execBWTarget: 0.25, execBWMaxPts: 2,
+      // QSE: NO "Other Executive Management" band
+      otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+      otherExecBWTarget: 0, otherExecBWMaxPts: 0,
+      // QSE Section 2: Senior+Middle+Junior combined (60%/30% flat targets)
+      seniorMaxPts: 6, seniorBWMaxPts: 2,
       middleMaxPts: 0, middleBWMaxPts: 0,
       juniorMaxPts: 0, juniorBWMaxPts: 0,
     },
     employmentEquity: {
+      // QSE: No separate EE pillar; disabled not scored in QSE MC
       seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
-      disabledMaxPts: 2, disabledTarget: 0.02, // 2% (NOT 3%)
+      disabledMaxPts: 0, disabledTarget: 0,
     },
     skills: {
+      // SK-1: 3% leviable / 15 pts (Black people)
       learningProgrammesMaxPts: 15,
+      // SK-2: 1% leviable / 7 pts (Black women spend — not bursaries)
       bursaryMaxPts: 7,
+      // SK-3: 0.15% leviable / 3 pts (Black disabled)
       disabledLearningMaxPts: 3,
+      // No LAI headcount indicator in QSE
       learnershipsMaxPts: 0,
+      // SK-4: Absorption bonus 1% headcount / 5 pts
       absorptionMaxPts: 5,
       overallSpendPercent: 3.0,
       bursarySpendPercent: 1.0,
@@ -845,24 +1244,29 @@ export const ICT_QSE: SectorConfig = {
       absorptionTargetPercent: 1.0,
     },
     procurement: {
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
-      qseTarget: 0.15, qseMaxPts: 3,
-      emeTarget: 0.15, emeMaxPts: 4,
-      bo51Target: 0.50, bo51MaxPts: 9,
-      bwo30Target: 0.12, bwo30MaxPts: 4,
-      dgTarget: 0.02, dgMaxPts: 2,
+      // QSE PP: 3 indicators only (all-suppliers 60%/15, BO51 15%/5, DG bonus 1%/1)
+      allSuppliersTarget: 0.60, allSuppliersMaxPts: 15,
+      // No QSE/EME/BWO30 rows in QSE procurement
+      qseTarget: 0, qseMaxPts: 0,
+      emeTarget: 0, emeMaxPts: 0,
+      bo51Target: 0.15, bo51MaxPts: 5,
+      bwo30Target: 0, bwo30MaxPts: 0,
+      dgTarget: 0.01, dgMaxPts: 1,
     },
+    // SD: 1% NPAT / 5 pts; ED: 1% NPAT / 5 base + tiered jobs bonus (1 or 2 pts, not yet modelled in calculator)
     esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 2 },
-    sed: { spendPercent: 1.0, maxPts: 12 },
+    sed: { spendPercent: 1.0, maxPts: 12 }, // ICT QSE: 12 pts (not 5)
   },
-  levelThresholds: ICT_LEVELS,
+  // ICT QSE uses standard RCOGP 8-band thresholds (100/95/90/80/75/70/55/40),
+  // NOT the ICT Generic 140-pt scale (ICT_LEVELS).
+  levelThresholds: STANDARD_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
 // ICT QSE verified from Excel: 25+15+30+21+5+8+12 = 116 (YES excluded)
-// ICT QSE uses same ICT level scale as ICT Generic
+// ICT QSE uses STANDARD level thresholds (not ICT_LEVELS which is for Generic/140-pt scale)
 
 // ---------------------------------------------------------------------------
 // Transport Sector — Large Enterprise (docs/Transport Codes.xlsx sheet1)
@@ -1282,7 +1686,8 @@ function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'
 // ---------------------------------------------------------------------------
 
 const ALL_CONFIGS: SectorConfig[] = [
-  RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
+  RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, FSC_BANKS, FSC_LTI, FSC_STI,
+  AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
 ].map(attachSubElements);
 

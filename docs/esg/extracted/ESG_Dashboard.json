@@ -1,0 +1,1634 @@
+{
+  "sheet_name": "ESG_Dashboard",
+  "sanitized_name": "ESG_Dashboard",
+  "dimensions": {
+    "max_row": 86,
+    "max_column": 15
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 136,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "🌱  ESG INTELLIGENCE DASHBOARD  —  SG Consumer  |  FY 2025/26  |  Powered by Okiru Consulting"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "Net-Zero · King V · IFRS S1/S2 · GARP/GRAP · ISO 14001/45001/27001 · Employment Equity · WSP/ATR"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "ESG PILLAR SCORES"
+        },
+        "12": {
+          "coord": "L4",
+          "col": 12,
+          "value": "EXECUTIVE SUMMARY — Board view"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "Pillar"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Score"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "Max"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "% Score"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Rating"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "Key Gap"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "Net-Zero Link"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Standards"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Target FY26"
+        },
+        "10": {
+          "coord": "J5",
+          "col": 10,
+          "value": "Status"
+        },
+        "12": {
+          "coord": "L5",
+          "col": 12,
+          "value": "Overall ESG Score"
+        },
+        "13": {
+          "coord": "M5",
+          "col": 13,
+          "value": "44.6%",
+          "formula": "=TEXT(D9,\"0.0%\")"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "🟢 Environmental (E)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 36,
+          "formula": "=E_Scorecard!D30"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "108"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0.3333333333,
+          "formula": "=IFERROR(B6/C6,0)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "⚠ Attention",
+          "formula": "=IF(D6>=Assumptions!$B$62,\"★★★ Excellent\",IF(D6>=Assumptions!$B$63,\"★★ Good\",IF(D6>=Assumptions!$B$64,\"★ Adequate\",\"⚠ Attention\")))"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "GHG Scope 1+2+3"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Fleet diesel dominant"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "IFRS S2/GRI 305/ISO14001"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "≥75/100"
+        },
+        "10": {
+          "coord": "J6",
+          "col": 10,
+          "value": "⚠ Behind",
+          "formula": "=IF(D6>=Assumptions!$B$65,\"✓ On Track\",\"⚠ Behind\")"
+        },
+        "12": {
+          "coord": "L6",
+          "col": 12,
+          "value": "Rating"
+        },
+        "13": {
+          "coord": "M6",
+          "col": 13,
+          "value": "⚠ Needs Attention",
+          "formula": "=IF(D9>=Assumptions!$B$62,\"★★★ Excellent\",IF(D9>=Assumptions!$B$63,\"★★ Good\",IF(D9>=Assumptions!$B$64,\"★ Adequate\",\"⚠ Needs Attention\")))"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "🔵 Social (S)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 33,
+          "formula": "=S_Scorecard!D28"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "100"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0.33,
+          "formula": "=IFERROR(B7/C7,0)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "⚠ Attention",
+          "formula": "=IF(D7>=Assumptions!$B$62,\"★★★ Excellent\",IF(D7>=Assumptions!$B$63,\"★★ Good\",IF(D7>=Assumptions!$B$64,\"★ Adequate\",\"⚠ Attention\")))"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "EE targets"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "EE + WSP compliance"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "EEA/GRI 405/ISO45001"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "≥75/100"
+        },
+        "10": {
+          "coord": "J7",
+          "col": 10,
+          "value": "⚠ Behind",
+          "formula": "=IF(D7>=Assumptions!$B$65,\"✓ On Track\",\"⚠ Behind\")"
+        },
+        "12": {
+          "coord": "L7",
+          "col": 12,
+          "value": "Strongest pillar"
+        },
+        "13": {
+          "coord": "M7",
+          "col": 13,
+          "value": "🟣 Governance (G)",
+          "formula": "=INDEX(A6:A8,MATCH(MAX(D6:D8),D6:D8,0))"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "🟣 Governance (G)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 64.8529411765,
+          "formula": "=G_Scorecard!D26"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "100"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 0.6485294118,
+          "formula": "=IFERROR(B8/C8,0)"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "★ Adequate",
+          "formula": "=IF(D8>=Assumptions!$B$62,\"★★★ Excellent\",IF(D8>=Assumptions!$B$63,\"★★ Good\",IF(D8>=Assumptions!$B$64,\"★ Adequate\",\"⚠ Attention\")))"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "King V full adoption"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "IFRS S2 + King V P10"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "King V/IFRS S1-S2/POPIA"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "≥75/100"
+        },
+        "10": {
+          "coord": "J8",
+          "col": 10,
+          "value": "⚠ Behind",
+          "formula": "=IF(D8>=Assumptions!$B$65,\"✓ On Track\",\"⚠ Behind\")"
+        },
+        "12": {
+          "coord": "L8",
+          "col": 12,
+          "value": "Weakest pillar"
+        },
+        "13": {
+          "coord": "M8",
+          "col": 13,
+          "value": "🔵 Social (S)",
+          "formula": "=INDEX(A6:A8,MATCH(MIN(D6:D8),D6:D8,0))"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "OVERALL ESG SCORE"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 0.4461764706,
+          "formula": "=IFERROR((E_Scorecard!D30/100+S_Scorecard!D28/100+G_Scorecard!D26/100)/3,0)"
+        },
+        "12": {
+          "coord": "L9",
+          "col": 12,
+          "value": "Material risks"
+        },
+        "13": {
+          "coord": "M9",
+          "col": 13,
+          "value": "12 of 18 risks logged",
+          "formula": "=GARP_GRAP!C28&\" of \"&GARP_GRAP!C27&\" risks logged\""
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "12": {
+          "coord": "L10",
+          "col": 12,
+          "value": "King V status"
+        },
+        "13": {
+          "coord": "M10",
+          "col": 13,
+          "value": "135/170 (79.4%)",
+          "formula": "=King5_Scorecard!E21&\"/170 (\"&TEXT(King5_Scorecard!E22,\"0.0%\")&\")\""
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "GHG EMISSIONS SUMMARY  (tCO₂e)  |  9 months actuals Jul-25 to Mar-26"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Scope"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Jul-25"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Aug-25"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Sep-25"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Oct-25"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "Nov-25"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "Dec-25"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Jan-26"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "Feb-26"
+        },
+        "10": {
+          "coord": "J12",
+          "col": 10,
+          "value": "Mar-26"
+        },
+        "11": {
+          "coord": "K12",
+          "col": 11,
+          "value": "YTD Total"
+        },
+        "12": {
+          "coord": "L12",
+          "col": 12,
+          "value": "Annualised"
+        },
+        "13": {
+          "coord": "M12",
+          "col": 13,
+          "value": "YoY Target"
+        },
+        "14": {
+          "coord": "N12",
+          "col": 14,
+          "value": "Status"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Scope 1 — Fleet Diesel"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": 79354.07,
+          "formula": "=IFERROR(E_Data!C75,0)"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": 68178.89,
+          "formula": "=IFERROR(E_Data!D75,0)"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 65076.46,
+          "formula": "=IFERROR(E_Data!E75,0)"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 73386.91,
+          "formula": "=IFERROR(E_Data!F75,0)"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": 67294.64,
+          "formula": "=IFERROR(E_Data!G75,0)"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": 57589.35,
+          "formula": "=IFERROR(E_Data!H75,0)"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": 48740.43,
+          "formula": "=IFERROR(E_Data!I75,0)"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": 63979.73,
+          "formula": "=IFERROR(E_Data!J75,0)"
+        },
+        "10": {
+          "coord": "J13",
+          "col": 10,
+          "value": 65865.05,
+          "formula": "=IFERROR(E_Data!K75,0)"
+        },
+        "11": {
+          "coord": "K13",
+          "col": 11,
+          "value": 589465.53,
+          "formula": "=IFERROR(SUM(B13:J13),0)"
+        },
+        "12": {
+          "coord": "L13",
+          "col": 12,
+          "value": 785954.04,
+          "formula": "=IFERROR(K13*Assumptions!$B$112,0)"
+        },
+        "13": {
+          "coord": "M13",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N13",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Scope 1 — Generator"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": 1289.14,
+          "formula": "=IFERROR(E_Data!C76,0)"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!D76,0)"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!E76,0)"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!F76,0)"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!G76,0)"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": 295,
+          "formula": "=IFERROR(E_Data!H76,0)"
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!I76,0)"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!J76,0)"
+        },
+        "10": {
+          "coord": "J14",
+          "col": 10,
+          "value": 597,
+          "formula": "=IFERROR(E_Data!K76,0)"
+        },
+        "11": {
+          "coord": "K14",
+          "col": 11,
+          "value": 2181.14,
+          "formula": "=IFERROR(SUM(B14:J14),0)"
+        },
+        "12": {
+          "coord": "L14",
+          "col": 12,
+          "value": 2908.1866666667,
+          "formula": "=IFERROR(K14*Assumptions!$B$112,0)"
+        },
+        "13": {
+          "coord": "M14",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N14",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Scope 1 — LPG Forklifts"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!C77,0)"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 570,
+          "formula": "=IFERROR(E_Data!D77,0)"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 190,
+          "formula": "=IFERROR(E_Data!E77,0)"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 190,
+          "formula": "=IFERROR(E_Data!F77,0)"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 380,
+          "formula": "=IFERROR(E_Data!G77,0)"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": 570,
+          "formula": "=IFERROR(E_Data!H77,0)"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": 380,
+          "formula": "=IFERROR(E_Data!I77,0)"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!J77,0)"
+        },
+        "10": {
+          "coord": "J15",
+          "col": 10,
+          "value": 0,
+          "formula": "=IFERROR(E_Data!K77,0)"
+        },
+        "11": {
+          "coord": "K15",
+          "col": 11,
+          "value": 2280,
+          "formula": "=IFERROR(SUM(B15:J15),0)"
+        },
+        "12": {
+          "coord": "L15",
+          "col": 12,
+          "value": 3040,
+          "formula": "=IFERROR(K15*Assumptions!$B$112,0)"
+        },
+        "13": {
+          "coord": "M15",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N15",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Scope 2 — Electricity (grid)"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": 288638.88,
+          "formula": "=IFERROR(E_Data!C82,0)"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 304665.02,
+          "formula": "=IFERROR(E_Data!D82,0)"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 294858.49,
+          "formula": "=IFERROR(E_Data!E82,0)"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 263387.94,
+          "formula": "=IFERROR(E_Data!F82,0)"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 255634.03,
+          "formula": "=IFERROR(E_Data!G82,0)"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": 290165.23,
+          "formula": "=IFERROR(E_Data!H82,0)"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": 261690.52,
+          "formula": "=IFERROR(E_Data!I82,0)"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": 315712.51,
+          "formula": "=IFERROR(E_Data!J82,0)"
+        },
+        "10": {
+          "coord": "J16",
+          "col": 10,
+          "value": 314825.82,
+          "formula": "=IFERROR(E_Data!K82,0)"
+        },
+        "11": {
+          "coord": "K16",
+          "col": 11,
+          "value": 2589578.44,
+          "formula": "=IFERROR(SUM(B16:J16),0)"
+        },
+        "12": {
+          "coord": "L16",
+          "col": 12,
+          "value": 3452771.25333333,
+          "formula": "=IFERROR(K16*Assumptions!$B$112,0)"
+        },
+        "13": {
+          "coord": "M16",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N16",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Scope 3 — Water"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": 409.41,
+          "formula": "=IFERROR(E_Data!C83,0)"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 391.39,
+          "formula": "=IFERROR(E_Data!D83,0)"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 380.72,
+          "formula": "=IFERROR(E_Data!E83,0)"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 534.81,
+          "formula": "=IFERROR(E_Data!F83,0)"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 476.36,
+          "formula": "=IFERROR(E_Data!G83,0)"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": 499.53,
+          "formula": "=IFERROR(E_Data!H83,0)"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": 533.01,
+          "formula": "=IFERROR(E_Data!I83,0)"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": 560.94,
+          "formula": "=IFERROR(E_Data!J83,0)"
+        },
+        "10": {
+          "coord": "J17",
+          "col": 10,
+          "value": 570.24,
+          "formula": "=IFERROR(E_Data!K83,0)"
+        },
+        "11": {
+          "coord": "K17",
+          "col": 11,
+          "value": 4356.41,
+          "formula": "=IFERROR(SUM(B17:J17),0)"
+        },
+        "12": {
+          "coord": "L17",
+          "col": 12,
+          "value": 5808.5466666667,
+          "formula": "=IFERROR(K17*Assumptions!$B$112,0)"
+        },
+        "13": {
+          "coord": "M17",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N17",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "TOTAL GHG (Scope 1+2+3)"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": 369691.5,
+          "formula": "=SUM(B13:B17)"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": 373805.3,
+          "formula": "=SUM(C13:C17)"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 360505.67,
+          "formula": "=SUM(D13:D17)"
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 337499.66,
+          "formula": "=SUM(E13:E17)"
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 323785.03,
+          "formula": "=SUM(F13:F17)"
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": 349119.11,
+          "formula": "=SUM(G13:G17)"
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": 311343.96,
+          "formula": "=SUM(H13:H17)"
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": 380253.18,
+          "formula": "=SUM(I13:I17)"
+        },
+        "10": {
+          "coord": "J18",
+          "col": 10,
+          "value": 381858.11,
+          "formula": "=SUM(J13:J17)"
+        },
+        "11": {
+          "coord": "K18",
+          "col": 11,
+          "value": 3187861.52,
+          "formula": "=SUM(K13:K17)"
+        },
+        "12": {
+          "coord": "L18",
+          "col": 12,
+          "value": 4250482.02666667,
+          "formula": "=K18*Assumptions!$B$112"
+        },
+        "13": {
+          "coord": "M18",
+          "col": 13,
+          "value": "— baseline year —"
+        },
+        "14": {
+          "coord": "N18",
+          "col": 14,
+          "value": "○ Baseline"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "KEY NET-ZERO & ESG KPIs — YTD FY2025/26"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "KPI"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Value"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Benchmark"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Source"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Total fleet diesel (litres YTD)"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": 589465.53,
+          "formula": "=E_Data!L19"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "<600,000 L target"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "Fleet_Register"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Total fleet tCO₂e Scope 1"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": 594980.49,
+          "formula": "=IFERROR(E_Data!L79,0)"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "<1,600 tCO₂e"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Total electricity kWh YTD"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": 2589578.44,
+          "formula": "=E_Data!L46"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "Monitor vs prior year"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "Utility_Bills"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Total electricity tCO₂e Scope 2"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": 2589578.44,
+          "formula": "=IFERROR(E_Data!L82,0)"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "Target: reduce 10% YoY"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "E_Data"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Fleet avg L/100km vs norm"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "No data",
+          "formula": "=IFERROR(AVERAGEIFS(Fleet_Register!K4:K19,Fleet_Register!K4:K19,\">0\"),\"No data\")"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "≤ vehicle norm"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "Fleet_Register"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Oricol CPT waste diversion %"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": 0.911,
+          "formula": "=Waste_Register!B16"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "≥90% — Target Met ✓"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "Waste_Register"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "EE: % Black employees"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": 0,
+          "formula": "=EE_Scorecard!B5"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "≥60%"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "EE_Scorecard"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "WSP submitted to SETA"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": 0,
+          "formula": "=S_Data!B45"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "Yes — Required"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "LTIFR YTD"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "Awaiting hours worked",
+          "formula": "=IFERROR(S_Data!G35,\"No data\")"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "<2.0"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "S_Data"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "King V score"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": 135,
+          "formula": "=King5_Scorecard!E21"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "≥100/170"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "King5_Scorecard"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "IFRS S1/S2 disclosures"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": 0,
+          "formula": "=IFERROR(COUNTIF(IFRS_S1_S2!D4:D40,\"Yes\")/MAX(1,COUNTA(IFRS_S1_S2!A4:A40)-COUNTBLANK(IFRS_S1_S2!A4:A40)),0)"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "≥80% disclosed"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "IFRS_S1_S2"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "ISO 14001 certification status"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "Certified (target)"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "ISO_Tracker"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "Materiality data (auto)"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "Risk"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": "Severity"
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": "Likelihood"
+        },
+        "4": {
+          "coord": "D76",
+          "col": 4,
+          "value": "Risk Score"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Climate Physical Risk",
+          "formula": "=GARP_GRAP!B5"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": 5,
+          "formula": "=IF(GARP_GRAP!E5=\"High\",5,IF(GARP_GRAP!E5=\"Medium\",3,IF(GARP_GRAP!E5=\"Low\",1,IF(GARP_GRAP!E5=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": 4,
+          "formula": "=GARP_GRAP!I5"
+        },
+        "4": {
+          "coord": "D77",
+          "col": 4,
+          "value": 20,
+          "formula": "=GARP_GRAP!J5"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Climate Transition Risk",
+          "formula": "=GARP_GRAP!B6"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": 5,
+          "formula": "=IF(GARP_GRAP!E6=\"High\",5,IF(GARP_GRAP!E6=\"Medium\",3,IF(GARP_GRAP!E6=\"Low\",1,IF(GARP_GRAP!E6=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": 5,
+          "formula": "=GARP_GRAP!I6"
+        },
+        "4": {
+          "coord": "D78",
+          "col": 4,
+          "value": 25,
+          "formula": "=GARP_GRAP!J6"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "Operational Risk — Fleet",
+          "formula": "=GARP_GRAP!B7"
+        },
+        "2": {
+          "coord": "B79",
+          "col": 2,
+          "value": 5,
+          "formula": "=IF(GARP_GRAP!E7=\"High\",5,IF(GARP_GRAP!E7=\"Medium\",3,IF(GARP_GRAP!E7=\"Low\",1,IF(GARP_GRAP!E7=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C79",
+          "col": 3,
+          "value": 5,
+          "formula": "=GARP_GRAP!I7"
+        },
+        "4": {
+          "coord": "D79",
+          "col": 4,
+          "value": 25,
+          "formula": "=GARP_GRAP!J7"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "Regulatory Risk — EE Act",
+          "formula": "=GARP_GRAP!B8"
+        },
+        "2": {
+          "coord": "B80",
+          "col": 2,
+          "value": 3,
+          "formula": "=IF(GARP_GRAP!E8=\"High\",5,IF(GARP_GRAP!E8=\"Medium\",3,IF(GARP_GRAP!E8=\"Low\",1,IF(GARP_GRAP!E8=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C80",
+          "col": 3,
+          "value": 3,
+          "formula": "=GARP_GRAP!I8"
+        },
+        "4": {
+          "coord": "D80",
+          "col": 4,
+          "value": 9,
+          "formula": "=GARP_GRAP!J8"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "Regulatory Risk — POPIA",
+          "formula": "=GARP_GRAP!B9"
+        },
+        "2": {
+          "coord": "B81",
+          "col": 2,
+          "value": 3,
+          "formula": "=IF(GARP_GRAP!E9=\"High\",5,IF(GARP_GRAP!E9=\"Medium\",3,IF(GARP_GRAP!E9=\"Low\",1,IF(GARP_GRAP!E9=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C81",
+          "col": 3,
+          "value": 3,
+          "formula": "=GARP_GRAP!I9"
+        },
+        "4": {
+          "coord": "D81",
+          "col": 4,
+          "value": 9,
+          "formula": "=GARP_GRAP!J9"
+        }
+      }
+    },
+    {
+      "row": 82,
+      "cells": {
+        "1": {
+          "coord": "A82",
+          "col": 1,
+          "value": "Financial Risk — SDL/WSP",
+          "formula": "=GARP_GRAP!B10"
+        },
+        "2": {
+          "coord": "B82",
+          "col": 2,
+          "value": 3,
+          "formula": "=IF(GARP_GRAP!E10=\"High\",5,IF(GARP_GRAP!E10=\"Medium\",3,IF(GARP_GRAP!E10=\"Low\",1,IF(GARP_GRAP!E10=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C82",
+          "col": 3,
+          "value": 3,
+          "formula": "=GARP_GRAP!I10"
+        },
+        "4": {
+          "coord": "D82",
+          "col": 4,
+          "value": 9,
+          "formula": "=GARP_GRAP!J10"
+        }
+      }
+    },
+    {
+      "row": 83,
+      "cells": {
+        "1": {
+          "coord": "A83",
+          "col": 1,
+          "value": "Reputational Risk — ESG",
+          "formula": "=GARP_GRAP!B11"
+        },
+        "2": {
+          "coord": "B83",
+          "col": 2,
+          "value": 3,
+          "formula": "=IF(GARP_GRAP!E11=\"High\",5,IF(GARP_GRAP!E11=\"Medium\",3,IF(GARP_GRAP!E11=\"Low\",1,IF(GARP_GRAP!E11=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C83",
+          "col": 3,
+          "value": 3,
+          "formula": "=GARP_GRAP!I11"
+        },
+        "4": {
+          "coord": "D83",
+          "col": 4,
+          "value": 9,
+          "formula": "=GARP_GRAP!J11"
+        }
+      }
+    },
+    {
+      "row": 84,
+      "cells": {
+        "1": {
+          "coord": "A84",
+          "col": 1,
+          "value": "Environmental Risk — Waste",
+          "formula": "=GARP_GRAP!B12"
+        },
+        "2": {
+          "coord": "B84",
+          "col": 2,
+          "value": 1,
+          "formula": "=IF(GARP_GRAP!E12=\"High\",5,IF(GARP_GRAP!E12=\"Medium\",3,IF(GARP_GRAP!E12=\"Low\",1,IF(GARP_GRAP!E12=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C84",
+          "col": 3,
+          "value": 2,
+          "formula": "=GARP_GRAP!I12"
+        },
+        "4": {
+          "coord": "D84",
+          "col": 4,
+          "value": 2,
+          "formula": "=GARP_GRAP!J12"
+        }
+      }
+    },
+    {
+      "row": 85,
+      "cells": {
+        "1": {
+          "coord": "A85",
+          "col": 1,
+          "value": "Supply Chain Risk",
+          "formula": "=GARP_GRAP!B13"
+        },
+        "2": {
+          "coord": "B85",
+          "col": 2,
+          "value": 3,
+          "formula": "=IF(GARP_GRAP!E13=\"High\",5,IF(GARP_GRAP!E13=\"Medium\",3,IF(GARP_GRAP!E13=\"Low\",1,IF(GARP_GRAP!E13=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C85",
+          "col": 3,
+          "value": 4,
+          "formula": "=GARP_GRAP!I13"
+        },
+        "4": {
+          "coord": "D85",
+          "col": 4,
+          "value": 12,
+          "formula": "=GARP_GRAP!J13"
+        }
+      }
+    },
+    {
+      "row": 86,
+      "cells": {
+        "1": {
+          "coord": "A86",
+          "col": 1,
+          "value": "Technology Risk",
+          "formula": "=GARP_GRAP!B14"
+        },
+        "2": {
+          "coord": "B86",
+          "col": 2,
+          "value": 1,
+          "formula": "=IF(GARP_GRAP!E14=\"High\",5,IF(GARP_GRAP!E14=\"Medium\",3,IF(GARP_GRAP!E14=\"Low\",1,IF(GARP_GRAP!E14=\"Req\",4,0))))"
+        },
+        "3": {
+          "coord": "C86",
+          "col": 3,
+          "value": 2,
+          "formula": "=GARP_GRAP!I14"
+        },
+        "4": {
+          "coord": "D86",
+          "col": 4,
+          "value": 2,
+          "formula": "=GARP_GRAP!J14"
+        }
+      }
+    }
+  ]
+}

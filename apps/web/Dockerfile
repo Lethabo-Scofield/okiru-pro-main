@@ -1,21 +1,23 @@
-FROM node:20-alpine AS builder
+﻿FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Native addon builds (e.g. canvas) — serial compile reduces peak RAM on ACR agents
+# Native addon builds (e.g. canvas) â€” serial compile reduces peak RAM on ACR agents
 ENV NO_COLOR=1 PNPM_NO_PROGRESS=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false \
     MAKEFLAGS=-j1
 
-RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
+RUN apk add --no-cache python3 make g++
 
 RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN sed -i '/- canvas/d' pnpm-workspace.yaml
 COPY packages/types/package.json packages/types/
 COPY packages/data-layer/package.json packages/data-layer/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
 RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","version":"1.0.0","private":true}' > apps/Computation-Engine/package.json
+
 
 RUN pnpm install --no-frozen-lockfile --reporter=append-only \
     && npm rebuild esbuild
@@ -39,11 +41,12 @@ RUN pnpm run build
 FROM node:20-alpine
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
+RUN apk add --no-cache python3 make g++
 
 RUN npm install -g pnpm@10.26.1
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/.npmrc ./
 COPY --from=builder /app/packages/types/package.json packages/types/
 COPY --from=builder /app/packages/data-layer/package.json packages/data-layer/
 COPY --from=builder /app/apps/web/package.json apps/web/
@@ -53,7 +56,7 @@ RUN mkdir -p apps/Computation-Engine && echo '{"name":"computation-engine","vers
 ENV NO_COLOR=1 NPM_CONFIG_FUND=false NPM_CONFIG_UPDATE_NOTIFIER=false MAKEFLAGS=-j1
 RUN pnpm install --no-frozen-lockfile --prod
 
-RUN apk del python3 make g++ pkgconfig
+RUN apk del python3 make g++
 
 COPY --from=builder /app/apps/web/dist/ apps/web/dist/
 

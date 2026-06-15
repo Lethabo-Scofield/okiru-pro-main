@@ -142,8 +142,12 @@ describe('CalculatorConfig baseline (#4) — valid shape, and why bare-config te
     expect(config.sed.maxPoints).toBeGreaterThan(0);
   });
 
-  it('procurement THROWS without a config — the documented cause of bare-config failures', () => {
-    expect(() => calculateProcurementScore(procurementData(), undefined as any)).toThrow();
+  it('procurement still scores without a config via its RCOGP Generic defaults', () => {
+    // Procurement falls back to RCOGP Generic sector defaults (like skills), so a
+    // bare config does NOT throw — it scores. (The earlier assertion that it threw
+    // was incorrect: requireSectorConfig resolves built-in RCOGP defaults.)
+    const result = calculateProcurementScore(procurementData(), undefined as any);
+    expect(result.total).toBeGreaterThan(0);
   });
 
   it('skills still scores without a config via its RCOGP Generic defaults', () => {

@@ -11,6 +11,7 @@ import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 import { buildEsgWorkbookTemplateXlsx } from "../src/lib/esg/esgWorkbookTemplate";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { buildGoldenSections } from "./esgGoldenFixture";
+import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -283,7 +284,6 @@ export function registerEsgWorkbookRoutes(app: Express): void {
         if (!buffer?.length) {
           return res.status(400).json({ error: "Missing xlsx file (multipart binary or fileBase64)" });
         }
-        const { parseEsgWorkbookXlsx } = await import("../src/lib/esg/esgWorkbookImport");
         const preview = parseEsgWorkbookXlsx(buffer);
         res.json(preview);
       } catch (err) {

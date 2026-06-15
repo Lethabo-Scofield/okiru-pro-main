@@ -1,0 +1,319 @@
+{
+  "file": "Okiru_ESG_Toolkit_v1_7_SG_Consumer_LiveData.xlsx",
+  "sheet_count": 28,
+  "sheet_names": [
+    "Cover",
+    "Assumptions",
+    "Audit_Log",
+    "ESG_Dashboard",
+    "E_Data",
+    "Fleet_Register",
+    "ISO_14083",
+    "Waste_Register",
+    "Driver_Debrief",
+    "S_Data",
+    "G_Data",
+    "EE_Scorecard",
+    "E_Scorecard",
+    "S_Scorecard",
+    "G_Scorecard",
+    "King5_Scorecard",
+    "IFRS_S1_S2",
+    "GARP_GRAP",
+    "ISO_Tracker",
+    "SAQ_Supplier",
+    "NetZero_Roadmap",
+    "B_BBEE_ESG",
+    "Materiality_Matrix",
+    "Carbon_Tax",
+    "Standards_Map",
+    "Glossary",
+    "Validation",
+    "Data_Status"
+  ],
+  "defined_names": [],
+  "sheets": [
+    {
+      "name": "Cover",
+      "safe": "Cover",
+      "rows": 42,
+      "cols": 4,
+      "formulas": 0,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Assumptions",
+      "safe": "Assumptions",
+      "rows": 112,
+      "cols": 6,
+      "formulas": 2,
+      "validations": 6,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Audit_Log",
+      "safe": "Audit_Log",
+      "rows": 30,
+      "cols": 6,
+      "formulas": 0,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "ESG_Dashboard",
+      "safe": "ESG_Dashboard",
+      "rows": 86,
+      "cols": 15,
+      "formulas": 136,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "E_Data",
+      "safe": "E_Data",
+      "rows": 90,
+      "cols": 14,
+      "formulas": 224,
+      "validations": 1,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Fleet_Register",
+      "safe": "Fleet_Register",
+      "rows": 33,
+      "cols": 15,
+      "formulas": 52,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "ISO_14083",
+      "safe": "ISO_14083",
+      "rows": 81,
+      "cols": 15,
+      "formulas": 303,
+      "validations": 5,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Waste_Register",
+      "safe": "Waste_Register",
+      "rows": 20,
+      "cols": 10,
+      "formulas": 12,
+      "validations": 1,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Driver_Debrief",
+      "safe": "Driver_Debrief",
+      "rows": 51,
+      "cols": 13,
+      "formulas": 43,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "S_Data",
+      "safe": "S_Data",
+      "rows": 82,
+      "cols": 12,
+      "formulas": 71,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "G_Data",
+      "safe": "G_Data",
+      "rows": 26,
+      "cols": 6,
+      "formulas": 21,
+      "validations": 12,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "EE_Scorecard",
+      "safe": "EE_Scorecard",
+      "rows": 25,
+      "cols": 9,
+      "formulas": 82,
+      "validations": 6,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "E_Scorecard",
+      "safe": "E_Scorecard",
+      "rows": 30,
+      "cols": 9,
+      "formulas": 55,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "S_Scorecard",
+      "safe": "S_Scorecard",
+      "rows": 28,
+      "cols": 9,
+      "formulas": 54,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "G_Scorecard",
+      "safe": "G_Scorecard",
+      "rows": 26,
+      "cols": 9,
+      "formulas": 43,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "King5_Scorecard",
+      "safe": "King5_Scorecard",
+      "rows": 22,
+      "cols": 9,
+      "formulas": 38,
+      "validations": 17,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "IFRS_S1_S2",
+      "safe": "IFRS_S1_S2",
+      "rows": 30,
+      "cols": 8,
+      "formulas": 24,
+      "validations": 22,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "GARP_GRAP",
+      "safe": "GARP_GRAP",
+      "rows": 30,
+      "cols": 11,
+      "formulas": 40,
+      "validations": 18,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "ISO_Tracker",
+      "safe": "ISO_Tracker",
+      "rows": 64,
+      "cols": 9,
+      "formulas": 48,
+      "validations": 43,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "SAQ_Supplier",
+      "safe": "SAQ_Supplier",
+      "rows": 46,
+      "cols": 11,
+      "formulas": 24,
+      "validations": 84,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "NetZero_Roadmap",
+      "safe": "NetZero_Roadmap",
+      "rows": 27,
+      "cols": 13,
+      "formulas": 50,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "B_BBEE_ESG",
+      "safe": "B_BBEE_ESG",
+      "rows": 18,
+      "cols": 8,
+      "formulas": 20,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Materiality_Matrix",
+      "safe": "Materiality_Matrix",
+      "rows": 31,
+      "cols": 7,
+      "formulas": 94,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Carbon_Tax",
+      "safe": "Carbon_Tax",
+      "rows": 29,
+      "cols": 6,
+      "formulas": 46,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Standards_Map",
+      "safe": "Standards_Map",
+      "rows": 37,
+      "cols": 9,
+      "formulas": 0,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Glossary",
+      "safe": "Glossary",
+      "rows": 101,
+      "cols": 5,
+      "formulas": 0,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Validation",
+      "safe": "Validation",
+      "rows": 32,
+      "cols": 5,
+      "formulas": 24,
+      "validations": 0,
+      "screenshot": "png_ok"
+    },
+    {
+      "name": "Data_Status",
+      "safe": "Data_Status",
+      "rows": 36,
+      "cols": 8,
+      "formulas": 0,
+      "validations": 0,
+      "screenshot": "png_ok"
+    }
+  ],
+  "screenshots": {
+    "Cover": "png_ok",
+    "Assumptions": "png_ok",
+    "Audit_Log": "png_ok",
+    "ESG_Dashboard": "png_ok",
+    "E_Data": "png_ok",
+    "Fleet_Register": "png_ok",
+    "ISO_14083": "png_ok",
+    "Waste_Register": "png_ok",
+    "Driver_Debrief": "png_ok",
+    "S_Data": "png_ok",
+    "G_Data": "png_ok",
+    "EE_Scorecard": "png_ok",
+    "E_Scorecard": "png_ok",
+    "S_Scorecard": "png_ok",
+    "G_Scorecard": "png_ok",
+    "King5_Scorecard": "png_ok",
+    "IFRS_S1_S2": "png_ok",
+    "GARP_GRAP": "png_ok",
+    "ISO_Tracker": "png_ok",
+    "SAQ_Supplier": "png_ok",
+    "NetZero_Roadmap": "png_ok",
+    "B_BBEE_ESG": "png_ok",
+    "Materiality_Matrix": "png_ok",
+    "Carbon_Tax": "png_ok",
+    "Standards_Map": "png_ok",
+    "Glossary": "png_ok",
+    "Validation": "png_ok",
+    "Data_Status": "png_ok"
+  }
+}

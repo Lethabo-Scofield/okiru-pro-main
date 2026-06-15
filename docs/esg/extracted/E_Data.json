@@ -1,0 +1,4587 @@
+{
+  "sheet_name": "E_Data",
+  "sanitized_name": "E_Data",
+  "dimensions": {
+    "max_row": 90,
+    "max_column": 14
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "0",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "B90"
+    }
+  ],
+  "formula_count": 224,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "E_DATA — ENVIRONMENTAL RAW DATA  |  SG Consumer  |  FY 2025/26"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "EMISSION FACTORS (DEFRA 2024 / Eskom NERSA 2024)  — edit only if factors updated"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "EF_DIESEL"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": 2.68
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "kgCO₂e/L"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Road freight diesel (DEFRA 2024)"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "EF_PETROL"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": 2.31
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "kgCO₂e/L"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "Business car petrol"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "EF_LPG"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": 1.51
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "kgCO₂e/kg"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "LPG forklifts (DBN warehouse)"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "EF_ELEC"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": 0.82
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "kgCO₂e/kWh"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "Eskom grid — NERSA 2024"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "EF_SOLAR"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": 0.025
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "kgCO₂e/kWh"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Solar PV (onsite generation)"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "EF_WATER"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": 0.000344
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "tCO₂e/kL"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "Municipal water (GHG Protocol)"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "EF_LANDFILL"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": 0.58
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "tCO₂e/tonne"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "Waste to landfill"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "SCOPE 1A — ROAD FREIGHT DIESEL (Fleet litres per depot)  [Source: Mariette Dashboard fuel consumption sheet]"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Depot/Source"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J13",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K13",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L13",
+          "col": 12,
+          "value": "YTD Total"
+        },
+        "13": {
+          "coord": "M13",
+          "col": 13,
+          "value": "tCO₂e YTD"
+        },
+        "14": {
+          "coord": "N13",
+          "col": 14,
+          "value": "Source File"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "SG Consumer – BLOEM"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": 17639.52
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": 12721.25
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 5877.41
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": 6836
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": 5002
+        },
+        "8": {
+          "coord": "H14",
+          "col": 8,
+          "value": 6977
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": 4713
+        },
+        "10": {
+          "coord": "J14",
+          "col": 10,
+          "value": 6995.19
+        },
+        "11": {
+          "coord": "K14",
+          "col": 11,
+          "value": 5922
+        },
+        "12": {
+          "coord": "L14",
+          "col": 12,
+          "value": 72683.37,
+          "formula": "=SUM(C14:K14)"
+        },
+        "13": {
+          "coord": "M14",
+          "col": 13,
+          "value": 194.7914316,
+          "formula": "=L14*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N14",
+          "col": 14,
+          "value": "Mariette/STATS/DASHBOARD 2025-2026"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "SG Consumer – CPT"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 6789
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 6039
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 5927
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": 6936
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": 5857
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": 6518
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": 4171.01
+        },
+        "10": {
+          "coord": "J15",
+          "col": 10,
+          "value": 3146
+        },
+        "11": {
+          "coord": "K15",
+          "col": 11,
+          "value": 6417
+        },
+        "12": {
+          "coord": "L15",
+          "col": 12,
+          "value": 51800.01,
+          "formula": "=SUM(C15:K15)"
+        },
+        "13": {
+          "coord": "M15",
+          "col": 13,
+          "value": 138.8240268,
+          "formula": "=L15*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N15",
+          "col": 14,
+          "value": "Mariette/STATS/DASHBOARD 2025-2026"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "SG Consumer – DBN"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 17716.57
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 14729.31
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 16273.31
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": 18434
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": 18357.36
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": 18828
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": 13750.41
+        },
+        "10": {
+          "coord": "J16",
+          "col": 10,
+          "value": 19177.8
+        },
+        "11": {
+          "coord": "K16",
+          "col": 11,
+          "value": 19512.38
+        },
+        "12": {
+          "coord": "L16",
+          "col": 12,
+          "value": 156779.14,
+          "formula": "=SUM(C16:K16)"
+        },
+        "13": {
+          "coord": "M16",
+          "col": 13,
+          "value": 420.1680952,
+          "formula": "=L16*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N16",
+          "col": 14,
+          "value": "Mariette/STATS/DASHBOARD 2025-2026"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "SG Consumer – ISANDO"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 35757.98
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 33349.25
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 35581.74
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": 39804.91
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": 36773.79
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": 23998.48
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": 24838.14
+        },
+        "10": {
+          "coord": "J17",
+          "col": 10,
+          "value": 33208.74
+        },
+        "11": {
+          "coord": "K17",
+          "col": 11,
+          "value": 32745.8
+        },
+        "12": {
+          "coord": "L17",
+          "col": 12,
+          "value": 296058.83,
+          "formula": "=SUM(C17:K17)"
+        },
+        "13": {
+          "coord": "M17",
+          "col": 13,
+          "value": 793.4376644,
+          "formula": "=L17*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N17",
+          "col": 14,
+          "value": "Mariette/STATS/DASHBOARD 2025-2026"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "SG Consumer – PE"
+        },
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": 1451
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": 1340.08
+        },
+        "5": {
+          "coord": "E18",
+          "col": 5,
+          "value": 1417
+        },
+        "6": {
+          "coord": "F18",
+          "col": 6,
+          "value": 1376
+        },
+        "7": {
+          "coord": "G18",
+          "col": 7,
+          "value": 1304.49
+        },
+        "8": {
+          "coord": "H18",
+          "col": 8,
+          "value": 1267.87
+        },
+        "9": {
+          "coord": "I18",
+          "col": 9,
+          "value": 1267.87
+        },
+        "10": {
+          "coord": "J18",
+          "col": 10,
+          "value": 1452
+        },
+        "11": {
+          "coord": "K18",
+          "col": 11,
+          "value": 1267.87
+        },
+        "12": {
+          "coord": "L18",
+          "col": 12,
+          "value": 12144.18,
+          "formula": "=SUM(C18:K18)"
+        },
+        "13": {
+          "coord": "M18",
+          "col": 13,
+          "value": 32.5464024,
+          "formula": "=L18*E_Data!$B$4/1000"
+        },
+        "14": {
+          "coord": "N18",
+          "col": 14,
+          "value": "Mariette/STATS/DASHBOARD 2025-2026"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "TOTAL FLEET DIESEL"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 79354.07,
+          "formula": "=C14+C15+C16+C17+C18"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 68178.89,
+          "formula": "=D14+D15+D16+D17+D18"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": 65076.46,
+          "formula": "=E14+E15+E16+E17+E18"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": 73386.91,
+          "formula": "=F14+F15+F16+F17+F18"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": 67294.64,
+          "formula": "=G14+G15+G16+G17+G18"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": 57589.35,
+          "formula": "=H14+H15+H16+H17+H18"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": 48740.43,
+          "formula": "=I14+I15+I16+I17+I18"
+        },
+        "10": {
+          "coord": "J19",
+          "col": 10,
+          "value": 63979.73,
+          "formula": "=J14+J15+J16+J17+J18"
+        },
+        "11": {
+          "coord": "K19",
+          "col": 11,
+          "value": 65865.05,
+          "formula": "=K14+K15+K16+K17+K18"
+        },
+        "12": {
+          "coord": "L19",
+          "col": 12,
+          "value": 589465.53,
+          "formula": "=L14+L15+L16+L17+L18"
+        },
+        "13": {
+          "coord": "M19",
+          "col": 13,
+          "value": 1579.7676204,
+          "formula": "=L19*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "SCOPE 1B — GENERATOR DIESEL (litres per depot)  [Source: Mariette Dashboard / Bowser Recon]"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Depot"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H22",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J22",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K22",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L22",
+          "col": 12,
+          "value": "YTD Total"
+        },
+        "13": {
+          "coord": "M22",
+          "col": 13,
+          "value": "tCO₂e YTD"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Generator – BLOEM"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 650
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J23",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K23",
+          "col": 11,
+          "value": 597
+        },
+        "12": {
+          "coord": "L23",
+          "col": 12,
+          "value": 1247,
+          "formula": "=SUM(C23:K23)"
+        },
+        "13": {
+          "coord": "M23",
+          "col": 13,
+          "value": 3.34196,
+          "formula": "=L23*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Generator – CPT"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J24",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K24",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L24",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C24:K24)"
+        },
+        "13": {
+          "coord": "M24",
+          "col": 13,
+          "value": 0,
+          "formula": "=L24*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Generator – DBN"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": 639.14
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H25",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J25",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K25",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L25",
+          "col": 12,
+          "value": 639.14,
+          "formula": "=SUM(C25:K25)"
+        },
+        "13": {
+          "coord": "M25",
+          "col": 13,
+          "value": 1.7128952,
+          "formula": "=L25*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Generator – ISANDO"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J26",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K26",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L26",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C26:K26)"
+        },
+        "13": {
+          "coord": "M26",
+          "col": 13,
+          "value": 0,
+          "formula": "=L26*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Generator – PE"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": 295
+        },
+        "9": {
+          "coord": "I27",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J27",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K27",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L27",
+          "col": 12,
+          "value": 295,
+          "formula": "=SUM(C27:K27)"
+        },
+        "13": {
+          "coord": "M27",
+          "col": 13,
+          "value": 0.7906,
+          "formula": "=L27*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "TOTAL GENERATOR"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": 1289.14,
+          "formula": "=C23+C24+C25+C26+C27"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": 0,
+          "formula": "=D23+D24+D25+D26+D27"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": 0,
+          "formula": "=E23+E24+E25+E26+E27"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": 0,
+          "formula": "=F23+F24+F25+F26+F27"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": 0,
+          "formula": "=G23+G24+G25+G26+G27"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": 295,
+          "formula": "=H23+H24+H25+H26+H27"
+        },
+        "9": {
+          "coord": "I28",
+          "col": 9,
+          "value": 0,
+          "formula": "=I23+I24+I25+I26+I27"
+        },
+        "10": {
+          "coord": "J28",
+          "col": 10,
+          "value": 0,
+          "formula": "=J23+J24+J25+J26+J27"
+        },
+        "11": {
+          "coord": "K28",
+          "col": 11,
+          "value": 597,
+          "formula": "=K23+K24+K25+K26+K27"
+        },
+        "12": {
+          "coord": "L28",
+          "col": 12,
+          "value": 2181.14,
+          "formula": "=L23+L24+L25+L26+L27"
+        },
+        "13": {
+          "coord": "M28",
+          "col": 13,
+          "value": 5.8454552,
+          "formula": "=L28*E_Data!$B$4/1000"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "SCOPE 1C — LPG FORKLIFTS (kg per depot)  [Source: Mariette Dashboard gas-forklifts sheet]"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "Depot/Unit"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E31",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F31",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G31",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H31",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I31",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J31",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K31",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L31",
+          "col": 12,
+          "value": "YTD kg"
+        },
+        "13": {
+          "coord": "M31",
+          "col": 13,
+          "value": "tCO₂e YTD"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "LPG Forklifts – DBN"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "kg"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": 570
+        },
+        "5": {
+          "coord": "E32",
+          "col": 5,
+          "value": 190
+        },
+        "6": {
+          "coord": "F32",
+          "col": 6,
+          "value": 190
+        },
+        "7": {
+          "coord": "G32",
+          "col": 7,
+          "value": 380
+        },
+        "8": {
+          "coord": "H32",
+          "col": 8,
+          "value": 570
+        },
+        "9": {
+          "coord": "I32",
+          "col": 9,
+          "value": 380
+        },
+        "10": {
+          "coord": "J32",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K32",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L32",
+          "col": 12,
+          "value": 2280,
+          "formula": "=SUM(C32:K32)"
+        },
+        "13": {
+          "coord": "M32",
+          "col": 13,
+          "value": 3.4428,
+          "formula": "=L32*E_Data!$B$6/1000"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "1": {
+          "coord": "A33",
+          "col": 1,
+          "value": "NOTE: BLOEM, CPT, ISANDO, PE use electric/lithium-battery forklifts — no LPG emissions. Sanulac data confirms depot-level forklift types."
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "1": {
+          "coord": "A35",
+          "col": 1,
+          "value": "SCOPE 1D — ROAD BUSINESS (Solly's car, ISANDO)  [Source: Mariette Dashboard fuel consumption sheet]"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "Source"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H36",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I36",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J36",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K36",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L36",
+          "col": 12,
+          "value": "YTD"
+        },
+        "13": {
+          "coord": "M36",
+          "col": 13,
+          "value": "tCO₂e"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "1": {
+          "coord": "A37",
+          "col": 1,
+          "value": "Solly's Car – ISANDO"
+        },
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "litres"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": 139.81
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": 142.25
+        },
+        "5": {
+          "coord": "E37",
+          "col": 5,
+          "value": 93.22
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": 109.49
+        },
+        "7": {
+          "coord": "G37",
+          "col": 7,
+          "value": 143.81
+        },
+        "8": {
+          "coord": "H37",
+          "col": 8,
+          "value": 74.68
+        },
+        "9": {
+          "coord": "I37",
+          "col": 9,
+          "value": 109.59
+        },
+        "10": {
+          "coord": "J37",
+          "col": 10,
+          "value": 98
+        },
+        "11": {
+          "coord": "K37",
+          "col": 11,
+          "value": 142.97
+        },
+        "12": {
+          "coord": "L37",
+          "col": 12,
+          "value": 1053.82,
+          "formula": "=SUM(C37:K37)"
+        },
+        "13": {
+          "coord": "M37",
+          "col": 13,
+          "value": 2.4343242,
+          "formula": "=L37*E_Data!$B$5/1000"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "1": {
+          "coord": "A39",
+          "col": 1,
+          "value": "SCOPE 2 — ELECTRICITY (kWh per depot/landlord)  [Source: Mariette Utility Bills 2025-26]"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "1": {
+          "coord": "A40",
+          "col": 1,
+          "value": "Depot / Landlord"
+        },
+        "2": {
+          "coord": "B40",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C40",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D40",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E40",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F40",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G40",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H40",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I40",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J40",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K40",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L40",
+          "col": 12,
+          "value": "YTD kWh"
+        },
+        "13": {
+          "coord": "M40",
+          "col": 13,
+          "value": "tCO₂e YTD"
+        },
+        "14": {
+          "coord": "N40",
+          "col": 14,
+          "value": "Landlord"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "SG Consumer – BLOEM"
+        },
+        "2": {
+          "coord": "B41",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C41",
+          "col": 3,
+          "value": 20495
+        },
+        "4": {
+          "coord": "D41",
+          "col": 4,
+          "value": 26100
+        },
+        "5": {
+          "coord": "E41",
+          "col": 5,
+          "value": 26118
+        },
+        "6": {
+          "coord": "F41",
+          "col": 6,
+          "value": 13295
+        },
+        "7": {
+          "coord": "G41",
+          "col": 7,
+          "value": 12343
+        },
+        "8": {
+          "coord": "H41",
+          "col": 8,
+          "value": 12343
+        },
+        "9": {
+          "coord": "I41",
+          "col": 9,
+          "value": 12343
+        },
+        "10": {
+          "coord": "J41",
+          "col": 10,
+          "value": 8126
+        },
+        "11": {
+          "coord": "K41",
+          "col": 11,
+          "value": 8131
+        },
+        "12": {
+          "coord": "L41",
+          "col": 12,
+          "value": 139294,
+          "formula": "=SUM(C41:K41)"
+        },
+        "13": {
+          "coord": "M41",
+          "col": 13,
+          "value": 114.22108,
+          "formula": "=L41*E_Data!$B$7/1000"
+        },
+        "14": {
+          "coord": "N41",
+          "col": 14,
+          "value": "KAVOD"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "1": {
+          "coord": "A42",
+          "col": 1,
+          "value": "SG Consumer – CPT"
+        },
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C42",
+          "col": 3,
+          "value": 35751.88
+        },
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": 37731.52
+        },
+        "5": {
+          "coord": "E42",
+          "col": 5,
+          "value": 37625.99
+        },
+        "6": {
+          "coord": "F42",
+          "col": 6,
+          "value": 31990.94
+        },
+        "7": {
+          "coord": "G42",
+          "col": 7,
+          "value": 32243.53
+        },
+        "8": {
+          "coord": "H42",
+          "col": 8,
+          "value": 32243.53
+        },
+        "9": {
+          "coord": "I42",
+          "col": 9,
+          "value": 32524.52
+        },
+        "10": {
+          "coord": "J42",
+          "col": 10,
+          "value": 33991.51
+        },
+        "11": {
+          "coord": "K42",
+          "col": 11,
+          "value": 39024.17
+        },
+        "12": {
+          "coord": "L42",
+          "col": 12,
+          "value": 313127.59,
+          "formula": "=SUM(C42:K42)"
+        },
+        "13": {
+          "coord": "M42",
+          "col": 13,
+          "value": 256.7646238,
+          "formula": "=L42*E_Data!$B$7/1000"
+        },
+        "14": {
+          "coord": "N42",
+          "col": 14,
+          "value": "SPEAR"
+        }
+      }
+    },
+    {
+      "row": 43,
+      "cells": {
+        "1": {
+          "coord": "A43",
+          "col": 1,
+          "value": "SG Consumer – DBN"
+        },
+        "2": {
+          "coord": "B43",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C43",
+          "col": 3,
+          "value": 73374
+        },
+        "4": {
+          "coord": "D43",
+          "col": 4,
+          "value": 74374
+        },
+        "5": {
+          "coord": "E43",
+          "col": 5,
+          "value": 74374
+        },
+        "6": {
+          "coord": "F43",
+          "col": 6,
+          "value": 67241
+        },
+        "7": {
+          "coord": "G43",
+          "col": 7,
+          "value": 68442
+        },
+        "8": {
+          "coord": "H43",
+          "col": 8,
+          "value": 65167
+        },
+        "9": {
+          "coord": "I43",
+          "col": 9,
+          "value": 51805
+        },
+        "10": {
+          "coord": "J43",
+          "col": 10,
+          "value": 119050
+        },
+        "11": {
+          "coord": "K43",
+          "col": 11,
+          "value": 75298
+        },
+        "12": {
+          "coord": "L43",
+          "col": 12,
+          "value": 669125,
+          "formula": "=SUM(C43:K43)"
+        },
+        "13": {
+          "coord": "M43",
+          "col": 13,
+          "value": 548.6825,
+          "formula": "=L43*E_Data!$B$7/1000"
+        },
+        "14": {
+          "coord": "N43",
+          "col": 14,
+          "value": "EXCELLERATE"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "SG Consumer – ISANDO"
+        },
+        "2": {
+          "coord": "B44",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C44",
+          "col": 3,
+          "value": 147015
+        },
+        "4": {
+          "coord": "D44",
+          "col": 4,
+          "value": 152733
+        },
+        "5": {
+          "coord": "E44",
+          "col": 5,
+          "value": 143245
+        },
+        "6": {
+          "coord": "F44",
+          "col": 6,
+          "value": 137371
+        },
+        "7": {
+          "coord": "G44",
+          "col": 7,
+          "value": 126447
+        },
+        "8": {
+          "coord": "H44",
+          "col": 8,
+          "value": 165869
+        },
+        "9": {
+          "coord": "I44",
+          "col": 9,
+          "value": 149823
+        },
+        "10": {
+          "coord": "J44",
+          "col": 10,
+          "value": 138674
+        },
+        "11": {
+          "coord": "K44",
+          "col": 11,
+          "value": 137607
+        },
+        "12": {
+          "coord": "L44",
+          "col": 12,
+          "value": 1298784,
+          "formula": "=SUM(C44:K44)"
+        },
+        "13": {
+          "coord": "M44",
+          "col": 13,
+          "value": 1065.00288,
+          "formula": "=L44*E_Data!$B$7/1000"
+        },
+        "14": {
+          "coord": "N44",
+          "col": 14,
+          "value": "LEXSHELL 280 INVESTMENTS"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "1": {
+          "coord": "A45",
+          "col": 1,
+          "value": "SG Consumer – PE"
+        },
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": 12003
+        },
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": 13726.5
+        },
+        "5": {
+          "coord": "E45",
+          "col": 5,
+          "value": 13495.5
+        },
+        "6": {
+          "coord": "F45",
+          "col": 6,
+          "value": 13490
+        },
+        "7": {
+          "coord": "G45",
+          "col": 7,
+          "value": 16158.5
+        },
+        "8": {
+          "coord": "H45",
+          "col": 8,
+          "value": 14542.7
+        },
+        "9": {
+          "coord": "I45",
+          "col": 9,
+          "value": 15195
+        },
+        "10": {
+          "coord": "J45",
+          "col": 10,
+          "value": 15871
+        },
+        "11": {
+          "coord": "K45",
+          "col": 11,
+          "value": 54765.65
+        },
+        "12": {
+          "coord": "L45",
+          "col": 12,
+          "value": 169247.85,
+          "formula": "=SUM(C45:K45)"
+        },
+        "13": {
+          "coord": "M45",
+          "col": 13,
+          "value": 138.783237,
+          "formula": "=L45*E_Data!$B$7/1000"
+        },
+        "14": {
+          "coord": "N45",
+          "col": 14,
+          "value": "CLEMLEN INVESTMENTS NO 10"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "1": {
+          "coord": "A46",
+          "col": 1,
+          "value": "TOTAL ELECTRICITY"
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": 288638.88,
+          "formula": "=C41+C42+C43+C44+C45"
+        },
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": 304665.02,
+          "formula": "=D41+D42+D43+D44+D45"
+        },
+        "5": {
+          "coord": "E46",
+          "col": 5,
+          "value": 294858.49,
+          "formula": "=E41+E42+E43+E44+E45"
+        },
+        "6": {
+          "coord": "F46",
+          "col": 6,
+          "value": 263387.94,
+          "formula": "=F41+F42+F43+F44+F45"
+        },
+        "7": {
+          "coord": "G46",
+          "col": 7,
+          "value": 255634.03,
+          "formula": "=G41+G42+G43+G44+G45"
+        },
+        "8": {
+          "coord": "H46",
+          "col": 8,
+          "value": 290165.23,
+          "formula": "=H41+H42+H43+H44+H45"
+        },
+        "9": {
+          "coord": "I46",
+          "col": 9,
+          "value": 261690.52,
+          "formula": "=I41+I42+I43+I44+I45"
+        },
+        "10": {
+          "coord": "J46",
+          "col": 10,
+          "value": 315712.51,
+          "formula": "=J41+J42+J43+J44+J45"
+        },
+        "11": {
+          "coord": "K46",
+          "col": 11,
+          "value": 314825.82,
+          "formula": "=K41+K42+K43+K44+K45"
+        },
+        "12": {
+          "coord": "L46",
+          "col": 12,
+          "value": 2589578.44,
+          "formula": "=L41+L42+L43+L44+L45"
+        },
+        "13": {
+          "coord": "M46",
+          "col": 13,
+          "value": 2123.4543208,
+          "formula": "=M41+M42+M43+M44+M45"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "1": {
+          "coord": "A48",
+          "col": 1,
+          "value": "SOLAR GENERATION (enter kWh generated — reduces Scope 2)  [JHB: Graeme Barand system; DBN: EDGE cert in progress]"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "1": {
+          "coord": "A49",
+          "col": 1,
+          "value": "Solar Source"
+        },
+        "2": {
+          "coord": "B49",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D49",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E49",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F49",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G49",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H49",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I49",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J49",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K49",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L49",
+          "col": 12,
+          "value": "YTD kWh"
+        },
+        "13": {
+          "coord": "M49",
+          "col": 13,
+          "value": "tCO₂e avoided"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "1": {
+          "coord": "A50",
+          "col": 1,
+          "value": "Solar – ISANDO (JHB)"
+        },
+        "2": {
+          "coord": "B50",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D50",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E50",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F50",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G50",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H50",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I50",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J50",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K50",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L50",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C50:K50)"
+        },
+        "13": {
+          "coord": "M50",
+          "col": 13,
+          "value": 0,
+          "formula": "=-L50*E_Data!$B$8/1000"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "1": {
+          "coord": "A51",
+          "col": 1,
+          "value": "Solar – DBN (EDGE)"
+        },
+        "2": {
+          "coord": "B51",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D51",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E51",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F51",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G51",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H51",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I51",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J51",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K51",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L51",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C51:K51)"
+        },
+        "13": {
+          "coord": "M51",
+          "col": 13,
+          "value": 0,
+          "formula": "=-L51*E_Data!$B$8/1000"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "1": {
+          "coord": "A52",
+          "col": 1,
+          "value": "Solar – CPT"
+        },
+        "2": {
+          "coord": "B52",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C52",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D52",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E52",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F52",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G52",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H52",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I52",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J52",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K52",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L52",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C52:K52)"
+        },
+        "13": {
+          "coord": "M52",
+          "col": 13,
+          "value": 0,
+          "formula": "=-L52*E_Data!$B$8/1000"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "1": {
+          "coord": "A53",
+          "col": 1,
+          "value": "Solar – BLOEM"
+        },
+        "2": {
+          "coord": "B53",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C53",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D53",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E53",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F53",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G53",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H53",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I53",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J53",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K53",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L53",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C53:K53)"
+        },
+        "13": {
+          "coord": "M53",
+          "col": 13,
+          "value": 0,
+          "formula": "=-L53*E_Data!$B$8/1000"
+        }
+      }
+    },
+    {
+      "row": 54,
+      "cells": {
+        "1": {
+          "coord": "A54",
+          "col": 1,
+          "value": "Solar – PE"
+        },
+        "2": {
+          "coord": "B54",
+          "col": 2,
+          "value": "kWh"
+        },
+        "3": {
+          "coord": "C54",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D54",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E54",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F54",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G54",
+          "col": 7,
+          "value": 0
+        },
+        "8": {
+          "coord": "H54",
+          "col": 8,
+          "value": 0
+        },
+        "9": {
+          "coord": "I54",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J54",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K54",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L54",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(C54:K54)"
+        },
+        "13": {
+          "coord": "M54",
+          "col": 13,
+          "value": 0,
+          "formula": "=-L54*E_Data!$B$8/1000"
+        }
+      }
+    },
+    {
+      "row": 56,
+      "cells": {
+        "1": {
+          "coord": "A56",
+          "col": 1,
+          "value": "WATER CONSUMPTION (kL per depot)  [Source: Mariette electricity & water sheet — utility bills data]"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "1": {
+          "coord": "A57",
+          "col": 1,
+          "value": "Depot"
+        },
+        "2": {
+          "coord": "B57",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C57",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D57",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E57",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F57",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G57",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H57",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I57",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J57",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K57",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L57",
+          "col": 12,
+          "value": "YTD kL"
+        },
+        "13": {
+          "coord": "M57",
+          "col": 13,
+          "value": "tCO₂e YTD"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "1": {
+          "coord": "A58",
+          "col": 1,
+          "value": "SG Consumer – BLOEM"
+        },
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": "kL"
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": 45.57
+        },
+        "4": {
+          "coord": "D58",
+          "col": 4,
+          "value": 45.57
+        },
+        "5": {
+          "coord": "E58",
+          "col": 5,
+          "value": 45.57
+        },
+        "6": {
+          "coord": "F58",
+          "col": 6,
+          "value": 35
+        },
+        "7": {
+          "coord": "G58",
+          "col": 7,
+          "value": 35
+        },
+        "8": {
+          "coord": "H58",
+          "col": 8,
+          "value": 35
+        },
+        "9": {
+          "coord": "I58",
+          "col": 9,
+          "value": 35
+        },
+        "10": {
+          "coord": "J58",
+          "col": 10,
+          "value": 67.95
+        },
+        "11": {
+          "coord": "K58",
+          "col": 11,
+          "value": 67.95
+        },
+        "12": {
+          "coord": "L58",
+          "col": 12,
+          "value": 412.61,
+          "formula": "=SUM(C58:K58)"
+        },
+        "13": {
+          "coord": "M58",
+          "col": 13,
+          "value": 0.14193784,
+          "formula": "=L58*E_Data!$B$9"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "1": {
+          "coord": "A59",
+          "col": 1,
+          "value": "SG Consumer – CPT"
+        },
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": "kL"
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D59",
+          "col": 4,
+          "value": 0
+        },
+        "5": {
+          "coord": "E59",
+          "col": 5,
+          "value": 0
+        },
+        "6": {
+          "coord": "F59",
+          "col": 6,
+          "value": 0
+        },
+        "7": {
+          "coord": "G59",
+          "col": 7,
+          "value": 50
+        },
+        "8": {
+          "coord": "H59",
+          "col": 8,
+          "value": 50
+        },
+        "9": {
+          "coord": "I59",
+          "col": 9,
+          "value": 0
+        },
+        "10": {
+          "coord": "J59",
+          "col": 10,
+          "value": 0
+        },
+        "11": {
+          "coord": "K59",
+          "col": 11,
+          "value": 0
+        },
+        "12": {
+          "coord": "L59",
+          "col": 12,
+          "value": 100,
+          "formula": "=SUM(C59:K59)"
+        },
+        "13": {
+          "coord": "M59",
+          "col": 13,
+          "value": 0.0344,
+          "formula": "=L59*E_Data!$B$9"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "1": {
+          "coord": "A60",
+          "col": 1,
+          "value": "SG Consumer – DBN"
+        },
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": "kL"
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": 47
+        },
+        "4": {
+          "coord": "D60",
+          "col": 4,
+          "value": 48
+        },
+        "5": {
+          "coord": "E60",
+          "col": 5,
+          "value": 48
+        },
+        "6": {
+          "coord": "F60",
+          "col": 6,
+          "value": 99.6
+        },
+        "7": {
+          "coord": "G60",
+          "col": 7,
+          "value": 108.1
+        },
+        "8": {
+          "coord": "H60",
+          "col": 8,
+          "value": 112.6
+        },
+        "9": {
+          "coord": "I60",
+          "col": 9,
+          "value": 135.2
+        },
+        "10": {
+          "coord": "J60",
+          "col": 10,
+          "value": 229.4
+        },
+        "11": {
+          "coord": "K60",
+          "col": 11,
+          "value": 117.78
+        },
+        "12": {
+          "coord": "L60",
+          "col": 12,
+          "value": 945.68,
+          "formula": "=SUM(C60:K60)"
+        },
+        "13": {
+          "coord": "M60",
+          "col": 13,
+          "value": 0.32531392,
+          "formula": "=L60*E_Data!$B$9"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "1": {
+          "coord": "A61",
+          "col": 1,
+          "value": "SG Consumer – ISANDO"
+        },
+        "2": {
+          "coord": "B61",
+          "col": 2,
+          "value": "kL"
+        },
+        "3": {
+          "coord": "C61",
+          "col": 3,
+          "value": 243
+        },
+        "4": {
+          "coord": "D61",
+          "col": 4,
+          "value": 256
+        },
+        "5": {
+          "coord": "E61",
+          "col": 5,
+          "value": 241
+        },
+        "6": {
+          "coord": "F61",
+          "col": 6,
+          "value": 241
+        },
+        "7": {
+          "coord": "G61",
+          "col": 7,
+          "value": 200
+        },
+        "8": {
+          "coord": "H61",
+          "col": 8,
+          "value": 227
+        },
+        "9": {
+          "coord": "I61",
+          "col": 9,
+          "value": 255
+        },
+        "10": {
+          "coord": "J61",
+          "col": 10,
+          "value": 211
+        },
+        "11": {
+          "coord": "K61",
+          "col": 11,
+          "value": 258
+        },
+        "12": {
+          "coord": "L61",
+          "col": 12,
+          "value": 2132,
+          "formula": "=SUM(C61:K61)"
+        },
+        "13": {
+          "coord": "M61",
+          "col": 13,
+          "value": 0.733408,
+          "formula": "=L61*E_Data!$B$9"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "1": {
+          "coord": "A62",
+          "col": 1,
+          "value": "SG Consumer – PE"
+        },
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": "kL"
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": 73.84
+        },
+        "4": {
+          "coord": "D62",
+          "col": 4,
+          "value": 41.82
+        },
+        "5": {
+          "coord": "E62",
+          "col": 5,
+          "value": 46.15
+        },
+        "6": {
+          "coord": "F62",
+          "col": 6,
+          "value": 159.21
+        },
+        "7": {
+          "coord": "G62",
+          "col": 7,
+          "value": 83.26
+        },
+        "8": {
+          "coord": "H62",
+          "col": 8,
+          "value": 74.93
+        },
+        "9": {
+          "coord": "I62",
+          "col": 9,
+          "value": 107.81
+        },
+        "10": {
+          "coord": "J62",
+          "col": 10,
+          "value": 52.59
+        },
+        "11": {
+          "coord": "K62",
+          "col": 11,
+          "value": 126.51
+        },
+        "12": {
+          "coord": "L62",
+          "col": 12,
+          "value": 766.12,
+          "formula": "=SUM(C62:K62)"
+        },
+        "13": {
+          "coord": "M62",
+          "col": 13,
+          "value": 0.26354528,
+          "formula": "=L62*E_Data!$B$9"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "1": {
+          "coord": "A63",
+          "col": 1,
+          "value": "TOTAL WATER"
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": 409.41,
+          "formula": "=C58+C59+C60+C61+C62"
+        },
+        "4": {
+          "coord": "D63",
+          "col": 4,
+          "value": 391.39,
+          "formula": "=D58+D59+D60+D61+D62"
+        },
+        "5": {
+          "coord": "E63",
+          "col": 5,
+          "value": 380.72,
+          "formula": "=E58+E59+E60+E61+E62"
+        },
+        "6": {
+          "coord": "F63",
+          "col": 6,
+          "value": 534.81,
+          "formula": "=F58+F59+F60+F61+F62"
+        },
+        "7": {
+          "coord": "G63",
+          "col": 7,
+          "value": 476.36,
+          "formula": "=G58+G59+G60+G61+G62"
+        },
+        "8": {
+          "coord": "H63",
+          "col": 8,
+          "value": 499.53,
+          "formula": "=H58+H59+H60+H61+H62"
+        },
+        "9": {
+          "coord": "I63",
+          "col": 9,
+          "value": 533.01,
+          "formula": "=I58+I59+I60+I61+I62"
+        },
+        "10": {
+          "coord": "J63",
+          "col": 10,
+          "value": 560.94,
+          "formula": "=J58+J59+J60+J61+J62"
+        },
+        "11": {
+          "coord": "K63",
+          "col": 11,
+          "value": 570.24,
+          "formula": "=K58+K59+K60+K61+K62"
+        },
+        "12": {
+          "coord": "L63",
+          "col": 12,
+          "value": 4356.41,
+          "formula": "=L58+L59+L60+L61+L62"
+        },
+        "13": {
+          "coord": "M63",
+          "col": 13,
+          "value": 1.49860504,
+          "formula": "=M58+M59+M60+M61+M62"
+        }
+      }
+    },
+    {
+      "row": 65,
+      "cells": {
+        "1": {
+          "coord": "A65",
+          "col": 1,
+          "value": "WASTE DATA (% recycled per month from Cority; Oricol Mar-26 actual)  [Source: Mariette waste sheet + Oricol sustainability report]"
+        }
+      }
+    },
+    {
+      "row": 66,
+      "cells": {
+        "1": {
+          "coord": "A66",
+          "col": 1,
+          "value": "Metric"
+        },
+        "2": {
+          "coord": "B66",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C66",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D66",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E66",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F66",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G66",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H66",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I66",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J66",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K66",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L66",
+          "col": 12,
+          "value": "YTD Avg"
+        },
+        "13": {
+          "coord": "M66",
+          "col": 13,
+          "value": "Target"
+        }
+      }
+    },
+    {
+      "row": 67,
+      "cells": {
+        "1": {
+          "coord": "A67",
+          "col": 1,
+          "value": "% Waste Recycled (all depots)"
+        },
+        "2": {
+          "coord": "B67",
+          "col": 2,
+          "value": "%"
+        },
+        "3": {
+          "coord": "C67",
+          "col": 3,
+          "value": 10.65
+        },
+        "4": {
+          "coord": "D67",
+          "col": 4,
+          "value": 16.24
+        },
+        "5": {
+          "coord": "E67",
+          "col": 5,
+          "value": 11.06
+        },
+        "6": {
+          "coord": "F67",
+          "col": 6,
+          "value": 8.89
+        },
+        "7": {
+          "coord": "G67",
+          "col": 7,
+          "value": 26.42
+        },
+        "8": {
+          "coord": "H67",
+          "col": 8,
+          "value": 10.68
+        },
+        "9": {
+          "coord": "I67",
+          "col": 9,
+          "value": 4.6
+        },
+        "10": {
+          "coord": "J67",
+          "col": 10,
+          "value": 13.73
+        },
+        "11": {
+          "coord": "K67",
+          "col": 11,
+          "value": 9.56
+        },
+        "12": {
+          "coord": "L67",
+          "col": 12,
+          "value": 12.4255555556,
+          "formula": "=AVERAGE(C67:K67)"
+        },
+        "13": {
+          "coord": "M67",
+          "col": 13,
+          "value": "30%+"
+        }
+      }
+    },
+    {
+      "row": 68,
+      "cells": {
+        "1": {
+          "coord": "A68",
+          "col": 1,
+          "value": "CPT Oricol — Total Waste (kg)"
+        },
+        "2": {
+          "coord": "B68",
+          "col": 2,
+          "value": "kg"
+        },
+        "3": {
+          "coord": "C68",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D68",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E68",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F68",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G68",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H68",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I68",
+          "col": 9,
+          "value": "—"
+        },
+        "10": {
+          "coord": "J68",
+          "col": 10,
+          "value": "—"
+        },
+        "11": {
+          "coord": "K68",
+          "col": 11,
+          "value": "—"
+        },
+        "12": {
+          "coord": "L68",
+          "col": 12,
+          "value": 22470
+        },
+        "13": {
+          "coord": "M68",
+          "col": 13,
+          "value": "Mar-26 actual"
+        }
+      }
+    },
+    {
+      "row": 69,
+      "cells": {
+        "1": {
+          "coord": "A69",
+          "col": 1,
+          "value": "CPT Oricol — % Landfill"
+        },
+        "2": {
+          "coord": "B69",
+          "col": 2,
+          "value": "%"
+        },
+        "3": {
+          "coord": "C69",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D69",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E69",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F69",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G69",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H69",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I69",
+          "col": 9,
+          "value": "—"
+        },
+        "10": {
+          "coord": "J69",
+          "col": 10,
+          "value": "—"
+        },
+        "11": {
+          "coord": "K69",
+          "col": 11,
+          "value": "—"
+        },
+        "12": {
+          "coord": "L69",
+          "col": 12,
+          "value": 8.9
+        },
+        "13": {
+          "coord": "M69",
+          "col": 13,
+          "value": "<10% target"
+        }
+      }
+    },
+    {
+      "row": 70,
+      "cells": {
+        "1": {
+          "coord": "A70",
+          "col": 1,
+          "value": "CPT Oricol — % Diversion (recycled+recovery)"
+        },
+        "2": {
+          "coord": "B70",
+          "col": 2,
+          "value": "%"
+        },
+        "3": {
+          "coord": "C70",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D70",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E70",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F70",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G70",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H70",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I70",
+          "col": 9,
+          "value": "—"
+        },
+        "10": {
+          "coord": "J70",
+          "col": 10,
+          "value": "—"
+        },
+        "11": {
+          "coord": "K70",
+          "col": 11,
+          "value": "—"
+        },
+        "12": {
+          "coord": "L70",
+          "col": 12,
+          "value": 91.1
+        },
+        "13": {
+          "coord": "M70",
+          "col": 13,
+          "value": ">90% ✓"
+        }
+      }
+    },
+    {
+      "row": 71,
+      "cells": {
+        "1": {
+          "coord": "A71",
+          "col": 1,
+          "value": "Landfill tCO₂e (CPT Mar-26 estimate)"
+        },
+        "2": {
+          "coord": "B71",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C71",
+          "col": 3,
+          "value": "—"
+        },
+        "4": {
+          "coord": "D71",
+          "col": 4,
+          "value": "—"
+        },
+        "5": {
+          "coord": "E71",
+          "col": 5,
+          "value": "—"
+        },
+        "6": {
+          "coord": "F71",
+          "col": 6,
+          "value": "—"
+        },
+        "7": {
+          "coord": "G71",
+          "col": 7,
+          "value": "—"
+        },
+        "8": {
+          "coord": "H71",
+          "col": 8,
+          "value": "—"
+        },
+        "9": {
+          "coord": "I71",
+          "col": 9,
+          "value": "—"
+        },
+        "10": {
+          "coord": "J71",
+          "col": 10,
+          "value": "—"
+        },
+        "11": {
+          "coord": "K71",
+          "col": 11,
+          "value": "—"
+        },
+        "12": {
+          "coord": "L71",
+          "col": 12,
+          "value": 1.1599014,
+          "formula": "=L68*L69/100*E_Data!$B$10/1000"
+        }
+      }
+    },
+    {
+      "row": 73,
+      "cells": {
+        "1": {
+          "coord": "A73",
+          "col": 1,
+          "value": "GHG EMISSIONS SUMMARY — SCOPE 1 + 2 + 3  (tCO₂e)  [Auto-calculated from sections above]"
+        }
+      }
+    },
+    {
+      "row": 74,
+      "cells": {
+        "1": {
+          "coord": "A74",
+          "col": 1,
+          "value": "Scope / Category"
+        },
+        "2": {
+          "coord": "B74",
+          "col": 2,
+          "value": "Unit"
+        },
+        "3": {
+          "coord": "C74",
+          "col": 3,
+          "value": "Jul-25"
+        },
+        "4": {
+          "coord": "D74",
+          "col": 4,
+          "value": "Aug-25"
+        },
+        "5": {
+          "coord": "E74",
+          "col": 5,
+          "value": "Sep-25"
+        },
+        "6": {
+          "coord": "F74",
+          "col": 6,
+          "value": "Oct-25"
+        },
+        "7": {
+          "coord": "G74",
+          "col": 7,
+          "value": "Nov-25"
+        },
+        "8": {
+          "coord": "H74",
+          "col": 8,
+          "value": "Dec-25"
+        },
+        "9": {
+          "coord": "I74",
+          "col": 9,
+          "value": "Jan-26"
+        },
+        "10": {
+          "coord": "J74",
+          "col": 10,
+          "value": "Feb-26"
+        },
+        "11": {
+          "coord": "K74",
+          "col": 11,
+          "value": "Mar-26"
+        },
+        "12": {
+          "coord": "L74",
+          "col": 12,
+          "value": "YTD Total"
+        },
+        "13": {
+          "coord": "M74",
+          "col": 13,
+          "value": "% of Total"
+        }
+      }
+    },
+    {
+      "row": 75,
+      "cells": {
+        "1": {
+          "coord": "A75",
+          "col": 1,
+          "value": "Scope 1A — Fleet Diesel"
+        },
+        "2": {
+          "coord": "B75",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C75",
+          "col": 3,
+          "value": 79354.07,
+          "formula": "=E_Data!C14+E_Data!C15+E_Data!C16+E_Data!C17+E_Data!C18"
+        },
+        "4": {
+          "coord": "D75",
+          "col": 4,
+          "value": 68178.89,
+          "formula": "=E_Data!D14+E_Data!D15+E_Data!D16+E_Data!D17+E_Data!D18"
+        },
+        "5": {
+          "coord": "E75",
+          "col": 5,
+          "value": 65076.46,
+          "formula": "=E_Data!E14+E_Data!E15+E_Data!E16+E_Data!E17+E_Data!E18"
+        },
+        "6": {
+          "coord": "F75",
+          "col": 6,
+          "value": 73386.91,
+          "formula": "=E_Data!F14+E_Data!F15+E_Data!F16+E_Data!F17+E_Data!F18"
+        },
+        "7": {
+          "coord": "G75",
+          "col": 7,
+          "value": 67294.64,
+          "formula": "=E_Data!G14+E_Data!G15+E_Data!G16+E_Data!G17+E_Data!G18"
+        },
+        "8": {
+          "coord": "H75",
+          "col": 8,
+          "value": 57589.35,
+          "formula": "=E_Data!H14+E_Data!H15+E_Data!H16+E_Data!H17+E_Data!H18"
+        },
+        "9": {
+          "coord": "I75",
+          "col": 9,
+          "value": 48740.43,
+          "formula": "=E_Data!I14+E_Data!I15+E_Data!I16+E_Data!I17+E_Data!I18"
+        },
+        "10": {
+          "coord": "J75",
+          "col": 10,
+          "value": 63979.73,
+          "formula": "=E_Data!J14+E_Data!J15+E_Data!J16+E_Data!J17+E_Data!J18"
+        },
+        "11": {
+          "coord": "K75",
+          "col": 11,
+          "value": 65865.05,
+          "formula": "=E_Data!K14+E_Data!K15+E_Data!K16+E_Data!K17+E_Data!K18"
+        },
+        "12": {
+          "coord": "L75",
+          "col": 12,
+          "value": 589465.53,
+          "formula": "=SUM(C75:K75)"
+        }
+      }
+    },
+    {
+      "row": 76,
+      "cells": {
+        "1": {
+          "coord": "A76",
+          "col": 1,
+          "value": "Scope 1B — Generator Diesel"
+        },
+        "2": {
+          "coord": "B76",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C76",
+          "col": 3,
+          "value": 1289.14,
+          "formula": "=E_Data!C23+E_Data!C24+E_Data!C25+E_Data!C26+E_Data!C27"
+        },
+        "4": {
+          "coord": "D76",
+          "col": 4,
+          "value": 0,
+          "formula": "=E_Data!D23+E_Data!D24+E_Data!D25+E_Data!D26+E_Data!D27"
+        },
+        "5": {
+          "coord": "E76",
+          "col": 5,
+          "value": 0,
+          "formula": "=E_Data!E23+E_Data!E24+E_Data!E25+E_Data!E26+E_Data!E27"
+        },
+        "6": {
+          "coord": "F76",
+          "col": 6,
+          "value": 0,
+          "formula": "=E_Data!F23+E_Data!F24+E_Data!F25+E_Data!F26+E_Data!F27"
+        },
+        "7": {
+          "coord": "G76",
+          "col": 7,
+          "value": 0,
+          "formula": "=E_Data!G23+E_Data!G24+E_Data!G25+E_Data!G26+E_Data!G27"
+        },
+        "8": {
+          "coord": "H76",
+          "col": 8,
+          "value": 295,
+          "formula": "=E_Data!H23+E_Data!H24+E_Data!H25+E_Data!H26+E_Data!H27"
+        },
+        "9": {
+          "coord": "I76",
+          "col": 9,
+          "value": 0,
+          "formula": "=E_Data!I23+E_Data!I24+E_Data!I25+E_Data!I26+E_Data!I27"
+        },
+        "10": {
+          "coord": "J76",
+          "col": 10,
+          "value": 0,
+          "formula": "=E_Data!J23+E_Data!J24+E_Data!J25+E_Data!J26+E_Data!J27"
+        },
+        "11": {
+          "coord": "K76",
+          "col": 11,
+          "value": 597,
+          "formula": "=E_Data!K23+E_Data!K24+E_Data!K25+E_Data!K26+E_Data!K27"
+        },
+        "12": {
+          "coord": "L76",
+          "col": 12,
+          "value": 2181.14,
+          "formula": "=SUM(C76:K76)"
+        }
+      }
+    },
+    {
+      "row": 77,
+      "cells": {
+        "1": {
+          "coord": "A77",
+          "col": 1,
+          "value": "Scope 1C — LPG Forklifts (DBN)"
+        },
+        "2": {
+          "coord": "B77",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C77",
+          "col": 3,
+          "value": 0,
+          "formula": "=E_Data!C32"
+        },
+        "4": {
+          "coord": "D77",
+          "col": 4,
+          "value": 570,
+          "formula": "=E_Data!D32"
+        },
+        "5": {
+          "coord": "E77",
+          "col": 5,
+          "value": 190,
+          "formula": "=E_Data!E32"
+        },
+        "6": {
+          "coord": "F77",
+          "col": 6,
+          "value": 190,
+          "formula": "=E_Data!F32"
+        },
+        "7": {
+          "coord": "G77",
+          "col": 7,
+          "value": 380,
+          "formula": "=E_Data!G32"
+        },
+        "8": {
+          "coord": "H77",
+          "col": 8,
+          "value": 570,
+          "formula": "=E_Data!H32"
+        },
+        "9": {
+          "coord": "I77",
+          "col": 9,
+          "value": 380,
+          "formula": "=E_Data!I32"
+        },
+        "10": {
+          "coord": "J77",
+          "col": 10,
+          "value": 0,
+          "formula": "=E_Data!J32"
+        },
+        "11": {
+          "coord": "K77",
+          "col": 11,
+          "value": 0,
+          "formula": "=E_Data!K32"
+        },
+        "12": {
+          "coord": "L77",
+          "col": 12,
+          "value": 2280,
+          "formula": "=SUM(C77:K77)"
+        }
+      }
+    },
+    {
+      "row": 78,
+      "cells": {
+        "1": {
+          "coord": "A78",
+          "col": 1,
+          "value": "Scope 1D — Business Cars"
+        },
+        "2": {
+          "coord": "B78",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C78",
+          "col": 3,
+          "value": 139.81,
+          "formula": "=E_Data!C37"
+        },
+        "4": {
+          "coord": "D78",
+          "col": 4,
+          "value": 142.25,
+          "formula": "=E_Data!D37"
+        },
+        "5": {
+          "coord": "E78",
+          "col": 5,
+          "value": 93.22,
+          "formula": "=E_Data!E37"
+        },
+        "6": {
+          "coord": "F78",
+          "col": 6,
+          "value": 109.49,
+          "formula": "=E_Data!F37"
+        },
+        "7": {
+          "coord": "G78",
+          "col": 7,
+          "value": 143.81,
+          "formula": "=E_Data!G37"
+        },
+        "8": {
+          "coord": "H78",
+          "col": 8,
+          "value": 74.68,
+          "formula": "=E_Data!H37"
+        },
+        "9": {
+          "coord": "I78",
+          "col": 9,
+          "value": 109.59,
+          "formula": "=E_Data!I37"
+        },
+        "10": {
+          "coord": "J78",
+          "col": 10,
+          "value": 98,
+          "formula": "=E_Data!J37"
+        },
+        "11": {
+          "coord": "K78",
+          "col": 11,
+          "value": 142.97,
+          "formula": "=E_Data!K37"
+        },
+        "12": {
+          "coord": "L78",
+          "col": 12,
+          "value": 1053.82,
+          "formula": "=SUM(C78:K78)"
+        }
+      }
+    },
+    {
+      "row": 79,
+      "cells": {
+        "1": {
+          "coord": "A79",
+          "col": 1,
+          "value": "SCOPE 1 TOTAL (tCO₂e)"
+        },
+        "3": {
+          "coord": "C79",
+          "col": 3,
+          "value": 80783.02,
+          "formula": "=SUM(C75,C76,C77,C78)"
+        },
+        "4": {
+          "coord": "D79",
+          "col": 4,
+          "value": 68891.14,
+          "formula": "=SUM(D75,D76,D77,D78)"
+        },
+        "5": {
+          "coord": "E79",
+          "col": 5,
+          "value": 65359.68,
+          "formula": "=SUM(E75,E76,E77,E78)"
+        },
+        "6": {
+          "coord": "F79",
+          "col": 6,
+          "value": 73686.4,
+          "formula": "=SUM(F75,F76,F77,F78)"
+        },
+        "7": {
+          "coord": "G79",
+          "col": 7,
+          "value": 67818.45,
+          "formula": "=SUM(G75,G76,G77,G78)"
+        },
+        "8": {
+          "coord": "H79",
+          "col": 8,
+          "value": 58529.03,
+          "formula": "=SUM(H75,H76,H77,H78)"
+        },
+        "9": {
+          "coord": "I79",
+          "col": 9,
+          "value": 49230.02,
+          "formula": "=SUM(I75,I76,I77,I78)"
+        },
+        "10": {
+          "coord": "J79",
+          "col": 10,
+          "value": 64077.73,
+          "formula": "=SUM(J75,J76,J77,J78)"
+        },
+        "11": {
+          "coord": "K79",
+          "col": 11,
+          "value": 66605.02,
+          "formula": "=SUM(K75,K76,K77,K78)"
+        },
+        "12": {
+          "coord": "L79",
+          "col": 12,
+          "value": 594980.49,
+          "formula": "=SUM(L75,L76,L77,L78)"
+        }
+      }
+    },
+    {
+      "row": 80,
+      "cells": {
+        "1": {
+          "coord": "A80",
+          "col": 1,
+          "value": "Scope 2 — Grid Electricity (location-based)"
+        },
+        "2": {
+          "coord": "B80",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C80",
+          "col": 3,
+          "value": 288638.88,
+          "formula": "=E_Data!C46"
+        },
+        "4": {
+          "coord": "D80",
+          "col": 4,
+          "value": 304665.02,
+          "formula": "=E_Data!D46"
+        },
+        "5": {
+          "coord": "E80",
+          "col": 5,
+          "value": 294858.49,
+          "formula": "=E_Data!E46"
+        },
+        "6": {
+          "coord": "F80",
+          "col": 6,
+          "value": 263387.94,
+          "formula": "=E_Data!F46"
+        },
+        "7": {
+          "coord": "G80",
+          "col": 7,
+          "value": 255634.03,
+          "formula": "=E_Data!G46"
+        },
+        "8": {
+          "coord": "H80",
+          "col": 8,
+          "value": 290165.23,
+          "formula": "=E_Data!H46"
+        },
+        "9": {
+          "coord": "I80",
+          "col": 9,
+          "value": 261690.52,
+          "formula": "=E_Data!I46"
+        },
+        "10": {
+          "coord": "J80",
+          "col": 10,
+          "value": 315712.51,
+          "formula": "=E_Data!J46"
+        },
+        "11": {
+          "coord": "K80",
+          "col": 11,
+          "value": 314825.82,
+          "formula": "=E_Data!K46"
+        },
+        "12": {
+          "coord": "L80",
+          "col": 12,
+          "value": 2589578.44,
+          "formula": "=E_Data!L46"
+        }
+      }
+    },
+    {
+      "row": 81,
+      "cells": {
+        "1": {
+          "coord": "A81",
+          "col": 1,
+          "value": "Scope 2 Solar Offset (negative — enter generation)"
+        },
+        "2": {
+          "coord": "B81",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C81",
+          "col": 3,
+          "value": 0,
+          "formula": "=SUM(E_Data!C50+E_Data!C51+E_Data!C52+E_Data!C53+E_Data!C54)"
+        },
+        "4": {
+          "coord": "D81",
+          "col": 4,
+          "value": 0,
+          "formula": "=SUM(E_Data!D50+E_Data!D51+E_Data!D52+E_Data!D53+E_Data!D54)"
+        },
+        "5": {
+          "coord": "E81",
+          "col": 5,
+          "value": 0,
+          "formula": "=SUM(E_Data!E50+E_Data!E51+E_Data!E52+E_Data!E53+E_Data!E54)"
+        },
+        "6": {
+          "coord": "F81",
+          "col": 6,
+          "value": 0,
+          "formula": "=SUM(E_Data!F50+E_Data!F51+E_Data!F52+E_Data!F53+E_Data!F54)"
+        },
+        "7": {
+          "coord": "G81",
+          "col": 7,
+          "value": 0,
+          "formula": "=SUM(E_Data!G50+E_Data!G51+E_Data!G52+E_Data!G53+E_Data!G54)"
+        },
+        "8": {
+          "coord": "H81",
+          "col": 8,
+          "value": 0,
+          "formula": "=SUM(E_Data!H50+E_Data!H51+E_Data!H52+E_Data!H53+E_Data!H54)"
+        },
+        "9": {
+          "coord": "I81",
+          "col": 9,
+          "value": 0,
+          "formula": "=SUM(E_Data!I50+E_Data!I51+E_Data!I52+E_Data!I53+E_Data!I54)"
+        },
+        "10": {
+          "coord": "J81",
+          "col": 10,
+          "value": 0,
+          "formula": "=SUM(E_Data!J50+E_Data!J51+E_Data!J52+E_Data!J53+E_Data!J54)"
+        },
+        "11": {
+          "coord": "K81",
+          "col": 11,
+          "value": 0,
+          "formula": "=SUM(E_Data!K50+E_Data!K51+E_Data!K52+E_Data!K53+E_Data!K54)"
+        },
+        "12": {
+          "coord": "L81",
+          "col": 12,
+          "value": 0,
+          "formula": "=SUM(E_Data!L50+E_Data!L51+E_Data!L52+E_Data!L53+E_Data!L54)"
+        }
+      }
+    },
+    {
+      "row": 82,
+      "cells": {
+        "1": {
+          "coord": "A82",
+          "col": 1,
+          "value": "SCOPE 2 NET (tCO₂e)"
+        },
+        "3": {
+          "coord": "C82",
+          "col": 3,
+          "value": 288638.88,
+          "formula": "=C80+C81"
+        },
+        "4": {
+          "coord": "D82",
+          "col": 4,
+          "value": 304665.02,
+          "formula": "=D80+D81"
+        },
+        "5": {
+          "coord": "E82",
+          "col": 5,
+          "value": 294858.49,
+          "formula": "=E80+E81"
+        },
+        "6": {
+          "coord": "F82",
+          "col": 6,
+          "value": 263387.94,
+          "formula": "=F80+F81"
+        },
+        "7": {
+          "coord": "G82",
+          "col": 7,
+          "value": 255634.03,
+          "formula": "=G80+G81"
+        },
+        "8": {
+          "coord": "H82",
+          "col": 8,
+          "value": 290165.23,
+          "formula": "=H80+H81"
+        },
+        "9": {
+          "coord": "I82",
+          "col": 9,
+          "value": 261690.52,
+          "formula": "=I80+I81"
+        },
+        "10": {
+          "coord": "J82",
+          "col": 10,
+          "value": 315712.51,
+          "formula": "=J80+J81"
+        },
+        "11": {
+          "coord": "K82",
+          "col": 11,
+          "value": 314825.82,
+          "formula": "=K80+K81"
+        },
+        "12": {
+          "coord": "L82",
+          "col": 12,
+          "value": 2589578.44,
+          "formula": "=L80+L81"
+        }
+      }
+    },
+    {
+      "row": 83,
+      "cells": {
+        "1": {
+          "coord": "A83",
+          "col": 1,
+          "value": "Scope 3 — Water Consumption"
+        },
+        "2": {
+          "coord": "B83",
+          "col": 2,
+          "value": "tCO₂e"
+        },
+        "3": {
+          "coord": "C83",
+          "col": 3,
+          "value": 409.41,
+          "formula": "=E_Data!C63"
+        },
+        "4": {
+          "coord": "D83",
+          "col": 4,
+          "value": 391.39,
+          "formula": "=E_Data!D63"
+        },
+        "5": {
+          "coord": "E83",
+          "col": 5,
+          "value": 380.72,
+          "formula": "=E_Data!E63"
+        },
+        "6": {
+          "coord": "F83",
+          "col": 6,
+          "value": 534.81,
+          "formula": "=E_Data!F63"
+        },
+        "7": {
+          "coord": "G83",
+          "col": 7,
+          "value": 476.36,
+          "formula": "=E_Data!G63"
+        },
+        "8": {
+          "coord": "H83",
+          "col": 8,
+          "value": 499.53,
+          "formula": "=E_Data!H63"
+        },
+        "9": {
+          "coord": "I83",
+          "col": 9,
+          "value": 533.01,
+          "formula": "=E_Data!I63"
+        },
+        "10": {
+          "coord": "J83",
+          "col": 10,
+          "value": 560.94,
+          "formula": "=E_Data!J63"
+        },
+        "11": {
+          "coord": "K83",
+          "col": 11,
+          "value": 570.24,
+          "formula": "=E_Data!K63"
+        },
+        "12": {
+          "coord": "L83",
+          "col": 12,
+          "value": 4356.41,
+          "formula": "=E_Data!L63"
+        }
+      }
+    },
+    {
+      "row": 84,
+      "cells": {
+        "1": {
+          "coord": "A84",
+          "col": 1,
+          "value": "TOTAL GHG (Scope 1+2+3)  tCO₂e"
+        },
+        "3": {
+          "coord": "C84",
+          "col": 3,
+          "value": 369831.31,
+          "formula": "=C79+C82+C83"
+        },
+        "4": {
+          "coord": "D84",
+          "col": 4,
+          "value": 373947.55,
+          "formula": "=D79+D82+D83"
+        },
+        "5": {
+          "coord": "E84",
+          "col": 5,
+          "value": 360598.89,
+          "formula": "=E79+E82+E83"
+        },
+        "6": {
+          "coord": "F84",
+          "col": 6,
+          "value": 337609.15,
+          "formula": "=F79+F82+F83"
+        },
+        "7": {
+          "coord": "G84",
+          "col": 7,
+          "value": 323928.84,
+          "formula": "=G79+G82+G83"
+        },
+        "8": {
+          "coord": "H84",
+          "col": 8,
+          "value": 349193.79,
+          "formula": "=H79+H82+H83"
+        },
+        "9": {
+          "coord": "I84",
+          "col": 9,
+          "value": 311453.55,
+          "formula": "=I79+I82+I83"
+        },
+        "10": {
+          "coord": "J84",
+          "col": 10,
+          "value": 380351.18,
+          "formula": "=J79+J82+J83"
+        },
+        "11": {
+          "coord": "K84",
+          "col": 11,
+          "value": 382001.08,
+          "formula": "=K79+K82+K83"
+        },
+        "12": {
+          "coord": "L84",
+          "col": 12,
+          "value": 3188915.34,
+          "formula": "=L79+L82+L83"
+        }
+      }
+    },
+    {
+      "row": 85,
+      "cells": {
+        "1": {
+          "coord": "A85",
+          "col": 1,
+          "value": "% by scope — Scope 1"
+        },
+        "2": {
+          "coord": "B85",
+          "col": 2,
+          "value": "%"
+        },
+        "3": {
+          "coord": "C85",
+          "col": 3,
+          "value": 0.2184320738,
+          "formula": "=IFERROR(C79/C84,0)"
+        },
+        "4": {
+          "coord": "D85",
+          "col": 4,
+          "value": 0.1842267452,
+          "formula": "=IFERROR(D79/D84,0)"
+        },
+        "5": {
+          "coord": "E85",
+          "col": 5,
+          "value": 0.181253137,
+          "formula": "=IFERROR(E79/E84,0)"
+        },
+        "6": {
+          "coord": "F85",
+          "col": 6,
+          "value": 0.2182594873,
+          "formula": "=IFERROR(F79/F84,0)"
+        },
+        "7": {
+          "coord": "G85",
+          "col": 7,
+          "value": 0.2093621858,
+          "formula": "=IFERROR(G79/G84,0)"
+        },
+        "8": {
+          "coord": "H85",
+          "col": 8,
+          "value": 0.1676118868,
+          "formula": "=IFERROR(H79/H84,0)"
+        },
+        "9": {
+          "coord": "I85",
+          "col": 9,
+          "value": 0.158065368,
+          "formula": "=IFERROR(I79/I84,0)"
+        },
+        "10": {
+          "coord": "J85",
+          "col": 10,
+          "value": 0.1684699125,
+          "formula": "=IFERROR(J79/J84,0)"
+        },
+        "11": {
+          "coord": "K85",
+          "col": 11,
+          "value": 0.1743581981,
+          "formula": "=IFERROR(K79/K84,0)"
+        },
+        "12": {
+          "coord": "L85",
+          "col": 12,
+          "value": 0.1865777001,
+          "formula": "=IFERROR(L79/L84,0)"
+        }
+      }
+    },
+    {
+      "row": 86,
+      "cells": {
+        "1": {
+          "coord": "A86",
+          "col": 1,
+          "value": "% by scope — Scope 2 (net)"
+        },
+        "2": {
+          "coord": "B86",
+          "col": 2,
+          "value": "%"
+        },
+        "3": {
+          "coord": "C86",
+          "col": 3,
+          "value": 0.780460908,
+          "formula": "=IFERROR(C82/C84,0)"
+        },
+        "4": {
+          "coord": "D86",
+          "col": 4,
+          "value": 0.8147266107,
+          "formula": "=IFERROR(D82/D84,0)"
+        },
+        "5": {
+          "coord": "E86",
+          "col": 5,
+          "value": 0.8176910639,
+          "formula": "=IFERROR(E82/E84,0)"
+        },
+        "6": {
+          "coord": "F86",
+          "col": 6,
+          "value": 0.7801564028,
+          "formula": "=IFERROR(F82/F84,0)"
+        },
+        "7": {
+          "coord": "G86",
+          "col": 7,
+          "value": 0.7891672443,
+          "formula": "=IFERROR(G82/G84,0)"
+        },
+        "8": {
+          "coord": "H86",
+          "col": 8,
+          "value": 0.8309575895,
+          "formula": "=IFERROR(H82/H84,0)"
+        },
+        "9": {
+          "coord": "I86",
+          "col": 9,
+          "value": 0.8402232692,
+          "formula": "=IFERROR(I82/I84,0)"
+        },
+        "10": {
+          "coord": "J86",
+          "col": 10,
+          "value": 0.8300552926,
+          "formula": "=IFERROR(J82/J84,0)"
+        },
+        "11": {
+          "coord": "K86",
+          "col": 11,
+          "value": 0.8241490312,
+          "formula": "=IFERROR(K82/K84,0)"
+        },
+        "12": {
+          "coord": "L86",
+          "col": 12,
+          "value": 0.8120561896,
+          "formula": "=IFERROR(L82/L84,0)"
+        }
+      }
+    },
+    {
+      "row": 88,
+      "cells": {
+        "1": {
+          "coord": "A88",
+          "col": 1,
+          "value": "NET-ZERO TARGETS (SBTi CNZS 2.0)  —  Baseline: FY2025/26  |  Target: −50% Scope 1+2 by 2030  |  Net-Zero by 2050"
+        }
+      }
+    },
+    {
+      "row": 89,
+      "cells": {
+        "1": {
+          "coord": "A89",
+          "col": 1,
+          "value": "Target"
+        },
+        "2": {
+          "coord": "B89",
+          "col": 2,
+          "value": "Baseline tCO₂e"
+        },
+        "3": {
+          "coord": "C89",
+          "col": 3,
+          "value": "2030 Target"
+        },
+        "4": {
+          "coord": "D89",
+          "col": 4,
+          "value": "2040 Target"
+        },
+        "5": {
+          "coord": "E89",
+          "col": 5,
+          "value": "2050 Target"
+        },
+        "6": {
+          "coord": "F89",
+          "col": 6,
+          "value": "Current YTD"
+        },
+        "7": {
+          "coord": "G89",
+          "col": 7,
+          "value": "On Track?"
+        }
+      }
+    },
+    {
+      "row": 90,
+      "cells": {
+        "1": {
+          "coord": "A90",
+          "col": 1,
+          "value": "Scope 1+2 Combined"
+        },
+        "2": {
+          "coord": "B90",
+          "col": 2,
+          "value": 0
+        },
+        "3": {
+          "coord": "C90",
+          "col": 3,
+          "value": 0,
+          "formula": "=B90*0.5"
+        },
+        "4": {
+          "coord": "D90",
+          "col": 4,
+          "value": 0,
+          "formula": "=B90*0.1"
+        },
+        "5": {
+          "coord": "E90",
+          "col": 5,
+          "value": "Net-Zero"
+        },
+        "6": {
+          "coord": "F90",
+          "col": 6,
+          "value": 3184558.93,
+          "formula": "=L79+L82"
+        },
+        "7": {
+          "coord": "G90",
+          "col": 7,
+          "value": "Set baseline",
+          "formula": "=IF(B90=0,\"Set baseline\",IF(F90<=C90,\"✓ On Track\",\"⚠ Gap\"))"
+        }
+      }
+    }
+  ]
+}

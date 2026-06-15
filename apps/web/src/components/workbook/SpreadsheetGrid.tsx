@@ -1,26 +1,72 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, AlertCircle, Maximize2, Minimize2, X } from "lucide-react";
-import type { ColumnDef } from "./sections";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
+import type { ColumnDef, GridTotalDef } from "./sections";
+import { parseAmount } from "./sections";
+import { deriveGenderFromSaId } from "@/lib/saIdGender";
+import { coerceYesNo, yesNoToSelectValue } from "@/lib/yesNoValue";
+import { applyPasteToRows, parseClipboardMatrix, expandClipboardMatrix, getClipboardPasteShape } from "@/lib/workbookGridParse";
+import { formatDateForDisplay, numericDateDisplayToIso } from "@/lib/numericDateInput";
+import { normalizeCellForColumn, toGridRows, type NormalizationResult } from "@/lib/tabularNormalize";
+import { normalizePaste } from "@/lib/aiMappingClient";
+import { suggestSelectOption, FUZZY_SELECT_HINT } from "@/lib/selectOptionMatch";
+import { MappingConfirmModal } from "./MappingConfirmModal";
+import { CellValidationPopup, FIELD_LEARN_MORE } from "./CellValidationPopup";
+import { API_BASE } from "@toolkit/lib/config";
 
 type Row = Record<string, unknown> & { _id: string };
-
-const MIN_VISIBLE_ROWS = 10;
+type CellRef = { row: number; col: number };
 
 interface Props {
   columns: ColumnDef[];
   rows: Row[];
   onChange: (rows: Row[]) => void;
-  /** Optional cross-field row validator merged into per-cell errors. */
   rowValidate?: (row: Record<string, unknown>) => Record<string, string>;
-  /** Shown in the fullscreen overlay header. */
   sectionLabel?: string;
   sectionDescription?: string;
+  gridTotals?: GridTotalDef[];
+  readOnly?: boolean;
+  canDeleteRows?: boolean;
+  canAddRows?: boolean;
 }
 
-// A row counts as "empty" when no cell has user-entered content. Boolean
-// columns default to `false` on row creation, so only `true` is treated as
-// user data; non-boolean cells count as data when non-blank (trimmed).
+function isYesNoColumn(col: ColumnDef): boolean {
+  return Boolean(col.yesNoBoolean);
+}
+
+function sumColumn(rows: Row[], columns: ColumnDef[], key: string): number {
+  const col = columns.find((c) => c.key === key);
+  if (!col || col.type !== "number") return 0;
+  let total = 0;
+  for (const row of rows) {
+    if (isRowEmpty(row, columns)) continue;
+    const n = parseAmount(row[key]);
+    if (Number.isFinite(n)) total += n;
+  }
+  return total;
+}
+
+// Number of blank ghost rows always visible below the last real row.
+const MIN_EMPTY_ROWS = 25;
+const VIRTUAL_THRESHOLD = 50;
+const ROW_HEIGHT = 40;
+const DEFAULT_COL_WIDTH = 120;
+
+function colLetter(idx: number): string {
+  let n = idx;
+  let s = "";
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+function cellKey(row: number, col: number): string {
+  return `${row}:${col}`;
+}
+
 function isRowEmpty(row: Row, columns: ColumnDef[]): boolean {
   for (const c of columns) {
     const v = row[c.key];
@@ -47,6 +93,30 @@ function emptyRow(columns: ColumnDef[]): Row {
   return r;
 }
 
+function normalizeRange(a: CellRef, b: CellRef) {
+  return {
+    minR: Math.min(a.row, b.row),
+    maxR: Math.max(a.row, b.row),
+    minC: Math.min(a.col, b.col),
+    maxC: Math.max(a.col, b.col),
+  };
+}
+
+function formatCellDisplay(v: unknown, col: ColumnDef): string {
+  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
+  if (col.type === "boolean") return v ? "TRUE" : "FALSE";
+  if (col.type === "date") return formatDateForDisplay(v);
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function serializeCellValue(v: unknown, col: ColumnDef): string {
+  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
+  if (col.type === "boolean") return v ? "TRUE" : "FALSE";
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
 export function SpreadsheetGrid({
   columns,
   rows,
@@ -54,10 +124,88 @@ export function SpreadsheetGrid({
   rowValidate,
   sectionLabel,
   sectionDescription,
+  gridTotals,
+  readOnly = false,
+  canDeleteRows = true,
+  canAddRows = true,
 }: Props) {
-  const [active, setActive] = useState<{ row: number; col: number } | null>(null);
+  const [activeCell, setActiveCell] = useState<CellRef | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<CellRef | null>(null);
+  const [extraCells, setExtraCells] = useState<Set<string>>(new Set());
+  const [editingCell, setEditingCell] = useState<CellRef | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    const w: Record<string, number> = {};
+    for (const c of columns) w[c.key] = c.width || DEFAULT_COL_WIDTH;
+    return w;
+  });
+  const [undoStack, setUndoStack] = useState<Row[][]>([]);
+  const [pastePreview, setPastePreview] = useState<{ rows: number; cols: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: number } | null>(null);
+  const [mapPreview, setMapPreview] = useState<{
+    anchor: CellRef;
+    result: NormalizationResult | null;
+    usedAi: boolean;
+    notes: string[];
+    loading: boolean;
+  } | null>(null);
+  const [cellPopup, setCellPopup] = useState<{
+    anchorRect: DOMRect;
+    rawValue: string;
+    suggestion: string | null;
+    col: ColumnDef;
+    rowIdx: number;
+    isAiSuggestion?: boolean;
+    loading?: boolean;
+  } | null>(null);
+  const cellPopupAbortRef = useRef<AbortController | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+  /** false when edit began via type-over (first key already in editValue). */
+  const editFocusSelectAllRef = useRef(true);
+  /** true between first type-to-edit key and edit input mount (editingCell still null). */
+  const editKeystrokeBootstrapRef = useRef(false);
+  const dragAnchor = useRef<CellRef | null>(null);
+  const isDragging = useRef(false);
+  const fillDrag = useRef<{ startRow: number; endRow: number } | null>(null);
+  const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
+
+  // Total rows shown = real rows + ghost padding rows (in edit mode only).
+  const displayRowCount = readOnly
+    ? rows.length
+    : Math.max(rows.length + MIN_EMPTY_ROWS, MIN_EMPTY_ROWS);
+
+  const useVirtual = displayRowCount > VIRTUAL_THRESHOLD;
+
+  const virtualizer = useVirtualizer({
+    count: displayRowCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+    enabled: useVirtual,
+  });
+
+  const selectionRange = useMemo(() => {
+    if (!activeCell || !selectionEnd) return null;
+    return normalizeRange(activeCell, selectionEnd);
+  }, [activeCell, selectionEnd]);
+
+  const pushUndo = useCallback((snapshot: Row[]) => {
+    setUndoStack((prev) => [...prev.slice(-19), snapshot.map((r) => ({ ...r }))]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setUndoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      onChange(last.map((r) => ({ ...r })));
+      return prev.slice(0, -1);
+    });
+  }, [onChange]);
 
   const exitFullscreen = useCallback(() => setIsFullscreen(false), []);
 
@@ -82,7 +230,6 @@ export function SpreadsheetGrid({
   const validateRow = useCallback(
     (row: Row): Record<string, string> => {
       const errors: Record<string, string> = {};
-      // Per ruleset global_rules: only validate a row if at least one cell has data.
       const empty = isRowEmpty(row, columns);
       for (const col of columns) {
         const v = row[col.key];
@@ -115,89 +262,892 @@ export function SpreadsheetGrid({
     return m;
   }, [rows, validateRow]);
 
-  const visibleRows = useMemo(() => {
-    const missing = Math.max(0, MIN_VISIBLE_ROWS - rows.length);
-    if (missing === 0) return rows;
-    return [
-      ...rows,
-      ...Array.from({ length: missing }, (_, i) => ({
-        ...emptyRow(columns),
-        _id: `ghost_${rows.length + i}`,
-      })),
-    ];
-  }, [rows, columns]);
-
   const totalErrors = useMemo(
     () => Object.values(errorMap).reduce((sum, e) => sum + Object.keys(e).length, 0),
     [errorMap],
   );
 
-  const updateCell = useCallback(
-    (rowIdx: number, colKey: string, value: unknown) => {
-      const next = [...rows];
-      while (next.length <= rowIdx) next.push(emptyRow(columns));
-      next[rowIdx] = { ...next[rowIdx], [colKey]: value };
-      onChange(next);
+  const getCellValue = useCallback(
+    (rowIdx: number, colIdx: number): unknown => {
+      const col = columns[colIdx];
+      if (!col) return "";
+      return rows[rowIdx]?.[col.key] ?? "";
     },
-    [rows, columns, onChange],
+    [columns, rows],
   );
 
-  const addRow = useCallback(() => {
-    onChange([...rows, emptyRow(columns)]);
-    setTimeout(() => setActive({ row: rows.length, col: 0 }), 0);
-  }, [rows, columns, onChange]);
+  // Materializes ghost rows up to rowIdx, then sets the cell value.
+  const updateCell = useCallback(
+    (rowIdx: number, colKey: string, value: unknown, extra?: Record<string, unknown>) => {
+      if (readOnly) return;
+      pushUndo(rows);
+      const next = [...rows];
+      while (next.length <= rowIdx) next.push(emptyRow(columns));
+      next[rowIdx] = { ...next[rowIdx], [colKey]: value, ...extra };
+      onChange(next);
+    },
+    [rows, columns, onChange, readOnly, pushUndo],
+  );
+
+  const columnTotals = useMemo(() => {
+    if (!gridTotals?.length) return {} as Record<string, number>;
+    const out: Record<string, number> = {};
+    for (const t of gridTotals) out[t.columnKey] = sumColumn(rows, columns, t.columnKey);
+    return out;
+  }, [gridTotals, rows, columns]);
+
+  const commitEdit = useCallback(
+    (moveTo?: CellRef | null, rawOverride?: string) => {
+      if (!editingCell) return;
+      const col = columns[editingCell.col];
+      if (col && !readOnly) {
+        const raw = rawOverride ?? editValue;
+        let value: unknown = raw;
+        if (col.type === "number") {
+          value = raw !== "" ? Number(raw) : "";
+        } else if (col.type === "boolean") {
+          value = raw.toLowerCase() === "true" || raw === "1";
+        } else if (isYesNoColumn(col)) {
+          value = coerceYesNo(raw);
+        } else if (col.type === "date" && raw.trim() !== "") {
+          value = numericDateDisplayToIso(raw) ?? raw;
+        }
+        // For ghost rows, only materialize if there's actual content.
+        const isEmpty = value === "" || value === null || value === undefined;
+        if (!isEmpty || editingCell.row < rows.length) {
+          const extra: Record<string, unknown> = {};
+          if (col.key === "idNumber") {
+            const inferred = deriveGenderFromSaId(value);
+            if (inferred && columns.some((c) => c.key === "gender")) {
+              extra.gender = inferred;
+            }
+          }
+          updateCell(editingCell.row, col.key, value, Object.keys(extra).length ? extra : undefined);
+
+          const isExactSelectPick =
+            (col.type === "select" || isYesNoColumn(col)) &&
+            (isYesNoColumn(col)
+              ? raw === "Yes" || raw === "No"
+              : Boolean(col.options?.includes(raw.trim())));
+
+          // Run deterministic normalization to detect mismatches and surface a popup.
+          if (!isExactSelectPick && !isEmpty && raw.trim() !== "") {
+            const normalized = normalizeCellForColumn(raw, col);
+            const hasMismatch =
+              normalized.changed &&
+              normalized.value !== "" &&
+              String(normalized.value) !== raw.trim();
+            const hasFlag = Boolean(normalized.flag);
+            let suggestion = hasMismatch ? String(normalized.value) : null;
+            if (!suggestion && col.type === "select" && col.options?.length) {
+              const fuzzy = suggestSelectOption(raw, col.options, col.key);
+              if (
+                fuzzy.suggestion &&
+                fuzzy.suggestion !== raw.trim() &&
+                fuzzy.confidence >= FUZZY_SELECT_HINT
+              ) {
+                suggestion = fuzzy.suggestion;
+              }
+            }
+
+            if (hasMismatch || hasFlag || suggestion) {
+              const cellEl = document.querySelector(
+                `[data-cell="${editingCell.row}-${editingCell.col}"]`,
+              );
+              const anchorRect = cellEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
+
+              // Abort any previous AI call.
+              cellPopupAbortRef.current?.abort();
+              const abort = new AbortController();
+              cellPopupAbortRef.current = abort;
+
+              setCellPopup({
+                anchorRect,
+                rawValue: raw.trim(),
+                suggestion,
+                col,
+                rowIdx: editingCell.row,
+                isAiSuggestion: false,
+                loading: suggestion == null,
+              });
+
+              // If deterministic couldn't suggest anything confident, hit the AI endpoint.
+              if (suggestion == null) {
+                const payload = {
+                  fieldKey: col.key,
+                  fieldLabel: col.label,
+                  rawValue: raw.trim(),
+                  fieldType: isYesNoColumn(col) ? "select" : col.type,
+                  allowedValues: isYesNoColumn(col)
+                    ? ["Yes", "No"]
+                    : col.options ?? [],
+                  validationMessage: col.validationMessage,
+                  dateFormat: col.type === "date" ? "dd/mm/yyyy" : undefined,
+                };
+                fetch(`${API_BASE}/api/workbook/suggest-value`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  signal: abort.signal,
+                  body: JSON.stringify(payload),
+                })
+                  .then((r) => (r.ok ? r.json() : null))
+                  .then((data: { suggestion?: string; explanation?: string } | null) => {
+                    if (!abort.signal.aborted && data?.suggestion) {
+                      setCellPopup((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              suggestion: data.suggestion ?? null,
+                              isAiSuggestion: true,
+                              loading: false,
+                            }
+                          : null,
+                      );
+                    } else if (!abort.signal.aborted) {
+                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
+                    }
+                  })
+                  .catch(() => {
+                    if (!abort.signal.aborted) {
+                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
+                    }
+                  });
+              }
+            }
+          }
+        }
+      }
+      editKeystrokeBootstrapRef.current = false;
+      setEditingCell(null);
+      setEditValue("");
+      if (moveTo) {
+        setActiveCell(moveTo);
+        setSelectionEnd(moveTo);
+      }
+    },
+    [editingCell, editValue, columns, readOnly, updateCell, rows.length],
+  );
+
+  const commitSelectEdit = useCallback(
+    (value: string) => {
+      setEditValue(value);
+      commitEdit(undefined, value);
+    },
+    [commitEdit],
+  );
+
+  const startEdit = useCallback(
+    (ref: CellRef, initialValue?: string) => {
+      if (readOnly) return;
+      const col = columns[ref.col];
+      if (!col || col.type === "boolean") return;
+      const v = ref.row < rows.length ? rows[ref.row][col.key] : "";
+      editFocusSelectAllRef.current = initialValue === undefined;
+      editKeystrokeBootstrapRef.current = initialValue !== undefined;
+      setEditingCell(ref);
+      const display =
+        initialValue ??
+        (isYesNoColumn(col)
+          ? yesNoToSelectValue(v)
+          : col.type === "date"
+            ? formatDateForDisplay(v)
+            : String(v ?? ""));
+      setEditValue(display);
+      setActiveCell(ref);
+      setSelectionEnd(ref);
+    },
+    [readOnly, columns, rows],
+  );
 
   const deleteRow = useCallback(
     (rowIdx: number) => {
+      if (readOnly || !canDeleteRows || rowIdx >= rows.length) return;
+      pushUndo(rows);
       onChange(rows.filter((_, i) => i !== rowIdx));
+      setSelectedRow(null);
+      setActiveCell(null);
+      setSelectionEnd(null);
+      setExtraCells(new Set());
+      setEditingCell(null);
     },
-    [rows, onChange],
+    [rows, onChange, readOnly, canDeleteRows, pushUndo],
   );
+
+  const clearSelection = useCallback(() => {
+    if (readOnly || !selectionRange) return;
+    pushUndo(rows);
+    const next = rows.map((r, ri) => {
+      if (ri < selectionRange.minR || ri > selectionRange.maxR) return r;
+      const copy = { ...r };
+      for (let ci = selectionRange.minC; ci <= selectionRange.maxC; ci++) {
+        const col = columns[ci];
+        if (col) copy[col.key] = col.type === "boolean" ? false : "";
+      }
+      return copy;
+    });
+    for (const key of extraCells) {
+      const [rs, cs] = key.split(":").map(Number);
+      if (next[rs]) {
+        const col = columns[cs];
+        if (col) next[rs] = { ...next[rs], [col.key]: col.type === "boolean" ? false : "" };
+      }
+    }
+    onChange(next);
+  }, [readOnly, selectionRange, extraCells, rows, columns, onChange, pushUndo]);
+
+  const collectSelectedCells = useCallback((): Array<{ row: number; col: number }> => {
+    const cells: Array<{ row: number; col: number }> = [];
+    const seen = new Set<string>();
+    const add = (r: number, c: number) => {
+      const k = cellKey(r, c);
+      if (!seen.has(k)) {
+        seen.add(k);
+        cells.push({ row: r, col: c });
+      }
+    };
+    if (selectionRange) {
+      for (let r = selectionRange.minR; r <= selectionRange.maxR; r++) {
+        for (let c = selectionRange.minC; c <= selectionRange.maxC; c++) add(r, c);
+      }
+    }
+    for (const k of extraCells) {
+      const [r, c] = k.split(":").map(Number);
+      add(r, c);
+    }
+    if (cells.length === 0 && activeCell) add(activeCell.row, activeCell.col);
+    return cells;
+  }, [selectionRange, extraCells, activeCell]);
+
+  const copySelection = useCallback(async () => {
+    const cells = collectSelectedCells();
+    if (cells.length === 0) return;
+
+    const minR = Math.min(...cells.map((c) => c.row));
+    const maxR = Math.max(...cells.map((c) => c.row));
+    const minC = Math.min(...cells.map((c) => c.col));
+    const maxC = Math.max(...cells.map((c) => c.col));
+
+    const lines: string[] = [];
+    for (let r = minR; r <= maxR; r++) {
+      const rowVals: string[] = [];
+      for (let c = minC; c <= maxC; c++) {
+        const inSel = cells.some((x) => x.row === r && x.col === c);
+        if (inSel) {
+          const col = columns[c];
+          rowVals.push(col ? serializeCellValue(getCellValue(r, c), col) : "");
+        } else {
+          rowVals.push("");
+        }
+      }
+      lines.push(rowVals.join("\t"));
+    }
+    const tsv = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(tsv);
+    } catch {
+      /* clipboard may be blocked */
+    }
+  }, [collectSelectedCells, columns, getCellValue]);
+
+  const applyMatrixPositional = useCallback(
+    (matrix: string[][], anchor: CellRef) => {
+      const shape = getClipboardPasteShape(matrix);
+      const firstRowLooksLikeHeaders =
+        shape === "grid" &&
+        matrix[0]?.length > 1 &&
+        matrix[0]?.some((h) => {
+          const labelMatch = columns.some((c) => {
+            const label = c.label.replace(/\*+$/, "").trim().toLowerCase();
+            const cell = h.trim().toLowerCase();
+            return label === cell || label.startsWith(cell) || cell.startsWith(label.slice(0, 6));
+          });
+          return labelMatch;
+        });
+      pushUndo(rows);
+      const next = applyPasteToRows(rows, columns, matrix, anchor, Boolean(firstRowLooksLikeHeaders));
+      onChange(next);
+      setPastePreview({
+        rows: matrix.length,
+        cols: Math.max(...matrix.map((r) => r.length), 0),
+      });
+      setTimeout(() => setPastePreview(null), 2000);
+    },
+    [columns, rows, onChange, pushUndo],
+  );
+
+  const getPasteAnchor = useCallback((): CellRef | null => {
+    if (selectionRange) {
+      return { row: selectionRange.minR, col: selectionRange.minC };
+    }
+    return activeCell;
+  }, [selectionRange, activeCell]);
+
+  const handlePaste = useCallback(
+    (text: string) => {
+      if (readOnly) return;
+      const anchor = getPasteAnchor();
+      if (!anchor) return;
+
+      let matrix = expandClipboardMatrix(parseClipboardMatrix(text));
+      if (matrix.length === 0) return;
+
+      const shape = getClipboardPasteShape(matrix);
+
+      // Single-cell paste: apply immediately, no preview needed.
+      const isSingleCell = matrix.length === 1 && (matrix[0]?.length ?? 0) <= 1;
+      if (isSingleCell) {
+        applyMatrixPositional(matrix, anchor);
+        return;
+      }
+
+      // Column/row vector pastes from Excel: apply directly without blocking modal.
+      if (shape === "column" || shape === "row") {
+        applyMatrixPositional(matrix, anchor);
+        return;
+      }
+
+      // Multi-column grid paste: normalize + validate, then show confirm preview.
+      setMapPreview({ anchor, result: null, usedAi: false, notes: [], loading: true });
+      normalizePaste(matrix, columns, API_BASE, {
+        startColIndex: anchor.col,
+        hasHeaderRow: undefined,
+      })
+        .then(({ result, usedAi, notes }) => {
+          setMapPreview({ anchor, result, usedAi, notes, loading: false });
+        })
+        .catch(() => {
+          setMapPreview(null);
+          applyMatrixPositional(matrix, anchor);
+        });
+    },
+    [readOnly, getPasteAnchor, columns, applyMatrixPositional],
+  );
+
+  const confirmMapPreview = useCallback(() => {
+    if (!mapPreview?.result) return;
+    const { anchor, result } = mapPreview;
+    const pasted = toGridRows(result, columns);
+    if (pasted.length === 0) {
+      setMapPreview(null);
+      return;
+    }
+    pushUndo(rows);
+    const next = rows.map((r) => ({ ...r }));
+    const needed = anchor.row + pasted.length;
+    while (next.length < needed) next.push(emptyRow(columns));
+    const mappedKeys = result.mapping.filter((m) => m.targetKey).map((m) => m.targetKey as string);
+    for (let i = 0; i < pasted.length; i++) {
+      const targetIdx = anchor.row + i;
+      const target = { ...next[targetIdx] };
+      const preserveId = target._id;
+      for (const key of mappedKeys) target[key] = pasted[i][key];
+      target._id = preserveId;
+      next[targetIdx] = target;
+    }
+    onChange(next);
+    setPastePreview({ rows: pasted.length, cols: result.stats.mappedColumns });
+    setTimeout(() => setPastePreview(null), 2000);
+    setMapPreview(null);
+  }, [mapPreview, columns, rows, onChange, pushUndo]);
+
+  const applyFill = useCallback(
+    (fromRow: number, toRow: number) => {
+      if (readOnly || !selectionRange) return;
+      const sourceRow = selectionRange.minR;
+      if (toRow <= sourceRow) return;
+      pushUndo(rows);
+      const next = rows.map((r) => ({ ...r }));
+      for (let r = sourceRow + 1; r <= toRow; r++) {
+        if (r >= next.length) {
+          next.push(emptyRow(columns));
+        }
+        for (let c = selectionRange.minC; c <= selectionRange.maxC; c++) {
+          const col = columns[c];
+          if (!col) continue;
+          next[r] = { ...next[r], [col.key]: next[sourceRow][col.key] };
+        }
+      }
+      onChange(next);
+    },
+    [readOnly, selectionRange, rows, columns, onChange, pushUndo],
+  );
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onPaste = (e: ClipboardEvent) => {
+      if (readOnly) return;
+      const text = e.clipboardData?.getData("text/plain");
+      if (!text || !activeCell) return;
+      e.preventDefault();
+      handlePaste(text);
+    };
+
+    el.addEventListener("paste", onPaste);
+    return () => el.removeEventListener("paste", onPaste);
+  }, [readOnly, activeCell, handlePaste]);
+
+  useEffect(() => {
+    const el = editInputRef.current;
+    if (!editingCell || !el) return;
+    el.focus();
+    // HTMLSelectElement has no .select() / .setSelectionRange() — only inputs do.
+    if (typeof el.select === "function") {
+      if (editFocusSelectAllRef.current) {
+        el.select();
+      } else if (typeof el.setSelectionRange === "function") {
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      }
+    }
+    editKeystrokeBootstrapRef.current = false;
+  }, [editingCell]);
+
+  useEffect(() => {
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!active) return;
-      const { row, col } = active;
+      if (editingCell) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          editKeystrokeBootstrapRef.current = false;
+          setEditingCell(null);
+          setEditValue("");
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const { row, col } = editingCell;
+          const nextRow = Math.min(row + 1, displayRowCount - 1);
+          commitEdit({ row: nextRow, col });
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const { row, col } = editingCell;
+          if (e.shiftKey && col > 0) commitEdit({ row, col: col - 1 });
+          else if (!e.shiftKey && col < columns.length - 1) commitEdit({ row, col: col + 1 });
+          else if (!e.shiftKey && row < displayRowCount - 1) commitEdit({ row: row + 1, col: 0 });
+          else commitEdit();
+          return;
+        }
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        e.preventDefault();
+        copySelection();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && activeCell) {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+      if (e.key === "F2" && activeCell) {
+        e.preventDefault();
+        startEdit(activeCell);
+        return;
+      }
+      if (!activeCell) return;
+
+      const { row, col } = activeCell;
       const lastCol = columns.length - 1;
-      const lastRow = visibleRows.length - 1;
+      const lastRow = displayRowCount - 1;
 
       if (e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
-        if (row < lastRow) setActive({ row: row + 1, col });
-        else if (e.key === "Enter") addRow();
+        if (row < lastRow) {
+          const next = { row: row + 1, col };
+          setActiveCell(next);
+          setSelectionEnd(next);
+          setExtraCells(new Set());
+        }
       } else if (e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey)) {
         if (row > 0) {
           e.preventDefault();
-          setActive({ row: row - 1, col });
+          const next = { row: row - 1, col };
+          setActiveCell(next);
+          setSelectionEnd(next);
+          setExtraCells(new Set());
         }
       } else if (e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey)) {
         if (col < lastCol) {
           e.preventDefault();
-          setActive({ row, col: col + 1 });
+          const next = { row, col: col + 1 };
+          setActiveCell(next);
+          setSelectionEnd(next);
+          setExtraCells(new Set());
         } else if (e.key === "Tab" && row < lastRow) {
           e.preventDefault();
-          setActive({ row: row + 1, col: 0 });
+          const next = { row: row + 1, col: 0 };
+          setActiveCell(next);
+          setSelectionEnd(next);
+          setExtraCells(new Set());
         }
       } else if (e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey)) {
         if (col > 0) {
           e.preventDefault();
-          setActive({ row, col: col - 1 });
+          const next = { row, col: col - 1 };
+          setActiveCell(next);
+          setSelectionEnd(next);
+          setExtraCells(new Set());
         }
+      } else if (!readOnly && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        e.preventDefault();
+        if (editKeystrokeBootstrapRef.current) {
+          setEditValue((prev) => prev + e.key);
+          return;
+        }
+        startEdit(activeCell, e.key);
       }
     },
-    [active, columns.length, visibleRows.length, addRow],
+    [
+      editingCell,
+      activeCell,
+      columns.length,
+      displayRowCount,
+      readOnly,
+      undo,
+      copySelection,
+      clearSelection,
+      startEdit,
+      commitEdit,
+    ],
   );
 
+  const handleCellMouseDown = (rIdx: number, cIdx: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const ref = { row: rIdx, col: cIdx };
+    if (e.ctrlKey || e.metaKey) {
+      setExtraCells((prev) => {
+        const next = new Set(prev);
+        const k = cellKey(rIdx, cIdx);
+        if (next.has(k)) next.delete(k);
+        else next.add(k);
+        return next;
+      });
+      setActiveCell(ref);
+      return;
+    }
+    if (e.shiftKey && activeCell) {
+      setSelectionEnd(ref);
+      setExtraCells(new Set());
+    } else {
+      dragAnchor.current = ref;
+      isDragging.current = true;
+      setActiveCell(ref);
+      setSelectionEnd(ref);
+      setExtraCells(new Set());
+      setSelectedRow(null);
+    }
+  };
+
+  const handleCellMouseEnter = (rIdx: number, cIdx: number) => {
+    if (fillDrag.current) {
+      fillDrag.current.endRow = rIdx;
+      return;
+    }
+    if (!isDragging.current || !dragAnchor.current) return;
+    setSelectionEnd({ row: rIdx, col: cIdx });
+  };
+
   useEffect(() => {
-    if (!active || !containerRef.current) return;
-    const sel = containerRef.current.querySelector<HTMLElement>(
-      `[data-cell="${active.row}-${active.col}"] input, [data-cell="${active.row}-${active.col}"] select`,
+    const up = () => {
+      if (fillDrag.current) {
+        const { startRow, endRow } = fillDrag.current;
+        if (endRow > startRow) applyFill(startRow, endRow);
+        fillDrag.current = null;
+      }
+      isDragging.current = false;
+      dragAnchor.current = null;
+    };
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mouseup", up);
+    };
+  }, [applyFill]);
+
+  const handleRowSelect = (rIdx: number) => {
+    setSelectedRow(rIdx);
+    setActiveCell({ row: rIdx, col: 0 });
+    setSelectionEnd({ row: rIdx, col: columns.length - 1 });
+    setExtraCells(new Set());
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, row: number) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, row });
+  };
+
+  const startResize = (key: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { key, startX: e.clientX, startW: colWidths[key] || DEFAULT_COL_WIDTH };
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = e.clientX - resizeRef.current.startX;
+      const nextW = Math.max(60, resizeRef.current.startW + delta);
+      setColWidths((prev) => ({ ...prev, [resizeRef.current!.key]: nextW }));
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const isCellSelected = (rIdx: number, cIdx: number): boolean => {
+    if (extraCells.has(cellKey(rIdx, cIdx))) return true;
+    if (selectionRange) {
+      return (
+        rIdx >= selectionRange.minR &&
+        rIdx <= selectionRange.maxR &&
+        cIdx >= selectionRange.minC &&
+        cIdx <= selectionRange.maxC
+      );
+    }
+    return false;
+  };
+
+  const isActiveCell = (rIdx: number, cIdx: number): boolean =>
+    activeCell?.row === rIdx && activeCell?.col === cIdx;
+
+  const showFillHandle =
+    !readOnly &&
+    selectionRange &&
+    activeCell &&
+    selectionRange.minR === selectionRange.maxR &&
+    selectionRange.minC <= selectionRange.maxC;
+
+  const renderCell = (row: Row, rIdx: number, col: ColumnDef, cIdx: number) => {
+    const v = row[col.key];
+    const errs = errorMap[row._id] || {};
+    const err = errs[col.key];
+    const selected = isCellSelected(rIdx, cIdx);
+    const active = isActiveCell(rIdx, cIdx);
+    const isEditing = editingCell?.row === rIdx && editingCell?.col === cIdx;
+
+    return (
+      <td
+        key={col.key}
+        data-cell={`${rIdx}-${cIdx}`}
+        style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
+        className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+          selected ? "bg-blue-500/10" : ""
+        } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
+        onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
+        onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
+        onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
+        onContextMenu={(e) => handleContextMenu(e, rIdx)}
+        title={
+          err ||
+          col.optionGuidance?.[String(v ?? "")] ||
+          col.guidance ||
+          undefined
+        }
+      >
+        {col.type === "boolean" && !isYesNoColumn(col) ? (
+          <div className="flex items-center justify-center h-full py-2">
+            <input
+              type="checkbox"
+              checked={Boolean(v)}
+              disabled={readOnly}
+              onChange={(e) => updateCell(rIdx, col.key, e.target.checked)}
+              className="h-4 w-4 accent-blue-500 disabled:opacity-60"
+              data-testid={`cell-${rIdx}-${col.key}`}
+            />
+          </div>
+        ) : isEditing ? (
+          col.type === "select" || isYesNoColumn(col) ? (
+            <select
+              ref={editInputRef}
+              value={editValue}
+              disabled={readOnly}
+              onChange={(e) => commitSelectEdit(e.target.value)}
+              className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+              data-testid={`cell-edit-${rIdx}-${col.key}`}
+            >
+              <option value="" className="bg-[#1c1c1e]">—</option>
+              {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
+                <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+              ))}
+            </select>
+          ) : (
+          <input
+            ref={editInputRef}
+            type={col.type === "number" ? "number" : "text"}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => commitEdit()}
+            className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+            data-testid={`cell-edit-${rIdx}-${col.key}`}
+          />
+          )
+        ) : (
+          <div
+            className="px-3 py-2 text-[13px] text-white truncate min-h-[36px] flex items-center"
+            data-testid={`cell-${rIdx}-${col.key}`}
+          >
+            {formatCellDisplay(v, col) || (
+              <span className="text-[#48484a]">{col.required ? "Required" : ""}</span>
+            )}
+          </div>
+        )}
+        {active && showFillHandle && cIdx === selectionRange!.maxC && (
+          <span
+            className="absolute -bottom-[3px] -right-[3px] w-2 h-2 bg-blue-500 border border-white cursor-crosshair z-20"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              fillDrag.current = { startRow: rIdx, endRow: rIdx };
+            }}
+            data-testid="fill-handle"
+          />
+        )}
+        {err && (
+          <span className="absolute right-1 top-1.5 text-status-error" title={err}>
+            <AlertCircle className="h-3 w-3" />
+          </span>
+        )}
+      </td>
     );
-    sel?.focus();
-  }, [active]);
+  };
+
+  const renderDataRow = (row: Row, rIdx: number) => (
+    <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`row-${rIdx}`}>
+      <td
+        className={`text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 cursor-pointer select-none sticky left-0 bg-[#0e0e10] z-[1] ${
+          selectedRow === rIdx ? "bg-blue-500/20 text-blue-300" : ""
+        }`}
+        onClick={() => handleRowSelect(rIdx)}
+        onContextMenu={(e) => handleContextMenu(e, rIdx)}
+        data-testid={`row-select-${rIdx}`}
+      >
+        {rIdx + 1}
+      </td>
+      {columns.map((col, cIdx) => renderCell(row, rIdx, col, cIdx))}
+      <td className="border-b border-[#2c2c2e] p-1 text-center">
+        {canDeleteRows && !readOnly && (
+          <button
+            type="button"
+            onClick={() => deleteRow(rIdx)}
+            className="p-1.5 rounded hover:bg-white/[0.06] text-[#636366] hover:text-status-error smooth press-sm"
+            title="Delete row"
+            data-testid={`button-delete-row-${rIdx}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+
+  // Ghost rows are blank placeholder rows that give an infinite-spreadsheet feel.
+  // They become real rows only when the user actually enters data.
+  const renderGhostRow = (rIdx: number) => {
+    const isEditing = editingCell?.row === rIdx;
+    return (
+      <tr
+        key={`ghost-${rIdx}`}
+        className="hover:bg-white/[0.01]"
+        data-testid={`ghost-row-${rIdx}`}
+      >
+        <td
+          className="text-[#3a3a3c] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 select-none sticky left-0 bg-[#0e0e10] z-[1]"
+          onClick={() => handleRowSelect(rIdx)}
+          onContextMenu={(e) => handleContextMenu(e, rIdx)}
+        >
+          {rIdx + 1}
+        </td>
+        {columns.map((col, cIdx) => {
+          const selected = isCellSelected(rIdx, cIdx);
+          const active = isActiveCell(rIdx, cIdx);
+          const cellEditing = isEditing && editingCell?.col === cIdx;
+          return (
+            <td
+              key={col.key}
+              data-cell={`${rIdx}-${cIdx}`}
+              style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
+              className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+                selected ? "bg-blue-500/10" : ""
+              } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""}`}
+              onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
+              onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
+              onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
+              onContextMenu={(e) => handleContextMenu(e, rIdx)}
+            >
+              {cellEditing && col.type !== "boolean" ? (
+                col.type === "select" || isYesNoColumn(col) ? (
+                  <select
+                    ref={editInputRef}
+                    value={editValue}
+                    disabled={readOnly}
+                    onChange={(e) => commitSelectEdit(e.target.value)}
+                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    data-testid={`cell-edit-${rIdx}-${col.key}`}
+                  >
+                    <option value="" className="bg-[#1c1c1e]">—</option>
+                    {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
+                      <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    ref={editInputRef}
+                    type={col.type === "number" ? "number" : "text"}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => commitEdit()}
+                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    data-testid={`cell-edit-${rIdx}-${col.key}`}
+                  />
+                )
+              ) : (
+                <div className="px-3 py-2 min-h-[36px]" />
+              )}
+              {active && showFillHandle && cIdx === selectionRange!.maxC && (
+                <span
+                  className="absolute -bottom-[3px] -right-[3px] w-2 h-2 bg-blue-500 border border-white cursor-crosshair z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    fillDrag.current = { startRow: rIdx, endRow: rIdx };
+                  }}
+                />
+              )}
+            </td>
+          );
+        })}
+        <td className="border-b border-[#2c2c2e] p-1 text-center" />
+      </tr>
+    );
+  };
+
+  const renderRow = (rIdx: number) =>
+    rIdx < rows.length ? renderDataRow(rows[rIdx], rIdx) : renderGhostRow(rIdx);
 
   const toolbar = (
-    <div className="flex items-center justify-between shrink-0">
+    <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
       <div className="flex items-center gap-3 text-[12px] text-[#8e8e93]">
         <span data-testid="grid-row-count">
           {rows.length} {rows.length === 1 ? "row" : "rows"}
@@ -208,9 +1158,30 @@ export function SpreadsheetGrid({
             {totalErrors} validation {totalErrors === 1 ? "issue" : "issues"}
           </span>
         )}
+        {pastePreview && (
+          <span className="text-blue-400" data-testid="paste-preview">
+            Pasted {pastePreview.rows}×{pastePreview.cols}
+          </span>
+        )}
+        {readOnly && (
+          <span className="text-amber-400/90 uppercase text-[10px] font-semibold tracking-wide">Read-only</span>
+        )}
       </div>
       <div className="flex items-center gap-2">
+        {undoStack.length > 0 && !readOnly && (
+          <button
+            type="button"
+            onClick={undo}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
+            title="Undo (Ctrl+Z)"
+            data-testid="button-undo"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+            Undo
+          </button>
+        )}
         <button
+          type="button"
           onClick={() => (isFullscreen ? exitFullscreen() : setIsFullscreen(true))}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
@@ -228,160 +1199,226 @@ export function SpreadsheetGrid({
             </>
           )}
         </button>
-        <button
-          onClick={addRow}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold press-sm hover:bg-white/90 smooth"
-          data-testid="button-add-row"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add row
-        </button>
       </div>
     </div>
   );
 
   const gridTable = (
     <div
-      ref={containerRef}
+      ref={scrollRef}
       className={`rounded-xl border border-[#2c2c2e] bg-[#0e0e10] overflow-auto ${
         isFullscreen ? "flex-1 min-h-0" : "max-h-[60vh]"
       }`}
       data-testid="grid-scroll-container"
     >
-      <table className="w-full text-[13px] border-collapse">
+      <table className="w-full text-[13px] border-collapse table-fixed">
         <thead className="sticky top-0 bg-[#1c1c1e] z-10">
           <tr>
-            <th className="w-10 p-2 text-[#636366] font-medium text-[11px] border-b border-r border-[#2c2c2e]">
-              #
-            </th>
-            {columns.map((c) => (
+            <th className="w-10 p-2 text-[#636366] font-medium text-[11px] border-b border-r border-[#2c2c2e] sticky left-0 bg-[#1c1c1e] z-20" />
+            {columns.map((c, i) => (
               <th
                 key={c.key}
-                style={{ minWidth: c.width || 120 }}
-                className="text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] uppercase tracking-wider text-[11px]"
+                style={{ width: colWidths[c.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[c.key] || DEFAULT_COL_WIDTH }}
+                className="relative text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] text-[11px]"
               >
+                <span className="text-[#636366] mr-1.5 font-mono">{colLetter(i)}</span>
                 {c.label}
                 {c.required && <span className="text-status-error ml-0.5">*</span>}
+                <span
+                  role="separator"
+                  className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-500/40"
+                  onMouseDown={(e) => startResize(c.key, e)}
+                  data-testid={`resize-${c.key}`}
+                />
               </th>
             ))}
             <th className="w-10 p-2 border-b border-[#2c2c2e]" />
           </tr>
+          {gridTotals && gridTotals.length > 0 && (
+            <tr className="bg-[#161618] border-b border-[#2c2c2e]" data-testid="grid-totals-row">
+              <th className="sticky left-0 bg-[#161618] z-20 p-2 text-[10px] font-semibold text-[#8e8e93] border-r border-[#2c2c2e]">
+                Σ
+              </th>
+              {columns.map((c) => {
+                const spec = gridTotals.find((t) => t.columnKey === c.key);
+                const total = spec ? columnTotals[c.key] : null;
+                return (
+                  <th
+                    key={`total-${c.key}`}
+                    className="text-right px-3 py-1.5 text-[12px] font-semibold text-emerald-400/90 border-r border-[#2c2c2e]"
+                  >
+                    {spec && total != null ? (
+                      <span title={spec.label ?? "Total"}>
+                        {spec.label ? `${spec.label}: ` : ""}
+                        {total.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}
+                      </span>
+                    ) : null}
+                  </th>
+                );
+              })}
+              <th className="border-b border-[#2c2c2e]" />
+            </tr>
+          )}
         </thead>
         <tbody>
-          {visibleRows.map((row, rIdx) => {
-            const errs = errorMap[row._id] || {};
-            const isMaterialized = rIdx < rows.length;
-            return (
-              <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`row-${rIdx}`}>
-                <td className="text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5">
-                  {rIdx + 1}
-                </td>
-                {columns.map((col, cIdx) => {
-                  const v = row[col.key];
-                  const err = errs[col.key];
-                  const isActive = active?.row === rIdx && active?.col === cIdx;
-                  return (
-                    <td
-                      key={col.key}
-                      data-cell={`${rIdx}-${cIdx}`}
-                      className={`border-b border-r border-[#2c2c2e] p-0 relative ${isActive ? "ring-1 ring-inset ring-blue-500" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
-                      onClick={() => setActive({ row: rIdx, col: cIdx })}
-                      title={err || undefined}
-                    >
-                      {col.type === "select" ? (
-                        <select
-                          aria-label={col.label}
-                          value={String(v ?? "")}
-                          onChange={(e) => updateCell(rIdx, col.key, e.target.value)}
-                          onFocus={() => setActive({ row: rIdx, col: cIdx })}
-                          className="w-full bg-transparent px-3 py-2 text-[13px] text-white outline-none"
-                          data-testid={`cell-${rIdx}-${col.key}`}
-                          title={
-                            err ||
-                            col.optionGuidance?.[String(v ?? "")] ||
-                            col.guidance ||
-                            undefined
-                          }
-                        >
-                          <option value="" className="bg-[#1c1c1e]">—</option>
-                          {col.options?.map((o) => (
-                            <option
-                              key={o}
-                              value={o}
-                              className="bg-[#1c1c1e]"
-                              title={col.optionGuidance?.[o] || undefined}
-                            >
-                              {o}
-                            </option>
-                          ))}
-                        </select>
-                      ) : col.type === "boolean" ? (
-                        <div className="flex items-center justify-center h-full py-2">
-                          <input
-                            aria-label={col.label}
-                            type="checkbox"
-                            checked={Boolean(v)}
-                            onChange={(e) => updateCell(rIdx, col.key, e.target.checked)}
-                            onFocus={() => setActive({ row: rIdx, col: cIdx })}
-                            className="h-4 w-4 accent-blue-500"
-                            data-testid={`cell-${rIdx}-${col.key}`}
-                          />
-                        </div>
-                      ) : (
-                        <input
-                          aria-label={col.label}
-                          type="text"
-                          inputMode={col.type === "number" ? "decimal" : undefined}
-                          value={String(v ?? "")}
-                          onChange={(e) =>
-                            updateCell(
-                              rIdx,
-                              col.key,
-                              col.type === "number" && e.target.value !== ""
-                                ? Number(e.target.value)
-                                : e.target.value,
-                            )
-                          }
-                          onFocus={() => setActive({ row: rIdx, col: cIdx })}
-                          className="w-full bg-transparent px-3 py-2 text-[13px] text-white outline-none placeholder-[#48484a]"
-                          placeholder={col.required ? "Required" : ""}
-                          data-testid={`cell-${rIdx}-${col.key}`}
-                        />
-                      )}
-                      {err && (
-                        <span className="absolute right-1 top-1.5 text-status-error" title={err}>
-                          <AlertCircle className="h-3 w-3" />
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="border-b border-[#2c2c2e] p-1 text-center">
-                  <button
-                    onClick={() => deleteRow(rIdx)}
-                    disabled={!isMaterialized}
-                    className="p-1.5 rounded hover:bg-white/[0.06] text-[#636366] hover:text-status-error smooth press-sm"
-                    title="Delete row"
-                    data-testid={`button-delete-row-${rIdx}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+          {useVirtual ? (
+            <>
+              {virtualizer.getVirtualItems().length > 0 && (
+                <tr style={{ height: virtualizer.getVirtualItems()[0]?.start ?? 0 }}>
+                  <td colSpan={columns.length + 2} />
+                </tr>
+              )}
+              {virtualizer.getVirtualItems().map((vRow) => renderRow(vRow.index))}
+              {virtualizer.getVirtualItems().length > 0 && (
+                <tr
+                  style={{
+                    height:
+                      virtualizer.getTotalSize() -
+                      (virtualizer.getVirtualItems().at(-1)?.end ?? 0),
+                  }}
+                >
+                  <td colSpan={columns.length + 2} />
+                </tr>
+              )}
+            </>
+          ) : (
+            Array.from({ length: displayRowCount }, (_, rIdx) => renderRow(rIdx))
+          )}
         </tbody>
       </table>
     </div>
   );
 
+  const contextMenuPortal =
+    contextMenu &&
+    createPortal(
+      <div
+        className="fixed z-[200] min-w-[160px] rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] py-1 shadow-xl"
+        style={{ left: contextMenu.x, top: contextMenu.y }}
+        onClick={(e) => e.stopPropagation()}
+        data-testid="grid-context-menu"
+      >
+        {!readOnly && canAddRows && (
+          <>
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              onClick={() => {
+                pushUndo(rows);
+                const idx = Math.min(contextMenu.row, rows.length);
+                const newRow = emptyRow(columns);
+                const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
+                onChange(next);
+                setContextMenu(null);
+              }}
+            >
+              Insert row above
+            </button>
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              onClick={() => {
+                pushUndo(rows);
+                const idx = Math.min(contextMenu.row + 1, rows.length);
+                const newRow = emptyRow(columns);
+                const next = [...rows.slice(0, idx), newRow, ...rows.slice(idx)];
+                onChange(next);
+                setContextMenu(null);
+              }}
+            >
+              Insert row below
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+          onClick={() => {
+            copySelection();
+            setContextMenu(null);
+          }}
+        >
+          Copy
+        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                handlePaste(text);
+              } catch {
+                /* ignore */
+              }
+              setContextMenu(null);
+            }}
+          >
+            Paste
+          </button>
+        )}
+        {!readOnly && canDeleteRows && contextMenu.row < rows.length && (
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-[12px] text-status-error hover:bg-white/[0.06]"
+            onClick={() => {
+              deleteRow(contextMenu.row);
+              setContextMenu(null);
+            }}
+          >
+            Delete row
+          </button>
+        )}
+      </div>,
+      document.body,
+    );
+
   const gridBody = (
     <div
-      className={isFullscreen ? "flex flex-col flex-1 min-h-0 gap-3" : "space-y-3"}
+      ref={containerRef}
+      tabIndex={0}
+      className={isFullscreen ? "flex flex-col flex-1 min-h-0 gap-3 outline-none" : "space-y-3 outline-none"}
       onKeyDown={onKeyDown}
     >
       {toolbar}
       {gridTable}
+      {!readOnly && (
+        <p className="text-[11px] text-[#636366]">
+          Click to select · drag for range · Shift+click extend · Ctrl+click multi-select · F2 or type to edit ·
+          Ctrl+C copy · Ctrl+V paste from Excel · drag fill handle to copy down · Ctrl+Z undo.
+        </p>
+      )}
+      {contextMenuPortal}
+      {cellPopup && (
+        <CellValidationPopup
+          rawValue={cellPopup.rawValue}
+          suggestion={cellPopup.suggestion}
+          validationMessage={cellPopup.col.validationMessage}
+          suggestionHint={cellPopup.col.suggestionHint}
+          learnMore={FIELD_LEARN_MORE[cellPopup.col.key]}
+          isAiSuggestion={cellPopup.isAiSuggestion}
+          loading={cellPopup.loading}
+          anchorRect={cellPopup.anchorRect}
+          onAccept={(val) => {
+            updateCell(cellPopup.rowIdx, cellPopup.col.key, val);
+            setCellPopup(null);
+          }}
+          onDismiss={() => setCellPopup(null)}
+        />
+      )}
+      <MappingConfirmModal
+        open={Boolean(mapPreview)}
+        title={`Review pasted data${sectionLabel ? ` · ${sectionLabel}` : ""}`}
+        subtitle="Check that each column maps to the right field. Flagged cells were normalized or need review."
+        columns={columns}
+        result={mapPreview?.result ?? null}
+        usedAi={mapPreview?.usedAi}
+        notes={mapPreview?.notes}
+        loading={mapPreview?.loading}
+        confirmLabel="Paste into grid"
+        onClose={() => setMapPreview(null)}
+        onConfirm={confirmMapPreview}
+      />
     </div>
   );
 
@@ -396,6 +1433,7 @@ export function SpreadsheetGrid({
             {sectionLabel ? `${sectionLabel} grid` : "Grid"} is open in fullscreen.
           </p>
           <button
+            type="button"
             onClick={exitFullscreen}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
             data-testid="button-exit-fullscreen-inline"
@@ -415,18 +1453,14 @@ export function SpreadsheetGrid({
             <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-white/[0.06] shrink-0">
               <div className="min-w-0">
                 {sectionLabel && (
-                  <h2 className="text-[18px] font-bold tracking-tight text-white truncate">
-                    {sectionLabel}
-                  </h2>
+                  <h2 className="text-[18px] font-bold tracking-tight text-white truncate">{sectionLabel}</h2>
                 )}
                 {sectionDescription && (
                   <p className="text-[13px] text-[#8e8e93] mt-0.5">{sectionDescription}</p>
                 )}
-                {!sectionLabel && (
-                  <h2 className="text-[18px] font-bold tracking-tight text-white">Spreadsheet</h2>
-                )}
               </div>
               <button
+                type="button"
                 onClick={exitFullscreen}
                 className="p-2 rounded-lg hover:bg-white/[0.06] text-[#8e8e93] hover:text-white smooth press-sm shrink-0"
                 title="Close fullscreen (Esc)"

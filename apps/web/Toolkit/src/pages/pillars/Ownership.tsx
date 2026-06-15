@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
+import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
+import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Plus, Edit, Trash2, Info, Award, Clock, Vote, Wallet } from "lucide-react";
@@ -95,7 +97,7 @@ const emptyForm: ShareholderFormState = {
 };
 
 export default function Ownership() {
-  const { ownership, addShareholder, updateShareholder, removeShareholder, updateCompanyValue, calculatorConfig } = useBbeeStore();
+  const { ownership, client, addShareholder, updateShareholder, removeShareholder, updateCompanyValue, calculatorConfig } = useBbeeStore();
   const { toast } = useToast();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -274,21 +276,19 @@ export default function Ownership() {
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-shares`} className="text-right">Shares</Label>
-          <Input
+          <NumberInput
             id={`${prefix}-shares`}
-            type="number"
             value={formState.shares}
-            onChange={e => setFormState({ ...formState, shares: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, shares: v })}
             className="col-span-3"
           />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-shareValue`} className="text-right">Share Value</Label>
-          <Input
+          <NumberInput
             id={`${prefix}-shareValue`}
-            type="number"
             value={formState.shareValue}
-            onChange={e => setFormState({ ...formState, shareValue: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, shareValue: v })}
             className="col-span-3"
             placeholder="R"
           />
@@ -298,26 +298,24 @@ export default function Ownership() {
       <TabsContent value="rights" className="space-y-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-blackOwnership`} className="text-right">Black Ownership %</Label>
-          <Input
+          <NumberInput
             id={`${prefix}-blackOwnership`}
-            type="number"
             min="0"
             max="100"
             value={formState.blackOwnership}
-            onChange={e => setFormState({ ...formState, blackOwnership: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, blackOwnership: v })}
             className="col-span-3"
             placeholder="0-100"
           />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-blackWomenOwnership`} className="text-right">Black Women %</Label>
-          <Input
+          <NumberInput
             id={`${prefix}-blackWomenOwnership`}
-            type="number"
             min="0"
             max="100"
             value={formState.blackWomenOwnership}
-            onChange={e => setFormState({ ...formState, blackWomenOwnership: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, blackWomenOwnership: v })}
             className="col-span-3"
             placeholder="0-100"
           />
@@ -335,13 +333,12 @@ export default function Ownership() {
               Voting Rights %
             </div>
           </Label>
-          <Input
+          <NumberInput
             id={`${prefix}-votingRights`}
-            type="number"
             min="0"
             max="100"
             value={formState.votingRightsPercent || formState.blackOwnership}
-            onChange={e => setFormState({ ...formState, votingRightsPercent: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, votingRightsPercent: v })}
             className="col-span-3"
             placeholder="Defaults to Black Ownership %"
           />
@@ -353,13 +350,12 @@ export default function Ownership() {
               Economic Interest %
             </div>
           </Label>
-          <Input
+          <NumberInput
             id={`${prefix}-economicInterest`}
-            type="number"
             min="0"
             max="100"
             value={formState.economicInterestPercent || formState.blackOwnership}
-            onChange={e => setFormState({ ...formState, economicInterestPercent: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, economicInterestPercent: v })}
             className="col-span-3"
             placeholder="Defaults to Black Ownership %"
           />
@@ -424,13 +420,12 @@ export default function Ownership() {
               Years Held
             </div>
           </Label>
-          <Input
+          <NumberInput
             id={`${prefix}-yearsHeld`}
-            type="number"
             min="0"
             max="50"
             value={formState.yearsHeld}
-            onChange={e => setFormState({ ...formState, yearsHeld: Number(e.target.value) })}
+            onValueChange={v => setFormState({ ...formState, yearsHeld: v })}
             className="col-span-3"
           />
         </div>
@@ -538,7 +533,9 @@ export default function Ownership() {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Detailed Scorecard Breakdown</CardTitle>
-          <CardDescription>7 sub-line indicators per RCOGP Generic Codes</CardDescription>
+          <CardDescription>
+            {pillarBreakdownSubtitle(score.subLines, client, calculatorConfig)}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
@@ -682,19 +679,17 @@ export default function Ownership() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Company Value (ZAR)</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   value={companyVal}
-                  onChange={e => setCompanyVal(Number(e.target.value))}
+                  onValueChange={setCompanyVal}
                   className="font-mono"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Outstanding Debt (ZAR)</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   value={debtVal}
-                  onChange={e => setDebtVal(Number(e.target.value))}
+                  onValueChange={setDebtVal}
                   className="font-mono"
                 />
               </div>

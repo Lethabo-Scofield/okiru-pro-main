@@ -29,7 +29,7 @@ describe("lakeTradingWorkbookFixture", () => {
   });
 
   it("documents expected ground-truth totals", () => {
-    expect(lakeTradingExpectedScores.total).toBe(63.56);
+    expect(lakeTradingExpectedScores.total).toBe(62.17); // per-demographic MC (was 63.56)
     expect(lakeTradingExpectedScores.level).toBe(7);
     expect(lakeTradingExpectedScores.discountedLevel).toBe(8);
   });

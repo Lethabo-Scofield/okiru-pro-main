@@ -1,0 +1,2699 @@
+{
+  "sheet_name": "ISO_Tracker",
+  "sanitized_name": "ISO_Tracker",
+  "dimensions": {
+    "max_row": 64,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D5"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D6"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D7"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D8"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D9"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D10"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D11"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D12"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D13"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D14"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D15"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D16"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D21"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D22"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D23"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D24"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D25"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D26"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D27"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D28"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D29"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D34"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D35"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D36"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D37"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D38"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D39"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D40"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D41"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D46"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D47"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D48"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D49"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D50"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D51"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D52"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D57"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D58"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D59"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D60"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D61"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D62"
+    },
+    {
+      "type": "list",
+      "operator": "between",
+      "formula1": "\"Fully Compliant,Partially Compliant,Gap,Not Applicable\"",
+      "formula2": "0",
+      "allow_blank": true,
+      "showInputMessage": false,
+      "promptTitle": null,
+      "prompt": null,
+      "showErrorMessage": false,
+      "errorTitle": null,
+      "error": null,
+      "sqref": "D63"
+    }
+  ],
+  "formula_count": 48,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "ISO STANDARDS GAP TRACKER  |  ISO 14001 | 45001 | 27001 | 26000 | 22000  [Net-Zero lens on all]"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "ISO 14001:2015 — Environmental Management System"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Requirement"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Clause"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F4",
+          "col": 6,
+          "value": "Weight"
+        },
+        "7": {
+          "coord": "G4",
+          "col": 7,
+          "value": "Evidence Needed"
+        },
+        "8": {
+          "coord": "H4",
+          "col": 8,
+          "value": "Current Evidence / Status"
+        },
+        "9": {
+          "coord": "I4",
+          "col": 9,
+          "value": "Net-Zero / ESG Link"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Context of the organisation — internal/external issues"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "4.1"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D5=\"Fully Compliant\",5,IF(D5=\"Partially Compliant\",3,IF(D5=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "Env issues register"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Net-zero context essential"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "Interested parties — needs/expectations"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "4.2"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D6=\"Fully Compliant\",5,IF(D6=\"Partially Compliant\",3,IF(D6=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "Stakeholder register"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "Customers, SETA, DoEL"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "Scope of EMS"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "4.3"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D7=\"Fully Compliant\",5,IF(D7=\"Partially Compliant\",3,IF(D7=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "EMS scope document"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "All 5 depots covered"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Environmental policy — net-zero commitment"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "5.2"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D8=\"Fully Compliant\",5,IF(D8=\"Partially Compliant\",3,IF(D8=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "Board-approved env policy"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Code of Ethics §11 — board-approved environmental policy with GHG, energy, water, waste, biodiversity, noise commitments. Explicit net-zero / SBTi commitment to be added."
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "Include net-zero target"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Environmental objectives — GHG, energy, water, waste"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "6.2"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D9=\"Fully Compliant\",5,IF(D9=\"Partially Compliant\",3,IF(D9=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "KPIs in E_Scorecard"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Code of Ethics §11 commits to GHG quantification + target-setting; energy efficiency, water reduction, waste minimisation. Numerical SBTi targets pending formal commitment letter."
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "Link to SBTi targets"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Environmental aspects — fleet emissions dominant"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "6.1.2"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D10=\"Fully Compliant\",5,IF(D10=\"Partially Compliant\",3,IF(D10=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F10",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G10",
+          "col": 7,
+          "value": "Aspects register"
+        },
+        "8": {
+          "coord": "H10",
+          "col": 8,
+          "value": "Code of Ethics §11 identifies vehicle emissions as material aspect; full aspects register to be formalised."
+        },
+        "9": {
+          "coord": "I10",
+          "col": 9,
+          "value": "Fleet = >80% Scope 1"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "Legal requirements register (NEMA, NWA, NEMWA)"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "6.1.3"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D11=\"Fully Compliant\",5,IF(D11=\"Partially Compliant\",3,IF(D11=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "Legal compliance register"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "Code of Ethics §11 commits to compliance with all applicable laws and maintenance of environmental permits, licenses, approvals."
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": "Quarterly update"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "Emergency preparedness — fuel spill, fire"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "8.2"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D12=\"Fully Compliant\",5,IF(D12=\"Partially Compliant\",3,IF(D12=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "Emergency response plan"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "Supplier Code §8 references spill/incident response procedures (cascaded to suppliers); depot-level plans to be confirmed."
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "All depot plans"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Monitoring & measurement — monthly GHG data"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "9.1"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D13=\"Fully Compliant\",5,IF(D13=\"Partially Compliant\",3,IF(D13=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "E_Data sheet"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "Monthly Mariette submission"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "Internal audit — all depots"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "9.2"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D14=\"Fully Compliant\",5,IF(D14=\"Partially Compliant\",3,IF(D14=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F14",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G14",
+          "col": 7,
+          "value": "Audit schedule"
+        },
+        "9": {
+          "coord": "I14",
+          "col": 9,
+          "value": "Annual minimum"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Management review — ESG integration"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "9.3"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D15=\"Fully Compliant\",5,IF(D15=\"Partially Compliant\",3,IF(D15=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "Board/management review"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "Quarterly ESG review"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "ISO 14001 certification achieved"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "10"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D16=\"Fully Compliant\",5,IF(D16=\"Partially Compliant\",3,IF(D16=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "Certificate"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": "Target: confirm with Maria"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "ISO 14001:2015 Score"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": 15,
+          "formula": "=SUM(E5,E6,E7,E8,E9,E10,E11,E12,E13,E14,E15,E16)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "ISO 45001:2018 — Occupational H&S Management System"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Requirement"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "Clause"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "Weight"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "Evidence Needed"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Current Evidence / Status"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "Net-Zero / ESG Link"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "H&S policy — zero harm commitment"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "5.2"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D21=\"Fully Compliant\",5,IF(D21=\"Partially Compliant\",3,IF(D21=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "Board H&S policy"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": "Code of Ethics §7 (Labour Standards & Human Rights) commits to safe workplace; Supplier Code §7 requires OHS Act compliance and OHS management system from suppliers."
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": "Include fatigue policy"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Hazard identification (HIRA) — driver fatigue"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "6.1.2"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D22=\"Fully Compliant\",5,IF(D22=\"Partially Compliant\",3,IF(D22=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F22",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G22",
+          "col": 7,
+          "value": "HIRA register"
+        },
+        "9": {
+          "coord": "I22",
+          "col": 9,
+          "value": "Driver routes = key hazard"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "Legal requirements — OHS Act, COID, Road Traffic"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "6.1.3"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D23=\"Fully Compliant\",5,IF(D23=\"Partially Compliant\",3,IF(D23=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "Legal register"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "Supplier Code §7 enforces OHS Act compliance and incident notification; internal legal register to be confirmed."
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": "Quarterly update"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "Operational controls — PPE, fatigue mgmt, vehicle checks"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "8.1"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D24=\"Fully Compliant\",5,IF(D24=\"Partially Compliant\",3,IF(D24=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "SOPs per depot"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": "Driver debrief critical"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "Emergency preparedness — road accidents"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "8.2"
+        },
+        "5": {
+          "coord": "E25",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D25=\"Fully Compliant\",5,IF(D25=\"Partially Compliant\",3,IF(D25=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F25",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G25",
+          "col": 7,
+          "value": "Emergency plan"
+        },
+        "9": {
+          "coord": "I25",
+          "col": 9,
+          "value": "All depots + fleet"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "Monitoring — LTIFR, TRIFR, near-miss (Accidently)"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "9.1"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D26=\"Fully Compliant\",5,IF(D26=\"Partially Compliant\",3,IF(D26=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "Accidently system"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": "Monthly reporting"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "Incident investigation process"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "10.2"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D27=\"Fully Compliant\",5,IF(D27=\"Partially Compliant\",3,IF(D27=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "Incident reports"
+        },
+        "9": {
+          "coord": "I27",
+          "col": 9,
+          "value": "Within 24hrs of incident"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "Worker participation and consultation"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "5.4"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D28=\"Fully Compliant\",5,IF(D28=\"Partially Compliant\",3,IF(D28=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "Safety committee minutes"
+        },
+        "9": {
+          "coord": "I28",
+          "col": 9,
+          "value": "Monthly meetings"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "ISO 45001 certification achieved"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "10"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D29=\"Fully Compliant\",5,IF(D29=\"Partially Compliant\",3,IF(D29=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": "Certificate"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "Target: confirm timeline"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "ISO 45001:2018 Score"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": 6,
+          "formula": "=SUM(E21,E22,E23,E24,E25,E26,E27,E28,E29)"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "ISO 27001:2022 — Information Security Management System"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "Requirement"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "Clause"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E33",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F33",
+          "col": 6,
+          "value": "Weight"
+        },
+        "7": {
+          "coord": "G33",
+          "col": 7,
+          "value": "Evidence Needed"
+        },
+        "8": {
+          "coord": "H33",
+          "col": 8,
+          "value": "Current Evidence / Status"
+        },
+        "9": {
+          "coord": "I33",
+          "col": 9,
+          "value": "Net-Zero / ESG Link"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "Information security policy"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "5.2"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E34",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D34=\"Fully Compliant\",5,IF(D34=\"Partially Compliant\",3,IF(D34=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F34",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G34",
+          "col": 7,
+          "value": "IS policy"
+        },
+        "8": {
+          "coord": "H34",
+          "col": 8,
+          "value": "Code of Ethics §6 — Protection of Company Property: IP, confidential info, POPI Act compliance. Standalone Information Security policy to be confirmed."
+        },
+        "9": {
+          "coord": "I34",
+          "col": 9,
+          "value": "POPIA-aligned"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "POPIA Information Officer appointed"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "6.1"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E35",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D35=\"Fully Compliant\",5,IF(D35=\"Partially Compliant\",3,IF(D35=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F35",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G35",
+          "col": 7,
+          "value": "Appointment letter"
+        },
+        "8": {
+          "coord": "H35",
+          "col": 8,
+          "value": "POPI consent process active for SG Consumer (Jan 2026 letter); formal Information Officer appointment letter required."
+        },
+        "9": {
+          "coord": "I35",
+          "col": 9,
+          "value": "Companies Act s55"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "Information asset register"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "8.1"
+        },
+        "5": {
+          "coord": "E36",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D36=\"Fully Compliant\",5,IF(D36=\"Partially Compliant\",3,IF(D36=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F36",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G36",
+          "col": 7,
+          "value": "Asset register"
+        },
+        "9": {
+          "coord": "I36",
+          "col": 9,
+          "value": "Include fleet telematics data"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "Access controls — Cority, JDE, telematics systems"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "8.5.3"
+        },
+        "5": {
+          "coord": "E37",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D37=\"Fully Compliant\",5,IF(D37=\"Partially Compliant\",3,IF(D37=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F37",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G37",
+          "col": 7,
+          "value": "Access policy"
+        },
+        "9": {
+          "coord": "I37",
+          "col": 9,
+          "value": "Role-based access"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "2": {
+          "coord": "B38",
+          "col": 2,
+          "value": "Incident response plan — data breach"
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": "8.6"
+        },
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E38",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D38=\"Fully Compliant\",5,IF(D38=\"Partially Compliant\",3,IF(D38=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F38",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G38",
+          "col": 7,
+          "value": "Incident response plan"
+        },
+        "8": {
+          "coord": "H38",
+          "col": 8,
+          "value": "POPI Act compliance referenced (Code of Ethics §6); 72hr breach notification protocol per POPIA to be formalised."
+        },
+        "9": {
+          "coord": "I38",
+          "col": 9,
+          "value": "72hr notification POPIA"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "2": {
+          "coord": "B39",
+          "col": 2,
+          "value": "Supplier agreements — data processing"
+        },
+        "3": {
+          "coord": "C39",
+          "col": 3,
+          "value": "8.7"
+        },
+        "4": {
+          "coord": "D39",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E39",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D39=\"Fully Compliant\",5,IF(D39=\"Partially Compliant\",3,IF(D39=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F39",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G39",
+          "col": 7,
+          "value": "DPA agreements"
+        },
+        "8": {
+          "coord": "H39",
+          "col": 8,
+          "value": "Supplier Code §5 — supplier confidentiality and information protection obligations cascaded."
+        },
+        "9": {
+          "coord": "I39",
+          "col": 9,
+          "value": "All SaaS suppliers"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "2": {
+          "coord": "B40",
+          "col": 2,
+          "value": "Risk assessment — cyber risks"
+        },
+        "3": {
+          "coord": "C40",
+          "col": 3,
+          "value": "6.1.2"
+        },
+        "5": {
+          "coord": "E40",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D40=\"Fully Compliant\",5,IF(D40=\"Partially Compliant\",3,IF(D40=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F40",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G40",
+          "col": 7,
+          "value": "Cyber risk register"
+        },
+        "9": {
+          "coord": "I40",
+          "col": 9,
+          "value": "Annual assessment"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "2": {
+          "coord": "B41",
+          "col": 2,
+          "value": "ISO 27001 certification"
+        },
+        "3": {
+          "coord": "C41",
+          "col": 3,
+          "value": "10"
+        },
+        "5": {
+          "coord": "E41",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D41=\"Fully Compliant\",5,IF(D41=\"Partially Compliant\",3,IF(D41=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F41",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G41",
+          "col": 7,
+          "value": "Certificate"
+        },
+        "9": {
+          "coord": "I41",
+          "col": 9,
+          "value": "Target: confirm timeline"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "ISO 27001:2022 Score"
+        },
+        "5": {
+          "coord": "E42",
+          "col": 5,
+          "value": 12,
+          "formula": "=SUM(E34,E35,E36,E37,E38,E39,E40,E41)"
+        }
+      }
+    },
+    {
+      "row": 44,
+      "cells": {
+        "1": {
+          "coord": "A44",
+          "col": 1,
+          "value": "ISO 26000:2010 — Social Responsibility Guidance"
+        }
+      }
+    },
+    {
+      "row": 45,
+      "cells": {
+        "2": {
+          "coord": "B45",
+          "col": 2,
+          "value": "Requirement"
+        },
+        "3": {
+          "coord": "C45",
+          "col": 3,
+          "value": "Clause"
+        },
+        "4": {
+          "coord": "D45",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E45",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F45",
+          "col": 6,
+          "value": "Weight"
+        },
+        "7": {
+          "coord": "G45",
+          "col": 7,
+          "value": "Evidence Needed"
+        },
+        "8": {
+          "coord": "H45",
+          "col": 8,
+          "value": "Current Evidence / Status"
+        },
+        "9": {
+          "coord": "I45",
+          "col": 9,
+          "value": "Net-Zero / ESG Link"
+        }
+      }
+    },
+    {
+      "row": 46,
+      "cells": {
+        "2": {
+          "coord": "B46",
+          "col": 2,
+          "value": "Organisational governance — board accountability"
+        },
+        "3": {
+          "coord": "C46",
+          "col": 3,
+          "value": "P1"
+        },
+        "4": {
+          "coord": "D46",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E46",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D46=\"Fully Compliant\",5,IF(D46=\"Partially Compliant\",3,IF(D46=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F46",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G46",
+          "col": 7,
+          "value": "Board charter"
+        },
+        "8": {
+          "coord": "H46",
+          "col": 8,
+          "value": "Code of Ethics — board-approved code; Executive Committee approval; multiple committee structures (S&EC, Internal Audit)."
+        },
+        "9": {
+          "coord": "I46",
+          "col": 9,
+          "value": "King V P1 aligned"
+        }
+      }
+    },
+    {
+      "row": 47,
+      "cells": {
+        "2": {
+          "coord": "B47",
+          "col": 2,
+          "value": "Human rights — due diligence"
+        },
+        "3": {
+          "coord": "C47",
+          "col": 3,
+          "value": "P2"
+        },
+        "4": {
+          "coord": "D47",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E47",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D47=\"Fully Compliant\",5,IF(D47=\"Partially Compliant\",3,IF(D47=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F47",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G47",
+          "col": 7,
+          "value": "HR policy"
+        },
+        "8": {
+          "coord": "H47",
+          "col": 8,
+          "value": "Code of Ethics §7 (Labour Standards & Human Rights): dignity, fair treatment, no harassment, forced labour & child labour prohibitions, freedom of association, anti-discrimination, fair employment, community land rights."
+        },
+        "9": {
+          "coord": "I47",
+          "col": 9,
+          "value": "Labour Relations Act"
+        }
+      }
+    },
+    {
+      "row": 48,
+      "cells": {
+        "2": {
+          "coord": "B48",
+          "col": 2,
+          "value": "Labour practices — fair wages, EE, training"
+        },
+        "3": {
+          "coord": "C48",
+          "col": 3,
+          "value": "P3"
+        },
+        "4": {
+          "coord": "D48",
+          "col": 4,
+          "value": "Fully Compliant"
+        },
+        "5": {
+          "coord": "E48",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(D48=\"Fully Compliant\",5,IF(D48=\"Partially Compliant\",3,IF(D48=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F48",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G48",
+          "col": 7,
+          "value": "HR policies, WSP"
+        },
+        "8": {
+          "coord": "H48",
+          "col": 8,
+          "value": "EE Policy (Rev 2, 30 Jan 2023) — designated employer, EEA Chapter 3 compliance, EE Plan, EE Committees, reasonable accommodation, career advancement, learning & development; equal pay for equal value; workplace harassment policy."
+        },
+        "9": {
+          "coord": "I48",
+          "col": 9,
+          "value": "EEA + BCEA aligned"
+        }
+      }
+    },
+    {
+      "row": 49,
+      "cells": {
+        "2": {
+          "coord": "B49",
+          "col": 2,
+          "value": "Environment — net-zero, waste, water"
+        },
+        "3": {
+          "coord": "C49",
+          "col": 3,
+          "value": "P4"
+        },
+        "4": {
+          "coord": "D49",
+          "col": 4,
+          "value": "Partially Compliant"
+        },
+        "5": {
+          "coord": "E49",
+          "col": 5,
+          "value": 3,
+          "formula": "=IF(D49=\"Fully Compliant\",5,IF(D49=\"Partially Compliant\",3,IF(D49=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F49",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G49",
+          "col": 7,
+          "value": "E_Data, E_Scorecard"
+        },
+        "8": {
+          "coord": "H49",
+          "col": 8,
+          "value": "Code of Ethics §11 — environmental commitments (GHG, energy, water, waste, biodiversity, noise); Supplier Code §8 cascades to supply chain."
+        },
+        "9": {
+          "coord": "I49",
+          "col": 9,
+          "value": "ISO 14001 aligned"
+        }
+      }
+    },
+    {
+      "row": 50,
+      "cells": {
+        "2": {
+          "coord": "B50",
+          "col": 2,
+          "value": "Fair operating practices — anti-corruption"
+        },
+        "3": {
+          "coord": "C50",
+          "col": 3,
+          "value": "P5"
+        },
+        "4": {
+          "coord": "D50",
+          "col": 4,
+          "value": "Fully Compliant"
+        },
+        "5": {
+          "coord": "E50",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(D50=\"Fully Compliant\",5,IF(D50=\"Partially Compliant\",3,IF(D50=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F50",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G50",
+          "col": 7,
+          "value": "Ethics policy"
+        },
+        "8": {
+          "coord": "H50",
+          "col": 8,
+          "value": "Code of Ethics §8 — zero-tolerance bribery/corruption; Be Heard hotline 0800-007-117; Internal Audit active; PRECCA + FICA references; Supplier Code §5 cascades."
+        },
+        "9": {
+          "coord": "I50",
+          "col": 9,
+          "value": "PRECCA compliance"
+        }
+      }
+    },
+    {
+      "row": 51,
+      "cells": {
+        "2": {
+          "coord": "B51",
+          "col": 2,
+          "value": "Consumer issues — cold chain quality"
+        },
+        "3": {
+          "coord": "C51",
+          "col": 3,
+          "value": "P6"
+        },
+        "5": {
+          "coord": "E51",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D51=\"Fully Compliant\",5,IF(D51=\"Partially Compliant\",3,IF(D51=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F51",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G51",
+          "col": 7,
+          "value": "Quality procedures"
+        },
+        "9": {
+          "coord": "I51",
+          "col": 9,
+          "value": "ISO 22000 aligned"
+        }
+      }
+    },
+    {
+      "row": 52,
+      "cells": {
+        "2": {
+          "coord": "B52",
+          "col": 2,
+          "value": "Community development — CSI, SED"
+        },
+        "3": {
+          "coord": "C52",
+          "col": 3,
+          "value": "P7"
+        },
+        "4": {
+          "coord": "D52",
+          "col": 4,
+          "value": "Fully Compliant"
+        },
+        "5": {
+          "coord": "E52",
+          "col": 5,
+          "value": 5,
+          "formula": "=IF(D52=\"Fully Compliant\",5,IF(D52=\"Partially Compliant\",3,IF(D52=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F52",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G52",
+          "col": 7,
+          "value": "Social calendar"
+        },
+        "8": {
+          "coord": "H52",
+          "col": 8,
+          "value": "CSI/SED Policy (Rev 2, 30 Jan 2023) — formal three-pronged approach; SED 1% NPAT, CSI ≤0.25% NPAT; 75% Black beneficiary requirement (B-BBEE aligned); priority areas: income/jobs, infrastructure, training/mentoring."
+        },
+        "9": {
+          "coord": "I52",
+          "col": 9,
+          "value": "B-BBEE SED criteria"
+        }
+      }
+    },
+    {
+      "row": 53,
+      "cells": {
+        "2": {
+          "coord": "B53",
+          "col": 2,
+          "value": "ISO 26000:2010 Score"
+        },
+        "5": {
+          "coord": "E53",
+          "col": 5,
+          "value": 24,
+          "formula": "=SUM(E46,E47,E48,E49,E50,E51,E52)"
+        }
+      }
+    },
+    {
+      "row": 55,
+      "cells": {
+        "1": {
+          "coord": "A55",
+          "col": 1,
+          "value": "ISO 22000:2018 — Food Safety Management (Cold Chain)"
+        }
+      }
+    },
+    {
+      "row": 56,
+      "cells": {
+        "2": {
+          "coord": "B56",
+          "col": 2,
+          "value": "Requirement"
+        },
+        "3": {
+          "coord": "C56",
+          "col": 3,
+          "value": "Clause"
+        },
+        "4": {
+          "coord": "D56",
+          "col": 4,
+          "value": "Status"
+        },
+        "5": {
+          "coord": "E56",
+          "col": 5,
+          "value": "Score /5"
+        },
+        "6": {
+          "coord": "F56",
+          "col": 6,
+          "value": "Weight"
+        },
+        "7": {
+          "coord": "G56",
+          "col": 7,
+          "value": "Evidence Needed"
+        },
+        "8": {
+          "coord": "H56",
+          "col": 8,
+          "value": "Current Evidence / Status"
+        },
+        "9": {
+          "coord": "I56",
+          "col": 9,
+          "value": "Net-Zero / ESG Link"
+        }
+      }
+    },
+    {
+      "row": 57,
+      "cells": {
+        "2": {
+          "coord": "B57",
+          "col": 2,
+          "value": "Food safety policy — cold chain integrity"
+        },
+        "3": {
+          "coord": "C57",
+          "col": 3,
+          "value": "5.2"
+        },
+        "5": {
+          "coord": "E57",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D57=\"Fully Compliant\",5,IF(D57=\"Partially Compliant\",3,IF(D57=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F57",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G57",
+          "col": 7,
+          "value": "Food safety policy"
+        },
+        "9": {
+          "coord": "I57",
+          "col": 9,
+          "value": "FSMS for chilled goods"
+        }
+      }
+    },
+    {
+      "row": 58,
+      "cells": {
+        "2": {
+          "coord": "B58",
+          "col": 2,
+          "value": "HACCP plan — temperature control"
+        },
+        "3": {
+          "coord": "C58",
+          "col": 3,
+          "value": "8.5"
+        },
+        "5": {
+          "coord": "E58",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D58=\"Fully Compliant\",5,IF(D58=\"Partially Compliant\",3,IF(D58=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F58",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G58",
+          "col": 7,
+          "value": "HACCP document"
+        },
+        "9": {
+          "coord": "I58",
+          "col": 9,
+          "value": "Fridge units — 500hr service"
+        }
+      }
+    },
+    {
+      "row": 59,
+      "cells": {
+        "2": {
+          "coord": "B59",
+          "col": 2,
+          "value": "Prerequisite programmes — hygiene, pest control"
+        },
+        "3": {
+          "coord": "C59",
+          "col": 3,
+          "value": "8.2"
+        },
+        "5": {
+          "coord": "E59",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D59=\"Fully Compliant\",5,IF(D59=\"Partially Compliant\",3,IF(D59=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F59",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G59",
+          "col": 7,
+          "value": "PRP records"
+        },
+        "9": {
+          "coord": "I59",
+          "col": 9,
+          "value": "All depot warehouses"
+        }
+      }
+    },
+    {
+      "row": 60,
+      "cells": {
+        "2": {
+          "coord": "B60",
+          "col": 2,
+          "value": "Fridge unit maintenance (Transfrig)"
+        },
+        "3": {
+          "coord": "C60",
+          "col": 3,
+          "value": "8.6"
+        },
+        "5": {
+          "coord": "E60",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D60=\"Fully Compliant\",5,IF(D60=\"Partially Compliant\",3,IF(D60=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F60",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G60",
+          "col": 7,
+          "value": "Service records"
+        },
+        "9": {
+          "coord": "I60",
+          "col": 9,
+          "value": "Service intervals Fleet_Register"
+        }
+      }
+    },
+    {
+      "row": 61,
+      "cells": {
+        "2": {
+          "coord": "B61",
+          "col": 2,
+          "value": "Food safety training — drivers and warehouse"
+        },
+        "3": {
+          "coord": "C61",
+          "col": 3,
+          "value": "7.2"
+        },
+        "5": {
+          "coord": "E61",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D61=\"Fully Compliant\",5,IF(D61=\"Partially Compliant\",3,IF(D61=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F61",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G61",
+          "col": 7,
+          "value": "Training records"
+        },
+        "9": {
+          "coord": "I61",
+          "col": 9,
+          "value": "Annual minimum"
+        }
+      }
+    },
+    {
+      "row": 62,
+      "cells": {
+        "2": {
+          "coord": "B62",
+          "col": 2,
+          "value": "Traceability system — batch/load tracking"
+        },
+        "3": {
+          "coord": "C62",
+          "col": 3,
+          "value": "8.9.2"
+        },
+        "5": {
+          "coord": "E62",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D62=\"Fully Compliant\",5,IF(D62=\"Partially Compliant\",3,IF(D62=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F62",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G62",
+          "col": 7,
+          "value": "Tracking records"
+        },
+        "9": {
+          "coord": "I62",
+          "col": 9,
+          "value": "I-CAM / Cellulant system"
+        }
+      }
+    },
+    {
+      "row": 63,
+      "cells": {
+        "2": {
+          "coord": "B63",
+          "col": 2,
+          "value": "Emergency preparedness — temperature exceedance"
+        },
+        "3": {
+          "coord": "C63",
+          "col": 3,
+          "value": "8.4"
+        },
+        "5": {
+          "coord": "E63",
+          "col": 5,
+          "value": 0,
+          "formula": "=IF(D63=\"Fully Compliant\",5,IF(D63=\"Partially Compliant\",3,IF(D63=\"Not Applicable\",5,0)))"
+        },
+        "6": {
+          "coord": "F63",
+          "col": 6,
+          "value": "1"
+        },
+        "7": {
+          "coord": "G63",
+          "col": 7,
+          "value": "Emergency plan"
+        },
+        "9": {
+          "coord": "I63",
+          "col": 9,
+          "value": "Cold chain failure protocol"
+        }
+      }
+    },
+    {
+      "row": 64,
+      "cells": {
+        "2": {
+          "coord": "B64",
+          "col": 2,
+          "value": "ISO 22000:2018 Score"
+        },
+        "5": {
+          "coord": "E64",
+          "col": 5,
+          "value": 0,
+          "formula": "=SUM(E57,E58,E59,E60,E61,E62,E63)"
+        }
+      }
+    }
+  ]
+}

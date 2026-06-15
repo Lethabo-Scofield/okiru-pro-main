@@ -99,7 +99,7 @@ describe('calculateEsdScore', () => {
       expect(grantResult.sdSpend).toBeGreaterThan(loanResult.sdSpend);
     });
 
-    it('should apply same factor for grants and interest-free loans per B-BBEE codes', () => {
+    it('should apply 70% factor for interest-free loans per RCOGP slides 79-80', () => {
       const grantResult = calculateEsdScore(makeEsdData({
         contributions: [makeContribution({ type: 'grant', amount: 100_000 })],
       }), NPAT);
@@ -108,7 +108,8 @@ describe('calculateEsdScore', () => {
         contributions: [makeContribution({ type: 'interest_free_loan', amount: 100_000 })],
       }), NPAT);
 
-      expect(grantResult.sdSpend).toBe(loanResult.sdSpend);
+      expect(grantResult.sdSpend).toBe(100_000);
+      expect(loanResult.sdSpend).toBe(70_000);
     });
 
     it('should handle config with missing benefitFactors gracefully', () => {

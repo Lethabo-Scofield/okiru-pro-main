@@ -15,7 +15,10 @@ type AppNavBackBase = {
 };
 
 export type AppNavBackProps = AppNavBackBase &
-  ({ href: string; onClick?: never } | { href?: never; onClick: () => void });
+  (
+    | { href: string; onClick?: never; /** Use native `<a>` to escape nested wouter routers */ external?: boolean }
+    | { href?: never; onClick: () => void; external?: never }
+  );
 
 const variantStyles = {
   dark: {
@@ -117,8 +120,18 @@ export function AppNavBack(props: AppNavBackProps) {
     );
   }
 
+  const shellClass = innerShellClass(v, compact, className);
+
+  if (props.external) {
+    return (
+      <a href={props.href} className={shellClass} data-testid={testId}>
+        {inner}
+      </a>
+    );
+  }
+
   return (
-    <Link href={props.href} className={innerShellClass(v, compact, className)} data-testid={testId}>
+    <Link href={props.href} className={shellClass} data-testid={testId}>
       {inner}
     </Link>
   );

@@ -1,0 +1,728 @@
+{
+  "sheet_name": "Cover",
+  "sanitized_name": "Cover",
+  "dimensions": {
+    "max_row": 42,
+    "max_column": 4
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 0,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "🌱  SG CONSUMER  |  OKIRU ESG INTELLIGENCE TOOLKIT  v1.6  |  Net-Zero Edition"
+        }
+      }
+    },
+    {
+      "row": 2,
+      "cells": {
+        "1": {
+          "coord": "A2",
+          "col": 1,
+          "value": "King V · IFRS S1/S2 · GARP/GRAP · ISO 14001/45001/27001/26000 · GRI · EEA · WSP/ATR · SBTi CNZS 2.0  |  Powered by Okiru Consulting"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "ENTITY INFORMATION"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "Entity"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": "SG Consumer / SuperGroup SG Consumer (Pty) Ltd"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "Reporting Period"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": "FY 2025/2026  |  July 2025 – June 2026"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "Reporting Consultant"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": "Okiru Consulting  |  www.okiru.co.za"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Version"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "v1.7 | May 2026 | SG Consumer Live Data Load (Coba submission)"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Last Updated"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "2026-05-27"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Baseline Year (for SBTi)"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "FY 2025/26"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "Net-Zero Target Year"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "2050 (SBTi CNZS 2.0)"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "B-BBEE Sector"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": "Generic / FMCG Distribution"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "SHEET NAVIGATOR  —  Click sheet tabs to navigate | Blue cells = enter data | Green = auto-calculated"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Sheet"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Description"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "Type"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "ESG_Dashboard"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "Master ESG summary — E·S·G scores, GHG tiles, KPIs"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "E_Data"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": "Environmental raw data — 9 months actuals"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "2": {
+          "coord": "B18",
+          "col": 2,
+          "value": "S_Data"
+        },
+        "3": {
+          "coord": "C18",
+          "col": 3,
+          "value": "Social — EE headcount, H&S, WSP/ATR, OFO codes"
+        },
+        "4": {
+          "coord": "D18",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "G_Data"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "Governance — board, risk, POPIA, ethics"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "Fleet_Register"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "134-vehicle register — L/100km, tCO₂e, EV"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "Waste_Register"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "Oricol, Oracle, Cority waste streams"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "Driver_Debrief"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "Route completion %, excess km, fatigue flags"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "EE_Scorecard"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "EEA2 scoring — Black%, female%, PWD%"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "E_Scorecard"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": "Environmental score /100 — net-zero lens"
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "S_Scorecard"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "Social score /100 — EE+WSP+H&S+Community"
+        },
+        "4": {
+          "coord": "D25",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "G_Scorecard"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "Governance score /100 — King V+IFRS+GARP"
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "King5_Scorecard"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "King V — all 17 principles, Apply & Explain"
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "IFRS_S1_S2"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "IFRS S1/S2 climate disclosure tracker"
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "GARP_GRAP"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "GARP ERM + GRAP public interest alignment"
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "ISO_Tracker"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "ISO 14001/45001/27001/26000/22000 gaps"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "SAQ_Supplier"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "IMS-T-149 + JDE SAQ + Sanulac"
+        },
+        "4": {
+          "coord": "D31",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "NetZero_Roadmap"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "SBTi CNZS 2.0 pathway + OER tiers"
+        },
+        "4": {
+          "coord": "D32",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 33,
+      "cells": {
+        "2": {
+          "coord": "B33",
+          "col": 2,
+          "value": "Standards_Map"
+        },
+        "3": {
+          "coord": "C33",
+          "col": 3,
+          "value": "GRI/IFRS/King V/ISO cross-reference"
+        },
+        "4": {
+          "coord": "D33",
+          "col": 4,
+          "value": "📋 REFERENCE"
+        }
+      }
+    },
+    {
+      "row": 34,
+      "cells": {
+        "2": {
+          "coord": "B34",
+          "col": 2,
+          "value": "Validation"
+        },
+        "3": {
+          "coord": "C34",
+          "col": 3,
+          "value": "Data quality & formula checks"
+        },
+        "4": {
+          "coord": "D34",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 35,
+      "cells": {
+        "2": {
+          "coord": "B35",
+          "col": 2,
+          "value": "ISO_14083"
+        },
+        "3": {
+          "coord": "C35",
+          "col": 3,
+          "value": "Transport emissions per ISO 14083 / GLEC — trip register, intensity, customer alloc"
+        },
+        "4": {
+          "coord": "D35",
+          "col": 4,
+          "value": "🔵 DATA ENTRY"
+        }
+      }
+    },
+    {
+      "row": 36,
+      "cells": {
+        "1": {
+          "coord": "A36",
+          "col": 1,
+          "value": "COLOUR GUIDE:  🔵 Blue text = User input (enter data)  |  🟢 Green bg = Auto-calculated  |  🟡 Amber = Target/benchmark  |  🔴 Red = Gap/below target"
+        },
+        "2": {
+          "coord": "B36",
+          "col": 2,
+          "value": "B_BBEE_ESG"
+        },
+        "3": {
+          "coord": "C36",
+          "col": 3,
+          "value": "B-BBEE Generic Code element mapping → status level + procurement recognition"
+        },
+        "4": {
+          "coord": "D36",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 37,
+      "cells": {
+        "2": {
+          "coord": "B37",
+          "col": 2,
+          "value": "Materiality_Matrix"
+        },
+        "3": {
+          "coord": "C37",
+          "col": 3,
+          "value": "Impact × Likelihood scoring with single/double materiality toggle"
+        },
+        "4": {
+          "coord": "D37",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 38,
+      "cells": {
+        "2": {
+          "coord": "B38",
+          "col": 2,
+          "value": "Carbon_Tax"
+        },
+        "3": {
+          "coord": "C38",
+          "col": 3,
+          "value": "Section 12L liability calc — Tier 1 + Tier 2 + mitigation scenarios"
+        },
+        "4": {
+          "coord": "D38",
+          "col": 4,
+          "value": "⚙️ AUTO"
+        }
+      }
+    },
+    {
+      "row": 39,
+      "cells": {
+        "2": {
+          "coord": "B39",
+          "col": 2,
+          "value": "Glossary"
+        },
+        "3": {
+          "coord": "C39",
+          "col": 3,
+          "value": "Technical terms, definitions, source citations (98 entries)"
+        },
+        "4": {
+          "coord": "D39",
+          "col": 4,
+          "value": "📋 REFERENCE"
+        }
+      }
+    },
+    {
+      "row": 40,
+      "cells": {
+        "2": {
+          "coord": "B40",
+          "col": 2,
+          "value": "Assumptions"
+        },
+        "3": {
+          "coord": "C40",
+          "col": 3,
+          "value": "Strategy toggles + thresholds + EFs (single source of truth)"
+        },
+        "4": {
+          "coord": "D40",
+          "col": 4,
+          "value": "⚙️ TOGGLES"
+        }
+      }
+    },
+    {
+      "row": 41,
+      "cells": {
+        "1": {
+          "coord": "A41",
+          "col": 1,
+          "value": "COLOUR GUIDE:  🔵 Blue text = User input (enter data)  |  🟢 Green bg = Auto-calculated  |  🟡 Amber = Target/benchmark  |  🔴 Red = Gap/below target  |  🟧 Orange bg = Strategy toggle"
+        }
+      }
+    },
+    {
+      "row": 42,
+      "cells": {
+        "2": {
+          "coord": "B42",
+          "col": 2,
+          "value": "Data_Status"
+        },
+        "3": {
+          "coord": "C42",
+          "col": 3,
+          "value": "Live data tracker — every field with source, status, refresh date"
+        },
+        "4": {
+          "coord": "D42",
+          "col": 4,
+          "value": "📊 TRACKER"
+        }
+      }
+    }
+  ]
+}

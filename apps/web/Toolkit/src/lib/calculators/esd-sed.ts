@@ -7,7 +7,7 @@
  */
 import type { ESDData, SEDData, Contribution } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2 } from './shared';
+import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
 
 /**
  * ESD benefit factors per RCOGP slides 79-80
@@ -66,6 +66,8 @@ export interface EsdResult {
   enterpriseDev: number;
   graduationBonus: number;
   jobsCreatedBonus: number;
+  /** FSC stockbroker / fund-manager ED bonus (0 unless sector enables it). */
+  stockbrokerBonus: number;
   sdTotal: number;
   edTotal: number;
   total: number;
@@ -93,7 +95,7 @@ export interface SedResult {
 
 function buildBenefitFactors(
   pillar: 'esd' | 'sed',
-  config: CalculatorConfig
+  config?: CalculatorConfig
 ): Record<string, number> {
   const factors = { ...(pillar === 'sed' ? SED_BENEFIT_FACTORS : ESD_BENEFIT_FACTORS) };
   if (config?.benefitFactors && Array.isArray(config.benefitFactors)) {
@@ -131,7 +133,24 @@ const ESD_DEFAULTS = {
   enterpriseDevMax: 5,
   supplierDevTarget: 0.02,
   enterpriseDevTarget: 0.01,
+  edGraduationBonusMax: 1,
+  edJobsBonusMax: 1,
+  edStockbrokerBonusMax: 0,
+  edStockbrokerTarget: 0,
 } as const;
+
+/** Jobs-bonus tier boundary: ≥ 11% of workforce earns the upper tier (2 pts). */
+const ED_JOBS_UPPER_TIER_THRESHOLD = 0.11;
+
+/** Format NPAT target fraction for sub-line labels (e.g. 0.018 → "1.8% of NPAT"). */
+function formatNpatTargetLabel(pct: number): string {
+  const display = pct * 100;
+  const rounded =
+    Math.abs(display - Math.round(display)) < 0.05
+      ? String(Math.round(display))
+      : display.toFixed(1).replace(/\.0$/, "");
+  return `${rounded}% of NPAT`;
+}
 
 /**
  * RCOGP Generic defaults used when no sector CalculatorConfig is supplied.
@@ -148,12 +167,24 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     contributionCount: data.contributions?.length ?? 0,
   });
   const contributions = data.contributions || [];
-  const ec = (config?.esd ?? {}) as Partial<NonNullable<CalculatorConfig['esd']>>;
+  const { sectorCode, scorecardType } = resolveSectorContext(config);
+  const ec = requireSectorConfig(
+    sectorCode,
+    'esd',
+    config?.esd as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as Partial<NonNullable<CalculatorConfig['esd']>>;
 
   const supplierDevMax = ec.supplierDevMax ?? ESD_DEFAULTS.supplierDevMax;
   const enterpriseDevMax = ec.enterpriseDevMax ?? ESD_DEFAULTS.enterpriseDevMax;
   const supplierDevTargetPct = ec.supplierDevTarget ?? ESD_DEFAULTS.supplierDevTarget;
   const enterpriseDevTargetPct = ec.enterpriseDevTarget ?? ESD_DEFAULTS.enterpriseDevTarget;
+
+  // Config-driven ED bonus maxima (previously hard-coded as +1 / +1, capped at +2).
+  const edGraduationBonusMax = ec.edGraduationBonusMax ?? ESD_DEFAULTS.edGraduationBonusMax;
+  const edJobsBonusMax = ec.edJobsBonusMax ?? ESD_DEFAULTS.edJobsBonusMax;
+  const edStockbrokerBonusMax = ec.edStockbrokerBonusMax ?? ESD_DEFAULTS.edStockbrokerBonusMax;
+  const edStockbrokerTargetPct = ec.edStockbrokerTarget ?? ESD_DEFAULTS.edStockbrokerTarget;
 
   const sdTarget = npat * supplierDevTargetPct;
   const edTarget = npat * enterpriseDevTargetPct;
@@ -164,11 +195,39 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const sdScore = safeRatio(sdSpend, sdTarget, supplierDevMax);
   const edScore = safeRatio(edSpend, edTarget, enterpriseDevMax);
 
-  const graduationBonusScore = data.graduationBonus ? 1 : 0;
-  const jobsCreatedBonusScore = data.jobsCreatedBonus ? 1 : 0;
+  const graduationBonusScore = data.graduationBonus ? edGraduationBonusMax : 0;
 
+  // Two-tier "jobs created" bonus (mutually exclusive per TOOLKIT-RESOLVED.md S6):
+  //   no jobs            → 0
+  //   jobs ≤10% workforce → 1 pt
+  //   jobs ≥11% workforce → 2 pts (only when the sector enables a 2-pt max)
+  let jobsCreatedBonusScore = 0;
+  if (data.jobsCreatedBonus) {
+    const jobsPct = data.jobsCreatedPercent ?? 0;
+    if (edJobsBonusMax >= 2 && jobsPct >= ED_JOBS_UPPER_TIER_THRESHOLD) {
+      jobsCreatedBonusScore = 2;
+    } else {
+      jobsCreatedBonusScore = Math.min(1, edJobsBonusMax);
+    }
+  }
+
+  // FSC-only separate ED bonus: support of black stockbrokers / fund managers /
+  // intermediaries, scored at 0.5% NPAT for 2 pts (TOOLKIT-RESOLVED.md Q42).
+  const stockbrokerSpend = data.stockbrokerSpend ?? 0;
+  const stockbrokerBonusScore =
+    edStockbrokerBonusMax > 0 && edStockbrokerTargetPct > 0
+      ? clampScore(
+          safeRatio(stockbrokerSpend, npat * edStockbrokerTargetPct, edStockbrokerBonusMax),
+          edStockbrokerBonusMax,
+        )
+      : 0;
+
+  const edBonusMax = edGraduationBonusMax + edJobsBonusMax + edStockbrokerBonusMax;
   const sdTotal = clampScore(sdScore, supplierDevMax);
-  const edTotal = clampScore(edScore + graduationBonusScore + jobsCreatedBonusScore, enterpriseDevMax + 2);
+  const edTotal = clampScore(
+    edScore + graduationBonusScore + jobsCreatedBonusScore + stockbrokerBonusScore,
+    enterpriseDevMax + edBonusMax,
+  );
 
   const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
   const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
@@ -182,14 +241,33 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
-    { name: "Annual value of all Supplier Development contributions", target: "2% of NPAT", weighting: 10, score: sdScore },
+    {
+      name: "Annual value of all Supplier Development contributions",
+      target: formatNpatTargetLabel(supplierDevTargetPct),
+      weighting: supplierDevMax,
+      score: sdScore,
+    },
   ];
 
   const edSubLines: EsdSubLine[] = [
-    { name: "Annual value of Enterprise Development contributions", target: "1% of NPAT", weighting: 5, score: edScore },
-    { name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: 1, score: graduationBonusScore, isBonus: true },
-    { name: "Jobs created from ED & SD initiatives", target: "Tick-box", weighting: 1, score: jobsCreatedBonusScore, isBonus: true },
+    {
+      name: "Annual value of Enterprise Development contributions",
+      target: formatNpatTargetLabel(enterpriseDevTargetPct),
+      weighting: enterpriseDevMax,
+      score: edScore,
+    },
+    { name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: edGraduationBonusMax, score: graduationBonusScore, isBonus: true },
+    { name: "Jobs created from ED & SD initiatives", target: edJobsBonusMax >= 2 ? "≤10% → 1pt / ≥11% → 2pts" : "Tick-box", weighting: edJobsBonusMax, score: jobsCreatedBonusScore, isBonus: true },
   ];
+  if (edStockbrokerBonusMax > 0) {
+    edSubLines.push({
+      name: "ED support of black stockbrokers / fund managers / intermediaries",
+      target: `${(edStockbrokerTargetPct * 100).toFixed(1)}% of NPAT`,
+      weighting: edStockbrokerBonusMax,
+      score: stockbrokerBonusScore,
+      isBonus: true,
+    });
+  }
 
   const subLines: EsdSubLine[] = [...sdSubLines, ...edSubLines];
 
@@ -198,6 +276,7 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     enterpriseDev: round2(edScore),
     graduationBonus: round2(graduationBonusScore),
     jobsCreatedBonus: round2(jobsCreatedBonusScore),
+    stockbrokerBonus: round2(stockbrokerBonusScore),
     sdTotal: round2(sdTotal),
     edTotal: round2(edTotal),
     total: round2(sdTotal + edTotal),
@@ -216,25 +295,68 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   return result;
 }
 
-export function calculateSedScore(data: SEDData, npat: number, config?: CalculatorConfig): SedResult {
+export function calculateSedScore(
+  data: SEDData,
+  npat: number,
+  config?: CalculatorConfig,
+  opts?: { isReinsurer?: boolean },
+): SedResult {
   console.log('[SCORING-TRACE] calculateSedScore received:', {
     npat,
     contributionCount: data.contributions?.length ?? 0,
+    ceSpend: data.ceSpend,
+    ceBonusSpend: data.ceBonusSpend,
+    fundisaSpend: data.fundisaSpend,
   });
   const contributions = data.contributions || [];
-  const sc = (config?.sed ?? {}) as Partial<NonNullable<CalculatorConfig['sed']>>;
+  const { sectorCode, scorecardType } = resolveSectorContext(config);
+  const sc = requireSectorConfig(
+    sectorCode,
+    'sed',
+    config?.sed as Record<string, unknown> | undefined,
+    scorecardType,
+  ) as Partial<NonNullable<CalculatorConfig['sed']>>;
 
   const maxPoints = sc.maxPoints ?? SED_DEFAULTS.maxPoints;
   const npatTargetPct = sc.npatTarget ?? SED_DEFAULTS.npatTarget;
-  const target = npat * npatTargetPct;
 
   const sedFactors = buildBenefitFactors('sed', config);
-  const totalSpend = contributions.reduce((acc, c) => {
+  const rowSpend = contributions.reduce((acc, c) => {
     const factor = sedFactors[c.type] ?? 1.0;
     return acc + c.amount * factor;
   }, 0);
-  const score = safeRatio(totalSpend, target, maxPoints);
-  const total = round2(score);
+
+  // FSC SED+CE split model: row spend → SED base; meta fields → CE + bonuses.
+  const usesSplitModel = (sc.ceMaxPts ?? 0) > 0 || (sc.sedBaseMaxPts ?? 0) > 0;
+  let score: number;
+  let target: number;
+
+  if (usesSplitModel) {
+    const sedBaseMax = sc.sedBaseMaxPts ?? 3;
+    const sedTargetPct = sc.sedNpatTarget ?? 0.006;
+    const sedScore = safeRatio(rowSpend, npat * sedTargetPct, sedBaseMax);
+
+    const ceMax = opts?.isReinsurer ? 1 : (sc.ceMaxPts ?? 2);
+    const ceTargetPct = sc.ceNpatTarget ?? 0.004;
+    const ceScore = safeRatio(data.ceSpend ?? 0, npat * ceTargetPct, ceMax);
+
+    const ceBonusMax = opts?.isReinsurer ? 0 : (sc.ceBonusMaxPts ?? 1);
+    const ceBonusTargetPct = sc.ceBonusNpatTarget ?? 0.001;
+    const ceBonusScore = safeRatio(data.ceBonusSpend ?? 0, npat * ceBonusTargetPct, ceBonusMax);
+
+    const fundisaMax = sc.fundisaMaxPts ?? 2;
+    const fundisaTargetPct = sc.fundisaNpatTarget ?? 0.002;
+    const fundisaScore = safeRatio(data.fundisaSpend ?? 0, npat * fundisaTargetPct, fundisaMax);
+
+    score = sedScore + ceScore + ceBonusScore + fundisaScore;
+    target = npat * npatTargetPct;
+  } else {
+    target = npat * npatTargetPct;
+    score = safeRatio(rowSpend, target, maxPoints);
+  }
+
+  const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
+  const total = round2(clampScore(score, maxPoints));
   console.log(`[SCORING-TRACE] calculateSedScore result: ${total} / ${maxPoints}`);
 
   return {

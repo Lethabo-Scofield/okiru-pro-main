@@ -180,6 +180,24 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
     }
   });
 
+  it('maps Black shareholder race to black ownership voting rights', () => {
+    const wb = buildWorkbook();
+    const ownershipRows = wb.sections.ownership?.rows ?? [];
+    if (ownershipRows.length > 0) {
+      (ownershipRows[0] as any).race = 'Black';
+      (ownershipRows[0] as any).gender = 'Female';
+      (ownershipRows[0] as any).votingRights = 100;
+      (ownershipRows[0] as any).economicInterest = 100;
+      (ownershipRows[0] as any).shareholding = 100;
+      delete (ownershipRows[0] as any).blackOwnership;
+      delete (ownershipRows[0] as any).blackWomenOwnership;
+    }
+    const out = projectWorkbookToClient(wb);
+    const sh = out.shareholders[0] as any;
+    expect(sh.blackOwnership).toBeGreaterThan(0);
+    expect(sh.blackWomenOwnership).toBeGreaterThan(0);
+  });
+
   it('suppliers expose enterpriseType + fraction blackOwnership + numeric beeLevel (Lake Trading Fix Plan Bug 3 + 7)', () => {
     const sups = projection.suppliers as any[];
     expect(sups.length).toBe(2);
@@ -212,13 +230,15 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
     expect(result.total).toBeCloseTo(25, 1);
   });
 
-  it('Management Control ≈ 11.77/19 after projection (Gauteng EAP)', () => {
+  it('Management Control ≈ 10.38/19 after projection (Gauteng, per-demographic EAP)', () => {
+    // Per-demographic workbook model (corrected 2026-06-11; was 11.77 under the
+    // legacy aggregate engine). See management.eapWorkbook.test.ts for fidelity.
     const result = calculateManagementScore(
       { id: '', clientId: '', employees: projection.employees as any },
       RCOGP_GENERIC_CONFIG,
       'Gauteng',
     );
-    expect(result.total).toBeCloseTo(11.77, 0);
+    expect(result.total).toBeCloseTo(10.38, 0);
   });
 
   it('Preferential Procurement ≈ 20.33/29 after projection', () => {
@@ -263,7 +283,7 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
     expect(result.total).toBeCloseTo(0.41, 1);
   });
 
-  it('Grand total ≈ 63.56 (Lake Trading Excel ground truth)', () => {
+  it('Grand total ≈ 62.17 (per-demographic MC; was 63.56 under aggregate MC)', () => {
     const own = calculateOwnershipScore(
       {
         ...lakeTradingOwnership,
@@ -306,6 +326,6 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
       RCOGP_GENERIC_CONFIG,
     );
     const grand = own.total + mgmt.total + 0 /* skills */ + proc.total + esd.sdTotal + esd.edTotal + sed.total;
-    expect(grand).toBeCloseTo(63.56, 0);
+    expect(grand).toBeCloseTo(62.17, 0);
   });
 });

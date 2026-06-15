@@ -19,7 +19,6 @@ import type { CalculatorConfig } from "@shared/schema";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
-import { NumberTextInput } from "../NumberTextInput";
 
 interface ESDFormProps {
   data: ESDData;
@@ -69,12 +68,19 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
   const [form, setForm] = useState<typeof emptyForm>({ ...emptyForm });
 
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
+  const esdCfg = calculatorConfig?.esd;
+  const sdMax = esdCfg?.supplierDevMax ?? 10;
+  const edMax = esdCfg?.enterpriseDevMax ?? 5;
+  const edStockbrokerBonusMax = esdCfg?.edStockbrokerBonusMax ?? 0;
+  const edStockbrokerTargetPct = esdCfg?.edStockbrokerTarget ?? 0;
+  const showStockbrokerRow = edStockbrokerBonusMax > 0 && edStockbrokerTargetPct > 0;
+
   const result = useMemo(() => {
-    if (!calculatorConfig) return { total: 0, sdTotal: 0, edTotal: 0, supplierDev: 0, enterpriseDev: 0, graduationBonus: 0, jobsCreatedBonus: 0, sdSubMinimumMet: false, edSubMinimumMet: false, subMinimumMet: false, sdSpend: 0, edSpend: 0, sdTarget: 0, edTarget: 0, sdSubLines: [], edSubLines: [], subLines: [] };
+    if (!calculatorConfig) return { total: 0, sdTotal: 0, edTotal: 0, supplierDev: 0, enterpriseDev: 0, graduationBonus: 0, jobsCreatedBonus: 0, stockbrokerBonus: 0, sdSubMinimumMet: false, edSubMinimumMet: false, subMinimumMet: false, sdSpend: 0, edSpend: 0, sdTarget: 0, edTarget: 0, sdSubLines: [], edSubLines: [], subLines: [] };
     return calculateEsdScore(data, npat, calculatorConfig);
   }, [data, npat, calculatorConfig]);
   const totalESD = data.contributions.reduce((s, c) => s + c.amount, 0);
-  const esdMaxDisplay = 17; // SD 10 + ED 7 (RCOGP Generic)
+  const esdMaxDisplay = sdMax + edMax + (esdCfg?.edGraduationBonusMax ?? 1) + (esdCfg?.edJobsBonusMax ?? 1) + edStockbrokerBonusMax;
   const scorePercent = (result.total / esdMaxDisplay) * 100;
 
   const sdContribs = data.contributions.filter(c => c.category === 'supplier_development');
@@ -191,7 +197,10 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-medium">Enterprise & Supplier Development</p>
-              <p className="text-xs text-muted-foreground">NPAT: {formatRand(npat)} · SD max 10 + ED max 7</p>
+              <p className="text-xs text-muted-foreground">
+                NPAT: {formatRand(npat)} · SD max {sdMax} + ED max {edMax}
+                {showStockbrokerRow ? ` + stockbroker bonus ${edStockbrokerBonusMax}` : ''}
+              </p>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold">{result.total.toFixed(1)}</span>
@@ -217,7 +226,7 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
       </Card>
 
       {/* Bonuses */}
-      <div className="flex items-center gap-6">
+      <div className="flex flex-wrap items-center gap-6">
         <label className="flex items-center gap-2 cursor-pointer">
           <Checkbox checked={data.graduationBonus} onCheckedChange={v => onChange({ ...data, graduationBonus: !!v })} />
           <span className="text-sm">Graduation bonus</span>
@@ -234,13 +243,14 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
             <Label className="text-xs">
               ED support of black stockbrokers / fund managers / intermediaries (R)
             </Label>
-            <NumberTextInput
+            <Input
+              type="number"
               min={0}
-              value={data.stockbrokerSpend}
-              onNumberChange={(value) =>
+              value={data.stockbrokerSpend ?? ''}
+              onChange={(e) =>
                 onChange({
                   ...data,
-                  stockbrokerSpend: value || undefined,
+                  stockbrokerSpend: e.target.value === '' ? undefined : Number(e.target.value),
                 })
               }
               placeholder="0"
@@ -285,12 +295,12 @@ export function ESDForm({ data, onChange, npat = 0, className }: ESDFormProps) {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Amount (R)</Label>
-                <NumberTextInput value={form.amount} onNumberChange={value => setForm(p => ({ ...p, amount: value }))} placeholder="0" />
+                <Input type="number" value={form.amount || ''} onChange={e => setForm(p => ({ ...p, amount: Number(e.target.value) }))} placeholder="0" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Black Beneficiary %</Label>
-              <NumberTextInput min="0" max="100" value={form.blackBenefitPercent} onNumberChange={value => setForm(p => ({ ...p, blackBenefitPercent: value }))} />
+              <Input type="number" min="0" max="100" value={form.blackBenefitPercent} onChange={e => setForm(p => ({ ...p, blackBenefitPercent: Number(e.target.value) }))} />
             </div>
           </div>
           <DialogFooter>

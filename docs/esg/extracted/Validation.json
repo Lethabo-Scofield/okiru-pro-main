@@ -1,0 +1,777 @@
+{
+  "sheet_name": "Validation",
+  "sanitized_name": "Validation",
+  "dimensions": {
+    "max_row": 32,
+    "max_column": 5
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 24,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "VALIDATION — Data Quality Checks | Formula Verification | Zero Error Target"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "DATA COMPLETENESS CHECKS"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "Check"
+        },
+        "2": {
+          "coord": "B4",
+          "col": 2,
+          "value": "Expected"
+        },
+        "3": {
+          "coord": "C4",
+          "col": 3,
+          "value": "Actual (auto)"
+        },
+        "4": {
+          "coord": "D4",
+          "col": 4,
+          "value": "Pass/Fail"
+        },
+        "5": {
+          "coord": "E4",
+          "col": 5,
+          "value": "Action"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "E_Data: Fleet diesel months completed (9)"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "9"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 9,
+          "formula": "=COUNTIF(E_Data!C14:K14,\">0\")"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": "✗ FAIL — check data",
+          "formula": "=IF(C5=B5,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "E_Data: Electricity kWh months completed (9)"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "9"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 9,
+          "formula": "=COUNTIF(E_Data!C44:K44,\">0\")"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": "✗ FAIL — check data",
+          "formula": "=IF(C6=B6,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "E_Data: Water kL months completed (9)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "9"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 9,
+          "formula": "=COUNTIF(E_Data!C61:K61,\">0\")"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": "✗ FAIL — check data",
+          "formula": "=IF(C7=B7,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "S_Data: EE headcount entered (>0)"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": "No",
+          "formula": "=IF(S_Data!L12>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": "✗ FAIL — check data",
+          "formula": "=IF(C8=B8,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "E_Scorecard: Total score >0"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(E_Scorecard!D30>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C9=B9,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "S_Scorecard: Total score >0"
+        },
+        "2": {
+          "coord": "B10",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C10",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(S_Scorecard!D28>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D10",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C10=B10,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E10",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "G_Scorecard: Total score >0"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(G_Scorecard!D26>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C11=B11,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "King5: All 17 principles have status"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "17"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 7,
+          "formula": "=COUNTA(King5_Scorecard!C4:C30)-COUNTBLANK(King5_Scorecard!C4:C30)"
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": "✗ FAIL — check data",
+          "formula": "=IF(C12=B12,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "IFRS S1/S2: Disclosures entered"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(COUNTA(IFRS_S1_S2!D4:D40)>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C13=B13,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "Fleet_Register: Vehicle entries >0"
+        },
+        "2": {
+          "coord": "B14",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C14",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(COUNTA(Fleet_Register!A4:A30)>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D14",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C14=B14,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E14",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Waste_Register: Oricol data loaded"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(Waste_Register!D5>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C15=B15,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Driver_Debrief: Apr-26 data loaded"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "Yes"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": "Yes",
+          "formula": "=IF(COUNTA(Driver_Debrief!C4:C15)>0,\"Yes\",\"No\")"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": "✓ PASS",
+          "formula": "=IF(C16=B16,\"✓ PASS\",\"✗ FAIL — check data\")"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Update relevant data sheet"
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "GHG CALCULATION VERIFICATION  (cross-check against manual calc)"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Fleet BLOEM: Manual check"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "72,683 L"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": "194.791 tCO₂e"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": "EF_DIESEL=2.68"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Verify = E_Data Fleet row"
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Fleet CPT: Manual check"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "51,800 L"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": "138.824 tCO₂e"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": "EF_DIESEL=2.68"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "Verify = E_Data Fleet row"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Fleet DBN: Manual check"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "156,779 L"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": "420.168 tCO₂e"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": "EF_DIESEL=2.68"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "Verify = E_Data Fleet row"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "Fleet ISANDO: Manual check"
+        },
+        "2": {
+          "coord": "B22",
+          "col": 2,
+          "value": "296,059 L"
+        },
+        "3": {
+          "coord": "C22",
+          "col": 3,
+          "value": "793.438 tCO₂e"
+        },
+        "4": {
+          "coord": "D22",
+          "col": 4,
+          "value": "EF_DIESEL=2.68"
+        },
+        "5": {
+          "coord": "E22",
+          "col": 5,
+          "value": "Verify = E_Data Fleet row"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Fleet PE: Manual check"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "12,144 L"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": "32.546 tCO₂e"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": "EF_DIESEL=2.68"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "Verify = E_Data Fleet row"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "MANUAL GHG TOTALS (Jul-25 to Mar-26) — vs E_Data"
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "Total fleet diesel litres (all depots)"
+        },
+        "2": {
+          "coord": "B25",
+          "col": 2,
+          "value": "589,465.53"
+        },
+        "3": {
+          "coord": "C25",
+          "col": 3,
+          "value": "litres"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "Total fleet Scope 1 tCO₂e"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "1,579.768"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": "tCO₂e"
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "Total electricity kWh (all depots)"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "2,589,578.44"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": "kWh"
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Total electricity Scope 2 tCO₂e"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "2,123.454"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": "tCO₂e"
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "Total LPG DBN forklifts"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "2,280"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": "kg"
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "Total LPG Scope 1 tCO₂e"
+        },
+        "2": {
+          "coord": "B30",
+          "col": 2,
+          "value": "3.443"
+        },
+        "3": {
+          "coord": "C30",
+          "col": 3,
+          "value": "tCO₂e"
+        }
+      }
+    },
+    {
+      "row": 31,
+      "cells": {
+        "1": {
+          "coord": "A31",
+          "col": 1,
+          "value": "Total water all depots"
+        },
+        "2": {
+          "coord": "B31",
+          "col": 2,
+          "value": "4,356.410"
+        },
+        "3": {
+          "coord": "C31",
+          "col": 3,
+          "value": "kL"
+        }
+      }
+    },
+    {
+      "row": 32,
+      "cells": {
+        "1": {
+          "coord": "A32",
+          "col": 1,
+          "value": "GRAND SCOPE 1+2 (excl solar offset)"
+        },
+        "2": {
+          "coord": "B32",
+          "col": 2,
+          "value": "3703.222"
+        },
+        "3": {
+          "coord": "C32",
+          "col": 3,
+          "value": "tCO₂e"
+        }
+      }
+    }
+  ]
+}

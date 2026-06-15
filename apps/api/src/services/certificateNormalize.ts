@@ -4,6 +4,7 @@
  */
 import { createHash } from 'crypto';
 import type { CertificateRecord as LocalStoreRecord } from './certificateStore.js';
+import { cleanNameFromBlobPath } from './certificateExtractor.js';
 
 export type CertificateSource = 'mongo' | 'azure' | 'local';
 export type PublicCertificateStatus = 'valid' | 'expiring' | 'expired' | 'unknown';
@@ -90,6 +91,51 @@ export function buildCertSlug(
   const a = slugifyCertificatePart(companyName) || 'company';
   const b = slugifyCertificatePart(id) || 'certificate';
   return `${a}-${b}`;
+}
+
+export function blobBasename(blobName: string): string {
+  return blobName.split('/').pop() || blobName;
+}
+
+/** Prefer expiry-derived status; processed certs without expiry stay active when B-BBEE data exists. */
+export function resolveCertificateStatus(
+  doc: Record<string, unknown>,
+  expiry: Date | null,
+): PublicCertificateStatus {
+  if (expiry && Number.isFinite(expiry.getTime())) {
+    return statusFromExpiryDate(expiry);
+  }
+  if (doc.extractionStatus === 'completed') {
+    if (
+      finiteNumber(doc.bbbeeLevel) != null
+      || (typeof doc.companySize === 'string' && doc.companySize.trim())
+      || (typeof doc.vatNumber === 'string' && doc.vatNumber.trim())
+    ) {
+      return 'valid';
+    }
+  }
+  const stored = doc.status as PublicCertificateStatus | undefined;
+  if (stored && stored !== 'unknown') return stored;
+  return 'unknown';
+}
+
+export function isMetadataSubstantivelyComplete(
+  doc: Record<string, unknown>,
+  companyName: string,
+): boolean {
+  if (typeof doc.supplierName === 'string' && doc.supplierName.trim()) return true;
+  if (doc.extractionStatus === 'completed') return true;
+  return !!companyName && companyName !== 'Unknown company';
+}
+
+export function deriveCompanyNameFromBlob(blobName: string, fileName?: string | null): string {
+  const fromPath = cleanNameFromBlobPath(blobName);
+  if (fromPath) return fromPath;
+  if (fileName) {
+    const fromFile = cleanNameFromBlobPath(fileName);
+    if (fromFile) return fromFile;
+  }
+  return 'Unknown company';
 }
 
 export function statusFromExpiryDate(
@@ -220,11 +266,12 @@ export function normalizeFromBlobOnly(blob: {
   lastModified: string | null;
 }): PublicCertificate {
   const id = stableBlobRecordId(blob.name);
-  const fileName = blob.name.split('/').pop() || blob.name;
+  const fileName = blobBasename(blob.name);
+  const companyName = deriveCompanyNameFromBlob(blob.name, fileName);
   return {
     id,
-    slug: buildCertSlug('unknown-company', id),
-    companyName: 'Unknown company',
+    slug: buildCertSlug(companyName === 'Unknown company' ? 'unknown-company' : companyName, id),
+    companyName,
     vatNumber: null,
     companySize: null,
     bbbeeLevel: null,
@@ -240,7 +287,7 @@ export function normalizeFromBlobOnly(blob: {
     blackWomenOwnership: null,
     source: 'azure',
     status: 'unknown',
-    metadataComplete: false,
+    metadataComplete: companyName !== 'Unknown company',
     lastModified: blob.lastModified,
   };
 }
@@ -260,7 +307,8 @@ export function normalizeFromMongo(
     || 'certificate.pdf';
 
   const supplierName = typeof doc.supplierName === 'string' ? doc.supplierName.trim() : '';
-  const companyName = supplierName || 'Unknown company';
+  const companyName = supplierName
+    || deriveCompanyNameFromBlob(blobName || fileName, fileName);
   const expiryRaw = doc.expiryDate;
   const expiry = expiryRaw ? new Date(expiryRaw as string | Date) : null;
   const issueRaw = doc.issueDate;
@@ -270,9 +318,7 @@ export function normalizeFromMongo(
   const canonicalSlug = buildCertSlug(companyName, id);
   const slug = canonicalSlug ?? storedSlug;
 
-  const status =
-    (doc.status as PublicCertificateStatus | undefined)
-    || statusFromExpiryDate(expiry);
+  const status = resolveCertificateStatus(doc, expiry);
 
   return {
     id,
@@ -294,7 +340,7 @@ export function normalizeFromMongo(
     ...readExtendedFields(doc),
     source: 'mongo',
     status,
-    metadataComplete: !!supplierName,
+    metadataComplete: isMetadataSubstantivelyComplete(doc, companyName),
     lastModified:
       opts.blobLastModified
       || (doc.updatedAt ? new Date(doc.updatedAt as string | Date).toISOString() : null)
@@ -339,8 +385,8 @@ export function normalizeFromMongoAndParsed(
     certificateNumber: base.certificateNumber ?? parsed.certificateNumber ?? null,
     issueDate: base.issueDate ?? isoDay(parsed.issueDate ?? null),
     expiryDate: base.expiryDate ?? isoDay(expiry),
-    status: base.status === 'unknown' ? statusFromExpiryDate(expiry) : base.status,
-    metadataComplete: base.metadataComplete || !!supplierName,
+    status: resolveCertificateStatus(doc!, expiry),
+    metadataComplete: isMetadataSubstantivelyComplete(doc!, companyName) || !!supplierName,
     slug: buildCertSlug(companyName, base.id),
   };
 }
@@ -411,29 +457,63 @@ export function publicCertificateToDetailJson(c: PublicCertificate) {
   };
 }
 
-/** Deduplicate by canonical id, then slug. Later record wins (more recent load order). */
+function certificateRecordRichness(c: PublicCertificate): number {
+  let score = 0;
+  if (c.metadataComplete) score += 8;
+  if (c.source === 'mongo' || c.source === 'azure') score += 4;
+  if (c.companyName && c.companyName !== 'Unknown company') score += 2;
+  if (c.id && !isSyntheticBlobRecordId(c.id)) score += 2;
+  if (c.vatNumber) score += 1;
+  return score;
+}
+
+/** Deduplicate by blobName first, then id, then slug — never drop unrouted rows silently. */
 export function dedupePublicCertificates(certs: PublicCertificate[]): PublicCertificate[] {
+  const byBlob = new Map<string, PublicCertificate>();
   const byId = new Map<string, PublicCertificate>();
   const bySlug = new Map<string, PublicCertificate>();
-  const out: PublicCertificate[] = [];
+  const orphans: PublicCertificate[] = [];
 
   for (const c of certs) {
+    if (c.blobName) {
+      const prev = byBlob.get(c.blobName);
+      if (!prev || certificateRecordRichness(c) >= certificateRecordRichness(prev)) {
+        byBlob.set(c.blobName, c);
+      }
+      continue;
+    }
     if (c.id) {
       byId.set(c.id, c);
     } else if (c.slug) {
       bySlug.set(c.slug, c);
+    } else {
+      orphans.push(c);
     }
   }
 
+  const out: PublicCertificate[] = [];
+  const seenId = new Set<string>();
   const seenSlug = new Set<string>();
-  for (const c of byId.values()) {
+
+  for (const c of byBlob.values()) {
+    if (c.id) seenId.add(c.id);
     if (c.slug) seenSlug.add(c.slug);
+    out.push(c);
+  }
+  for (const c of byId.values()) {
+    if (c.id && seenId.has(c.id)) continue;
+    if (c.slug) {
+      if (seenSlug.has(c.slug)) continue;
+      seenSlug.add(c.slug);
+    }
     out.push(c);
   }
   for (const c of bySlug.values()) {
     if (c.slug && seenSlug.has(c.slug)) continue;
+    if (c.slug) seenSlug.add(c.slug);
     out.push(c);
   }
+  out.push(...orphans);
 
   return out;
 }

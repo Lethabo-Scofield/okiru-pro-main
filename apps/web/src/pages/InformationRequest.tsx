@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronRight,
@@ -7,7 +7,6 @@ import {
   Save,
   Building2,
   Search,
-  Send,
   CheckCircle2,
   Upload,
   FlaskConical,
@@ -27,24 +26,39 @@ import {
   getSectionGroupsForSector,
   getOrderedSectionKeysForSector,
   resolveScorecardTypeForSector,
+  validateFinancialMetaCrossFields,
+  filterVisibleFinancialMetaFields,
   type ColumnDef,
   type SectionGroup,
 } from "@/components/workbook/sections";
-import { SpreadsheetGrid } from "@/components/workbook/SpreadsheetGrid";
+import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
+import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
+import { WorkbookValidationPanel } from "@/components/workbook/WorkbookValidationPanel";
+import { CellValidationPopup, FIELD_LEARN_MORE } from "@/components/workbook/CellValidationPopup";
 import { NumericDateInput } from "@/components/ui/NumericDateInput";
+import { normalizeCellForColumn } from "@/lib/tabularNormalize";
+import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
-  validateWorkbook,
   formatWorkbookValidationSummary,
 } from "@/components/workbook/workbookValidation";
 import {
-  normalizeExcelFile,
+  extractAfsMetaForSubSector,
+  pruneCompanyMetaWhenLeavingFsc,
+  pruneFinancialMetaWhenLeavingFsc,
+  pruneSedMetaWhenLeavingFsc,
+  stripAfsMetaFromFinancial,
+} from "@/components/workbook/fscWorkbookMeta";
+import { fscSubSectorHasAfs } from "@/components/workbook/sections";
+import {
+  normalizeExcelFileWithAi,
   type WorkbookSectionsInput,
 } from "@/lib/workbookExcelNormalizer";
 import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
 import { ExcelImportPreviewModal } from "@/components/scorecard/ExcelImportPreviewModal";
 import { useBbeeStore } from "@toolkit/lib/store";
-import { ScorecardFlowStepper } from "@/components/scorecard/ScorecardFlowStepper";
+import { invalidateClientData } from "@toolkit/lib/api";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
+import { mergeWorkbookSectionSaveBody } from "@/lib/workbookSectionSave";
 
 type Row = Record<string, unknown> & { _id: string };
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
@@ -62,7 +76,13 @@ interface Company {
   createdByUserId?: string | null;
 }
 
-function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
+function LakeTradingDemoEntry({
+  onPick,
+  compact = false,
+}: {
+  onPick: (c: Company) => void;
+  compact?: boolean;
+}) {
   const [seeding, setSeeding] = useState(false);
   const { toast } = useToast();
 
@@ -85,7 +105,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
       if (data.validationIssueCount > 0) {
         toast({
           title: "Demo loaded with validation warnings",
-          description: `${data.validationIssueCount} issue(s) - review before submit.`,
+          description: `${data.validationIssueCount} issue(s) — review before submit.`,
           variant: "destructive",
         });
       }
@@ -101,6 +121,35 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
     }
   };
 
+  if (compact) {
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+          <FlaskConical className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[#d1d1d6]">Lake Trading Demo</p>
+            <p className="text-[12px] text-[#636366] mt-0.5">
+              Pre-filled RCOGP workbook — same validation and submit flow as a live client.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={openDemo}
+          disabled={seeding}
+          className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-200 text-[12px] font-semibold press-sm hover:bg-amber-500/25 disabled:opacity-60 smooth"
+          data-testid="button-open-lake-trading-demo"
+        >
+          {seeding ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FlaskConical className="h-3.5 w-3.5" />
+          )}
+          Open Lake Trading Demo
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -110,7 +159,7 @@ function LakeTradingDemoEntry({ onPick }: { onPick: (c: Company) => void }) {
             <h2 className="text-[15px] font-semibold text-amber-100">Lake Trading Demo Workbook</h2>
           </div>
           <p className="text-[13px] text-[#98989f] max-w-xl">
-            RCOGP Generic ground truth (~63.56 pts, Level 7 to 8). Pre-filled workbook - same UI,
+            RCOGP Generic ground truth (~63.56 pts, Level 7 → 8). Pre-filled workbook — same UI,
             validation, and submit flow as a live client.
           </p>
         </div>
@@ -181,8 +230,10 @@ function ExcelImportButton({
 
 function CompanyPicker({
   onPick,
+  mode = "picker",
 }: {
   onPick: (c: Company) => void;
+  mode?: "picker" | "create";
 }) {
   const { user } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -214,8 +265,9 @@ function CompanyPicker({
   }, []);
 
   useEffect(() => {
+    if (mode === "create") return;
     load();
-  }, [load]);
+  }, [load, mode]);
 
   const create = async () => {
     if (!newName.trim()) return;
@@ -252,11 +304,230 @@ function CompanyPicker({
     [companies, search],
   );
 
+  if (mode === "create") {
+    return (
+      <div className="max-w-3xl mx-auto py-6">
+        <div className="rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] overflow-hidden">
+          <div className="px-6 sm:px-8 pt-6 pb-5 border-b border-[#2c2c2e]">
+            <h2
+              className="text-[22px] sm:text-[26px] font-semibold tracking-tight text-white"
+              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+            >
+              Create Scorecard
+            </h2>
+            <p className="text-[14px] text-[#8e8e93] mt-1.5">
+              Enter your company&apos;s B-BBEE information to generate your scorecard.
+            </p>
+          </div>
+
+          <div className="px-6 sm:px-8 py-5">
+            <label
+              htmlFor="new-company-name"
+              className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2"
+            >
+              Company name
+            </label>
+            <input
+              id="new-company-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && create()}
+              placeholder="e.g. Acme Holdings (Pty) Ltd"
+              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10 mb-3"
+              data-testid="input-new-company"
+              autoFocus
+            />
+            <button
+              onClick={create}
+              disabled={!newName.trim() || creating}
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-[14px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
+              data-testid="button-start-scorecard"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  Start New Scorecard
+                  <ChevronRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#2c2c2e]" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <ExcelImportButton
+                label="Import from Excel"
+                onImport={async (file) => {
+                const result = await importBeeGatheringExcel(file, API_BASE);
+                if (!result.extraction.isBeeGatheringFormat) {
+                  const fallback = await normalizeExcelFileWithAi(file, API_BASE);
+                  if (fallback.criticalBlocked) {
+                    toast({
+                      title: "Import blocked — fix critical fields",
+                      description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  const companyName = String(
+                    fallback.sections["company-information"]?.meta?.companyName ?? "",
+                  ).trim();
+                  if (!companyName) {
+                    toast({
+                      title: "Unrecognized Excel layout",
+                      description:
+                        "Upload a BEE Information Gathering file or a workbook with Company / Legal Name.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setPendingFile(file);
+                  setPreviewResult({
+                    data: {
+                      companyName,
+                      sector: String(fallback.sections["company-information"]?.meta?.industrySector ?? ""),
+                      scorecardType: String(fallback.sections["company-information"]?.meta?.scorecardType ?? ""),
+                      revenue: Number(fallback.sections["financial-information"]?.meta?.revenue ?? 0) || undefined,
+                      npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
+                    },
+                    warnings: fallback.warnings,
+                    unmappedFields: [],
+                    fieldStatuses: { companyName: "mapped" },
+                    isBeeGatheringFormat: true,
+                    mappedSheets: Object.keys(fallback.mappedSheets),
+                  });
+                  setPendingSections(fallback.sections);
+                  setPreviewOpen(true);
+                  return;
+                }
+                setPendingFile(file);
+                setPreviewResult(result.extraction);
+                setPendingSections(result.sections);
+                setPreviewOpen(true);
+              }}
+            />
+            </div>
+          </div>
+
+          {showLakeDemo && (
+            <div className="px-6 sm:px-8 py-4 border-t border-[#2c2c2e] bg-amber-500/[0.03]">
+              <LakeTradingDemoEntry onPick={onPick} compact />
+            </div>
+          )}
+        </div>
+
+        <ExcelImportPreviewModal
+          open={previewOpen}
+          fileName={pendingFile?.name ?? ""}
+          result={previewResult}
+          importing={creating}
+          onClose={() => {
+            if (creating) return;
+            setPreviewOpen(false);
+            setPendingFile(null);
+            setPreviewResult(null);
+            setPendingSections(null);
+          }}
+          onConfirm={async () => {
+            const companyName = String(previewResult?.data.companyName ?? "").trim();
+            const sections = pendingSections;
+            if (!companyName || !sections) return;
+            setCreating(true);
+            try {
+              const res = await fetch(`${API_BASE}/api/clients`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: companyName }),
+              });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                toast({
+                  title: "Could not create company",
+                  description: err.error || "Server error.",
+                  variant: "destructive",
+                });
+                return;
+              }
+              const c = await res.json();
+              const clientId = c.clientId || c.id;
+              sessionStorage.setItem(
+                `okiru-excel-import-${clientId}`,
+                JSON.stringify({ extracted: previewResult?.data, importedAt: new Date().toISOString() }),
+              );
+              const importRes = await fetch(
+                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
+                {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ sections }),
+                },
+              );
+              if (!importRes.ok) {
+                toast({ title: "Import failed", variant: "destructive" });
+                return;
+              }
+              let submitted = false;
+              const submitRes = await fetch(
+                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
+                { method: "POST", credentials: "include" },
+              );
+              if (submitRes.ok) {
+                submitted = true;
+                try {
+                  await loadClientData(clientId);
+                } catch {
+                  // Summary page will retry loadClientData.
+                }
+              }
+              const warnCount = previewResult?.warnings.length ?? 0;
+              toast({
+                title: submitted
+                  ? "Imported and synced to scorecard"
+                  : warnCount > 0
+                    ? "Imported with gaps"
+                    : "Workbook imported",
+                description: submitted
+                  ? companyName
+                  : warnCount > 0
+                    ? `${warnCount} warning(s) — open workbook and submit when ready.`
+                    : `${companyName} — submit workbook to calculate score.`,
+              });
+              setPreviewOpen(false);
+              setPendingFile(null);
+              setPreviewResult(null);
+              setPendingSections(null);
+              onPick(c);
+            } finally {
+              setCreating(false);
+            }
+          }}
+        />
+
+        <p className="text-center text-[13px] text-[#636366] mt-5">
+          Already have a scorecard?{" "}
+          <a href="/dashboard" className="text-violet-300 hover:text-violet-200 underline underline-offset-2">
+            View saved companies
+          </a>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} />}
 
-      {/* Start a new company - primary action */}
+      {/* Start a new company — primary action */}
       <div
         className="relative overflow-hidden rounded-2xl border border-violet-400/20 p-6"
         style={{
@@ -285,7 +556,7 @@ function CompanyPicker({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Company name..."
+                placeholder="Company name…"
                 aria-label="New company name"
                 className="flex-1 bg-black/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none transition-colors"
                 data-testid="input-new-company"
@@ -307,10 +578,10 @@ function CompanyPicker({
               onImport={async (file) => {
               const result = await importBeeGatheringExcel(file, API_BASE);
               if (!result.extraction.isBeeGatheringFormat) {
-                const fallback = await normalizeExcelFile(file);
+                const fallback = await normalizeExcelFileWithAi(file, API_BASE);
                 if (fallback.criticalBlocked) {
                   toast({
-                    title: "Import blocked - fix critical fields",
+                    title: "Import blocked — fix critical fields",
                     description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
                     variant: "destructive",
                   });
@@ -371,7 +642,7 @@ function CompanyPicker({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search companies..."
+              placeholder="Search companies…"
               aria-label="Search companies"
               className="w-full bg-black/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[#636366] outline-none focus:border-white/[0.18] transition-colors"
               data-testid="input-company-search"
@@ -381,7 +652,7 @@ function CompanyPicker({
 
         {loading ? (
           <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-10 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading companies...
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading companies…
           </div>
         ) : companies.length === 0 ? (
           <div className="text-center py-12 px-4">
@@ -523,8 +794,8 @@ function CompanyPicker({
               description: submitted
                 ? companyName
                 : warnCount > 0
-                  ? `${warnCount} warning(s) - open workbook and submit when ready.`
-                  : `${companyName} - submit workbook to calculate score.`,
+                  ? `${warnCount} warning(s) — open workbook and submit when ready.`
+                  : `${companyName} — submit workbook to calculate score.`,
             });
             setPreviewOpen(false);
             setPendingFile(null);
@@ -545,78 +816,256 @@ function MetaForm({
   fields,
   value,
   onChange,
+  readOnly = false,
+  crossFieldErrors = {},
 }: {
   fields: ColumnDef[];
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  readOnly?: boolean;
+  crossFieldErrors?: Record<string, string>;
 }) {
-  const setField = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  const [popup, setPopup] = useState<{
+    anchorRect: DOMRect;
+    rawValue: string;
+    suggestion: string | null;
+    col: ColumnDef;
+    isAiSuggestion?: boolean;
+    loading?: boolean;
+  } | null>(null);
+  const popupAbortRef = useRef<AbortController | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
+
+  const setField = (k: string, v: unknown) => {
+    if (readOnly) return;
+    onChange({ ...value, [k]: v });
+  };
+
+  const handleBlur = (f: ColumnDef, rawTyped: string) => {
+    if (readOnly || !rawTyped.trim()) return;
+    // Only run for text-entry types, not boolean/select (select already constrains).
+    if (f.type === "boolean" || f.type === "select") return;
+
+    const normalized = normalizeCellForColumn(rawTyped, f);
+    const hasMismatch =
+      normalized.changed &&
+      normalized.value !== "" &&
+      String(normalized.value) !== rawTyped.trim();
+    const hasFlag = Boolean(normalized.flag);
+    if (!hasMismatch && !hasFlag) return;
+
+    const inputEl = inputRefs.current[f.key];
+    const anchorRect = inputEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
+    const suggestion = hasMismatch ? String(normalized.value) : null;
+
+    popupAbortRef.current?.abort();
+    const abort = new AbortController();
+    popupAbortRef.current = abort;
+
+    setPopup({
+      anchorRect,
+      rawValue: rawTyped.trim(),
+      suggestion,
+      col: f,
+      isAiSuggestion: false,
+      loading: suggestion == null,
+    });
+
+    if (suggestion == null) {
+      fetch(`${API_BASE}/api/workbook/suggest-value`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
+        body: JSON.stringify({
+          fieldKey: f.key,
+          fieldLabel: f.label,
+          rawValue: rawTyped.trim(),
+          fieldType: f.type,
+          allowedValues: f.options ?? [],
+        }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { suggestion?: string; explanation?: string } | null) => {
+          if (!abort.signal.aborted && data?.suggestion) {
+            setPopup((prev) =>
+              prev
+                ? { ...prev, suggestion: data.suggestion ?? null, isAiSuggestion: true, loading: false }
+                : null,
+            );
+          } else if (!abort.signal.aborted) {
+            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
+          }
+        })
+        .catch(() => {
+          if (!abort.signal.aborted) {
+            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
+          }
+        });
+    }
+  };
+
+  const renderField = (f: ColumnDef) => {
+    const v = value[f.key];
+    const blank =
+      v === "" || v === undefined || v === null ||
+      (typeof v === "string" && v.trim() === "");
+    const err =
+      crossFieldErrors[f.key] ||
+      (f.required && blank ? "Required" : f.validate ? f.validate(v) : null);
+    const emphasized = Boolean(f.emphasis);
+    return (
+      <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
+        <div className={`text-[12px] mb-1.5 flex items-center gap-1 ${emphasized ? "text-sky-200 font-medium" : "text-[#8e8e93]"}`}>
+          {f.label}
+          {f.required && <span className="text-status-error">*</span>}
+        </div>
+        {f.type === "select" ? (
+          <select
+            ref={(el) => { inputRefs.current[f.key] = el; }}
+            value={String(v ?? "")}
+            disabled={readOnly || f.readOnly}
+            onChange={(e) => setField(f.key, e.target.value)}
+            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a] disabled:opacity-60 ${emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+          >
+            <option value="" className="bg-[#1c1c1e]">—</option>
+            {f.options?.map((o) => (
+              <option key={o} value={o} className="bg-[#1c1c1e]">
+                {o}
+              </option>
+            ))}
+          </select>
+        ) : f.type === "boolean" ? (
+          <div className="flex items-center h-9">
+            <input
+              type="checkbox"
+              checked={Boolean(v)}
+              disabled={readOnly || f.readOnly}
+              onChange={(e) => setField(f.key, e.target.checked)}
+              className="h-4 w-4 accent-blue-500 disabled:opacity-60"
+            />
+          </div>
+        ) : f.type === "date" ? (
+          <NumericDateInput
+            ref={(el) => { inputRefs.current[f.key] = el; }}
+            value={String(v ?? "")}
+            disabled={readOnly || f.readOnly}
+            onChange={(iso) => setField(f.key, iso)}
+            onBlur={(e) => handleBlur(f, e.target.value)}
+            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+            placeholder="dd/mm/yyyy"
+          />
+        ) : (
+          <input
+            ref={(el) => { inputRefs.current[f.key] = el; }}
+            type={f.type === "number" ? "number" : "text"}
+            value={String(v ?? "")}
+            disabled={readOnly || f.readOnly}
+            readOnly={f.readOnly}
+            onChange={(e) =>
+              setField(
+                f.key,
+                f.type === "number" && e.target.value !== ""
+                  ? Number(e.target.value)
+                  : e.target.value,
+              )
+            }
+            onBlur={(e) => handleBlur(f, e.target.value)}
+            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${f.readOnly ? "bg-[#141416] cursor-default" : ""} ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+            placeholder={f.required ? "Required" : ""}
+          />
+        )}
+        {err && <div className="text-[11px] text-status-error mt-1">{err}</div>}
+        {f.guidance && (emphasized || f.readOnly) && (
+          <p className="text-[11px] text-[#8e8e93] mt-1.5 leading-snug">{f.guidance}</p>
+        )}
+      </label>
+    );
+  };
+
+  type MetaUnit = { kind: "field"; field: ColumnDef } | { kind: "emphasis"; fields: ColumnDef[] };
+  const units: MetaUnit[] = [];
+  let emphasisBatch: ColumnDef[] = [];
+  const flushEmphasis = () => {
+    if (emphasisBatch.length > 0) {
+      units.push({ kind: "emphasis", fields: emphasisBatch });
+      emphasisBatch = [];
+    }
+  };
+  for (const f of fields) {
+    if (f.emphasis) {
+      emphasisBatch.push(f);
+    } else {
+      flushEmphasis();
+      units.push({ kind: "field", field: f });
+    }
+  }
+  flushEmphasis();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {fields.map((f) => {
-        const v = value[f.key];
-        const blank =
-          v === "" || v === undefined || v === null ||
-          (typeof v === "string" && v.trim() === "");
-        const err = f.required && blank ? "Required" : f.validate ? f.validate(v) : null;
+      {units.map((unit) => {
+        if (unit.kind === "field") return renderField(unit.field);
         return (
-          <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
-            <div className="text-[12px] text-[#8e8e93] mb-1.5 flex items-center gap-1">
-              {f.label}
-              {f.required && <span className="text-status-error">*</span>}
+          <div
+            key={`emphasis-${unit.fields.map((f) => f.key).join("-")}`}
+            className="md:col-span-2 rounded-xl border border-sky-500/35 bg-sky-500/[0.07] p-4"
+            data-testid="meta-field-emphasis-group"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-300/90 mb-3">
+              Sector-specific configuration
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {unit.fields.map((f) => renderField(f))}
             </div>
-            {f.type === "select" ? (
-              <select
-                value={String(v ?? "")}
-                onChange={(e) => setField(f.key, e.target.value)}
-                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a]"
-              >
-                <option value="" className="bg-[#1c1c1e]">-</option>
-                {f.options?.map((o) => (
-                  <option key={o} value={o} className="bg-[#1c1c1e]">
-                    {o}
-                  </option>
-                ))}
-              </select>
-            ) : f.type === "boolean" ? (
-              <div className="flex items-center h-9">
-                <input
-                  type="checkbox"
-                  checked={Boolean(v)}
-                  onChange={(e) => setField(f.key, e.target.checked)}
-                  className="h-4 w-4 accent-blue-500"
-                />
-              </div>
-            ) : f.type === "date" ? (
-              <NumericDateInput
-                value={String(v ?? "")}
-                onChange={(iso) => setField(f.key, iso)}
-                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
-                placeholder="dd/mm/yyyy"
-              />
-            ) : (
-              <input
-                type="text"
-                inputMode={f.type === "number" ? "decimal" : undefined}
-                value={String(v ?? "")}
-                onChange={(e) =>
-                  setField(
-                    f.key,
-                    f.type === "number" && e.target.value !== ""
-                      ? Number(e.target.value)
-                      : e.target.value,
-                  )
-                }
-                className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] ${err ? "border-status-error" : "border-[#2c2c2e]"}`}
-                placeholder={f.required ? "Required" : ""}
-              />
-            )}
-            {err && <div className="text-[11px] text-status-error mt-1">{err}</div>}
-          </label>
+          </div>
         );
       })}
+      {popup && (
+        <CellValidationPopup
+          rawValue={popup.rawValue}
+          suggestion={popup.suggestion}
+          validationMessage={popup.col.validationMessage}
+          suggestionHint={popup.col.suggestionHint}
+          learnMore={FIELD_LEARN_MORE[popup.col.key]}
+          isAiSuggestion={popup.isAiSuggestion}
+          loading={popup.loading}
+          anchorRect={popup.anchorRect}
+          onAccept={(val) => {
+            setField(popup.col.key, val);
+            setPopup(null);
+          }}
+          onDismiss={() => setPopup(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function ActiveSectionEditor({
+  section,
+  rows,
+  onChange,
+  workspaceId,
+  clientCreatedByUserId,
+}: {
+  section: NonNullable<ReturnType<typeof getSection>>;
+  rows: Row[];
+  onChange: (rows: Row[]) => void;
+  workspaceId?: string | null;
+  clientCreatedByUserId?: string | null;
+}) {
+  const permissions = usePillarPermission(section.key, workspaceId, clientCreatedByUserId);
+
+  if (!section.columns) return null;
+
+  return (
+    <SectionWorkbookEditor
+      section={section}
+      rows={rows}
+      onChange={onChange}
+      permissions={permissions}
+    />
   );
 }
 
@@ -631,20 +1080,26 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
-  const [submitStatus, setSubmitStatus] = useState<{
-    type: "pending" | "success" | "error";
-    message: string;
-  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncInFlightRef = useRef(false);
+  const scheduleSyncRef = useRef<(() => void) | null>(null);
   // Per-section debounce timers + pending payloads so editing section B never
   // discards a pending save for section A.
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); 
   const pendingPayloads = useRef<
     Record<string, { rows?: Row[]; meta?: Record<string, unknown> }>
   >({});
+  const workbookRef = useRef<Workbook | null>(null);
   const inFlight = useRef(0);
   const { toast } = useToast();
+
+  useEffect(() => {
+    workbookRef.current = workbook;
+  }, [workbook]);
 
   useEffect(() => {
     let cancelled = false;
@@ -653,6 +1108,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!cancelled && data) {
+          workbookRef.current = data;
           setWorkbook(data);
           setSavedAt(data.updatedAt);
           setSubmittedAt(data.submittedAt ?? null);
@@ -663,6 +1119,22 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       cancelled = true;
     };
   }, [companyId]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/workspaces`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: Array<{ id?: string; workspaceId?: string }>) => {
+        const first = Array.isArray(list) ? list[0] : null;
+        if (first) setWorkspaceId(first.id || first.workspaceId || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const activeSectionPermissions = usePillarPermission(
+    activeSectionKey,
+    workspaceId,
+    company.createdByUserId,
+  );
 
   const saveSection = useCallback(
     async (
@@ -685,6 +1157,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         if (res.ok) {
           const data = await res.json();
           setSavedAt(data.updatedAt);
+          scheduleSyncRef.current?.();
           return true;
         }
         const msg = `Save failed (${res.status})`;
@@ -695,7 +1168,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         setSaveError("Network error");
         toast({
           title: "Save failed",
-          description: "Network error - will retry on next change.",
+          description: "Network error — will retry on next change.",
           variant: "destructive",
         });
         return false;
@@ -709,7 +1182,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
   const scheduleSave = useCallback(
     (sectionKey: string, body: { rows?: Row[]; meta?: Record<string, unknown> }) => {
-      pendingPayloads.current[sectionKey] = body;
+      pendingPayloads.current[sectionKey] = mergeWorkbookSectionSaveBody(
+        pendingPayloads.current[sectionKey],
+        body,
+        workbookRef.current?.sections[sectionKey],
+      );
       const existing = saveTimers.current[sectionKey];
       if (existing) clearTimeout(existing);
       saveTimers.current[sectionKey] = setTimeout(() => {
@@ -744,12 +1221,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       setWorkbook((prev) => {
         if (!prev) return prev;
         const current = prev.sections[sectionKey] || { rows: [] };
-        return {
+        const next: Workbook = {
           ...prev,
           sections: { ...prev.sections, [sectionKey]: { ...current, rows } },
         };
+        workbookRef.current = next;
+        return next;
       });
-      scheduleSave(sectionKey, { rows });
+      const sec = workbookRef.current?.sections[sectionKey];
+      scheduleSave(sectionKey, {
+        rows,
+        ...(sec?.meta !== undefined ? { meta: sec.meta } : {}),
+      });
     },
     [scheduleSave],
   );
@@ -757,29 +1240,101 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const handleMetaChange = useCallback(
     (sectionKey: string, meta: Record<string, unknown>) => {
       let next = meta;
+      const sectionPatches: Record<string, { meta: Record<string, unknown> }> = {};
+
       if (sectionKey === "company-information") {
-        const prevSector = String(
-          workbook?.sections[sectionKey]?.meta?.industrySector ?? "",
-        );
-        const newSector = String(meta.industrySector ?? "");
+        const prevMeta = (workbook?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
+        const prevSector = String(prevMeta.industrySector ?? "").trim().toUpperCase();
+        const newSector = String(meta.industrySector ?? "").trim().toUpperCase();
         if (newSector !== prevSector) {
           next = {
             ...meta,
             scorecardType: resolveScorecardTypeForSector(newSector, meta.scorecardType),
           };
+          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const norm = lookupIndustryNormPercent(undefined, newSector);
+          if (norm != null) {
+            sectionPatches["financial-information"] = {
+              meta: { ...finMeta, industryNormPercent: norm },
+            };
+          }
+          if (prevSector === "FSC" && newSector !== "FSC") {
+            next = pruneCompanyMetaWhenLeavingFsc(next);
+            let finNext = pruneFinancialMetaWhenLeavingFsc(
+              (sectionPatches["financial-information"]?.meta ?? finMeta) as Record<string, unknown>,
+            );
+            if (norm != null) finNext = { ...finNext, industryNormPercent: norm };
+            sectionPatches["financial-information"] = { meta: finNext };
+            sectionPatches["afs-additions"] = { meta: {} };
+            const sedMeta = (workbook?.sections["sed"]?.meta ?? {}) as Record<string, unknown>;
+            sectionPatches["sed"] = { meta: pruneSedMetaWhenLeavingFsc(sedMeta) };
+          }
+        }
+
+        const prevFsc = String(prevMeta.fscSubSector ?? "");
+        const newFsc = String(next.fscSubSector ?? "");
+        if (newSector === "FSC" && newFsc && prevFsc !== newFsc) {
+          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const existingAfs = (workbook?.sections["afs-additions"]?.meta ?? {}) as Record<
+            string,
+            unknown
+          >;
+          sectionPatches["financial-information"] = {
+            meta: stripAfsMetaFromFinancial(finMeta),
+          };
+          sectionPatches["afs-additions"] = {
+            meta: fscSubSectorHasAfs(newFsc)
+              ? extractAfsMetaForSubSector(finMeta, newFsc, existingAfs)
+              : {},
+          };
         }
       }
+
+      if (sectionKey === "financial-information") {
+        const companyMeta = (workbook?.sections["company-information"]?.meta ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const sector = String(companyMeta.industrySector ?? "").trim().toUpperCase();
+        const norm = lookupIndustryNormPercent(undefined, sector);
+        const stored = next.industryNormPercent;
+        const hasStored =
+          stored !== "" && stored !== undefined && stored !== null && Number(stored) > 0;
+        if (norm != null && !hasStored) {
+          next = { ...next, industryNormPercent: norm };
+        }
+      }
+
       setWorkbook((prev) => {
         if (!prev) return prev;
         const current = prev.sections[sectionKey] || { rows: [] };
-        return {
-          ...prev,
-          sections: { ...prev.sections, [sectionKey]: { ...current, meta: next } },
+        const sections = {
+          ...prev.sections,
+          [sectionKey]: { ...current, meta: next },
         };
+        for (const [key, patch] of Object.entries(sectionPatches)) {
+          const sec = prev.sections[key] || { rows: [] };
+          sections[key] = { ...sec, meta: patch.meta };
+        }
+        const updated: Workbook = { ...prev, sections };
+        workbookRef.current = updated;
+        return updated;
       });
-      scheduleSave(sectionKey, { rows: [], meta: next });
+
+      const primaryRows = workbookRef.current?.sections[sectionKey]?.rows ?? [];
+      scheduleSave(sectionKey, { rows: primaryRows, meta: next });
+      for (const [key, patch] of Object.entries(sectionPatches)) {
+        const patchRows = workbookRef.current?.sections[key]?.rows ?? [];
+        scheduleSave(key, { rows: patchRows, meta: patch.meta });
+      }
     },
-    [scheduleSave, workbook],
+    [scheduleSave],
   );
 
   const waitForInFlight = useCallback(async () => {
@@ -816,102 +1371,125 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!workbook) return;
-    setSubmitting(true);
-    setSubmitStatus({
-      type: "pending",
-      message: "Saving workbook changes before submitting the scorecard...",
-    });
-    try {
-      // 1. Wait for any save that is already mid-flight to land.
-      await waitForInFlight();
-      // 2. Flush every pending debounced save.
-      const ok = await flushAllPending();
-      // 3. Wait for the saves we just kicked off to actually complete.
-      await waitForInFlight();
-      // 4. Refuse to submit if any of those saves failed, or a prior save error
-      //    has not been cleared.
-      if (!ok || saveError) {
-        setSubmitStatus({
-          type: "error",
-          message: "Scorecard was not submitted because the latest workbook changes could not be saved.",
-        });
-        toast({
-          title: "Submit aborted",
-          description: "Unsaved changes failed to save - fix the save error and try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const validationIssues = validateWorkbook(workbook.sections);
-      if (validationIssues.length > 0) {
-        setSubmitStatus({
-          type: "error",
-          message: "Scorecard was not submitted. Fix the validation errors and try again.",
-        });
-        toast({
-          title: "Fix validation errors before submitting",
-          description: formatWorkbookValidationSummary(validationIssues, 4),
-          variant: "destructive",
-        });
-        return;
-      }
-      const res = await fetch(
-        `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/submit`,
-        { method: "POST", credentials: "include" },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const nextSubmittedAt = data.submittedAt || new Date().toISOString();
-        setSubmittedAt(nextSubmittedAt);
-        const c = data.counts || {};
-        setSubmitStatus({
-          type: "success",
-          message: `Scorecard saved and submitted at ${new Date(nextSubmittedAt).toLocaleTimeString()}. Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
-        });
-        toast({
-          title: "Submitted to scorecard",
-          description: `Synced ${c.employees ?? 0} employees, ${c.trainingPrograms ?? 0} training, ${c.suppliers ?? 0} suppliers, ${c.shareholders ?? 0} shareholders.`,
-        });
-        localStorage.setItem("okiru-pro-active-client", companyId);
-        try {
-          await loadClientData(companyId);
-        } catch {
-          // DataLoader will retry on the summary page if preload fails.
+  const syncWorkbookToScorecard = useCallback(
+    async (opts?: { quiet?: boolean; skipFlush?: boolean }): Promise<boolean> => {
+      if (!workbook || syncInFlightRef.current) return false;
+      syncInFlightRef.current = true;
+      setSyncing(true);
+      setSyncStatus("syncing");
+      try {
+        if (!opts?.skipFlush) {
+          await waitForInFlight();
+          const ok = await flushAllPending();
+          await waitForInFlight();
+          if (!ok || saveError) {
+            if (!opts?.quiet) {
+              toast({
+                title: "Sync aborted",
+                description:
+                  "Unsaved changes failed to save — fix the save error and try again.",
+                variant: "destructive",
+              });
+            }
+            return false;
+          }
+        } else {
+          await waitForInFlight();
         }
-      } else {
-        setSubmitStatus({
-          type: "error",
-          message: data.error || `Scorecard was not saved. Server returned ${res.status}.`,
-        });
-        toast({
-          title: "Submit failed",
-          description: data.error || `Server returned ${res.status}.`,
-          variant: "destructive",
-        });
+        const res = await fetch(
+          `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/sync`,
+          { method: "POST", credentials: "include" },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setSubmittedAt(data.submittedAt || new Date().toISOString());
+          setSyncStatus("synced");
+          localStorage.setItem("okiru-pro-active-client", companyId);
+          invalidateClientData(companyId);
+          try {
+            await loadClientData(companyId);
+          } catch {
+            // Summary / toolkit will retry loadClientData.
+          }
+          const warnCount = Array.isArray(data.warnings) ? data.warnings.length : 0;
+          if (!opts?.quiet && warnCount > 0) {
+            toast({
+              title: "Scorecard synced with gaps",
+              description: `${warnCount} pillar gap(s) — affected areas may score 0 until fixed.`,
+            });
+          }
+          return true;
+        }
+        setSyncStatus("error");
+        if (!opts?.quiet) {
+          toast({
+            title: "Scorecard sync failed",
+            description: data.error || data.summary || `Server returned ${res.status}.`,
+            variant: "destructive",
+          });
+        }
+        return false;
+      } catch {
+        setSyncStatus("error");
+        if (!opts?.quiet) {
+          toast({
+            title: "Scorecard sync failed",
+            description: "Network error.",
+            variant: "destructive",
+          });
+        }
+        return false;
+      } finally {
+        syncInFlightRef.current = false;
+        setSyncing(false);
       }
-    } catch (e) {
-      setSubmitStatus({
-        type: "error",
-        message: "Scorecard was not saved. Network error while submitting.",
+    },
+    [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast, loadClientData],
+  );
+
+  const scheduleSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null;
+      void syncWorkbookToScorecard({ quiet: true });
+    }, 1200);
+  }, [syncWorkbookToScorecard]);
+
+  scheduleSyncRef.current = scheduleSync;
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
+
+  const handleContinueToSummary = useCallback(async () => {
+    await waitForInFlight();
+    const ok = await flushAllPending();
+    await waitForInFlight();
+    if (!ok || saveError) {
+      toast({
+        title: "Could not save latest edits",
+        description: "Fix the save error before leaving, or use Save and try again.",
+        variant: "destructive",
       });
-      toast({ title: "Submit failed", description: "Network error.", variant: "destructive" });
-    } finally {
-      setSubmitting(false);
+      return;
     }
-  }, [companyId, workbook, flushAllPending, waitForInFlight, saveError, toast, navigate, loadClientData]);
+    localStorage.setItem("okiru-pro-active-client", companyId);
+    navigate(`/create-scorecard/${encodeURIComponent(companyId)}/summary`);
+    void syncWorkbookToScorecard({ quiet: true, skipFlush: true });
+  }, [companyId, flushAllPending, waitForInFlight, saveError, navigate, syncWorkbookToScorecard, toast]);
 
   const handleExcelImport = useCallback(
     async (file: File) => {
       const bee = await importBeeGatheringExcel(file, API_BASE);
       const result = bee.extraction.isBeeGatheringFormat
         ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
-        : await normalizeExcelFile(file);
+        : await normalizeExcelFileWithAi(file, API_BASE);
 
       if (result.criticalBlocked) {
         toast({
-          title: "Import blocked - fix critical fields",
+          title: "Import blocked — fix critical fields",
           description: formatWorkbookValidationSummary(result.validationIssues, 5),
           variant: "destructive",
         });
@@ -937,7 +1515,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         toast({
           title: "Imported with gaps",
           description:
-            "Non-critical fields missing - review sections before submit. Scores may reflect discounted levels.",
+            "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
         });
       } else {
         toast({ title: "Workbook updated from Excel" });
@@ -951,21 +1529,36 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       ?.industrySector ?? "",
   );
 
+  const scorecardType = String(
+    (workbook?.sections["company-information"]?.meta as Record<string, unknown> | undefined)
+      ?.scorecardType ?? "",
+  );
+
+  const fscSubSector = String(
+    (workbook?.sections["company-information"]?.meta as Record<string, unknown> | undefined)
+      ?.fscSubSector ?? "",
+  );
+
+  const fscReinsurer = Boolean(
+    (workbook?.sections["company-information"]?.meta as Record<string, unknown> | undefined)
+      ?.fscReinsurer,
+  );
+
   const sectionGroups: SectionGroup[] = useMemo(
-    () => getSectionGroupsForSector(sectorCode),
-    [sectorCode],
+    () => getSectionGroupsForSector(sectorCode, fscSubSector),
+    [sectorCode, fscSubSector],
   );
 
   const orderedKeys = useMemo(
-    () => getOrderedSectionKeysForSector(sectorCode),
-    [sectorCode],
+    () => getOrderedSectionKeysForSector(sectorCode, fscSubSector),
+    [sectorCode, fscSubSector],
   );
 
   const enabledSections = useMemo(() => {
     return orderedKeys
-      .map((k) => getSection(k, sectorCode))
+      .map((k) => getSection(k, sectorCode, scorecardType, fscSubSector, fscReinsurer))
       .filter((s): s is NonNullable<ReturnType<typeof getSection>> => Boolean(s?.enabled));
-  }, [orderedKeys, sectorCode]);
+  }, [orderedKeys, sectorCode, scorecardType, fscSubSector, fscReinsurer]);
 
   const selectSection = useCallback((key: string) => {
     setActiveSectionKey(key);
@@ -980,22 +1573,29 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const sectionStatus = (key: string): "empty" | "filled" => {
     const sec = workbook?.sections[key];
     if (!sec) return "empty";
-    const def = getSection(key);
+    const def = getSection(key, sectorCode, scorecardType, fscSubSector, fscReinsurer);
     if (def?.meta) {
       const m = (sec.meta || {}) as Record<string, unknown>;
-      const has = Object.values(m).some((v) => v !== "" && v != null);
-      return has ? "filled" : "empty";
+      const hasMeta = Object.values(m).some((v) => v !== "" && v != null);
+      if (hasMeta) return "filled";
+      // For hybrid sections (meta + columns), also check rows.
+      if (def.columns && (sec.rows?.length || 0) > 0) return "filled";
+      return "empty";
     }
     return (sec.rows?.length || 0) > 0 ? "filled" : "empty";
   };
 
   const saveStatusText = saving
-    ? "Saving..."
-    : saveError
-      ? saveError
-      : savedAt
-        ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
-        : "";
+    ? "Saving…"
+    : syncing
+      ? "Updating scorecard…"
+      : saveError
+        ? saveError
+        : syncStatus === "synced" && submittedAt
+          ? `Scorecard updated ${new Date(submittedAt).toLocaleTimeString()}`
+          : savedAt
+            ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
+            : "";
 
   const renderSectionTab = (key: string, variant: "sidebar" | "tabs", indent: boolean) => {
     const sec = enabledSections.find((s) => s.key === key);
@@ -1005,11 +1605,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     const isActive = activeSectionKey === sec.key;
     const indicator = sec.meta
       ? status === "filled"
-        ? "OK"
-        : "-"
+        ? "✓"
+        : "—"
       : count > 0
         ? String(count)
-        : "-";
+        : "—";
     const baseClass =
       variant === "sidebar"
         ? `w-full text-left px-3 py-2 rounded-lg text-[13px] flex items-center justify-between smooth press-sm ${indent ? "pl-6" : ""}`
@@ -1086,11 +1686,44 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   };
   const activeRows = activeSectionData.rows || [];
   const activeMeta = (activeSectionData.meta || {}) as Record<string, unknown>;
+  const companyMetaForFin = (workbook?.sections["company-information"]?.meta ?? {}) as Record<
+    string,
+    unknown
+  >;
   const activeMetaFields = activeSection?.meta
     ? activeSection.key === "company-information"
       ? getCompanyInfoMetaFields(String(activeMeta.industrySector ?? ""))
       : activeSection.meta
     : undefined;
+
+  const financialMetaWithNorm = useMemo(() => {
+    if (activeSection?.key !== "financial-information") return activeMeta;
+    const sector = String(companyMetaForFin.industrySector ?? "");
+    const norm = lookupIndustryNormPercent(undefined, sector);
+    const stored = activeMeta.industryNormPercent;
+    const hasStored =
+      stored !== "" && stored !== undefined && stored !== null && Number(stored) > 0;
+    if (!hasStored && norm != null) {
+      return { ...activeMeta, industryNormPercent: norm };
+    }
+    return activeMeta;
+  }, [activeSection?.key, activeMeta, companyMetaForFin.industrySector]);
+
+  const activeMetaFieldsResolved = useMemo(() => {
+    if (!activeMetaFields) return undefined;
+    if (activeSection?.key !== "financial-information") return activeMetaFields;
+    return filterVisibleFinancialMetaFields(activeMetaFields, financialMetaWithNorm);
+  }, [activeMetaFields, activeSection?.key, financialMetaWithNorm]);
+
+  const activeMetaCrossFieldErrors =
+    activeSection?.key === "financial-information"
+      ? validateFinancialMetaCrossFields(financialMetaWithNorm)
+      : {};
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("okiru-workbook-active-section", activeSectionKey);
+  }, [activeSectionKey]);
 
   return (
     <div className="space-y-6">
@@ -1101,7 +1734,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             className="text-[12px] text-[#8e8e93] hover:text-white smooth press-sm"
             data-testid="button-change-company"
           >
-            &lt;- Change company
+            ← Change company
           </button>
           <span className="text-[#3a3a3c]">|</span>
           <div className="flex items-center gap-2">
@@ -1109,9 +1742,9 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             <span className="text-[14px] font-semibold text-white">{company.name}</span>
             <span className="text-[11px] text-[#636366]">{companyId}</span>
           </div>
-          {submittedAt && (
+          {syncStatus === "synced" && submittedAt && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-success-bg text-status-success text-[10px] font-semibold uppercase tracking-wide">
-              <CheckCircle2 className="h-3 w-3" /> Submitted
+              <CheckCircle2 className="h-3 w-3" /> Synced
             </span>
           )}
         </div>
@@ -1137,63 +1770,45 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
           <ExcelImportButton onImport={handleExcelImport} disabled={loading || !workbook} />
-          {submittedAt && (
-            <button
-              onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}/summary`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm"
-              data-testid="button-continue-summary"
-            >
-              Continue to Summary
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          )}
           <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-[12px] font-semibold smooth press-sm hover:bg-white/90 disabled:opacity-60"
-            data-testid="button-submit"
+            onClick={() => void handleContinueToSummary()}
+            disabled={loading || !workbook}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold smooth press-sm disabled:opacity-60"
+            data-testid="button-continue-summary"
           >
-            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            {submittedAt ? "Re-submit" : "Submit to scorecard"}
+            <ChevronRight className="h-3.5 w-3.5" />
+            Continue to Summary
           </button>
+          {syncStatus === "syncing" && (
+            <span className="text-[10px] text-[#636366]">Syncing scorecard…</span>
+          )}
         </div>
       </div>
 
-      {submitStatus && (
-        <div
-          className={`rounded-xl border px-4 py-3 text-[13px] ${
-            submitStatus.type === "success"
-              ? "border-status-success/30 bg-status-success-bg text-status-success"
-              : submitStatus.type === "error"
-                ? "border-status-error/30 bg-status-error-bg text-status-error"
-                : "border-white/10 bg-[#1c1c1e] text-[#d1d1d6]"
-          }`}
-          data-testid="submit-status"
-          role={submitStatus.type === "error" ? "alert" : "status"}
-        >
-          <div className="flex items-start gap-2">
-            {submitStatus.type === "pending" ? (
-              <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-            ) : submitStatus.type === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : (
-              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-current text-[10px] font-bold">
-                !
-              </span>
-            )}
-            <span>{submitStatus.message}</span>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col lg:flex-row gap-6 items-start">
-        <div className="lg:hidden w-full -mx-1 px-1 overflow-x-auto">
-          <div className="flex gap-1.5 min-w-max pb-1" data-testid="workbook-mobile-tabs">
-            {renderSectionNav("tabs")}
+        <div className="lg:hidden w-full space-y-3">
+          {workbook && (
+            <WorkbookValidationPanel
+              sections={workbook.sections}
+              activeSectionKey={activeSectionKey}
+              onSelectSection={selectSection}
+            />
+          )}
+          <div className="-mx-1 px-1 overflow-x-auto">
+            <div className="flex gap-1.5 min-w-max pb-1" data-testid="workbook-mobile-tabs">
+              {renderSectionNav("tabs")}
+            </div>
           </div>
         </div>
 
-        <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:z-10">
+        <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:z-10 space-y-3">
+          {workbook && (
+            <WorkbookValidationPanel
+              sections={workbook.sections}
+              activeSectionKey={activeSectionKey}
+              onSelectSection={selectSection}
+            />
+          )}
           <div className="rounded-xl bg-[#1c1c1e] p-2" data-testid="workbook-tabs">
             {renderSectionNav("sidebar")}
           </div>
@@ -1206,43 +1821,107 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         >
           {loading ? (
             <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook...
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
             </div>
           ) : activeSection ? (
             <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/[0.06]">
-                <h2 className="text-[18px] font-bold tracking-tight text-white">
-                  {activeSection.label}
-                </h2>
-                <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
-              </div>
-              <div className="px-6 pb-6">
-                {activeMetaFields ? (
-                  <div className="pt-5">
-                    <MetaForm
-                      fields={activeMetaFields}
-                      value={activeMeta}
-                      onChange={(next) => handleMetaChange(activeSection.key, next)}
-                    />
+              {activeMetaFieldsResolved && activeSection?.columns ? (
+                // Hybrid section: MetaForm for aggregate inputs + grid for data rows.
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
                   </div>
-                ) : null}
-                {activeSection.columns ? (
-                  <div className="pt-5">
-                    <SpreadsheetGrid
-                      columns={activeSection.columns}
+                  <div className="px-6 pt-5 pb-4 border-b border-white/[0.04]">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-4">
+                      Section inputs
+                    </p>
+                    {activeSectionPermissions.loading ? (
+                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
+                      </div>
+                    ) : (
+                      <MetaForm
+                        fields={activeMetaFieldsResolved}
+                        value={
+                          activeSection.key === "financial-information"
+                            ? financialMetaWithNorm
+                            : activeMeta
+                        }
+                        readOnly={!activeSectionPermissions.canEdit}
+                        crossFieldErrors={activeMetaCrossFieldErrors}
+                        onChange={(next) => handleMetaChange(activeSection.key, next)}
+                      />
+                    )}
+                  </div>
+                  <div className="pt-2">
+                    <div className="px-6 pt-4 pb-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366]">
+                        {activeSection.gridLabel ?? "Training programme entries"}
+                      </p>
+                    </div>
+                    <ActiveSectionEditor
+                      section={activeSection}
                       rows={activeRows}
-                      rowValidate={activeSection.rowValidate}
+                      workspaceId={workspaceId}
+                      clientCreatedByUserId={company.createdByUserId}
                       onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
-                      sectionLabel={activeSection.label}
-                      sectionDescription={activeSection.description}
                     />
                   </div>
-                ) : !activeMetaFields ? (
-                  <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
-                    <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                </>
+              ) : activeMetaFieldsResolved ? (
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
                   </div>
-                ) : null}
-              </div>
+                  <div className="px-6 pb-6 pt-5">
+                    {activeSectionPermissions.loading ? (
+                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
+                      </div>
+                    ) : (
+                      <MetaForm
+                        fields={activeMetaFieldsResolved}
+                        value={
+                          activeSection.key === "financial-information"
+                            ? financialMetaWithNorm
+                            : activeMeta
+                        }
+                        readOnly={!activeSectionPermissions.canEdit}
+                        crossFieldErrors={activeMetaCrossFieldErrors}
+                        onChange={(next) => handleMetaChange(activeSection.key, next)}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : activeSection.columns ? (
+                <ActiveSectionEditor
+                  section={activeSection}
+                  rows={activeRows}
+                  workspaceId={workspaceId}
+                  clientCreatedByUserId={company.createdByUserId}
+                  onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
+                />
+              ) : (
+                <>
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h2 className="text-[18px] font-bold tracking-tight text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                  </div>
+                  <div className="px-6 pb-6">
+                    <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
+                      <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
         </section>
@@ -1260,6 +1939,44 @@ export default function InformationRequest() {
   const isCreateScorecardFlow = basePath === "/create-scorecard";
   const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
   const resolvedCompanyId = params.companyId || picked?.clientId || picked?.id || "";
+
+  // Dynamic back button: remember where the user navigated from.
+  // Reads sessionStorage once on mount (set by Dashboard and WorkbookScoreSummary
+  // before they navigate here), then clears it to avoid stale values.
+  const [backOrigin, setBackOrigin] = useState<string | null>(() => {
+    try {
+      const from = sessionStorage.getItem("okiru-workbook-from");
+      if (from) sessionStorage.removeItem("okiru-workbook-from");
+      return from;
+    } catch {
+      return null;
+    }
+  });
+
+  // When navigating from the summary view back to the workbook editor *within*
+  // the same InformationRequest component session (isSummaryStep goes true → false),
+  // update backOrigin so the header back button points back to Summary.
+  const prevIsSummaryRef = useRef(isSummaryStep);
+  useEffect(() => {
+    if (prevIsSummaryRef.current && !isSummaryStep) {
+      setBackOrigin("summary");
+    }
+    prevIsSummaryRef.current = isSummaryStep;
+  }, [isSummaryStep]);
+
+  // Derive the back-button destination and label from the tracked origin.
+  const backHref = (() => {
+    if (backOrigin === "saved-companies") return "/dashboard";
+    if (backOrigin === "summary" && resolvedCompanyId) {
+      return `/create-scorecard/${encodeURIComponent(resolvedCompanyId)}/summary`;
+    }
+    return isCreateScorecardFlow ? "/hub" : "/dashboard";
+  })();
+  const backLabel = (() => {
+    if (backOrigin === "saved-companies") return "Saved Companies";
+    if (backOrigin === "summary") return "Summary";
+    return isCreateScorecardFlow ? "Hub" : "Dashboard";
+  })();
 
   useEffect(() => {
     if (params.companyId && !picked) {
@@ -1292,15 +2009,25 @@ export default function InformationRequest() {
         <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <AppNavBack
-              href={isCreateScorecardFlow ? "/hub" : "/dashboard"}
+              href={backHref}
               eyebrow="Back"
-              label={isCreateScorecardFlow ? "Hub" : "Dashboard"}
+              label={backLabel}
               variant="dark"
               className="shrink-0"
             />
             <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
             <div className="flex items-center gap-3">
-              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
+              <div className="h-8 w-8 rounded-[8px] bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
+                <img
+                  src={logoCircle}
+                  alt="Okiru"
+                  className="h-5 w-5 rounded-[6px] object-contain"
+                  style={{
+                    filter:
+                      "brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(245deg) brightness(98%) contrast(98%)",
+                  }}
+                />
+              </div>
               <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
                 {pageTitle}
               </span>
@@ -1309,10 +2036,6 @@ export default function InformationRequest() {
           <UserAccountMenu variant="dashboard" />
         </div>
       </header>
-
-      {isCreateScorecardFlow && (
-        <ScorecardFlowStepper companyId={params.companyId || resolvedCompanyId || undefined} />
-      )}
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
         {!isSummaryStep && !picked && (
@@ -1330,7 +2053,7 @@ export default function InformationRequest() {
             <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
               {basePath === "/create-scorecard"
                 ? "Pick a company below or import an existing workbook from Excel. You can save and come back anytime."
-                : "Structured spreadsheet collection - replaces manual onboarding sheets."}
+                : "Structured spreadsheet collection — replaces manual onboarding sheets."}
             </p>
           </div>
         )}
@@ -1340,7 +2063,7 @@ export default function InformationRequest() {
               {picked.name}
             </h1>
             <p className="text-[13px] text-[#8e8e93] mt-1">
-              Complete each section, then submit to generate your scorecard.
+              Complete each section — scores sync automatically as you save. Continue to Summary anytime.
             </p>
           </div>
         )}
@@ -1351,6 +2074,8 @@ export default function InformationRequest() {
           ) : (
             <WorkbookView company={picked} onBack={handleBack} />
           )
+        ) : isCreateScorecardFlow ? (
+          <CompanyPicker onPick={handlePick} mode="create" />
         ) : (
           <CompanyPicker onPick={handlePick} />
         )}

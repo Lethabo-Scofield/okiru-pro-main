@@ -13,6 +13,8 @@ export const SCOPE_TO_CALCULATOR_CODES: Record<string, readonly string[]> = {
   enterpriseDevelopment: ["enterpriseDevelopment", "enterpriseSupplierDevelopment"],
   sed: ["socioEconomicDevelopment"],
   yes: ["yesInitiative"],
+  accessToFinancialServices: ["accessToFinancialServices"],
+  empowermentFinancing: ["empowermentFinancing"],
 };
 
 /** Maps calculator config keys to short Build sidebar ids (BuildPillarsStep). */
@@ -25,6 +27,8 @@ export const BUILD_PILLAR_ID_MAP: Record<string, string> = {
   ownership: "ownership",
   supplierDevelopment: "supplierDevelopment",
   enterpriseDevelopment: "enterpriseDevelopment",
+  accessToFinancialServices: "accessToFinancialServices",
+  empowermentFinancing: "empowermentFinancing",
 };
 
 /**

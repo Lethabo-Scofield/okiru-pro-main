@@ -1,6 +1,7 @@
 /**
  * Paste / clipboard parsing for ESG register grids — mirrors workbookGridParse.
  */
+import type { ColumnDef } from "@/components/workbook/sections";
 import {
   applyPasteToRows,
   expandClipboardMatrix,
@@ -8,7 +9,6 @@ import {
   parseClipboardMatrix,
   type WorkbookGridRow,
 } from "@/lib/workbookGridParse";
-import type { EsgColumnDef } from "./esgGridSections";
 import type { EsgGridRow } from "./esgGridRows";
 
 export {
@@ -20,7 +20,7 @@ export {
 
 export function pasteMatrixToEsgRows(
   matrix: string[][],
-  columns: EsgColumnDef[],
+  columns: ColumnDef[],
   existingRows: EsgGridRow[],
   anchor: { row: number; col: number },
   mapHeaders = false,

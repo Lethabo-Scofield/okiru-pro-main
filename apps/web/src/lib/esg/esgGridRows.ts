@@ -1,9 +1,9 @@
 /**
  * ESG register rows ↔ flat cell refs (A4, B4, …) for API storage and XLSX export.
  */
+import type { ColumnDef } from "@/components/workbook/sections";
 import {
   ESG_GRID_SECTIONS,
-  type EsgColumnDef,
   type EsgGridSectionId,
   isEsgGridSection,
 } from "./esgGridSections";
@@ -67,7 +67,7 @@ function rowsFromFlatCells(
   return out;
 }
 
-function hasRowData(row: EsgGridRow, columns: EsgColumnDef[]): boolean {
+function hasRowData(row: EsgGridRow, columns: ColumnDef[]): boolean {
   for (const col of columns) {
     const v = row[col.key];
     if (v === undefined || v === null || v === "") continue;

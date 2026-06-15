@@ -9,6 +9,8 @@
 
 import type { ClientInformationData } from '@/components/build/ClientInformationForm';
 import type { FinancialsData } from '@/components/build/FinancialsForm';
+import { calculateFinancials } from '@/components/build/FinancialsForm';
+import { lookupIndustryNormPercent } from '@/lib/industryNormLookup';
 import type { FoundationData } from '@/components/build/FoundationStep';
 import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
 import type { 
@@ -180,7 +182,7 @@ export function clientInfoToToolkitClient(
     revenue: financials.totalRevenue,
     npat: financials.deemedNpatUsed ? financials.deemedNpat : financials.npat,
     leviableAmount: financials.leviableAmount,
-    industryNorm: financials.industry ? getIndustryNorm(financials.industry) : undefined,
+    industryNorm: financials.industryNormPercent ?? undefined,
     eapProvince:
       clientInfo.eapProvince
       || inferEapProvinceFromAddress(clientInfo.physicalAddress || ''),
@@ -245,7 +247,10 @@ export function toolkitClientToClientInfo(client: Client): ClientInformationData
  */
 export function toolkitClientToFinancials(client: Client): FinancialsData {
   const industry = client.industry || 'Other';
-  const industryNorm = getIndustryNorm(industry);
+  const industryNormPercent =
+    typeof client.industryNorm === "number" && client.industryNorm > 0
+      ? client.industryNorm
+      : lookupIndustryNormPercent(industry, client.sectorCode);
   
   // Reconstruct financials from client data
   const totalRevenue = client.revenue || 0;
@@ -257,54 +262,20 @@ export function toolkitClientToFinancials(client: Client): FinancialsData {
   const tmpsInclusions = totalRevenue * 0.8; // Estimate
   const tmpsExclusions = 0; // Would need to be stored separately
   
-  const currentMargin = totalRevenue > 0 ? (npat / totalRevenue) * 100 : 0;
-  const quarterThreshold = industryNorm / 4;
-  const isBelowQuarter = currentMargin < quarterThreshold;
-  const deemedNpat = isBelowQuarter 
-    ? totalRevenue * (industryNorm / 100) 
-    : npat;
-  
-  return {
+  return calculateFinancials({
     totalRevenue,
     npat,
     leviableAmount,
-    totalPayroll: leviableAmount / 0.8, // Reverse estimate
     tmpsInclusions,
     tmpsExclusions,
     industry,
-    tmps: tmpsInclusions - tmpsExclusions,
-    currentMargin,
-    quarterThreshold,
-    isBelowQuarter,
-    deemedNpat,
-    deemedNpatUsed: isBelowQuarter,
-  };
-}
-
-/**
- * Get industry norm percentage
- */
-function getIndustryNorm(industry: string): number {
-  const norms: Record<string, number> = {
-    'Retail': 4,
-    'Manufacturing': 6,
-    'IT Services': 10,
-    'Financial Services': 15,
-    'Construction': 4,
-    'Agriculture': 6,
-    'Mining': 12,
-    'Transport': 5,
-    'Hospitality': 8,
-    'Healthcare': 10,
-    'Education': 5,
-    'Professional Services': 12,
-    'Real Estate': 15,
-    'Telecommunications': 12,
-    'Energy': 15,
-    'Generic': 6,
-    'Other': 6,
-  };
-  return norms[industry] || 6;
+    industryNormPercent,
+    priorYears: (client.financialHistory || []).slice(0, 5).map((h) => ({
+      yearLabel: h.year,
+      revenue: h.revenue,
+      npat: h.npat,
+    })),
+  });
 }
 
 // ============================================================================

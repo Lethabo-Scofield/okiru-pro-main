@@ -51,11 +51,17 @@ function basePillars(ownership?: Partial<BuildPillarsData["ownership"]>): BuildP
 }
 
 describe("validateScorecardCriticalInputs", () => {
-  it("requires revenue and NPAT always", () => {
-    const f = baseFoundation({ totalRevenue: 0, npat: 0, deemedNpat: 0 });
+  it("requires revenue and NPAT to be present (zero is valid)", () => {
+    const f = baseFoundation({ totalRevenue: undefined as unknown as number, npat: undefined as unknown as number, deemedNpat: undefined as unknown as number });
     const errs = validateScorecardCriticalInputs(f, basePillars());
     expect(errs.some((e) => e.includes("Revenue"))).toBe(true);
     expect(errs.some((e) => e.includes("NPAT"))).toBe(true);
+  });
+
+  it("accepts zero revenue and zero NPAT when provided", () => {
+    const f = baseFoundation({ totalRevenue: 0, npat: 0, deemedNpat: 0 });
+    const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }));
+    expect(errs).toHaveLength(0);
   });
 
   it("accepts deemed NPAT instead of NPAT", () => {
@@ -64,27 +70,15 @@ describe("validateScorecardCriticalInputs", () => {
     expect(errs.some((e) => e.includes("NPAT"))).toBe(false);
   });
 
-  it("requires ownership when scope is empty / full card", () => {
+  it("does not require ownership entities", () => {
     const f = baseFoundation();
     const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }));
-    expect(errs.some((e) => e.includes("Ownership"))).toBe(true);
-  });
-
-  it("requires ownership when employmentEquity is in scope", () => {
-    const f = baseFoundation();
-    const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }), ["employmentEquity"]);
-    expect(errs.some((e) => e.includes("Ownership"))).toBe(true);
-  });
-
-  it("skips ownership validation when scoped pillars omit ownership and employmentEquity", () => {
-    const f = baseFoundation();
-    const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }), ["skills"]);
     expect(errs.some((e) => e.includes("Ownership"))).toBe(false);
   });
 
-  it("still requires ownership when ownership is explicitly scoped", () => {
+  it("does not require ownership when employmentEquity is scoped", () => {
     const f = baseFoundation();
-    const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }), ["ownership"]);
-    expect(errs.some((e) => e.includes("Ownership"))).toBe(true);
+    const errs = validateScorecardCriticalInputs(f, basePillars({ shareholders: [] }), ["employmentEquity"]);
+    expect(errs.some((e) => e.includes("Ownership"))).toBe(false);
   });
 });

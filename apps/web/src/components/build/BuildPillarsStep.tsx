@@ -7,7 +7,7 @@ import { ScrollArea } from "@toolkit/components/ui/scroll-area";
 import { Switch } from "@toolkit/components/ui/switch";
 import { Label } from "@toolkit/components/ui/label";
 import {
-  Users, Building2, GraduationCap, ShoppingCart, Handshake, Heart,
+  Users, Building2, GraduationCap, ShoppingCart, Handshake, Heart, Landmark,
   TrendingUp, Briefcase, CheckCircle2, AlertCircle, ChevronLeft, ArrowRight, Lock,
   Upload,
 } from "lucide-react";
@@ -75,8 +75,8 @@ const PILLAR_METADATA: Record<string, { name: string; description: string; icon:
   enterpriseDevelopment: { name: 'Enterprise Development', description: 'ED contributions (NPAT % + bonuses)', icon: Handshake },
   socioEconomicDevelopment: { name: 'Socio-Economic Development', description: 'SED as % of NPAT', icon: Heart },
   yesInitiative: { name: 'YES Initiative', description: 'Youth placement tiers', icon: TrendingUp },
-  empowermentFinancing: { name: 'Empowerment Financing', description: 'FSC-specific financing', icon: Building2 },
-  accessToFinancialServices: { name: 'Access to Financial Services', description: 'FSC-specific access', icon: Users },
+  empowermentFinancing: { name: 'Empowerment Financing', description: 'FSC BEE transaction financing', icon: TrendingUp },
+  accessToFinancialServices: { name: 'Access to Financial Services', description: 'FSC access to financial services', icon: Landmark },
 };
 
 // Normalize API pillar keys to short IDs used by renderPillarForm/hasData/getPillarScore
@@ -96,6 +96,23 @@ function usePillarConfig(): PillarConfig[] {
   const pc = calculatorConfig.pillarConfigs;
   const pillars: PillarConfig[] = [];
 
+  const supplementalPillars: Array<{ key: string; maxPoints: number }> = [
+    {
+      key: 'accessToFinancialServices',
+      maxPoints:
+        calculatorConfig.accessToFinancialServices?.maxPoints
+        ?? (pc as Record<string, { maxPoints?: number } | undefined>).accessToFinancialServices?.maxPoints
+        ?? 0,
+    },
+    {
+      key: 'empowermentFinancing',
+      maxPoints:
+        calculatorConfig.empowermentFinancing?.maxPoints
+        ?? (pc as Record<string, { maxPoints?: number } | undefined>).empowermentFinancing?.maxPoints
+        ?? 0,
+    },
+  ];
+
   for (const [key, config] of Object.entries(pc)) {
     if (!config) continue;
 
@@ -114,6 +131,24 @@ function usePillarConfig(): PillarConfig[] {
       subMinimumThreshold: config.subMinimumPercent ?? 0,
       includeInGrandTotal: applicable,
       isApplicable: applicable,
+    });
+  }
+
+  for (const { key, maxPoints } of supplementalPillars) {
+    if (maxPoints <= 0 || pillars.some((p) => p.id === (PILLAR_ID_MAP[key] || key))) continue;
+    const meta = PILLAR_METADATA[key] || { name: key, description: '', icon: Building2 };
+    const shortId = PILLAR_ID_MAP[key] || key;
+    pillars.push({
+      id: shortId,
+      code: key.substring(0, 4).toUpperCase(),
+      name: meta.name,
+      description: meta.description,
+      icon: meta.icon,
+      maxPoints,
+      hasSubMinimum: false,
+      subMinimumThreshold: 0,
+      includeInGrandTotal: true,
+      isApplicable: true,
     });
   }
 
@@ -658,7 +693,7 @@ export function BuildPillarsStep({
           )}
           <Button
             onClick={onNext}
-            disabled={pillarFormsLocked || completedCount === 0}
+            disabled={pillarFormsLocked}
             className="gap-2"
             title={pillarFormsLocked ? 'View-only access' : ''}
           >

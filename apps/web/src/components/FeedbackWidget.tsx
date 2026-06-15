@@ -5,6 +5,11 @@ import { MessageSquarePlus, X, Loader2, Check } from 'lucide-react';
 import { useAuth } from '@toolkit/lib/auth';
 import { apiRequest } from '@toolkit/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import {
+  FEEDBACK_PILLAR_OPTIONS,
+  inferFeedbackPillar,
+  type FeedbackPillar,
+} from '@/lib/feedbackPillars';
 
 const HIDDEN_PATHS = ['/devmode'];
 
@@ -37,6 +42,7 @@ export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState<Category>('bug');
+  const [pillar, setPillar] = useState<FeedbackPillar>('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +55,12 @@ export function FeedbackWidget() {
       if (!email && user.email) setEmail(user.email);
     }
   }, [open, user, name, email]);
+
+  useEffect(() => {
+    if (open) {
+      setPillar(inferFeedbackPillar(location) as FeedbackPillar);
+    }
+  }, [open, location]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +90,7 @@ export function FeedbackWidget() {
   const reset = () => {
     setMessage('');
     setCategory('bug');
+    setPillar('');
     setJustSent(false);
   };
 
@@ -89,6 +102,7 @@ export function FeedbackWidget() {
       await apiRequest('POST', '/api/feedback', {
         message: message.trim(),
         category,
+        pillar: pillar || null,
         pageUrl: typeof window !== 'undefined' ? window.location.pathname + window.location.search : '',
         userName: name.trim() || null,
         userEmail: email.trim() || null,
@@ -203,6 +217,26 @@ export function FeedbackWidget() {
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="mb-4">
+                  <label htmlFor="feedback-pillar" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                    Pillar / area
+                  </label>
+                  <select
+                    id="feedback-pillar"
+                    data-testid="select-feedback-pillar"
+                    value={pillar}
+                    onChange={(e) => setPillar(e.target.value as FeedbackPillar)}
+                    style={formFontStyle}
+                    className="block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-0"
+                  >
+                    {FEEDBACK_PILLAR_OPTIONS.map((option) => (
+                      <option key={option.value || 'general'} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="mb-4">

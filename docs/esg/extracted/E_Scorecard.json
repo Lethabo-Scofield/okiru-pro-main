@@ -1,0 +1,1208 @@
+{
+  "sheet_name": "E_Scorecard",
+  "sanitized_name": "E_Scorecard",
+  "dimensions": {
+    "max_row": 30,
+    "max_column": 9
+  },
+  "named_ranges": [],
+  "data_validations": [],
+  "formula_count": 55,
+  "rows": [
+    {
+      "row": 1,
+      "cells": {
+        "1": {
+          "coord": "A1",
+          "col": 1,
+          "value": "E SCORECARD — Environmental Performance vs 100 pts  |  Net-Zero Lens  |  Links: E_Data"
+        }
+      }
+    },
+    {
+      "row": 3,
+      "cells": {
+        "1": {
+          "coord": "A3",
+          "col": 1,
+          "value": "Indicator"
+        },
+        "2": {
+          "coord": "B3",
+          "col": 2,
+          "value": "Max\nPts"
+        },
+        "3": {
+          "coord": "C3",
+          "col": 3,
+          "value": "Actual\n(auto)"
+        },
+        "4": {
+          "coord": "D3",
+          "col": 4,
+          "value": "Score"
+        },
+        "5": {
+          "coord": "E3",
+          "col": 5,
+          "value": "Data Source"
+        },
+        "6": {
+          "coord": "F3",
+          "col": 6,
+          "value": "Status"
+        },
+        "7": {
+          "coord": "G3",
+          "col": 7,
+          "value": "Standard Ref"
+        },
+        "8": {
+          "coord": "H3",
+          "col": 8,
+          "value": "Net-Zero Action"
+        },
+        "9": {
+          "coord": "I3",
+          "col": 9,
+          "value": "Audit / Calculation"
+        }
+      }
+    },
+    {
+      "row": 4,
+      "cells": {
+        "1": {
+          "coord": "A4",
+          "col": 1,
+          "value": "── GHG ──"
+        }
+      }
+    },
+    {
+      "row": 5,
+      "cells": {
+        "1": {
+          "coord": "A5",
+          "col": 1,
+          "value": "GHG: Scope 1 baseline established & tracked"
+        },
+        "2": {
+          "coord": "B5",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C5",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(E_Data!L19>0,5,0)"
+        },
+        "4": {
+          "coord": "D5",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C5,B5)"
+        },
+        "5": {
+          "coord": "E5",
+          "col": 5,
+          "value": "E_Data Fleet"
+        },
+        "6": {
+          "coord": "F5",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D5>=B5,\"✓ Met\",IF(D5>=B5*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G5",
+          "col": 7,
+          "value": "IFRS S2 / GHG Protocol"
+        },
+        "8": {
+          "coord": "H5",
+          "col": 8,
+          "value": "Baseline year: FY2025/26"
+        },
+        "9": {
+          "coord": "I5",
+          "col": 9,
+          "value": "Existence: E_Data!L19 (Fleet diesel YTD) > 0 → full 5 pts"
+        }
+      }
+    },
+    {
+      "row": 6,
+      "cells": {
+        "1": {
+          "coord": "A6",
+          "col": 1,
+          "value": "GHG: Scope 1 reduction vs prior year"
+        },
+        "2": {
+          "coord": "B6",
+          "col": 2,
+          "value": "10"
+        },
+        "3": {
+          "coord": "C6",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(E_Data!$B$90=0,0,IF((E_Data!$B$90-E_Data!$F$90)/E_Data!$B$90>=Assumptions!$B$43,10,IF((E_Data!$B$90-E_Data!$F$90)/E_Data!$B$90>=Assumptions!$B$43*Assumptions!$B$9,10*((E_Data!$B$90-E_Data!$F$90)/E_Data!$B$90)/Assumptions!$B$43,0))),0)"
+        },
+        "4": {
+          "coord": "D6",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C6,B6)"
+        },
+        "5": {
+          "coord": "E6",
+          "col": 5,
+          "value": "E_Data GHG"
+        },
+        "6": {
+          "coord": "F6",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D6>=B6,\"✓ Met\",IF(D6>=B6*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G6",
+          "col": 7,
+          "value": "SBTi near-term / IFRS S2"
+        },
+        "8": {
+          "coord": "H6",
+          "col": 8,
+          "value": "Target: -10% YoY → -50% by 2030"
+        },
+        "9": {
+          "coord": "I6",
+          "col": 9,
+          "value": "YoY reduction = (baseline-current)/baseline. Target = THR_GHG_YOY (Assumptions B36). Banded × stance floor."
+        }
+      }
+    },
+    {
+      "row": 7,
+      "cells": {
+        "1": {
+          "coord": "A7",
+          "col": 1,
+          "value": "GHG: Scope 2 net reduction (solar offset)"
+        },
+        "2": {
+          "coord": "B7",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C7",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(E_Data!$M$80=0,0,IF(-E_Data!$M$81/E_Data!$M$80>=Assumptions!$B$44,8,IF(-E_Data!$M$81/E_Data!$M$80>=Assumptions!$B$44*Assumptions!$B$9,8*(-E_Data!$M$81/E_Data!$M$80)/Assumptions!$B$44,0))),0)"
+        },
+        "4": {
+          "coord": "D7",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C7,B7)"
+        },
+        "5": {
+          "coord": "E7",
+          "col": 5,
+          "value": "E_Data Solar"
+        },
+        "6": {
+          "coord": "F7",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D7>=B7,\"✓ Met\",IF(D7>=B7*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G7",
+          "col": 7,
+          "value": "RE100 / GRI 305-2"
+        },
+        "8": {
+          "coord": "H7",
+          "col": 8,
+          "value": "Expand solar all depots by 2027"
+        },
+        "9": {
+          "coord": "I7",
+          "col": 9,
+          "value": "Solar % of gross Scope 2 = -E_Data!M81/M80. Target = THR_RE (20%). Banded."
+        }
+      }
+    },
+    {
+      "row": 8,
+      "cells": {
+        "1": {
+          "coord": "A8",
+          "col": 1,
+          "value": "GHG: Scope 3 tracking initiated"
+        },
+        "2": {
+          "coord": "B8",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C8",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(E_Data!$L$63>0,5,0)"
+        },
+        "4": {
+          "coord": "D8",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C8,B8)"
+        },
+        "5": {
+          "coord": "E8",
+          "col": 5,
+          "value": "E_Data Scope3"
+        },
+        "6": {
+          "coord": "F8",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D8>=B8,\"✓ Met\",IF(D8>=B8*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G8",
+          "col": 7,
+          "value": "GHG Protocol S3 / IFRS S2"
+        },
+        "8": {
+          "coord": "H8",
+          "col": 8,
+          "value": "Water, value chain, business travel"
+        },
+        "9": {
+          "coord": "I8",
+          "col": 9,
+          "value": "Existence: E_Data!L63 (Water kL YTD) > 0 → full 5 pts (Scope 3 tracking initiated)"
+        }
+      }
+    },
+    {
+      "row": 9,
+      "cells": {
+        "1": {
+          "coord": "A9",
+          "col": 1,
+          "value": "GHG: Net-zero target formally set (SBTi)"
+        },
+        "2": {
+          "coord": "B9",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C9",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(AND(Assumptions!$B$107>=2030,Assumptions!$B$107<=2060),5,IF(Assumptions!$B$107>0,2.5,0))"
+        },
+        "4": {
+          "coord": "D9",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C9,B9)"
+        },
+        "5": {
+          "coord": "E9",
+          "col": 5,
+          "value": "IFRS_S1_S2"
+        },
+        "6": {
+          "coord": "F9",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D9>=B9,\"✓ Met\",IF(D9>=B9*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G9",
+          "col": 7,
+          "value": "SBTi CNZS 2.0"
+        },
+        "8": {
+          "coord": "H9",
+          "col": 8,
+          "value": "Submit commitment letter FY2026"
+        },
+        "9": {
+          "coord": "I9",
+          "col": 9,
+          "value": "Net-zero target year set in Assumptions ENT_NZ (B105). 2030-2060 = full; other = half; blank = 0"
+        }
+      }
+    },
+    {
+      "row": 10,
+      "cells": {
+        "1": {
+          "coord": "A10",
+          "col": 1,
+          "value": "── Energy ──"
+        }
+      }
+    },
+    {
+      "row": 11,
+      "cells": {
+        "1": {
+          "coord": "A11",
+          "col": 1,
+          "value": "Energy: kWh data tracked monthly (all 5 depots)"
+        },
+        "2": {
+          "coord": "B11",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C11",
+          "col": 3,
+          "value": 5,
+          "formula": "=IF(E_Data!L46>0,5,0)"
+        },
+        "4": {
+          "coord": "D11",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C11,B11)"
+        },
+        "5": {
+          "coord": "E11",
+          "col": 5,
+          "value": "E_Data Elec"
+        },
+        "6": {
+          "coord": "F11",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D11>=B11,\"✓ Met\",IF(D11>=B11*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G11",
+          "col": 7,
+          "value": "GRI 302-1"
+        },
+        "8": {
+          "coord": "H11",
+          "col": 8,
+          "value": "Monthly utility bill reconciliation"
+        },
+        "9": {
+          "coord": "I11",
+          "col": 9,
+          "value": "Existence: E_Data!L46 (Electricity kWh YTD) > 0 → full 5 pts"
+        }
+      }
+    },
+    {
+      "row": 12,
+      "cells": {
+        "1": {
+          "coord": "A12",
+          "col": 1,
+          "value": "Energy: Energy efficiency improvement YoY"
+        },
+        "2": {
+          "coord": "B12",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C12",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D12",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C12,B12)"
+        },
+        "5": {
+          "coord": "E12",
+          "col": 5,
+          "value": "E_Data Elec"
+        },
+        "6": {
+          "coord": "F12",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D12>=B12,\"✓ Met\",IF(D12>=B12*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G12",
+          "col": 7,
+          "value": "GRI 302-4 / ISO 14001"
+        },
+        "8": {
+          "coord": "H12",
+          "col": 8,
+          "value": "LED retrofit; efficient cold chain"
+        },
+        "9": {
+          "coord": "I12",
+          "col": 9,
+          "value": "Pending: requires prior-year kWh baseline. Add to E_Data and reformulate. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 13,
+      "cells": {
+        "1": {
+          "coord": "A13",
+          "col": 1,
+          "value": "Energy: % renewable electricity ≥20%"
+        },
+        "2": {
+          "coord": "B13",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C13",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(E_Data!$L$46=0,0,IF((E_Data!$L$50+E_Data!$L$51+E_Data!$L$52+E_Data!$L$53+E_Data!$L$54)/E_Data!$L$46>=Assumptions!$B$44,8,IF((E_Data!$L$50+E_Data!$L$51+E_Data!$L$52+E_Data!$L$53+E_Data!$L$54)/E_Data!$L$46>=Assumptions!$B$44*Assumptions!$B$9,8*((E_Data!$L$50+E_Data!$L$51+E_Data!$L$52+E_Data!$L$53+E_Data!$L$54)/E_Data!$L$46)/Assumptions!$B$44,0))),0)"
+        },
+        "4": {
+          "coord": "D13",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C13,B13)"
+        },
+        "5": {
+          "coord": "E13",
+          "col": 5,
+          "value": "E_Data Solar"
+        },
+        "6": {
+          "coord": "F13",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D13>=B13,\"✓ Met\",IF(D13>=B13*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G13",
+          "col": 7,
+          "value": "RE100 / IFRS S2"
+        },
+        "8": {
+          "coord": "H13",
+          "col": 8,
+          "value": "Solar at all 5 depots by 2028"
+        },
+        "9": {
+          "coord": "I13",
+          "col": 9,
+          "value": "Solar kWh ÷ Total grid kWh. Target = THR_RE (20%). Banded × stance."
+        }
+      }
+    },
+    {
+      "row": 14,
+      "cells": {
+        "1": {
+          "coord": "A14",
+          "col": 1,
+          "value": "── Fleet ──"
+        }
+      }
+    },
+    {
+      "row": 15,
+      "cells": {
+        "1": {
+          "coord": "A15",
+          "col": 1,
+          "value": "Fleet: L/100km within norm (all vehicles)"
+        },
+        "2": {
+          "coord": "B15",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C15",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(COUNTA(Fleet_Register!$A$4:$A$19)=0,0,8*SUMPRODUCT((Fleet_Register!$K$4:$K$19>0)*(Fleet_Register!$K$4:$K$19<=Fleet_Register!$L$4:$L$19*Assumptions!$B$45))/MAX(1,COUNTIF(Fleet_Register!$K$4:$K$19,\">0\"))),0)"
+        },
+        "4": {
+          "coord": "D15",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C15,B15)"
+        },
+        "5": {
+          "coord": "E15",
+          "col": 5,
+          "value": "Fleet_Register"
+        },
+        "6": {
+          "coord": "F15",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D15>=B15,\"✓ Met\",IF(D15>=B15*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G15",
+          "col": 7,
+          "value": "SASB TR-AU / GRI 302"
+        },
+        "8": {
+          "coord": "H15",
+          "col": 8,
+          "value": "Eco-driving training: -10% L/100km"
+        },
+        "9": {
+          "coord": "I15",
+          "col": 9,
+          "value": "% of vehicles with K (L/100km actual) ≤ L (norm) × tolerance (THR_FUEL_TOL=1.05). Currently low because monthly km/litres not yet logged per vehicle."
+        }
+      }
+    },
+    {
+      "row": 16,
+      "cells": {
+        "1": {
+          "coord": "A16",
+          "col": 1,
+          "value": "Fleet: Fleet CO₂ per tonne-km tracked"
+        },
+        "2": {
+          "coord": "B16",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C16",
+          "col": 3,
+          "value": 0,
+          "formula": "=IF(SUMPRODUCT((Fleet_Register!$F$4:$F$19>0)*(Fleet_Register!$I$4:$I$19>0))>0,5,0)"
+        },
+        "4": {
+          "coord": "D16",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C16,B16)"
+        },
+        "5": {
+          "coord": "E16",
+          "col": 5,
+          "value": "Fleet_Register + tonnage"
+        },
+        "6": {
+          "coord": "F16",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D16>=B16,\"✓ Met\",IF(D16>=B16*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G16",
+          "col": 7,
+          "value": "IFRS S2 / GRI 305"
+        },
+        "8": {
+          "coord": "H16",
+          "col": 8,
+          "value": "Monthly intensity reporting"
+        },
+        "9": {
+          "coord": "I16",
+          "col": 9,
+          "value": "Existence: any vehicle with both carry capacity (F) and km logged (I) → full 5 pts"
+        }
+      }
+    },
+    {
+      "row": 17,
+      "cells": {
+        "1": {
+          "coord": "A17",
+          "col": 1,
+          "value": "Fleet: EV vehicles as % of fleet"
+        },
+        "2": {
+          "coord": "B17",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C17",
+          "col": 3,
+          "value": 0,
+          "formula": "=IFERROR(IF(Fleet_Register!$B$28=0,0,IF(Fleet_Register!$H$28/Fleet_Register!$B$28>=Assumptions!$B$46,5,IF(Fleet_Register!$H$28/Fleet_Register!$B$28>=Assumptions!$B$46*Assumptions!$B$9,5*(Fleet_Register!$H$28/Fleet_Register!$B$28)/Assumptions!$B$46,0))),0)"
+        },
+        "4": {
+          "coord": "D17",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C17,B17)"
+        },
+        "5": {
+          "coord": "E17",
+          "col": 5,
+          "value": "Fleet_Register"
+        },
+        "6": {
+          "coord": "F17",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D17>=B17,\"✓ Met\",IF(D17>=B17*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G17",
+          "col": 7,
+          "value": "SBTi Scope 3 / IFRS S2"
+        },
+        "8": {
+          "coord": "H17",
+          "col": 8,
+          "value": "20% EV target by 2030"
+        },
+        "9": {
+          "coord": "I17",
+          "col": 9,
+          "value": "EV count ÷ total fleet (Fleet_Register row 28). Target = THR_EV_MIN (5% current). Banded."
+        }
+      }
+    },
+    {
+      "row": 18,
+      "cells": {
+        "1": {
+          "coord": "A18",
+          "col": 1,
+          "value": "── Waste ──"
+        }
+      }
+    },
+    {
+      "row": 19,
+      "cells": {
+        "1": {
+          "coord": "A19",
+          "col": 1,
+          "value": "Waste: Diversion rate ≥75% (target 91%+)"
+        },
+        "2": {
+          "coord": "B19",
+          "col": 2,
+          "value": "5"
+        },
+        "3": {
+          "coord": "C19",
+          "col": 3,
+          "value": 5,
+          "formula": "=IFERROR(IF(Waste_Register!$B$16>=Assumptions!$B$48,5,IF(Waste_Register!$B$16>=Assumptions!$B$48*Assumptions!$B$9,5*Waste_Register!$B$16/Assumptions!$B$48,0)),0)"
+        },
+        "4": {
+          "coord": "D19",
+          "col": 4,
+          "value": 5,
+          "formula": "=MIN(C19,B19)"
+        },
+        "5": {
+          "coord": "E19",
+          "col": 5,
+          "value": "Waste_Register"
+        },
+        "6": {
+          "coord": "F19",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D19>=B19,\"✓ Met\",IF(D19>=B19*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G19",
+          "col": 7,
+          "value": "GRI 306 / ISO 14001"
+        },
+        "8": {
+          "coord": "H19",
+          "col": 8,
+          "value": "Extend Oricol CPT to all depots"
+        },
+        "9": {
+          "coord": "I19",
+          "col": 9,
+          "value": "Waste_Register!B16 (Oricol CPT diversion %). Target = THR_WASTE (75%). Banded."
+        }
+      }
+    },
+    {
+      "row": 20,
+      "cells": {
+        "1": {
+          "coord": "A20",
+          "col": 1,
+          "value": "Waste: Cardboard recycling tracked (Cority)"
+        },
+        "2": {
+          "coord": "B20",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C20",
+          "col": 3,
+          "value": 4,
+          "formula": "=IF(Waste_Register!$B$17>0,4,0)"
+        },
+        "4": {
+          "coord": "D20",
+          "col": 4,
+          "value": 4,
+          "formula": "=MIN(C20,B20)"
+        },
+        "5": {
+          "coord": "E20",
+          "col": 5,
+          "value": "E_Data Waste"
+        },
+        "6": {
+          "coord": "F20",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D20>=B20,\"✓ Met\",IF(D20>=B20*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G20",
+          "col": 7,
+          "value": "GRI 306 / ISO 14001"
+        },
+        "8": {
+          "coord": "H20",
+          "col": 8,
+          "value": "Monthly depot reporting"
+        },
+        "9": {
+          "coord": "I20",
+          "col": 9,
+          "value": "Existence: Cority average % recycled (Waste_Register B17) > 0 → full 4 pts"
+        }
+      }
+    },
+    {
+      "row": 21,
+      "cells": {
+        "1": {
+          "coord": "A21",
+          "col": 1,
+          "value": "Waste: Landfill tCO₂e tracked"
+        },
+        "2": {
+          "coord": "B21",
+          "col": 2,
+          "value": "3"
+        },
+        "3": {
+          "coord": "C21",
+          "col": 3,
+          "value": 3,
+          "formula": "=IF(Waste_Register!$B$18>0,3,0)"
+        },
+        "4": {
+          "coord": "D21",
+          "col": 4,
+          "value": 3,
+          "formula": "=MIN(C21,B21)"
+        },
+        "5": {
+          "coord": "E21",
+          "col": 5,
+          "value": "Waste_Register"
+        },
+        "6": {
+          "coord": "F21",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D21>=B21,\"✓ Met\",IF(D21>=B21*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G21",
+          "col": 7,
+          "value": "GRI 306-3"
+        },
+        "8": {
+          "coord": "H21",
+          "col": 8,
+          "value": "Minimise landfill send"
+        },
+        "9": {
+          "coord": "I21",
+          "col": 9,
+          "value": "Existence: Waste_Register B18 (Landfill tCO₂e YTD) > 0 → full 3 pts"
+        }
+      }
+    },
+    {
+      "row": 22,
+      "cells": {
+        "1": {
+          "coord": "A22",
+          "col": 1,
+          "value": "── Water ──"
+        }
+      }
+    },
+    {
+      "row": 23,
+      "cells": {
+        "1": {
+          "coord": "A23",
+          "col": 1,
+          "value": "Water: Monthly consumption tracked (all depots)"
+        },
+        "2": {
+          "coord": "B23",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C23",
+          "col": 3,
+          "value": 4,
+          "formula": "=IF(E_Data!L63>0,4,0)"
+        },
+        "4": {
+          "coord": "D23",
+          "col": 4,
+          "value": 4,
+          "formula": "=MIN(C23,B23)"
+        },
+        "5": {
+          "coord": "E23",
+          "col": 5,
+          "value": "E_Data Water"
+        },
+        "6": {
+          "coord": "F23",
+          "col": 6,
+          "value": "⚠ Partial",
+          "formula": "=IF(D23>=B23,\"✓ Met\",IF(D23>=B23*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G23",
+          "col": 7,
+          "value": "GRI 303-1"
+        },
+        "8": {
+          "coord": "H23",
+          "col": 8,
+          "value": "CT dam project; DBN monitoring"
+        },
+        "9": {
+          "coord": "I23",
+          "col": 9,
+          "value": "Existence: E_Data!L63 (Water kL YTD) > 0 → full 4 pts"
+        }
+      }
+    },
+    {
+      "row": 24,
+      "cells": {
+        "1": {
+          "coord": "A24",
+          "col": 1,
+          "value": "Water: Water efficiency initiative active"
+        },
+        "2": {
+          "coord": "B24",
+          "col": 2,
+          "value": "3"
+        },
+        "3": {
+          "coord": "C24",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D24",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C24,B24)"
+        },
+        "5": {
+          "coord": "E24",
+          "col": 5,
+          "value": "E_Data"
+        },
+        "6": {
+          "coord": "F24",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D24>=B24,\"✓ Met\",IF(D24>=B24*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G24",
+          "col": 7,
+          "value": "GRI 303-3"
+        },
+        "8": {
+          "coord": "H24",
+          "col": 8,
+          "value": "CT dam, DBN 20kL project"
+        },
+        "9": {
+          "coord": "I24",
+          "col": 9,
+          "value": "Pending: requires water efficiency initiative Y/N flag in G_Data. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 25,
+      "cells": {
+        "1": {
+          "coord": "A25",
+          "col": 1,
+          "value": "── ISO ──"
+        }
+      }
+    },
+    {
+      "row": 26,
+      "cells": {
+        "1": {
+          "coord": "A26",
+          "col": 1,
+          "value": "ISO 14001: Certification achieved/in progress"
+        },
+        "2": {
+          "coord": "B26",
+          "col": 2,
+          "value": "8"
+        },
+        "3": {
+          "coord": "C26",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D26",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C26,B26)"
+        },
+        "5": {
+          "coord": "E26",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F26",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D26>=B26,\"✓ Met\",IF(D26>=B26*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G26",
+          "col": 7,
+          "value": "ISO 14001"
+        },
+        "8": {
+          "coord": "H26",
+          "col": 8,
+          "value": "Target date confirm with Maria"
+        },
+        "9": {
+          "coord": "I26",
+          "col": 9,
+          "value": "Pending: requires ISO 14001 cert status (Y/N) from ISO_Tracker. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 27,
+      "cells": {
+        "1": {
+          "coord": "A27",
+          "col": 1,
+          "value": "ISO 14001: Aspects register maintained"
+        },
+        "2": {
+          "coord": "B27",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C27",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D27",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C27,B27)"
+        },
+        "5": {
+          "coord": "E27",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F27",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D27>=B27,\"✓ Met\",IF(D27>=B27*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G27",
+          "col": 7,
+          "value": "ISO 14001 cl 6.1.2"
+        },
+        "8": {
+          "coord": "H27",
+          "col": 8,
+          "value": "Fleet diesel dominant aspect"
+        },
+        "9": {
+          "coord": "I27",
+          "col": 9,
+          "value": "Pending: aspects register Y/N from ISO_Tracker. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 28,
+      "cells": {
+        "1": {
+          "coord": "A28",
+          "col": 1,
+          "value": "Environmental policy — board approved"
+        },
+        "2": {
+          "coord": "B28",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C28",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D28",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C28,B28)"
+        },
+        "5": {
+          "coord": "E28",
+          "col": 5,
+          "value": "G_Data"
+        },
+        "6": {
+          "coord": "F28",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D28>=B28,\"✓ Met\",IF(D28>=B28*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G28",
+          "col": 7,
+          "value": "King V P1 / ISO 14001"
+        },
+        "8": {
+          "coord": "H28",
+          "col": 8,
+          "value": "Include net-zero commitment"
+        },
+        "9": {
+          "coord": "I28",
+          "col": 9,
+          "value": "Pending: env policy approval Y/N from G_Data row 23. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 29,
+      "cells": {
+        "1": {
+          "coord": "A29",
+          "col": 1,
+          "value": "NEMA/NWA/NEMWA legal compliance"
+        },
+        "2": {
+          "coord": "B29",
+          "col": 2,
+          "value": "4"
+        },
+        "3": {
+          "coord": "C29",
+          "col": 3,
+          "value": 0
+        },
+        "4": {
+          "coord": "D29",
+          "col": 4,
+          "value": 0,
+          "formula": "=MIN(C29,B29)"
+        },
+        "5": {
+          "coord": "E29",
+          "col": 5,
+          "value": "ISO_Tracker"
+        },
+        "6": {
+          "coord": "F29",
+          "col": 6,
+          "value": "✗ Gap",
+          "formula": "=IF(D29>=B29,\"✓ Met\",IF(D29>=B29*0.5,\"⚠ Partial\",\"✗ Gap\"))"
+        },
+        "7": {
+          "coord": "G29",
+          "col": 7,
+          "value": "NEMA / NWA"
+        },
+        "8": {
+          "coord": "H29",
+          "col": 8,
+          "value": "Legal register quarterly"
+        },
+        "9": {
+          "coord": "I29",
+          "col": 9,
+          "value": "Pending: legal compliance status from ISO_Tracker. Currently 0."
+        }
+      }
+    },
+    {
+      "row": 30,
+      "cells": {
+        "1": {
+          "coord": "A30",
+          "col": 1,
+          "value": "E SCORECARD TOTAL"
+        },
+        "4": {
+          "coord": "D30",
+          "col": 4,
+          "value": 36,
+          "formula": "=SUM(D5,D6,D7,D8,D9,D11,D12,D13,D15,D16,D17,D19,D20,D21,D23,D24,D26,D27,D28,D29)"
+        },
+        "5": {
+          "coord": "E30",
+          "col": 5,
+          "value": "108 pts max"
+        }
+      }
+    }
+  ]
+}

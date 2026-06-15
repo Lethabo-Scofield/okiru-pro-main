@@ -2,7 +2,20 @@ import { useCallback, useMemo } from "react";
 import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
 import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
-import { ESG_DEFAULT_MONTHS } from "./esgDefaults";
+
+export const ESG_DEFAULT_MONTHS = [
+  "Jul-25",
+  "Aug-25",
+  "Sep-25",
+  "Oct-25",
+  "Nov-25",
+  "Dec-25",
+  "Jan-26",
+  "Feb-26",
+  "Mar-26",
+];
+
+export const ESG_DEFAULT_DEPOTS = ["BLOEM", "CPT", "DBN", "ISANDO", "PE"];
 
 export type MonthlyRow = { depot: string; months: (number | "")[]; source?: string };
 

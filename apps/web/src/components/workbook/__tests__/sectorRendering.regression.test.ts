@@ -1,12 +1,13 @@
 /**
- * Regression — sector-aware rendering (Task #3).
+ * Regression — sector-aware rendering.
  *
  * Pins:
- *  - TRANSPORT splits MC and EE; every other sector merges them under
- *    "management-control-ee".
+ *  - MC and EE are now ONE combined flat section for ALL sectors (including
+ *    TRANSPORT). The `employees` section is disabled and hidden from the nav;
+ *    legacy data stored there is still projected to scoring.
  *  - SED's ICT-specific column is gated on sector === "ICT" and the underlying
  *    SED_COLUMNS array is never mutated.
- *  - Storage keys are identical across sectors so persisted workbooks survive
+ *  - Navigation keys are identical across sectors so persisted workbooks survive
  *    a sector switch.
  */
 import { describe, expect, it } from "vitest";
@@ -18,7 +19,7 @@ import {
   SED_COLUMNS,
 } from "../sections";
 
-const NON_TRANSPORT_SECTORS = [
+const ALL_SECTORS = [
   "RCOGP",
   "GENERIC",
   "ICT",
@@ -28,28 +29,32 @@ const NON_TRANSPORT_SECTORS = [
   "AGRI",
   "PROPERTY",
   "TOURISM",
+  "TRANSPORT",
 ];
 
-describe("getSectionGroupsForSector — non-Transport sectors merge MC + EE", () => {
-  it.each(NON_TRANSPORT_SECTORS)("%s renders MC+EE as one parent with two children", (sector) => {
+describe("getSectionGroupsForSector — MC+EE is one combined flat section for all sectors", () => {
+  it.each(ALL_SECTORS)("%s renders MC+EE as one flat section (not a parent group)", (sector) => {
     const groups = getSectionGroupsForSector(sector);
-    const merged = groups.find((g) => g.key === "management-control-ee");
-    expect(merged, `sector=${sector}`).toBeDefined();
-    expect(merged!.isGroup).toBe(true);
-    expect(merged!.sectionKeys).toEqual(["management-control", "employees"]);
-    expect(groups.find((g) => g.key === "management-control" && !g.isGroup)).toBeUndefined();
-    expect(groups.find((g) => g.key === "employees" && !g.isGroup)).toBeUndefined();
+    // No more management-control-ee group key.
+    expect(groups.find((g) => g.key === "management-control-ee"), `sector=${sector} group key`).toBeUndefined();
+    const mgmt = groups.find((g) => g.key === "management-control");
+    expect(mgmt, `sector=${sector} flat entry`).toBeDefined();
+    expect(mgmt!.isGroup, `sector=${sector} isGroup`).toBe(false);
+    expect(mgmt!.sectionKeys, `sector=${sector} sectionKeys`).toEqual(["management-control"]);
+    // The disabled `employees` section is NOT in the nav for any sector.
+    expect(groups.find((g) => g.sectionKeys.includes("employees")), `sector=${sector} employees in nav`).toBeUndefined();
   });
 });
 
-describe("getSectionGroupsForSector — TRANSPORT splits MC and EE", () => {
-  it("returns Management Control and Employees as separate top-level groups", () => {
-    const groups = getSectionGroupsForSector("TRANSPORT");
-    expect(groups.find((g) => g.key === "management-control-ee")).toBeUndefined();
-    const mgmt = groups.find((g) => g.key === "management-control");
-    const ee = groups.find((g) => g.key === "employees");
-    expect(mgmt?.isGroup).toBe(false);
-    expect(ee?.isGroup).toBe(false);
+describe("getSectionGroupsForSector — order is consistent", () => {
+  it("management-control sits between ownership and skills-development for all sectors", () => {
+    for (const sector of ALL_SECTORS) {
+      const groups = getSectionGroupsForSector(sector);
+      const idx = groups.findIndex((g) => g.key === "management-control");
+      expect(idx, `sector=${sector} index`).toBeGreaterThan(-1);
+      expect(groups[idx - 1]?.key, `sector=${sector} before`).toBe("ownership");
+      expect(groups[idx + 1]?.key, `sector=${sector} after`).toBe("skills-development");
+    }
   });
 });
 
@@ -81,7 +86,7 @@ describe("getSection('sed', sector) — ICT gating", () => {
 describe("Storage keys — stable across sector switches", () => {
   it("every sector exposes the same set of underlying section keys", () => {
     const reference = new Set(getOrderedSectionKeysForSector("RCOGP"));
-    for (const sector of [...NON_TRANSPORT_SECTORS, "TRANSPORT"]) {
+    for (const sector of ALL_SECTORS) {
       const keys = new Set(getOrderedSectionKeysForSector(sector));
       expect(keys, `sector=${sector}`).toEqual(reference);
     }
@@ -89,7 +94,7 @@ describe("Storage keys — stable across sector switches", () => {
 
   it("storage keys are a subset of canonical SECTIONS keys", () => {
     const canonical = new Set(SECTIONS.map((s) => s.key));
-    for (const sector of [...NON_TRANSPORT_SECTORS, "TRANSPORT"]) {
+    for (const sector of ALL_SECTORS) {
       for (const k of getOrderedSectionKeysForSector(sector)) {
         expect(canonical.has(k), `${sector}::${k}`).toBe(true);
       }
