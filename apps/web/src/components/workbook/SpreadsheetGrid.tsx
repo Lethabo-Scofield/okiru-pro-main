@@ -335,98 +335,10 @@ export function SpreadsheetGrid({
           }
           updateCell(editingCell.row, col.key, value, Object.keys(extra).length ? extra : undefined);
 
-          const isExactSelectPick =
-            (col.type === "select" || isYesNoColumn(col)) &&
-            (isYesNoColumn(col)
-              ? raw === "Yes" || raw === "No"
-              : Boolean(col.options?.includes(raw.trim())));
-
-          // Run deterministic normalization to detect mismatches and surface a popup.
-          if (!isExactSelectPick && !isEmpty && raw.trim() !== "") {
-            const normalized = normalizeCellForColumn(raw, col);
-            const hasMismatch =
-              normalized.changed &&
-              normalized.value !== "" &&
-              String(normalized.value) !== raw.trim();
-            const hasFlag = Boolean(normalized.flag);
-            let suggestion = hasMismatch ? String(normalized.value) : null;
-            if (!suggestion && col.type === "select" && col.options?.length) {
-              const fuzzy = suggestSelectOption(raw, col.options, col.key);
-              if (
-                fuzzy.suggestion &&
-                fuzzy.suggestion !== raw.trim() &&
-                fuzzy.confidence >= FUZZY_SELECT_HINT
-              ) {
-                suggestion = fuzzy.suggestion;
-              }
-            }
-
-            if (hasMismatch || hasFlag || suggestion) {
-              const cellEl = document.querySelector(
-                `[data-cell="${editingCell.row}-${editingCell.col}"]`,
-              );
-              const anchorRect = cellEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
-
-              // Abort any previous AI call.
-              cellPopupAbortRef.current?.abort();
-              const abort = new AbortController();
-              cellPopupAbortRef.current = abort;
-
-              setCellPopup({
-                anchorRect,
-                rawValue: raw.trim(),
-                suggestion,
-                col,
-                rowIdx: editingCell.row,
-                isAiSuggestion: false,
-                loading: suggestion == null,
-              });
-
-              // If deterministic couldn't suggest anything confident, hit the AI endpoint.
-              if (suggestion == null) {
-                const payload = {
-                  fieldKey: col.key,
-                  fieldLabel: col.label,
-                  rawValue: raw.trim(),
-                  fieldType: isYesNoColumn(col) ? "select" : col.type,
-                  allowedValues: isYesNoColumn(col)
-                    ? ["Yes", "No"]
-                    : col.options ?? [],
-                  validationMessage: col.validationMessage,
-                  dateFormat: col.type === "date" ? "dd/mm/yyyy" : undefined,
-                };
-                fetch(`${API_BASE}/api/workbook/suggest-value`, {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  signal: abort.signal,
-                  body: JSON.stringify(payload),
-                })
-                  .then((r) => (r.ok ? r.json() : null))
-                  .then((data: { suggestion?: string; explanation?: string } | null) => {
-                    if (!abort.signal.aborted && data?.suggestion) {
-                      setCellPopup((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              suggestion: data.suggestion ?? null,
-                              isAiSuggestion: true,
-                              loading: false,
-                            }
-                          : null,
-                      );
-                    } else if (!abort.signal.aborted) {
-                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
-                    }
-                  })
-                  .catch(() => {
-                    if (!abort.signal.aborted) {
-                      setCellPopup((prev) => (prev ? { ...prev, loading: false } : null));
-                    }
-                  });
-              }
-            }
-          }
+          // AI value-suggestion / auto-normalization popup removed: dropdowns,
+          // format hints and inline validation now guide input. The popup was
+          // surfacing off-base AI suggestions and reformatting already-valid
+          // entries (e.g. dates), so it has been removed per user feedback.
         }
       }
       editKeystrokeBootstrapRef.current = false;

@@ -20,6 +20,7 @@ import {
   type SectionDef,
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
+import { coerceYesNo } from "../src/lib/yesNoValue";
 import { isBlackRace, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import {
   getClient as memGetClient,
@@ -895,12 +896,12 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const votingPct = pctToFraction((r as any).votingRights);
     const eiPct = pctToFraction((r as any).economicInterest);
     const sharePct = pctToFraction((r as any).shareholding);
-    const isYouth = Boolean((r as any).isYouth);
-    const isDisabled = Boolean((r as any).isDisabled);
+    const isYouth = coerceYesNo((r as any).isYouth);
+    const isDisabled = coerceYesNo((r as any).isDisabled);
     // Lake demo writes `isNewEntrant` directly; default false otherwise.
-    const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    const isNewEntrant = coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
     // AGRI-specific: farm workers as a 5th Designated Group category.
-    const isFarmWorker = sectorCode === "AGRI" && Boolean((r as any).isFarmWorker) && farmWorkersIncluded;
+    const isFarmWorker = sectorCode === "AGRI" && coerceYesNo((r as any).isFarmWorker) && farmWorkersIncluded;
 
     // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
     // supplies them (trust holders, multi-beneficiary shareholders). Fall back
@@ -930,7 +931,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       votingRights: num((r as any).votingRights),
       economicInterest: num((r as any).economicInterest),
       shareholding: num((r as any).shareholding),
-      modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
+      modifiedFlowThrough: coerceYesNo((r as any).modifiedFlowThrough),
       // NEW (fix plan Bug 1) Î“Ã‡Ã¶ scoring-engine fields the loader reads.
       blackOwnership,
       blackWomenOwnership,
@@ -944,7 +945,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
-        Boolean((r as any).isDesignatedGroup) ||
+        coerceYesNo((r as any).isDesignatedGroup) ||
         pctToFraction((r as any).designatedGroupOwnership) > 0 ||
         isYouth ||
         isDisabled ||
@@ -980,8 +981,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
-        isDisabled: Boolean((r as any).isDisabled),
-        isForeign: Boolean((r as any).isForeign),
+        isDisabled: coerceYesNo((r as any).isDisabled),
+        isForeign: coerceYesNo((r as any).isForeign),
         votingRights: num((r as any).votingRights),
         startDate: s((r as any).startDate),
       });
@@ -999,8 +1000,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         num((r as any).trainingFacilityCost) +
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
-    const absorbed = Boolean((r as any).absorbed);
-    const employed = Boolean((r as any).employed);
+    const absorbed = coerceYesNo((r as any).absorbed);
+    const employed = coerceYesNo((r as any).employed);
     const categoryCode = s((r as any).categoryCode);
     // Derive employmentStatus (calculator reads this for unemployed/learnership/
     // absorption scoring) and the explicit YES / bursary flags, so the first
@@ -1020,16 +1021,16 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       race: normalizeRace(s((r as any).race)) || s((r as any).race),
       gender: s((r as any).gender),
       isBlack: isBlackRace(s((r as any).race)),
-      isDisabled: Boolean((r as any).isDisabled),
-      isForeign: Boolean((r as any).isForeign),
+      isDisabled: coerceYesNo((r as any).isDisabled),
+      isForeign: coerceYesNo((r as any).isForeign),
       employed,
       employmentStatus,
-      isYesEmployee: Boolean((r as any).isYesEmployee ?? (r as any).yesEmployee),
-      completed: Boolean((r as any).completed),
-      isCompleted: Boolean((r as any).completed),
+      isYesEmployee: coerceYesNo((r as any).isYesEmployee ?? (r as any).yesEmployee),
+      completed: coerceYesNo((r as any).completed),
+      isCompleted: coerceYesNo((r as any).completed),
       absorbed,
       isAbsorbed: absorbed,
-      isBursary: Boolean((r as any).isBursary) || categoryCode === "A",
+      isBursary: coerceYesNo((r as any).isBursary) || categoryCode === "A",
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),
@@ -1078,20 +1079,20 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         beeLevel,
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
-        empoweringSupplier: Boolean((r as any).empoweringSupplier),
-        isEmpoweringSupplier: Boolean((r as any).empoweringSupplier),
+        empoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
+        isEmpoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
         // Carry both the raw % (for audit) and the fraction (for scoring)
         currentBlackOwnership: num((r as any).currentBlackOwnership),
         blackOwnership: blackOwnershipFraction,
         currentBlackFemaleOwnership: num((r as any).currentBlackFemaleOwnership),
         blackFemaleOwnership: blackFemaleOwnershipFraction,
         blackWomenOwnership: blackFemaleOwnershipFraction,
-        sdRecipient: Boolean((r as any).sdRecipient),
-        isSupplierDevRecipient: Boolean((r as any).sdRecipient),
-        threeYearContract: Boolean((r as any).threeYearContract),
-        hasThreeYearContract: Boolean((r as any).threeYearContract),
-        designated: Boolean((r as any).designated),
-        isDesignatedGroup: Boolean((r as any).designated),
+        sdRecipient: coerceYesNo((r as any).sdRecipient),
+        isSupplierDevRecipient: coerceYesNo((r as any).sdRecipient),
+        threeYearContract: coerceYesNo((r as any).threeYearContract),
+        hasThreeYearContract: coerceYesNo((r as any).threeYearContract),
+        designated: coerceYesNo((r as any).designated),
+        isDesignatedGroup: coerceYesNo((r as any).designated),
         spend: num((r as any).spend),
         amount: num((r as any).spend),
         // Calculators check these flags when present
@@ -1141,7 +1142,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       contributionType: rawType,
       category: "socio_economic" as const,
       descriptionOfSpend: s((r as any).descriptionOfSpend),
-      ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
+      ictSpecificInitiative: coerceYesNo((r as any).ictSpecificInitiative),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),
       amount: num((r as any).amount),

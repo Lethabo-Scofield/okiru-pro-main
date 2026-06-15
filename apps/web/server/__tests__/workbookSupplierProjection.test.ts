@@ -54,4 +54,31 @@ describe('workbook supplier projection (Polo #8/#10)', () => {
     expect(OWNERSHIP_COLUMNS.some((c) => c.key === 'dataDate')).toBe(false);
     expect(PROCUREMENT_COLUMNS.some((c) => c.key === 'registrationNumber')).toBe(true);
   });
+
+  // A learner marked "No" for Foreign/Disabled must NOT come through as foreign/
+  // disabled. The projection previously used Boolean("No") === true, so string
+  // yes/no values (e.g. from Excel import) flipped the flags. coerceYesNo fixes it.
+  it('coerces string Yes/No skills flags correctly (No -> false, Yes -> true)', () => {
+    const wb = {
+      companyId: 'c1',
+      sections: {
+        'company-information': { meta: { industrySector: 'RCOGP' } },
+        'skills-development': {
+          rows: [
+            { _id: 's1', programName: 'P', categoryCode: 'D', learnerName: 'No One',
+              race: 'African', gender: 'Male', isForeign: 'No', isDisabled: 'No', courseCost: 50000 },
+            { _id: 's2', programName: 'P', categoryCode: 'D', learnerName: 'Yes One',
+              race: 'African', gender: 'Female', isForeign: 'Yes', isDisabled: 'Yes', courseCost: 50000 },
+          ],
+        },
+      },
+    } as unknown as WorkbookData;
+    const tps = projectWorkbookToClient(wb).trainingPrograms;
+    const noOne = tps.find((t: any) => t.learnerName === 'No One');
+    const yesOne = tps.find((t: any) => t.learnerName === 'Yes One');
+    expect(noOne.isForeign).toBe(false);
+    expect(noOne.isDisabled).toBe(false);
+    expect(yesOne.isForeign).toBe(true);
+    expect(yesOne.isDisabled).toBe(true);
+  });
 });

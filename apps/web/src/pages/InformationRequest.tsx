@@ -841,69 +841,10 @@ function MetaForm({
     onChange({ ...value, [k]: v });
   };
 
-  const handleBlur = (f: ColumnDef, rawTyped: string) => {
-    if (readOnly || !rawTyped.trim()) return;
-    // Only run for text-entry types, not boolean/select (select already constrains).
-    if (f.type === "boolean" || f.type === "select") return;
-
-    const normalized = normalizeCellForColumn(rawTyped, f);
-    const hasMismatch =
-      normalized.changed &&
-      normalized.value !== "" &&
-      String(normalized.value) !== rawTyped.trim();
-    const hasFlag = Boolean(normalized.flag);
-    if (!hasMismatch && !hasFlag) return;
-
-    const inputEl = inputRefs.current[f.key];
-    const anchorRect = inputEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
-    const suggestion = hasMismatch ? String(normalized.value) : null;
-
-    popupAbortRef.current?.abort();
-    const abort = new AbortController();
-    popupAbortRef.current = abort;
-
-    setPopup({
-      anchorRect,
-      rawValue: rawTyped.trim(),
-      suggestion,
-      col: f,
-      isAiSuggestion: false,
-      loading: suggestion == null,
-    });
-
-    if (suggestion == null) {
-      fetch(`${API_BASE}/api/workbook/suggest-value`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        signal: abort.signal,
-        body: JSON.stringify({
-          fieldKey: f.key,
-          fieldLabel: f.label,
-          rawValue: rawTyped.trim(),
-          fieldType: f.type,
-          allowedValues: f.options ?? [],
-        }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: { suggestion?: string; explanation?: string } | null) => {
-          if (!abort.signal.aborted && data?.suggestion) {
-            setPopup((prev) =>
-              prev
-                ? { ...prev, suggestion: data.suggestion ?? null, isAiSuggestion: true, loading: false }
-                : null,
-            );
-          } else if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        })
-        .catch(() => {
-          if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        });
-    }
-  };
+  // AI value-suggestion popup removed per user feedback: dropdowns, format hints
+  // and inline validation now guide input. The popup surfaced off-base AI
+  // suggestions and reformatted already-valid entries, so it no longer runs.
+  const handleBlur = (_f: ColumnDef, _rawTyped: string) => {};
 
   const renderField = (f: ColumnDef) => {
     const v = value[f.key];
