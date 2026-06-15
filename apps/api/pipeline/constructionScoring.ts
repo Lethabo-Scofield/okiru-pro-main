@@ -237,7 +237,8 @@ function scoreIndicator(
       break;
     }
     case 'evidence': {
-      const truthy = actual === true || (typeof actual === 'number' && actual >= 1) || (typeof actual === 'string' && actual === 'Yes');
+      const actualStr = String(actual).trim().toLowerCase();
+      const truthy = actual === true || (typeof actual === 'number' && actual >= 1) || ['yes', 'y', 'true', '1'].includes(actualStr);
       achieved = truthy ? indicator.weight : 0;
       actual = !!truthy;
       break;
