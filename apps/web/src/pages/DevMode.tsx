@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Bug, Lightbulb, MessageSquare, ShieldCheck, Trash2,
+  Bug, Lightbulb, MessageSquare, ShieldCheck,
   RefreshCcw, CheckCircle2, Clock, CircleAlert, Search, Loader2,
 } from 'lucide-react';
 import { apiRequest } from '@toolkit/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
 import { AppNavBack } from '@/components/AppNavBack';
 import { feedbackPillarLabel } from '@/lib/feedbackPillars';
 
@@ -32,6 +32,7 @@ interface FeedbackListResponse {
   feedback: FeedbackItem[];
   total: number;
   source: 'mongodb' | 'memory';
+  databaseConnected?: boolean;
 }
 
 interface FeedbackStats {
@@ -41,6 +42,7 @@ interface FeedbackStats {
   resolved: number;
   byCategory: Record<string, number>;
   source: 'mongodb' | 'memory';
+  databaseConnected?: boolean;
 }
 
 const STATUS_FILTERS: Array<{ value: Status | 'all'; label: string }> = [
@@ -58,7 +60,7 @@ const CATEGORY_FILTERS: Array<{ value: Category | 'all'; label: string }> = [
   { value: 'general', label: 'General' },
 ];
 
-const CATEGORY_ICON: Record<Category, JSX.Element> = {
+const CATEGORY_ICON: Record<Category, ReactNode> = {
   bug: <Bug className="h-3.5 w-3.5" />,
   feature: <Lightbulb className="h-3.5 w-3.5" />,
   general: <MessageSquare className="h-3.5 w-3.5" />,
@@ -71,7 +73,7 @@ const STATUS_COLOR: Record<Status, string> = {
   'resolved': 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
 };
 
-const STATUS_ICON: Record<Status, JSX.Element> = {
+const STATUS_ICON: Record<Status, ReactNode> = {
   'open': <CircleAlert className="h-3 w-3" />,
   'in-progress': <Clock className="h-3 w-3" />,
   'resolved': <CheckCircle2 className="h-3 w-3" />,
@@ -87,8 +89,6 @@ function formatDate(iso: string): string {
 }
 
 export default function DevMode() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -101,10 +101,11 @@ export default function DevMode() {
     queryKey: ['/api/feedback', statusFilter, categoryFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.set('dbOnly', '1');
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       const qs = params.toString();
-      const res = await apiRequest('GET', `/api/feedback${qs ? '?' + qs : ''}`);
+      const res = await apiRequest('GET', `/api/feedback?${qs}`);
       return res.json();
     },
   });
@@ -112,50 +113,15 @@ export default function DevMode() {
   const statsQuery = useQuery<FeedbackStats>({
     queryKey: ['/api/feedback/stats'],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/feedback/stats');
+      const res = await apiRequest('GET', '/api/feedback/stats?dbOnly=1');
       return res.json();
-    },
-  });
-
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: Status }) => {
-      const res = await apiRequest('PATCH', `/api/feedback/${id}`, { status });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feedback'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/feedback/stats'] });
-    },
-    onError: (err) => {
-      toast({
-        title: 'Failed to update',
-        description: err instanceof Error ? err.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const deleteFeedback = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest('DELETE', `/api/feedback/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feedback'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/feedback/stats'] });
-      toast({ title: 'Feedback deleted' });
-    },
-    onError: (err) => {
-      toast({
-        title: 'Failed to delete',
-        description: err instanceof Error ? err.message : 'Please try again.',
-        variant: 'destructive',
-      });
     },
   });
 
   const items = listQuery.data?.feedback ?? [];
   const stats = statsQuery.data;
-  const source = listQuery.data?.source ?? statsQuery.data?.source;
+  const databaseConnected =
+    listQuery.data?.databaseConnected ?? statsQuery.data?.databaseConnected ?? true;
 
   const filteredItems = useMemo(() => {
     if (!search.trim()) return items;
@@ -210,9 +176,9 @@ export default function DevMode() {
           <StatCard label="Resolved" value={stats?.resolved ?? 0} loading={statsQuery.isLoading} accent="emerald" />
         </section>
 
-        {source === 'memory' && (
+        {!databaseConnected && (
           <div className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-            Storage: in-memory (MongoDB not connected). Feedback will reset on server restart.
+            MongoDB is not connected, so database feedback is not available. No in-memory or sample feedback is shown here.
           </div>
         )}
 
@@ -318,31 +284,8 @@ export default function DevMode() {
                         <span>Anonymous</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={item.status}
-                        onChange={(e) => updateStatus.mutate({ id: item.id, status: e.target.value as Status })}
-                        disabled={updateStatus.isPending}
-                        data-testid={`select-status-${item.id}`}
-                        className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-zinc-200 focus:border-indigo-500 focus:outline-none"
-                      >
-                        <option value="open">Open</option>
-                        <option value="in-progress">In progress</option>
-                        <option value="resolved">Resolved</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('Delete this feedback?')) {
-                            deleteFeedback.mutate(item.id);
-                          }
-                        }}
-                        disabled={deleteFeedback.isPending}
-                        data-testid={`button-delete-${item.id}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-400">
+                      Read-only public view
                     </div>
                   </div>
                 </li>
