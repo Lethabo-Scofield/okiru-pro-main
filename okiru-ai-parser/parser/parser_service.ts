@@ -27,7 +27,9 @@ export class ParserService {
       margin: classification.margin,
     });
 
-    const knowledge = await this.repository.getDocumentKnowledge(classification.document_type);
+    const fallbackRepository = new InMemoryOntologyRepository();
+    const knowledge = await this.repository.getDocumentKnowledge(classification.document_type)
+      ?? await fallbackRepository.getDocumentKnowledge(classification.document_type);
     if (!knowledge || classification.status === 'unsupported' || classification.status === 'low_confidence') {
       return parserOutputSchema.parse({
         file_id: input.file_id,
@@ -95,13 +97,15 @@ export class ParserService {
       errors: validation.errors.length,
     });
 
-    const calculatorPayload = buildCalculatorPayload(knowledge.fields, extracted, validation.safe_fields);
     const requiresReview = !validation.passed || classification.confidence < 0.85;
     const status = validation.errors.length > 0 && classification.confidence < 0.6
       ? 'failed'
       : requiresReview
         ? 'review_required'
         : 'passed';
+    const calculatorPayload = status === 'failed'
+      ? {}
+      : buildCalculatorPayload(knowledge.fields, extracted, validation.safe_fields);
 
     const extractedFields = Object.fromEntries(
       Object.entries(extracted).map(([key, value]) => {
@@ -123,7 +127,7 @@ export class ParserService {
       overall_confidence: classification.confidence,
       status,
       extracted_fields: extractedFields,
-      calculator_payload: status === 'passed' ? calculatorPayload : calculatorPayload,
+      calculator_payload: calculatorPayload,
       validation: {
         passed: validation.passed,
         warnings: validation.warnings,

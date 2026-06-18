@@ -1,6 +1,7 @@
 import type { DocumentClassification, DocumentClassificationCandidate } from '../schemas/document_types.js';
 import type { RawExtractionInput } from '../schemas/parser_output.js';
 import type { DocumentKnowledge, DocumentTypeNode, FieldKnowledge, OntologyRepository } from '../graph/ontology_models.js';
+import { defaultDocumentKnowledge } from '../graph/ontology_queries.js';
 
 const PASS_CONFIDENCE = 0.85;
 const REVIEW_CONFIDENCE = 0.6;
@@ -154,12 +155,21 @@ export async function classifyDocument(
   input: RawExtractionInput,
   repository: OntologyRepository,
 ): Promise<DocumentClassification> {
-  const documentTypes = await repository.listDocumentTypes();
+  const fallbackKnowledge = defaultDocumentKnowledge();
+  const fallbackByName = new Map(fallbackKnowledge.map((knowledge) => [knowledge.document.name.toLowerCase(), knowledge]));
+  const documentTypesByName = new Map<string, DocumentTypeNode>();
+  for (const doc of await repository.listDocumentTypes()) {
+    documentTypesByName.set(doc.name.toLowerCase(), doc);
+  }
+  for (const knowledge of fallbackKnowledge) {
+    documentTypesByName.set(knowledge.document.name.toLowerCase(), knowledge.document);
+  }
+  const documentTypes = Array.from(documentTypesByName.values());
   const text = `${input.filename}\n${input.raw_text}`;
 
   const candidates: DocumentClassificationCandidate[] = [];
   for (const doc of documentTypes) {
-    const knowledge = await repository.getDocumentKnowledge(doc.name);
+    const knowledge = await repository.getDocumentKnowledge(doc.name) ?? fallbackByName.get(doc.name.toLowerCase()) ?? null;
     candidates.push(scoreCandidate(text, doc, knowledge));
   }
 

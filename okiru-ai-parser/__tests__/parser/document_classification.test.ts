@@ -63,6 +63,57 @@ describe('document type classification', () => {
     expect(result.reason).toContain('sufficient confidence');
   });
 
+  it('keeps canonical B-BBEE certificate classification when repository contains noisy ontology records', async () => {
+    const result = await classifyDocument(rawText([
+      'B-BBEE CERTIFICATE',
+      'Enterprise Name: ABC Suppliers Pty Ltd',
+      'Registration Number: 2020/123456/07',
+      'B-BBEE Status Level: Level Two',
+      'Black Ownership: 51%',
+      'Expiry Date: 01 Feb 2027',
+    ].join('\n')), customRepository(ambiguousDocs));
+
+    expect(result.status).toBe('classified');
+    expect(result.document_type).toBe('B-BBEE Certificate');
+    expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it('uses canonical fallback knowledge when the primary repository lacks the classified document', async () => {
+    const service = new ParserService(customRepository(ambiguousDocs));
+    const result = await service.resolve(rawText([
+      'B-BBEE CERTIFICATE',
+      'Enterprise Name: ABC Suppliers Pty Ltd',
+      'B-BBEE Status Level: Level Two',
+      'Black Ownership: 51%',
+      'Expiry Date: 01 Feb 2027',
+    ].join('\n')));
+
+    expect(result.status).toBe('passed');
+    expect(result.document_type).toBe('B-BBEE Certificate');
+    expect(result.calculator_payload).toEqual({
+      'supplier.name': 'ABC Suppliers Pty Ltd',
+      'supplier.bee_level': 2,
+      'supplier.black_ownership': 51,
+      'supplier.certificate_expiry': '2027-02-01',
+    });
+  });
+
+  it('does not infer expiry date from issue date when expiry label is missing', async () => {
+    const service = new ParserService();
+    const result = await service.resolve(rawText([
+      'B-BBEE CERTIFICATE',
+      'Enterprise Name: Missing Expiry Suppliers Pty Ltd',
+      'B-BBEE Status Level: Level 3',
+      'Black Ownership: 45%',
+      'Issue Date: 01 Mar 2026',
+    ].join('\n')));
+
+    expect(result.status).toBe('review_required');
+    expect(result.extracted_fields.expiry_date?.normalized_value).toBeNull();
+    expect(result.validation.missing_fields).toContain('expiry_date');
+    expect(result.calculator_payload).not.toHaveProperty('supplier.certificate_expiry');
+  });
+
   it('marks close document-type candidates as ambiguous', async () => {
     const result = await classifyDocument(rawText([
       'CIPC document',
@@ -73,7 +124,9 @@ describe('document type classification', () => {
     ].join('\n')), customRepository(ambiguousDocs));
 
     expect(result.status).toBe('ambiguous');
-    expect(result.candidates).toHaveLength(2);
+    const topCandidateText = result.candidates?.slice(0, 2).map((candidate) => candidate.document_type).join('\n') ?? '';
+    expect(topCandidateText).toContain('CIPC COR39');
+    expect(topCandidateText).toContain('CIPC registration documents');
     expect(result.reason).toContain('too close');
   });
 
