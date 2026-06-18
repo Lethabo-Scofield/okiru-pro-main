@@ -10,6 +10,6 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "parser/**/*.ts", "graph/**/*.ts", "schemas/**/*.ts", "__tests__/**/*.ts"],
+  "include": ["src/**/*.ts", "parser/**/*.ts", "graph/**/*.ts", "schemas/**/*.ts", "__tests__/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
