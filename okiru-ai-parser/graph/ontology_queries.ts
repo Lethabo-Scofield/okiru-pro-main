@@ -54,7 +54,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
       document: {
         name: 'B-BBEE Certificate',
         description: 'Supplier B-BBEE status level certificate or affidavit evidence.',
-        aliases: ['BEE Certificate', 'BBBEE Certificate', 'B-BBEE Affidavit', 'BEE Affidavit'],
+        aliases: ['BEE Certificate', 'BBBEE Certificate', 'B-BBEE Certificate', 'Supplier B-BBEE Certificate'],
         required: true,
         pillar_code: 'ESD',
         graph_version,
@@ -92,7 +92,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'bee_level_range_check', rule_type: 'range', severity: 'error', logic: 'bee_level:1:8', failure_message: 'B-BBEE level must be between 1 and 8', graph_version },
           ],
           patterns: [
-            { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: 'B[-\\s]?BBEE\\s*(?:Status\\s*)?Level\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
+            { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: '(?:B[-\\s]?BBEE\\s*(?:Status\\s*)?Level|BEE\\s*Level)\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.bee_level', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.beeLevel', manual_flow_mapping: 'procurement.supplier.beeLevel', graph_version },
@@ -111,7 +111,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'black_ownership_percentage_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black ownership percentage must be between 0 and 100', graph_version },
           ],
           patterns: [
-            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black ownership percentage', graph_version },
+            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black ownership percentage', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.black_ownership', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.blackOwnership', manual_flow_mapping: 'procurement.supplier.blackOwnership', graph_version },
@@ -131,7 +131,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'certificate_not_expired', rule_type: 'date', severity: 'error', logic: 'not_expired', failure_message: 'Certificate is expired', graph_version },
           ],
           patterns: [
-            { name: 'Expiry Date', pattern_type: 'regex', examples: ['Expiry Date: 01 Feb 2027'], regex: '(?:Expiry|Expiration|Valid\\s+Until)\\s*Date?\\s*[:\\-]?\\s*([0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[\\/\\-][0-9]{1,2}[\\/\\-][0-9]{4})', semantic_hint: 'certificate expiry date', graph_version },
+            { name: 'Expiry Date', pattern_type: 'regex', examples: ['Expiry Date: 01 Feb 2027'], regex: '(?:Expiry|Expiration|Valid\\s+Until|Valid\\s+To)(?:\\s*Date)?\\s*[:\\-]?\\s*([0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[\\/\\-][0-9]{1,2}[\\/\\-][0-9]{4})', semantic_hint: 'certificate expiry date', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.certificate_expiry', expected_type: 'date', destination: 'manual_workbook', workbook_field: 'supplier.expiryDate', manual_flow_mapping: 'procurement.supplier.expiryDate', graph_version },
@@ -181,7 +181,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'bee_level_range_check', rule_type: 'range', severity: 'error', logic: 'bee_level:1:8', failure_message: 'B-BBEE level must be between 1 and 8', graph_version },
           ],
           patterns: [
-            { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: 'B[-\\s]?BBEE\\s*(?:Status\\s*)?Level\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
+            { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: '(?:B[-\\s]?BBEE\\s*(?:Status\\s*)?Level|BEE\\s*Level)\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.bee_level', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.beeLevel', manual_flow_mapping: 'procurement.supplier.beeLevel', graph_version },
@@ -200,7 +200,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'black_ownership_percentage_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black ownership percentage must be between 0 and 100', graph_version },
           ],
           patterns: [
-            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black ownership percentage', graph_version },
+            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black ownership percentage', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.black_ownership', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.blackOwnership', manual_flow_mapping: 'procurement.supplier.blackOwnership', graph_version },
@@ -307,7 +307,7 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'black_ownership_percentage_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black ownership percentage must be between 0 and 100', graph_version },
           ],
           patterns: [
-            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'supplier black ownership', graph_version },
+            { name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+Ownership(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'supplier black ownership', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.black_ownership', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.blackOwnership', manual_flow_mapping: 'procurement.supplier.blackOwnership', graph_version },

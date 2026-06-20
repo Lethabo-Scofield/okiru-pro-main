@@ -30,7 +30,7 @@ function findHeuristicValue(fieldName: string, text: string): { rawValue: string
   if (/expiry/.test(fieldName)) {
     candidates.push({
       pattern: 'expiry_date_label',
-      regex: /\b(?:Expiry|Expiration|Valid\s+Until|Valid\s+To)\s*Date?\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/i,
+      regex: /\b(?:Expiry|Expiration|Valid\s+Until|Valid\s+To)(?:\s*Date)?\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/i,
       confidence: 0.86,
     });
   } else if (/signed/.test(fieldName)) {
