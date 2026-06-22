@@ -162,7 +162,7 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       bursaryMax: sk.bursaryMaxPts,                    // 4 (unemployed training)
       overallTarget: sk.overallSpendPercent / 100,     // 0.060
       bursaryTarget: sk.bursarySpendPercent / 100,     // 0.025 (2.5% headcount)
-      subMinThreshold: skillsSubMin,                   // 10 (40% × 25)
+      subMinThreshold: skillsSubMin,                   // 8 (40% × 20 base, excl. 5-pt absorption bonus)
       overallSpendPercent: sk.overallSpendPercent / 100,   // 0.060
       bursarySpendPercent: sk.bursarySpendPercent / 100,   // 0.025
       disabledSpendPercent: sk.disabledSpendPercent / 100, // 0.003 (0.3%)
@@ -185,7 +185,7 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       baseMax: procBaseMax,                            // 5+3+4+9+4 = 25
       bonusMax: pr.dgMaxPts,                           // 2
       tmpsTarget: 0,
-      subMinThreshold: procSubMin,                     // 10.8 (40% × 27)
+      subMinThreshold: procSubMin,                     // 10 (40% × 25 base, excl. 2-pt DG bonus)
       blackOwnedThreshold: pr.bo51Target,              // 0.40
       blackWomenThreshold: pr.bwo30Target,             // 0.12
       allSuppliersTarget: pr.allSuppliersTarget,       // 0.80

@@ -259,6 +259,28 @@ describe('ICT Generic golden — Skills Development', () => {
     expect(withUnemployed.learnerships).toBeCloseTo(4, 1);
     expect(withUnemployed.bursaries).toBeCloseTo(4, 1);  // 2.1.2.2 now scores → 4 + 4 = 8
   });
+
+  it('absorption (2.1.3) is scored over unemployed-LAI completers, not all Black learners (ledger D-05)', () => {
+    const base = { isBlack: true, isDisabled: false, race: 'African' as const, gender: 'Male' as const,
+      category: 'learnership' as const, categoryCode: 'D' as const, cost: 1000 };
+    // 4 Black LAI learners: 2 unemployed-completed (1 absorbed), 2 employed.
+    // OLD basis: absorbed/all = 1/4 = 25%. NEW basis: absorbed/unemployed-LAI-completers = 1/2 = 50%.
+    const r = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-test', leviableAmount: LEVIABLE,
+        trainingPrograms: [
+          { ...base, id: 'u1', employmentStatus: 'Unemployed', isCompleted: true, isAbsorbed: true } as never,
+          { ...base, id: 'u2', employmentStatus: 'Unemployed', isCompleted: true, isAbsorbed: false } as never,
+          { ...base, id: 'e1', employmentStatus: 'Permanent', isCompleted: true, isAbsorbed: false } as never,
+          { ...base, id: 'e2', employmentStatus: 'Permanent', isCompleted: true, isAbsorbed: false } as never,
+        ],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(r.rawStats.absorptionRate).toBeCloseTo(0.5, 5); // was 0.25 under all-learners basis
+    expect(r.absorption).toBeCloseTo(5, 1);
+  });
 });
 
 // ─── Procurement scoring ──────────────────────────────────────────────────────
