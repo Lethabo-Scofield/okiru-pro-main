@@ -30,6 +30,7 @@ export interface CalculatorConfig {
     womenEIMax?: number;
     womenEITarget?: number;
     newEntrantsMax?: number;
+    newEntrantsTarget?: number;
     designatedGroupsMax?: number;
     designatedGroupsTarget?: number;
     /**
@@ -126,6 +127,12 @@ export interface CalculatorConfig {
      * all categories rather than bursary-category spend. (DISCREPANCY-LEDGER D-03.)
      */
     bursaryIsBlackFemale?: boolean;
+    /**
+     * ICT Generic only: the 2.1.3 absorption bonus is scored over UNEMPLOYED Black
+     * learners who COMPLETED an LAI, not over all Black learners. (DISCREPANCY-LEDGER
+     * ict/generic D-05.) QSE absorption keeps the all-learners basis (open item Q-E).
+     */
+    absorptionBasisUnemployedLAI?: boolean;
   };
   procurement: {
     baseMax: number;

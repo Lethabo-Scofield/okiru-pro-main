@@ -99,6 +99,9 @@ interface SpendAccumulator {
   unemployedCount: number;
   /** Spend on Black FEMALE learners (all categories) — drives the QSE "Spend on Black women" 7-pt line. */
   blackFemaleSpend: number;
+  /** Count of unemployed Black learners who completed an LAI — denominator for the
+   *  ICT-Generic 2.1.3 absorption bonus, gated by absorptionBasisUnemployedLAI. */
+  unemployedLAICompletedCount: number;
   byCategory: Record<TrainingCategoryCode, number>;
 }
 
@@ -106,11 +109,22 @@ function isUnemployed(prog: TrainingProgram): boolean {
   return prog.employmentStatus === 'Unemployed' || prog.isEmployed === false;
 }
 
+function isLAIProgram(prog: TrainingProgram): boolean {
+  const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
+  return (
+    prog.category === 'learnership' ||
+    prog.category === 'internship' ||
+    catCode === 'B' ||
+    catCode === 'C' ||
+    catCode === 'D'
+  );
+}
+
 function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   const acc: SpendAccumulator = {
     total: 0, bursary: 0, disabled: 0, blackPeople: 0,
     learnershipCount: 0, absorbedCount: 0, totalBlackLearners: 0,
-    unemployedCount: 0, blackFemaleSpend: 0,
+    unemployedCount: 0, blackFemaleSpend: 0, unemployedLAICompletedCount: 0,
     byCategory: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 },
   };
 
@@ -136,16 +150,15 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     // or internships" — count categories B (internship), C (apprenticeship) and
     // D (learnership). Previously only B/legacy strings counted, so selecting the
     // proper C/D codes scored zero (Polo feedback #9).
-    if (
-      prog.category === 'learnership' ||
-      prog.category === 'internship' ||
-      catCode === 'B' ||
-      catCode === 'C' ||
-      catCode === 'D'
-    ) {
+    if (isLAIProgram(prog)) {
       acc.learnershipCount++;
     }
     if (isUnemployed(prog)) acc.unemployedCount++;
+    // Unemployed Black learner who completed an LAI — denominator for the ICT-Generic
+    // 2.1.3 absorption bonus (toolkit basis), used when absorptionBasisUnemployedLAI.
+    if (isLAIProgram(prog) && isUnemployed(prog) && prog.isCompleted) {
+      acc.unemployedLAICompletedCount++;
+    }
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
     if (prog.isAbsorbed) acc.absorbedCount++;
   }
@@ -332,6 +345,9 @@ export function calculateSkillsScore(
   // Black-FEMALE learning spend across ALL categories, not bursary-category spend
   // and not gender-blind. (DISCREPANCY-LEDGER rcogp/qse & ict/qse D-03.)
   const bursaryIsBlackFemale = (sc as any).bursaryIsBlackFemale === true;
+  // ICT Generic: absorption denominator = unemployed-LAI completers, not all Black
+  // learners (toolkit basis). QSE keeps the all-learners basis (open item Q-E). (ledger D-05)
+  const absorptionBasisUnemployedLAI = (sc as any).absorptionBasisUnemployedLAI === true;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
@@ -367,8 +383,11 @@ export function calculateSkillsScore(
   const learnershipTarget = Math.max(entityHeadcount * (learnershipTargetPct / 100), 1);
   const learnershipScore = clampScore(safeRatio(spend.learnershipCount, learnershipTarget, learnershipMaxPts), learnershipMaxPts);
 
-  const absorptionRate = spend.totalBlackLearners > 0
-    ? spend.absorbedCount / spend.totalBlackLearners
+  const absorptionDenominator = absorptionBasisUnemployedLAI
+    ? spend.unemployedLAICompletedCount
+    : spend.totalBlackLearners;
+  const absorptionRate = absorptionDenominator > 0
+    ? spend.absorbedCount / absorptionDenominator
     : 0;
   const absorptionScore = clampScore(safeRatio(absorptionRate, absorptionTargetPct / 100, absorptionMaxPts), absorptionMaxPts);
 
