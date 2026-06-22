@@ -164,6 +164,15 @@ describe('normalizeDesignationForScoring', () => {
     expect(normalizeDesignationForScoring('Non-executive Director')).toBe('Board');
     expect(normalizeDesignationForScoring('Senior Manager')).toBe('Senior');
   });
+
+  it('does not score a blank designation as Junior (ledger rcogp/generic D-01)', () => {
+    // Blank → 'Unclassified' (scored in no MC band), matching the workbook where an
+    // empty Designation.calcs matches no band's COUNTIFS. Previously returned 'Junior'.
+    expect(normalizeDesignationForScoring('')).toBe('Unclassified');
+    expect(normalizeDesignationForScoring(undefined)).toBe('Unclassified');
+    expect(normalizeDesignationForScoring(null)).toBe('Unclassified');
+    expect(normalizeDesignationForScoring('   ')).toBe('Unclassified');
+  });
 });
 
 describe('BLACK_RACES', () => {

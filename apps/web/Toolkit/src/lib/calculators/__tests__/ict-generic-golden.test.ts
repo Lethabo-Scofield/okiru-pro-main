@@ -95,19 +95,19 @@ describe('ICT Generic — CalculatorConfig completeness', () => {
     expect(mc.disabledTarget).toBe(0.02);
   });
 
-  it('skills targets correct (ICT-specific: 6%, no bursary)', () => {
+  it('skills targets correct (ICT-specific: 6%; LAI split 4+4)', () => {
     const sk = CONFIG.skills;
     // 2.1.1.1 all-spend at 6% = 8 pts
     expect(sk.learningProgrammesMaxPts).toBe(8);
     expect(sk.overallSpendPercent).toBeCloseTo(0.060, 4); // stored as fraction after /100
-    // No separate bursary in ICT
-    expect(sk.bursaryMaxPts).toBe(0);
-    expect(sk.bursarySpendPercent).toBe(0);
+    // 2.1.2.2 unemployed-LAI headcount = 4 pts (bursary slot, headcount-based) — ledger D-02
+    expect(sk.bursaryMaxPts).toBe(4);
+    expect(sk.bursarySpendPercent).toBeCloseTo(0.025, 4); // 2.5% headcount, fraction after /100
     // 2.1.1.2 disabled at 0.3% = 4 pts
     expect(sk.disabledLearningMaxPts).toBe(4);
     expect(sk.disabledSpendPercent).toBeCloseTo(0.003, 4); // stored as fraction after /100
-    // 2.1.2.1 + 2.1.2.2 LAI + unemployed training at 2.5% = 8 pts combined
-    expect(sk.learnershipsMaxPts).toBe(8);
+    // 2.1.2.1 all-LAI headcount at 2.5% = 4 pts (was 8 combined; now split — ledger D-02)
+    expect(sk.learnershipsMaxPts).toBe(4);
     expect(sk.learnershipTargetPercent).toBe(2.5);
     // 2.1.3 absorption bonus = 5 pts
     expect(sk.absorptionMaxPts).toBe(5);
@@ -229,6 +229,35 @@ describe('ICT Generic golden — Skills Development', () => {
     );
     expect(r.total).toBe(0);
     expect(r.subMinimumMet).toBe(false);
+  });
+
+  it('LAI is two separate 4-pt indicators: employed-only caps at 4, adding unemployed reaches 8 (ledger D-02)', () => {
+    const base = { isBlack: true, isDisabled: false, race: 'African' as const, gender: 'Male' as const, category: 'learnership' as const, categoryCode: 'D' as const };
+    // headcount 40 → 2.5% target = 1 learner per indicator.
+    const employedOnly = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-test', leviableAmount: LEVIABLE, headcount: 40,
+        trainingPrograms: [{ ...base, id: 'e1', name: 'LAI', cost: 1000, employmentStatus: 'Permanent' } as never],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(employedOnly.learnerships).toBeCloseTo(4, 1); // 2.1.2.1 all-LAI maxed
+    expect(employedOnly.bursaries).toBe(0);              // 2.1.2.2 unemployed-LAI — none (was folded → wrongly 8)
+
+    const withUnemployed = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-test', leviableAmount: LEVIABLE, headcount: 40,
+        trainingPrograms: [
+          { ...base, id: 'e1', name: 'LAI', cost: 1000, employmentStatus: 'Permanent' } as never,
+          { ...base, id: 'u1', name: 'LAI', cost: 1000, employmentStatus: 'Unemployed' } as never,
+        ],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(withUnemployed.learnerships).toBeCloseTo(4, 1);
+    expect(withUnemployed.bursaries).toBeCloseTo(4, 1);  // 2.1.2.2 now scores → 4 + 4 = 8
   });
 });
 
