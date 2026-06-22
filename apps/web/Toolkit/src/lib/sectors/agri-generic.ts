@@ -134,6 +134,16 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       middleBWMaxPts: mc.middleBWMaxPts,               // 1
       juniorMaxPts: mc.juniorMaxPts,                   // 1
       juniorBWMaxPts: mc.juniorBWMaxPts,               // 1
+      // Per-band Black/BW targets required by the EAP-split scorer. Without them
+      // AGRI (useRcogp=false) scores the 8 SMJ band points as 0 (mgmtFallback
+      // returns undefined → subTarget NaN). The `?? default` keeps the band
+      // scoring intact even if these ever drop out of sectorConfig. (ledger D-01)
+      seniorBlackTarget: mc.seniorBlackTarget ?? 0.60,
+      seniorBWTarget: mc.seniorBWTarget ?? 0.30,
+      middleBlackTarget: mc.middleBlackTarget ?? 0.75,
+      middleBWTarget: mc.middleBWTarget ?? 0.38,
+      juniorBlackTarget: mc.juniorBlackTarget ?? 0.88,
+      juniorBWTarget: mc.juniorBWTarget ?? 0.44,
       disabledTarget: ee.disabledTarget,               // 0.02
       disabledMaxPts: ee.disabledMaxPts,               // 2
     },

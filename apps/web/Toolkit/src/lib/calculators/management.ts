@@ -194,6 +194,10 @@ export function calculateManagementScore(
   const grouped = groupByDesignation(employees);
   const combineExcoSenior = data.combineExcoSenior === true;
   const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
+  // QSE scorecards score Senior+Middle+Junior management as ONE combined band
+  // against flat 60%/30% targets (no provincial-EAP split). See the isQse branch
+  // below. (TOOLKIT-RESOLVED.md S4; DISCREPANCY-LEDGER rcogp/qse D-01, ict/qse D-02.)
+  const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
   const rcogp = MANAGEMENT_RCOGP_DEFAULTS;
 
   const cfg = managementControl;
@@ -253,10 +257,21 @@ export function calculateManagementScore(
   const juniorBWBandTarget = mgmtFallback(cfg?.juniorBWTarget, rcogp.juniorBWTarget, useRcogp);
 
   const board = grouped['Board'] || [];
-  const execDirs = [
-    ...(grouped['Executive'] || []),
-    ...(grouped['Executive Director'] || []),
-  ];
+  // QSE "Executive Management" (Section 1) combines Executive Directors AND Other
+  // Executive Managers into ONE band (workbook MC Scorecard F24 = COUNTIFS over
+  // Designation.calcs ∈ {Executive Director, Other Executive Manager}). The Generic
+  // codes keep Other Executive Management as a separate band, so only fold it in for
+  // QSE. (DISCREPANCY-LEDGER rcogp/qse & ict/qse D-01.)
+  const execDirs = isQse
+    ? [
+        ...(grouped['Executive'] || []),
+        ...(grouped['Executive Director'] || []),
+        ...(grouped['Other Executive Management'] || []),
+      ]
+    : [
+        ...(grouped['Executive'] || []),
+        ...(grouped['Executive Director'] || []),
+      ];
   const otherExec = grouped['Other Executive Management'] || [];
   const senior = grouped['Senior'] || [];
   const middle = grouped['Middle'] || [];
@@ -266,8 +281,18 @@ export function calculateManagementScore(
   const semiSkilled = grouped['Semi-skilled'] || [];
   const unskilled = grouped['Unskilled'] || [];
 
-  const boardBlackPct = pctOf(board, countBlack);
-  const boardBWOPct = pctOf(board, countBlackWomen);
+  // Board "exercisable voting rights": weight each board member by their entered
+  // votingRightsPercent when the board's voting shares are an intentionally COMPLETE
+  // distribution (sum ≈ 100%); otherwise fall back to equal-weight headcount. This
+  // connects the previously-orphaned votingRightsPercent input — live bug: a user
+  // entered 33% black-female board voting and scored 0 because the field was never
+  // read. Targets stay the per-sector config values (boardBlackTarget/boardWomenTarget).
+  const boardVotingSum = board.reduce((s, e) => s + (e.votingRightsPercent ?? 0), 0);
+  const useBoardVotingWeights = boardVotingSum >= 99 && boardVotingSum <= 101;
+  const boardBlackVoting = board.reduce((s, e) => s + (isBlackRace(e.race) ? (e.votingRightsPercent ?? 0) : 0), 0);
+  const boardBWVoting = board.reduce((s, e) => s + (isBlackRace(e.race) && e.gender === 'Female' ? (e.votingRightsPercent ?? 0) : 0), 0);
+  const boardBlackPct = useBoardVotingWeights ? boardBlackVoting / boardVotingSum : pctOf(board, countBlack);
+  const boardBWOPct = useBoardVotingWeights ? boardBWVoting / boardVotingSum : pctOf(board, countBlackWomen);
   const execBlackPct = pctOf(execDirs, countBlack);
   const execBWOPct = pctOf(execDirs, countBlackWomen);
   const otherExecBlackPct = pctOf(otherExec, countBlack);
@@ -321,7 +346,23 @@ export function calculateManagementScore(
   let seniorBlack: number;
   let seniorBWO: number;
 
-  if (combineExcoSenior) {
+  if (isQse) {
+    // QSE Management Control Section 2: Senior + Middle + Junior management are
+    // scored as ONE combined band against FLAT targets (60% / 30%), not the
+    // Generic per-band provincial-EAP split. Workbook MC Scorecard:
+    //   F29 = Σ COUNTIFS(Designation.calcs ∈ {Senior,Middle,Junior Manager}, Black?=Yes)
+    //         / Σ COUNTIFS(Designation.calcs ∈ {…})
+    //   G29 = MIN(F29 / 0.60 × 6, 6);  the black-female row uses 0.30 × 2.
+    // seniorMaxPts (6) + seniorBWMaxPts (2) carry the whole 8-pt SMJ band;
+    // middle/junior maxPts are 0, so their EAP-split results stay 0.
+    const smj = [...senior, ...middle, ...junior];
+    const smjBlackPct = pctOf(smj, countBlack);
+    const smjBWOPct = pctOf(smj, countBlackWomen);
+    otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
+    otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
+    seniorBlack = clampScore(safeRatio(smjBlackPct, seniorBlackTarget, seniorMaxPts), seniorMaxPts);
+    seniorBWO = clampScore(safeRatio(smjBWOPct, seniorBWBandTarget, seniorBWMaxPts), seniorBWMaxPts);
+  } else if (combineExcoSenior) {
     otherExecBlackScore = clampScore(
       safeRatio(combinedExcoBlackPct, otherExecBlackTarget, combinedExcoBlackMax),
       combinedExcoBlackMax,

@@ -33,6 +33,7 @@ import { calculateManagementScore } from '../management';
 import { calculateSkillsScore } from '../skills';
 import { calculateProcurementScore } from '../procurement';
 import { calculateEsdScore, calculateSedScore } from '../esd-sed';
+import { getEffectiveEap, type Province } from '../eapTargets';
 
 const CONFIG = AGRI_GENERIC_CALCULATOR_CONFIG;
 
@@ -41,6 +42,38 @@ const NPAT = 10_000_000;
 const LEVIABLE = 5_000_000;
 const TMPS = 50_000_000;
 const EAP_PROVINCE = 'Gauteng';
+
+// Race/gender for each of the 6 black demographic groups the EAP splits across.
+const GROUP_RG: Record<string, { race: string; gender: string }> = {
+  AM: { race: 'African', gender: 'Male' },
+  CM: { race: 'Coloured', gender: 'Male' },
+  IM: { race: 'Indian', gender: 'Male' },
+  AF: { race: 'African', gender: 'Female' },
+  CF: { race: 'Coloured', gender: 'Female' },
+  IF: { race: 'Indian', gender: 'Female' },
+};
+
+/**
+ * Build an all-black workforce for one MC band, distributed across the 6
+ * demographic groups in the province's EFFECTIVE-EAP proportions. Because each
+ * group's share then equals its EAP weight, every per-group sub-target
+ * (bandTarget × eapWeight) is satisfied, so the EAP-split band scores its FULL
+ * points. Used to prove the AGRI senior/middle/junior bands score (ledger D-01:
+ * they previously returned 0 because the band targets were missing from config).
+ */
+function eapDistributedBlackBand(designation: string, province: string, n = 600) {
+  const eff = getEffectiveEap(province as Province);
+  const emps: Array<Record<string, unknown>> = [];
+  let i = 0;
+  (['AM', 'CM', 'IM', 'AF', 'CF', 'IF'] as const).forEach((g) => {
+    const count = Math.round(n * (eff[g] ?? 0));
+    const { race, gender } = GROUP_RG[g];
+    for (let k = 0; k < count; k++) {
+      emps.push({ id: `${designation}-${i++}`, name: 'e', gender, race, designation, isDisabled: false, isForeign: false });
+    }
+  });
+  return emps;
+}
 
 // ---------------------------------------------------------------------------
 // §1 Config completeness
@@ -548,5 +581,61 @@ describe('AGRI Generic — differs from RCOGP Generic', () => {
 
   it('Skills overall spend = 6% leviable (not RCOGP 3.5%)', () => {
     expect(CONFIG.skills.overallSpendPercent).toBeCloseTo(0.06, 4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §7 MC senior/middle/junior EAP bands score (regression for DISCREPANCY-LEDGER D-01)
+//
+// Before the fix, AGRI_GENERIC config omitted seniorBlackTarget/…/juniorBWTarget,
+// and management.ts gates the RCOGP defaults off for non-RCOGP sectors
+// (useRcogp=false), so mgmtFallback returned undefined → subTarget = NaN → every
+// per-demographic band scored 0. The 8 senior/middle/junior points (of 23 MC)
+// were unreachable for ALL AGRI entities. See docs/domain/sectors/agri/generic/connections.md §6.
+// ---------------------------------------------------------------------------
+
+describe('AGRI Generic — MC senior/middle/junior bands (ledger D-01)', () => {
+  it('a single black senior manager scores > 0 (was NaN→0 before the fix)', () => {
+    const r = calculateManagementScore(
+      {
+        id: '1', clientId: 'agri',
+        employees: [
+          { id: '1', name: 'S', gender: 'Male', race: 'African', designation: 'Senior', isDisabled: false, isForeign: false },
+        ],
+      },
+      CONFIG,
+      EAP_PROVINCE,
+    );
+    expect(r.seniorBlack).toBeGreaterThan(0);
+  });
+
+  it('a 100%-black, EAP-distributed senior/middle/junior workforce scores the full 8 SMJ band points', () => {
+    const employees = [
+      ...eapDistributedBlackBand('Senior', EAP_PROVINCE),
+      ...eapDistributedBlackBand('Middle', EAP_PROVINCE),
+      ...eapDistributedBlackBand('Junior', EAP_PROVINCE),
+    ];
+    const r = calculateManagementScore(
+      { id: '1', clientId: 'agri', employees: employees as never },
+      CONFIG,
+      EAP_PROVINCE,
+    );
+
+    // Every band — Black AND Black-female — was exactly 0 before the fix.
+    expect(r.seniorBlack).toBeGreaterThan(0);
+    expect(r.seniorBWO).toBeGreaterThan(0);
+    expect(r.middleBlack).toBeGreaterThan(0);
+    expect(r.middleBWO).toBeGreaterThan(0);
+    expect(r.juniorBlack).toBeGreaterThan(0);
+    expect(r.juniorBWO).toBeGreaterThan(0);
+
+    // EAP-proportional staffing satisfies every per-group sub-target, so each band
+    // maxes out: senior 2+1, middle 2+1, junior 1+1 = 8 of the 23 MC points.
+    const smj =
+      r.seniorBlack + r.seniorBWO +
+      r.middleBlack + r.middleBWO +
+      r.juniorBlack + r.juniorBWO;
+    expect(smj).toBeGreaterThanOrEqual(7.5);
+    expect(smj).toBeLessThanOrEqual(8);
   });
 });

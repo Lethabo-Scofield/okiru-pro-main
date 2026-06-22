@@ -360,7 +360,12 @@ router.get('/download', async (req: Request, res: Response) => {
 
     const baseFileName = trimmed.split('/').pop() || trimmed;
     const safeDownloadName = baseFileName.replace(/[\r\n"\\\x00-\x1F\x7F]/g, '_');
-    const contentDisposition = `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
+    // Preview renders the blob in an <iframe>/<img>, which only DISPLAYS when the SAS
+    // URL is served inline; the default `attachment` makes the browser download it and
+    // show nothing. The Download button omits ?disposition so it keeps `attachment`.
+    // (live feedback: "preview button downloads the scorecard and displays nothing")
+    const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+    const contentDisposition = `${disposition}; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`;
 
     const sasToken = generateBlobSASQueryParameters({
       containerName: CONTAINER_NAME,

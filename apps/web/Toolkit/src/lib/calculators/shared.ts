@@ -118,7 +118,12 @@ const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
  */
 export function normalizeDesignationForScoring(raw: string | null | undefined): string {
   const trimmed = String(raw ?? '').trim();
-  if (!trimmed) return 'Junior';
+  // A blank designation matches NO band in the workbook (every MC Scorecard band
+  // is a COUNTIFS on Designation.calcs = an exact band label), so it must score
+  // nowhere — not default to Junior, which silently inflated the junior band's
+  // count/denominator for any dataset with empty designation cells.
+  // 'Unclassified' is not read by any band in management.ts. (ledger rcogp/generic D-01)
+  if (!trimmed) return 'Unclassified';
   const exact = WORKBOOK_TO_DESIGNATION[trimmed];
   if (exact) return exact;
 

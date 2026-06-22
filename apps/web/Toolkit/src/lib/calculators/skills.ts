@@ -97,6 +97,8 @@ interface SpendAccumulator {
   totalBlackLearners: number;
   /** Count of unemployed Black learners — drives the AgriBEE headcount-based 2.1.2.2 indicator. */
   unemployedCount: number;
+  /** Spend on Black FEMALE learners (all categories) — drives the QSE "Spend on Black women" 7-pt line. */
+  blackFemaleSpend: number;
   byCategory: Record<TrainingCategoryCode, number>;
 }
 
@@ -108,7 +110,7 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   const acc: SpendAccumulator = {
     total: 0, bursary: 0, disabled: 0, blackPeople: 0,
     learnershipCount: 0, absorbedCount: 0, totalBlackLearners: 0,
-    unemployedCount: 0,
+    unemployedCount: 0, blackFemaleSpend: 0,
     byCategory: { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0, G: 0 },
   };
 
@@ -126,6 +128,9 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     acc.totalBlackLearners++;
 
     if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
+    // All programs here are Black (non-black were `continue`d above), so a Female
+    // learner's spend is Black-female spend — the QSE "Spend on Black women" line.
+    if (prog.gender === 'Female') acc.blackFemaleSpend += cost;
     if (prog.isDisabled) acc.disabled += cost;
     // "Number of ALL Black people participating in learnerships, apprenticeships
     // or internships" — count categories B (internship), C (apprenticeship) and
@@ -323,6 +328,10 @@ export function calculateSkillsScore(
   // AgriBEE: the bursary slot models the "unemployed Black people in training"
   // indicator (2.1.2.2), which is scored on a headcount basis, not spend.
   const bursaryIsHeadcount = (sc as any).bursaryIsHeadcount === true;
+  // QSE "Spend on Black women" (7 pts @ 1% leviable): the bursary slot measures
+  // Black-FEMALE learning spend across ALL categories, not bursary-category spend
+  // and not gender-blind. (DISCREPANCY-LEDGER rcogp/qse & ict/qse D-03.)
+  const bursaryIsBlackFemale = (sc as any).bursaryIsBlackFemale === true;
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
@@ -350,7 +359,9 @@ export function calculateSkillsScore(
   const bursaryHeadcountTarget = Math.max(entityHeadcount * bursaryTargetPct, 1);
   const bursaryScore = bursaryIsHeadcount
     ? clampScore(safeRatio(spend.unemployedCount, bursaryHeadcountTarget, bursaryMaxPts), bursaryMaxPts)
-    : clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);
+    : bursaryIsBlackFemale
+      ? clampScore(safeRatio(spend.blackFemaleSpend, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts)
+      : clampScore(safeRatio(spend.bursary, TARGET_BURSARIES, bursaryMaxPts), bursaryMaxPts);
   const disabledScore = clampScore(safeRatio(spend.disabled, TARGET_DISABLED, disabledMaxPts), disabledMaxPts);
 
   const learnershipTarget = Math.max(entityHeadcount * (learnershipTargetPct / 100), 1);
@@ -372,7 +383,9 @@ export function calculateSkillsScore(
     { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
     bursaryIsHeadcount
       ? { name: "Number of unemployed Black people in training", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: bursaryScore }
-      : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
+      : bursaryIsBlackFemale
+        ? { name: "Expenditure on learning programmes for Black women", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore }
+        : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
     { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: disabledScore },
     { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: learnershipScore },
     { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },
@@ -402,7 +415,7 @@ export function calculateSkillsScore(
     eapProvince: province,
     rawStats: {
       blackSpend: round2(totalRecognised),
-      bursarySpend: round2(spend.bursary),
+      bursarySpend: round2(bursaryIsBlackFemale ? spend.blackFemaleSpend : spend.bursary),
       disabledSpend: round2(spend.disabled),
       learnershipCount: spend.learnershipCount,
       absorbedCount: spend.absorbedCount,

@@ -120,6 +120,12 @@ export interface CalculatorConfig {
      * (TOOLKIT-RESOLVED.md Q13; AGRI Skills Scorecard r39, header "Headcount".)
      */
     bursaryIsHeadcount?: boolean;
+    /**
+     * QSE only: the bursary slot (bursaryMaxPts) represents "Spend on Black women"
+     * (7 pts @ 1% leviable), so it is scored from Black-FEMALE learning spend across
+     * all categories rather than bursary-category spend. (DISCREPANCY-LEDGER D-03.)
+     */
+    bursaryIsBlackFemale?: boolean;
   };
   procurement: {
     baseMax: number;

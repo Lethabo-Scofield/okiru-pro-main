@@ -183,6 +183,9 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
       absorptionMaxPts: sk.absorptionMaxPts,
       learnershipTargetPercent: sk.learnershipTargetPercent,
       absorptionTargetPercent: sk.absorptionTargetPercent,
+      // 2.1.2.2: the bursary slot (4 pts) is the UNEMPLOYED-Black-in-LAI headcount
+      // indicator (2.5% of headcount), scored on a headcount basis. (ledger D-02)
+      bursaryIsHeadcount: true,
     },
     procurement: {
       baseMax: procBaseMax,

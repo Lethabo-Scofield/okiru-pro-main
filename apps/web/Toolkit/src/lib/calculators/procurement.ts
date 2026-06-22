@@ -120,8 +120,15 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     const recognised = sup.spend * getRecognitionMultiplier(sup.beeLevel, config);
     recognisedSpend += recognised;
 
-    // Use isEmpoweringSupplier flag when available, fall back to level 1-4
-    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 4)) {
+    // "Spend from all suppliers (Level 1-8)": every supplier with a recognition
+    // level 1-8 counts, weighted by its multiplier (NC / level 0 → 0). The B-BBEE
+    // LEVEL already discounts L5-8 (0.80…0.10), so gating this line to L1-4 wrongly
+    // dropped recognised L5-8 spend entirely and under-scored the line (could fail
+    // the PP sub-minimum). The Empowering-Supplier flag governs the separate 1.2
+    // adjusted-spend factor, not inclusion here; an explicit isEmpoweringSupplier
+    // === false is still honoured (strict non-empowering exclusion).
+    // (DISCREPANCY-LEDGER rcogp/qse D-02; Excel Procurement Scorecard!H9 = sum over all suppliers.)
+    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 8)) {
       empoweringSpend += recognised;
     }
 

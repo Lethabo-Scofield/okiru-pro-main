@@ -1789,17 +1789,24 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
-                      <MetaForm
-                        fields={activeMetaFieldsResolved}
-                        value={
-                          activeSection.key === "financial-information"
-                            ? financialMetaWithNorm
-                            : activeMeta
-                        }
-                        readOnly={!activeSectionPermissions.canEdit}
-                        crossFieldErrors={activeMetaCrossFieldErrors}
-                        onChange={(next) => handleMetaChange(activeSection.key, next)}
-                      />
+                      <>
+                        {!activeSectionPermissions.canEdit && (
+                          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+                            You have <span className="font-semibold">read-only</span> access to this section — changes here won't be saved. Ask the workspace owner to grant you edit access to this pillar.
+                          </div>
+                        )}
+                        <MetaForm
+                          fields={activeMetaFieldsResolved}
+                          value={
+                            activeSection.key === "financial-information"
+                              ? financialMetaWithNorm
+                              : activeMeta
+                          }
+                          readOnly={!activeSectionPermissions.canEdit}
+                          crossFieldErrors={activeMetaCrossFieldErrors}
+                          onChange={(next) => handleMetaChange(activeSection.key, next)}
+                        />
+                      </>
                     )}
                   </div>
                   <div className="pt-2">
@@ -1831,17 +1838,24 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
-                      <MetaForm
-                        fields={activeMetaFieldsResolved}
-                        value={
-                          activeSection.key === "financial-information"
-                            ? financialMetaWithNorm
-                            : activeMeta
-                        }
-                        readOnly={!activeSectionPermissions.canEdit}
-                        crossFieldErrors={activeMetaCrossFieldErrors}
-                        onChange={(next) => handleMetaChange(activeSection.key, next)}
-                      />
+                      <>
+                        {!activeSectionPermissions.canEdit && (
+                          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+                            You have <span className="font-semibold">read-only</span> access to this section — changes here won't be saved. Ask the workspace owner to grant you edit access to this pillar.
+                          </div>
+                        )}
+                        <MetaForm
+                          fields={activeMetaFieldsResolved}
+                          value={
+                            activeSection.key === "financial-information"
+                              ? financialMetaWithNorm
+                              : activeMeta
+                          }
+                          readOnly={!activeSectionPermissions.canEdit}
+                          crossFieldErrors={activeMetaCrossFieldErrors}
+                          onChange={(next) => handleMetaChange(activeSection.key, next)}
+                        />
+                      </>
                     )}
                   </div>
                 </>
