@@ -16,4 +16,19 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Per-pillar: Own=23.00 MC=6.79 PP=20.33 SD=3.69 ED=2.36 SED=0.41 (Skills=0)
 - Decision: KEEP — establishes the fitness function. PP/SD/ED/SED match the Excel
   ground truth exactly; Ownership (−2) and MC (−4.98) are the open gaps → M1.
-- Commit: (initial autoresearch scaffolding)
+- Commit: 0ffc5870 (initial autoresearch scaffolding)
+
+### EXP-1 — Ownership: credit new entrants from BNE% column  (2026-06-24)
+- Backlog item: M1b
+- Hypothesis: Ownership scores 23 not 25 because `projectWorkbookToClient` only
+  reads new-entrant as a boolean flag (`isNewEntrant`/`blackNewEntrant`) that no
+  workbook column supplies — so the bulk-uploaded BNE% never credits the 2
+  new-entrant points. Designated groups are already credited from their % column.
+- Change: apps/web/server/workbookRoutes.ts:917 — `isNewEntrant` now also true when
+  `pctToFraction(blackNewEntrantOwnership) > 0` (mirrors the designated-group rule).
+- Result: SCORE 56.58 → 58.58 (target 63.56); full suite 1078 pass / 22 fail
+  (same pre-existing failures, no new red); PIPELINE green.
+- Per-pillar: Own=25.00 (was 23) MC=6.79 PP=20.33 SD=3.69 ED=2.36 SED=0.41
+- Decision: KEEP — Ownership now matches the Excel ground truth (25/25). Remaining
+  gap is entirely Management Control (6.79 vs 11.77) → M1a next.
+- Commit: (autoresearch/auto branch)
