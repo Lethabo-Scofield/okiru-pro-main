@@ -69,7 +69,11 @@ suite('autoresearch fitness — Lake Trading bulk upload → 63.56', () => {
   const tmps = p.financials?.tmps ?? 133730345.99;
 
   const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 100000000, outstandingDebt: 0, yearsHeld: 10 } as any, CONFIG).total;
-  const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any }, CONFIG, 'Gauteng').total;
+  // combineExcoSenior comes from the company-info meta ("Combine Other Executive &
+  // Senior Management? = Yes") — the real scoring path (Toolkit store) passes it,
+  // so the fitness harness must too.
+  const combineExcoSenior = Boolean((p.financials as any)?.combineExcoSenior);
+  const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any, combineExcoSenior } as any, CONFIG, 'Gauteng').total;
   const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, CONFIG).total;
   const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any, graduationBonus: false, jobsCreatedBonus: false } as any, npat, CONFIG);
   const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, CONFIG).total;

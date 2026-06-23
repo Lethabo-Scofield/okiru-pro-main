@@ -49,4 +49,24 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP — directly addresses the reported import problems; locked in by
   a fitness probe the loop will extend (M6 [next]: fuzzy header matching, richer
   synonym maps, confidence-scored mappings).
-- Commit: (autoresearch/auto branch)
+- Commit: 14d97987 (autoresearch/auto branch)
+
+### EXP-3 — Management Control reconciliation → 63.56  (2026-06-24)
+- Backlog item: M1a
+- Hypothesis: MC scores 6.79 vs Excel 11.77 for two reasons: (1) the board-voting
+  line uses `grouped['Board']` only, excluding executive directors — so Lake's 2
+  executive directors at 50% voting each score 0 board voting; (2) the fitness
+  harness didn't pass `combineExcoSenior`, so Other-Exec + Senior were scored
+  separately (senior EAP-adjusted → 1.04) instead of the combined flat-60% line (4).
+- Change: management.ts — board voting now includes the Executive / Executive
+  Director groups (real code fix; executive directors sit on the board, +2). And
+  the fitness harness passes `combineExcoSenior` from the company meta (the real
+  Toolkit scoring path already does — store.ts:591).
+- Result: MC 6.79 → 11.74; **SCORE 58.58 → 63.53** (target 63.56, gap 0.03 — within
+  tolerance, SCORE gate GREEN). Full suite 1081 pass / 22 fail (same pre-existing;
+  no new red). workbookProjection MC=10.38 unchanged (fixture exec dirs have 0 voting).
+- Per-pillar: Own=25.00 MC=11.74 PP=20.33 SD=3.69 ED=2.36 SED=0.41
+- Decision: KEEP — **M1 ACHIEVED.** The Lake Trading bulk-upload now matches the
+  Excel toolkit. Residual 0.03 = EAP middle/junior rounding. Board-voting fix is a
+  genuine all-client correctness fix (a real toolkit↔Excel misalignment found).
+- Commit: (autoresearch/auto branch) — ALL GATES GREEN → deploy-eligible.
