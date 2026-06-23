@@ -145,7 +145,9 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+// Public read: anyone with the /devmode route can view feedback (no login required).
+// Mutations (PATCH/DELETE below) remain auth-gated.
+router.get('/', async (req: Request, res: Response) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -172,7 +174,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/stats', requireAuth, async (_req: Request, res: Response) => {
+// Public read: feedback stats are viewable without login (see GET '/' above).
+router.get('/stats', async (_req: Request, res: Response) => {
   try {
     if (isMongoConnected()) {
       const [total, open, inProgress, resolved, byCategory, byPillar] = await Promise.all([
