@@ -19,6 +19,7 @@ import {
   isCriticalWorkbookIssue,
   type WorkbookValidationIssue,
 } from "@/components/workbook/workbookValidation";
+import { BOOLEAN_TRUE, BOOLEAN_FALSE } from "@/lib/tabularNormalize";
 
 export type WorkbookRow = Record<string, unknown> & { _id: string };
 export type WorkbookSectionPayload = { rows: WorkbookRow[]; meta?: Record<string, unknown> };
@@ -37,9 +38,9 @@ const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   { sectionKey: "financial-information", hints: ["financial information", "financial", "finance", "p&l", "revenue"] },
   { sectionKey: "afs-additions", hints: ["afs additions", "access to financial services", "afs scorecard", "afs banks", "afs long term", "afs short term"] },
   { sectionKey: "ownership", hints: ["ownership", "shareholder", "voting rights", "equity"] },
-  { sectionKey: "management-control", hints: ["management control", "management", "board", "directors"] },
-  { sectionKey: "employees", hints: ["employees", "employee", "staff list", "employment equity", "ee profile"] },
-  { sectionKey: "skills-development", hints: ["skills development", "skills", "training", "learnership"] },
+  { sectionKey: "management-control", hints: ["management control", "management", "board", "directors", "exco", "leadership", "mc data"] },
+  { sectionKey: "employees", hints: ["employees", "employee", "staff list", "employment equity", "ee profile", "workforce", "headcount"] },
+  { sectionKey: "skills-development", hints: ["skills development", "skills", "training", "learning", "learnership", "learnerships", "learning programme", "learning programmes", "skills report", "bursaries", "wsp atr", "skills dev"] },
   // The "suppliers" / "vendor" hints map to the canonical Procurement section
   // (the standalone "Suppliers" section was removed in May 2026).
   { sectionKey: "procurement", hints: ["procurement", "preferential procurement", "suppliers", "supplier", "vendor", "vendors"] },
@@ -185,9 +186,15 @@ export function parseLooseNumber(raw: unknown): number | null {
 
 function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unknown {
   if (raw === null || raw === undefined || raw === "") return "";
-  if (col?.type === "boolean") {
+  // Yes/No select columns (yesNoBoolean) and plain booleans both normalise via the
+  // shared synonym set, so "true"/"t"/"✓"/"x"/"checked"/"compliant"/"yebo" all
+  // become Yes and "no"/"false"/"n/a"/"none" become No — not a raw string that
+  // then fails strict-select validation.
+  if (col?.yesNoBoolean || col?.type === "boolean") {
     const s = String(raw).trim().toLowerCase();
-    return s === "yes" || s === "true" || s === "1" || s === "y";
+    if (BOOLEAN_TRUE.has(s)) return true;
+    if (BOOLEAN_FALSE.has(s)) return false;
+    return false;
   }
   if (col?.type === "number") {
     const n = parseLooseNumber(raw);

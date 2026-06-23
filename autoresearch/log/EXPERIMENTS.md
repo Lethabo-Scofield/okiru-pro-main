@@ -31,4 +31,22 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Per-pillar: Own=25.00 (was 23) MC=6.79 PP=20.33 SD=3.69 ED=2.36 SED=0.41
 - Decision: KEEP — Ownership now matches the Excel ground truth (25/25). Remaining
   gap is entirely Management Control (6.79 vs 11.77) → M1a next.
+- Commit: fbe661f6 (autoresearch/auto branch)
+
+### EXP-2 — Smarter normalization (user feedback)  (2026-06-24)
+- Backlog item: M6
+- Hypothesis: bulk-upload normalization isn't smart enough — yes/no select columns
+  kept the raw string ("true" → "true", failing strict validation), misnamed
+  skills sheets (e.g. "Learning & Development") were skipped, and headcount had to
+  be entered separately from the employee register.
+- Change: shared BOOLEAN_TRUE/FALSE synonym set exported from tabularNormalize and
+  wired into the importer's coerceValue (yesNoBoolean + boolean → real booleans);
+  broadened skills/employees/management sheet-name hints; headcount auto-derives
+  from employees.length in projectWorkbookToClient. New probe:
+  normalizationIntelligence.test.ts (3 cases).
+- Result: full suite 1081 pass / 22 fail (same pre-existing; no new red). Lake
+  Trading SCORE unchanged at 58.58 (these are robustness, not score, fixes).
+- Decision: KEEP — directly addresses the reported import problems; locked in by
+  a fitness probe the loop will extend (M6 [next]: fuzzy header matching, richer
+  synonym maps, confidence-scored mappings).
 - Commit: (autoresearch/auto branch)

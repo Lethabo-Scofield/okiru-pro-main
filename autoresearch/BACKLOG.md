@@ -51,6 +51,28 @@ yes/no coercers; EAP tables duplicated frontend+API per memory
 `eap-targets-were-hardcoded-in-two-places`), silent-failure modes, and any
 TODO/FIXME that is a real bug. Each cleanup must keep the full suite green.
 
+## M6 — Smart spreadsheet normalization (user feedback)  [IN PROGRESS]
+
+Make any spreadsheet import "claude smart". Driven by direct user feedback (skills
+sheet misplaced; "true" not recognised as Yes; headcount should link to the
+employee register). Fitness probe:
+`apps/web/src/lib/__tests__/normalizationIntelligence.test.ts` — extend it with
+each new messy case before/after fixing.
+
+- [done EXP-2] Yes/No synonym coercion unified on the shared `BOOLEAN_TRUE`/`FALSE`
+  set (true/t/✓/x/checked/compliant/yebo ↔ no/false/n-a/none) in the importer's
+  `coerceValue` — yes/no *select* columns now normalise to booleans instead of
+  storing the raw string (which then failed strict-select validation).
+- [done EXP-2] Skills sheet-name hints broadened (learning, L&D, learnerships,
+  WSP/ATR, bursaries, skills report); employees/management hints broadened
+  (workforce, exco, leadership, headcount).
+- [done EXP-2] Skills headcount auto-derives from the employee register when not
+  supplied (`projectWorkbookToClient`) — no double entry.
+- [next] Fuzzy column-header matching (token overlap / edit distance) for headers
+  not covered by aliases; richer race/size/level/designation synonym maps;
+  per-cell mapping confidence + a "review low-confidence mappings" surface; lean
+  on the AI fallback (`normalizeExcelFileWithAi`) for genuinely novel sheets.
+
 ## M5 — Risk register  [OPEN, continuous]
 
 Maintain `log/RISKS.md`: correctness, security, data-loss, operational. For each:

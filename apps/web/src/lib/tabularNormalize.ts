@@ -103,7 +103,9 @@ const GENDER_MAP: Record<string, string> = {
   men: "Male",
 };
 
-const BOOLEAN_TRUE = new Set([
+// Shared Yes/No synonym sets — the single source of truth for boolean coercion
+// across paste, file-import and the grid (keep normalization consistently smart).
+export const BOOLEAN_TRUE = new Set([
   "true",
   "yes",
   "y",
@@ -113,8 +115,11 @@ const BOOLEAN_TRUE = new Set([
   "x",
   "checked",
   "compliant",
+  "yebo",
+  "applicable",
+  "present",
 ]);
-const BOOLEAN_FALSE = new Set([
+export const BOOLEAN_FALSE = new Set([
   "false",
   "no",
   "n",
@@ -124,6 +129,10 @@ const BOOLEAN_FALSE = new Set([
   "-",
   "unchecked",
   "non-compliant",
+  "na",
+  "n/a",
+  "none",
+  "not applicable",
 ]);
 
 const PLACEHOLDER_VALUES = new Set([
