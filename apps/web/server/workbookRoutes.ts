@@ -913,8 +913,13 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const sharePct = pctToFraction((r as any).shareholding);
     const isYouth = coerceYesNo((r as any).isYouth);
     const isDisabled = coerceYesNo((r as any).isDisabled);
-    // Lake demo writes `isNewEntrant` directly; default false otherwise.
-    const isNewEntrant = coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    // Credit a black new entrant from the explicit flag OR a positive BNE%
+    // column (mirrors how designated groups are credited from their % below).
+    // Without this, a workbook / bulk-upload row that supplies only BNE% never
+    // scores the new-entrant points.
+    const isNewEntrant =
+      coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant) ||
+      pctToFraction((r as any).blackNewEntrantOwnership) > 0;
     // AGRI-specific: farm workers as a 5th Designated Group category.
     const isFarmWorker = sectorCode === "AGRI" && coerceYesNo((r as any).isFarmWorker) && farmWorkersIncluded;
 
