@@ -1187,6 +1187,14 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     if (supplierSpendTotal > 0) financials.tmps = supplierSpendTotal;
   }
 
+  // Connect the skills headcount to the actual employee register — the user
+  // shouldn't have to enter it twice. When no headcount was supplied, use the
+  // number of employees captured in Management Control. The skills calculator
+  // scores learnership / absorption participation as a % of this headcount.
+  if (!((financials as any).headcount > 0) && employees.length > 0) {
+    (financials as any).headcount = employees.length;
+  }
+
   const ownershipMeta = {
     companyValue: financials.companyValue ?? 0,
     outstandingDebt: financials.outstandingDebt ?? 0,
