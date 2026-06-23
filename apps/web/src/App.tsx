@@ -211,7 +211,7 @@ function AppRouter() {
         <ProtectedRoute><EsgPreviewRoute><EsgToolkitLoader /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/devmode">
-        <ProtectedRoute><DevMode /></ProtectedRoute>
+        <DevMode />
       </Route>
       <Route path="/super-admin">
         <SuperAdminRoute><SuperAdmin /></SuperAdminRoute>
