@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import { parseWorkbookDate, type ColumnDef } from "@/components/workbook/sections";
 import { suggestSelectOption, FUZZY_SELECT_ACCEPT } from "@/lib/selectOptionMatch";
+import { parseNumberLoose } from "@/lib/tabularNormalize";
+import { coerceYesNo } from "@/lib/yesNoValue";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -46,6 +48,14 @@ export function mapHeaderToKey(header: string, columns: ColumnDef[]): string | n
 }
 
 export function coerceCellValue(key: string, col: ColumnDef | undefined, raw: unknown): unknown {
+  // Yes/No select columns are stored as booleans (scoring reads true/false).
+  // Route them through coerceYesNo so a pasted "yes"/"no" persists as the correct
+  // boolean, matching the keyboard-edit and Excel-import paths.
+  if (col?.yesNoBoolean) {
+    // Empty stays unset (blank); a real value coerces to the boolean scoring reads.
+    if (raw === null || raw === undefined || raw === "") return "";
+    return coerceYesNo(raw);
+  }
   if (raw === null || raw === undefined || raw === "") return col?.type === "boolean" ? false : "";
   if (col?.type === "boolean") {
     const s = String(raw).trim().toLowerCase();
@@ -53,8 +63,10 @@ export function coerceCellValue(key: string, col: ColumnDef | undefined, raw: un
   }
   if (col?.type === "number") {
     if (typeof raw === "number") return raw;
-    const n = parseFloat(String(raw).replace(/[^\d.-]/g, ""));
-    return Number.isFinite(n) ? n : "";
+    // parseNumberLoose handles SA-locale decimals ("9,09" → 9.09), thousands
+    // separators and currency symbols, instead of stripping the comma (909).
+    const n = parseNumberLoose(String(raw));
+    return n === null ? "" : n;
   }
   if (col?.type === "date") {
     if (raw instanceof Date) {
@@ -100,7 +112,10 @@ export function parseClipboardMatrix(text: string): string[][] {
   const trimmed = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!trimmed.trim()) return [];
 
-  const delimiter = trimmed.includes("\t") ? "\t" : ",";
+  // Clipboard data from Excel/Sheets is always TAB-delimited between columns.
+  // Never fall back to comma: SA-locale decimals ("9,09") and thousands
+  // separators would otherwise be torn apart across adjacent columns.
+  const delimiter = "\t";
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -204,7 +219,9 @@ export function matrixToRowsByPosition(
       if (!key) continue;
       const col = columns.find((x) => x.key === key);
       const val = coerceCellValue(key, col, line[c]);
-      if (val !== "" && val !== null && val !== undefined && val !== false) hasData = true;
+      // A boolean (incl. explicit false, e.g. a Yes/No cell set to "No") counts as
+      // data; only "" / null / undefined are treated as empty.
+      if (typeof val === "boolean" || (val !== "" && val !== null && val !== undefined)) hasData = true;
       row[key] = val;
     }
 

@@ -773,13 +773,19 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     width: 140,
     aliases: ["Ownership Type"],
   },
-  yesNoColumn("soaBuyer", "SOA Buyer", { width: 110, aliases: ["SOA Buyer"] }),
+  yesNoColumn("soaBuyer", "Sale of Assets (SOA) Buyer", {
+    width: 150,
+    aliases: ["SOA Buyer", "Sale of Assets Buyer"],
+    guidance:
+      "SOA = Sale of Assets. Choose Yes if this shareholder acquired the holding via a Sale of Assets transaction.",
+  }),
   {
     key: "transactionSoa",
     label: "Transaction (SOA)",
     type: "text",
     width: 150,
     aliases: ["Transaction (SOA)", "Transaction"],
+    guidance: "SOA = Sale of Assets. Describe the Sale of Assets transaction, if applicable.",
   },
   {
     key: "rowOutstandingDebt",
@@ -857,6 +863,8 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     validate: percentValidator,
     aliases: ["Share %", "Shareholding (%)", "Shareholding"],
     validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+    guidance:
+      "Percentage shareholding. Used only to weight this shareholder against others when 'Number of Shares' is blank. Voting and economic-interest points come from the Voting Rights (%) and Economic Interest (%) columns.",
   },
   {
     key: "votingRights",
@@ -866,6 +874,8 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     validate: percentValidator,
     aliases: ["Voting Rights"],
     validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+    guidance:
+      "This shareholder's share of the company's total exercisable voting rights (a 51% voting holder = 51), not the proportion of their own shares that carry votes.",
   },
   {
     key: "economicInterest",
@@ -912,7 +922,7 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
     guidance:
       "Required. Distinguishes board-level directors (Executive Director, Non-executive Director) from management/EE bands. Board-level rows are scored at fixed MC targets; Senior/Middle/Junior rows are scored against provincial EAP targets.",
   },
-  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"] },
+  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"], guidance: "Optional reference only. Scoring uses the Designation column; Occupational Level is used only as a fallback if Designation is blank." },
   { key: "department", label: "Department", type: "text", width: 160, aliases: ["Department", "Dept", "Business Unit"] },
   { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Monthly Salary", "Remuneration", "Total Cost to Company", "CTC"] },
   yesNoColumn("isDisabled", "Disabled", { width: 100, required: false, aliases: ["Disabled *", "Disabled"] }),
@@ -1554,6 +1564,29 @@ export function getSection(
       label: "Preferential Procurement",
       description:
         "Construction sector procurement spend against TMPS. Indicator rows follow the selected Construction scorecard type (QSE / Contractor / BEP).",
+    };
+  }
+
+  // Construction is scored on Supplier Development; the Construction Sector Code
+  // has no *scored* Enterprise Development pillar (ED contributions score 0).
+  // We steer users to SD via the label/guidance but keep both options so strict
+  // validation never rejects an imported row that carries "Enterprise Development".
+  if (key === "esd" && sector === "CONSTRUCTION" && section.columns) {
+    return {
+      ...section,
+      label: "Supplier Development",
+      description:
+        "Construction is scored on Supplier Development. The Construction Sector Code has no scored Enterprise Development pillar — ED contributions score 0 points.",
+      columns: section.columns.map((c) =>
+        c.key === "esdCategory"
+          ? {
+              ...c,
+              guidance:
+                "Construction is scored on Supplier Development only — Enterprise Development contributions are not scored (0 pts). Use Supplier Development.",
+              validationMessage: "Construction is scored on Supplier Development (Enterprise Development is not scored).",
+            }
+          : c,
+      ),
     };
   }
 
