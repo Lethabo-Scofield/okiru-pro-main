@@ -133,7 +133,9 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.get("/api/feedback", requireAuth, async (req: Request, res: Response) => {
+  // Public read: anyone with the /devmode route can view feedback (no login
+  // required). Mutations (PATCH/DELETE below) remain auth-gated.
+  app.get("/api/feedback", async (req: Request, res: Response) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -162,7 +164,8 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.get("/api/feedback/stats", requireAuth, async (_req: Request, res: Response) => {
+  // Public read: feedback stats viewable without login (see GET '/api/feedback').
+  app.get("/api/feedback/stats", async (_req: Request, res: Response) => {
     try {
       if (isMongoConnected()) {
         const [total, open, inProgress, resolved, byCategory] = await Promise.all([
