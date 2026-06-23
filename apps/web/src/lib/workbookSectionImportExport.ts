@@ -37,7 +37,8 @@ function parseGridMatrix(matrix: unknown[][], columns: ColumnDef[]): WorkbookGri
       if (!key) return;
       const col = columns.find((c) => c.key === key);
       const val = coerceCellValue(key, col, vals[colIdx]);
-      if (val !== "" && val !== null && val !== undefined && val !== false) hasData = true;
+      // Explicit boolean (e.g. a Yes/No cell set to "No") counts as data.
+      if (typeof val === "boolean" || (val !== "" && val !== null && val !== undefined)) hasData = true;
       row[key] = val;
     });
     for (const col of columns) {
