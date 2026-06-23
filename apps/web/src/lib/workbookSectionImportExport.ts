@@ -12,7 +12,7 @@ export type SectionImportDiff = {
   unchanged: number;
 };
 
-function findHeaderRow(rows: unknown[][]): number {
+export function findHeaderRow(rows: unknown[][]): number {
   for (let i = 0; i < Math.min(rows.length, 8); i++) {
     const row = rows[i] || [];
     const filled = row.filter((c) => c !== null && c !== undefined && String(c).trim() !== "").length;

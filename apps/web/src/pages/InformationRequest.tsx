@@ -1428,43 +1428,80 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
   const handleExcelImport = useCallback(
     async (file: File) => {
-      const bee = await importBeeGatheringExcel(file, API_BASE);
-      const result = bee.extraction.isBeeGatheringFormat
-        ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
-        : await normalizeExcelFileWithAi(file, API_BASE);
+      try {
+        const bee = await importBeeGatheringExcel(file, API_BASE);
+        const result = bee.extraction.isBeeGatheringFormat
+          ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
+          : await normalizeExcelFileWithAi(file, API_BASE);
 
-      if (result.criticalBlocked) {
+        if (result.criticalBlocked) {
+          toast({
+            title: "Import blocked — fix critical fields",
+            description: formatWorkbookValidationSummary(result.validationIssues, 5),
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Only send sections that actually parsed data. The server replaces each
+        // section it receives by key (persistSection), so posting empty sections
+        // would wipe rows that didn't parse instead of leaving them untouched.
+        const populatedSections = Object.fromEntries(
+          Object.entries(result.sections ?? {}).filter(([, sec]) => {
+            const rows = (sec as { rows?: unknown[] } | undefined)?.rows;
+            const meta = (sec as { meta?: Record<string, unknown> } | undefined)?.meta;
+            const hasRows = Array.isArray(rows) && rows.length > 0;
+            const hasMeta = !!meta && Object.keys(meta).length > 0;
+            return hasRows || hasMeta;
+          }),
+        ) as typeof result.sections;
+
+        if (Object.keys(populatedSections).length === 0) {
+          toast({
+            title: "Nothing to import",
+            description:
+              "No recognisable data was found in that file. Check the sheet names and column headers match the expected template.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const res = await fetch(
+          `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/import`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sections: populatedSections }),
+          },
+        );
+        if (!res.ok) {
+          toast({ title: "Import failed", variant: "destructive" });
+          return;
+        }
+        setWorkbook((prev) =>
+          prev ? { ...prev, sections: { ...prev.sections, ...populatedSections } } : prev,
+        );
+        if (result.validationIssues.length > 0) {
+          toast({
+            title: "Imported with gaps",
+            description:
+              "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
+          });
+        } else {
+          toast({ title: "Workbook updated from Excel" });
+        }
+      } catch (err) {
+        // Previously any thrown error (bad file, network/AI failure) fell through
+        // with no UI feedback — the button just appeared to do nothing.
         toast({
-          title: "Import blocked — fix critical fields",
-          description: formatWorkbookValidationSummary(result.validationIssues, 5),
+          title: "Couldn't import file",
+          description:
+            err instanceof Error
+              ? err.message
+              : "The file could not be read. Make sure it's a valid .xlsx workbook and try again.",
           variant: "destructive",
         });
-        return;
-      }
-      const res = await fetch(
-        `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/import`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sections: result.sections }),
-        },
-      );
-      if (!res.ok) {
-        toast({ title: "Import failed", variant: "destructive" });
-        return;
-      }
-      setWorkbook((prev) =>
-        prev ? { ...prev, sections: { ...prev.sections, ...result.sections } } : prev,
-      );
-      if (result.validationIssues.length > 0) {
-        toast({
-          title: "Imported with gaps",
-          description:
-            "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
-        });
-      } else {
-        toast({ title: "Workbook updated from Excel" });
       }
     },
     [companyId, toast],
