@@ -230,4 +230,14 @@ Append one entry per loop iteration (newest at the bottom). Template is in
   DB/auth e2e fails). Logged the matchSheetName fragility as R23 (medium).
 - Decision: KEEP — high-impact correctness fix (real measured financials now reach scoring
   for the first time). Deploy-eligible; shipping in this batch with R6/R7/R8/R19.
-- Commit: (autoresearch/auto branch)
+- Commit: 9015355c (autoresearch/auto branch)
+
+### DEPLOY — tag 9015355c-202606241139  (2026-06-24, user-directed "deploy the ready fixes")
+- Built+pushed api & web to ACR (compute unchanged, left at 5418f511-202606151030).
+- Pinned prod overlay api+web → 9015355c-202606241139; kubectl apply; rolled api & web.
+- Ships on top of the already-live R6 (337d61e2): **R7** (EXP-8 FSC absorption), **R8**
+  (EXP-11 RCOGP QSE absorption→100%), **R19** (EXP-10 import company-meta), **R21** (EXP-12
+  financials sheet mapping + Measured column). So all of R6/R7/R8/R19/R21 are now LIVE.
+- Gates at deploy: SCORE 63.53≈63.56 ✓, PIPELINE ✓, full suite green (minus known pre-existing
+  e2e). Verify: api+web pods on the new tag Running; okiru.pro/health → HTTP 200.
+- Still UNSHIPPED on branch: none from this batch. Open backlog: R9–R13, R18, R20, R22, R23.
