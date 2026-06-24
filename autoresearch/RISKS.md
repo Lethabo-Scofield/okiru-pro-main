@@ -22,3 +22,9 @@ Open weaknesses to investigate (find the ROOT CAUSE — under-INGESTION, not sco
 discrepancies (esp. W4). For each weakness: reproduce in the score harness, find why the data
 is dropped/under-scored, fix the IMPORT/normalizer (not the targets), re-run the fitness, keep
 the full suite green. **Goal: 16/16 Level 1.** Do not inflate scores — fix ingestion.
+
+### M7 iteration 1 (2026-06-24) — ownership + ESD ingestion
+- **W1a DONE** (ESD sheet "Enterprise & Supplier Developme" skipped → no SD/ED): added truncated-name hints. SD now ingests.
+- **W-own DONE** (3 bugs: junk summary rows ingested as shareholders; flat 1-share weighting; blackOwnership=max(voting,EI) squared by the calc): filter junk, derive shares from voting%, set blackOwnership=1.0 for black individuals. Ownership 12→23-25/25.
+- **Impact:** scores lifted from ~45–69 to ~66–90; best now AGRI ~90/132 (L3). Still **0/14 Level 1**. No regression (Lake 63.53; suites green).
+- **Next (biggest remaining gaps):** W1b `ed0` everywhere (enterprise-dev contributions not categorized, ~7pts); FSC `sk1` (FSC skills broken, ~20pts on FSC); the remaining ~10–30pts to L1 per workbook.
