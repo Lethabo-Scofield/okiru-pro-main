@@ -128,7 +128,7 @@ const QSE_INDICATORS: ConstructionIndicator[] = [
     code: 'qse.ownership.designated_groups',
     element: 'ownership', category: 'main',
     name: 'Black New Entrants / Designated Groups',
-    description: 'Economic Interest of Black New Entrants or Black Designated Groups (target: 10% for contractors, 5% for others ΓÇö per source, target is ambiguous for QSE; engine uses 10% by default)',
+    description: 'Economic Interest of Black New Entrants or Black Designated Groups. ZM-verified 2026-06-24: target 10% (default), 5% for BEP entities — applied via input.subSector in constructionScoring.ts.',
     weight: 7, target: 10, targetUnit: 'percent', calculation: 'percentage',
     inputKey: 'economicInterestDesignatedPercent',
     evidenceRequired: 'Designation evidence, qualifying classification proof',
@@ -1168,7 +1168,7 @@ const BEP_INDICATORS: ConstructionIndicator[] = [
     element: 'enterpriseSupplierDevelopment', category: 'main',
     name: 'PP from EME Suppliers',
     description: 'B-BBEE Procurement Spend from EME Suppliers as a percentage of TMPS',
-    weight: 3, target: 15, targetUnit: 'percent_tmps', calculation: 'percentage_of_tmps',
+    weight: 3, target: 20, targetUnit: 'percent_tmps', calculation: 'percentage_of_tmps', // ZM-verified 2026-06-24: 20% (was 15%)
     inputKey: 'ppEmeSpend',
     evidenceRequired: 'EME affidavits/certificates',
   },
@@ -1177,7 +1177,7 @@ const BEP_INDICATORS: ConstructionIndicator[] = [
     element: 'enterpriseSupplierDevelopment', category: 'main',
     name: 'PP from QSE Suppliers',
     description: 'B-BBEE Procurement Spend from QSE Suppliers as a percentage of TMPS',
-    weight: 2, target: 15, targetUnit: 'percent_tmps', calculation: 'percentage_of_tmps',
+    weight: 2, target: 10, targetUnit: 'percent_tmps', calculation: 'percentage_of_tmps', // ZM-verified 2026-06-24: 10% (was 15%)
     inputKey: 'ppQseSpend',
     evidenceRequired: 'QSE affidavits/certificates',
   },
