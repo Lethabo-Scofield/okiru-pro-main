@@ -490,7 +490,7 @@ function CompanyPicker({
                   // Summary page will retry loadClientData.
                 }
               }
-              const warnCount = previewResult?.warnings.length ?? 0;
+              const warnCount = previewResult?.warnings?.length ?? 0;
               toast({
                 title: submitted
                   ? "Imported and synced to scorecard"
@@ -786,7 +786,7 @@ function CompanyPicker({
                 // Summary page will retry loadClientData.
               }
             }
-            const warnCount = previewResult?.warnings.length ?? 0;
+            const warnCount = previewResult?.warnings?.length ?? 0;
             toast({
               title: submitted
                 ? "Imported and synced to scorecard"
