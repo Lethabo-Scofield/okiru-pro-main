@@ -928,17 +928,21 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     // to race+gender+voting/EI derivation for individual shareholders.
     const explicitBlackOwn = (r as any).blackOwnership;
     const explicitBlackWomenOwn = (r as any).blackWomenOwnership;
+    // blackOwnership is the BLACK FRACTION of the holder (the calc multiplies it by the
+    // holder's share fraction). A black individual is 100% black-owned — their holding
+    // SIZE comes from `shares` (voting/EI), NOT from blackOwnership. The old code set it
+    // to max(voting,EI), which the calc then squared (28% voting -> 14% black). (W-own)
     const blackOwnership =
       explicitBlackOwn != null
         ? pctToFraction(explicitBlackOwn)
         : isBlack
-          ? Math.max(votingPct, eiPct)
+          ? 1
           : 0;
     const blackWomenOwnership =
       explicitBlackWomenOwn != null
         ? pctToFraction(explicitBlackWomenOwn)
         : isBlack && isFemale
-          ? Math.max(votingPct, eiPct)
+          ? 1
           : 0;
 
     return {
@@ -958,10 +962,14 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // Use integer "shares" derived from shareholding %; only relative weight matters
       // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
       // branch in calculateOwnershipScore so blackOwnership flows through.
+      // Share weight: real export sheets carry Voting Rights % / Economic Interest %
+      // but no explicit shareholding column, so the share-weighted ownership calc was
+      // diluting every holder to 1 equal share (black voting read ~6% not ~63%). Fall
+      // back to voting% (then EI%) as the weight so ownership scores from real %s. (W-own)
       shares:
         num((r as any).numberOfShares) > 0
           ? Math.round(num((r as any).numberOfShares))
-          : Math.max(1, Math.round(sharePct * 10_000)),
+          : Math.max(1, Math.round((sharePct > 0 ? sharePct : Math.max(votingPct, eiPct)) * 10_000)),
       shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
@@ -976,6 +984,15 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       economicInterestPercent: eiPct,
       ownershipType: "shareholder" as const,
     };
+  }).filter((sh) => {
+    // Drop summary / total / note rows the grid parser ingests below the shareholder
+    // data (e.g. "TOTALS" with voting 100%, "Black voting rights", a "Net value:" note).
+    // These were polluting the share-weighted ownership calc. (W-own)
+    const nm = String(sh.name ?? "").trim().toLowerCase();
+    if (!nm) return false;
+    if (/^(totals?|sub-?totals?|grand\s+total|net\s+value|black\s+(voting|women|economic|new|people|disabled))/i.test(nm)) return false;
+    // A real shareholder has a recognised race or some ownership signal.
+    return sh.race !== "" || sh.blackOwnership > 0 || sh.votingRightsPercent > 0 || sh.economicInterestPercent > 0;
   });
 
   const empSeen = new Set<string>();
