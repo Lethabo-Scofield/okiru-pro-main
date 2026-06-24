@@ -45,6 +45,23 @@ describe('construction-map — unit conversions + wiring', () => {
     expect(input.financials.npat).toBe(10_000_000);
   });
 
+  it('Phase 1: ESD/SED beneficiary flags feed the BWO / structured / limited-services indicators', () => {
+    const { input } = buildConstructionScoringInput(
+      baseState({
+        client: { npat: 10_000_000 },
+        esd: { contributions: [
+          { id: 'sd1', beneficiary: 'BWO Co', type: 'grant', amount: 100_000, category: 'supplier_development', blackBenefitPercent: 100, isBlackWomenOwnedBeneficiary: true },
+        ] },
+        sed: { contributions: [
+          { id: 'se1', beneficiary: 'Community', type: 'grant', amount: 80_000, category: 'socio_economic', blackBenefitPercent: 100, isStructuredProject: true, isLimitedServicesCommunity: true },
+        ] },
+      }), cfg,
+    );
+    expect(input.indicators.supplierDevelopmentSpendBWO as number).toBeGreaterThan(0);
+    expect(input.indicators.sedStructuredProjectsSpend as number).toBeGreaterThan(0);
+    expect(input.indicators.sedLimitedServicesPercent).toBe(100); // 100% of SED to limited-services communities
+  });
+
   it('passes recognised PP / SD / SED spend as RAW ZAR (not a percentage)', () => {
     const { input } = buildConstructionScoringInput(
       baseState({
