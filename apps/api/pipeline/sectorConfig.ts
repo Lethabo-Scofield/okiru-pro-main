@@ -690,7 +690,7 @@ export const FSC_GENERIC: SectorConfig = {
       bursarySpendPercent: 1.5,       // Unemployed spend target = 1.5% of leviable
       disabledSpendPercent: 0.3,      // Disabled spend target = 0.3% of leviable
       learnershipTargetPercent: 5.0,  // LAI = 5% of total headcount
-      absorptionTargetPercent: 1.0,   // Absorption = 100% of unemployed LAI participants
+      absorptionTargetPercent: 100,   // 100% of unemployed LAI (skills.ts single /100 → 1.0). R7: was 1.0 + a 2nd /100 in the mapper = 0.01% effective
     },
     procurement: {
       // FSC Others PP — verified from Excel procurement scorecard.
@@ -784,7 +784,7 @@ export const FSC_BANKS: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -870,7 +870,7 @@ export const FSC_LTI: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -954,7 +954,7 @@ export const FSC_STI: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,

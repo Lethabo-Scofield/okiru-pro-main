@@ -270,7 +270,7 @@ describe('FSC Generic golden — pillar scores', () => {
     expect(r.subMinimumMet).toBe(false);
   });
 
-  it('Skills = 23/23 (full compliant spend across all FSC categories)', () => {
+  it('Skills = 20.6/23 (full base spend; absorption pro-rata after R7 fix)', () => {
     // overallTarget = 0.035 × LEVIABLE(150M) = 5,250,000
     // bursaryTarget = 0.015 × LEVIABLE(150M) = 2,250,000
     // disabledTarget = 0.003 × LEVIABLE(150M) = 450,000
@@ -301,13 +301,42 @@ describe('FSC Generic golden — pillar scores', () => {
       },
       CONFIG,
     );
-    // Expected: learningScore(11) + bursaryScore(4) + disabledScore(1) + learnershipScore(4) + absorptionBonus(3) = 23
-    expect(r.total).toBeCloseTo(23, 0);
+    // base learningScore(11) + bursaryScore(4) + disabledScore(1) + learnershipScore(4) = 20; plus the
+    // 3-pt absorption bonus PRO-RATA: 1 of 5 black learners absorbed (20%) × 3 = 0.6 → total 20.6.
+    // (R7: was 23 because the old 0.01% effective target maxed any nonzero absorption; target is now 100%.)
+    expect(r.total).toBeCloseTo(20.6, 1);
     expect(r.subMinimumMet).toBe(true);
     // Sub-minimum = 40% × (11+4+1+4) = 8 pts; base ≥ 8 required
     expect(r.learningProgrammes).toBeCloseTo(11, 0);
     expect(r.disabledLearning).toBeCloseTo(1, 0);
     expect(r.learnerships).toBeCloseTo(4, 0);
+  });
+
+  // R7: absorption bonus is pro-rata against a 100% target (was effectively 0.01%,
+  // so any single absorbed learner used to max the full 3-pt bonus).
+  it('absorption bonus is pro-rata, not gated (R7 fix)', () => {
+    const run = (a1: boolean, a2: boolean) =>
+      calculateSkillsScore(
+        {
+          id: '1', clientId: 'fsc',
+          leviableAmount: LEVIABLE,
+          trainingPrograms: [
+            { id: 'l1', name: 'LAI 1', category: 'learnership', categoryCode: 'D' as const,
+              cost: 50_000, isBlack: true, isEmployed: false, gender: 'Male' as const, race: 'African' as const, isDisabled: false, isAbsorbed: a1 },
+            { id: 'l2', name: 'LAI 2', category: 'learnership', categoryCode: 'D' as const,
+              cost: 50_000, isBlack: true, isEmployed: false, gender: 'Female' as const, race: 'African' as const, isDisabled: false, isAbsorbed: a2 },
+          ],
+          yesCandidatesCount: 0, yesAbsorbedCount: 0,
+        },
+        CONFIG,
+      ).total;
+    const none = run(false, false);
+    const half = run(true, false); // 1 of 2 black learners absorbed = 50%
+    const full = run(true, true);  // 2 of 2 = 100%
+    // Absorption is the only difference between runs. Full = 3 pts (100%), half = 1.5 (50%).
+    // Before the fix both would have been the full 3 (the 0.01% target maxed any absorption).
+    expect(full - none).toBeCloseTo(3, 1);
+    expect(half - none).toBeCloseTo(1.5, 1);
   });
 
   it('Skills sub-minimum test: 9.2 pts threshold (40% × 23)', () => {
