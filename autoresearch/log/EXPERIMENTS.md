@@ -207,4 +207,27 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP — corrects a real under-target (absorption maxed at 1% instead of 100%, over-
   scoring QSE skills by up to ~5 pts). Deploy-eligible. Spotted the identical bug in ICT QSE
   (`sectorConfig.ts:1260` still 1.0) → logged as R22 for the next iteration (kept R8 atomic).
+- Commit: 93cab297 (autoresearch/auto branch)
+
+### EXP-12 — Fix R21: bulk-upload financials (Measured column) — found a bigger bug  (2026-06-24)
+- Backlog item: M6 / R21 (user-directed: "do r21, then deploy")
+- Scout FIRST (dumped the real Financials sheets): layout is
+  `Metric | Prior FYE… | Measured FYE… | Forecast FYE…`. Then a synthetic unit test
+  surfaced the REAL root cause via `mappedSheets` — a sheet named "Financials" mapped to
+  **afs-additions**, not financial-information: `norm("access to financial services")` =
+  "accesstofinancialservices" CONTAINS "financials", and matchSheetName's longest-substring
+  pass-2 (25 > 9) beat the "financial" hint. afs-additions has `meta: []`, so
+  revenue/NPAT/payroll were **silently dropped on every upload** (scoring used deemed NPAT) —
+  worse than the documented "reads Prior column".
+- Change (`workbookExcelNormalizer.ts`): (A) added exact hint `"financials"` so pass-1 exact
+  match wins before the substring pass; (B) added `findMeasuredColumn` + made
+  `parseMetaFromSheet` prefer the Measured (current-year) column when a Prior|Measured|Forecast
+  header is present, falling back to col B for ordinary single-value meta sheets.
+- Result: a one-off verification over ALL 16 real workbooks — every file now maps
+  Financials→financial-information AND parsed `revenue == Measured` (≠ Prior); NPAT/payroll
+  populate too. Normalizer unit suite 58/58 (+2 R21 tests); harness still 12/16 clean (the 4
+  FSC sub-variants are R20), no crashes; full web suite no new regressions (22 pre-existing
+  DB/auth e2e fails). Logged the matchSheetName fragility as R23 (medium).
+- Decision: KEEP — high-impact correctness fix (real measured financials now reach scoring
+  for the first time). Deploy-eligible; shipping in this batch with R6/R7/R8/R19.
 - Commit: (autoresearch/auto branch)

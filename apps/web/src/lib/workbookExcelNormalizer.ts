@@ -36,7 +36,11 @@ export type ExcelImportResult = {
 
 const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   { sectionKey: "company-information", hints: ["information request", "company information", "company info", "general", "client"] },
-  { sectionKey: "financial-information", hints: ["financial information", "financial", "finance", "p&l", "revenue"] },
+  // "financials" must be an EXACT hint: the afs-additions hint "access to financial
+  // services" normalises to a string containing "financials", so without an exact
+  // pass-1 match the real "Financials" sheet was swallowed by afs-additions (meta: [])
+  // and every workbook's revenue/NPAT/payroll were silently dropped. (R21)
+  { sectionKey: "financial-information", hints: ["financials", "financial information", "financial", "finance", "p&l", "revenue"] },
   { sectionKey: "afs-additions", hints: ["afs additions", "access to financial services", "afs scorecard", "afs banks", "afs long term", "afs short term"] },
   { sectionKey: "ownership", hints: ["ownership", "shareholder", "voting rights", "equity"] },
   { sectionKey: "management-control", hints: ["management control", "management", "board", "directors", "exco", "leadership", "mc data"] },
@@ -256,20 +260,52 @@ function findHeaderRow(rows: unknown[][]): number {
   return 0;
 }
 
+/**
+ * R21: real toolkit Financials sheets lay values out as
+ * `Metric | Prior FYE… | Measured FYE… | Forecast FYE…`. The scorecard is built
+ * on the MEASURED (current) year, so meta values must come from that column —
+ * not column B (Prior). Find the year-header row (one carrying both a "Prior…"
+ * and a "Measured…" cell, columns ≥ 1) and return the Measured column index.
+ * Returns null for ordinary single-value meta sheets (value in column B), which
+ * therefore keep their existing behaviour.
+ */
+function findMeasuredColumn(rows: unknown[][]): number | null {
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    let measuredIdx = -1;
+    let hasPrior = false;
+    for (let c = 1; c < row.length; c++) {
+      const cell = String(row[c] ?? "").trim();
+      if (/^measured\b/i.test(cell)) measuredIdx = c;
+      else if (/^prior\b/i.test(cell)) hasPrior = true;
+    }
+    if (measuredIdx >= 0 && hasPrior) return measuredIdx;
+  }
+  return null;
+}
+
 function parseMetaFromSheet(
   rows: unknown[][],
   columns: ColumnDef[],
 ): Record<string, unknown> {
   const meta: Record<string, unknown> = {};
+  // R21: prefer the Measured column when the sheet has a Prior|Measured|Forecast header.
+  const measuredCol = findMeasuredColumn(rows);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i] || [];
     if (row.length >= 2) {
       const label = String(row[0] ?? "").trim();
-      const value = row[1];
       if (!label) continue;
       const key = mapHeaderToKey(label, columns);
       if (key) {
         const col = columns.find((c) => c.key === key);
+        // Default to column B; override with the Measured column when present and
+        // non-empty (so single-value rows above the year header still read column B).
+        let value = row[1];
+        if (measuredCol != null) {
+          const m = row[measuredCol];
+          if (m !== "" && m !== null && m !== undefined) value = m;
+        }
         meta[key] = coerceValue(key, col, value);
       }
     }
