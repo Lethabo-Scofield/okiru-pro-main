@@ -324,7 +324,24 @@ function parseGridFromSheet(
   if (rows.length < 2) return [];
   const headerIdx = findHeaderRow(rows);
   const headers = (rows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
-  const keyByCol: (string | null)[] = headers.map((h) => mapHeaderToKey(h, columns));
+  // Two-pass column→key mapping. A column whose header EXACTLY matches a key's alias
+  // owns that key; a looser substring match cannot override an exact-claimed key.
+  // Without this, "Salary Cost (category B,C,D only)" and "Location" both substring-
+  // matched "category" and overwrote the real "Category *" -> categoryCode slot with
+  // the Location value, breaking category-based skills scoring for every workbook. (W-skills)
+  const exactKeyForHeader = (h: string): string | null => {
+    const hn = norm(h);
+    if (!hn) return null;
+    for (const col of columns) for (const alias of buildColumnAliases(col)) if (norm(alias) === hn) return col.key;
+    return null;
+  };
+  const exactKeys = headers.map(exactKeyForHeader);
+  const claimedExact = new Set(exactKeys.filter((k): k is string => Boolean(k)));
+  const keyByCol: (string | null)[] = headers.map((h, i) => {
+    if (exactKeys[i]) return exactKeys[i];
+    const k = mapHeaderToKey(h, columns);
+    return k && !claimedExact.has(k) ? k : null;
+  });
 
   const out: WorkbookRow[] = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
