@@ -295,12 +295,17 @@ describe("validateWorkbook", () => {
 describe("validateScorecardTypeForSector", () => {
   it("returns allowed options per sector", () => {
     expect(getScorecardTypeOptions("RCOGP")).toEqual(["Generic", "QSE"]);
-    expect(getScorecardTypeOptions("CONSTRUCTION")).toEqual(["QSE", "Contractor", "BEP"]);
+    expect(getScorecardTypeOptions("CONSTRUCTION")).toEqual(["Generic", "QSE"]);
     expect(getScorecardTypeOptions("FSC")).toEqual(["Generic"]);
   });
 
-  it("accepts construction BEP", () => {
-    expect(validateScorecardTypeForSector("CONSTRUCTION", "BEP")).toBeNull();
+  it("construction scorecard type is the size axis (Generic/QSE); sub-sector moved to constructionSubSector", () => {
+    expect(validateScorecardTypeForSector("CONSTRUCTION", "Generic")).toBeNull();
+    expect(validateScorecardTypeForSector("CONSTRUCTION", "QSE")).toBeNull();
+    // Legacy single-field Contractor/BEP migrate to the Generic size (they were
+    // the large scorecards); the constructionSubSector field now holds the sub-sector.
+    expect(resolveScorecardTypeForSector("CONSTRUCTION", "Contractor")).toBe("Generic");
+    expect(resolveScorecardTypeForSector("CONSTRUCTION", "BEP")).toBe("Generic");
   });
 
   it("rejects QSE for AGRI", () => {
@@ -383,6 +388,7 @@ describe("resolveScorecardTypeForSector", () => {
 
   it("clears invalid scorecard type when multiple options remain", () => {
     expect(resolveScorecardTypeForSector("RCOGP", "Contractor")).toBe("");
-    expect(resolveScorecardTypeForSector("CONSTRUCTION", "Generic")).toBe("");
+    // Generic is now valid for construction (the size axis); an unknown value clears.
+    expect(resolveScorecardTypeForSector("CONSTRUCTION", "EME")).toBe("");
   });
 });

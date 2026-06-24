@@ -87,4 +87,20 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP the resolver. MARK M2 NEEDS-REVIEW — the UI re-model + migration +
   engine integration is a focused, reviewed change, not an unattended auto-deploy.
   Pausing the loop for user direction.
+- Commit: 91404336 (autoresearch/auto branch)
+
+### EXP-5 — Construction UI re-model (sub-sector × size)  (2026-06-24)
+- Backlog item: M2
+- Hypothesis: the construction `scorecardType` dropdown conflates sub-sector
+  (Contractor/BEP) with size (Generic/QSE) — Zoleka's feedback. Split them.
+- Change: added a required `constructionSubSector` (Contractor|BEP) meta field;
+  `getScorecardTypeOptions("CONSTRUCTION")` → [Generic, QSE]; legacy Contractor/BEP
+  scorecardType values migrate to Generic in `resolveScorecardTypeForSector` (they
+  were the large scorecards) so existing data stays valid. New constructionModel.test.ts
+  (4); updated 3 workbookValidation tests that encoded the old model.
+- Result: full web suite 1081 pass / 22 fail (same pre-existing; no new red);
+  RCOGP untouched; Lake Trading SCORE unchanged.
+- Decision: KEEP — addresses the sub-sector/size confusion directly. Remaining M2:
+  wire the workbook → construction engine scoring via the resolver (UNVERIFIED;
+  held for review, no deploy).
 - Commit: (autoresearch/auto branch)
