@@ -186,4 +186,25 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP — major bulk-upload unblock (real all-sector fix). Deploy-eligible.
   Next: R20 (FSC sub-variant import), R21 (financials Measured-column), then add
   scoring to the harness.
+- Commit: 309e936b (autoresearch/auto branch)
+
+### EXP-11 — Fix R8: RCOGP QSE absorption target 1% → 100%  (2026-06-24)
+- Backlog item: M5 / R8 (next single M3 fix; loop-directed)
+- Hypothesis check FIRST (R8 contradicted a deliberate prior golden + ledger D-04, which
+  claimed 1% is correct). Verified against the verbatim Excel: `RCOGP_QSE` Skills Scorecard
+  `E23 = 'Skills Calcs'!C30 = 1` is the *display* target; the actual SCORE is
+  `Skills Calcs!J28 = IFERROR(MIN(I28/I30 × E28, E28), 0)` = `MIN(absorbed/completers × 5, 5)`
+  — NO % divisor, so full 5 pts require **100%** absorption. The ledger D-04 "1% target" was a
+  misread of the display cell. Code `safeRatio(rate, pct/100, 5)` matches J28 iff pct = 100.
+- Change: `sectorConfig.ts:1168` RCOGP_QSE `absorptionTargetPercent` 1.0 → 100 (Toolkit + API
+  share this config; both do a single `/100`, confirmed pillarCalculators.ts:735 /
+  sectorCalculators.ts:181). Updated `rcogp-qse.ts` passthrough comment. Corrected 2
+  rcogp-qse golden tests (config 1.0→100; "maxes at 100% not 1%") + added a pro-rata test
+  (50% → 2.5, strictly <5) and a tail test (1/200 → ~0). Corrected the ledger D-04 entry.
+- Result: rcogp-qse golden 39/39; full Toolkit calculator suite **476/476**; API sectorConfig
+  integrity 31/31. No RCOGP-Generic / AGRI / Lake-Trading regression (those use 2.5 / 100 /
+  Generic, untouched). FSC (R7) was already 100 — now consistent.
+- Decision: KEEP — corrects a real under-target (absorption maxed at 1% instead of 100%, over-
+  scoring QSE skills by up to ~5 pts). Deploy-eligible. Spotted the identical bug in ICT QSE
+  (`sectorConfig.ts:1260` still 1.0) → logged as R22 for the next iteration (kept R8 atomic).
 - Commit: (autoresearch/auto branch)

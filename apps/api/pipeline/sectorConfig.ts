@@ -1160,12 +1160,16 @@ export const RCOGP_QSE: SectorConfig = {
       bursaryMaxPts: 7,               // Spend on Black female: 1% leviable (QSE-specific indicator)
       disabledLearningMaxPts: 3,      // Spend on Black disabled: 0.15% leviable
       learnershipsMaxPts: 0,          // No LAI headcount indicator in QSE
-      absorptionMaxPts: 5,            // Absorption of unemployed Black after LAI: 1%
+      absorptionMaxPts: 5,            // Absorption of unemployed Black after LAI (bonus)
       overallSpendPercent: 3.0,       // 3% (vs Generic 3.5%)
       bursarySpendPercent: 1.0,       // Black female spend target 1%
       disabledSpendPercent: 0.15,     // 0.15% (vs Generic 0.3%)
       learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,   // 1% (vs Generic 2.5%)
+      // R8: 100% absorption target. Excel `Skills Calcs!J28 = MIN(absorbed/completers × 5, 5)`
+      // has NO percentage divisor — full 5 pts require 100% absorption. Whole-percent 100 →
+      // (calculator /100) → 1.0 = 100%. Was 1.0 (=1%); the ledger D-04 "1% target" misread the
+      // display cell C30=1 as a divisor. (basis completers-vs-black-learners stays open: Q-E/R18.)
+      absorptionTargetPercent: 100,
     },
     procurement: {
       // QSE PP: 3 indicators only (no QSE/EME split, no BWO30)
