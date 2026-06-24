@@ -113,18 +113,23 @@ function buildColumnAliases(col: ColumnDef): string[] {
   return aliases;
 }
 
-function mapHeaderToKey(header: string, columns: ColumnDef[]): string | null {
+function mapHeaderToKey(header: string, columns: ColumnDef[], excludeKeys?: Set<string>): string | null {
   const h = norm(header);
   if (!h) return null;
   // First pass: exact normalised match — beats substring matches when both
   // would qualify (e.g. "Spend" vs "Total Spend" → prefer the exact "Spend").
   for (const col of columns) {
+    if (excludeKeys?.has(col.key)) continue;
     for (const alias of buildColumnAliases(col)) {
       if (norm(alias) === h) return col.key;
     }
   }
-  // Second pass: substring/contains match (looser).
+  // Second pass: substring/contains match (looser). Skipping already-claimed keys
+  // lets a header whose FIRST substring match is taken fall through to its next
+  // valid key (e.g. "Current Company Size *" → sizeAtFirstProcurement is claimed →
+  // currentSize). (W-proc)
   for (const col of columns) {
+    if (excludeKeys?.has(col.key)) continue;
     for (const alias of buildColumnAliases(col)) {
       const a = norm(alias);
       if (!a) continue;
@@ -339,8 +344,9 @@ function parseGridFromSheet(
   const claimedExact = new Set(exactKeys.filter((k): k is string => Boolean(k)));
   const keyByCol: (string | null)[] = headers.map((h, i) => {
     if (exactKeys[i]) return exactKeys[i];
-    const k = mapHeaderToKey(h, columns);
-    return k && !claimedExact.has(k) ? k : null;
+    // Substring match, skipping keys already exact-claimed so the header can fall
+    // through to its next valid (unclaimed) key instead of being dropped.
+    return mapHeaderToKey(h, columns, claimedExact);
   });
 
   const out: WorkbookRow[] = [];
