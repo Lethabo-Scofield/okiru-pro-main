@@ -322,6 +322,79 @@ function parseMetaFromSheet(
   return meta;
 }
 
+/**
+ * W-fsc: FSC test/export workbooks express "Access to Financial Services" as a
+ * generic indicator table — `Access Indicator | Unit | Notional Target | Achieved
+ * | Qualifying? (Yes/No)` — NOT the structured per-field layout the afs-additions
+ * section meta expects (afsActiveAccountsCompliant, afsElectronicAccessCompliant …).
+ * So parseMetaFromSheet matched nothing and AFS scored 0, dropping every FSC
+ * Banks/LTI/STI workbook to Level 2 purely on unscored AFS.
+ *
+ * Read the table faithfully: for each indicator the workbook marks "Qualifying"
+ * (explicit Yes, or Achieved ≥ Target), set the matching afs* compliance flag so
+ * the existing AFS calculator (calculateAfsScore) can score it. Indicators the
+ * sheet does NOT carry (e.g. geographic point-coverage %) are left unset → 0,
+ * never fabricated. Keyword matching is union across sub-sectors; the calculator
+ * only reads the fields relevant to its sub-sector, so extra flags are harmless.
+ */
+function deriveAfsMetaFromIndicatorTable(rows: unknown[][]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  // Find the header row: one carrying an indicator/target/achieved/qualifying header.
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const joined = (rows[i] || []).map((c) => norm(String(c ?? ""))).join("|");
+    if (/indicator/.test(joined) && (/qualifying/.test(joined) || /achieved/.test(joined) || /target/.test(joined))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return out;
+  const header = (rows[headerIdx] as unknown[]).map((c) => norm(String(c ?? "")));
+  const find = (...keys: string[]) => header.findIndex((h) => keys.some((k) => h.includes(k)));
+  const labelCol = Math.max(0, find("indicator", "accessindicator", "measure"));
+  const targetCol = find("notionaltarget", "target");
+  const achievedCol = find("achieved", "actual");
+  const qualCol = find("qualifying", "qualify", "compliant");
+
+  const setTrue = (k: string) => { out[k] = true; };
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[];
+    if (!r) continue;
+    const label = norm(String(r[labelCol] ?? ""));
+    if (!label) continue;
+    const target = targetCol >= 0 ? Number(String(r[targetCol] ?? "").replace(/[^0-9.\-]/g, "")) : NaN;
+    const achieved = achievedCol >= 0 ? Number(String(r[achievedCol] ?? "").replace(/[^0-9.\-]/g, "")) : NaN;
+    const qualText = qualCol >= 0 ? norm(String(r[qualCol] ?? "")) : "";
+    const qualifies = qualText
+      ? /^y|^yes|^true|^compliant|^pass/.test(qualText)
+      : Number.isFinite(achieved) && Number.isFinite(target) && target > 0 && achieved >= target;
+    if (!qualifies) continue;
+
+    // ---- Banks (FS701) ----
+    if (/account/.test(label)) setTrue("afsActiveAccountsCompliant");
+    if (/electronic|digital|mobile|ussd|online/.test(label)) setTrue("afsElectronicAccessCompliant");
+    if (/servicepoint|accesspoint|serviceaccess|branch|atm|agent|pointofpresence|claimsservice/.test(label)) setTrue("afsHasPointOfPresence");
+    // ---- STI (FS703) commercial lines + insurance policies ----
+    if (/equipment/.test(label)) setTrue("afsCommercialEquipment");
+    if (/liability|sme|business|asset/.test(label)) setTrue("afsCommercialLiability");
+    if (/property|personalline|household|motor/.test(label)) setTrue("afsCommercialProperty");
+    if (/agri|crop|farmer/.test(label)) { setTrue("afsCommercialAgriculture"); setTrue("afsCommercialLivestock"); }
+    if (/livestock/.test(label)) setTrue("afsCommercialLivestock");
+    if (/broker|intermediar|procurement|other/.test(label)) setTrue("afsCommercialOther");
+    if (/policy|policies|premium|covertotarget|insurance|riskcover|shorttermcover|longtermrisk/.test(label)) setTrue("afsInsurancePoliciesCompliant");
+    // ---- LTI (FS702) ----
+    if (/appropriateproduct|productrange|developedproduct/.test(label) && Number.isFinite(achieved) && Number.isFinite(target) && target > 0) {
+      out.afsAppropriateProductsNumerator = Math.min(achieved, target);
+      out.afsAppropriateProductsDenominator = target;
+    }
+    if (/marketpenetration|onbookpolic/.test(label) && Number.isFinite(achieved) && Number.isFinite(target) && target > 0) {
+      out.afsMarketPenetrationPolicies = achieved;
+      out.afsSaiaCommunicatedPolicies = target;
+    }
+  }
+  return out;
+}
+
 function parseGridFromSheet(
   rows: unknown[][],
   columns: ColumnDef[],
@@ -469,6 +542,15 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
     if (def.meta) {
       const meta = parseMetaFromSheet(matrix, def.meta);
       payload = { ...payload, meta: { ...payload.meta, ...meta } };
+    }
+    // W-fsc: the AFS sheet is a generic indicator table, not key/value meta, so
+    // parseMetaFromSheet finds nothing. Derive the afs* compliance flags from the
+    // "Qualifying" column so calculateAfsScore can score it (was silently 0).
+    if (sectionKey === "afs-additions") {
+      const afsMeta = deriveAfsMetaFromIndicatorTable(matrix);
+      if (Object.keys(afsMeta).length > 0) {
+        payload = { ...payload, meta: { ...payload.meta, ...afsMeta } };
+      }
     }
     if (def.columns) {
       const rows = parseGridFromSheet(matrix, def.columns);
