@@ -34,3 +34,8 @@ the full suite green. **Goal: 16/16 Level 1.** Do not inflate scores — fix ing
 - **W-skills DONE** (THE big one: "Salary Cost (category…)" + "Location" headers substring-matched "category" and overwrote the real Category column via last-write-wins → categoryCode got the Province value → category-based skills scored ~0 for ALL sectors): two-pass exact-match-first column mapping in parseGridFromSheet. Skills RCOGP 9→22, FSC 1→19.
 - **Impact: 0/14 → 7/14 Level 1.** Lake 63.53 unchanged; suites green.
 - **Remaining 7 not-L1:** mostly FSC Banks/STI variants (W2 — they use FSC Generic config + are criticalBlocked R20) + ICT Generic 116/140 (L2, close). Next: W2 fscSubSector derivation, then the per-workbook tail.
+
+### M7 iteration 3 (2026-06-24) — supplier enterpriseType + procurement = 7->8 Level 1
+- **W-proc DONE** (QSE/EME spend = 0: the W-skills two-pass nulled "Current Company Size *" because its first substring match (sizeAtFirstProcurement) was claimed; currentSize never set -> all suppliers enterpriseType=generic): mapHeaderToKey now takes excludeKeys; substring pass skips claimed keys and falls through to the next valid one. Procurement pp 18->27-29.
+- **Impact: 7/14 -> 8/14 Level 1** (ICT Generic reached L1). Lake 63.53; 112 golden/normalizer tests pass.
+- **Remaining 6 not-L1: ALL FSC Banks/LTI/STI variants** (~102-104/130-132, L2). They have FSC-specific elements — AFS (12pts), Consumer Education, Empowerment Financing — that the fitness (and possibly the live calculateScorecard) does not score/ingest. NEXT: determine whether the live FSC path scores those elements; if yes, add them to the fitness + ingest their sheets; if the data/scoring genuinely isn't there, flag the FSC variants for the expert.
