@@ -119,4 +119,21 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP (discovery). Next fix tick: R6 (highest-impact, lowest-risk,
   clearly undocumented). Then R7/R8 (absorption /100 + 1%-vs-100%). The 6
   expert-signoff items are routed to the user, not auto-fixed.
+- Commit: c0284ed6 (autoresearch/auto branch)
+
+### EXP-7 — Fix R6: ICT Generic MC senior/middle/junior band targets  (2026-06-24)
+- Backlog item: M3 / R6 (user-directed)
+- Hypothesis: ICT Generic MC senior/middle/junior bands score 0 because the band
+  targets are missing from config → mgmtFallback returns undefined (useRcogp=false
+  for ICT) → subTarget = undefined×eff = NaN → every per-demographic group scores 0.
+  8 of 23 MC points unreachable for every ICT Generic entity.
+- Change: added seniorBlackTarget 0.60 / seniorBWTarget 0.30 / middle 0.75 / 0.38 /
+  junior 0.88 / 0.44 to ICT_GENERIC.managementControl (sectorConfig.ts) + wired them
+  through the ict-generic.ts converter. Golden test: a 100%-black EAP-distributed
+  SMJ workforce now scores the full 8 SMJ band points (was 0). Also fixed a stale
+  pre-existing api test ("11 sectors" → 14; registry legitimately has 14).
+- Result: full Toolkit calculator suite 474 pass; api sectorConfig integrity 31 pass;
+  ICT golden SMJ test green; RCOGP/AGRI/Lake-Trading untouched. No new regressions.
+- Decision: KEEP — real all-client correctness fix for ICT Generic. Deploy-eligible
+  (green). Next: R7 (FSC absorption double /100), R8 (RCOGP QSE absorption 1→100).
 - Commit: (autoresearch/auto branch)

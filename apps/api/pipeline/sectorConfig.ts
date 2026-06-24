@@ -564,6 +564,13 @@ export const ICT_GENERIC: SectorConfig = {
       seniorMaxPts: 2, seniorBWMaxPts: 1,
       middleMaxPts: 2, middleBWMaxPts: 1,
       juniorMaxPts: 1, juniorBWMaxPts: 1,
+      // Per-band Black / Black-female targets, split across the provincial EAP
+      // (workbook MC Scorecard E30/E37/E43/E50/E56/E63). Required: without them the
+      // calculator's mgmtFallback returns undefined for ICT (useRcogp=false) and the
+      // 8 senior/middle/junior band points silently score 0. (R6 / matches AGRI D-01)
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
     },
     employmentEquity: {
       // All MC+EE merged into the MC pillar; disabled scored within MC

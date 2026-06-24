@@ -147,6 +147,15 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
       middleBWMaxPts: mc.middleBWMaxPts,
       juniorMaxPts: mc.juniorMaxPts,
       juniorBWMaxPts: mc.juniorBWMaxPts,
+      // Per-band Black / Black-female EAP targets (R6). Without these the calculator's
+      // mgmtFallback returns undefined for ICT (useRcogp=false) and the 8 SMJ points
+      // silently score 0. Sourced from sectorConfig MC Scorecard E30/E37/E43/E50/E56/E63.
+      seniorBlackTarget: mc.seniorBlackTarget,
+      seniorBWTarget: mc.seniorBWTarget,
+      middleBlackTarget: mc.middleBlackTarget,
+      middleBWTarget: mc.middleBWTarget,
+      juniorBlackTarget: mc.juniorBlackTarget,
+      juniorBWTarget: mc.juniorBWTarget,
       disabledTarget: ee.disabledTarget,
       disabledMaxPts: ee.disabledMaxPts,
     },
