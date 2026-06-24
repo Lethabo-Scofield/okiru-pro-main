@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
   SECTIONS,
   getSection,
+  getScorecardTypeOptions,
   parseWorkbookDate,
   BBBEE_LEVEL_MAP,
   OCC_LEVEL_MAP,
@@ -316,6 +317,70 @@ function hasCriticalGaps(issues: WorkbookValidationIssue[]): boolean {
   return issues.some(isCriticalWorkbookIssue);
 }
 
+/**
+ * Map a free-text "Sector / Codes" string (as written in the toolkit header,
+ * e.g. "Generic - Amended Codes of Good Practice", "ICT Sector Code",
+ * "Construction Sector Code (Contractor scorecard)", "Financial Sector Code
+ * (FSC) - Banks", "...QSE scorecard") to the company-info meta the scorer needs.
+ */
+function mapSectorString(raw: string): Record<string, string> {
+  const s = raw.toLowerCase();
+  const out: Record<string, string> = {};
+  let sector: string;
+  if (s.includes("ict")) sector = "ICT";
+  else if (s.includes("construction")) sector = "CONSTRUCTION";
+  else if (s.includes("financial sector") || /\bfsc\b/.test(s)) sector = "FSC";
+  else if (s.includes("transport")) sector = "TRANSPORT";
+  else if (s.includes("agri")) sector = "AGRI";
+  else sector = "RCOGP"; // "Generic - Amended Codes of Good Practice"
+  out.industrySector = sector;
+  const allowed = getScorecardTypeOptions(sector);
+  out.scorecardType = /\bqse\b/.test(s) && allowed.includes("QSE")
+    ? "QSE"
+    : (allowed.includes("Generic") ? "Generic" : allowed[0] ?? "Generic");
+  if (sector === "FSC") {
+    out.fscSubSector = s.includes("bank") ? "Banks"
+      : s.includes("long") ? "Long-Term Insurers"
+      : s.includes("short") ? "Short-Term Insurers"
+      : "Others";
+  }
+  if (sector === "CONSTRUCTION") {
+    out.constructionSubSector = (s.includes("bep") || s.includes("built environment")) ? "BEP" : "Contractor";
+  }
+  return out;
+}
+
+const NAME_LABELS = new Set([
+  "measured entity", "measured entity name", "company / legal name", "company name",
+  "legal name", "entity name", "company",
+]);
+const SECTOR_LABELS = ["sector / codes", "sector/codes", "sector codes", "industry / sector code", "industry sector", "applicable codes"];
+
+/**
+ * R19: real export workbooks put the measured entity name + sector on the
+ * Financials sheet header (not the "Information Request" checklist sheet that
+ * maps to company-information), so the required company meta was never read and
+ * every standalone upload was critically blocked. Scan all sheets' header rows
+ * for a "Measured Entity"/"Sector / Codes" key-value pair and derive the meta.
+ */
+function deriveCompanyMetaFromSheets(wb: XLSX.WorkBook): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const name of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: "" }) as unknown[][];
+    for (const r of rows.slice(0, 15)) {
+      const label = String(r?.[0] ?? "").trim().toLowerCase();
+      const value = String(r?.[1] ?? "").trim();
+      if (!label || !value) continue;
+      if (out.companyName === undefined && NAME_LABELS.has(label)) out.companyName = value;
+      if (out.industrySector === undefined && SECTOR_LABELS.some((l) => label === l || label.startsWith(l))) {
+        Object.assign(out, mapSectorString(value));
+      }
+    }
+    if (out.companyName !== undefined && out.industrySector !== undefined) break;
+  }
+  return out;
+}
+
 export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const warnings: string[] = [];
   const mappedSheets: Record<string, string> = {};
@@ -347,6 +412,15 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
       payload = { ...payload, rows: [...(payload.rows ?? []), ...rows] };
     }
     sections[sectionKey] = payload;
+  }
+
+  // R19: derive missing company meta (name/sector/type/sub-sector) from any
+  // sheet's header — real export workbooks carry it on the Financials sheet, not
+  // the "Information Request" checklist. Existing explicit company-info wins.
+  const derived = deriveCompanyMetaFromSheets(wb);
+  if (Object.keys(derived).length > 0) {
+    const ci = sections["company-information"] ?? { rows: [] };
+    sections["company-information"] = { ...ci, meta: { ...derived, ...(ci.meta ?? {}) } };
   }
 
   // Strict select-option enforcement is on for the Excel import-preview path

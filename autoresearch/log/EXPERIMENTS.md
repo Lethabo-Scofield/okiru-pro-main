@@ -169,4 +169,21 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP the harness (ongoing cross-sector bulk-upload regression tool).
   Real HIGH bug found → R19 (M6 smart normalization). Next: fix company-meta
   extraction, then re-run the harness to confirm all 16 import + add scoring.
+- Commit: dc86cb61 (autoresearch/auto branch)
+
+### EXP-10 — Fix R19: derive company meta from any sheet header  (2026-06-24)
+- Backlog item: M6 / R19 (user-directed)
+- Change: added `deriveCompanyMetaFromSheets` + `mapSectorString` to
+  `normalizeExcelBuffer` — scans every sheet's header for "Measured Entity" /
+  "Sector / Codes" and maps the sector string ("Generic - Amended Codes"→RCOGP,
+  "ICT Sector Code"→ICT, "Construction…(Contractor)"→CONSTRUCTION+Contractor,
+  "Financial Sector Code (FSC) - Banks"→FSC+Banks, "…QSE scorecard"→QSE, etc.) to
+  sector + scorecardType + FSC/construction sub-sector. Existing explicit meta wins.
+- Result: harness **12/16 import cleanly** (was 0/16). Full web suite 1088 pass /
+  22 pre-existing fail — no new regressions. The 4 FSC Banks/LTI/STI still block on
+  prior-year/AFS data → R20. Also found R21 (financials read the Prior column, not
+  Measured → wrong NPAT for all uploads).
+- Decision: KEEP — major bulk-upload unblock (real all-sector fix). Deploy-eligible.
+  Next: R20 (FSC sub-variant import), R21 (financials Measured-column), then add
+  scoring to the harness.
 - Commit: (autoresearch/auto branch)
