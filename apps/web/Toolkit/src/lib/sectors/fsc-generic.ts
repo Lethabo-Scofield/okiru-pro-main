@@ -205,7 +205,7 @@ export function sectorConfigToFscCalculatorConfig(sc: SectorConfig): CalculatorC
       learnershipsMaxPts: sk.learnershipsMaxPts,              // 4 (LAI headcount 5%)
       absorptionMaxPts: sk.absorptionMaxPts,                  // 3 (bonus)
       learnershipTargetPercent: sk.learnershipTargetPercent,  // 5.0
-      absorptionTargetPercent: sk.absorptionTargetPercent / 100,  // 0.01 (100% of unemployed LAI)
+      absorptionTargetPercent: sk.absorptionTargetPercent,  // R7: whole-percent (100); skills.ts single /100 → 1.0 = 100%
     },
 
     procurement: {

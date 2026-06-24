@@ -147,7 +147,7 @@ export function sectorConfigToFscLtiCalculatorConfig(sc: SectorConfig): Calculat
       learnershipsMaxPts: sk.learnershipsMaxPts,
       absorptionMaxPts: sk.absorptionMaxPts,
       learnershipTargetPercent: sk.learnershipTargetPercent,
-      absorptionTargetPercent: sk.absorptionTargetPercent / 100,
+      absorptionTargetPercent: sk.absorptionTargetPercent,  // R7: whole-percent; skills.ts single /100
     },
 
     procurement: {

@@ -136,4 +136,21 @@ Append one entry per loop iteration (newest at the bottom). Template is in
   ICT golden SMJ test green; RCOGP/AGRI/Lake-Trading untouched. No new regressions.
 - Decision: KEEP — real all-client correctness fix for ICT Generic. Deploy-eligible
   (green). Next: R7 (FSC absorption double /100), R8 (RCOGP QSE absorption 1→100).
+- Commit: 337d61e2 (autoresearch/auto) — DEPLOYED (api+web 337d61e2, 0827e583).
+
+### EXP-8 — Fix R7: FSC absorption double /100 (all 4 variants)  (2026-06-24)
+- Backlog item: M3 / R7 (user-directed)
+- Hypothesis: FSC mappers do absorptionTargetPercent /100 AND skills.ts:392 /100
+  again → effective 0.0001 (0.01%) vs Excel 100%; any single absorbed learner maxes
+  the 3-pt bonus.
+- Change: sectorConfig.ts FSC Generic/Banks/LTI/STI absorptionTargetPercent 1.0→100;
+  removed the /100 from fsc-generic/banks/lti/sti mappers (single /100 in skills.ts
+  → target 1.0 = 100%). API path single-divides → auto-fixed by the config. Corrected
+  the FSC-generic golden (was 23 due to the bug → 20.6 pro-rata) + new pro-rata test
+  (full=3, half=1.5).
+- Result: 475 Toolkit calc tests pass; FSC goldens (all 4) green; api integrity 31
+  pass; no regression. Found a related issue → R18 (FSC absorption denominator is
+  totalBlackLearners, Excel uses unemployed-LAI completers — logged, not fixed here).
+- Decision: KEEP — real all-client correctness fix (FSC absorption was wildly
+  over-scoring). Deploy-eligible. Next: R8 (RCOGP QSE absorption 1→100), R9/R10.
 - Commit: (autoresearch/auto branch)
