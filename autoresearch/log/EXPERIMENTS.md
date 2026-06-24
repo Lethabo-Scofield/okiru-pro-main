@@ -241,3 +241,18 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Gates at deploy: SCORE 63.53≈63.56 ✓, PIPELINE ✓, full suite green (minus known pre-existing
   e2e). Verify: api+web pods on the new tag Running; okiru.pro/health → HTTP 200.
 - Still UNSHIPPED on branch: none from this batch. Open backlog: R9–R13, R18, R20, R22, R23.
+
+### EXP-13 — Fix R22: ICT QSE absorption target 1% → 100% (exact mirror of R8)  (2026-06-24)
+- Backlog item: M5 / R22 (loop-directed, next single fix)
+- Verified FIRST (per the R8 lesson, don't trust RISKS blindly): `ICT_QSE.json` score formula
+  is `=IFERROR(MIN(I28/I30*E28,E28),0)` (and `MIN(I59/I61*E59,E59)` prior) = `MIN(absorbed/
+  completers × 5, 5)` — NO % divisor, identical to RCOGP QSE → effective target 100%.
+- Change: `sectorConfig.ts:1264` ICT_QSE `absorptionTargetPercent` 1.0 → 100 (Toolkit + API share
+  the config, both single /100). Updated `ict-qse.ts` passthrough comment. Corrected the 2
+  ict-qse golden assertions (config 1.0→100; "maxes at 100% not 1%") + added pro-rata (50%→2.5)
+  and tail (1/200→~0) regressions.
+- Result: ict-qse golden 52/52; full Toolkit calculator suite **477/477**; API sectorConfig
+  integrity 31/31. No RCOGP/AGRI/Lake-Trading regression.
+- Decision: KEEP — corrects the last QSE absorption under-target (ICT QSE was still maxing at 1%).
+  Deploy-eligible (NOT shipped — holding for the user; R9–R13 still to do).
+- Commit: (autoresearch/auto branch)

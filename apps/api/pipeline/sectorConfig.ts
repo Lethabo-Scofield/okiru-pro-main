@@ -1255,13 +1255,17 @@ export const ICT_QSE: SectorConfig = {
       disabledLearningMaxPts: 3,
       // No LAI headcount indicator in QSE
       learnershipsMaxPts: 0,
-      // SK-4: Absorption bonus 1% headcount / 5 pts
+      // SK-4: Absorption bonus / 5 pts
       absorptionMaxPts: 5,
       overallSpendPercent: 3.0,
       bursarySpendPercent: 1.0,
       disabledSpendPercent: 0.15,
       learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,
+      // R22 (mirror of R8): 100% absorption target. Excel `Skills Calcs!J28 =
+      // MIN(absorbed/completers × 5, 5)` has NO percentage divisor — full 5 pts
+      // require 100% absorption. Whole-percent 100 → (calculator /100) → 1.0 = 100%.
+      // Was 1.0 (=1%); the D-04 fix removed the double /100 but left the under-target.
+      absorptionTargetPercent: 100,
     },
     procurement: {
       // QSE PP: 3 indicators only (all-suppliers 60%/15, BO51 15%/5, DG bonus 1%/1)
