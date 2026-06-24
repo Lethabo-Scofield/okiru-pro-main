@@ -275,4 +275,20 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Lesson reinforced: a cached cell value ("1") is not a formula — always read the SCORE formula
   and the target's *source* formula. This is the 2nd RISKS/ledger claim the verify-first rule
   has caught wrong (after the ledger's R8 "1% target").
+- Commit: 44578190 (autoresearch/auto branch, docs-only)
+
+### EXP-15 — R10 (RCOGP Generic absorption 2.5→5) — REJECTED, same as R9  (2026-06-24)
+- Backlog item: M5 / R10 (loop-directed, verify-first)
+- Verified `RCOGP_Generic.json`: absorption (2.1.3, row 47) is structurally IDENTICAL to ICT
+  Generic — `C69=ROUNDUP(C68×2.5%,0)`, `C75=ROUNDUP(C74×5%,0)`, `C81=ROUNDUP(C80×5%,0)`, labels
+  `B69/B75/B81 "Absorption target (2.5%)/(5%)"`. ROUNDUP **headcount** target, NOT a 5% rate.
+  The M3 hunt's `D47=0.05` is the 5% headcount multiplier inside ROUNDUP, misread as a divisor.
+- Decision: **REJECT** the 2.5→5 change — wrong shape; would also perturb Lake Trading. NO code
+  change. Consolidated R9+R10 (and the related R11 denominator question) into a new structural
+  item **R24** (Generic absorption headcount-target model: ROUNDUP headcount + YES-tier 2.5/5%
+  conditional + EAP split). R24 is non-atomic, touches the fitness sector, and the YES-tier rule
+  likely needs expert confirm → out of the clear-bug loop's scope.
+- Pattern: BOTH M3 "Generic absorption" rate claims (R9=100%, R10=5%) were wrong for the same
+  reason — the M3 hunt read cached target values as rate divisors without reading the ROUNDUP
+  source. 3rd and 4th wrong claims the verify-first rule has caught.
 - Commit: (autoresearch/auto branch, docs-only)
