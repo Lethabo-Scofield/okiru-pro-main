@@ -343,7 +343,9 @@ export function getScorecardTypeOptions(sectorCode: string): string[] {
     case "TRANSPORT":
       return ["Generic", "QSE"];
     case "CONSTRUCTION":
-      return ["QSE", "Contractor", "BEP"];
+      // Size axis. Sub-sector (Contractor/BEP) is a separate field
+      // (constructionSubSector). Construction has no separate EME scorecard.
+      return ["Generic", "QSE"];
     case "FSC":
     case "AGRI":
       return ["Generic"];
@@ -359,6 +361,16 @@ export function resolveScorecardTypeForSector(
 ): string {
   const allowed = getScorecardTypeOptions(sectorCode);
   const value = String(current ?? "").trim();
+  // Construction migration: the legacy single field used Contractor/BEP as the
+  // "scorecard type". Those are the Generic (large) scorecards, so migrate them to
+  // the Generic size — the constructionSubSector field now captures Contractor vs
+  // BEP. This keeps existing entities valid under the new size-axis options.
+  if (
+    String(sectorCode ?? "").trim().toUpperCase() === "CONSTRUCTION" &&
+    (value === "Contractor" || value === "BEP")
+  ) {
+    return "Generic";
+  }
   if (value && allowed.includes(value)) return value;
   if (allowed.length === 1) return allowed[0];
   return "";
@@ -419,6 +431,21 @@ export function getCompanyInfoMetaFields(sectorCode?: string): ColumnDef[] {
         emphasis: true,
         guidance:
           "FSC-specific. Reinsurers use reduced Consumer Education scoring: Additional CE only (1 pt max) and the Additional CE bonus row is suppressed.",
+      },
+    ]);
+  }
+
+  if (sector === "CONSTRUCTION") {
+    base = insertFieldsAfter(base, "industrySector", [
+      {
+        key: "constructionSubSector",
+        label: "Construction Sub-Sector",
+        type: "select",
+        required: true,
+        emphasis: true,
+        options: ["Contractor", "BEP"],
+        guidance:
+          "Required for Construction. Contractor (CE) or BEP (Built Environment Professional) — they have different scorecards (per the Construction Sector Code). Pick the size separately under Scorecard Type (Generic vs QSE).",
       },
     ]);
   }

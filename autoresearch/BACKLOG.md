@@ -46,11 +46,13 @@ doesn't actually score through the Contractor/BEP engine.
 - [done EXP-4] `resolveConstructionEntityType(subSector, scorecardType)` — maps the
   clean (Contractor|BEP × Generic|QSE) model to the 3 existing engine scorecards,
   backward-compatible with the legacy single field. + unit test. (Pure, safe.)
-- [needs review] UI re-model: add `constructionSubSector` field + make `scorecardType`
-  the size axis — REQUIRES a data migration for entities whose `scorecardType` is
-  "Contractor"/"BEP" (else strict-select validation rejects them).
+- [done EXP-5] UI re-model: added `constructionSubSector` (Contractor|BEP) required
+  meta field; `scorecardType` is now the size axis (Generic/QSE). Legacy
+  Contractor/BEP scorecardType values migrate to Generic in
+  `resolveScorecardTypeForSector` (they were the large scorecards) so existing
+  entities stay valid. + constructionModel.test.ts; 3 old-model tests updated.
 - [needs review] Wire the workbook → construction engine scoring path via the
-  resolver — the UNVERIFIED integration the user flagged for review.
+  resolver — the UNVERIFIED integration the user flagged for review. (Next M2 step.)
 
 Implement the real Construction model (see `specs/construction-sector-codes.md`
 and memory `construction-sector-model`):
