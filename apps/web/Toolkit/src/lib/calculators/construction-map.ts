@@ -72,6 +72,27 @@ export function buildConstructionScoringInput(
   const seniorMiddleBlackPercent = sm.length > 0 ? (sm.filter(isBlack).length / sm.length) * 100 : undefined;
   const seniorMiddleBlackWomenPercent = sm.length > 0 ? (sm.filter(isBW).length / sm.length) * 100 : undefined;
 
+  // ── ESD/SED beneficiary-flag subsets (Phase 1) ──
+  // Split the calculator's benefit-adjusted spend proportionally by the raw flagged
+  // amounts so the subset uses the SAME basis as the main SD/SED indicator.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const esdContribs: any[] = Array.isArray(state.esd?.contributions) ? state.esd.contributions : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sedContribs: any[] = Array.isArray(state.sed?.contributions) ? state.sed.contributions : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sumAmt = (arr: any[], pred: (c: any) => boolean): number =>
+    arr.filter(pred).reduce((s, c) => s + (Number(c?.amount) || 0), 0);
+
+  const sdRawTotal = sumAmt(esdContribs, (c) => c?.category === 'supplier_development');
+  const sdBwoRaw = sumAmt(esdContribs, (c) => c?.category === 'supplier_development' && c?.isBlackWomenOwnedBeneficiary === true);
+  const supplierDevelopmentSpendBWO = sdRawTotal > 0 ? esd.sdSpend * (sdBwoRaw / sdRawTotal) : undefined;
+
+  const sedRawTotal = sumAmt(sedContribs, () => true);
+  const sedStructRaw = sumAmt(sedContribs, (c) => c?.isStructuredProject === true);
+  const sedStructuredProjectsSpend = sedRawTotal > 0 ? sed.actualSpend * (sedStructRaw / sedRawTotal) : undefined;
+  const sedLimitedRaw = sumAmt(sedContribs, (c) => c?.isLimitedServicesCommunity === true);
+  const sedLimitedServicesPercent = sedRawTotal > 0 ? (sedLimitedRaw / sedRawTotal) * 100 : undefined;
+
   const raw: Record<string, number | boolean | undefined> = {
     // ── Ownership (fractions → ×100; net value 0–1) ──
     votingRightsBlackPercent: toPct(o.blackVotingPercentage),
@@ -112,6 +133,11 @@ export function buildConstructionScoringInput(
     // ── Supplier Development / SED (RAW ZAR for _of_npat) ──
     supplierDevelopmentSpend: Number.isFinite(esd.sdSpend) ? esd.sdSpend : undefined,
     sedSpend: Number.isFinite(sed.actualSpend) ? sed.actualSpend : undefined,
+
+    // ── ESD/SED beneficiary-flag subsets (Phase 1) ──
+    supplierDevelopmentSpendBWO,
+    sedStructuredProjectsSpend,
+    sedLimitedServicesPercent,
   };
 
   const indicators: Record<string, number | boolean> = {};

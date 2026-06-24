@@ -391,6 +391,11 @@ export interface Contribution {
   
   // NEW: Benefit factor for ESD (for NDI scoring)
   benefitFactor?: number;                  // 1x, 3x, or 5x multiplier
+
+  // Construction-specific beneficiary flags (Phase 1 wiring — see docs/construction-wiring-spec.md)
+  isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
+  isStructuredProject?: boolean;           // SED: Structured SED Project
+  isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
 }
 
 export interface ESDData {
