@@ -124,8 +124,15 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     const recognised = sup.spend * getRecognitionMultiplier(sup.beeLevel, config);
     recognisedSpend += recognised;
 
-    // Use isEmpoweringSupplier flag when available, fall back to level 1-4
-    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 4)) {
+    // "Spend from all suppliers (Level 1-8)": every supplier with a recognition
+    // level 1-8 counts, weighted by its multiplier (NC / level 0 → 0). The B-BBEE
+    // LEVEL already discounts L5-8 (0.80…0.10), so gating this line to L1-4 wrongly
+    // dropped recognised L5-8 spend entirely and under-scored the line (could fail
+    // the PP sub-minimum). The Empowering-Supplier flag governs the separate 1.2
+    // adjusted-spend factor, not inclusion here; an explicit isEmpoweringSupplier
+    // === false is still honoured (strict non-empowering exclusion).
+    // (DISCREPANCY-LEDGER rcogp/qse D-02; Excel Procurement Scorecard!H9 = sum over all suppliers.)
+    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 8)) {
       empoweringSpend += recognised;
     }
 
@@ -144,7 +151,14 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       blackFemaleOwned30Spend += recognised;
     }
 
-    const isDesignatedGroup = sup.blackOwnership >= 0.51 && (sup.youthOwnership > 0 || sup.disabledOwnership > 0);
+    // Designated-group supplier: ≥51% black-owned AND a designated-group owner.
+    // Honour an explicit isDesignatedGroup flag (the workbook captures a boolean
+    // "designated" flag, not youth/disabled ownership columns) in addition to the
+    // youth/disabled ownership signals the Toolkit form collects — otherwise the
+    // workbook path could never award the DG bonus.
+    const isDesignatedGroup =
+      sup.blackOwnership >= 0.51 &&
+      (Boolean(sup.isDesignatedGroup) || sup.youthOwnership > 0 || sup.disabledOwnership > 0);
     if (isDesignatedGroup) {
       designatedGroupSpend += recognised;
     }

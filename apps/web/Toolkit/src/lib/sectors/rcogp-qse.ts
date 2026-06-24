@@ -124,7 +124,11 @@ export function sectorConfigToQseCalculatorConfig(sc: SectorConfig): CalculatorC
       otherExecBlackMaxPts: mc.otherExecBlackMaxPts ?? 0,
       otherExecBWTarget: mc.otherExecBWTarget ?? 0,
       otherExecBWMaxPts: mc.otherExecBWMaxPts ?? 0,
-      // QSE MC Section 2: Senior+Middle+Junior combined (60%/30% fixed targets)
+      // QSE MC Section 2: Senior+Middle+Junior combined (60%/30% fixed targets).
+      // The calculator scores this as ONE flat band for QSE (management.ts isQse
+      // branch); these targets MUST be present or the 8 SMJ points score 0. (ledger D-01)
+      seniorBlackTarget: mc.seniorBlackTarget ?? 0.60,
+      seniorBWTarget: mc.seniorBWTarget ?? 0.30,
       // seniorMaxPts carries the combined SMJ Black score (6pts @ 60%)
       seniorMaxPts: mc.seniorMaxPts ?? 6,
       seniorBWMaxPts: mc.seniorBWMaxPts ?? 2,
@@ -163,7 +167,14 @@ export function sectorConfigToQseCalculatorConfig(sc: SectorConfig): CalculatorC
       learnershipsMaxPts: sk.learnershipsMaxPts,   // 0 for QSE
       absorptionMaxPts: sk.absorptionMaxPts,
       learnershipTargetPercent: sk.learnershipTargetPercent, // 0 for QSE
-      absorptionTargetPercent: sk.absorptionTargetPercent / 100, // 1.0% → 0.010
+      // QSE Skills SK-2 "Spend on Black female" (bursaryMaxPts=7 @ 1% leviable) measures
+      // Black-female learning spend across all categories, not bursary spend. (ledger D-03)
+      bursaryIsBlackFemale: true,
+      // Pass the PERCENT through (skills.ts divides by 100 → 0.01 = 1%). The
+      // previous `/ 100` here was a second division (0.010 → 0.0001 = 0.01%), so
+      // any absorption maxed the 5-pt bonus instantly. (DISCREPANCY-LEDGER D-04;
+      // the absorbed÷headcount vs ÷black-learners basis is the open expert item Q-E.)
+      absorptionTargetPercent: sk.absorptionTargetPercent, // 1.0 (percent) → skills.ts /100 = 1%
     },
     procurement: {
       baseMax: procBaseMax,               // 15 + 5 = 20

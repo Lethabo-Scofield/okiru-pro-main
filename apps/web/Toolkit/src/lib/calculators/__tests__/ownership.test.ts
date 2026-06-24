@@ -147,6 +147,33 @@ describe('calculateOwnershipScore', () => {
 
       expect(result.newEntrants).toBe(0);
     });
+
+    it('scales new-entrant points proportionally below 25% voting (non-full branch, ledger D-04)', () => {
+      // Black voting = 0.5*0.02 = 0.01 < 0.25 → non-full branch.
+      // totalNewEntrantEI = 0.5*0.02 = 0.01; target 0.02; maxPts 2 → 0.01/0.02*2 = 1.0
+      const result = calculateOwnershipScore(makeOwnershipData({
+        yearsHeld: 10,
+        shareholders: [
+          makeShareholder({ id: 'a', shares: 50, blackOwnership: 0.02, blackNewEntrant: true }),
+          makeShareholder({ id: 'b', shares: 50, blackOwnership: 0.0, blackNewEntrant: false }),
+        ],
+      }));
+      expect(result.fullOwnershipAwarded).toBe(false);
+      expect(result.newEntrants).toBeCloseTo(1.0, 2);
+    });
+
+    it('caps new-entrant points at max when EI ratio >= target (non-full)', () => {
+      // totalNewEntrantEI = 0.5*0.10 = 0.05 >= 0.02 → clamped to 2
+      const result = calculateOwnershipScore(makeOwnershipData({
+        yearsHeld: 10,
+        shareholders: [
+          makeShareholder({ id: 'a', shares: 50, blackOwnership: 0.10, blackNewEntrant: true }),
+          makeShareholder({ id: 'b', shares: 50, blackOwnership: 0.0, blackNewEntrant: false }),
+        ],
+      }));
+      expect(result.fullOwnershipAwarded).toBe(false);
+      expect(result.newEntrants).toBeCloseTo(2, 2);
+    });
   });
 
   describe('graduation factor', () => {

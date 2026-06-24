@@ -134,6 +134,16 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       middleBWMaxPts: mc.middleBWMaxPts,               // 1
       juniorMaxPts: mc.juniorMaxPts,                   // 1
       juniorBWMaxPts: mc.juniorBWMaxPts,               // 1
+      // Per-band Black/BW targets required by the EAP-split scorer. Without them
+      // AGRI (useRcogp=false) scores the 8 SMJ band points as 0 (mgmtFallback
+      // returns undefined → subTarget NaN). The `?? default` keeps the band
+      // scoring intact even if these ever drop out of sectorConfig. (ledger D-01)
+      seniorBlackTarget: mc.seniorBlackTarget ?? 0.60,
+      seniorBWTarget: mc.seniorBWTarget ?? 0.30,
+      middleBlackTarget: mc.middleBlackTarget ?? 0.75,
+      middleBWTarget: mc.middleBWTarget ?? 0.38,
+      juniorBlackTarget: mc.juniorBlackTarget ?? 0.88,
+      juniorBWTarget: mc.juniorBWTarget ?? 0.44,
       disabledTarget: ee.disabledTarget,               // 0.02
       disabledMaxPts: ee.disabledMaxPts,               // 2
     },
@@ -152,7 +162,7 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       bursaryMax: sk.bursaryMaxPts,                    // 4 (unemployed training)
       overallTarget: sk.overallSpendPercent / 100,     // 0.060
       bursaryTarget: sk.bursarySpendPercent / 100,     // 0.025 (2.5% headcount)
-      subMinThreshold: skillsSubMin,                   // 10 (40% × 25)
+      subMinThreshold: skillsSubMin,                   // 8 (40% × 20 base, excl. 5-pt absorption bonus)
       overallSpendPercent: sk.overallSpendPercent / 100,   // 0.060
       bursarySpendPercent: sk.bursarySpendPercent / 100,   // 0.025
       disabledSpendPercent: sk.disabledSpendPercent / 100, // 0.003 (0.3%)
@@ -175,7 +185,7 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       baseMax: procBaseMax,                            // 5+3+4+9+4 = 25
       bonusMax: pr.dgMaxPts,                           // 2
       tmpsTarget: 0,
-      subMinThreshold: procSubMin,                     // 10.8 (40% × 27)
+      subMinThreshold: procSubMin,                     // 10 (40% × 25 base, excl. 2-pt DG bonus)
       blackOwnedThreshold: pr.bo51Target,              // 0.40
       blackWomenThreshold: pr.bwo30Target,             // 0.12
       allSuppliersTarget: pr.allSuppliersTarget,       // 0.80

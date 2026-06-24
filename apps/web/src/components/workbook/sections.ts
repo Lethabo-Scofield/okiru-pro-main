@@ -755,15 +755,9 @@ export function getFinancialMetaFields(sectorCode?: string): ColumnDef[] {
 // ---------- Ownership ----------
 // Column order aligned with Excel "Ownership Data" (RCOGP toolkit row 6).
 export const OWNERSHIP_COLUMNS: ColumnDef[] = [
-  {
-    key: "dataDate",
-    label: "Data Date (dd/mm/yyyy)",
-    type: "date",
-    width: 150,
-    validate: dateValidator,
-    aliases: ["Data Date"],
-    validationMessage: "Enter date as dd/mm/yyyy",
-  },
+  // Polo feedback #2: "Data Date" has no meaning per-shareholder in ownership and
+  // is not consumed by the projection or scoring — removed. (The Skills section
+  // keeps its own dataDate, which the Skills scorecard does use.)
   {
     key: "shareholderName",
     label: "Shareholder",
@@ -1066,6 +1060,9 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
 // {Generic, QSE, EME}; B-BBEE levels 1–8 or Non-compliant; CoGP/RCoGP enum.
 export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
+  // Polo feedback #8: not all suppliers are VAT-registered — capture a company
+  // registration number so unregistered-for-VAT suppliers can still be identified.
+  { key: "registrationNumber", label: "Supplier Reg Number", type: "text", width: 180, aliases: ["Reg Number", "Reg No", "Registration Number", "Company Registration", "Supplier Registration"] },
   {
     key: "currentSize",
     label: "Current Size",

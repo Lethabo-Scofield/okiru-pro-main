@@ -1,6 +1,11 @@
 /**
- * Regression — SpreadsheetGrid inline edit must not call .select() on <select>
- * elements (HTMLSelectElement has no select/setSelectionRange methods).
+ * Regression — SpreadsheetGrid inline edit must not attempt text selection on
+ * controls that don't support it:
+ *  - <select> has no select()/setSelectionRange() methods, and
+ *  - <input type="number|date|email|...">  HAS those methods but THROWS
+ *    InvalidStateError when called, which crashed the whole app via the
+ *    ErrorBoundary the moment a numeric grid cell was edited.
+ * Selection must be gated on the input *type*, not just method presence.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -12,10 +17,20 @@ const gridSrc = readFileSync(
 );
 
 describe("SpreadsheetGrid edit focus — select-safe", () => {
-  it("guards el.select() so HTMLSelectElement edit controls do not throw", () => {
-    expect(gridSrc).toMatch(/typeof el\.select === ["']function["']/);
-    expect(gridSrc).toMatch(/typeof el\.setSelectionRange === ["']function["']/);
-    expect(gridSrc).toContain("HTMLSelectElement has no .select()");
+  it("gates selection on selectable input types so number/select cells don't throw", () => {
+    // The whitelist of text-selectable input types must exist...
+    expect(gridSrc).toContain("SELECTABLE_INPUT_TYPES");
+    // ...and selection must be guarded by (HTMLInputElement && type is selectable),
+    // not merely by the presence of a setSelectionRange method.
+    expect(gridSrc).toMatch(
+      /el instanceof HTMLInputElement && SELECTABLE_INPUT_TYPES\.has\(el\.type\)/,
+    );
+    // number inputs (type "number") must NOT be in the selectable set.
+    const setBlock = gridSrc.slice(
+      gridSrc.indexOf("SELECTABLE_INPUT_TYPES = new Set("),
+      gridSrc.indexOf("SELECTABLE_INPUT_TYPES = new Set(") + 200,
+    );
+    expect(setBlock).not.toContain('"number"');
     expect(gridSrc).toMatch(
       /editInputRef = useRef<HTMLInputElement \| HTMLSelectElement>/,
     );

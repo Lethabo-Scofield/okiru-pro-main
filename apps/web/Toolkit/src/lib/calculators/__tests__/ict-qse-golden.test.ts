@@ -80,7 +80,7 @@ describe('ICT QSE — CalculatorConfig completeness', () => {
     expect(CONFIG.skills.disabledLearningMaxPts).toBe(3);
     expect(CONFIG.skills.absorptionMaxPts).toBe(5);
     expect(CONFIG.skills.learnershipsMaxPts).toBe(0);      // No LAI headcount in QSE
-    expect(CONFIG.skills.absorptionTargetPercent).toBeCloseTo(0.010, 4);
+    expect(CONFIG.skills.absorptionTargetPercent).toBeCloseTo(1.0, 4); // percent; skills.ts /100 → 1% (was double-divided to 0.01%, ledger D-04)
     // Total: 15 + 7 + 3 + 0 + 5 = 30 ✓
     const skillsMax =
       CONFIG.skills.learningProgrammesMaxPts +
@@ -306,6 +306,22 @@ describe('ICT QSE — Management Control pillar', () => {
     expect(r.boardVotingBWO).toBe(0);
   });
 
+  it('counts Other Executive Manager in the QSE executive band (ledger D-01 — was excluded)', () => {
+    // QSE "Executive Management" = Executive Director + Other Executive Manager (toolkit F24).
+    // A single black Other Executive Manager → 100% of the exec band → execBlack = 5 (was 0).
+    const r = calculateManagementScore(
+      {
+        id: '1', clientId: 'ict-qse',
+        employees: [
+          { id: '1', name: 'OEM', gender: 'Male', race: 'African', designation: 'Other Executive Manager', isDisabled: false, isForeign: false },
+        ],
+      },
+      CONFIG,
+      'Gauteng',
+    );
+    expect(r.execDirectorsBlack).toBeCloseTo(5, 1);
+  });
+
   it('fully-maxed management team → approaches 15/15', () => {
     const employees = [
       // Executive (100% black, 50% female → exec = 5+2)
@@ -322,8 +338,10 @@ describe('ICT QSE — Management Control pillar', () => {
       CONFIG,
       'Gauteng',
     );
-    expect(r.total).toBeGreaterThanOrEqual(7); // at minimum exec band maxed
-    expect(r.total).toBeLessThanOrEqual(15);
+    // exec 7 + combined-SMJ flat 60/30 (6+2) = 15 (DISCREPANCY-LEDGER D-02)
+    expect(r.seniorBlack).toBeCloseTo(6, 1);
+    expect(r.seniorBWO).toBeCloseTo(2, 1);
+    expect(r.total).toBeCloseTo(15, 1);
   });
 });
 
@@ -398,8 +416,39 @@ describe('ICT QSE — Skills Development pillar', () => {
       },
       CONFIG,
     );
-    // SK-2: min(bursarySpend / (LEVIABLE × 0.01), 1) × 7 = 7
+    // SK-2: min(blackFemaleSpend / (LEVIABLE × 0.01), 1) × 7 = 7
     expect(r.bursaries).toBeCloseTo(7, 0);
+  });
+
+  it('SK-2 credits Black-female spend in ANY category, not just bursaries (ledger D-03)', () => {
+    // A Black woman's short-course spend (not a bursary) now scores the 7-pt line; was 0.
+    const r = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE,
+        trainingPrograms: [
+          { id: 'bf', name: 'Course', category: 'short_course', cost: LEVIABLE * 0.01,
+            isBlack: true, isDisabled: false, isAbsorbed: false, gender: 'Female', race: 'African' } as never,
+        ],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(r.bursaries).toBeCloseTo(7, 0);
+  });
+
+  it('SK-2 does NOT score male Black spend (gender filter) (ledger D-03)', () => {
+    const r = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE,
+        trainingPrograms: [
+          { id: 'm', name: 'Course', category: 'short_course', cost: LEVIABLE * 0.05,
+            isBlack: true, isDisabled: false, isAbsorbed: false, gender: 'Male', race: 'African' } as never,
+        ],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(r.bursaries).toBe(0);
   });
 
   it('skills sub-minimum threshold is 10 pts (40% × 25 base, excl. 5-pt absorption bonus)', () => {
@@ -425,6 +474,20 @@ describe('ICT QSE — Skills Development pillar', () => {
     );
     expect(r.absorption).toBeGreaterThan(0);
     expect(r.absorption).toBeLessThanOrEqual(5);
+  });
+
+  it('absorption no longer maxes on a single learner (ledger D-04: 1% target, not 0.01%)', () => {
+    // 1 absorbed of 200 Black learners = 0.5% rate; against the 1% target → 0.5/1 × 5 = 2.5.
+    // Before the double-/100 fix the effective target was 0.01%, so this maxed at 5.
+    const programs = Array.from({ length: 200 }, (_, i) => ({
+      id: `L${i}`, name: 'LAI', category: 'learnership', cost: 1000,
+      isBlack: true, isDisabled: false, isAbsorbed: i === 0, gender: 'Male', race: 'African',
+    }));
+    const r = calculateSkillsScore(
+      { id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE, trainingPrograms: programs as never, yesCandidatesCount: 0, yesAbsorbedCount: 0 },
+      CONFIG,
+    );
+    expect(r.absorption).toBeCloseTo(2.5, 1);
   });
 });
 
@@ -466,6 +529,23 @@ describe('ICT QSE — Preferential Procurement pillar', () => {
     );
     // L1 recognition = 135% → recognised > TMPS × 0.60 → capped at 15
     expect(r.empoweringSuppliers).toBeCloseTo(15, 0);
+  });
+
+  it('counts L5-L8 suppliers in the all-suppliers (Level 1-8) line (ledger D-02 — was 0 for L5-8)', () => {
+    // Level-8 supplier (recognition 0.10) at 100% of TMPS:
+    //   score = min((TMPS × 0.10) / (TMPS × 0.60), 1) × 15 = 2.5 (was 0 before the fix).
+    const r = calculateProcurementScore(
+      {
+        id: '1', clientId: 'ict-qse', tmps: TMPS,
+        suppliers: [
+          { id: 's8', name: 'Level 8 Tech Co', beeLevel: 8 as const, enterpriseType: 'generic' as const,
+            blackOwnership: 0, blackWomenOwnership: 0, youthOwnership: 0, disabledOwnership: 0, spend: TMPS },
+        ],
+      },
+      CONFIG,
+    );
+    expect(r.empoweringSuppliers).toBeGreaterThan(0);
+    expect(r.empoweringSuppliers).toBeCloseTo(2.5, 1);
   });
 
   it('15% TMPS on 51%+ black-owned supplier → bo51 maxed at 5 pts', () => {

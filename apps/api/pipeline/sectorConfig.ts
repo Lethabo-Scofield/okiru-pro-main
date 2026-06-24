@@ -573,17 +573,19 @@ export const ICT_GENERIC: SectorConfig = {
     skills: {
       // 2.1.1.1 All-spend Black: 6% leviable = 8 pts
       // 2.1.1.2 Disabled Black: 0.3% leviable = 4 pts
-      // 2.1.2.1 LAI Black: 2.5% headcount = 4 pts
-      // 2.1.2.2 Unemployed training Black: 2.5% headcount = 4 pts (combined with LAI in learnershipsMaxPts)
+      // 2.1.2.1 LAI Black (employed + unemployed): 2.5% headcount = 4 pts → learnershipsMaxPts
+      // 2.1.2.2 Unemployed Black in LAI: 2.5% headcount = 4 pts → bursary slot (bursaryIsHeadcount)
       // 2.1.3 Absorption bonus = 5 pts
       // Total: 8+4+4+4+5 = 25
+      // Previously 2.1.2.1 and 2.1.2.2 were folded into learnershipsMaxPts=8, which let an
+      // employed-only LAI workforce score the full 8 instead of 4. (DISCREPANCY-LEDGER D-02)
       learningProgrammesMaxPts: 8,
-      bursaryMaxPts: 0,        // No separate bursary indicator in ICT
+      bursaryMaxPts: 4,        // 2.1.2.2 unemployed-LAI headcount (headcount-based)
       disabledLearningMaxPts: 4,
-      learnershipsMaxPts: 8,   // LAI 4 pts + unemployed training 4 pts combined
+      learnershipsMaxPts: 4,   // 2.1.2.1 all-LAI headcount @ 2.5%
       absorptionMaxPts: 5,
       overallSpendPercent: 6.0,
-      bursarySpendPercent: 0.0,
+      bursarySpendPercent: 2.5, // 2.1.2.2 unemployed-LAI headcount target
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 2.5,
       absorptionTargetPercent: 2.5,
@@ -1034,6 +1036,13 @@ export const AGRI_GENERIC: SectorConfig = {
       seniorMaxPts: 2, seniorBWMaxPts: 1,    // EAP-based (60%/30%)
       middleMaxPts: 2, middleBWMaxPts: 1,    // EAP-based (75%/38%)
       juniorMaxPts: 1, juniorBWMaxPts: 1,    // EAP-based (88%/44%)
+      // Per-band Black / Black-female targets, split across the provincial EAP
+      // (workbook MC Scorecard E30/E37/E43/E50/E56/E63). Required: without them the
+      // calculator's mgmtFallback returns undefined for AGRI (useRcogp=false) and the
+      // 8 senior/middle/junior band points silently score 0. (DISCREPANCY-LEDGER D-01)
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
     },
     employmentEquity: {
       seniorMaxPts: 2, middleMaxPts: 2, juniorMaxPts: 1,

@@ -856,7 +856,9 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
 
     (async () => {
       try {
-        const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(cert.name)}`);
+        // disposition=inline → the SAS URL renders in the iframe/<img> instead of
+        // forcing a download. The Download button omits it and keeps `attachment`.
+        const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(cert.name)}&disposition=inline`);
         if (!res.ok) {
           const body = await res.json().catch(() => ({ message: 'Could not load document' }));
           throw new Error(body.message || `Error ${res.status}`);

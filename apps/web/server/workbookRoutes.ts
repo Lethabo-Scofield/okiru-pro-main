@@ -20,6 +20,7 @@ import {
   type SectionDef,
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
+import { coerceYesNo } from "../src/lib/yesNoValue";
 import { isBlackRace, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import {
   getClient as memGetClient,
@@ -227,9 +228,23 @@ function yesNo(v: unknown): string {
   if (["false", "no", "n", "0"].includes(t)) return "No";
   return s(v);
 }
-function num(v: unknown): number {
-  const n = Number(v);
+// Tolerant numeric parse: Number("1,000,000") / Number("R 1 000 000") / Number("60%")
+// are all NaN, which previously coerced to 0 and silently zeroed revenue / payroll /
+// spend / ownership% from text-formatted Excel cells or pasted values. Strip currency
+// symbols, thousands separators (commas + ordinary/narrow/non-breaking spaces) and a
+// trailing percent sign before parsing.
+function parseLooseNumber(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v === null || v === undefined) return 0;
+  const cleaned = String(v)
+    .replace(/[\s  ]/g, "")
+    .replace(/[R$,%]/gi, "");
+  if (cleaned === "" || cleaned === "-") return 0;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
+}
+function num(v: unknown): number {
+  return parseLooseNumber(v);
 }
 
 const DATA_SHEETS: DataSheetSpec[] = [
@@ -861,8 +876,9 @@ function mapEnterpriseType(rawSize: string): "eme" | "qse" | "generic" {
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 7: workbook stores % (0Î“Ã‡Ã´100); calculators expect fractions (0Î“Ã‡Ã´1)
 function pctToFraction(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
+  // parseLooseNumber strips "%", currency and thousands separators so "51.5%" /
+  // "60" / "0,6" still parse instead of NaN→0 (which failed every BO51/BWO30 check).
+  const n = parseLooseNumber(v);
   if (n <= 1) return Math.max(0, n);
   return Math.max(0, n / 100);
 }
@@ -895,12 +911,12 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const votingPct = pctToFraction((r as any).votingRights);
     const eiPct = pctToFraction((r as any).economicInterest);
     const sharePct = pctToFraction((r as any).shareholding);
-    const isYouth = Boolean((r as any).isYouth);
-    const isDisabled = Boolean((r as any).isDisabled);
+    const isYouth = coerceYesNo((r as any).isYouth);
+    const isDisabled = coerceYesNo((r as any).isDisabled);
     // Lake demo writes `isNewEntrant` directly; default false otherwise.
-    const isNewEntrant = Boolean((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    const isNewEntrant = coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
     // AGRI-specific: farm workers as a 5th Designated Group category.
-    const isFarmWorker = sectorCode === "AGRI" && Boolean((r as any).isFarmWorker) && farmWorkersIncluded;
+    const isFarmWorker = sectorCode === "AGRI" && coerceYesNo((r as any).isFarmWorker) && farmWorkersIncluded;
 
     // Prefer explicit blackOwnership / blackWomenOwnership when the workbook row
     // supplies them (trust holders, multi-beneficiary shareholders). Fall back
@@ -930,7 +946,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       votingRights: num((r as any).votingRights),
       economicInterest: num((r as any).economicInterest),
       shareholding: num((r as any).shareholding),
-      modifiedFlowThrough: Boolean((r as any).modifiedFlowThrough),
+      modifiedFlowThrough: coerceYesNo((r as any).modifiedFlowThrough),
       // NEW (fix plan Bug 1) Î“Ã‡Ã¶ scoring-engine fields the loader reads.
       blackOwnership,
       blackWomenOwnership,
@@ -944,7 +960,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
-        Boolean((r as any).isDesignatedGroup) ||
+        coerceYesNo((r as any).isDesignatedGroup) ||
         pctToFraction((r as any).designatedGroupOwnership) > 0 ||
         isYouth ||
         isDisabled ||
@@ -980,8 +996,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         designation,
         department: s((r as any).department),
         salary: num((r as any).salary),
-        isDisabled: Boolean((r as any).isDisabled),
-        isForeign: Boolean((r as any).isForeign),
+        isDisabled: coerceYesNo((r as any).isDisabled),
+        isForeign: coerceYesNo((r as any).isForeign),
         votingRights: num((r as any).votingRights),
         startDate: s((r as any).startDate),
       });
@@ -999,8 +1015,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         num((r as any).trainingFacilityCost) +
         num((r as any).salaryCost) +
         num((r as any).otherCosts);
-    const absorbed = Boolean((r as any).absorbed);
-    const employed = Boolean((r as any).employed);
+    const absorbed = coerceYesNo((r as any).absorbed);
+    const employed = coerceYesNo((r as any).employed);
     const categoryCode = s((r as any).categoryCode);
     // Derive employmentStatus (calculator reads this for unemployed/learnership/
     // absorption scoring) and the explicit YES / bursary flags, so the first
@@ -1020,16 +1036,16 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       race: normalizeRace(s((r as any).race)) || s((r as any).race),
       gender: s((r as any).gender),
       isBlack: isBlackRace(s((r as any).race)),
-      isDisabled: Boolean((r as any).isDisabled),
-      isForeign: Boolean((r as any).isForeign),
+      isDisabled: coerceYesNo((r as any).isDisabled),
+      isForeign: coerceYesNo((r as any).isForeign),
       employed,
       employmentStatus,
-      isYesEmployee: Boolean((r as any).isYesEmployee ?? (r as any).yesEmployee),
-      completed: Boolean((r as any).completed),
-      isCompleted: Boolean((r as any).completed),
+      isYesEmployee: coerceYesNo((r as any).isYesEmployee ?? (r as any).yesEmployee),
+      completed: coerceYesNo((r as any).completed),
+      isCompleted: coerceYesNo((r as any).completed),
       absorbed,
       isAbsorbed: absorbed,
-      isBursary: Boolean((r as any).isBursary) || categoryCode === "A",
+      isBursary: coerceYesNo((r as any).isBursary) || categoryCode === "A",
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),
@@ -1069,6 +1085,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         supplierName: s((r as any).supplierName),
         // Alias `name` for downstream consumers that key off it.
         name: s((r as any).supplierName),
+        // Polo feedback #8: carry the supplier registration number through.
+        registrationNumber: s((r as any).registrationNumber),
         currentSize: sizeRaw,
         size: sizeRaw,
         enterpriseType, // Lake Trading Fix Plan â”¬Âº1 Bug 3
@@ -1076,20 +1094,20 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         beeLevel,
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
-        empoweringSupplier: Boolean((r as any).empoweringSupplier),
-        isEmpoweringSupplier: Boolean((r as any).empoweringSupplier),
+        empoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
+        isEmpoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
         // Carry both the raw % (for audit) and the fraction (for scoring)
         currentBlackOwnership: num((r as any).currentBlackOwnership),
         blackOwnership: blackOwnershipFraction,
         currentBlackFemaleOwnership: num((r as any).currentBlackFemaleOwnership),
         blackFemaleOwnership: blackFemaleOwnershipFraction,
         blackWomenOwnership: blackFemaleOwnershipFraction,
-        sdRecipient: Boolean((r as any).sdRecipient),
-        isSupplierDevRecipient: Boolean((r as any).sdRecipient),
-        threeYearContract: Boolean((r as any).threeYearContract),
-        hasThreeYearContract: Boolean((r as any).threeYearContract),
-        designated: Boolean((r as any).designated),
-        isDesignatedGroup: Boolean((r as any).designated),
+        sdRecipient: coerceYesNo((r as any).sdRecipient),
+        isSupplierDevRecipient: coerceYesNo((r as any).sdRecipient),
+        threeYearContract: coerceYesNo((r as any).threeYearContract),
+        hasThreeYearContract: coerceYesNo((r as any).threeYearContract),
+        designated: coerceYesNo((r as any).designated),
+        isDesignatedGroup: coerceYesNo((r as any).designated),
         spend: num((r as any).spend),
         amount: num((r as any).spend),
         // Calculators check these flags when present
@@ -1139,7 +1157,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       contributionType: rawType,
       category: "socio_economic" as const,
       descriptionOfSpend: s((r as any).descriptionOfSpend),
-      ictSpecificInitiative: Boolean((r as any).ictSpecificInitiative),
+      ictSpecificInitiative: coerceYesNo((r as any).ictSpecificInitiative),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),
       amount: num((r as any).amount),
@@ -1151,6 +1169,18 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const sedMeta = (sec["sed"]?.meta ?? {}) as Record<string, unknown>;
   const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
   const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
+
+  // Procurement TMPS fallback (Polo feedback #10): suppliers were saved but never
+  // scored because procurement targets are tmps × pct, and tmps only came from the
+  // Financials TMPS field. If that wasn't supplied, derive tmps from total supplier
+  // spend so entered suppliers actually produce a score.
+  if (!(financials.tmps > 0)) {
+    const supplierSpendTotal = suppliers.reduce(
+      (acc, sup) => acc + (num((sup as any).spend) || 0),
+      0,
+    );
+    if (supplierSpendTotal > 0) financials.tmps = supplierSpendTotal;
+  }
 
   const ownershipMeta = {
     companyValue: financials.companyValue ?? 0,

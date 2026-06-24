@@ -14,6 +14,7 @@ const DEFAULT_VOTING_TARGET = 0.25;
 const DEFAULT_WOMEN_VOTING_TARGET = 0.10;
 const DEFAULT_WOMEN_EI_TARGET = 0.10;
 const DEFAULT_DG_TARGET = 0.03;
+const DEFAULT_NEW_ENTRANTS_TARGET = 0.02;
 
 const GRADUATION_TABLE: Record<number, number> = {
   1: 0.1, 2: 0.2, 3: 0.4, 4: 0.4,
@@ -77,6 +78,7 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     womenEIMaxPts: oc?.womenEIMax ?? 2,
     netValueMaxPts: oc?.netValueMax ?? 8,
     newEntrantsMaxPts: oc?.newEntrantsMax ?? 2,
+    newEntrantsTarget: oc?.newEntrantsTarget ?? DEFAULT_NEW_ENTRANTS_TARGET,
     designatedGroupsMax: oc?.designatedGroupsMax ?? 3,
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
@@ -114,6 +116,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   let totalDesignatedGroup = 0;
   let netValuePointsAgg = 0;
   let hasNewEntrant = false;
+  let totalNewEntrantEI = 0;
 
   for (const sh of shareholders) {
     const pct = hasShares
@@ -133,7 +136,10 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       totalDesignatedGroup += pct * sh.blackOwnership;
     }
 
-    if (sh.blackNewEntrant) hasNewEntrant = true;
+    if (sh.blackNewEntrant) {
+      hasNewEntrant = true;
+      totalNewEntrantEI += pct * sh.blackOwnership;
+    }
 
     if (sh.shareValue > 0 && sh.blackOwnership > 0) {
       const debtAttributable = outstandingDebt * pct;
@@ -178,7 +184,12 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
 
     economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
     designatedGroups = clampScore(safeRatio(totalDesignatedGroup, ot.designatedGroupsTarget, ot.designatedGroupsMax), ot.designatedGroupsMax);
-    newEntrants = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
+    // Scale new-entrant points by new entrants' black economic interest vs the 2%
+    // target (toolkit Ownership Scorecard H12), not all-or-nothing. QSE folds new
+    // entrants into the combined designated-group line. (ledger D-04/D-06/D-07)
+    newEntrants = ot.combinedNewEntrantsDesignated
+      ? 0
+      : clampScore(safeRatio(totalNewEntrantEI, ot.newEntrantsTarget, ot.newEntrantsMaxPts), ot.newEntrantsMaxPts);
 
     const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
     if (hasNetValue) {
@@ -201,7 +212,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
     { name: 'Economic interest of black females / ESOP bonus', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
     { name: ot.combinedNewEntrantsDesignated ? 'Economic interest of black new entrants or designated groups' : 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
-    { name: 'Economic interest of black new entrants', target: 'New entrant', weighting: ot.newEntrantsMaxPts, score: newEntrants },
+    { name: 'Economic interest of black new entrants', target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`, weighting: ot.newEntrantsMaxPts, score: newEntrants },
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
   ];
 

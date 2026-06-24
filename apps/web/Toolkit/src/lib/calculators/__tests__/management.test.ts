@@ -129,6 +129,36 @@ describe('calculateManagementScore', () => {
       expect(result.rawStats.boardBWOPct).toBe(1.0);
     });
 
+    it('weights board black-female by votingRightsPercent when board voting sums to 100% (live bug: 33% entered → was 0)', () => {
+      // Black-female director holding 33% of board voting (> 25% target) on a 6-person board.
+      // Voting-weighted → full 1 pt; headcount would dilute to 1/6 ≈ 16.7% → ~0.67.
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female', votingRightsPercent: 33 }),
+          makeEmployee({ id: '2', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+          makeEmployee({ id: '3', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+          makeEmployee({ id: '4', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+          makeEmployee({ id: '5', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+          makeEmployee({ id: '6', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+        ],
+      }));
+      expect(result.boardVotingBWO).toBeCloseTo(1, 1); // 33% / 25% target, capped at 1 pt
+    });
+
+    it('falls back to headcount when votingRightsPercent is not a complete distribution', () => {
+      // votingRightsPercent unset (sum 0) → headcount: 1 black female of 4 = 25% = target → 1 pt.
+      const result = calculateManagementScore(makeManagementData({
+        employees: [
+          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female' }),
+          makeEmployee({ id: '2', designation: 'Board', race: 'White', gender: 'Male' }),
+          makeEmployee({ id: '3', designation: 'Board', race: 'White', gender: 'Male' }),
+          makeEmployee({ id: '4', designation: 'Board', race: 'White', gender: 'Male' }),
+        ],
+      }));
+      expect(result.boardVotingBWO).toBeCloseTo(1, 1);
+      expect(result.rawStats.boardBWOPct).toBeCloseTo(0.25, 2);
+    });
+
     it('should return 0 BWO for all-male board', () => {
       const result = calculateManagementScore(makeManagementData({
         employees: [
