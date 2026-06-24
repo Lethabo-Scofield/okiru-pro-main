@@ -291,4 +291,25 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Pattern: BOTH M3 "Generic absorption" rate claims (R9=100%, R10=5%) were wrong for the same
   reason — the M3 hunt read cached target values as rate divisors without reading the ROUNDUP
   source. 3rd and 4th wrong claims the verify-first rule has caught.
-- Commit: (autoresearch/auto branch, docs-only)
+- Commit: 107fa906 (autoresearch/auto branch, docs-only)
+
+### EXP-16 — Fix R12: AGRI BWO30 per-supplier qualification 12% → 30%  (2026-06-24)
+- Backlog item: M5 / R12 (loop-directed, verify-first) — the first non-skills/non-absorption item
+- Verified `AGRI_Generic.json`: scorecard line B55 = "Spend on empowering suppliers with **greater
+  than 30%** black female ownership". `procurement.ts:146` filters suppliers by
+  `blackWomenOwnership >= blackWomenThreshold` (intended default 0.30); the AGRI converter
+  overrode it with `pr.bwo30Target` (0.12 = the SPEND target), so 12–29%-BWO suppliers wrongly
+  counted toward the 4-pt line. CONFIRMED REAL (unlike R9/R10).
+- Also checked the adjacent `blackOwnedThreshold: pr.bo51Target` (0.40): **inert** — procurement.ts
+  hardcodes the ≥51% qualifier (`sup.blackOwnership >= 0.51`), never reads `pc.blackOwnedThreshold`.
+  So that one is dead config, not a scoring bug. Kept R12 atomic to the live BWO30 bug.
+- Change: `agri-generic.ts:190` `blackWomenThreshold: 0.30` (qualification distinct from the 12%
+  spend target). +2 AGRI golden tests: 20%-BWO supplier → BWO30 line = 0 (was 4 under the bug);
+  35%-BWO → maxes 4.
+- Result: AGRI golden 44/44; full Toolkit suite **479/479**; fitness SCORE 63.53 (RCOGP/Lake
+  Trading untouched — AGRI-only change). No regression.
+- Decision: KEEP — real over-credit fix (under-qualified suppliers inflated the BWO30 line).
+  Deploy-eligible (NOT shipped — holding for the user). Spotted the same conflation pattern in
+  all 4 FSC sectors (`blackWomenThreshold: pr.bwo30Target` = 0.10) → logged R25 to verify FSC's
+  BWO qualification % (RCOGP/ICT correctly use the 0.30 default).
+- Commit: (autoresearch/auto branch)
