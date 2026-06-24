@@ -19,6 +19,7 @@ import { calculateManagementScore } from '@toolkit/lib/calculators/management';
 import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from '@toolkit/lib/calculators/esd-sed';
+import { calculateAfsScore } from '@toolkit/lib/calculators/afs';
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-generic';
 import { RCOGP_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-qse';
 import { ICT_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/ict-generic';
@@ -100,8 +101,12 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
           const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
-          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed;
-          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
+          // FSC Banks/LTI/STI carry an Access to Financial Services pillar (12 pts).
+          // calculateAfsScore returns null when the config has no AFS (FSC Generic / non-FSC).
+          const afsData = { id: '', clientId: '', ...((p.financials as any)?.afs ?? {}) };
+          const afs = calculateAfsScore(afsData as any, cfg)?.total ?? 0;
+          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs;
+          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
         }
         const lvl = levelFromConfig(total, cfg);
         scored++;
