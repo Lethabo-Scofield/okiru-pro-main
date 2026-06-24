@@ -153,4 +153,20 @@ Append one entry per loop iteration (newest at the bottom). Template is in
   totalBlackLearners, Excel uses unemployed-LAI completers — logged, not fixed here).
 - Decision: KEEP — real all-client correctness fix (FSC absorption was wildly
   over-scoring). Deploy-eligible. Next: R8 (RCOGP QSE absorption 1→100), R9/R10.
+- Commit: 17703bb8 (autoresearch/auto branch)
+
+### EXP-9 — Toolkit Testing Data harness (16 real workbooks)  (2026-06-24)
+- Backlog item: M6 (user-directed: "run the systems on the test data")
+- Method: built `apps/web/src/__tests__/toolkitTestData.harness.test.ts` (env-gated,
+  TOOLKIT_HARNESS=1) — runs every file in docs/Toolkit Testing Data through the REAL
+  bulk-upload path (normalizeExcelBuffer → projectWorkbookToClient) + reports import
+  health. Headless equivalent of uploading each via the create-scorecard UI (Chrome
+  extension not connected, so the browser path is blocked).
+- Result: all 16 workbooks ingest their pillar GRIDS fine (employees 500/70,
+  suppliers 90/70, SED 5) but **all 16 are criticalBlocked** — Company Name/Sector/
+  Type are not extracted. Root cause (R19): company meta lives on the **Financials
+  sheet header**, not the "Information Request" checklist sheet the importer reads.
+- Decision: KEEP the harness (ongoing cross-sector bulk-upload regression tool).
+  Real HIGH bug found → R19 (M6 smart normalization). Next: fix company-meta
+  extraction, then re-run the harness to confirm all 16 import + add scoring.
 - Commit: (autoresearch/auto branch)
