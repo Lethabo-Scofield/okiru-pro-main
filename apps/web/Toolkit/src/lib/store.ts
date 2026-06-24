@@ -46,6 +46,13 @@ import {
   AGRI_GENERIC_CALCULATOR_CONFIG,
   isAgriGenericSector,
 } from './sectors/agri-generic';
+import {
+  isConstructionSector,
+  resolveConstructionScorecardKey,
+  buildConstructionCalculatorConfig,
+} from './sectors/construction';
+import { buildConstructionScoringInput } from './calculators/construction-map';
+import { calculateConstructionScorecard } from '../../../../api/pipeline/constructionScoring';
 
 import { coerceYesNo } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
@@ -556,6 +563,39 @@ function calculateScorecard(
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
   if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
+
+  // Construction scores via the expert-verified indicator-matrix evaluator, not the
+  // pillar calculators. Map the Toolkit data → ConstructionScoringInput, evaluate, and
+  // adapt the 5-element output into ScorecardResult (construction folds PP+SD into the
+  // ESD element → mapped to the procurement slot; SD/ED/EE/YES slots are zeroed).
+  if (isConstructionSector(state.client.sectorCode)) {
+    const { entityType, input } = buildConstructionScoringInput(state, cfg);
+    const out = calculateConstructionScorecard(entityType, input);
+    const el = out.elementScores;
+    const lvl = pointsToLevel(out.totalScore, cfg);
+    const mkPillar = (e: { achievedPoints: number; availablePoints: number }) => ({
+      score: round2(e.achievedPoints), target: e.availablePoints, weighting: e.availablePoints,
+    });
+    const result: ScorecardResult = {
+      ownership: { ...mkPillar(el.ownership), subMinimumMet: true },
+      managementControl: mkPillar(el.managementControl),
+      skillsDevelopment: { ...mkPillar(el.skillsDevelopment), subMinimumMet: true },
+      procurement: { ...mkPillar(el.enterpriseSupplierDevelopment), subMinimumMet: true },
+      supplierDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
+      enterpriseDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
+      socioEconomicDevelopment: mkPillar(el.socioEconomicDevelopment),
+      yesInitiative: { score: 0, target: 0, weighting: 0 },
+      total: { score: round2(out.totalScore), target: out.totalAvailable, weighting: out.totalAvailable },
+      achievedLevel: lvl,
+      discountedLevel: lvl,
+      isDiscounted: false,
+      recognitionLevel: levelToRecognition(lvl, cfg),
+    };
+    // Attach the raw construction output (per-indicator detail) for the results view.
+    (result as unknown as { construction?: unknown }).construction = out;
+    return result;
+  }
+
   assertSectorConfigLoaded(cfg, state.client);
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
@@ -1412,6 +1452,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         get()._recalculateAll();
         return;
       }
+    }
+
+    if (isConstructionSector(sectorCode)) {
+      const entityType = resolveConstructionScorecardKey(scorecardType, (client as { constructionSubSector?: string }).constructionSubSector);
+      console.log('[SCORING-TRACE] Using bundled Construction calculator config:', entityType);
+      set({ calculatorConfig: buildConstructionCalculatorConfig(entityType) });
+      get()._recalculateAll();
+      return;
     }
 
     const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
