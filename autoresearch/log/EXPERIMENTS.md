@@ -255,4 +255,24 @@ Append one entry per loop iteration (newest at the bottom). Template is in
   integrity 31/31. No RCOGP/AGRI/Lake-Trading regression.
 - Decision: KEEP — corrects the last QSE absorption under-target (ICT QSE was still maxing at 1%).
   Deploy-eligible (NOT shipped — holding for the user; R9–R13 still to do).
-- Commit: (autoresearch/auto branch)
+- Commit: 183b18c7 (autoresearch/auto branch)
+
+### EXP-14 — R9 (ICT Generic absorption 2.5→100) — REJECTED on verification  (2026-06-24)
+- Backlog item: M5 / R9 (loop-directed, verify-first)
+- Verified against `ICT_Generic.json` BEFORE changing anything (the R8 lesson). Unlike QSE
+  (`MIN(absorbed/completers × 5, 5)`, target 100%), ICT Generic absorption (2.1.3, scorecard
+  row 54) scores `MIN(absorbed/target × 5, 5)` where **target is a ROUNDUP *headcount***:
+  `Skills Toolkit!C70=ROUNDUP(C69×2.5%,0)`, `C76=ROUNDUP(C75×5%,0)`, labels `B70 "Absorption
+  target (2.5%)"`, `B76/B82 "(5%)"` (conditional YES-tier). The `D54='Skills Calcs'!C76=1`
+  the M3 hunt cited as "fraction 1.0=100%" is just the sample's rounded-up headcount (1 person),
+  not a percentage.
+- Decision: **REJECT** the 2.5→100 change — it would force 100% absorption to max the bonus,
+  far harsher than Excel's 2.5–5%-of-headcount target. NO code change. The current 2.5% is in
+  the right ballpark; the genuine gap is structural — code uses `absorbed/totalBlackLearners`,
+  Excel uses `absorbed/ROUNDUP(2.5–5%×base headcount)` (+ the YES-tier conditional + EAP
+  distribution). That's a modeling change entangled with R11, not an atomic clear-bug fix →
+  reclassified R9 to needs-modeling / fold into R11.
+- Lesson reinforced: a cached cell value ("1") is not a formula — always read the SCORE formula
+  and the target's *source* formula. This is the 2nd RISKS/ledger claim the verify-first rule
+  has caught wrong (after the ledger's R8 "1% target").
+- Commit: (autoresearch/auto branch, docs-only)
