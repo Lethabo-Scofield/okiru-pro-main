@@ -1337,6 +1337,35 @@ export function getConstructionScorecard(entityType: string): ConstructionScorec
   return scorecard;
 }
 
+/**
+ * Resolve the Construction engine entity type from the clean two-axis model:
+ *   sub-sector ∈ {Contractor, BEP}  ×  size ∈ {Generic, QSE}.
+ *
+ * The Construction Sector Code has a single QSE scorecard (sub-sector-agnostic),
+ * and separate Generic (large) scorecards per sub-sector. So:
+ *   - any QSE-size entity            → construction_qse
+ *   - Generic + Contractor           → construction_contractor
+ *   - Generic + BEP                  → construction_bep
+ *
+ * Backward-compatible: also accepts the legacy single `scorecardType` values
+ * ("Contractor" / "BEP" / "QSE") so existing entities keep resolving while the
+ * UI migrates to the sub-sector + size model (M2). Defaults to Contractor.
+ */
+export function resolveConstructionEntityType(
+  constructionSubSector: string | undefined,
+  scorecardType: string | undefined,
+): ConstructionEntityType {
+  const size = String(scorecardType ?? '').trim().toLowerCase();
+  // Legacy single-field values map straight through.
+  if (size === 'qse') return 'construction_qse';
+  if (size === 'contractor') return 'construction_contractor';
+  if (size === 'bep') return 'construction_bep';
+  // Two-axis model: size is Generic/EME → pick the scorecard by sub-sector.
+  const sub = String(constructionSubSector ?? '').trim().toLowerCase();
+  if (sub === 'bep' || sub.includes('built environment')) return 'construction_bep';
+  return 'construction_contractor';
+}
+
 export function listConstructionEntityTypes(): Array<{ value: ConstructionEntityType; label: string; totalPoints: number }> {
   return [
     { value: 'construction_qse', label: 'Construction QSE', totalPoints: CONSTRUCTION_QSE_SCORECARD.totalMaxPoints },
