@@ -860,7 +860,7 @@ function mapContributionType(raw: string): string {
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
   const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  if (t === "ed" || t.startsWith("enterprise")) return "enterprise_development";
+  if (t === "ed" || t.startsWith("enterprise") || t.includes("enterprise development")) return "enterprise_development";
   if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
   // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
   return "supplier_development";
@@ -1145,7 +1145,10 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // enterprise_development) and map contributionType labels Î“Ã¥Ã† calculator keys.
   const esdContributions = (sec["esd"]?.rows ?? []).map((r) => {
     const rawType = s((r as any).contributionType);
-    const rawCategory = s((r as any).esdCategory);
+    // The export ESD sheet has no category column — SD vs ED is encoded in the
+    // Contribution Description ("ENTERPRISE DEVELOPMENT (non-supplier…)" vs "SD
+    // beneficiary (existing supplier…)"). Fall back to it so ED rows score. (W1b)
+    const rawCategory = s((r as any).esdCategory) || s((r as any).contributionDescription);
     return {
       id: (r as any)._id ?? undefined,
       // Calculator reads `beneficiary` + `type` + `category` + `amount`
