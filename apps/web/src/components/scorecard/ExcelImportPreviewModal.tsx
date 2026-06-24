@@ -89,10 +89,10 @@ export function ExcelImportPreviewModal({
         .map((key) => ({
           key,
           label: EXTRACTED_FIELD_LABELS[key],
-          value: result.data[key],
-          status: result.fieldStatuses[key] ?? (result.data[key] !== undefined ? "mapped" : "unrecognized"),
-          confidence: result.fieldConfidences[key],
-          source: result.fieldSources[key],
+          value: result.data?.[key],
+          status: result.fieldStatuses?.[key] ?? (result.data?.[key] !== undefined ? "mapped" : "unrecognized"),
+          confidence: result.fieldConfidences?.[key],
+          source: result.fieldSources?.[key],
         }))
         .filter((r) => r.value !== undefined || r.status !== "unrecognized");
 
@@ -236,7 +236,7 @@ export function ExcelImportPreviewModal({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={importing || !result?.isBeeGatheringFormat || !result.data.companyName}
+            disabled={importing || !result?.isBeeGatheringFormat || !result?.data?.companyName}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black text-[13px] font-semibold hover:bg-[#e5e5e5] smooth press-sm disabled:opacity-50"
             data-testid="button-confirm-excel-import"
           >

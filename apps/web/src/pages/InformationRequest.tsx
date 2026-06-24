@@ -399,8 +399,9 @@ function CompanyPicker({
                       npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
                     },
                     warnings: fallback.warnings,
-                    unmappedFields: [],
                     fieldStatuses: { companyName: "mapped" },
+                    fieldConfidences: {},
+                    fieldSources: {},
                     isBeeGatheringFormat: true,
                     mappedSheets: Object.keys(fallback.mappedSheets),
                   });
@@ -437,7 +438,7 @@ function CompanyPicker({
             setPendingSections(null);
           }}
           onConfirm={async () => {
-            const companyName = String(previewResult?.data.companyName ?? "").trim();
+            const companyName = String(previewResult?.data?.companyName ?? "").trim();
             const sections = pendingSections;
             if (!companyName || !sections) return;
             setCreating(true);
@@ -609,8 +610,9 @@ function CompanyPicker({
                     npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
                   },
                   warnings: fallback.warnings,
-                  unmappedFields: [],
                   fieldStatuses: { companyName: "mapped" },
+                  fieldConfidences: {},
+                  fieldSources: {},
                   isBeeGatheringFormat: true,
                   mappedSheets: Object.keys(fallback.mappedSheets),
                 });
