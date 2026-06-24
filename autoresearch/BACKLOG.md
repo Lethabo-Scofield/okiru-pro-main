@@ -5,7 +5,16 @@ Work top-to-bottom. One experiment per loop. Update status as you go:
 
 ---
 
-## M1 — Close the Lake Trading score gap (56.58 → 63.56)  [OPEN, highest priority]
+## M1 — Close the Lake Trading score gap (56.58 → 63.56)  [DONE — deployed 2026-06-24, web 62ae4aa3]
+
+EXP-1 (ownership new-entrant +2) + EXP-3 (MC board-voting +board, combine) closed
+the gap: SCORE 63.53 ≈ 63.56. Both are real all-client correctness fixes. Shipped
+to prod (web image 62ae4aa3-202606240741). Residual 0.03 = EAP middle/junior
+rounding — optionally tighten later.
+
+---
+
+## M1-original (superseded by the DONE note above)  [reference]
 
 The fitness function is RED. Two sub-gaps (see `specs/lake-trading-target.md`):
 
