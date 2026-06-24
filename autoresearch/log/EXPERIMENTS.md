@@ -69,4 +69,22 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP — **M1 ACHIEVED.** The Lake Trading bulk-upload now matches the
   Excel toolkit. Residual 0.03 = EAP middle/junior rounding. Board-voting fix is a
   genuine all-client correctness fix (a real toolkit↔Excel misalignment found).
-- Commit: (autoresearch/auto branch) — ALL GATES GREEN → deploy-eligible.
+- Commit: 62ae4aa3 (autoresearch/auto) — ALL GATES GREEN → DEPLOYED (web 62ae4aa3, a994a602).
+
+### EXP-4 — Construction entity-type resolver + M2 finding  (2026-06-24)
+- Backlog item: M2
+- Finding: the construction engine (constructionIndicators.ts) ALREADY encodes the
+  full Contractor/BEP/QSE scorecards from the docx, but as a STANDALONE
+  /api/construction/evaluate endpoint not wired into the workbook→score pipeline;
+  the SectorConfig construction entries are UNVERIFIED zero-stubs. So M2 is a
+  deliberate change: UI re-model + data migration (legacy scorecardType) +
+  workbook→engine integration — the UNVERIFIED area the user flagged for review.
+- Change: added `resolveConstructionEntityType(subSector, scorecardType)` mapping
+  the clean two-axis model to the 3 existing scorecards (backward-compatible) +
+  unit test. Pure, safe seam for the future integration.
+- Result: resolver test (4) green; existing construction tests (22) green; no
+  regressions; RCOGP untouched.
+- Decision: KEEP the resolver. MARK M2 NEEDS-REVIEW — the UI re-model + migration +
+  engine integration is a focused, reviewed change, not an unattended auto-deploy.
+  Pausing the loop for user direction.
+- Commit: (autoresearch/auto branch)

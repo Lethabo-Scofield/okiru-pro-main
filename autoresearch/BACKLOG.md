@@ -33,7 +33,24 @@ The fitness function is RED. Two sub-gaps (see `specs/lake-trading-target.md`):
 
 Definition of done: SCORE ≈ 63.56, PIPELINE gate green, full suite green.
 
-## M2 — Construction sub-sector model  [OPEN]
+## M2 — Construction sub-sector model  [IN PROGRESS — needs user review for scoring integration]
+
+EXP-4 finding: the construction indicator engine (`apps/api/pipeline/constructionIndicators.ts`)
+ALREADY encodes the full Contractor/BEP/QSE scorecards from the docx (123/123/110
+pts). But it's a STANDALONE `/api/construction/evaluate` endpoint (manual indicator
+inputs) NOT wired into the main workbook → score pipeline, and the `SectorConfig`
+construction entries are UNVERIFIED zero-stubs. So the UI `scorecardType`
+(QSE/Contractor/BEP) conflates sub-sector with size, and a construction workbook
+doesn't actually score through the Contractor/BEP engine.
+
+- [done EXP-4] `resolveConstructionEntityType(subSector, scorecardType)` — maps the
+  clean (Contractor|BEP × Generic|QSE) model to the 3 existing engine scorecards,
+  backward-compatible with the legacy single field. + unit test. (Pure, safe.)
+- [needs review] UI re-model: add `constructionSubSector` field + make `scorecardType`
+  the size axis — REQUIRES a data migration for entities whose `scorecardType` is
+  "Contractor"/"BEP" (else strict-select validation rejects them).
+- [needs review] Wire the workbook → construction engine scoring path via the
+  resolver — the UNVERIFIED integration the user flagged for review.
 
 Implement the real Construction model (see `specs/construction-sector-codes.md`
 and memory `construction-sector-model`):
