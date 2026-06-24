@@ -49,7 +49,11 @@ const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   // The "suppliers" / "vendor" hints map to the canonical Procurement section
   // (the standalone "Suppliers" section was removed in May 2026).
   { sectionKey: "procurement", hints: ["procurement", "preferential procurement", "suppliers", "supplier", "vendor", "vendors"] },
-  { sectionKey: "esd", hints: ["enterprise development", "supplier development", "esd", "es&sd"] },
+  // "Enterprise & Supplier Developme" is the real export sheet name (Excel truncates
+  // sheet names to 31 chars). The old hints "enterprise development" / "supplier
+  // development" did NOT match it, so the whole ESD sheet was skipped and every
+  // workbook lost its Supplier + Enterprise Development points. (W1a)
+  { sectionKey: "esd", hints: ["enterprise & supplier development", "enterprise supplier development", "enterprise & supplier", "enterprise development", "supplier development", "esd", "es&sd"] },
   { sectionKey: "sed", hints: ["socioeconomic", "socio-economic", "socio economic", "sed", "csi"] },
 ];
 

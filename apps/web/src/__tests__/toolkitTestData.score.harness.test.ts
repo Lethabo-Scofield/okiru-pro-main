@@ -87,7 +87,8 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         const cfg = configFor(sector, type, subSector);
         if (!cfg) { rows.push(`${f.slice(0, 34).padEnd(34)} | ${sector}/${type} | (no bundled config — API sector)`); continue; }
 
-        let total: number;
+        let total = 0;
+        let brk = '';
         if (isConstructionSector(sector)) {
           const state = { client: { sectorCode: sector, scorecardType: type, constructionSubSector: subSector, npat, leviableAmount: leviable, eapProvince: 'National' }, ownership: { shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }, management: { employees: p.employees }, skills: { leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] }, procurement: { tmps, suppliers: p.suppliers }, esd: { contributions: p.esdContributions }, sed: { contributions: p.sedContributions } };
           const { entityType, input } = buildConstructionScoringInput(state, cfg);
@@ -100,11 +101,12 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
           const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
           total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed;
+          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
         }
         const lvl = levelFromConfig(total, cfg);
         scored++;
         if (lvl === 1) level1++;
-        rows.push(`${f.slice(0, 34).padEnd(34)} | ${sector.padEnd(6)}/${type.padEnd(8)} | total ${total.toFixed(1).padStart(6)} / ${cfg.totalMaxPoints} | Level ${lvl === 99 ? 'NC' : lvl}${lvl !== 1 ? '  <-- NOT L1' : ''}`);
+        rows.push(`${f.slice(0, 30).padEnd(30)} | ${sector.padEnd(5)}/${type.slice(0,7).padEnd(7)} | tot ${total.toFixed(0).padStart(3)}/${cfg.totalMaxPoints} L${lvl === 99 ? 'NC' : lvl}${brk}`);
       } catch (e) {
         rows.push(`${f.slice(0, 34).padEnd(34)} | SCORE THREW: ${(e as Error).message.slice(0, 60)}`);
       }
