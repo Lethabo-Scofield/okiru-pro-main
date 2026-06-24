@@ -312,4 +312,29 @@ Append one entry per loop iteration (newest at the bottom). Template is in
   Deploy-eligible (NOT shipped — holding for the user). Spotted the same conflation pattern in
   all 4 FSC sectors (`blackWomenThreshold: pr.bwo30Target` = 0.10) → logged R25 to verify FSC's
   BWO qualification % (RCOGP/ICT correctly use the 0.30 default).
+- Commit: e5394035 (autoresearch/auto branch)
+
+### EXP-17 — Fix R13: FSC Generic skills sub-min comment (comment-only)  (2026-06-24)
+- Backlog item: M5 / R13 (LOW; the last clear-bug item)
+- Verified: code computes `skillsSubMin = 40% × (maxPoints − absorptionMaxPts) = 40% × (23 − 3)
+  = 8.0`. The inline comment said "9.2 pts (40% × 23)" — wrongly counted the 3-pt absorption
+  bonus in the base. No scoring effect (the value 8.0 was already correct).
+- Change: corrected the `fsc-generic.ts:196` comment to "8.0 = 40% × 20 base (excl. 3-pt
+  absorption bonus)". FSC golden 38/38.
+- Decision: KEEP (comment-only). Deploy-neutral.
 - Commit: (autoresearch/auto branch)
+
+---
+
+## M3 CLEAR-BUG BACKLOG EXHAUSTED  (2026-06-24)
+Ran EXP-7..EXP-17. Resolution of the 14 M3 "clear bug" candidates + harness/import finds:
+- FIXED & SHIPPED (live on okiru.pro, tag 9015355c-202606241139): R6, R7, R8, R19, R21.
+- FIXED & STAGED (committed, awaiting the user's deploy): R22, R12, R13.
+- REJECTED by verify-first (the M3 claim was wrong; Excel evidence logged): R9, R10 — both
+  "Generic absorption" claims; the toolkits use a ROUNDUP-headcount target, not a rate.
+- STRUCTURAL / needs-modeling (NOT atomic; out of the clear-bug loop): R24 (=R9+R10+R11 Generic
+  absorption headcount-target model), R18 (FSC absorption denominator), R20 (FSC sub-variant
+  import), R23 (matchSheetName fragility), R25 (FSC BWO qualification %).
+- EXPERT sign-off (do not auto-fix): R14, R15, R16, R17; plus R3 construction-engine integration.
+Verify-first caught 4 wrong claims (ledger R8 "1%", R9 100%, R10 5%, and prevented forcing them).
+The loop STOPS here — remaining work is modeling/expert, not clear-bug.
