@@ -112,6 +112,9 @@ export interface ConstructionScoringInput {
   };
   /** Optional override for the African EAP percent (default uses national EAP for African = 80.4%). */
   africanEapPercent?: number;
+  /** Sub-sector of the measured entity. Only affects QSE scoring where a target differs by
+   *  sub-sector (e.g. New Entrants/Designated Groups: 5% for BEP vs 10% otherwise — ZM-verified). */
+  subSector?: 'Contractor' | 'BEP';
 }
 
 const ELEMENT_NAMES: Record<ConstructionElement, string> = {
@@ -142,6 +145,12 @@ function scoreIndicator(
   indicator: ConstructionIndicator,
   input: ConstructionScoringInput
 ): IndicatorResult {
+  // ZM-verified 2026-06-24: the QSE "Black New Entrants / Designated Groups" line targets
+  // 5% for BEP entities and 10% otherwise. The QSE scorecard is shared across sub-sectors,
+  // so apply the BEP override here (reported target reflects the effective value).
+  if (indicator.code === 'qse.ownership.designated_groups' && input.subSector === 'BEP') {
+    indicator = { ...indicator, target: 5 };
+  }
   const raw = input.indicators[indicator.inputKey];
   const missing = raw === undefined || raw === null;
   const baseResult = {
