@@ -25,6 +25,7 @@ experiment (see BACKLOG M5).
 | R11 | MEDIUM | ICT Generic / skills | unemployed-LAI headcount (2.1.2.2) counts ALL unemployed Black learners, not only LAI participants. `skills.ts:156` | gate increment on `isLAIProgram(prog)` (ledger-flagged) | OPEN |
 | R12 | MEDIUM | AGRI Generic / procurement | BWO30 line uses 12% (spend target) as the per-supplier ownership qualification instead of 30%. `agri-generic.ts:190` overrides the correct 0.30 default | remove the bad `blackWomenThreshold: pr.bwo30Target` override | OPEN |
 | R13 | LOW | FSC Generic / skills | sub-min inline comment wrong ("9.2 / 40%×23"); computed value 8.0 is correct | comment-only fix | OPEN |
+| R19 | **HIGH** | Bulk upload / all sectors | real export workbooks put Company **Name + Sector + Scorecard Type on the Financials sheet header** (e.g. "…(Pty) Ltd", "Sector / Codes: Generic - Amended Codes"), but the importer only looks on the "Information Request" sheet (a checklist) → company meta never extracted → **every standalone upload is criticalBlocked** on required fields. Found by the Toolkit Testing Data harness across all 16 files. | M6: extract company name/sector/type from the Financials header (or scan smartly) + map "Generic - Amended Codes"→sector; OR merge import into the existing entity's meta before the critical-block check | OPEN |
 
 ### Needs B-BBEE expert sign-off (route to Zoleka/expert — do NOT auto-fix; modeling judgment or big blast radius)
 | # | Severity | Sector / pillar | Question for the expert |
