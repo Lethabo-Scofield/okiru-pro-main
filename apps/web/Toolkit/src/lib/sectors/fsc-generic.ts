@@ -193,7 +193,7 @@ export function sectorConfigToFscCalculatorConfig(sc: SectorConfig): CalculatorC
       bursaryMax: sk.bursaryMaxPts,                   // 4 (unemployed)
       overallTarget: sk.overallSpendPercent / 100,    // ~0.035 (approximation)
       bursaryTarget: sk.bursarySpendPercent / 100,    // 0.015 (1.5% leviable)
-      subMinThreshold: skillsSubMin,                  // 9.2 pts (40% × 23)
+      subMinThreshold: skillsSubMin,                  // R13: 8.0 pts = 40% × 20 base (maxPoints 23 − 3-pt absorption bonus); the old "9.2 (40%×23)" wrongly counted the bonus in the base
       overallSpendPercent: sk.overallSpendPercent / 100,
       bursarySpendPercent: sk.bursarySpendPercent / 100,
       disabledSpendPercent: sk.disabledSpendPercent / 100,  // 0.003 (0.3% leviable)
