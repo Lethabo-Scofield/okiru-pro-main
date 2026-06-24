@@ -841,69 +841,10 @@ function MetaForm({
     onChange({ ...value, [k]: v });
   };
 
-  const handleBlur = (f: ColumnDef, rawTyped: string) => {
-    if (readOnly || !rawTyped.trim()) return;
-    // Only run for text-entry types, not boolean/select (select already constrains).
-    if (f.type === "boolean" || f.type === "select") return;
-
-    const normalized = normalizeCellForColumn(rawTyped, f);
-    const hasMismatch =
-      normalized.changed &&
-      normalized.value !== "" &&
-      String(normalized.value) !== rawTyped.trim();
-    const hasFlag = Boolean(normalized.flag);
-    if (!hasMismatch && !hasFlag) return;
-
-    const inputEl = inputRefs.current[f.key];
-    const anchorRect = inputEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
-    const suggestion = hasMismatch ? String(normalized.value) : null;
-
-    popupAbortRef.current?.abort();
-    const abort = new AbortController();
-    popupAbortRef.current = abort;
-
-    setPopup({
-      anchorRect,
-      rawValue: rawTyped.trim(),
-      suggestion,
-      col: f,
-      isAiSuggestion: false,
-      loading: suggestion == null,
-    });
-
-    if (suggestion == null) {
-      fetch(`${API_BASE}/api/workbook/suggest-value`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        signal: abort.signal,
-        body: JSON.stringify({
-          fieldKey: f.key,
-          fieldLabel: f.label,
-          rawValue: rawTyped.trim(),
-          fieldType: f.type,
-          allowedValues: f.options ?? [],
-        }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: { suggestion?: string; explanation?: string } | null) => {
-          if (!abort.signal.aborted && data?.suggestion) {
-            setPopup((prev) =>
-              prev
-                ? { ...prev, suggestion: data.suggestion ?? null, isAiSuggestion: true, loading: false }
-                : null,
-            );
-          } else if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        })
-        .catch(() => {
-          if (!abort.signal.aborted) {
-            setPopup((prev) => (prev ? { ...prev, loading: false } : null));
-          }
-        });
-    }
-  };
+  // AI value-suggestion popup removed per user feedback: dropdowns, format hints
+  // and inline validation now guide input. The popup surfaced off-base AI
+  // suggestions and reformatted already-valid entries, so it no longer runs.
+  const handleBlur = (_f: ColumnDef, _rawTyped: string) => {};
 
   const renderField = (f: ColumnDef) => {
     const v = value[f.key];
@@ -1241,9 +1182,14 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     (sectionKey: string, meta: Record<string, unknown>) => {
       let next = meta;
       const sectionPatches: Record<string, { meta: Record<string, unknown> }> = {};
+      // Read sibling sections from the live ref, NOT the `workbook` closure value:
+      // handleMetaChange only depends on [scheduleSave], so `workbook` is stale and
+      // reading financial meta from it wiped real financials when the sector changed
+      // (the cross-section patch rebuilt financial-information from an empty copy).
+      const wb = workbookRef.current;
 
       if (sectionKey === "company-information") {
-        const prevMeta = (workbook?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
+        const prevMeta = (wb?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
         const prevSector = String(prevMeta.industrySector ?? "").trim().toUpperCase();
         const newSector = String(meta.industrySector ?? "").trim().toUpperCase();
         if (newSector !== prevSector) {
@@ -1251,7 +1197,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             ...meta,
             scorecardType: resolveScorecardTypeForSector(newSector, meta.scorecardType),
           };
-          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+          const finMeta = (wb?.sections["financial-information"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
@@ -1269,7 +1215,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             if (norm != null) finNext = { ...finNext, industryNormPercent: norm };
             sectionPatches["financial-information"] = { meta: finNext };
             sectionPatches["afs-additions"] = { meta: {} };
-            const sedMeta = (workbook?.sections["sed"]?.meta ?? {}) as Record<string, unknown>;
+            const sedMeta = (wb?.sections["sed"]?.meta ?? {}) as Record<string, unknown>;
             sectionPatches["sed"] = { meta: pruneSedMetaWhenLeavingFsc(sedMeta) };
           }
         }
@@ -1277,11 +1223,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         const prevFsc = String(prevMeta.fscSubSector ?? "");
         const newFsc = String(next.fscSubSector ?? "");
         if (newSector === "FSC" && newFsc && prevFsc !== newFsc) {
-          const finMeta = (workbook?.sections["financial-information"]?.meta ?? {}) as Record<
+          const finMeta = (wb?.sections["financial-information"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
-          const existingAfs = (workbook?.sections["afs-additions"]?.meta ?? {}) as Record<
+          const existingAfs = (wb?.sections["afs-additions"]?.meta ?? {}) as Record<
             string,
             unknown
           >;
@@ -1297,7 +1243,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       }
 
       if (sectionKey === "financial-information") {
-        const companyMeta = (workbook?.sections["company-information"]?.meta ?? {}) as Record<
+        const companyMeta = (wb?.sections["company-information"]?.meta ?? {}) as Record<
           string,
           unknown
         >;
@@ -1843,17 +1789,24 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
-                      <MetaForm
-                        fields={activeMetaFieldsResolved}
-                        value={
-                          activeSection.key === "financial-information"
-                            ? financialMetaWithNorm
-                            : activeMeta
-                        }
-                        readOnly={!activeSectionPermissions.canEdit}
-                        crossFieldErrors={activeMetaCrossFieldErrors}
-                        onChange={(next) => handleMetaChange(activeSection.key, next)}
-                      />
+                      <>
+                        {!activeSectionPermissions.canEdit && (
+                          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+                            You have <span className="font-semibold">read-only</span> access to this section — changes here won't be saved. Ask the workspace owner to grant you edit access to this pillar.
+                          </div>
+                        )}
+                        <MetaForm
+                          fields={activeMetaFieldsResolved}
+                          value={
+                            activeSection.key === "financial-information"
+                              ? financialMetaWithNorm
+                              : activeMeta
+                          }
+                          readOnly={!activeSectionPermissions.canEdit}
+                          crossFieldErrors={activeMetaCrossFieldErrors}
+                          onChange={(next) => handleMetaChange(activeSection.key, next)}
+                        />
+                      </>
                     )}
                   </div>
                   <div className="pt-2">
@@ -1885,17 +1838,24 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
-                      <MetaForm
-                        fields={activeMetaFieldsResolved}
-                        value={
-                          activeSection.key === "financial-information"
-                            ? financialMetaWithNorm
-                            : activeMeta
-                        }
-                        readOnly={!activeSectionPermissions.canEdit}
-                        crossFieldErrors={activeMetaCrossFieldErrors}
-                        onChange={(next) => handleMetaChange(activeSection.key, next)}
-                      />
+                      <>
+                        {!activeSectionPermissions.canEdit && (
+                          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+                            You have <span className="font-semibold">read-only</span> access to this section — changes here won't be saved. Ask the workspace owner to grant you edit access to this pillar.
+                          </div>
+                        )}
+                        <MetaForm
+                          fields={activeMetaFieldsResolved}
+                          value={
+                            activeSection.key === "financial-information"
+                              ? financialMetaWithNorm
+                              : activeMeta
+                          }
+                          readOnly={!activeSectionPermissions.canEdit}
+                          crossFieldErrors={activeMetaCrossFieldErrors}
+                          onChange={(next) => handleMetaChange(activeSection.key, next)}
+                        />
+                      </>
                     )}
                   </div>
                 </>
