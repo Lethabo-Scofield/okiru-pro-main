@@ -16,7 +16,7 @@ experiment (see BACKLOG M5).
 ### Clear, undocumented bugs — the loop will fix each with a golden test (no scoring judgment needed)
 | # | Severity | Sector / pillar | Misalignment | Fix | Status |
 |---|---|---|---|---|---|
-| R6 | **HIGH** | ICT Generic / MC | senior/middle/junior band targets MISSING from config → targets resolve to NaN → **8 of 23 MC pts always score 0** for every ICT Generic entity (under-scores). `sectorConfig.ts:554-567` omits them | Add seniorBlackTarget 0.60 / BW 0.30, middle 0.75 / 0.38, junior 0.88 / 0.44 (mirror AGRI/RCOGP) + converter copy in `ict-generic.ts` | OPEN (next fix) |
+| R6 | **HIGH** | ICT Generic / MC | senior/middle/junior band targets MISSING from config → targets resolve to NaN → **8 of 23 MC pts always score 0** for every ICT Generic entity (under-scores). `sectorConfig.ts:554-567` omits them | Added seniorBlackTarget 0.60 / BW 0.30, middle 0.75 / 0.38, junior 0.88 / 0.44 (mirror AGRI/RCOGP) + converter copy in `ict-generic.ts` + golden test (full 8 SMJ pts) | **DONE** (EXP-7, branch; deploy-eligible) |
 | R7 | **HIGH** | FSC Generic / skills | absorption target divided by 100 **twice** → effective 0.01% vs Excel 100%; any single absorbed learner maxes the 3-pt bonus. `fsc-generic.ts:208` + `skills.ts:392` | Remove one /100 (config 1.0→100, single-divide); mirror fsc-banks/lti/sti + API path | OPEN |
 | R8 | **HIGH** | RCOGP QSE / skills | absorption target 1% vs Excel 100% (the "1" in C30 is the fraction 1.0). `sectorConfig.ts:1161` | 1.0 → 100 | OPEN |
 | R9 | MEDIUM | ICT Generic / skills | absorption target 2.5% vs Excel 100% (D54=1). `sectorConfig.ts:591` | 2.5 → 100 | OPEN |
