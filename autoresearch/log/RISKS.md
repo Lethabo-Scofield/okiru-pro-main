@@ -5,10 +5,30 @@ experiment (see BACKLOG M5).
 
 | # | Severity | Area | Risk | Evidence (file:line / source) | Proposed fix | Status |
 |---|---|---|---|---|---|---|
-| R1 | HIGH | Correctness | MC engine under-scores vs Excel for Lake Trading (6.79 vs 11.77) — real client scores would be wrong | fitness EXP-0; `management.ts`; Excel "MC Scorecard" | Reconcile MC/EE EAP model to Excel (M1a) | OPEN |
-| R2 | MEDIUM | Correctness | Ownership projection drops points (23 vs 25) on bulk-upload | fitness EXP-0; `projectWorkbookToClient` ownership map | Fix projection/generator field mapping (M1b) | OPEN |
-| R3 | MEDIUM | Correctness | Construction sub-sector (Contractor/BEP) overloaded onto scorecardType; configs UNVERIFIED | memory `construction-sector-model`; `sectorConfig.ts` | Implement sub-sector model (M2) | OPEN |
-| R4 | MEDIUM | Maintainability | Duplicated feedback handlers (apps/api vs apps/web/server) — edits to the wrong one are silent no-ops | memory `devmode-feedback-infra` | Unify or clearly mark the dead one (M4) | OPEN |
-| R5 | LOW | Data integrity | Bulk-upload empty-section overwrite can blank populated pillars on partial import | review of `/api/workbook/:id/import` | Already mitigated client-side (populated-only); add server guard (M4) | OPEN |
+| R1 | HIGH | Correctness | MC engine under-scored Lake Trading (6.79 vs 11.77) | EXP-3; `management.ts` board voting | Board voting now includes exec directors | DONE (deployed 762dfe47) |
+| R2 | MEDIUM | Correctness | Ownership dropped 2 pts on bulk-upload (23 vs 25) | EXP-1; `projectWorkbookToClient` | New entrants credited from BNE% | DONE (deployed) |
+| R3 | MEDIUM | Correctness | Construction sub-sector overloaded onto scorecardType | EXP-5; `sections.ts` | UI re-model shipped; engine integration held for review | PARTIAL (UI done) |
+| R4 | MEDIUM | Maintainability | Duplicated feedback handlers — edits to the wrong one are silent | memory `devmode-feedback-infra` | Unify / mark the dead one (M4) | OPEN |
+| R5 | LOW | Data integrity | Bulk-upload empty-section overwrite can blank pillars | `/api/workbook/:id/import` | Client-side mitigated; add server guard (M4) | OPEN |
 
-Add new risks as the misalignment hunt (M3) surfaces them.
+## M3 misalignment hunt (EXP-6, 2026-06-24) — 14 confirmed (sector TS vs verbatim Excel)
+
+### Clear, undocumented bugs — the loop will fix each with a golden test (no scoring judgment needed)
+| # | Severity | Sector / pillar | Misalignment | Fix | Status |
+|---|---|---|---|---|---|
+| R6 | **HIGH** | ICT Generic / MC | senior/middle/junior band targets MISSING from config → targets resolve to NaN → **8 of 23 MC pts always score 0** for every ICT Generic entity (under-scores). `sectorConfig.ts:554-567` omits them | Add seniorBlackTarget 0.60 / BW 0.30, middle 0.75 / 0.38, junior 0.88 / 0.44 (mirror AGRI/RCOGP) + converter copy in `ict-generic.ts` | OPEN (next fix) |
+| R7 | **HIGH** | FSC Generic / skills | absorption target divided by 100 **twice** → effective 0.01% vs Excel 100%; any single absorbed learner maxes the 3-pt bonus. `fsc-generic.ts:208` + `skills.ts:392` | Remove one /100 (config 1.0→100, single-divide); mirror fsc-banks/lti/sti + API path | OPEN |
+| R8 | **HIGH** | RCOGP QSE / skills | absorption target 1% vs Excel 100% (the "1" in C30 is the fraction 1.0). `sectorConfig.ts:1161` | 1.0 → 100 | OPEN |
+| R9 | MEDIUM | ICT Generic / skills | absorption target 2.5% vs Excel 100% (D54=1). `sectorConfig.ts:591` | 2.5 → 100 | OPEN |
+| R10 | MEDIUM | RCOGP Generic / skills | absorption target 2.5% vs Excel 5% (D47=0.05). `sectorConfig.ts:482` | 2.5 → 5.0 | OPEN |
+| R11 | MEDIUM | ICT Generic / skills | unemployed-LAI headcount (2.1.2.2) counts ALL unemployed Black learners, not only LAI participants. `skills.ts:156` | gate increment on `isLAIProgram(prog)` (ledger-flagged) | OPEN |
+| R12 | MEDIUM | AGRI Generic / procurement | BWO30 line uses 12% (spend target) as the per-supplier ownership qualification instead of 30%. `agri-generic.ts:190` overrides the correct 0.30 default | remove the bad `blackWomenThreshold: pr.bwo30Target` override | OPEN |
+| R13 | LOW | FSC Generic / skills | sub-min inline comment wrong ("9.2 / 40%×23"); computed value 8.0 is correct | comment-only fix | OPEN |
+
+### Needs B-BBEE expert sign-off (route to Zoleka/expert — do NOT auto-fix; modeling judgment or big blast radius)
+| # | Severity | Sector / pillar | Question for the expert |
+|---|---|---|---|
+| R14 | **HIGH** | RCOGP QSE + ICT QSE (shared `ownership.ts`) | The ≥25%/≥30% "full ownership" voting shortcut auto-awards full economic-interest, designated-group and 8-pt net value (no realisation data) and auto-passes the 3.2 net-value sub-min. Excel scores each row from its own actuals. Ledger says remove it — confirm before touching shared ownership.ts (large blast radius). |
+| R15 | MEDIUM | RCOGP Generic + QSE / ESD | Guarantee SD/ED benefit factor: TS uses 3% (amended Codes); the RCOGP toolkit reference cell says 50%. Which authority governs? |
+| R16 | MEDIUM | RCOGP Generic / MC | Board band is built from designation; Excel uses the Yes/No `Board?` flag (a board member with a non-director designation is excluded). Needs an `isBoardMember` field added to the model. |
+| R17 | MEDIUM | AGRI Generic / skills | Cat F&G + admin recognition cap: TS uses 25% F&G + separate 15% admin; AGRI toolkit folds F&G+admin into a single 15% subtotal. May be an intentional 2019-amendment choice. |

@@ -103,4 +103,20 @@ Append one entry per loop iteration (newest at the bottom). Template is in
 - Decision: KEEP — addresses the sub-sector/size confusion directly. Remaining M2:
   wire the workbook → construction engine scoring via the resolver (UNVERIFIED;
   held for review, no deploy).
+- Commit: 762dfe47 (autoresearch/auto) — DEPLOYED with M2 PDF (762dfe47, 1c8fd313).
+
+### EXP-6 — M3 misalignment hunt (all sectors)  (2026-06-24)
+- Backlog item: M3
+- Method: Workflow — 6 sector finders diffing each TS scorer/config against the
+  verbatim Excel (docs/toolkits/extracted_formulas/<sector>.md) → adversarial
+  verification of each finding (26 agents).
+- Result: **14 confirmed misalignments** logged to log/RISKS.md (R6-R17). 8 are
+  clear undocumented bugs (the loop will fix each with a golden test); 6 need
+  B-BBEE expert sign-off (ownership shortcut, guarantees 3% vs 50%, board flag,
+  AGRI cap). Highest-impact bug: **R6 — ICT Generic MC senior/middle/junior band
+  targets are MISSING from config → 8 of 23 MC points always score 0** for every
+  ICT Generic entity (NaN-zeroing; ICT was missed when AGRI/RCOGP/QSE got the fix).
+- Decision: KEEP (discovery). Next fix tick: R6 (highest-impact, lowest-risk,
+  clearly undocumented). Then R7/R8 (absorption /100 + 1%-vs-100%). The 6
+  expert-signoff items are routed to the user, not auto-fixed.
 - Commit: (autoresearch/auto branch)
