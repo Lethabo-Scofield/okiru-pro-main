@@ -129,6 +129,9 @@ export function buildConstructionScoringInput(
     ppAllEmpoweringSpend: Number.isFinite(pr.empoweringSpend) ? pr.empoweringSpend : undefined,
     pp51BlackOwnedSpend: Number.isFinite(pr.blackOwned51Spend) ? pr.blackOwned51Spend : undefined,
     ppDesignated51Spend: Number.isFinite(pr.designatedGroupSpend) ? pr.designatedGroupSpend : undefined,
+    // EME/QSE recognised spend from suppliers[].enterpriseType (Phase 1, no new input).
+    ppEmeSpend: Number.isFinite(pr.spendEME) ? pr.spendEME : undefined,
+    ppQseSpend: Number.isFinite(pr.spendQSE) ? pr.spendQSE : undefined,
 
     // ── Supplier Development / SED (RAW ZAR for _of_npat) ──
     supplierDevelopmentSpend: Number.isFinite(esd.sdSpend) ? esd.sdSpend : undefined,

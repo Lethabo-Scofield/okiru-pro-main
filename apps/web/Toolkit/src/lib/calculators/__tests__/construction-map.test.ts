@@ -77,6 +77,19 @@ describe('construction-map — unit conversions + wiring', () => {
     expect(input.indicators.ppAllEmpoweringSpend as number).toBeGreaterThan(0);
     expect(input.indicators.sedSpend).toBe(200_000);
   });
+
+  it('Phase 1: EME/QSE recognised spend feeds ppEmeSpend/ppQseSpend from enterpriseType', () => {
+    const { input } = buildConstructionScoringInput(
+      baseState({
+        procurement: { tmps: 1_000_000, suppliers: [
+          { id: 'eme1', name: 'EME', beeLevel: 1, enterpriseType: 'eme', blackOwnership: 0.6, blackWomenOwnership: 0, youthOwnership: 0, disabledOwnership: 0, spend: 200_000 },
+          { id: 'qse1', name: 'QSE', beeLevel: 2, enterpriseType: 'qse', blackOwnership: 0.6, blackWomenOwnership: 0, youthOwnership: 0, disabledOwnership: 0, spend: 150_000 },
+        ] },
+      }), cfg,
+    );
+    expect(input.indicators.ppEmeSpend as number).toBeGreaterThan(0);
+    expect(input.indicators.ppQseSpend as number).toBeGreaterThan(0);
+  });
 });
 
 describe('construction-map — end-to-end scoring via the verified engine', () => {
