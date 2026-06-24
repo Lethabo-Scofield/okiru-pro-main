@@ -1275,6 +1275,22 @@ export async function registerRoutes(
         await storage.addMember(inv.workspaceId, userId, inv.role, { pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined, displayRole: inv.displayRole });
       }
       await storage.acceptInvite(token);
+      // Org membership: scorecard visibility is org-scoped (sameOrg || sameUser), so put the
+      // accepting user in the inviter's organisation — this is how teammates come to see each
+      // other's scorecards going forward (the same effect as the one-off Okiru org merge).
+      let joinedOrg: string | null = null;
+      try {
+        const inviter = await storage.getUserById(inv.invitedByUserId);
+        if (inviter?.organizationId && inviter.organizationId !== user.organizationId) {
+          await storage.updateUser(userId, {
+            organizationId: inviter.organizationId,
+            organizationName: inviter.organizationName ?? undefined,
+          } as any);
+          joinedOrg = inviter.organizationId;
+        }
+      } catch (orgErr) {
+        logger.warn("invite-accept org join failed (membership still added)", orgErr);
+      }
       await recordAudit(req, {
         action: "workspace.invite.accept",
         resourceType: "workspace_invite",
@@ -1284,6 +1300,7 @@ export async function registerRoutes(
           workspaceId: inv.workspaceId,
           role: inv.role,
           alreadyMember: !!existing,
+          joinedOrg,
         },
       });
       return res.json({ ok: true, workspaceId: inv.workspaceId });
