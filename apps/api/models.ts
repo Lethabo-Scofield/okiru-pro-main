@@ -480,6 +480,20 @@ const certificateMetadataSchema = new Schema({
   extractionStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
   extractionError: { type: String, default: null },
   processedAt: { type: Date, default: null },
+  enrichmentStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'review_required', 'failed'],
+    default: 'pending',
+    index: true,
+  },
+  lastEnrichedAt: { type: Date, default: null },
+  enrichmentVersion: { type: String, default: null },
+  fieldConfidence: { type: Schema.Types.Mixed, default: {} },
+  reviewFields: { type: [String], default: [] },
+  auditLog: {
+    type: [Schema.Types.Mixed],
+    default: [],
+  },
   uploadedByUserId: { type: String, default: null, index: true },
   // Verification (Phase 1 — production readiness)
   verified: { type: Boolean, default: false, index: true },
