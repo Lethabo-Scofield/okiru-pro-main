@@ -143,6 +143,26 @@ export function ExcelImportPreviewModal({
                 Sheets scanned: {result.mappedSheets?.join(", ") || "—"}
               </div>
 
+              {(result.sectionSummary?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-[#2c2c2e] overflow-hidden">
+                  <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
+                    Data extracted by section
+                  </div>
+                  <div className="px-3 py-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {result.sectionSummary?.map((s) => (
+                      <div key={s.key} className="flex items-center justify-between gap-2 text-[12px]">
+                        <span className="text-[#d1d1d6] truncate">{s.label}</span>
+                        <span className="tabular-nums text-emerald-400 font-medium shrink-0">
+                          {s.rowCount > 0
+                            ? `${s.rowCount} row${s.rowCount !== 1 ? "s" : ""}`
+                            : `${s.fieldCount} field${s.fieldCount !== 1 ? "s" : ""}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {groupedRows.map((group) => (
                 <div key={group.id} className="rounded-xl border border-[#2c2c2e] overflow-hidden">
                   <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">

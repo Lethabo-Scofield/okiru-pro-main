@@ -61,6 +61,34 @@ import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
 import { mergeWorkbookSectionSaveBody } from "@/lib/workbookSectionSave";
 
 type Row = Record<string, unknown> & { _id: string };
+
+const PREVIEW_SECTION_LABELS: Record<string, string> = {
+  "company-information": "Company Information",
+  "financial-information": "Financial Information",
+  ownership: "Ownership",
+  "management-control": "Management Control",
+  employees: "Employees",
+  "skills-development": "Skills Development",
+  procurement: "Procurement / Suppliers",
+  esd: "Enterprise & Supplier Development",
+  sed: "Socio-Economic Development",
+  "afs-additions": "Access to Financial Services",
+};
+
+/** Per-section row/field counts for the import preview so users see everything
+ *  that came in, not just company + financials. */
+function buildSectionSummary(sections: WorkbookSectionsInput) {
+  return Object.entries(sections)
+    .map(([key, sec]) => ({
+      key,
+      label: PREVIEW_SECTION_LABELS[key] ?? key,
+      rowCount: Array.isArray((sec as { rows?: unknown[] })?.rows) ? (sec as { rows: unknown[] }).rows.length : 0,
+      fieldCount: (sec as { meta?: Record<string, unknown> })?.meta
+        ? Object.values((sec as { meta: Record<string, unknown> }).meta).filter((v) => v !== "" && v != null).length
+        : 0,
+    }))
+    .filter((s) => s.rowCount > 0 || s.fieldCount > 0);
+}
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
 type Workbook = {
   companyId: string;
@@ -405,6 +433,7 @@ function CompanyPicker({
                     isBeeGatheringFormat: true,
                     mappedSheets: Object.keys(fallback.mappedSheets),
                     extractedFieldCount: fallback.extractedFieldCount,
+                    sectionSummary: buildSectionSummary(fallback.sections),
                   });
                   setPendingSections(fallback.sections);
                   setPreviewOpen(true);
@@ -617,6 +646,7 @@ function CompanyPicker({
                   isBeeGatheringFormat: true,
                   mappedSheets: Object.keys(fallback.mappedSheets),
                   extractedFieldCount: fallback.extractedFieldCount,
+                  sectionSummary: buildSectionSummary(fallback.sections),
                 });
                 setPendingSections(fallback.sections);
                 setPreviewOpen(true);
