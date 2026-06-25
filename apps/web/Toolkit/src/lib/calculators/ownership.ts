@@ -48,6 +48,8 @@ export interface OwnershipResult {
     economicInterestBWOPercentage: number;
     designatedGroupPercentage: number;
     netValuePercentage: number;
+    /** Black new-entrant economic interest as a fraction 0–1 (Construction new-entrants indicator). */
+    newEntrantEIPercentage: number;
   };
 }
 
@@ -238,6 +240,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       economicInterestBWOPercentage: round2(totalEconomicInterestBWO),
       designatedGroupPercentage: round2(totalDesignatedGroup),
       netValuePercentage: round2(fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / ot.netValueMaxPts)),
+      newEntrantEIPercentage: round2(totalNewEntrantEI),
     },
   };
 }

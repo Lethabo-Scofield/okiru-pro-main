@@ -93,6 +93,21 @@ export function buildConstructionScoringInput(
   const sedLimitedRaw = sumAmt(sedContribs, (c) => c?.isLimitedServicesCommunity === true);
   const sedLimitedServicesPercent = sedRawTotal > 0 ? (sedLimitedRaw / sedRawTotal) * 100 : undefined;
 
+  // ── Phase 1 derivations (from data the workbook DOES carry) ──
+  const leviable = Number(client.leviableAmount ?? 0);
+  // Cat A/B/C/D recognised black skills spend (from the skills calculator's own breakdown).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const catBd: any[] = Array.isArray((skills as any).categoryBreakdown) ? (skills as any).categoryBreakdown : [];
+  const catABCDSpend = catBd
+    .filter((b) => ['A', 'B', 'C', 'D'].includes(String(b?.code)))
+    .reduce((s, b) => s + (Number(b?.recognisedSpend) || 0), 0);
+  // "Voting + Economic ≥ X%": achieved on BOTH iff the lower of the two reaches X.
+  const bothPct = (a?: number, b?: number): number | undefined =>
+    a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b) ? undefined : Math.min(a, b) * 100;
+  // Black-disabled skills spend as a % of total black skills spend (same cost basis).
+  const blackDisabledSkillsPercent = sk.blackSpend > 0 ? (sk.disabledSpend / sk.blackSpend) * 100 : undefined;
+  const absorptionPct = sk.totalBlackLearners > 0 ? (sk.absorbedCount / sk.totalBlackLearners) * 100 : undefined;
+
   const raw: Record<string, number | boolean | undefined> = {
     // ── Ownership (fractions → ×100; net value 0–1) ──
     votingRightsBlackPercent: toPct(o.blackVotingPercentage),
@@ -141,6 +156,23 @@ export function buildConstructionScoringInput(
     supplierDevelopmentSpendBWO,
     sedStructuredProjectsSpend,
     sedLimitedServicesPercent,
+
+    // ── Phase 1: construction-specific inputs DERIVED from workbook data ──
+    // Ownership new entrants (economic interest fraction → percent).
+    newEntrantsPercent: toPct(o.newEntrantEIPercentage),
+    // QSE combined voting+economic bonus thresholds.
+    votingAndEconomicBlackPercent: bothPct(o.blackVotingPercentage, o.economicInterestPercentage),
+    votingAndEconomicBlackWomenPercent: bothPct(o.blackWomenVotingPercentage, o.economicInterestBWOPercentage),
+    // Skills: secondary tier reuses the recognised black spend; disabled / Cat-ABCD /
+    // absorption computed on the calculator's own basis.
+    skillsSpendBlackSecondary: Number.isFinite(sk.blackSpend) ? sk.blackSpend : undefined,
+    skillsSpendBlackDisabledPercent: blackDisabledSkillsPercent,
+    skillsDisabilitiesProgrammesPercent: blackDisabledSkillsPercent,
+    skillsCatABCDPercent: leviable > 0 ? (catABCDSpend / leviable) * 100 : undefined,
+    absorptionPercent: absorptionPct,
+    // PP from ≥35% / ≥51% black-women-owned suppliers (recognised ZAR).
+    pp35BlackWomenOwnedSpend: Number.isFinite(pr.blackWomen35Spend) ? pr.blackWomen35Spend : undefined,
+    ppBlackWomen51Spend: Number.isFinite(pr.blackWomen51Spend) ? pr.blackWomen51Spend : undefined,
   };
 
   const indicators: Record<string, number | boolean> = {};
