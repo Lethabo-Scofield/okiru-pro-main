@@ -1022,6 +1022,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         isForeign: coerceYesNo((r as any).isForeign),
         votingRights: num((r as any).votingRights),
         startDate: s((r as any).startDate),
+        // Construction-only template fields (professional registration, youth).
+        professionallyRegistered: coerceYesNo((r as any).professionallyRegistered),
+        isYouthEmployee: coerceYesNo((r as any).isYouthEmployee),
       });
     }
   }
@@ -1080,6 +1083,12 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       cost: total,
       startDate: s((r as any).startDate),
       endDate: s((r as any).endDate),
+      // Construction-only template fields (industry registration, learner mgmt
+      // level, mentorship) for the construction skills indicators.
+      industryRegistered: coerceYesNo((r as any).industryRegistered),
+      learnerMgmtLevel: s((r as any).learnerMgmtLevel),
+      mentorship: coerceYesNo((r as any).mentorship),
+      mentorshipPromotion: coerceYesNo((r as any).mentorshipPromotion),
     };
   });
 
@@ -1167,6 +1176,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       paymentDate: s((r as any).paymentDate),
       primeRate: num((r as any).primeRate),
       actualRate: num((r as any).actualRate),
+      // Construction-only: recognised Supplier & Contractor Development programme.
+      supplierDevProgramme: coerceYesNo((r as any).supplierDevProgramme),
     };
   });
 

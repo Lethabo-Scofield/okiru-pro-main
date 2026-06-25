@@ -970,7 +970,34 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
     validate: dateOrNumberValidator,
     aliases: ["Hire Date", "Hire Date (format: dd/mm/yyyy)"],
   },
+  // Construction-only employee fields (surfaced for CONSTRUCTION via getSection;
+  // stripped from the form for other sectors). Feed the construction
+  // professional-registration and youth indicators. (Phase 1 template columns)
+  yesNoColumn("professionallyRegistered", "Professionally Registered?", {
+    width: 150,
+    required: false,
+    aliases: ["Professionally Registered", "Professionally Registered?", "Professional Registration", "Professionally Registered (Yes/No)"],
+    guidance: "Construction only: is this employee professionally registered with a statutory built-environment / industry council?",
+  }),
+  yesNoColumn("isYouthEmployee", "Youth (under 35)?", {
+    width: 120,
+    required: false,
+    aliases: ["Youth", "Youth (<35)", "Youth?", "Youth (under 35)", "Is Youth"],
+    guidance: "Construction only: is this employee a black youth (under 35)? Feeds the Black Youth Employees bonus.",
+  }),
 ];
+
+/** Construction-only column keys, appended to the base arrays for the importer but
+ *  hidden from non-construction forms via getSection. (Phase 1 template columns) */
+export const CONSTRUCTION_ONLY_COLUMN_KEYS = new Set<string>([
+  "professionallyRegistered",
+  "isYouthEmployee",
+  "industryRegistered",
+  "learnerMgmtLevel",
+  "mentorship",
+  "mentorshipPromotion",
+  "supplierDevProgramme",
+]);
 
 /**
  * @deprecated Use MC_EE_COLUMNS for the combined Management Control &
@@ -1093,6 +1120,27 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "manHours", label: "Man Hours", type: "number", width: 120, validate: numericValidator },
   { key: "startDate", label: "Start Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
   { key: "endDate", label: "End Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
+  // Construction-only learner fields (hidden from other sectors via getSection).
+  // Feed the construction industry-registration, black-management-by-level and
+  // mentorship indicators. (Phase 1 template columns)
+  yesNoColumn("industryRegistered", "Registered with Industry Body?", {
+    width: 160, required: false,
+    aliases: ["Industry Body", "Registered with Industry Body", "Industry Registration", "Industry Body Registered"],
+    guidance: "Construction only: is this black candidate registered with a recognised industry/professional body?",
+  }),
+  { key: "learnerMgmtLevel", label: "Management Level", type: "select", options: ["Executive", "Senior", "Middle", "Junior", "None"], width: 150, required: false,
+    aliases: ["Management Level", "Mgmt Level", "Learner Management Level", "Management Band"],
+    guidance: "Construction only: the learner's management band (Exec/Senior/Middle/Junior) for black-management skills indicators." },
+  yesNoColumn("mentorship", "Mentorship Programme?", {
+    width: 150, required: false,
+    aliases: ["Mentorship", "Mentorship Programme", "Mentored", "On Mentorship"],
+    guidance: "Construction only: is this learner on a structured mentorship programme?",
+  }),
+  yesNoColumn("mentorshipPromotion", "Promoted via Mentorship?", {
+    width: 160, required: false,
+    aliases: ["Mentorship Promotion", "Promoted via Mentorship", "Mentorship Promoted"],
+    guidance: "Construction only: was this learner promoted through the mentorship programme? (bonus)",
+  }),
 ];
 
 // ---------- Procurement / Suppliers ----------
@@ -1195,6 +1243,13 @@ export const ESD_COLUMNS: ColumnDef[] = [
   { key: "paymentDate", label: "Payment Date (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Payment date (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
   { key: "primeRate", label: "Prime Rate (%)", type: "number", width: 130, validate: percentValidator },
   { key: "actualRate", label: "Actual Rate (%)", type: "number", width: 130, validate: percentValidator },
+  // Construction-only (hidden from other sectors via getSection): flags a recognised
+  // Supplier & Contractor Development programme (Annex CSC 400). (Phase 1 template column)
+  yesNoColumn("supplierDevProgramme", "Supplier/Contractor Dev Programme?", {
+    width: 200, required: false,
+    aliases: ["Supplier Development Programme", "Contractor Development Programme", "Supplier/Contractor Dev Programme", "Dev Programme"],
+    guidance: "Construction only: is this a recognised Supplier & Contractor Development programme (Annex CSC 400)?",
+  }),
 ];
 
 // ---------- SED ----------
@@ -1439,6 +1494,24 @@ export const SECTIONS: SectionDef[] = [
  *  - Skills Development: eapProvince and eapYear excluded for QSE (fixed % targets, no EAP lookup).
  */
 export function getSection(
+  key: string,
+  sectorCode?: string,
+  scorecardType?: string,
+  fscSubSector?: string,
+  fscReinsurer?: boolean,
+): SectionDef | undefined {
+  const result = getSectionInner(key, sectorCode, scorecardType, fscSubSector, fscReinsurer);
+  // Construction-only columns live in the base arrays so the importer (which calls
+  // getSection with NO sector) always parses them. Hide them from EXPLICIT
+  // non-construction sector forms; keep them for the importer and for Construction.
+  if (!result?.columns || sectorCode === undefined) return result;
+  const sector = String(sectorCode).trim().toUpperCase();
+  if (sector === "" || sector === "CONSTRUCTION") return result;
+  const cols = result.columns.filter((c) => !CONSTRUCTION_ONLY_COLUMN_KEYS.has(c.key));
+  return cols.length === result.columns.length ? result : { ...result, columns: cols };
+}
+
+function getSectionInner(
   key: string,
   sectorCode?: string,
   scorecardType?: string,
