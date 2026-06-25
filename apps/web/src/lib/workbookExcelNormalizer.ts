@@ -73,6 +73,14 @@ const GENDER_MAP: Record<string, string> = {
   f: "Female",
 };
 
+// Summary / total / note rows the grid parser ingests below the real shareholder
+// rows (e.g. "TOTALS" at 100% voting, "Black voting rights", a "Net value:" note).
+// The projection (workbookRoutes) already drops these for scoring, but the import
+// PREVIEW shows the raw ingested rows — so they surfaced as bogus shareholders with
+// a percentage in the Race column, flooding validation. Filter at ingestion. (W-validate)
+const JUNK_OWNERSHIP_NAME =
+  /^(totals?|sub-?totals?|grand\s+total|net\s+value|black\s+(voting|women|economic|new|people|disabled))/i;
+
 function norm(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -437,6 +445,21 @@ function parseGridFromSheet(
     });
     if (hasData) out.push(row);
   }
+  // W3: workbooks commonly put the full name in a single "Name" column while the
+  // grid also defines a separate (required) "Surname". Split "First Last" so the
+  // surname isn't flagged Required and per-person scoring has both parts. Last
+  // whitespace token is the surname; everything before it is the given name(s).
+  if (columns.some((c) => c.key === "name") && columns.some((c) => c.key === "surname")) {
+    for (const r of out) {
+      const nm = String(r.name ?? "").trim();
+      const sn = String(r.surname ?? "").trim();
+      if (nm && !sn && /\s/.test(nm)) {
+        const parts = nm.split(/\s+/);
+        r.surname = parts.pop() as string;
+        r.name = parts.join(" ");
+      }
+    }
+  }
   return out;
 }
 
@@ -553,7 +576,15 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
       }
     }
     if (def.columns) {
-      const rows = parseGridFromSheet(matrix, def.columns);
+      let rows = parseGridFromSheet(matrix, def.columns);
+      // Drop summary/total/note rows the grid parser picks up below the shareholder
+      // data so they don't show as bogus shareholders in the import preview. (W-validate)
+      if (sectionKey === "ownership") {
+        rows = rows.filter((r) => {
+          const nm = String((r as Record<string, unknown>).shareholderName ?? (r as Record<string, unknown>).name ?? "").trim();
+          return !JUNK_OWNERSHIP_NAME.test(nm);
+        });
+      }
       payload = { ...payload, rows: [...(payload.rows ?? []), ...rows] };
     }
     sections[sectionKey] = payload;
