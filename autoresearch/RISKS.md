@@ -1,4 +1,13 @@
 
+## M7b — Import validation noise (W-validate + W3) — 2026-06-25
+Live import flagged 700–2,900 non-blocking "issues" per workbook (looked broken). Root
+causes + score-NEUTRAL fixes (commit b5d7e84a; Lake 63.56 + SCORE 12/14 unchanged; web
+suite green; 28,943 → 181 total issues, 0/16 blocked):
+- **W-validate (Yes/No flood, ~95%):** `yesNoColumn` fields are `yesNoBoolean` → importer stores JS booleans → strict-select stringified to "true"/"false" → rejected vs ["Yes","No"]. Fix: tolerant `selectValueAllowed` in workbookValidation.ts (booleans/1-0/y-n + case-insensitive + ESD/SED contribution synonyms). VALIDATION-ONLY — an earlier attempt to canonicalise at ingestion shifted an ESD score (Kgodiso 112→111), so all leniency now lives in the validator.
+- **Junk shareholder rows:** "Black voting rights | 63%" summary rows showed as bogus shareholders (% in Race col) in the preview. Filtered at ingestion (projection already dropped them for scoring).
+- **W3 name/surname split DONE:** full name in one "Name" column + separately-required "Surname" → 500 "surname Required" warnings/file. Split "First Last" at ingestion. Resolves the user-reported split bug.
+- **Remaining 181 = genuine:** real cross-field check (black-female > black ownership, ×65) + once-per-workbook missing-optional-field notices (skills meta: headcount/training-manager-salary/period/date/EAP — relaxing these `required` flags is a product call, deferred). Deployed to prod.
+
 ## M7 — Workbook-weakness hunt: all 16 Toolkit Testing Data → Level 1 (2026-06-24)
 
 **Goal (expert ground truth):** every workbook in `docs/Toolkit Testing Data` must score
