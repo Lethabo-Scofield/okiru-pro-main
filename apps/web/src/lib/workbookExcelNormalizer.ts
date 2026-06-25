@@ -707,18 +707,34 @@ export async function normalizeExcelFileWithAi(
     const warnings = [...base.warnings];
     let recovered = 0;
 
+    const cellFilled = (v: unknown) =>
+      v !== "" && v !== null && v !== undefined && !(typeof v === "string" && v.trim() === "");
+
     for (const name of unmapped) {
       const key = sheetToSection[name];
       if (!key) continue;
       const def = getSection(key);
       if (!def?.columns) continue; // only grid sections support generic recovery
       const rows = parseGridFromSheet(readMatrix(name), def.columns);
-      if (rows.length) {
-        sections[key] = { rows: [...(sections[key]?.rows ?? []), ...rows] };
-        mappedSheets[name] = key;
-        recovered++;
-        warnings.push(`Recovered "${name}" → ${def.label} (${rows.length} rows)${usedAi ? " via AI" : ""}.`);
+      if (!rows.length) continue;
+      // Quality gate: only accept the AI's sheet→section guess if the parsed rows
+      // actually populate the section's REQUIRED columns. Without this, a sheet the
+      // AI mis-maps (e.g. an FSC "Empowerment Financing" / "Consumer Education" sheet
+      // forced into ESD/SED) injects junk rows that fill only a label/amount and leave
+      // Beneficiary/Type/etc. blank — a flood of "Required" errors + bogus dropdown
+      // values. A genuinely-matching sheet fills most required columns. (W-airec)
+      const requiredKeys = def.columns.filter((c) => c.required).map((c) => c.key);
+      const avgFill = requiredKeys.length
+        ? rows.reduce((s, r) => s + requiredKeys.filter((k) => cellFilled((r as Record<string, unknown>)[k])).length, 0) / (rows.length * requiredKeys.length)
+        : 1;
+      if (requiredKeys.length && avgFill < 0.5) {
+        warnings.push(`Skipped "${name}" — its columns don't match ${def.label} (only ${Math.round(avgFill * 100)}% of required fields present), so it was not imported.`);
+        continue;
       }
+      sections[key] = { rows: [...(sections[key]?.rows ?? []), ...rows] };
+      mappedSheets[name] = key;
+      recovered++;
+      warnings.push(`Recovered "${name}" → ${def.label} (${rows.length} rows)${usedAi ? " via AI" : ""}.`);
     }
 
     if (recovered === 0) {
