@@ -32,6 +32,10 @@ export type ExcelImportResult = {
   criticalBlocked: boolean;
   warnings: string[];
   mappedSheets: Record<string, string>;
+  /** Count of populated data points (non-empty meta fields + grid rows) across all
+   *  sections — drives the "{n} fields extracted" preview line (was always 0 for the
+   *  clean-importer path because this field was never set). */
+  extractedFieldCount: number;
 };
 
 const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
@@ -606,7 +610,15 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const validationIssues = validateWorkbook(sections, { strictSelectOptions: true });
   const criticalBlocked = hasCriticalGaps(validationIssues);
 
-  return { sections, validationIssues, criticalBlocked, warnings, mappedSheets };
+  // Count populated data points for the "{n} fields extracted" preview line: every
+  // non-empty meta value plus every grid row across all sections.
+  let extractedFieldCount = 0;
+  for (const sec of Object.values(sections)) {
+    if (sec?.meta) extractedFieldCount += Object.values(sec.meta).filter((v) => v !== "" && v != null).length;
+    if (Array.isArray(sec?.rows)) extractedFieldCount += sec.rows.length;
+  }
+
+  return { sections, validationIssues, criticalBlocked, warnings, mappedSheets, extractedFieldCount };
 }
 
 export async function normalizeExcelFile(file: File): Promise<ExcelImportResult> {

@@ -404,6 +404,7 @@ function CompanyPicker({
                     fieldSources: {},
                     isBeeGatheringFormat: true,
                     mappedSheets: Object.keys(fallback.mappedSheets),
+                    extractedFieldCount: fallback.extractedFieldCount,
                   });
                   setPendingSections(fallback.sections);
                   setPreviewOpen(true);
@@ -615,6 +616,7 @@ function CompanyPicker({
                   fieldSources: {},
                   isBeeGatheringFormat: true,
                   mappedSheets: Object.keys(fallback.mappedSheets),
+                  extractedFieldCount: fallback.extractedFieldCount,
                 });
                 setPendingSections(fallback.sections);
                 setPreviewOpen(true);
