@@ -108,6 +108,29 @@ export function buildConstructionScoringInput(
   const blackDisabledSkillsPercent = sk.blackSpend > 0 ? (sk.disabledSpend / sk.blackSpend) * 100 : undefined;
   const absorptionPct = sk.totalBlackLearners > 0 ? (sk.absorbedCount / sk.totalBlackLearners) * 100 : undefined;
 
+  // ── Phase 1 template-column derivations (construction-only employee/learner/ESD fields) ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tps: any[] = Array.isArray(state.skills?.trainingPrograms) ? state.skills.trainingPrograms : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tpCost = (p: any): number =>
+    (['courseCost', 'travelCost', 'accommodationCost', 'cateringCost', 'stationeryCost', 'facilityCost', 'trainingFacilityCost', 'salaryCost', 'otherCosts']
+      .reduce((s, k) => s + (Number(p?.[k]) || 0), 0)) || Number(p?.totalCost) || Number(p?.cost) || 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const blackTp = (p: any) => (p?.isBlack ?? (p?.race && p.race !== 'White'));
+  const blackTps = tps.filter(blackTp);
+  const blackTpSpend = blackTps.reduce((s, p) => s + tpCost(p), 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lvlOf = (p: any) => String(p?.learnerMgmtLevel ?? '');
+  const execSrMidSpend = blackTps.filter((p) => /exec|senior|middle/i.test(lvlOf(p))).reduce((s, p) => s + tpCost(p), 0);
+  const juniorSpend = blackTps.filter((p) => /junior/i.test(lvlOf(p))).reduce((s, p) => s + tpCost(p), 0);
+  const blackEmps = emps.filter(isBlack);
+  const profRegCount = emps.filter((e) => isBlack(e) && e?.professionallyRegistered === true).length;
+  const youthCount = emps.filter((e) => isBlack(e) && e?.isYouthEmployee === true).length;
+  const industryRegCount = blackTps.filter((p) => p?.industryRegistered === true).length;
+  const mentoredCount = blackTps.filter((p) => p?.mentorship === true).length;
+  const mentorPromotedCount = blackTps.filter((p) => p?.mentorshipPromotion === true).length;
+  const pct = (n: number, d: number): number | undefined => (d > 0 ? (n / d) * 100 : undefined);
+
   const raw: Record<string, number | boolean | undefined> = {
     // ── Ownership (fractions → ×100; net value 0–1) ──
     votingRightsBlackPercent: toPct(o.blackVotingPercentage),
@@ -173,6 +196,21 @@ export function buildConstructionScoringInput(
     // PP from ≥35% / ≥51% black-women-owned suppliers (recognised ZAR).
     pp35BlackWomenOwnedSpend: Number.isFinite(pr.blackWomen35Spend) ? pr.blackWomen35Spend : undefined,
     ppBlackWomen51Spend: Number.isFinite(pr.blackWomen51Spend) ? pr.blackWomen51Spend : undefined,
+
+    // ── Phase 1 template columns: only score when the workbook carries the data ──
+    // Employees: professional registration + youth.
+    blackProfessionalsPercent: pct(profRegCount, emps.length),
+    professionalRegistrationPercent: pct(profRegCount, blackEmps.length),
+    blackYouthPercent: pct(youthCount, emps.length),
+    // Skills: industry-body registration, black-management by level, mentorship.
+    skillsIndustryCandidatesPercent: pct(industryRegCount, blackTps.length),
+    industryRegistrationPercent: pct(industryRegCount, blackTps.length),
+    skillsBlackMgmtExecSeniorMiddlePercent: pct(execSrMidSpend, blackTpSpend),
+    skillsBlackMgmtJuniorPercent: pct(juniorSpend, blackTpSpend),
+    mentorshipProgrammeImplemented: mentoredCount > 0 ? true : undefined,
+    mentorshipPromotionPercent: pct(mentorPromotedCount, blackTps.length),
+    // ESD: recognised supplier & contractor development programme.
+    supplierContractorDevProgrammeImplemented: esdContribs.some((c) => c?.supplierDevProgramme === true) ? true : undefined,
   };
 
   const indicators: Record<string, number | boolean> = {};
