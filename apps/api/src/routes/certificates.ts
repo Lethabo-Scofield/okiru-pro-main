@@ -42,6 +42,11 @@ import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
 import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
+import {
+  ENRICHMENT_FIELDS,
+  runCertificateEnrichmentJob,
+  type EnrichmentField,
+} from '../services/certificateEnrichmentJob.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -853,6 +858,40 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
       return res.status(500).json({ message: 'Extraction failed' });
     }
     res.end();
+  }
+});
+
+router.post('/enrich-missing', async (req: Request, res: Response) => {
+  const providedKey = req.headers['x-api-key'] as string | undefined;
+  const expectedKey = process.env.API_INTERNAL_KEY;
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    return res.status(401).json({ message: 'Invalid or missing x-api-key header' });
+  }
+
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
+    return res.status(500).json({ message: 'Azure Storage is not configured.' });
+  }
+
+  try {
+    const requestedFields = Array.isArray(req.body?.fields)
+      ? req.body.fields.filter((f: unknown): f is EnrichmentField =>
+          typeof f === 'string' && (ENRICHMENT_FIELDS as readonly string[]).includes(f),
+        )
+      : undefined;
+    const result = await runCertificateEnrichmentJob(blobServiceClient, {
+      limit: req.body?.limit,
+      dryRun: req.body?.dryRun === true,
+      force: req.body?.force === true,
+      fields: requestedFields,
+    });
+    if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
+      invalidateListAndStatsCache();
+    }
+    return res.json(result);
+  } catch (err: any) {
+    logger.error('Certificate enrichment job failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate enrichment failed', error: err.message });
   }
 });
 
