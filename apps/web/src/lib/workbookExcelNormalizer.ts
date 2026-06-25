@@ -467,6 +467,17 @@ function parseGridFromSheet(
   return out;
 }
 
+/** Count populated data points (non-empty meta values + grid rows) across all
+ *  sections — drives the "{n} fields extracted" preview line. */
+function countExtractedFields(sections: WorkbookSectionsInput): number {
+  let n = 0;
+  for (const sec of Object.values(sections)) {
+    if (sec?.meta) n += Object.values(sec.meta).filter((v) => v !== "" && v != null).length;
+    if (Array.isArray(sec?.rows)) n += sec.rows.length;
+  }
+  return n;
+}
+
 function emptySections(): WorkbookSectionsInput {
   const sections: WorkbookSectionsInput = {};
   for (const s of SECTIONS) {
@@ -610,15 +621,7 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const validationIssues = validateWorkbook(sections, { strictSelectOptions: true });
   const criticalBlocked = hasCriticalGaps(validationIssues);
 
-  // Count populated data points for the "{n} fields extracted" preview line: every
-  // non-empty meta value plus every grid row across all sections.
-  let extractedFieldCount = 0;
-  for (const sec of Object.values(sections)) {
-    if (sec?.meta) extractedFieldCount += Object.values(sec.meta).filter((v) => v !== "" && v != null).length;
-    if (Array.isArray(sec?.rows)) extractedFieldCount += sec.rows.length;
-  }
-
-  return { sections, validationIssues, criticalBlocked, warnings, mappedSheets, extractedFieldCount };
+  return { sections, validationIssues, criticalBlocked, warnings, mappedSheets, extractedFieldCount: countExtractedFields(sections) };
 }
 
 export async function normalizeExcelFile(file: File): Promise<ExcelImportResult> {
@@ -707,6 +710,7 @@ export async function normalizeExcelFileWithAi(
       criticalBlocked: hasCriticalGaps(validationIssues),
       warnings: [...warnings, ...notes],
       mappedSheets,
+      extractedFieldCount: countExtractedFields(sections),
     };
   } catch {
     return base;
