@@ -44,6 +44,9 @@ export interface ProcurementResult {
     empoweringSpend: number;
     blackOwned51Spend: number;
     blackFemaleOwned30Spend: number;
+    /** Recognised spend with ≥35% / ≥51% black-women-owned suppliers (Construction PP). */
+    blackWomen35Spend: number;
+    blackWomen51Spend: number;
     foreignSupplierSpend: number; // Issue 3: Added for TMPS tracking
   };
 }
@@ -108,6 +111,8 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   let emeSpend = 0;
   let blackOwned51Spend = 0;
   let blackFemaleOwned30Spend = 0;
+  let blackWomen35Spend = 0;
+  let blackWomen51Spend = 0;
   let designatedGroupSpend = 0;
   let foreignSupplierSpend = 0;
 
@@ -146,6 +151,8 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     if (sup.blackWomenOwnership >= blackWomenThreshold) {
       blackFemaleOwned30Spend += recognised;
     }
+    if (sup.blackWomenOwnership >= 0.35) blackWomen35Spend += recognised;
+    if (sup.blackWomenOwnership >= 0.51) blackWomen51Spend += recognised;
 
     // Designated-group supplier: ≥51% black-owned AND a designated-group owner.
     // Honour an explicit isDesignatedGroup flag (the workbook captures a boolean
@@ -211,6 +218,8 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       empoweringSpend: round2(empoweringSpend),
       blackOwned51Spend: round2(blackOwned51Spend),
       blackFemaleOwned30Spend: round2(blackFemaleOwned30Spend),
+      blackWomen35Spend: round2(blackWomen35Spend),
+      blackWomen51Spend: round2(blackWomen51Spend),
       foreignSupplierSpend: round2(foreignSupplierSpend),
     },
   };

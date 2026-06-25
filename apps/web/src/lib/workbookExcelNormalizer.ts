@@ -478,6 +478,25 @@ function countExtractedFields(sections: WorkbookSectionsInput): number {
   return n;
 }
 
+/**
+ * Fill fields the workbook didn't provide but we CAN derive, so the form/preview
+ * show real values instead of blanks (and they aren't flagged). Score-neutral: the
+ * projection already derives the same headcount + defaults EAP to National — this
+ * just surfaces those values in the imported data. (user request)
+ */
+function deriveSectionDefaults(sections: WorkbookSectionsInput): void {
+  const mcRows = sections['management-control']?.rows?.length ?? 0;
+  const empRows = sections['employees']?.rows?.length ?? 0;
+  const headcount = mcRows || empRows;
+  const skills = sections['skills-development'];
+  if (skills) {
+    const meta = ((skills as { meta?: Record<string, unknown> }).meta ??=
+      {}) as Record<string, unknown>;
+    if ((meta.headcount == null || meta.headcount === '') && headcount > 0) meta.headcount = headcount;
+    if (meta.eapProvince == null || meta.eapProvince === '') meta.eapProvince = 'National';
+  }
+}
+
 function emptySections(): WorkbookSectionsInput {
   const sections: WorkbookSectionsInput = {};
   for (const s of SECTIONS) {
@@ -613,6 +632,10 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
     const ci = sections["company-information"] ?? { rows: [] };
     sections["company-information"] = { ...ci, meta: { ...derived, ...(ci.meta ?? {}) } };
   }
+
+  // Fill derivable fields (headcount from the employee register, EAP → National)
+  // so the form/preview show them instead of blanks. (user request)
+  deriveSectionDefaults(sections);
 
   // Strict select-option enforcement is on for the Excel import-preview path
   // so unrecognised dropdown values (e.g. "Mega Corp" supplier size,
