@@ -883,6 +883,9 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
       limit: req.body?.limit,
       dryRun: req.body?.dryRun === true,
       force: req.body?.force === true,
+      forceText: req.body?.forceText === true,
+      includeDetails: req.body?.includeDetails === true,
+      reviewSampleLimit: req.body?.reviewSampleLimit,
       fields: requestedFields,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {

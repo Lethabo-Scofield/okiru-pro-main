@@ -54,6 +54,9 @@ export type CertificateEnrichmentOptions = {
   limit?: number;
   dryRun?: boolean;
   force?: boolean;
+  forceText?: boolean;
+  includeDetails?: boolean;
+  reviewSampleLimit?: number;
   fields?: EnrichmentField[];
 };
 
@@ -64,12 +67,23 @@ export type CertificateEnrichmentResult = {
   failed: number;
   dryRun: boolean;
   coverage: Record<EnrichmentField, string>;
+  reviewSamples: Array<{
+    blobName: string;
+    fileName: string;
+    reviewFields: ReviewField[];
+    reviewUrl: string;
+    previewUrl: string;
+    downloadUrl: string;
+  }>;
   details: Array<{
     blobName: string;
     fileName: string;
     status: EnrichmentStatus | 'dry_run';
     updates: Record<string, unknown>;
     reviewFields: ReviewField[];
+    reviewUrl: string;
+    previewUrl: string;
+    downloadUrl: string;
     error?: string;
   }>;
 };
@@ -96,7 +110,7 @@ const MIN_SAVE_CONFIDENCE: Record<EnrichmentField, number> = {
   sectorName: 0.86,
   vatNumber: 0.9,
   bbbeeLevel: 0.88,
-  companySize: 0.86,
+  companySize: 0.8,
   blackOwnership: 0.88,
   blackWomenOwnership: 0.88,
   expiryDate: 0.88,
@@ -114,6 +128,14 @@ function blobBasename(blobName: string): string {
   return blobName.split('/').pop() || blobName;
 }
 
+function certificateDownloadUrl(blobName: string, disposition: 'inline' | 'attachment' = 'attachment'): string {
+  return `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=${disposition}`;
+}
+
+function certificateReviewUrl(blobName: string): string {
+  return `/certificates?reviewBlob=${encodeURIComponent(blobName)}`;
+}
+
 function hasValue(v: unknown): boolean {
   if (v == null) return false;
   if (v instanceof Date) return Number.isFinite(v.getTime());
@@ -124,6 +146,46 @@ function hasValue(v: unknown): boolean {
 function normalizeExistingValue(v: unknown): unknown {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return v;
+}
+
+function responseUpdates(updates: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(updates).map(([k, v]) => [
+      k,
+      k === 'extractedText' && typeof v === 'string'
+        ? `[${v.length} chars refreshed]`
+        : normalizeExistingValue(v),
+    ]),
+  );
+}
+
+function errorDetails(err: unknown): Record<string, unknown> {
+  if (err instanceof Error) {
+    const details: Record<string, unknown> = {
+      name: err.name,
+      message: err.message || String(err),
+    };
+    const anyErr = err as any;
+    if (anyErr.code) details.code = anyErr.code;
+    if (anyErr.statusCode) details.statusCode = anyErr.statusCode;
+    if (anyErr.details) details.details = anyErr.details;
+    if (anyErr.response?.status) details.responseStatus = anyErr.response.status;
+    if (anyErr.response?.bodyAsText) details.responseBody = String(anyErr.response.bodyAsText).slice(0, 500);
+    return details;
+  }
+
+  try {
+    return { message: JSON.stringify(err) };
+  } catch {
+    return { message: String(err) };
+  }
+}
+
+function errorMessage(err: unknown): string {
+  const details = errorDetails(err);
+  return typeof details.message === 'string' && details.message.trim()
+    ? details.message
+    : String(err);
 }
 
 function shouldUpdateField(
@@ -314,6 +376,22 @@ function extractCompanySize(text: string, reviews: ReviewField[]): FieldCandidat
     });
   }
   return null;
+}
+
+function extractCompanySizeFromFilename(fileName: string): FieldCandidate | null {
+  const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+  const m = /(?:^|[\s_\-])((?:EME|QSE|Generic(?:\s+Enterprise)?|Large(?:\s+Enterprise)?|Micro|Small|Medium))(?:[\s_\-]|\b|$)/i.exec(base);
+  if (!m) return null;
+  const size = normalizeCompanySize(m[1]);
+  if (!size) return null;
+  return {
+    field: 'companySize',
+    mongoField: 'companySize',
+    value: size,
+    confidence: 0.8,
+    evidence: fileName,
+    source: 'filename',
+  };
 }
 
 function parsePercent(raw: string): number | null {
@@ -519,8 +597,15 @@ async function extractTextFromBuffer(buffer: Buffer, fileName: string): Promise<
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   let text = '';
   if (['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
-    text = await extractTextWithDocIntelligence(buffer, fileName);
-    if (text.trim()) return { text, extractionMode: 'document-intelligence-or-pdfjs' };
+    try {
+      text = await extractTextWithDocIntelligence(buffer, fileName);
+      if (text.trim()) return { text, extractionMode: 'document-intelligence-or-pdfjs' };
+    } catch (err) {
+      logger.warn('Primary certificate text extraction failed; trying fallback extractor', {
+        fileName,
+        error: errorDetails(err),
+      });
+    }
   }
   if (ext === 'pdf') {
     text = await ocrPdf(buffer, fileName);
@@ -543,6 +628,7 @@ function collectFieldCandidates(text: string, fileName: string, fields: Enrichme
   add(extractVat(text, reviews));
   add(extractBbbeeLevel(text, reviews));
   add(extractCompanySize(text, reviews));
+  add(extractCompanySizeFromFilename(fileName));
   add(extractOwnership(text, 'blackOwnership', reviews));
   add(extractOwnership(text, 'blackWomenOwnership', reviews));
   add(extractExpiryDate(text, reviews));
@@ -606,6 +692,11 @@ async function listAzureBlobs(blobServiceClient: BlobServiceClient): Promise<Arr
   return blobs;
 }
 
+function existingText(doc: MongoDoc | null): string {
+  const text = typeof doc?.extractedText === 'string' ? doc.extractedText.trim() : '';
+  return text.length >= 50 ? text : '';
+}
+
 async function loadMetadataMap(blobNames: string[]): Promise<Map<string, MongoDoc>> {
   const map = new Map<string, MongoDoc>();
   const chunkSize = 500;
@@ -653,14 +744,31 @@ function statusForResult(updates: Record<string, unknown>, reviewFields: ReviewF
   return 'completed';
 }
 
+function reviewLinks(blobName: string, fileName: string, reviewFields: ReviewField[]) {
+  return {
+    blobName,
+    fileName,
+    reviewFields,
+    reviewUrl: certificateReviewUrl(blobName),
+    previewUrl: certificateDownloadUrl(blobName, 'inline'),
+    downloadUrl: certificateDownloadUrl(blobName, 'attachment'),
+  };
+}
+
 export async function runCertificateEnrichmentJob(
   blobServiceClient: BlobServiceClient,
   options: CertificateEnrichmentOptions = {},
 ): Promise<CertificateEnrichmentResult> {
   const dryRun = options.dryRun === true;
   const force = options.force === true;
+  const forceText = options.forceText === true;
+  const includeDetails = options.includeDetails === true;
+  const reviewSampleLimit = Math.min(Math.max(Number(options.reviewSampleLimit) || 50, 0), 500);
   const fields = selectedFields(options.fields);
-  const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 500);
+  const requestedLimit = Number(options.limit);
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(Math.floor(requestedLimit), 5_000)
+    : 50;
   if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
   const blobs = await listAzureBlobs(blobServiceClient);
@@ -673,6 +781,15 @@ export async function runCertificateEnrichmentJob(
     .filter(({ doc }) => needsEnrichment(doc, fields, force))
     .slice(0, limit);
 
+  logger.info('Certificate enrichment batch started', {
+    candidates: candidates.length,
+    totalBlobs: blobs.length,
+    dryRun,
+    force,
+    forceText,
+    fields,
+  });
+
   const container = getCertContainerClient(blobServiceClient);
   const result: CertificateEnrichmentResult = {
     processed: 0,
@@ -681,6 +798,7 @@ export async function runCertificateEnrichmentJob(
     failed: 0,
     dryRun,
     coverage: {} as Record<EnrichmentField, string>,
+    reviewSamples: [],
     details: [],
   };
 
@@ -700,10 +818,21 @@ export async function runCertificateEnrichmentJob(
         );
       }
 
-      const buffer = await container.getBlobClient(blob.name).downloadToBuffer();
-      const extracted = await extractTextFromBuffer(buffer, fileName);
-      const text = extracted.text;
-      extractionMode = extracted.extractionMode;
+      let text = !forceText ? existingText(doc) : '';
+      if (text) {
+        extractionMode = 'mongo-extractedText';
+      } else {
+        const buffer = await container.getBlobClient(blob.name).downloadToBuffer();
+        const extracted = await extractTextFromBuffer(buffer, fileName);
+        text = extracted.text;
+        extractionMode = extracted.extractionMode;
+        if (!dryRun && text.trim()) {
+          updates.extractedText = text.substring(0, 4000);
+          updates.extractionStatus = 'completed';
+          updates.extractionError = null;
+          updates.processedAt = new Date();
+        }
+      }
 
       if (!text.trim()) {
         pushReview(reviewFields, 'companyName', 'Text extraction failed; only filename-derived company name can be considered');
@@ -739,6 +868,9 @@ export async function runCertificateEnrichmentJob(
       const status = statusForResult(updates, reviewFields);
       if (reviewFields.length > 0) result.reviewRequired++;
       if (Object.keys(updates).length > 0) result.updated++;
+      if (reviewFields.length > 0 && result.reviewSamples.length < reviewSampleLimit) {
+        result.reviewSamples.push(reviewLinks(blob.name, fileName, reviewFields));
+      }
 
       const auditEntry = createAuditEntry({ dryRun, blobName: blob.name, extractionMode, updates, reviewFields });
       if (!dryRun) {
@@ -768,20 +900,25 @@ export async function runCertificateEnrichmentJob(
         await CertificateMetadataModel.findOneAndUpdate(
           { blobName: blob.name },
           updateDoc,
-          { upsert: true, new: true },
+          { upsert: true, returnDocument: 'after' },
         );
       }
 
-      result.details.push({
-        blobName: blob.name,
-        fileName,
-        status: dryRun ? 'dry_run' : status,
-        updates: Object.fromEntries(Object.entries(updates).map(([k, v]) => [k, normalizeExistingValue(v)])),
-        reviewFields,
-      });
+      if (includeDetails) {
+        result.details.push({
+          status: dryRun ? 'dry_run' : status,
+          updates: responseUpdates(updates),
+          ...reviewLinks(blob.name, fileName, reviewFields),
+        });
+      }
     } catch (err: any) {
       result.failed++;
-      logger.error('Certificate enrichment failed', { blobName: blob.name, error: err.message });
+      const failureReviewFields: ReviewField[] = [{
+        field: 'companyName',
+        reason: 'Certificate enrichment failed before safe metadata could be saved',
+        evidence: errorMessage(err),
+      }];
+      logger.error('Certificate enrichment failed', { blobName: blob.name, error: errorDetails(err) });
       if (!dryRun) {
         await CertificateMetadataModel.findOneAndUpdate(
           { blobName: blob.name },
@@ -802,22 +939,35 @@ export async function runCertificateEnrichmentJob(
                   type: 'certificate_enrichment_failed',
                   version: CERTIFICATE_ENRICHMENT_VERSION,
                   blobName: blob.name,
-                  error: err.message,
+                  error: errorDetails(err),
                 }],
                 $slice: -50,
               },
             },
           },
-          { upsert: true, new: true },
+          { upsert: true, returnDocument: 'after' },
         );
       }
-      result.details.push({
-        blobName: blob.name,
-        fileName,
-        status: 'failed',
-        updates: {},
-        reviewFields,
-        error: err.message,
+      if (result.reviewSamples.length < reviewSampleLimit) {
+        result.reviewSamples.push(reviewLinks(blob.name, fileName, failureReviewFields));
+      }
+      if (includeDetails) {
+        result.details.push({
+          status: 'failed',
+          updates: {},
+          ...reviewLinks(blob.name, fileName, failureReviewFields),
+          error: errorMessage(err),
+        });
+      }
+    }
+
+    if (result.processed % 25 === 0 || result.processed === candidates.length) {
+      logger.info('Certificate enrichment progress', {
+        processed: result.processed,
+        candidates: candidates.length,
+        updated: result.updated,
+        reviewRequired: result.reviewRequired,
+        failed: result.failed,
       });
     }
   }

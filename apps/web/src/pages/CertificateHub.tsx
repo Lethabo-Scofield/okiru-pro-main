@@ -658,15 +658,13 @@ export default function CertificateHub() {
           />
         ) : (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="hidden md:grid grid-cols-[2fr_1.1fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] items-center gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <div>Company</div>
-              <div>Sector</div>
+            <div className="hidden md:grid grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(150px,1fr)] items-center gap-4 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <div>Company / sector</div>
               <div>VAT number</div>
               <div>Level</div>
               <div>Size</div>
               <div>Ownership</div>
               <div>Expiry</div>
-              <div />
             </div>
             {filtered.map((cert, idx) => (
               <CertRow
@@ -765,11 +763,11 @@ function CertRow({
 }) {
   return (
     <div
-      className="md:grid md:grid-cols-[2fr_1.1fr_1fr_0.6fr_0.7fr_1fr_0.9fr_auto] md:items-center md:gap-3 px-4 py-3.5 hover:bg-[#16161b] transition-colors"
+      className="px-4 py-3.5 hover:bg-[#16161b] transition-colors"
       style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)' }}
     >
-      {/* Mobile: stacked. Desktop: grid columns */}
-      <div className="min-w-0">
+      <div className="md:grid md:grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(150px,1fr)] md:items-start md:gap-4">
+        <div className="min-w-0">
         <div className="text-[14px] text-white font-medium leading-snug flex items-center gap-1.5 flex-wrap">
           {cert.slug ? (
             <Link
@@ -801,9 +799,17 @@ function CertRow({
             </span>
           )}
         </div>
+        <div
+          className="mt-1 flex items-start gap-1.5 text-[12px] leading-snug text-[#8e8e93]"
+          title={sectorDisplayLabel(cert.sectorCode, cert.sectorName)}
+        >
+          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#636366]" />
+          <span className="min-w-0 truncate">
+            {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : 'Sector not captured'}
+          </span>
+        </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
-          {cert.sectorCode && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {sectorDisplayLabel(cert.sectorCode, cert.sectorName)}</span>}
           {cert.bbbeeLevel != null && <span><Award className="inline h-3 w-3 mr-0.5" /> Level {cert.bbbeeLevel}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
           {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
@@ -812,9 +818,6 @@ function CertRow({
         <div className="md:hidden mt-1.5"><StatusBadge status={cert.status} expiryDate={cert.expiryDate} /></div>
       </div>
 
-      <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate" title={sectorDisplayLabel(cert.sectorCode, cert.sectorName)}>
-        {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : <span className="text-[#48484a]">-</span>}
-      </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
         {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">—</span>}
       </div>
@@ -830,37 +833,38 @@ function CertRow({
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
         {cert.blackOwnership != null ? (
-          <span>
+          <span className="inline-flex flex-col gap-0.5">
             <span className="text-white">{formatPct(cert.blackOwnership)}</span>
             {cert.blackWomenOwnership != null && (
-              <span className="text-[#636366] text-[11px] ml-1">· {formatPct(cert.blackWomenOwnership)} women</span>
+              <span className="text-[#636366] text-[11px]">· {formatPct(cert.blackWomenOwnership)} women</span>
             )}
           </span>
         ) : (
           <span className="text-[#48484a]">-</span>
         )}
       </div>
-      <div className="hidden md:flex items-center gap-2 text-[13px] text-[#a1a1aa]">
+      <div className="hidden md:flex flex-col items-start gap-1 text-[13px] text-[#a1a1aa]">
         <span>{formatExpiry(cert.expiryDate)}</span>
         <StatusBadge status={cert.status} expiryDate={cert.expiryDate} />
       </div>
-      <div className="hidden md:flex items-center justify-end gap-1">
+      </div>
+      <div className="hidden md:flex items-center justify-end gap-2 mt-3">
         <button
           onClick={onPreview}
           aria-label={`Preview ${cert.companyName}`}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[12px]"
+          className="inline-flex min-w-[92px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[12px]"
         >
           <Eye className="h-4 w-4" />
-          <span className="hidden lg:inline">Preview</span>
+          <span>Preview</span>
         </button>
         <button
           onClick={onDownload}
           disabled={isDownloading}
           aria-label={`Download ${cert.fileName}`}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors text-[12px]"
+          className="inline-flex min-w-[104px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors text-[12px]"
         >
           {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          <span className="hidden lg:inline">Download</span>
+          <span>Download</span>
         </button>
       </div>
 
