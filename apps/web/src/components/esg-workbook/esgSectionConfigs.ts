@@ -323,11 +323,25 @@ export const EE_MATURITY_ROWS: MaturityRowDef[] = [
   { cell: "B5", scoreCell: "E5", label: "% Black employees", kind: "numeric" },
 ];
 
-export function eDataDepotRows() {
+/** Reporting-unit selector for Environmental data: per-site (the 5 depots) or one
+ *  consolidated "Company wide" row, for entities that report environmental detail at
+ *  company level rather than per depot. Stored on the e-data draft as `eScope`. */
+export const E_DATA_SCOPE_FIELDS: EsgFieldDef[] = [
+  {
+    cell: "eScope",
+    label: "Environmental data scope",
+    type: "select",
+    options: ["Per site / depot", "Company wide"],
+  },
+];
+
+export function eDataDepotRows(companyWide = false) {
+  if (companyWide) return [{ depot: "Company wide", months: [] as (number | "")[] }];
   return ESG_DEFAULT_DEPOTS.map((depot) => ({ depot, months: [] as (number | "")[] }));
 }
 
-export function eDataGeneratorRows() {
+export function eDataGeneratorRows(companyWide = false) {
+  if (companyWide) return [{ depot: "Generator – Company wide", months: [] as (number | "")[] }];
   return ESG_DEFAULT_DEPOTS.map((depot) => ({
     depot: `Generator – ${depot}`,
     months: [] as (number | "")[],
@@ -342,14 +356,16 @@ export function eDataBusinessCarRows() {
   return [{ depot: "Solly's Car – ISANDO", months: [] as (number | "")[] }];
 }
 
-export function eDataSolarRows() {
+export function eDataSolarRows(companyWide = false) {
+  if (companyWide) return [{ depot: "Solar – Company wide", months: [] as (number | "")[] }];
   return ESG_SOLAR_SOURCES.map((src) => ({
     depot: `Solar – ${src}`,
     months: [] as (number | "")[],
   }));
 }
 
-export function eDataWaterRows() {
+export function eDataWaterRows(companyWide = false) {
+  if (companyWide) return [{ depot: "Water – Company wide", months: [] as (number | "")[] }];
   return ESG_DEFAULT_DEPOTS.map((depot) => ({
     depot: `SG Consumer – ${depot}`,
     months: [] as (number | "")[],

@@ -9,9 +9,33 @@ import {
 } from "@toolkit/components/ui/tooltip";
 import { AppNavBack } from "@/components/AppNavBack";
 
+/** Resolve where the toolkit "Back" button should return to, honouring the origin
+ *  recorded by whoever opened the toolkit (summary vs company workbook). Falls back
+ *  to the Hub when no origin was set (e.g. opened from the document processor). */
+function resolveToolkitBack(): { href: string; eyebrow: string; label: string; tooltip: string } {
+  try {
+    const raw = sessionStorage.getItem('okiru-toolkit-from');
+    // Only honour the origin when it matches the client currently open in the toolkit;
+    // a mismatch means the origin is stale (e.g. left over from a previous, unrelated
+    // entry such as the document processor) so we fall through to the Hub.
+    const activeClient = localStorage.getItem('okiru-pro-active-client') || '';
+    if (raw) {
+      const o = JSON.parse(raw) as { kind?: string; companyId?: string };
+      if (o.companyId && o.companyId === activeClient && o.kind === 'summary') {
+        return { href: `/create-scorecard/${o.companyId}/summary`, eyebrow: 'Back to', label: 'Summary', tooltip: 'Back to Summary' };
+      }
+      if (o.companyId && o.companyId === activeClient && o.kind === 'company') {
+        return { href: `/create-scorecard/${o.companyId}`, eyebrow: 'Back to', label: 'Workbook', tooltip: 'Back to the company workbook' };
+      }
+    }
+  } catch { /* ignore malformed origin */ }
+  return { href: '/hub', eyebrow: 'Suite', label: 'Hub', tooltip: 'Back to Okiru Hub' };
+}
+
 export function Topbar() {
   const { user, logout } = useAuth();
   const client = useBbeeStore(s => s.client);
+  const back = resolveToolkitBack();
 
   const handleLogout = () => {
     logout();
@@ -32,9 +56,9 @@ export function Topbar() {
           <TooltipTrigger asChild>
             <span tabIndex={-1} className="inline-flex">
               <AppNavBack
-                onClick={() => { window.location.href = '/hub'; }}
-                eyebrow="Suite"
-                label="Hub"
+                onClick={() => { window.location.href = back.href; }}
+                eyebrow={back.eyebrow}
+                label={back.label}
                 variant="light"
                 size="compact"
                 data-testid="btn-back-platform"
@@ -42,7 +66,7 @@ export function Topbar() {
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-xs">Back to Okiru Hub</p>
+            <p className="text-xs">{back.tooltip}</p>
           </TooltipContent>
         </Tooltip>
         <div className="h-3.5 w-px bg-border/30" />

@@ -13,7 +13,7 @@ import { isEsgGridSection, type EsgGridSectionId } from "@/lib/esgGridSections";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { EsgScalarForm } from "./EsgScalarForm";
 import { EsgMonthlyGrid } from "./EsgMonthlyGrid";
-import { eDataDepotRows } from "./esgSectionConfigs";
+import { eDataDepotRows, E_DATA_SCOPE_FIELDS } from "./esgSectionConfigs";
 import { EsgHeadcountGrid } from "./EsgHeadcountGrid";
 import { EsgMaturityGrid } from "./EsgMaturityGrid";
 import { EsgSubtabContainer } from "./EsgSubtabContainer";
@@ -180,6 +180,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
       );
     } else if (sectionId === "e-data") {
       const activeSub = (draft._activeSubtab as string) || subTab || initialSubtab || "scope-1a";
+      // Company-wide reporting collapses each per-depot grid to a single consolidated row.
+      const eCompanyWide = String(draft.eScope) === "Company wide";
       const eTab = (id: string, content: ReactNode) => {
         const def = E_DATA_SUBTABS.find((t) => t.id === id);
         return { id, label: def?.label ?? id, content };
@@ -188,7 +190,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "scope-1a",
           <EsgMonthlyGrid
-            rows={eDataDepotRows()}
+            rows={eDataDepotRows(eCompanyWide)}
             cellPrefix="s1a"
             emissionFactor={Number(draft.B4 ?? 2.68)}
             unitLabel="L diesel"
@@ -200,7 +202,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "scope-1b",
           <EsgMonthlyGrid
-            rows={eDataGeneratorRows()}
+            rows={eDataGeneratorRows(eCompanyWide)}
             cellPrefix="s1b"
             emissionFactor={Number(draft.B4 ?? 2.68)}
             unitLabel="L diesel"
@@ -236,7 +238,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "scope-2",
           <EsgMonthlyGrid
-            rows={eDataDepotRows()}
+            rows={eDataDepotRows(eCompanyWide)}
             cellPrefix="s2"
             emissionFactor={Number(draft.B7 ?? 0.82)}
             unitLabel="kWh"
@@ -248,7 +250,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "solar",
           <EsgMonthlyGrid
-            rows={eDataSolarRows()}
+            rows={eDataSolarRows(eCompanyWide)}
             cellPrefix="solar"
             emissionFactor={Number(draft.B8 ?? 0.025)}
             unitLabel="kWh"
@@ -260,7 +262,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "water",
           <EsgMonthlyGrid
-            rows={eDataWaterRows()}
+            rows={eDataWaterRows(eCompanyWide)}
             cellPrefix="water"
             emissionFactor={Number(draft.B9 ?? 0.000344) * 1000}
             unitLabel="kL"
@@ -317,14 +319,27 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         ? allTabs.filter((t) => visibleSubtabs.includes(t.id))
         : allTabs;
       body = (
-        <EsgSubtabContainer
-          activeTab={tabs.some((t) => t.id === activeSub) ? activeSub : tabs[0]?.id ?? activeSub}
-          onTabChange={(id) => {
-            setSubTab(id);
-            updateDraft({ _activeSubtab: id });
-          }}
-          tabs={tabs}
-        />
+        <div className="space-y-3">
+          <EsgScalarForm
+            fields={E_DATA_SCOPE_FIELDS}
+            values={draft}
+            onChange={updateDraft}
+            readOnly={locked}
+          />
+          {eCompanyWide && (
+            <p className="text-[12px] text-[var(--esg-text3)]">
+              Company-wide: enter one consolidated figure per source for the whole company instead of per depot.
+            </p>
+          )}
+          <EsgSubtabContainer
+            activeTab={tabs.some((t) => t.id === activeSub) ? activeSub : tabs[0]?.id ?? activeSub}
+            onTabChange={(id) => {
+              setSubTab(id);
+              updateDraft({ _activeSubtab: id });
+            }}
+            tabs={tabs}
+          />
+        </div>
       );
     } else if (sectionId === "s-data") {
       const activeSub = (draft._activeSubtab as string) || subTab || initialSubtab || "headcount";
