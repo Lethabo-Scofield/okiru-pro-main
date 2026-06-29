@@ -70,7 +70,10 @@ function pillarInScope(pillar: string, scopes: string[]): boolean {
 
 export function useWorkspacePermissions(workspaceId: string | null | undefined): WorkspacePermissions {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  // Start loading=true when we WILL fetch — prevents a tick of "no role, full access"
+  // between mount and the effect kicking in.
+  const willFetch = Boolean(workspaceId && user?.id);
+  const [loading, setLoading] = useState(willFetch);
   const [role, setRole] = useState<WorkspaceRole | null>(null);
   const [pillarScopes, setPillarScopes] = useState<string[] | null>(null);
 
@@ -78,6 +81,7 @@ export function useWorkspacePermissions(workspaceId: string | null | undefined):
     if (!workspaceId || !user?.id) {
       setRole(null);
       setPillarScopes(null);
+      setLoading(false);
       return;
     }
 
@@ -108,25 +112,33 @@ export function useWorkspacePermissions(workspaceId: string | null | undefined):
     return () => { cancelled = true; };
   }, [workspaceId, user?.id]);
 
+  // Fail-closed once the lookup has resolved with no role (non-member / fetch error).
+  // Before resolution, treat as no-access for mutations — the loading flag tells
+  // the UI to wait rather than silently grant access.
+  const inWorkspaceContext = Boolean(workspaceId && user?.id);
+  const denyMutations = inWorkspaceContext && !role;
+
   const canView = useCallback((pillar: string): boolean => {
-    if (!role) return true; // no workspace loaded → show everything
+    if (!inWorkspaceContext) return true; // personal scope
+    if (!role) return false; // resolved with no membership → deny
     if (role === 'owner') return true;
     if (role === 'viewer') return true; // viewers see everything (read-only)
     // collaborator: check scopes
     if (!pillarScopes || pillarScopes.length === 0) return true;
     return pillarInScope(pillar, pillarScopes);
-  }, [role, pillarScopes]);
+  }, [inWorkspaceContext, role, pillarScopes]);
 
   const canEdit = useCallback((pillar: string): boolean => {
-    if (!role) return true;
+    if (!inWorkspaceContext) return true;
+    if (!role) return false; // resolved with no membership → deny
     if (role === 'owner') return true;
     if (role === 'viewer') return false;
     // collaborator
     if (!pillarScopes || pillarScopes.length === 0) return true;
     return pillarInScope(pillar, pillarScopes);
-  }, [role, pillarScopes]);
+  }, [inWorkspaceContext, role, pillarScopes]);
 
-  if (!workspaceId || !user?.id) return DEFAULT_PERMISSIONS;
+  if (!inWorkspaceContext) return DEFAULT_PERMISSIONS;
 
   const isOwner = role === 'owner';
   const hasFullAccess = isOwner || (role === 'collaborator' && (!pillarScopes || pillarScopes.length === 0));
@@ -135,7 +147,7 @@ export function useWorkspacePermissions(workspaceId: string | null | undefined):
     loading,
     role,
     pillarScopes,
-    canEditFoundation: role === 'owner' || role === 'collaborator',
+    canEditFoundation: !denyMutations && (role === 'owner' || role === 'collaborator'),
     canView,
     canEdit,
     canViewFinalScorecard: true,
