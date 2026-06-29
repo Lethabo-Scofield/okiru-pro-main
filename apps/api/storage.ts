@@ -193,6 +193,11 @@ export class DatabaseStorage implements IStorage {
     return clean<FinancialYear>(doc);
   }
 
+  async updateFinancialYear(id: string, data: Partial<InsertFinancialYear>): Promise<FinancialYear | undefined> {
+    const doc = await FinancialYearModel.findOneAndUpdate({ id }, { $set: data }, { returnDocument: 'after' }).lean();
+    return doc ? clean<FinancialYear>(doc) : undefined;
+  }
+
   async deleteFinancialYear(id: string): Promise<void> {
     await FinancialYearModel.deleteOne({ id });
   }

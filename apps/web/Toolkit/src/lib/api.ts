@@ -129,6 +129,8 @@ export const api = {
   // --- Financial Years ---
   addFinancialYear: (clientId: string, data: any) =>
     apiRequest(`/api/clients/${clientId}/financial-years`, { method: "POST", body: JSON.stringify(data) }),
+  updateFinancialYear: (id: string, data: any) =>
+    apiRequest(`/api/financial-years/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteFinancialYear: (id: string) =>
     apiRequest(`/api/financial-years/${id}`, { method: "DELETE" }),
 
