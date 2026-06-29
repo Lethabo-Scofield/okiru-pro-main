@@ -83,6 +83,20 @@ vi.mock('../../services/mongoSearch.js', () => ({
   ensureSearchIndex: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../services/azureCertStorage.js', () => ({
+  getCertAccountName: vi.fn(() => 'testaccount'),
+  getCertBlobContainerName: vi.fn(() => 'clients-certs'),
+  getCertBlobServiceClient: vi.fn(() => ({ mocked: true })),
+  getCertConnectionString: vi.fn(() => 'UseDevelopmentStorage=true'),
+  getCertContainerClient: vi.fn(() => ({
+    getBlobClient: vi.fn(() => ({
+      url: 'https://example.test/cert.pdf',
+      downloadToBuffer: vi.fn(),
+    })),
+    listBlobsFlat: vi.fn(async function* () {}),
+  })),
+}));
+
 vi.mock('../../services/certificateExtractor.js', () => ({
   processAllCertificates: vi.fn(async () => ({ processed: 0 })),
   processOneCertificate: vi.fn(async () => null),
@@ -104,6 +118,111 @@ vi.mock('../../services/certificateExtractor.js', () => ({
   })),
 }));
 
+const runCertificateTextExtractionRetryJob = vi.fn(async (_client: any, options: any) => ({
+  dryRun: options?.dryRun !== false,
+  limit: Math.min(Math.max(Number(options?.limit) || (options?.dryRun === false ? 5 : 20), 1), 25),
+  requestedLimit: options?.limit ?? null,
+  maxLimit: 25,
+  concurrency: Math.min(Math.max(Number(options?.concurrency) || 1, 1), 3),
+  fileTimeoutMs: Number(options?.fileTimeoutMs) || 120000,
+  matched: 0,
+  retried: 0,
+  wouldRetry: options?.dryRun === false ? 0 : 0,
+  updated: 0,
+  skipped: 0,
+  completed: 0,
+  textTooShort: 0,
+  failed: 0,
+  timedOut: 0,
+  durationMs: 0,
+  averageMsPerFile: 0,
+  results: [],
+  summary: {},
+  coverage: { totalCertificates: 0 },
+}));
+
+const runCertificateEnrichmentJob = vi.fn(async (_client: any, options: any) => ({
+  totalCertificates: 2758,
+  usableTextCount: 2040,
+  skippedMissingText: 718,
+  processed: 0,
+  updated: 0,
+  reviewRequired: 0,
+  failed: 0,
+  dryRun: options?.dryRun === true,
+  coverage: {},
+  reviewSamples: [],
+  details: [],
+}));
+
+vi.mock('../../services/certificateEnrichmentJob.js', () => ({
+  ENRICHMENT_FIELDS: [
+    'companyName',
+    'sectorCode',
+    'sectorName',
+    'vatNumber',
+    'bbbeeLevel',
+    'bbbeeLevelStatus',
+    'companySize',
+    'blackOwnership',
+    'blackWomenOwnership',
+    'expiryDate',
+    'certificateNumber',
+    'verificationAgency',
+  ],
+  PRODUCTION_CERTIFICATE_FIELDS: [
+    'companyName',
+    'sectorCode',
+    'sectorName',
+    'vatNumber',
+    'bbbeeLevel',
+    'bbbeeLevelStatus',
+    'companySize',
+    'blackOwnership',
+    'blackWomenOwnership',
+    'expiryDate',
+  ],
+  getProductionCertificateCoverage: vi.fn(async () => ({
+    totalCertificates: 2758,
+    usableTextCount: 2040,
+    skippedMissingText: 718,
+    productionFields: ['company', 'sector', 'vatNumber', 'bbbeeLevel', 'companySize', 'ownership', 'expiryDate'],
+    fieldCoverage: {
+      companyCount: 2757,
+      sectorCount: 2300,
+      vatNumberCount: 3,
+      bbbeeLevelCount: 308,
+      companySizeCount: 2735,
+      ownershipCount: 1129,
+      expiryDateCount: 941,
+    },
+  })),
+  runCertificateEnrichmentJob,
+}));
+
+vi.mock('../../services/certificateTextExtractionJob.js', () => ({
+  getCertificateTextExtractionCoverage: vi.fn(async () => ({
+    totalCertificates: 0,
+    usableExtractedText: 0,
+    missingExtractedText: 0,
+    textTooShort: 0,
+    failed: 0,
+    missingBlob: 0,
+    unsupported: 0,
+    pendingOrNotAttempted: 0,
+    byExtractionStatus: {},
+    byExtractionMode: {},
+    averageExtractedTextLength: 0,
+    topFailureReasons: [],
+    dependencies: {
+      azureDocumentIntelligenceConfigured: false,
+      tesseractJsAvailable: true,
+      pdftoppmAvailable: false,
+    },
+  })),
+  runCertificateTextExtractionRetryJob,
+}));
+
 let server: http.Server;
 let port: number;
 let tmpDir: string;
@@ -114,10 +233,11 @@ let storeMod: StoreModule;
 async function call(
   method: string,
   path: string,
-  opts: { body?: any; auth?: string } = {},
+  opts: { body?: any; auth?: string; apiKey?: string } = {},
 ): Promise<{ status: number; body: any }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.auth) headers['x-test-auth'] = opts.auth;
+  if (opts.apiKey) headers['x-api-key'] = opts.apiKey;
   const res = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
     headers,
@@ -180,6 +300,7 @@ async function upload(
 
 beforeAll(async () => {
   originalCwd = process.cwd();
+  process.env.API_INTERNAL_KEY = 'test-internal-key';
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cert-routes-test-'));
   process.chdir(tmpDir);
 
@@ -203,6 +324,10 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  runCertificateTextExtractionRetryJob.mockClear();
+  runCertificateEnrichmentJob.mockClear();
+  delete process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION;
+
   // Wipe disk store so each test starts with a deterministic baseline.
   // We then re-seed only what each test needs. Note: the in-memory Map
   // inside certificateStore persists across tests because the module isn't
@@ -569,6 +694,203 @@ describe('GET /stats and GET /seo/list', () => {
       slug: expect.stringMatching(/^seo-widgets/),
       status: expect.any(String),
     });
+  });
+});
+
+describe('Internal extraction coverage/retry endpoints', () => {
+  it('rejects extraction coverage without a valid API key', async () => {
+    const r = await call('GET', '/api/certificates/extraction-coverage');
+
+    expect(r.status).toBe(401);
+  });
+
+  it('rejects retry extraction without a valid API key', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', { body: { limit: 20 } });
+
+    expect(r.status).toBe(401);
+  });
+
+  it('defaults retry extraction to dryRun=true', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: { limit: 20 },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ dryRun: true, limit: 20 }),
+    );
+    expect(r.body.dryRun).toBe(true);
+  });
+
+  it('passes safe retry filters and controls to the extraction job', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 999,
+        dryRun: false,
+        statuses: ['text_too_short', 'completed', 'not-real'],
+        modes: ['none', 'ocr', 'not-real'],
+        onlyMissingText: true,
+        fileTimeoutMs: 30000,
+        concurrency: 2,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 999,
+        dryRun: false,
+        statuses: ['text_too_short', 'completed'],
+        modes: ['none', 'ocr'],
+        onlyMissingText: true,
+        fileTimeoutMs: 30000,
+        concurrency: 2,
+      }),
+    );
+    expect(r.body.limit).toBe(25);
+    expect(r.body.concurrency).toBe(2);
+  });
+
+  it('manual retry endpoint still works when startup extraction is disabled', async () => {
+    process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION = 'true';
+
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 10,
+        dryRun: false,
+        modes: ['none'],
+        onlyMissingText: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledTimes(1);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 10,
+        dryRun: false,
+        modes: ['none'],
+        onlyMissingText: true,
+      }),
+    );
+  });
+
+  it('rejects usable-text enrichment without a valid API key', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      body: { limit: 100, dryRun: true },
+    });
+
+    expect(r.status).toBe(401);
+    expect(runCertificateEnrichmentJob).not.toHaveBeenCalled();
+  });
+
+  it('runs enrichment only for usable-text records without triggering text extraction', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 100,
+        dryRun: false,
+        forceText: true,
+        fields: ['vatNumber', 'expiryDate', 'not-real'],
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 100,
+        dryRun: false,
+        forceText: false,
+        onlyUsableText: true,
+        fields: ['vatNumber', 'expiryDate'],
+      }),
+    );
+    expect(r.body).toMatchObject({
+      totalCertificates: 2758,
+      usableTextCount: 2040,
+      skippedMissingText: 718,
+    });
+  });
+
+  it('defaults usable-text enrichment to production-critical fields only', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      apiKey: 'test-internal-key',
+      body: {
+        dryRun: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        dryRun: true,
+        onlyUsableText: true,
+        fields: [
+          'companyName',
+          'sectorCode',
+          'sectorName',
+          'vatNumber',
+          'bbbeeLevel',
+          'bbbeeLevelStatus',
+          'companySize',
+          'blackOwnership',
+          'blackWomenOwnership',
+          'expiryDate',
+        ],
+      }),
+    );
+  });
+
+  it('returns focused production coverage for the seven MVP fields', async () => {
+    const r = await call('GET', '/api/certificates/production-coverage', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      totalCertificates: 2758,
+      usableTextCount: 2040,
+      skippedMissingText: 718,
+      productionFields: ['company', 'sector', 'vatNumber', 'bbbeeLevel', 'companySize', 'ownership', 'expiryDate'],
+      fieldCoverage: {
+        companyCount: 2757,
+        sectorCount: 2300,
+        vatNumberCount: 3,
+        bbbeeLevelCount: 308,
+        companySizeCount: 2735,
+        ownershipCount: 1129,
+        expiryDateCount: 941,
+      },
+    });
+  });
+
+  it('passes usable-text mode through enrich-missing when requested', async () => {
+    const r = await call('POST', '/api/certificates/enrich-missing', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 25,
+        dryRun: true,
+        onlyUsableText: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 25,
+        dryRun: true,
+        onlyUsableText: true,
+      }),
+    );
   });
 });
 
