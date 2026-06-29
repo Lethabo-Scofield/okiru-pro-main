@@ -547,3 +547,20 @@ const companyProfileSchema = new Schema({
 }, { collection: "company_profiles", strict: false });
 
 export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);
+
+// Mirror of apps/web/shared/schema.ts `workspaceMemberSchema` — same collection
+// `workspace_members`. Defined here so the apps/api per-entity write routes can
+// resolve pillarScopes without crossing the apps/web/server boundary (audit
+// B15-srv). Read-only from here.
+const workspaceMemberSchema = new Schema({
+  memberId: { type: String, required: true, unique: true, index: true },
+  workspaceId: { type: String, required: true, index: true },
+  userId: { type: String, required: true, index: true },
+  role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
+  displayRole: { type: String, default: null },
+  pillarScopes: { type: [String], default: undefined },
+  joinedAt: { type: Date, default: Date.now },
+}, { collection: "workspace_members" });
+workspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
+
+export const WorkspaceMemberModel = mongoose.models.WorkspaceMember || mongoose.model("WorkspaceMember", workspaceMemberSchema);
