@@ -217,9 +217,13 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 20
             successThreshold: 1
+          # Readiness now hits /ready (added in commit 4754b23c) so the pod is
+          # taken out of rotation when MongoDB is unreachable — preventing a
+          # repeat of the silent secrets-wiped outage where probes stayed
+          # green against an unconnected DB.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 5000
               scheme: HTTP
             initialDelaySeconds: 20
