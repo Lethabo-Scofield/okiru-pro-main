@@ -33,8 +33,16 @@ export default function SED() {
   const [newSed, setNewSed] = useState({ beneficiary: '', type: 'grant', amount: 0 });
   const errs = useFieldErrors();
 
-  const npat = client.npat; 
-  const targetSpend = npat * 0.01;
+  const npat = client.npat;
+  // Drive target % and max points from the sector calculatorConfig instead of
+  // the hardcoded RCOGP 1% / 5pt (audit A10). calculateSedScore already uses
+  // sc.npatTarget, so this is a display-only refactor and produces the same
+  // numbers for RCOGP while showing the correct target for AGRI / FSC / etc.
+  const sedConfig = calculatorConfig?.sed as { npatTarget?: number } | undefined;
+  const npatTargetPct = sedConfig?.npatTarget ?? 0.01;
+  const sedMaxPoints = calculatorConfig?.pillarConfigs?.socioEconomicDevelopment?.maxPoints ?? 5;
+  const targetSpend = npat * npatTargetPct;
+  const targetPctLabel = `${(npatTargetPct * 100).toFixed(npatTargetPct < 0.01 ? 2 : 0)}%`;
   const actualSpend = contributions.reduce((acc, c) => acc + c.amount, 0);
 
   const getTypeColor = (type: string) => {
@@ -145,7 +153,7 @@ export default function SED() {
             <div className="text-2xl font-bold font-heading">
               {formatRand(npat)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Base for 1% SED target</p>
+            <p className="text-xs text-muted-foreground mt-1">Base for {targetPctLabel} SED target</p>
           </CardContent>
         </Card>
 
@@ -165,7 +173,7 @@ export default function SED() {
                 <div className="text-xl font-semibold text-muted-foreground">
                   {formatRand(targetSpend)}
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">Target (1%)</div>
+                <div className="text-sm text-muted-foreground mt-1">Target ({targetPctLabel})</div>
               </div>
             </div>
             <div className="mt-4 h-3 w-full bg-secondary rounded-full overflow-hidden">
@@ -211,15 +219,15 @@ export default function SED() {
                 <tr className="hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">Socio-Economic Development</td>
                   <td className="px-4 py-3 text-muted-foreground">Annual value of all Socio-Economic Development Contributions made by the Measured Entity as a percentage of the target</td>
-                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">5.00</td>
-                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">1%</td>
+                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sedMaxPoints.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{targetPctLabel}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
               </tbody>
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total SED Score</td>
-                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">5.00</td>
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">{sedMaxPoints.toFixed(2)}</td>
                   <td className="px-4 py-4"></td>
                   <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{score.total.toFixed(2)}</td>
                 </tr>
