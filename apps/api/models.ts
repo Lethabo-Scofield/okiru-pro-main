@@ -98,6 +98,12 @@ const supplierSchema = new Schema({
   name: { type: String, required: true },
   beeLevel: { type: Number, default: 4 },
   blackOwnership: { type: Number, default: 0 },
+  // Demographic + classification fields the Toolkit form/import already capture
+  // and the procurement calculator scores (were silently dropped: strict schema).
+  blackWomenOwnership: { type: Number, default: 0 },
+  youthOwnership: { type: Number, default: 0 },
+  disabledOwnership: { type: Number, default: 0 },
+  enterpriseType: { type: String, default: '' },
   spend: { type: Number, default: 0 },
   registrationNumber: { type: String, default: '' },
 }, { collection: "suppliers" });

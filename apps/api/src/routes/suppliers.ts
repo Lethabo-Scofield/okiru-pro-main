@@ -12,6 +12,11 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   return res.json(result);
 });
 
+router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+  const result = await storage.updateSupplier(String(req.params.id), req.body);
+  return res.json(result);
+});
+
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   await storage.deleteSupplier(String(req.params.id));
   return res.json({ message: "Deleted" });
