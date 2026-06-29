@@ -51,3 +51,13 @@ Edit `program.md` (the org's "code"). Examples to iterate toward: a dedicated
 agent that adversarially re-checks each KEEP before commit; parallel experiments
 on independent pillars. Keep the fitness function and gates fixed while you
 evolve the org around them.
+
+The **misalignment / defect finder now exists as an invocable skill**:
+`/audit-sweep` (see `.claude/skills/audit-sweep/SKILL.md`). It hunts the recurring
+"Wave-1" defect classes (phantom saves, comments rendered as UI, toast-only
+validation, dead inputs, bulk-vs-manual divergence, fail-open auth, re-hydration
+clobber, sector-coverage gaps) and appends confirmed findings to `log/RISKS.md`.
+Run `/audit-sweep deep` before any deploy; treat any scoring-related finding as a
+hypothesis for the loop above (validate against the real `.xlsx`/`specs/` first —
+never change a target to make a finding "go away"). It detects only; fixing stays
+a separate, gated step.
