@@ -11,6 +11,7 @@ import {
   getScorecardTypeOptions,
   parseWorkbookDate,
   BBBEE_LEVEL_MAP,
+  DESIGNATION_MAP,
   OCC_LEVEL_MAP,
   SUPPLIER_SIZE_MAP,
   type ColumnDef,
@@ -259,6 +260,15 @@ function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unk
     }
     if (col.key === "occupationalLevel") {
       const mapped = OCC_LEVEL_MAP[n];
+      if (mapped) return mapped;
+    }
+    if (col.key === "designation") {
+      // Apply DESIGNATION_MAP so common synonyms in uploaded MC/EE registers
+      // ("Senior Management", "NED", "Exec Director", "Middle Management", …)
+      // resolve to the canonical Select option (audit B9). Without this they
+      // were silently flagged invalid even though the manual form would accept
+      // the same value via its own normalizer.
+      const mapped = DESIGNATION_MAP[n];
       if (mapped) return mapped;
     }
     if (col.key === "bbbeeLevel") {
