@@ -80,6 +80,7 @@ export default function ClientSelector() {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [nameError, setNameError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -111,7 +112,8 @@ export default function ClientSelector() {
   );
 
   const handleCreate = async () => {
-    if (!newClient.name) {
+    if (!newClient.name.trim()) {
+      setNameError(true);
       toast({ title: "Required", description: "Client name is required", variant: "destructive" });
       return;
     }
@@ -256,7 +258,7 @@ export default function ClientSelector() {
 
               <Dialog open={isCreateOpen} onOpenChange={(open) => {
                 setIsCreateOpen(open);
-                if (!open) { setLogoFile(null); setLogoPreview(null); }
+                if (!open) { setLogoFile(null); setLogoPreview(null); setNameError(false); }
               }}>
                 <DialogTrigger asChild>
                   <Button className="gap-2 rounded-full h-9 px-5 text-sm" data-testid="btn-create-client">
@@ -294,11 +296,14 @@ export default function ClientSelector() {
                       <Label className="text-xs">Company Name</Label>
                       <Input
                         value={newClient.name}
-                        onChange={e => setNewClient({ ...newClient, name: e.target.value })}
+                        onChange={e => { setNewClient({ ...newClient, name: e.target.value }); if (nameError) setNameError(false); }}
                         placeholder="e.g. Acme Corporation SA"
-                        className="h-10"
                         data-testid="input-client-name"
+                        aria-invalid={nameError || undefined}
+                        aria-describedby={nameError ? 'client-name-error' : undefined}
+                        className={cn("h-10", nameError && "border-destructive focus-visible:ring-destructive")}
                       />
+                      {nameError && <p id="client-name-error" className="text-xs text-destructive">Company name is required.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">

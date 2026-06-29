@@ -219,6 +219,7 @@ export default function ManagementControl() {
   const [activeTab, setActiveTab] = useState("basic");
   const [formState, setFormState] = useState<EmployeeFormState>({ ...defaultFormState });
   const [nameError, setNameError] = useState(false);
+  const [mappingNameError, setMappingNameError] = useState(false);
 
   const [showForeignOnly, setShowForeignOnly] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -358,6 +359,7 @@ export default function ManagementControl() {
     setColumnMapping({ name: '', idNumber: '', gender: '', race: '', designation: '', isDisabled: '', isForeign: '', province: '', hireDate: '' });
     setPreviewEmployees([]);
     setFileName('');
+    setMappingNameError(false);
   }, []);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -407,6 +409,7 @@ export default function ManagementControl() {
 
   const handleApplyMapping = useCallback(() => {
     if (!columnMapping.name) {
+      setMappingNameError(true);
       toast({ title: "Missing mapping", description: "Name column mapping is required.", variant: "destructive" });
       return;
     }
@@ -1164,26 +1167,41 @@ export default function ManagementControl() {
                   { key: 'isForeign', label: 'Foreign National', required: false },
                   { key: 'province', label: 'Province', required: false },
                   { key: 'hireDate', label: 'Hire Date', required: false },
-                ].map(field => (
-                  <div key={field.key} className="grid grid-cols-2 items-center gap-4">
-                    <Label className="text-right text-sm">
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-0.5">*</span>}
-                    </Label>
-                    <Select
-                      value={columnMapping[field.key] || '__none__'}
-                      onValueChange={(v) => setColumnMapping(prev => ({ ...prev, [field.key]: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">-- Not mapped --</SelectItem>
-                        {fileColumns.map(col => (
-                          <SelectItem key={col} value={col}>{col}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                ].map(field => {
+                  const fieldHasError = field.key === 'name' && mappingNameError && !columnMapping.name;
+                  return (
+                    <div key={field.key} className="grid grid-cols-2 items-start gap-4">
+                      <Label className="text-right text-sm pt-2">
+                        {field.label}
+                        {field.required && <span className="text-destructive ml-0.5">*</span>}
+                      </Label>
+                      <div className="space-y-1">
+                        <Select
+                          value={columnMapping[field.key] || '__none__'}
+                          onValueChange={(v) => {
+                            setColumnMapping(prev => ({ ...prev, [field.key]: v === '__none__' ? '' : v }));
+                            if (field.key === 'name' && v !== '__none__' && mappingNameError) setMappingNameError(false);
+                          }}
+                        >
+                          <SelectTrigger
+                            aria-invalid={fieldHasError || undefined}
+                            aria-describedby={fieldHasError ? `${field.key}-mapping-error` : undefined}
+                            className={cn(fieldHasError && "border-destructive focus-visible:ring-destructive")}
+                          >
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">-- Not mapped --</SelectItem>
+                            {fileColumns.map(col => (
+                              <SelectItem key={col} value={col}>{col}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldHasError && <p id={`${field.key}-mapping-error`} className="text-xs text-destructive">Map a column to {field.label}.</p>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <DialogFooter className="gap-2">
