@@ -12,7 +12,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight, Wallet, Vote } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight, Wallet, Vote } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -55,6 +55,22 @@ const VALID_RACES = ['African', 'Coloured', 'Indian', 'White'];
 // Issue 1: Added new designation levels
 const VALID_DESIGNATIONS = ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior', 'Skilled Technical', 'Semi-skilled', 'Unskilled'];
 const VALID_PROVINCES = ['Gauteng', 'Western Cape', 'KZN', 'Eastern Cape', 'Free State', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'National'];
+
+// Heading shown for each designation group. Using an explicit map avoids the
+// "{level} Management" concatenation that produced "Board Management",
+// "Other Executive Management Management", "Unskilled Management", etc.
+const LEVEL_HEADINGS: Record<string, string> = {
+  'Board': 'Board',
+  'Executive Director': 'Executive Directors',
+  'Other Executive Management': 'Other Executive Management',
+  'Executive': 'Executive Management',
+  'Senior': 'Senior Management',
+  'Middle': 'Middle Management',
+  'Skilled Technical': 'Skilled Technical',
+  'Junior': 'Junior Management',
+  'Semi-skilled': 'Semi-skilled',
+  'Unskilled': 'Unskilled',
+};
 
 const GENDER_MAP: Record<string, string> = {
   'm': 'Male', 'male': 'Male', 'f': 'Female', 'female': 'Female',
@@ -506,7 +522,6 @@ export default function ManagementControl() {
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label className="text-right">Level</Label>
-          // Issue 1: Added new designation options
           <Select value={formState.designation} onValueChange={(v) => setFormState({...formState, designation: v as typeof formState.designation})}>
             <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -1005,7 +1020,7 @@ export default function ManagementControl() {
               <CardHeader className="pb-3 border-b">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    {level} Management
+                    {LEVEL_HEADINGS[level] ?? level}
                     <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-xs font-normal">
                       {total} Total
                     </Badge>
@@ -1044,7 +1059,7 @@ export default function ManagementControl() {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditOpen(emp)}>
-                          <Filter className="h-3 w-3" />
+                          <Pencil className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => removeEmployee(emp.id)}>
                           <Trash2 className="h-3 w-3" />
