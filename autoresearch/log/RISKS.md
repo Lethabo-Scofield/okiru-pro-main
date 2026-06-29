@@ -40,3 +40,64 @@ experiment (see BACKLOG M5).
 | R15 | MEDIUM | RCOGP Generic + QSE / ESD | Guarantee SD/ED benefit factor: TS uses 3% (amended Codes); the RCOGP toolkit reference cell says 50%. Which authority governs? |
 | R16 | MEDIUM | RCOGP Generic / MC | Board band is built from designation; Excel uses the Yes/No `Board?` flag (a board member with a non-director designation is excluded). Needs an `isBoardMember` field added to the model. |
 | R17 | MEDIUM | AGRI Generic / skills | Cat F&G + admin recognition cap: TS uses 25% F&G + separate 15% admin; AGRI toolkit folds F&G+admin into a single 15% subtotal. May be an intentional 2019-amendment choice. |
+
+## audit-sweep 2026-06-29 — multi-agent audit + P1/P2 store sweep
+
+First run of the `/audit-sweep` skill (`.claude/skills/audit-sweep/SKILL.md`). Multi-agent
+audit: 72 findings → 64 confirmed (2 critical, 14 high, 27 med, 21 low), 6 false positives
+rejected. Ratings: DevOps 3.5/10, Code 4.5/10, Logging 5.5/10, Frontend 5/10. These are
+product/UX/security/persistence risks (distinct from the R1–R25 scoring-fidelity register
+above). NONE change a scoring target — Lake Trading stays 63.56.
+
+| # | Severity | Pattern | Risk | Evidence (file:line) | Status |
+|---|---|---|---|---|---|
+| A1 | **CRITICAL** | P1 phantom-save | `updateEmployee` mutates local state + "Updated" toast but never calls the API (no `api.updateEmployee`) → every employee edit lost on reload | `store.ts:1587`; `api.ts:87-92` | OPEN (Wave 1) |
+| A2 | **CRITICAL** | P9 fail-open RBAC | live `GET /api/clients/:clientId/data` + write routes check org/creator only, not `pillarScopes`; client hooks fail OPEN → a pillar-scoped user reads+edits all pillars | `apps/web/server/routes.ts:1750`; `usePillarPermission.ts:176` | OPEN (Wave 2) |
+| A3 | HIGH | P1 phantom-save | `updateFinancialYear` local-only (no `api.updateFinancialYear`) | `store.ts:1533` | OPEN (Wave 1) |
+| A4 | HIGH | P1 phantom-save | `updateAfs` local-only — FSC Access-to-Financial-Services edits lost | `store.ts:1722` | OPEN (Wave 1) |
+| A5 | HIGH | P1 phantom-save | `updateEsdBonuses` local-only — ESD graduation/jobs bonuses + evidence lost | `store.ts:1739` | OPEN (Wave 1) |
+| A6 | HIGH | P2 partial-payload | `addEmployee`/`addEmployeesBulk` drop `idNumber,isForeign,province,hireDate,terminationDate` from API payload → foreign-exclusion & active-period break after reload | `store.ts:1580,1608` | OPEN (Wave 1) |
+| A7 | HIGH | P2 / bulk | `addEmployeesBulk` loops `api.addEmployee` N× instead of `api.bulkAddEmployees`; UI mapping never collects salary/voting | `store.ts:1601`; `ManagementControl.tsx:414` | OPEN (Wave 1) |
+| A8 | HIGH | P10 clobber | `loadClientData` re-hydration overwrites local state; mutations are fire-and-forget `.catch(console.error)` with no user-visible failure | `store.ts:1228,1559` | OPEN (Wave 1) |
+| A9 | HIGH | P7 dead input | employee `annualSalary` + shareholder `votingRightsPercent`/`economicInterestPercent` collected but no calculator reads them | `ownership.ts:123`; `management.ts` | OPEN (Wave 3) |
+| A10 | HIGH | P11 sector gap | FSC Consumer Ed/Fundisa scored but no SED input; `SED.tsx:35` hardcodes RCOGP 1%/5pt for all sectors; construction beneficiary/employee/learner indicators scored with no input surface | `SED.tsx:35`; `construction-map.ts:87` | OPEN (Wave 3) |
+| A11 | HIGH | P3 UI-leak | `// Issue 1` dev comment renders as visible text in Add/Edit Employee modals | `ManagementControl.tsx:509` | OPEN (Wave 1) |
+| A12 | MEDIUM | P6 validation | manual forms: toast-only validation, no inline field error, whitespace-only names pass (≠ bulk/import) | `ManagementControl.tsx:243`; Ownership/Skills/ESD/SED | OPEN (Wave 1) |
+| A13 | MEDIUM | P8 taxonomy | bulk `DESIGNATION_MAP` can't emit "Executive Director"/"Other Executive Management" the manual form offers → same person scored differently by entry path | `ManagementControl.tsx:71` | OPEN (Wave 3) |
+| A14 | MEDIUM | P12 health-lie | `/health` returns 200 unconditionally (never checks Mongo) → probes green during outage; prod logs 500s only when `!isProd` | `apps/api/src/routes/health.ts`; `apps/api/index.ts:148` | OPEN |
+| A15 | LOW | P4/P5 | `{level} Management` doubles "Management"; edit button uses Filter/funnel icon | `ManagementControl.tsx:1008,1047` | OPEN (Wave 1) |
+
+DevOps note (not a code risk but root-caused the outage): CI/CD was deleted in commit `01ad6412`
+(2026-05-27) — no `.github/`; secrets/deploys hand-driven; External Secrets + GitOps are
+templates only; no alerting/metrics/cluster-IaC. See [[toolkit-quality-audit]] memory.
+
+## audit-sweep 2026-06-29 (deep, run 2) — 33 NEW verified locations (P1–P8); P9–P12 verify cut off by session limit
+
+Whole-repo deep sweep. Went a layer deeper than the run-1 store check (also verified backend
+routes + the duplicated build forms + import path): 59 raw → 33 confirmed NEW locations, 6
+rejected. NONE change a scoring target. P9–P12 verifiers hit the session limit — re-run
+`/audit-sweep deep` after reset to verify new fail-open/health locations (the *classes* are
+already logged as A2/A8/A10/A14).
+
+| # | Severity | Pattern | Risk | Evidence (file:line) |
+|---|---|---|---|---|
+| B1 | **HIGH** | P1 | `updateSupplier` calls `api.updateSupplier` but backend has **no PATCH /api/suppliers/:id** → silent 404; supplier edits don't persist | `store.ts:1665`; `apps/api/src/routes/suppliers.ts` |
+| B2 | **HIGH** | P1 | `updateTrainingProgram` calls the API but backend training-programs router has **no PATCH** → silent 404; Skills/YES edits don't persist | `store.ts:1631` |
+| B3 | **HIGH** | P1 | AFS pillar driven entirely by phantom `updateAfs`; backend has no AFS read/write path (12 FSC pts lost on reload) | `AccessToFinancialServices.tsx:96` |
+| B4 | MEDIUM | P1 | YES candidate edit shows "Changes saved" but makes no store/api call | `YES.tsx:251` |
+| B5 | **HIGH** | P2 | `addShareholder` drops 7 fields (economic interest, designated-group, new-entrant, years-held, graduation) | `store.ts:1546` |
+| B6 | **HIGH** | P2 | `addTrainingProgram` sends only legacy fields, drops the entire modern TrainingProgram schema | `store.ts:1623` |
+| B7 | **HIGH** | P2 | `addSupplier` drops certificateExpiryDate, isForeignSupplier + ~12 fields | `store.ts:1656` |
+| B8 | MEDIUM | P2 | `bulkAddEmployees` helper targets a non-existent `/employees/bulk` endpoint (dead); store loops single POSTs | `api.ts:90` |
+| B9 | **HIGH** | P8 | Excel normalizer never applies `DESIGNATION_MAP` → uploaded designation synonyms flagged invalid | `workbookExcelNormalizer.ts:245` |
+| B10 | **HIGH** | P8 | `VALID_SECTOR_CODES` omits CONSTRUCTION → normalizer silently downgrades CONSTRUCTION uploads to RCOGP (wrong scorecard) | `bbeeSectorCodes.ts:1` |
+| B11 | MEDIUM | P7 | SED/ESD "Black Beneficiary %" (`blackBenefitPercent`) collected + imported but never scored | `esd-sed.ts:116` |
+| B12 | MEDIUM | P7 | Skills `isAbet`/`isMandatory` collected (live + build form) but read by no calculator | `SkillsDevelopment.tsx:477`; `SkillsForm.tsx:391` |
+| B13 | MEDIUM | P7 | Build OwnershipForm voting%/economic-interest% collected, calculator ignores (same class as live A9) | `OwnershipForm.tsx:553` |
+| B14 | LOW | P7 | `isSupplierDevRecipient` + shareholder `designatedGroupType` collected but never scored | `ProcurementForm.tsx:290`; `OwnershipForm.tsx:596` |
+| B15 | **HIGH** | P9 | `loadClientWithAccess` gates client read/write on org/creator only, no pillarScopes (new line of A2) | `apps/web/server/routes.ts:1536` |
+| B15-srv | **HIGH** | P9 | **SERVER-SIDE WRITE ENFORCEMENT (apps/api).** Per-entity write routes (POST /employees, PATCH /employees/:id, /suppliers, /training-programs, /shareholders, /esd-contributions, /sed-contributions, /scenarios, /financial-years) under apps/api/src/routes/* still check verifyClientAccess (org/creator) only — they don't consult pillarScopes. With Mongo-backed ProcessorSession bridging Client→workspaceId, the pattern from `resolveClientPillarAccess` in apps/web/server/routes.ts (added in this commit) can be ported to a shared apps/api middleware that gates by entity-type → pillar-key. | `apps/api/src/middleware/auth.ts:14`; `apps/api/src/routes/{employees,suppliers,shareholders,contributions,scenarios,financialYears}.ts` | OPEN |
+| B16 | MEDIUM | P6 | Toast-only validation is **repo-wide** (14 confirmed sites: Ownership, Skills, Procurement, ESD, SED, Scenarios, ClientSelector, MC bulk-mapping) — no aria-invalid / inline error anywhere | `Ownership.tsx:128` +13 |
+| B17 | LOW | P8 | DocumentProcessor enterpriseType offers 'large' (not in eme/qse/generic); cert extractor `VALID_SIZES` diverges from size enum | `DocumentProcessor.tsx:5152`; `llmExtractor.ts:240` |
+
+Rejected (6, verifier killed as overstated/dup): addEsd/addSed contribution "drops fields" (core fields ARE sent); MC edit-save validation (dup of known add); 3 P9 framings where the verifier judged the severity overstated (org-only check is real but it pushed back on impact — worth expert review).

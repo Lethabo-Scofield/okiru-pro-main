@@ -1533,6 +1533,51 @@ export async function registerRoutes(
   // Returns the plain client doc on success, or null after writing the
   // appropriate 404/403 response. Used by the per-client routes below to
   // dedupe the access guard.
+  // Resolve workspace-based pillar access for a client. The Client model has no
+  // direct workspaceId field — the link is the ProcessorSession (Assessment),
+  // which carries both `clientId` and `workspaceId`. If we find a
+  // workspace-bound assessment for this client, we treat that workspace as the
+  // authority and resolve the caller's pillarScopes against it. If we find none
+  // (single-user flow with no workspace overlay), the caller's existing org/
+  // creator check from loadClientWithAccess stands and access is unfiltered.
+  // Audit A2/B15 — closes the server-side half of the RBAC bypass for the read
+  // path. (Per-entity write routes live in apps/api and need the same plumbing
+  // applied separately — TODO logged in autoresearch/RISKS.md as B15-server.)
+  async function resolveClientPillarAccess(
+    clientId: string,
+    userId: string,
+  ): Promise<{
+    mode: "owner_override" | "full" | "readOnly" | "scoped";
+    scopes?: string[];
+  } | null> {
+    if (!isMongoConnected()) return null;
+    try {
+      const session = await ProcessorSessionModel.findOne({
+        clientId,
+        workspaceId: { $nin: [null, ""] },
+      })
+        .sort({ updatedAt: -1 })
+        .lean();
+      const sessionAny = session as any;
+      if (!sessionAny?.workspaceId) return null;
+      const ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? null;
+      if (ownerId && ownerId === userId) return { mode: "full" };
+      const member = await storage.getMember(String(sessionAny.workspaceId), userId);
+      if (!member) return { mode: "scoped", scopes: [] }; // not a member of the bound workspace → deny pillars
+      if (member.role === "owner") return { mode: "owner_override" };
+      if (member.role === "viewer") return { mode: "readOnly" };
+      const scopes = normalizePillarScopes(member.pillarScopes);
+      if (scopes.length === 0) return { mode: "full" };
+      return { mode: "scoped", scopes };
+    } catch (err) {
+      logger.warn("resolveClientPillarAccess failed (non-fatal)", {
+        clientId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async function loadClientWithAccess(
     req: Request,
     res: Response,
@@ -1753,6 +1798,31 @@ export async function registerRoutes(
       const c = await loadClientWithAccess(req, res);
       if (!c) return;
 
+      // If a workspace-bound assessment exists for this client, enforce the
+      // caller's pillarScopes against it. For scoped collaborators we still
+      // return the client meta (name, sector, etc.) — only the pillar payloads
+      // outside their scope are stripped. Audit A2 server side.
+      const userId = (req.session as any).userId as string;
+      const pillarAccess = await resolveClientPillarAccess(clientId, userId);
+      const allowedPillars: Set<string> | null =
+        pillarAccess && pillarAccess.mode === "scoped"
+          ? new Set([
+              ...(pillarAccess.scopes ?? []),
+              // Scope synonyms in scorecardCollaboration's pillarInScope:
+              // management↔employmentEquity, esd↔supplierDevelopment↔enterpriseDevelopment
+              ...((pillarAccess.scopes ?? []).includes("management") || (pillarAccess.scopes ?? []).includes("employmentEquity")
+                ? ["management", "employmentEquity"]
+                : []),
+              ...((pillarAccess.scopes ?? []).includes("esd") ||
+              (pillarAccess.scopes ?? []).includes("supplierDevelopment") ||
+              (pillarAccess.scopes ?? []).includes("enterpriseDevelopment")
+                ? ["esd", "supplierDevelopment", "enterpriseDevelopment"]
+                : []),
+            ])
+          : null;
+      const allow = (key: string): boolean => !allowedPillars || allowedPillars.has(key);
+      const empty = <T>(fallback: T): T => fallback;
+
       res.json({
         client: {
           id: c.id ?? c.clientId,
@@ -1787,32 +1857,38 @@ export async function registerRoutes(
           beeCertificateLevel: c.beeCertificateLevel || null,
           verificationAgency: c.verificationAgency || '',
         },
-        ownership: {
-          id: `own-${clientId}`,
-          shareholders: c.shareholders || [],
-          companyValue: c.companyValue || 0,
-          outstandingDebt: c.outstandingDebt || 0,
-          yearsHeld: 0,
-        },
-        management: {
-          employees: c.employees || [],
-        },
-        skills: {
-          leviableAmount: c.leviableAmount || 0,
-          trainingPrograms: c.trainingPrograms || [],
-        },
-        procurement: {
-          tmps: c.tmps || 0,
-          suppliers: c.suppliers || [],
-        },
-        esd: {
-          contributions: c.esdContributions || [],
-        },
-        sed: {
-          contributions: c.sedContributions || [],
-        },
+        ownership: allow("ownership")
+          ? {
+              id: `own-${clientId}`,
+              shareholders: c.shareholders || [],
+              companyValue: c.companyValue || 0,
+              outstandingDebt: c.outstandingDebt || 0,
+              yearsHeld: 0,
+            }
+          : empty({ id: `own-${clientId}`, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }),
+        management: allow("management")
+          ? { employees: c.employees || [] }
+          : empty({ employees: [] }),
+        skills: allow("skills")
+          ? { leviableAmount: c.leviableAmount || 0, trainingPrograms: c.trainingPrograms || [] }
+          : empty({ leviableAmount: 0, trainingPrograms: [] }),
+        procurement: allow("procurement")
+          ? { tmps: c.tmps || 0, suppliers: c.suppliers || [] }
+          : empty({ tmps: 0, suppliers: [] }),
+        esd: allow("esd")
+          ? { contributions: c.esdContributions || [] }
+          : empty({ contributions: [] }),
+        sed: allow("sed")
+          ? { contributions: c.sedContributions || [] }
+          : empty({ contributions: [] }),
         financialYears: [],
         scenarios: [],
+        // Surface the scope decision to the client so the UI can show a
+        // read-only/scoped banner — does NOT grant access; the filtering above
+        // is the security boundary.
+        access: pillarAccess
+          ? { mode: pillarAccess.mode, scopes: pillarAccess.scopes ?? null }
+          : { mode: "full" as const, scopes: null },
       });
     } catch (error: any) {
       logger.error("Error fetching client data", error);
