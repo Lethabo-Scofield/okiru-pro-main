@@ -1548,14 +1548,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addShareholder(state.activeClientId, {
-        name: shareholder.name,
-        ownershipType: shareholder.ownershipType || 'shareholder',
-        blackOwnership: shareholder.blackOwnership,
-        blackWomenOwnership: shareholder.blackWomenOwnership,
-        shares: shareholder.shares,
-        shareValue: shareholder.shareValue,
-      }).catch(console.error);
+      // Send the full Shareholder shape (sans local id) so demographic/designated/
+      // graduation fields aren't silently dropped on persist (audit B5).
+      const { id: _shId, ...shareholderPayload } = shareholder;
+      api.addShareholder(state.activeClientId, shareholderPayload).catch(console.error);
     }
   },
   updateShareholder: (id, data) => {
@@ -1630,12 +1626,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addTrainingProgram(state.activeClientId, {
-        name: program.name, category: program.category, cost: program.cost,
-        employeeId: program.employeeId, isEmployed: program.isEmployed, isBlack: program.isBlack,
-        gender: program.gender, race: program.race, isDisabled: program.isDisabled,
-        municipality: program.municipality,
-      }).catch(console.error);
+      // Send the full TrainingProgram shape (sans local id) — the legacy subset
+      // was dropping programName/categoryCode/learnerName/employmentStatus/dates/
+      // *Cost/isYesEmployee/isCompleted/isAbsorbed (audit B6).
+      const { id: _tpId, ...programPayload } = program;
+      api.addTrainingProgram(state.activeClientId, programPayload).catch(console.error);
     }
   },
   updateTrainingProgram: (id, data) => {
