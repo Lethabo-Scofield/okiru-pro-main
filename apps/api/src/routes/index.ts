@@ -17,6 +17,7 @@ import profileRouter from './profile.js';
 import clientsRouter from './clients.js';
 import shareholdersRouter from './shareholders.js';
 import employeesRouter from './employees.js';
+import trainingProgramsRouter from './trainingPrograms.js';
 import suppliersRouter from './suppliers.js';
 import contributionsRouter from './contributions.js';
 import scenariosRouter from './scenarios.js';
@@ -124,9 +125,10 @@ export async function registerRoutes(
   app.use('/api/clients/:clientId/employees', employeesRouter);
   app.use('/api/employees', employeesRouter);
 
-  // Training program routes
-  app.use('/api/clients/:clientId/training-programs', employeesRouter);
-  app.use('/api/training-programs', employeesRouter);
+  // Training program routes (dedicated router; previously dual-mounted on the
+  // employees router, which mis-routed create→createEmployee and update/delete→404)
+  app.use('/api/clients/:clientId/training-programs', trainingProgramsRouter);
+  app.use('/api/training-programs', trainingProgramsRouter);
 
   // Supplier routes (nested under clients and standalone)
   app.use('/api/clients/:clientId/suppliers', suppliersRouter);
