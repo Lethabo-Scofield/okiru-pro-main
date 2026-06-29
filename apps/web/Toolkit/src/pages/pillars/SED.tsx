@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
@@ -30,6 +31,7 @@ export default function SED() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newSed, setNewSed] = useState({ beneficiary: '', type: 'grant', amount: 0 });
+  const errs = useFieldErrors();
 
   const npat = client.npat; 
   const targetSpend = npat * 0.01;
@@ -44,7 +46,10 @@ export default function SED() {
   };
 
   const handleAdd = () => {
-    if (!newSed.beneficiary || newSed.amount <= 0) {
+    const beneficiaryBad = !newSed.beneficiary.trim();
+    const amountBad = !(newSed.amount > 0);
+    if (beneficiaryBad || amountBad) {
+      errs.setMany({ beneficiary: beneficiaryBad, amount: amountBad });
       toast({ title: "Invalid", description: "Beneficiary and amount are required.", variant: "destructive" });
       return;
     }
@@ -73,7 +78,7 @@ export default function SED() {
           <p className="text-muted-foreground mt-1">Manage your CSI and SED contributions.</p>
         </div>
         
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) errs.reset(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2" data-testid="btn-add-sed">
               <Plus className="h-4 w-4" />
@@ -88,11 +93,29 @@ export default function SED() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Beneficiary</Label>
-                <Input value={newSed.beneficiary} onChange={e => setNewSed({...newSed, beneficiary: e.target.value})} className="col-span-3" />
+                <div className="col-span-3 space-y-1">
+                  <Input
+                    value={newSed.beneficiary}
+                    onChange={e => { setNewSed({...newSed, beneficiary: e.target.value}); errs.clear('beneficiary'); }}
+                    aria-invalid={errs.has('beneficiary') || undefined}
+                    aria-describedby={errs.has('beneficiary') ? 'sed-beneficiary-error' : undefined}
+                    className={cn(errs.has('beneficiary') && "border-destructive focus-visible:ring-destructive")}
+                  />
+                  {errs.has('beneficiary') && <p id="sed-beneficiary-error" className="text-xs text-destructive">Beneficiary is required.</p>}
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Amount (R)</Label>
-                <NumberInput value={newSed.amount} onValueChange={v => setNewSed({...newSed, amount: v})} className="col-span-3" />
+                <div className="col-span-3 space-y-1">
+                  <NumberInput
+                    value={newSed.amount}
+                    onValueChange={v => { setNewSed({...newSed, amount: v}); if (v > 0) errs.clear('amount'); }}
+                    aria-invalid={errs.has('amount') || undefined}
+                    aria-describedby={errs.has('amount') ? 'sed-amount-error' : undefined}
+                    className={errs.has('amount') ? "border-destructive focus-visible:ring-destructive" : undefined}
+                  />
+                  {errs.has('amount') && <p id="sed-amount-error" className="text-xs text-destructive">Amount must be greater than 0.</p>}
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Type</Label>
