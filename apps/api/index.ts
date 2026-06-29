@@ -12,6 +12,7 @@ import { connectArango, ensureCollections } from "./arango/index.js";
 import { seedOntology } from "./pipeline/seedOntology.js";
 import { createLogger, requestContext } from "./src/logger.js";
 import { ensureSearchIndex } from "./src/services/mongoSearch.js";
+import { runCertificateStartupExtraction } from "./src/services/certificateStartupExtraction.js";
 import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
@@ -155,25 +156,17 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
 
     setImmediate(async () => {
-      try {
-        const { getCertBlobServiceClient } = await import("./src/services/azureCertStorage.js");
-        const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
-        if (process.env.CERT_EXTRACTION_ON_STARTUP === 'false') {
-          logger.info("Startup certificate extraction disabled via CERT_EXTRACTION_ON_STARTUP=false");
-          return;
-        }
-        const blobServiceClient = getCertBlobServiceClient();
-        if (!blobServiceClient) return;
-        logger.info("Starting background certificate extraction...");
-        const result = await processAllCertificates(blobServiceClient, false, (done, total) => {
-          if (done % 25 === 0 || done === total) {
-            logger.info("Certificate extraction progress", { done, total });
-          }
-        });
-        logger.info("Background certificate extraction complete", result);
-      } catch (err) {
-        logger.warn("Background certificate extraction failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
-      }
+      await runCertificateStartupExtraction({
+        logger,
+        loadBlobServiceClient: async () => {
+          const { getCertBlobServiceClient } = await import("./src/services/azureCertStorage.js");
+          return getCertBlobServiceClient();
+        },
+        loadProcessor: async () => {
+          const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
+          return processAllCertificates;
+        },
+      });
     });
   });
 })();

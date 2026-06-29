@@ -20,6 +20,34 @@ export function isDocumentIntelligenceConfigured(): boolean {
   return !!(AZURE_DI_ENDPOINT && AZURE_DI_KEY);
 }
 
+export async function extractTextWithAzureDocumentIntelligenceOnly(
+  buffer: Buffer,
+  fileName: string,
+): Promise<{ configured: boolean; text: string; error: string | null }> {
+  if (!isDocumentIntelligenceConfigured()) {
+    return {
+      configured: false,
+      text: '',
+      error: 'Azure Document Intelligence is not configured',
+    };
+  }
+
+  try {
+    const text = await extractWithAzureFormRecognizer(buffer, fileName);
+    return {
+      configured: true,
+      text: text.trim(),
+      error: text.trim() ? null : 'Azure Document Intelligence returned empty text',
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      text: '',
+      error: err?.message || String(err),
+    };
+  }
+}
+
 /**
  * Extract text from a PDF or image document.
  *

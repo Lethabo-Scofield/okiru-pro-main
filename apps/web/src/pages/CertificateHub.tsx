@@ -25,13 +25,22 @@ interface CertificateRow {
   name: string;
   fileName: string;
   companyName: string;
+  tradingName?: string | null;
+  registrationNumber?: string | null;
   vatNumber: string | null;
+  taxNumber?: string | null;
   companySize: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
   bbbeeLevel: number | null;
+  bbbeeLevelStatus?: string | null;
+  certificateType?: string | null;
+  procurementRecognition?: number | null;
   certificateNumber?: string | null;
+  issueDate?: string | null;
   expiryDate: string | null;
+  agency?: string | null;
+  sanasAccreditationNumber?: string | null;
   status: 'valid' | 'expiring' | 'expired' | 'unknown';
   lastModified: string | null;
   id?: string | null;
@@ -40,6 +49,9 @@ interface CertificateRow {
   metadataComplete?: boolean;
   sectorCode?: string | null;
   sectorName?: string | null;
+  enrichmentStatus?: string | null;
+  reviewFields?: string[];
+  fieldConfidence?: Record<string, unknown>;
   location?: string | null;
   businessUnit?: string | null;
 }
@@ -50,7 +62,11 @@ function certificateHaystack(c: CertificateRow): string {
     ${c.vatNumber || ''}
     ${c.fileName || ''}
     ${c.bbbeeLevel ?? ''}
-    ${c.certificateNumber || ''}
+    ${c.bbbeeLevelStatus || ''}
+    ${c.companySize || ''}
+    ${c.blackOwnership ?? ''}
+    ${c.blackWomenOwnership ?? ''}
+    ${c.expiryDate || ''}
     ${c.sectorCode || ''}
     ${c.sectorName || ''}
     ${c.location || ''}
@@ -101,15 +117,37 @@ function parseCertStatsJson(json: unknown): CertStats | null {
 }
 
 function formatExpiry(dateStr: string | null): string {
-  if (!dateStr) return '-';
+  if (!dateStr) return 'Missing';
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '-';
+  if (isNaN(d.getTime())) return 'Missing';
   return d.toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function formatPct(n: number | null): string {
-  if (n == null) return '-';
+  if (n == null) return 'Missing';
   return `${n.toFixed(n < 10 ? 1 : 0)}%`;
+}
+
+function displayValue(value: string | number | null | undefined): string {
+  if (value == null) return 'Missing';
+  const text = String(value).trim();
+  return text || 'Missing';
+}
+
+function confidenceTitle(cert: CertificateRow, field: string): string | undefined {
+  const meta = cert.fieldConfidence?.[field];
+  if (!meta || typeof meta !== 'object') return undefined;
+  const record = meta as Record<string, unknown>;
+  const confidence = typeof record.confidence === 'number' ? `${Math.round(record.confidence * 100)}%` : null;
+  const method = typeof record.extractionMethod === 'string' ? record.extractionMethod : null;
+  const snippet = typeof record.sourceTextSnippet === 'string' ? record.sourceTextSnippet : null;
+  return [confidence && `Confidence ${confidence}`, method, snippet].filter(Boolean).join(' · ') || undefined;
+}
+
+function needsReview(cert: CertificateRow): boolean {
+  return cert.enrichmentStatus === 'review_required'
+    || cert.enrichmentStatus === 'failed'
+    || (cert.reviewFields?.length ?? 0) > 0;
 }
 
 function StatusBadge({ status, expiryDate }: { status: CertificateRow['status']; expiryDate: string | null }) {
@@ -268,6 +306,7 @@ export default function CertificateHub() {
   const [sizeFilter, setSizeFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
   const [ownershipFilter, setOwnershipFilter] = useState('');
+  const [reviewOnly, setReviewOnly] = useState(false);
 
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [previewCert, setPreviewCert] = useState<CertificateRow | null>(null);
@@ -330,7 +369,20 @@ export default function CertificateHub() {
     setRefreshing(false);
   }, [loadAllCerts, loadStats]);
 
-  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter);
+  const reviewCount = useMemo(() => allCerts.filter(needsReview).length, [allCerts]);
+  const fieldCoverage = useMemo(() => {
+    const count = (predicate: (cert: CertificateRow) => boolean) => allCerts.reduce((sum, cert) => sum + (predicate(cert) ? 1 : 0), 0);
+    return [
+      { label: 'Company', value: count(c => !!c.companyName && !/^Unknown company/i.test(c.companyName)) },
+      { label: 'Sector', value: count(c => !!c.sectorCode || !!c.sectorName) },
+      { label: 'VAT', value: count(c => !!c.vatNumber) },
+      { label: 'B-BBEE Level', value: count(c => c.bbbeeLevel != null || !!c.bbbeeLevelStatus) },
+      { label: 'Size', value: count(c => !!c.companySize) },
+      { label: 'Ownership', value: count(c => c.blackOwnership != null || c.blackWomenOwnership != null) },
+      { label: 'Expiry', value: count(c => !!c.expiryDate) },
+    ];
+  }, [allCerts]);
+  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || reviewOnly);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -341,6 +393,7 @@ export default function CertificateHub() {
       if (statusFilter && c.status !== statusFilter) return false;
       if (sizeFilter && (c.companySize || '').toLowerCase() !== sizeFilter.toLowerCase()) return false;
       if (sectorFilter && (c.sectorCode || '').toUpperCase() !== sectorFilter.toUpperCase()) return false;
+      if (reviewOnly && !needsReview(c)) return false;
       if (ownershipFilter) {
         const [minStr, maxStr] = ownershipFilter.split('-');
         const min = Number(minStr), max = Number(maxStr);
@@ -355,7 +408,7 @@ export default function CertificateHub() {
       if (av !== bv) return av ? -1 : 1;
       return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
-  }, [allCerts, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter]);
+  }, [allCerts, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter, reviewOnly]);
 
   const clearAllFilters = () => {
     setSearch('');
@@ -363,6 +416,7 @@ export default function CertificateHub() {
     setSizeFilter('');
     setSectorFilter('');
     setOwnershipFilter('');
+    setReviewOnly(false);
   };
 
   const requireLoginToUpload = useCallback(() => {
@@ -557,7 +611,65 @@ export default function CertificateHub() {
           </div>
         )}
 
+        {!loading && reviewCount > 0 && (
+          <div className="mb-6 rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[#fbbf24]">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{reviewCount.toLocaleString()} certificate{reviewCount === 1 ? '' : 's'} need metadata review</span>
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#d1d1d6]">
+                  Open these records to preview the certificate and verify uncertain enrichment fields.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {reviewOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setReviewOnly(false)}
+                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06] hover:text-white transition-colors"
+                  >
+                    Show all
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setReviewOnly(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#f59e0b] px-3 py-2 text-[12px] font-medium text-black hover:bg-[#fbbf24] transition-colors"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Review now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ─── Filters ────────────────────────────────────────── */}
+        {!loading && allCerts.length > 0 && (
+          <div className="mb-6 rounded-lg border border-[#2c2c2e] bg-[#111114] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[13px] font-medium text-white">Metadata coverage</h3>
+                <p className="text-[11px] text-[#636366]">Counts are based on values returned by the certificate API.</p>
+              </div>
+              <span className="shrink-0 text-[11px] text-[#8e8e93]">{allCerts.length.toLocaleString()} loaded</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+              {fieldCoverage.map((field) => (
+                <div key={field.label} className="min-w-0 rounded-md bg-black/30 px-2.5 py-2">
+                  <div className="truncate text-[10px] uppercase tracking-wide text-[#636366]">{field.label}</div>
+                  <div className="mt-0.5 text-[13px] font-medium text-white">
+                    {field.value.toLocaleString()}
+                    <span className="ml-1 text-[10px] font-normal text-[#636366]">/ {allCerts.length.toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           <FilterPill
             label="Validity"
@@ -588,6 +700,21 @@ export default function CertificateHub() {
             options={OWNERSHIP_RANGES.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
             onChange={setOwnershipFilter}
           />
+          <button
+            type="button"
+            onClick={() => setReviewOnly((value) => !value)}
+            className={[
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] transition-colors',
+              reviewOnly
+                ? 'border-[#f59e0b]/70 bg-[#f59e0b]/15 text-[#fbbf24]'
+                : 'border-[#2c2c2e] text-[#a1a1aa] hover:text-white hover:border-[#3a3a3c]',
+            ].join(' ')}
+            title="Show certificates that need metadata review"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Needs review
+            <span className="text-[#8e8e93]">{reviewCount.toLocaleString()}</span>
+          </button>
           {hasActiveFilters && (
             <button
               onClick={clearAllFilters}
@@ -606,7 +733,7 @@ export default function CertificateHub() {
             <div>
               <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
-                {hasActiveFilters ? 'Search results' : 'All certificates'}
+                {reviewOnly ? 'Certificates needing review' : hasActiveFilters ? 'Search results' : 'All certificates'}
               </h2>
               {hasActiveFilters ? (
                 <p className="text-[13px] text-[#8e8e93]">
@@ -736,16 +863,26 @@ function CertRow({
               Metadata missing
             </span>
           )}
-          {cert.verified && (
-            <span
-              title="Verified by an administrator"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
-              style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.12)' }}
+            {cert.verified && (
+              <span
+                title="Verified by an administrator"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
+                style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.12)' }}
             >
               <ShieldCheck className="h-3 w-3" />
-              Verified
-            </span>
-          )}
+                Verified
+              </span>
+            )}
+            {needsReview(cert) && (
+              <span
+                title={cert.reviewFields?.length ? `Review: ${cert.reviewFields.join(', ')}` : 'Metadata needs review'}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
+                style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.12)' }}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Review
+              </span>
+            )}
         </div>
         <div
           className="mt-1 flex items-start gap-1.5 text-[12px] leading-snug text-[#8e8e93]"
@@ -756,9 +893,17 @@ function CertRow({
             {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : 'Sector not captured'}
           </span>
         </div>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#636366]">
+          {cert.vatNumber && <span>VAT: {cert.vatNumber}</span>}
+          {cert.bbbeeLevelStatus && <span>{cert.bbbeeLevelStatus}</span>}
+          {cert.companySize && <span>Size: {cert.companySize}</span>}
+          {cert.blackOwnership != null && <span>Ownership: {formatPct(cert.blackOwnership)}</span>}
+          {cert.blackWomenOwnership != null && <span>Women ownership: {formatPct(cert.blackWomenOwnership)}</span>}
+          {cert.expiryDate && <span>Expiry: {formatExpiry(cert.expiryDate)}</span>}
+        </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
-          {cert.bbbeeLevel != null && <span><Award className="inline h-3 w-3 mr-0.5" /> Level {cert.bbbeeLevel}</span>}
+          {(cert.bbbeeLevel != null || cert.bbbeeLevelStatus) && <span><Award className="inline h-3 w-3 mr-0.5" /> {cert.bbbeeLevelStatus || `Level ${cert.bbbeeLevel}`}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
           {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
           {cert.expiryDate && <span><CalendarClock className="inline h-3 w-3 mr-0.5" /> {formatExpiry(cert.expiryDate)}</span>}
@@ -797,6 +942,16 @@ function CertRow({
       </div>
       </div>
       <div className="hidden md:flex items-center justify-end gap-2 mt-3">
+        {needsReview(cert) && (
+          <button
+            onClick={onPreview}
+            aria-label={`Review ${cert.companyName}`}
+            className="inline-flex min-w-[88px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[#fbbf24] bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20 transition-colors text-[12px]"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span>Review</span>
+          </button>
+        )}
         <button
           onClick={onPreview}
           aria-label={`Preview ${cert.companyName}`}
@@ -818,6 +973,15 @@ function CertRow({
 
       {/* Mobile action buttons */}
       <div className="md:hidden mt-3 flex items-center gap-2">
+        {needsReview(cert) && (
+          <button
+            onClick={onPreview}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#fbbf24] bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20 transition-colors"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Review
+          </button>
+        )}
         <button
           onClick={onPreview}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
@@ -983,29 +1147,60 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
               )}
             </div>
 
+            {needsReview(cert) && (
+              <div className="rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-[12px] font-medium text-[#fbbf24]">
+                  <AlertTriangle className="h-4 w-4" />
+                  Needs metadata review
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#d1d1d6]">
+                  {cert.enrichmentStatus === 'failed'
+                    ? 'The enrichment job could not safely process this certificate.'
+                    : 'Some extracted fields were uncertain and need manual verification.'}
+                </p>
+                {(cert.reviewFields?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {cert.reviewFields!.map((field) => (
+                      <span
+                        key={field}
+                        className="rounded bg-black/25 px-2 py-0.5 text-[11px] text-[#fef3c7]"
+                      >
+                        {field}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
+              <PreviewField label="Company" value={displayValue(cert.companyName)} icon={<Building2 className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'companyName')} />
               <PreviewField label="Sector" value={sectorDisplayLabel(cert.sectorCode, cert.sectorName)} icon={<Building2 className="h-3.5 w-3.5" />} />
-              <PreviewField label="VAT Number" value={cert.vatNumber ?? '-'} icon={<Hash className="h-3.5 w-3.5" />} />
-              <PreviewField label="Company Size" value={cert.companySize ?? '-'} icon={<Building2 className="h-3.5 w-3.5" />} />
+              <PreviewField label="VAT Number" value={displayValue(cert.vatNumber)} icon={<Hash className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'vatNumber')} />
+              <PreviewField label="Company Size" value={displayValue(cert.companySize)} icon={<Building2 className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'companySize')} />
               <PreviewField
                 label="B-BBEE Level"
-                value={cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : '-'}
+                value={cert.bbbeeLevelStatus || (cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : 'Needs review')}
                 icon={<Award className="h-3.5 w-3.5" />}
+                title={confidenceTitle(cert, 'bbbeeLevel')}
               />
               <PreviewField
                 label="Expiry Date"
                 value={formatExpiry(cert.expiryDate)}
                 icon={<CalendarClock className="h-3.5 w-3.5" />}
+                title={confidenceTitle(cert, 'expiryDate')}
               />
               <PreviewField
                 label="Black Ownership"
                 value={formatPct(cert.blackOwnership)}
                 icon={<Percent className="h-3.5 w-3.5" />}
+                title={confidenceTitle(cert, 'blackOwnership')}
               />
               <PreviewField
                 label="Black Women Ownership"
                 value={formatPct(cert.blackWomenOwnership)}
                 icon={<Users2 className="h-3.5 w-3.5" />}
+                title={confidenceTitle(cert, 'blackWomenOwnership')}
               />
             </div>
 
@@ -1024,14 +1219,14 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
   );
 }
 
-function PreviewField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function PreviewField({ label, value, icon, title }: { label: string; value: string; icon?: React.ReactNode; title?: string }) {
   return (
-    <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5">
+    <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5" title={title}>
       <div className="flex items-center gap-1.5 text-[10px] text-[#636366] uppercase tracking-wider mb-1">
         {icon}
         {label}
       </div>
-      <div className="text-[13px] text-white font-medium truncate">{value}</div>
+      <div className={`text-[13px] font-medium truncate ${value === 'Missing' || value === 'Needs review' ? 'text-[#8e8e93]' : 'text-white'}`}>{value}</div>
     </div>
   );
 }

@@ -44,9 +44,16 @@ import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch 
 import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 import {
   ENRICHMENT_FIELDS,
+  PRODUCTION_CERTIFICATE_FIELDS,
+  getProductionCertificateCoverage,
   runCertificateEnrichmentJob,
   type EnrichmentField,
 } from '../services/certificateEnrichmentJob.js';
+import {
+  getCertificateTextExtractionCoverage,
+  runCertificateTextExtractionRetryJob,
+} from '../services/certificateTextExtractionJob.js';
+import type { CertificateExtractionMode, CertificateExtractionStatus } from '../services/certificateExtractionStatus.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -67,6 +74,16 @@ function getBlobServiceClient(): BlobServiceClient | null {
 
 function getContainerClient(blobServiceClient: BlobServiceClient) {
   return getCertContainerClient(blobServiceClient);
+}
+
+function requireInternalApiKey(req: Request, res: Response): boolean {
+  const providedKey = req.headers['x-api-key'] as string | undefined;
+  const expectedKey = process.env.API_INTERNAL_KEY;
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    res.status(401).json({ message: 'Invalid or missing x-api-key header' });
+    return false;
+  }
+  return true;
 }
 
 /** Express may surface path/query values as `string | string[]`; normalize to a single string. */
@@ -268,9 +285,12 @@ function applyFilters(rows: CertificateRow[], q: {
         vatNumber: r.vatNumber,
         fileName: r.fileName,
         bbbeeLevel: r.bbbeeLevel,
-        certificateNumber: r.certificateNumber,
         sectorCode: r.sectorCode ?? null,
         sectorName: r.sectorName ?? null,
+        companySize: r.companySize ?? null,
+        blackOwnership: r.blackOwnership ?? null,
+        blackWomenOwnership: r.blackWomenOwnership ?? null,
+        expiryDate: r.expiryDate ?? null,
         location: r.location ?? null,
         businessUnit: r.businessUnit ?? null,
       }).includes(s),
@@ -861,15 +881,15 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/enrich-missing', async (req: Request, res: Response) => {
-  const providedKey = req.headers['x-api-key'] as string | undefined;
-  const expectedKey = process.env.API_INTERNAL_KEY;
-  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
-    return res.status(401).json({ message: 'Invalid or missing x-api-key header' });
-  }
+async function runCertificateEnrichmentEndpoint(
+  req: Request,
+  res: Response,
+  defaults: { onlyUsableText?: boolean; forceText?: boolean } = {},
+) {
+  if (!requireInternalApiKey(req, res)) return;
 
   const blobServiceClient = getBlobServiceClient();
-  if (!blobServiceClient) {
+  if (!blobServiceClient && defaults.onlyUsableText !== true) {
     return res.status(500).json({ message: 'Azure Storage is not configured.' });
   }
 
@@ -879,14 +899,16 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
           typeof f === 'string' && (ENRICHMENT_FIELDS as readonly string[]).includes(f),
         )
       : undefined;
-    const result = await runCertificateEnrichmentJob(blobServiceClient, {
+    const fields = requestedFields?.length ? requestedFields : [...PRODUCTION_CERTIFICATE_FIELDS];
+    const result = await runCertificateEnrichmentJob((blobServiceClient ?? {}) as any, {
       limit: req.body?.limit,
       dryRun: req.body?.dryRun === true,
       force: req.body?.force === true,
-      forceText: req.body?.forceText === true,
+      forceText: defaults.forceText ?? (req.body?.forceText === true),
+      onlyUsableText: defaults.onlyUsableText ?? (req.body?.onlyUsableText === true),
       includeDetails: req.body?.includeDetails === true,
       reviewSampleLimit: req.body?.reviewSampleLimit,
-      fields: requestedFields,
+      fields,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
       invalidateListAndStatsCache();
@@ -895,6 +917,79 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Certificate enrichment job failed', err instanceof Error ? err : new Error(String(err)));
     return res.status(500).json({ message: 'Certificate enrichment failed', error: err.message });
+  }
+}
+
+router.post('/enrich-missing', async (req: Request, res: Response) => {
+  return runCertificateEnrichmentEndpoint(req, res);
+});
+
+router.post('/enrich-usable-text', async (req: Request, res: Response) => {
+  return runCertificateEnrichmentEndpoint(req, res, { onlyUsableText: true, forceText: false });
+});
+
+router.get('/production-coverage', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    return res.json(await getProductionCertificateCoverage());
+  } catch (err: any) {
+    logger.error('Certificate production coverage failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate production coverage failed', error: err.message });
+  }
+});
+
+router.get('/extraction-coverage', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    const coverage = await getCertificateTextExtractionCoverage();
+    return res.json(coverage);
+  } catch (err: any) {
+    logger.error('Certificate extraction coverage failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate extraction coverage failed', error: err.message });
+  }
+});
+
+router.post('/retry-extraction', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
+    return res.status(500).json({ message: 'Azure Storage is not configured.' });
+  }
+
+  try {
+    const allowedStatuses: CertificateExtractionStatus[] = ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'];
+    const allowedModes: CertificateExtractionMode[] = ['azure_document_intelligence', 'pdf_text', 'ocr', 'filename_only', 'none', 'failed'];
+    const statuses = Array.isArray(req.body?.statuses)
+      ? req.body.statuses.filter((status: unknown): status is CertificateExtractionStatus =>
+          typeof status === 'string' && allowedStatuses.includes(status as CertificateExtractionStatus),
+        )
+      : undefined;
+    const modes = Array.isArray(req.body?.modes)
+      ? req.body.modes.filter((mode: unknown): mode is CertificateExtractionMode =>
+          typeof mode === 'string' && allowedModes.includes(mode as CertificateExtractionMode),
+        )
+      : undefined;
+    const result = await runCertificateTextExtractionRetryJob(blobServiceClient, {
+      limit: req.body?.limit,
+      dryRun: req.body?.dryRun !== false,
+      force: req.body?.force === true,
+      includeDetails: req.body?.includeDetails !== false,
+      statuses,
+      modes,
+      onlyMissingText: req.body?.onlyMissingText !== false,
+      fileTimeoutMs: req.body?.fileTimeoutMs,
+      concurrency: req.body?.concurrency,
+    });
+    if (!result.dryRun && result.updated > 0) {
+      invalidateListAndStatsCache();
+    }
+    return res.json(result);
+  } catch (err: any) {
+    logger.error('Certificate extraction retry failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate extraction retry failed', error: err.message });
   }
 });
 
