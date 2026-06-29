@@ -240,6 +240,11 @@ export class DatabaseStorage implements IStorage {
     return clean<Employee>(doc);
   }
 
+  async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined> {
+    const doc = await EmployeeModel.findOneAndUpdate({ id }, { $set: data }, { returnDocument: 'after' }).lean();
+    return doc ? clean<Employee>(doc) : undefined;
+  }
+
   async deleteEmployee(id: string): Promise<void> {
     await EmployeeModel.deleteOne({ id });
   }

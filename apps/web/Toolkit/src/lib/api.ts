@@ -89,6 +89,8 @@ export const api = {
     apiRequest(`/api/clients/${clientId}/employees`, { method: "POST", body: JSON.stringify(data) }),
   bulkAddEmployees: (clientId: string, data: any[]) =>
     apiRequest(`/api/clients/${clientId}/employees/bulk`, { method: "POST", body: JSON.stringify({ employees: data }) }),
+  updateEmployee: (id: string, data: any) =>
+    apiRequest(`/api/employees/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteEmployee: (id: string) => apiRequest(`/api/employees/${id}`, { method: "DELETE" }),
 
   // --- Training Programs ---

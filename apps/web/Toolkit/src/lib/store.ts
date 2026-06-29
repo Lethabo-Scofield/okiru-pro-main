@@ -1592,6 +1592,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }
     }));
     get()._recalculateAll();
+    api.updateEmployee(id, data).catch(console.error);
   },
   removeEmployee: (id) => {
     set((state) => ({ management: { ...state.management, employees: state.management.employees.filter(e => e.id !== id) } }));
